@@ -38,7 +38,7 @@ async function liveCategories(ports: WorkerPorts) {
       .map((c) => c.id)
   );
 }
-export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
+const budgetStatusRead: ToolFactory = (ports) => async (input) => {
   const month = readMonth(input);
   const store = await ports.store();
   const context = await budgetContext(ports, store, month);
@@ -96,7 +96,9 @@ export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
     categories,
     targets,
     targetFundingOverspent:
-      !context.setupRequired && hasTargetFundingOverspending(context.state.categories),
+      !context.setupRequired &&
+      (hasTargetFundingOverspending(context.state.categories) ||
+        context.cardPayments.some((c) => c.availableCents < 0)),
     targetFunding: context.setupRequired
       ? []
       : targetFundingLines(
@@ -317,4 +319,19 @@ export const budgetApplyHandler: ToolFactory = (ports) => async (input) => {
   });
   if (new Set(ids).size !== ids.length) throw new InputError("categoryIds must be unique");
   return applyAssignments(ports, month, assignments, readBudgetReview(command), "user");
+};
+
+/** A repairable ledger must not leave the Budget screen without a way forward. */
+export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
+  try {
+    return await budgetStatusRead(ports)(input);
+  } catch (error) {
+    if (!(error instanceof InputError) || error.code !== "card_ledger_review_required") throw error;
+    return {
+      month: readMonth(input),
+      cardLedgerReviewRequired: true,
+      readyUnavailable: "card_ledger_review_required",
+      readyToAssignCents: null
+    };
+  }
 };

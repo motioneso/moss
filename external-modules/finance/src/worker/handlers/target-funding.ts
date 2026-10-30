@@ -52,10 +52,13 @@ export const targetFundHandler: ToolFactory = (ports) => async (input) => {
   const context = await budgetContext(ports, store, month);
   if (context.setupRequired) throw staleBudget();
   requireSameReview(expected, context);
-  if (hasTargetFundingOverspending(context.state.categories))
+  if (
+    hasTargetFundingOverspending(context.state.categories) ||
+    context.cardPayments.some((c) => c.availableCents < 0)
+  )
     throw new InputError(
       "cover_overspending",
-      "Cover category overspending before funding targets"
+      "Cover category and card-payment overspending before funding targets"
     );
   const progress = (await store.targets.forMonth(month)).map((target) =>
     targetProgress(target, context.state.categories[target.categoryId], month, date)

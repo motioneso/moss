@@ -1,3 +1,4 @@
+import { CardPayments, type CardPaymentView } from "../card-payments";
 import type { TargetFundingLine } from "../../domain/target-funding";
 import { FLEX_POOL } from "../../domain/flex";
 import { FlexBudgetPanel, type FlexBudgetView } from "../flex-budget";
@@ -62,6 +63,10 @@ interface BudgetAccount {
 
 interface BudgetStatusResult extends Record<string, unknown> {
   month: string;
+  cardPayments?: CardPaymentView[];
+  cardChoices?: { accountId: string; name: string }[];
+  cardStorageReady?: boolean;
+  cardLedgerReviewRequired?: boolean;
   targets?: TargetProgress[];
   targetFunding?: TargetFundingLine[];
   targetFundingOverspent?: boolean;
@@ -537,6 +542,9 @@ function BudgetBody(props: { result: BudgetStatusResult } & AssignProps): ReactN
             ? ` · ${result.excludedAccountCount} other-currency or tracking accounts excluded`
             : ""}
           . Positive category balances carry forward.
+          {result.cardPayments?.length
+            ? " Card debt remains in account balances; Ready uses each enrolled card's payment reserve instead of subtracting its full debt."
+            : ""}
         </p>
         <div className="fnm-phone-only">
           <NeedsYou needsLook={needsLook} overspent={overspent} />
@@ -775,7 +783,19 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
         {outcomeGate(
           status,
           (body) =>
-            body.setupRequired ? (
+            body.cardLedgerReviewRequired ? (
+              <section className="fnm-block" aria-label="Card ledger needs review">
+                <Note variant="practical">
+                  Review the card ledger before budgeting. Payment reserves need complete linked
+                  manual transfers in one currency. Repair unlinked transfer categories in
+                  Transactions, then use Record transfer in Accounts for payment pairs. Ready to
+                  assign is unavailable until the ledger is consistent.
+                </Note>
+                <Button variant="secondary" onClick={() => navigate("/transactions")}>
+                  Review transactions
+                </Button>
+              </section>
+            ) : body.setupRequired ? (
               <BudgetSetup
                 tools={props.tools}
                 storageReady={body.storageReady ?? false}
@@ -824,6 +844,19 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
                       flexChoices: body.flexChoices ?? [],
                       flexDetail: body.flexDetail ?? [],
                       state: body.state
+                    }}
+                  />
+                ) : null}
+                {body.isoCurrency && body.currentMonth && body.cardStorageReady ? (
+                  <CardPayments
+                    tools={props.tools}
+                    disabled={busy || checking || uncertain || hasDrafts}
+                    data={{
+                      month,
+                      currentMonth: body.currentMonth,
+                      isoCurrency: body.isoCurrency,
+                      cardPayments: body.cardPayments ?? [],
+                      cardChoices: body.cardChoices ?? []
                     }}
                   />
                 ) : null}

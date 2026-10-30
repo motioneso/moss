@@ -61,7 +61,9 @@
       "app.finance_merchant_rules",
       "app.finance_bill_adjustments",
       "app.finance_transfer_corrections",
-      "app.finance_provider_handoffs"
+      "app.finance_provider_handoffs",
+      "app.finance_card_policies",
+      "app.finance_card_assignments"
     ]
   },
   "settingsPath": "/settings",
@@ -70,7 +72,7 @@
       {
         "id": "finance.budget",
         "label": "Budget",
-        "description": "Choose one fixed working currency through review; legacy amounts require acknowledgement and stay unchanged. Only accounts and posted activity in that currency fund the budget. Tracking accounts and pending entries are excluded. Past manual balances use the opening ledger; connected balances use recorded snapshots at or before month end. Missing history makes ready-to-assign unavailable. Future months show the plan without claiming spendable cash; future assignments reserve current cash. Exact integer calculations refuse unsafe totals. Fund up to 20 current-month target suggestions within ready money, with before/after totals and host confirmation. Dated suggestions recalculate with saved balances. Cancel retains review; stale/uncertain saves require checking saved records. After saves, target actions wait for refreshed totals. Cover category overspending before target funding. Weekly targets count full-month weekdays and assigned money; no proration or automatic funding.",
+        "description": "One reviewed working currency; posted owned cash/card activity only. Historical manual balances reconstruct opening ledgers; bank snapshots disclose missing history. Future plans do not claim spendable cash. Current target funding and envelope/flexible modes use captured review and confirmation; stale or uncertain writes require checking saved records. Optional Card payments reserves cash per manual card from the current month, preserving earlier full-debt accounting. Funded purchases move category cash into reserves; unfunded credit spending never creates Ready. Linked manual payments consume reserves; refunds, excess and negative payment cash remain visible. Review setup/funding before host-confirmed save; no payment is sent. Provider cards retain full-debt accounting. Unlinked transfers pause totals; review Transactions, then record linked transfers in Accounts. Cover category and payment overspending before target funding. Weekly, refill, dated and monthly targets remain plans.",
         "path": "/"
       },
       {
@@ -117,7 +119,7 @@
       },
       {
         "id": "finance.budget-typing",
-        "description": "Assigned totals save through awaited, reviewed host actions. Cancel keeps typed amounts. Assistant actions refresh saved reads. Typed amounts keep their original review; changed budgets and rejected/uncertain saves require an explicit successful Check saved records before saving. Failed reads end Refreshing and keep the write block; busy reads honor the server wait. Discard clears local input only. Targets guide contributions, refill or dated saving without moving money; old archived/pooled targets offer read-only removal preserving money/history. New targets exclude the synthetic pool. Flexible mode routes chosen category activity, guidance and carry into one funded pool; members cannot be funded separately. Mode changes need current-month confirmation and no future funding or conflicting targets; leaving needs exact destinations for available money. History and transaction categories stay intact. Open reviews retain captured versions."
+        "description": "Envelope and optional pooled flexible budgeting with signed rollover, targets and captured confirmed changes. Card payments offers reviewed per-manual-card cash reserves from this month; existing cards default to full-debt accounting. Funded spending and refunds move category cash; explicit manual transfer pairs consume payment cash. Unfunded debt never creates Ready. Negative payment cash blocks automatic target funding. Closed cards retain visible cash for release. Historical modes stay unchanged; provider-card reserves and disabling enrollment are not supported. No bank payment is sent. Stale or uncertain saves require checking saved records."
       },
       {
         "id": "finance.getting-started",
@@ -1827,6 +1829,86 @@
           "expectedFingerprint"
         ]
       }
+    },
+    {
+      "name": "finance.card-reserve.preview",
+      "permissionId": "finance.card-reserve.preview",
+      "actionLabel": "Review card-payment cash",
+      "description": "Reserve budget cash for an owned manual credit card. Enrollment starts this month; earlier months retain full-debt accounting. No payment is sent. Enroll assigns starting-debt cash; fund sets available payment cash. Preview exact effects, then save with captured budget tokens and host confirmation. Changed reviews reject.",
+      "risk": "read",
+      "handler": "card-reserve.preview",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "month": {
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "action": {
+            "type": "string",
+            "enum": ["enroll", "fund"]
+          },
+          "availableCents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["month", "accountId", "action", "availableCents"]
+      }
+    },
+    {
+      "name": "finance.card-reserve.save",
+      "permissionId": "finance.card-reserve.save",
+      "actionLabel": "Save card-payment cash",
+      "description": "Reserve budget cash for an owned manual credit card. Enrollment starts this month; earlier months retain full-debt accounting. No payment is sent. Enroll assigns starting-debt cash; fund sets available payment cash. Preview exact effects, then save with captured budget tokens and host confirmation. Changed reviews reject.",
+      "risk": "write",
+      "handler": "card-reserve.save",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "month": {
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "action": {
+            "type": "string",
+            "enum": ["enroll", "fund"]
+          },
+          "availableCents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": [
+          "month",
+          "accountId",
+          "action",
+          "availableCents",
+          "expectedRevision",
+          "expectedFingerprint"
+        ]
+      },
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["accountId", "month", "action", "availableCents"]
     }
   ],
   "assistantActionFamilies": [

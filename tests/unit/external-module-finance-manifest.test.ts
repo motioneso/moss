@@ -217,7 +217,9 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.rules.list", "rules.list"],
         ["finance.rules.preview", "rules.preview"],
         ["finance.rules.update", "rules.update"],
-        ["finance.targets.fund", "targets.fund"]
+        ["finance.targets.fund", "targets.fund"],
+        ["finance.card-reserve.preview", "card-reserve.preview"],
+        ["finance.card-reserve.save", "card-reserve.save"]
       ]
     );
     for (const tool of result.manifest.assistantTools ?? []) {

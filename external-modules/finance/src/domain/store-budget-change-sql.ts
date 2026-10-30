@@ -41,6 +41,26 @@ export async function commitBudgetSql(db: FinanceDb, change: BudgetChange): Prom
     );
     flexIndex = params.length - 3;
   }
+  let cardIndex = 0;
+  if (change.cardAssignment) {
+    cardIndex = params.length + 1;
+    params.push(change.cardAssignment.accountId, change.cardAssignment.assignedCents);
+    if (change.cardPolicy) params.push(change.cardPolicy.effectiveMonth);
+    guards.push(`EXISTS (SELECT 1 FROM app.finance_accounts WHERE account_id=$${cardIndex}
+      AND source='manual' AND type='credit' AND iso_currency=(SELECT iso_currency FROM app.finance_budget_policy))`);
+    guards.push(
+      change.cardPolicy
+        ? `NOT EXISTS (SELECT 1 FROM app.finance_card_policies WHERE account_id=$${cardIndex})`
+        : `EXISTS (SELECT 1 FROM app.finance_card_policies WHERE account_id=$${cardIndex} AND effective_month<=$1)`
+    );
+    if (
+      change.cardAssignment.month !== change.month ||
+      (change.cardPolicy &&
+        (change.cardPolicy.accountId !== change.cardAssignment.accountId ||
+          change.cardPolicy.effectiveMonth !== change.month))
+    )
+      throw new Error("Card reservation must use its reviewed account and month");
+  }
   const result = await db.query<{ applied: boolean }>(
     "WITH " +
       budgetEligibilitySql(4, guards.length ? guards.join(" AND ") : "true") +
@@ -62,6 +82,15 @@ export async function commitBudgetSql(db: FinanceDb, change: BudgetChange): Prom
         : "") +
       (flexIndex
         ? `, f AS (INSERT INTO app.finance_flex_policies (owner_user_id,month,active,flex_ids,non_monthly_ids,updated_at) SELECT app.current_actor_user_id(),$${flexIndex},$${flexIndex + 1},$${flexIndex + 2}::jsonb,$${flexIndex + 3}::jsonb,now() FROM eligible ON CONFLICT (owner_user_id,month) DO UPDATE SET active=EXCLUDED.active,flex_ids=EXCLUDED.flex_ids,non_monthly_ids=EXCLUDED.non_monthly_ids,updated_at=EXCLUDED.updated_at RETURNING month)`
+        : "") +
+      (cardIndex
+        ? (change.cardPolicy
+            ? `, cp AS (INSERT INTO app.finance_card_policies(owner_user_id,account_id,effective_month)
+          SELECT app.current_actor_user_id(),$${cardIndex},$${cardIndex + 2} FROM eligible RETURNING account_id)`
+            : "") +
+          `, ca AS (INSERT INTO app.finance_card_assignments(owner_user_id,account_id,month,assigned_cents)
+          SELECT app.current_actor_user_id(),$${cardIndex},$1,$${cardIndex + 1}::bigint FROM eligible
+          ON CONFLICT(owner_user_id,account_id,month) DO UPDATE SET assigned_cents=EXCLUDED.assigned_cents RETURNING account_id)`
         : "") +
       " SELECT EXISTS (SELECT 1 FROM eligible) AS applied",
     params

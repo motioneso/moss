@@ -1,3 +1,5 @@
+import { deriveCardReserves, cardReadyToAssignCents } from "../../domain/card-reserves.js";
+import type { CardReservePolicy, CardReserveAssignment } from "../../domain/card-reserve-store.js";
 import { allocations } from "../../domain/splits.js";
 import { flexForMonth, type FlexPolicy } from "../../domain/flex.js";
 import {
@@ -6,7 +8,6 @@ import {
   effectiveTransferIds,
   fundingAt,
   budgetAccount,
-  readyToAssignCents,
   safeCents,
   signedBalanceCents,
   MANUAL_CURRENCIES,
@@ -95,7 +96,8 @@ export async function budgetContext(
   ports: WorkerPorts,
   store: FinanceStore,
   month: string,
-  flexOverride?: FlexPolicy
+  flexOverride?: FlexPolicy,
+  cardOverride?: { policy?: CardReservePolicy; assignment: CardReserveAssignment }
 ) {
   const policy = await store.budgetPolicy?.get();
   const accounts = await store.listAccounts();
@@ -149,9 +151,47 @@ export async function budgetContext(
     (transactionsByMonth[row.date.slice(0, 7)] ??= []).push(row);
   }
   ledgers[month] ??= { assignments: {} };
+  let cardPolicies = (await store.cardReserves?.policies()) ?? [];
+  let cardAssignments = (await store.cardReserves?.assignments()) ?? [];
+  if (cardOverride) {
+    if (cardOverride.policy) cardPolicies = [...cardPolicies, cardOverride.policy];
+    cardAssignments = [
+      ...cardAssignments.filter(
+        (a) =>
+          a.accountId !== cardOverride.assignment.accountId ||
+          a.month !== cardOverride.assignment.month
+      ),
+      cardOverride.assignment
+    ];
+  }
+  for (const key of [
+    ...cardPolicies.map((p) => p.effectiveMonth),
+    ...cardAssignments.map((a) => a.month)
+  ])
+    ledgers[key] ??= { assignments: {} };
+  const ordinary = deriveBudgetMonths({ ledgers, transactionsByMonth, flexPolicies });
+  let payments;
+  try {
+    payments =
+      deriveCardReserves({
+        accounts,
+        rows,
+        policies: cardPolicies,
+        assignments: cardAssignments,
+        ordinary,
+        flexPolicies,
+        transferIds: excluded,
+        through: date
+      })[month] ?? [];
+  } catch (error) {
+    throw new InputError(
+      "card_ledger_review_required",
+      error instanceof Error ? error.message : "Review the card ledger before budgeting"
+    );
+  }
   const state = {
     computedAt: ports.now().toISOString(),
-    ...deriveBudgetMonths({ ledgers, transactionsByMonth, flexPolicies })[month]!
+    ...ordinary[month]!
   };
   const balances = await fundingAt(store, fundingAccounts, all, month, date);
   const readyUnavailable =
@@ -172,16 +212,20 @@ export async function budgetContext(
                   .filter(([id]) => id !== "income" && id !== "transfers")
                   .reduce((n, [, cents]) => n + BigInt(Math.max(0, safeCents(cents))), 0n),
               0n
-            )
+            ) +
+            cardAssignments
+              .filter((a) => a.month > month)
+              .reduce((sum, a) => sum + BigInt(Math.max(0, a.assignedCents)), 0n)
         )
       : 0;
   const ready = readyUnavailable
     ? null
     : safeCents(
         BigInt(
-          readyToAssignCents(
+          cardReadyToAssignCents(
             balances.map((a) => ({ ...a, balanceCents: a.balanceCents! })),
-            state.categories
+            state,
+            payments
           )
         ) - BigInt(futureReservedCents)
       );
@@ -198,6 +242,22 @@ export async function budgetContext(
   return {
     setupRequired: false as const,
     flex,
+    cardPayments: payments.map((p) => ({
+      ...p,
+      name: accounts.find((a) => a.accountId === p.accountId)!.name,
+      archived: Boolean(accounts.find((a) => a.accountId === p.accountId)!.archivedAt)
+    })),
+    cardChoices: accounts
+      .filter(
+        (a) =>
+          a.source === "manual" &&
+          a.type === "credit" &&
+          a.isoCurrency === policy.isoCurrency &&
+          !a.archivedAt &&
+          !cardPolicies.some((p) => p.accountId === a.accountId)
+      )
+      .map((a) => ({ accountId: a.accountId, name: a.name })),
+    cardStorageReady: Boolean(store.cardReserves),
     flexDetail: flex?.active
       ? flex.flexIds.map((id) => ({
           id,

@@ -1,3 +1,8 @@
+import type {
+  CardReserveStore,
+  CardReservePolicy,
+  CardReserveAssignment
+} from "./card-reserve-store.js";
 import type { TransferCorrectionStore } from "./transfer-corrections.js";
 import type { BillAdjustmentStore } from "./bill-adjustments.js";
 import type { MerchantRuleStore } from "./merchant-rules.js";
@@ -44,6 +49,8 @@ export interface ActivityInput {
 export interface BudgetChange {
   expected: BudgetReview;
   flexPolicy?: FlexPolicy;
+  cardPolicy?: CardReservePolicy;
+  cardAssignment?: CardReserveAssignment;
   categories?: Category[];
   month: string;
   assignments: { categoryId: string; amountCents: number }[];
@@ -79,6 +86,7 @@ export interface FinanceStore {
   readonly targets?: TargetStore;
   readonly bills?: BillStore;
   readonly flex?: FlexStore;
+  readonly cardReserves?: CardReserveStore;
   readonly budgetPolicy?: BudgetPolicyStore;
   /** SQL-only ledger; legacy KV must migrate before manual entry. */
   readonly manual?: ManualLedgerStore;

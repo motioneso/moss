@@ -1,3 +1,4 @@
+import { cardReservePreviewHandler, cardReserveSaveHandler } from "./handlers/card-reserves.js";
 import { transferReviewHandler, transferReverseHandler } from "./handlers/transfer-corrections.js";
 import { targetFundHandler } from "./handlers/target-funding.js";
 import { billAdjustHandler, billAdjustResetHandler } from "./handlers/bill-adjustments.js";
@@ -122,6 +123,8 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "transaction.split": transactionSplitHandler,
   // FIN-03 (#1148) Task 3: the envelope-budget surface of manifest v0.2.0.
   "budget.status": budgetStatusHandler,
+  "card-reserve.preview": cardReservePreviewHandler,
+  "card-reserve.save": cardReserveSaveHandler,
   "flex.preview": flexPreviewHandler,
   "flex.configure": flexConfigureHandler,
   "flex.assign": flexAssignHandler,

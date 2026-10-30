@@ -1,3 +1,5 @@
+import { exerciseInstalledSplit } from "./helpers/finance-live-splits.js";
+import { exerciseCardReserves } from "./helpers/finance-live-cards.js";
 import {
   exerciseLedgerFilter,
   captureStatementReview
@@ -307,75 +309,29 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
       }
     }, 120_000);
 
-    it("saves a split through the signed-in Finance UI, real API and installed SQL worker", async () => {
-      const page = await context.newPage();
+    it("reviews card-payment reserves through captured confirmation and actual SQL ledger changes", async () => {
+      const person = await readyOwner(
+        "card-reserve@finance-page.test",
+        "Synthetic card reserve owner"
+      );
+      const other = await signedInContext(person.cookie);
       try {
-        await page.goto(`${base}/m/finance/transactions`);
-        const opener = page
-          .getByRole("button", { name: "Split Synthetic weekend market", exact: true })
-          .filter({ visible: true });
-        await opener.waitFor({ timeout: 30_000 });
-        await opener.click();
-        await page.getByLabel("Split category 2", { exact: true }).selectOption("dining");
-        await page.getByLabel("Split amount 1", { exact: true }).fill("60.00");
-        await page.getByLabel("Split amount 2", { exact: true }).fill("22.43");
-        await page.getByRole("button", { name: "Save split", exact: true }).click();
-        await page
-          .getByRole("dialog", { name: "Split transaction", exact: true })
-          .waitFor({ state: "detached", timeout: 30_000 });
-        const result = await readTool("finance.transactions.query", {
+        await exerciseCardReserves(
+          other,
+          base,
+          workerDb,
+          person.userId,
           month,
-          transactionId: "synthetic-market"
-        });
-        expect(result.transactions).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({
-              id: "synthetic-market",
-              amountCents: 8243,
-              splitRevision: 1,
-              splits: [
-                { categoryId: "groceries", amountCents: 6000 },
-                { categoryId: "dining", amountCents: 2243 }
-              ]
-            })
-          ])
+          (name, input) => readTool(name, input, person.cookie),
+          artifacts
         );
-        const memberRows = (await readTool("finance.transactions.query", { month }, member.cookie))
-          .transactions as { id: string }[];
-        // The member now owns a synthetic zero-net net-worth fixture; the owner's market stays private.
-        expect(memberRows.map((row) => row.id).sort()).toEqual([
-          "manual:net-worth-expense",
-          "manual:net-worth-refund"
-        ]);
-        await page.reload();
-        await page
-          .getByRole("button", { name: "Edit split for Synthetic weekend market", exact: true })
-          .filter({ visible: true })
-          .waitFor();
-        if (artifacts)
-          await page.screenshot({
-            path: join(resolve(artifacts), "finance-installed-split-desktop.png"),
-            fullPage: true
-          });
-        await page.setViewportSize({ width: 390, height: 900 });
-        expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
-          false
-        );
-        if (artifacts)
-          await page.screenshot({
-            path: join(resolve(artifacts), "finance-installed-split-phone.png"),
-            fullPage: true
-          });
-      } catch (error) {
-        if (artifacts)
-          await page.screenshot({
-            path: join(resolve(artifacts), "finance-installed-debug.png"),
-            fullPage: true
-          });
-        throw error;
       } finally {
-        await page.close();
+        await other.close();
       }
+    }, 150_000);
+
+    it("saves a split through the signed-in Finance UI, real API and installed SQL worker", async () => {
+      await exerciseInstalledSplit(context, base, month, readTool, member.cookie, artifacts);
     }, 90_000);
 
     it("reviews and confirms the working currency through the real host before showing budget amounts", async () => {

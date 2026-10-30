@@ -13,6 +13,8 @@ export const BUDGET_FINGERPRINT_SQL =
     ["finance_bill_plans", "id"],
     ["finance_bill_adjustments", "jsonb_build_array(plan_id, due_date)"],
     ["finance_flex_policies", "month"],
+    ["finance_card_policies", "account_id"],
+    ["finance_card_assignments", "jsonb_build_array(account_id, month)"],
     ["finance_bill_occurrences", "jsonb_build_array(plan_id, due_date)"]
   ]
     .map(

@@ -1,3 +1,4 @@
+import { cardReserveSqlStore } from "./store-card-reserves-sql.js";
 import { transferCorrectionSqlStore } from "./store-transfer-corrections-sql.js";
 import { providerHandoffSqlStore } from "./store-provider-handoffs-sql.js";
 import { billAdjustmentSqlStore } from "./store-bill-adjustments-sql.js";
@@ -277,6 +278,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
     targets: targetSqlStore(db),
     bills: billSqlStore(db),
     flex: flexSqlStore(db),
+    cardReserves: cardReserveSqlStore(db),
     manual: manualSqlStore(db),
     reconciliation: reconciliationSqlStore(db),
     imports: importSqlStore(db),

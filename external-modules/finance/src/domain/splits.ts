@@ -2,13 +2,13 @@ import type { TransactionRecord, TransactionSplit } from "./records.js";
 
 export function splitsBalance(record: Pick<TransactionRecord, "amountCents" | "splits">): boolean {
   if (!record.splits?.length) return false;
-  let total = 0;
+  if (!Number.isSafeInteger(record.amountCents)) return false;
+  let total = 0n;
   for (const split of record.splits) {
     if (!Number.isSafeInteger(split.amountCents)) return false;
-    total += split.amountCents;
-    if (!Number.isSafeInteger(total)) return false;
+    total += BigInt(split.amountCents);
   }
-  return total === record.amountCents;
+  return total === BigInt(record.amountCents);
 }
 
 /** Invalidated allocations remain stored for repair, but never inflate reports. */

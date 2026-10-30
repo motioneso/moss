@@ -150,6 +150,10 @@ async function describe(row: ActivityRecord, names: Names): Promise<string> {
       return "Reconciled a manual statement";
     case "transaction.import":
       return `Imported ${num(p.entryCount) ?? 0} manual transaction${p.entryCount === 1 ? "" : "s"}`;
+    case "card.enroll":
+      return "Set up a card-payment reserve; no payment sent";
+    case "card.cash-set":
+      return "Changed cash reserved for a card payment";
     case "flex.mode":
       return "Changed the budget planning mode";
     case "flex.assign":
