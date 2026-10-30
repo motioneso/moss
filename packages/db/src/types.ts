@@ -162,6 +162,9 @@ export interface ExternalModulesTable {
   manifest_hash: string;
   package_hash: string;
   disabled_reason: string | null;
+  // #3560: an admin switched this module off. Staged-package acceptance refreshes the
+  // baseline hashes but must not flip this back on (drift and install failures leave it false).
+  disabled_by_admin: ColumnType<boolean, boolean | undefined, boolean>;
   enabled_by: string | null;
   // Approval of the current accepted hashes; legacy rows deliberately remain unattributed.
   descriptor_approved_by: string | null;

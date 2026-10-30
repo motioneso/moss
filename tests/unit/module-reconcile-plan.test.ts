@@ -34,20 +34,46 @@ describe("assertQualifiedModuleTable", () => {
 
 describe("decideStagedAcceptance", () => {
   it("accepts when the on-disk package hash matches the staged hash", () => {
-    expect(decideStagedAcceptance({ stagedPackageHash: "abc", onDiskPackageHash: "abc" })).toEqual({
-      accept: true
-    });
+    expect(
+      decideStagedAcceptance({
+        stagedPackageHash: "abc",
+        onDiskPackageHash: "abc",
+        adminDisabled: false
+      })
+    ).toEqual({ accept: true, activate: true });
+  });
+
+  it("accepts the package but keeps an admin-disabled module off (#3560)", () => {
+    expect(
+      decideStagedAcceptance({
+        stagedPackageHash: "abc",
+        onDiskPackageHash: "abc",
+        adminDisabled: true
+      })
+    ).toEqual({ accept: true, activate: false });
   });
 
   it("declines with a reason when hashes differ (partial swap / tamper)", () => {
-    expect(decideStagedAcceptance({ stagedPackageHash: "abc", onDiskPackageHash: "def" })).toEqual({
+    expect(
+      decideStagedAcceptance({
+        stagedPackageHash: "abc",
+        onDiskPackageHash: "def",
+        adminDisabled: false
+      })
+    ).toEqual({
       accept: false,
       reason: "staged package hash abc does not match on-disk package hash def"
     });
   });
 
   it("declines when the module is staged but missing on disk", () => {
-    expect(decideStagedAcceptance({ stagedPackageHash: "abc", onDiskPackageHash: null })).toEqual({
+    expect(
+      decideStagedAcceptance({
+        stagedPackageHash: "abc",
+        onDiskPackageHash: null,
+        adminDisabled: false
+      })
+    ).toEqual({
       accept: false,
       reason: "staged package hash abc does not match on-disk package hash <absent>"
     });
