@@ -8,13 +8,22 @@ export async function exerciseFlex(
   base: string,
   month: string,
   read: Read,
-  artifacts?: string
+  artifacts?: string,
+  repairLegacyTarget?: () => Promise<void>
 ) {
   const before = await read("finance.transactions.query", { month });
   await page.goto(`${base}/m/finance`);
   await page.getByRole("button", { name: "Set up flexible budget", exact: true }).click();
   const setup = page.getByRole("dialog", { name: "Set up a flexible budget", exact: true });
   const original = await read("finance.budget.status", { month });
+  const starting = (
+    original.state as {
+      categories: Record<string, { assignedCents: number; availableCents: number }>;
+    }
+  ).categories;
+  const returnedAssignment = (id: string, available: number) =>
+    available + (starting[id]?.assignedCents ?? 0) - (starting[id]?.availableCents ?? 0);
+
   for (const c of original.flexChoices as { id: string; name: string }[])
     await setup
       .getByLabel(`Grouping for ${c.name}`, { exact: true })
@@ -36,6 +45,7 @@ export async function exerciseFlex(
   await setup.getByRole("button", { name: "Confirm mode change", exact: true }).click();
   await guard.getByRole("button", { name: "Confirm action", exact: true }).click();
   await setup.waitFor({ state: "detached" });
+  if (repairLegacyTarget) await repairLegacyTarget();
   const field = () =>
     page.getByLabel("Assigned to Flexible spending", { exact: true }).filter({ visible: true });
   await field().waitFor();
@@ -105,8 +115,8 @@ export async function exerciseFlex(
   await exit.waitFor({ state: "detached" });
   expect((await read("finance.budget.status", { month })).state).toMatchObject({
     categories: {
-      groceries: { assignedCents: 16000, availableCents: 10000 },
-      dining: { assignedCents: 4000, availableCents: 1757 },
+      groceries: { assignedCents: returnedAssignment("groceries", 10000), availableCents: 10000 },
+      dining: { assignedCents: returnedAssignment("dining", 1757), availableCents: 1757 },
       [FLEX_POOL]: { availableCents: 0 }
     }
   });

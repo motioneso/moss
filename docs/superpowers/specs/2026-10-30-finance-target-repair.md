@@ -6,9 +6,10 @@ ledger values and prior target versions; no new target type or budget policy is 
 
 The current target metadata handler checks category funding even when removing a target.
 Consequently an old target attached to an active flexible-pool member cannot be removed,
-although removal does not assign money. The native category list also includes the synthetic
-flexible pool, which has no canonical target category, and can mislabel legacy pooled or
-archived targets after eligible categories are filtered. These are repair paths within the
+although removal does not assign money. The reusable target section does not itself exclude
+the synthetic flexible pool; the actual Budget screen already filters it before passing choices.
+Existing pooled or archived targets can be mislabeled after eligible categories are filtered.
+Keep that screen filter and make the section defensive as well. These are repair paths within the
 existing target/flexible-budget model, not a new broader goals feature.
 
 Allow removed targets through the metadata handler's funding guard; retain the SQL owner,

@@ -1,3 +1,6 @@
+import { exerciseLegacyTargetRepair } from "./finance-live-target-repair.js";
+import type { Kysely } from "kysely";
+import type { MossDatabase } from "@moss/db";
 import { join, resolve } from "node:path";
 import type { BrowserContext } from "playwright-core";
 import { exerciseBills } from "./finance-live-bills.js";
@@ -9,11 +12,31 @@ export async function exercisePlanning(
   month: string,
   read: (name: string, input: Record<string, unknown>) => Promise<Record<string, unknown>>,
   kind: "bills" | "flex",
-  artifacts?: string
+  artifacts?: string,
+  legacy?: { db: Kysely<MossDatabase>; actorUserId: string }
 ) {
   const page = await context.newPage();
   try {
-    await (kind === "bills" ? exerciseBills : exerciseFlex)(page, base, month, read, artifacts);
+    if (kind === "bills") await exerciseBills(page, base, month, read, artifacts);
+    else
+      await exerciseFlex(
+        page,
+        base,
+        month,
+        read,
+        artifacts,
+        legacy
+          ? () =>
+              exerciseLegacyTargetRepair(
+                page,
+                legacy.db,
+                legacy.actorUserId,
+                month,
+                read,
+                artifacts
+              )
+          : undefined
+      );
   } catch (error) {
     if (artifacts)
       await page.screenshot({

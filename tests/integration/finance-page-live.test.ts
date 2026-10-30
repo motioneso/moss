@@ -485,7 +485,11 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
     );
     it(
       "confirms one funded flexible pool and an exact return to envelopes without changing transactions",
-      () => exercisePlanning(context, base, month, readTool, "flex", artifacts),
+      () =>
+        exercisePlanning(context, base, month, readTool, "flex", artifacts, {
+          db: workerDb,
+          actorUserId: owner.userId
+        }),
       180_000
     );
 

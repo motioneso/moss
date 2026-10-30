@@ -1,3 +1,4 @@
+import { targetSetHandler } from "../../external-modules/finance/src/worker/handlers/targets.js";
 import type * as Funding from "../../external-modules/finance/src/domain/target-funding.js";
 import { BUDGET_FINGERPRINT_SQL } from "../../external-modules/finance/src/domain/budget-review-sql.js";
 import { budgetStatusHandler } from "../../external-modules/finance/src/worker/handlers/budget.js";
@@ -196,6 +197,13 @@ beforeEach(async () => {
           })
         ).toBe(true);
       for (const target of [
+        {
+          categoryId: "savings",
+          effectiveMonth: "2026-09",
+          kind: "balance" as const,
+          amountCents: 50000,
+          dueDate: "2026-12-31"
+        },
         {
           categoryId: "groceries",
           effectiveMonth: "2026-09",
@@ -418,5 +426,30 @@ describe("installed selected target funding", () => {
       prior = await snapshot();
     await expect(fund(command(pooled, ["savings"]))).rejects.toThrow();
     expect(await snapshot()).toEqual(prior);
+    const captured = await status();
+    const removal = {
+      month,
+      categoryId: "savings",
+      kind: "removed",
+      amountCents: 0,
+      expectedRevision: captured.revision,
+      expectedFingerprint: captured.fingerprint
+    };
+    expect(await owner((s) => targetSetHandler(ports(s))(removal))).toMatchObject({ status: "ok" });
+    const removed = await snapshot();
+    expect(removed.ledger).toEqual(prior.ledger);
+    expect(removed.accounts).toEqual(prior.accounts);
+    expect(removed.transactions).toEqual(prior.transactions);
+    expect(await owner((s) => s.targets!.forMonth("2026-09"))).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ categoryId: "savings", amountCents: 50000 })
+      ])
+    );
+    expect((await status()).targets).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ categoryId: "savings" })])
+    );
+    const stable = await snapshot();
+    await expect(owner((s) => targetSetHandler(ports(s))(removal))).rejects.toThrow();
+    expect(await snapshot()).toEqual(stable);
   });
 });

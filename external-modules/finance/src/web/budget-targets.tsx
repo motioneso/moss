@@ -1,3 +1,4 @@
+import { FLEX_POOL } from "../domain/flex";
 import { TargetFundingDialog } from "./target-funding-dialog";
 import type { TargetFundingLine } from "../domain/target-funding";
 import {
@@ -41,8 +42,15 @@ export function BudgetTargets(props: BudgetTargetsProps): ReactNodeLike {
   const [funding, setFunding] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const categories = props.categories.filter(
-    (c) => !c.archived && c.id !== "income" && c.id !== "transfers"
+    (c) => !c.archived && c.id !== "income" && c.id !== "transfers" && c.id !== FLEX_POOL
   );
+  const targetName = (id: string) =>
+    props.categories.find((c) => c.id === id)?.name ??
+    props.funding?.lines.find((line) => line.categoryId === id)?.name ??
+    "Unavailable category";
+  const canEdit = !editing || categories.some((c) => c.id === editing);
+  const editorCategories =
+    editing && !canEdit ? [...categories, { id: editing, name: targetName(editing) }] : categories;
   return (
     <section className="fnm-block" aria-label="Category targets">
       <SectionHead title="Plan for what matters" rule />
@@ -54,9 +62,7 @@ export function BudgetTargets(props: BudgetTargetsProps): ReactNodeLike {
           {props.targets.map((target) => (
             <RowIndexItem
               key={target.categoryId}
-              title={
-                categories.find((c) => c.id === target.categoryId)?.name ?? "Archived category"
-              }
+              title={targetName(target.categoryId)}
               excerpt={`${target.kind === "monthly" ? "Monthly contribution" : `Balance by ${target.dueDate}`} · ${formatCents(target.amountCents, props.currency)} · ${target.status === "reached" ? "Target reached" : `${formatCents(target.remainingCents, props.currency)} remaining${target.status === "overdue" ? " · overdue" : ""}${target.kind === "balance" ? ` · ${formatCents(target.suggestedCents, props.currency)} additional suggested` : ""}`}`}
               meta={
                 <Button
@@ -65,7 +71,9 @@ export function BudgetTargets(props: BudgetTargetsProps): ReactNodeLike {
                   disabled={!props.tools || disabled}
                   onClick={() => setEditing(target.categoryId)}
                 >
-                  Edit target
+                  {categories.some((c) => c.id === target.categoryId)
+                    ? "Edit target"
+                    : "Review old target"}
                 </Button>
               }
             />
@@ -142,7 +150,8 @@ export function BudgetTargets(props: BudgetTargetsProps): ReactNodeLike {
         <TargetDialog
           key={editing}
           {...props}
-          categories={categories}
+          categories={editorCategories}
+          canEdit={canEdit}
           initialId={editing}
           onClose={() => setEditing(null)}
           onSaved={setAwaitingFingerprint}
@@ -153,6 +162,7 @@ export function BudgetTargets(props: BudgetTargetsProps): ReactNodeLike {
 }
 function TargetDialog(
   props: BudgetTargetsProps & {
+    canEdit: boolean;
     initialId: string;
     onClose: () => void;
     onSaved: (fingerprint: string) => void;
@@ -176,7 +186,7 @@ function TargetDialog(
   };
   const cents = parseAmountToCents(amount);
   const save = async (remove = false) => {
-    if (!props.tools || lock.current || blocked) return;
+    if (!props.tools || lock.current || blocked || (!remove && !props.canEdit)) return;
     if (
       !remove &&
       (cents === null || cents <= 0 || (kind === "balance" && !isCalendarDate(dueDate)))
@@ -219,7 +229,7 @@ function TargetDialog(
   };
   return (
     <Dialog
-      title={existing ? "Edit target" : "Add a target"}
+      title={!props.canEdit ? "Review old target" : existing ? "Edit target" : "Add a target"}
       description={`From ${monthLabel(props.month)} onward · ${props.currency}`}
       scrollBody
       closeDisabled={busy}
@@ -234,15 +244,17 @@ function TargetDialog(
               Remove target
             </Button>
           ) : null}
-          <Button disabled={busy || blocked} onClick={() => void save()}>
+          <Button disabled={busy || blocked || !props.canEdit} onClick={() => void save()}>
             {busy ? "Saving…" : "Save target"}
           </Button>
         </div>
       }
     >
-      <div className="fnm-block">
+      <div className="fnm-block fnm-block--tight">
         <Note variant="practical">
-          Saving a target does not assign money. Earlier months keep their target history.
+          {props.canEdit
+            ? "Saving a target does not assign money. Earlier months keep their target history."
+            : "This category is archived or funded through the flexible pool. You can remove the old target; assigned money and earlier target history stay intact."}
         </Note>
         <label className="fnm-block fnm-block--tight">
           Category
@@ -266,7 +278,7 @@ function TargetDialog(
           <Select
             aria-label="Target type"
             value={kind}
-            disabled={busy}
+            disabled={busy || !props.canEdit}
             onChange={(e: { currentTarget: { value: string } }) => setKind(e.currentTarget.value)}
           >
             <option value="monthly">Monthly contribution</option>
@@ -280,7 +292,7 @@ function TargetDialog(
             aria-label="Target amount"
             inputMode="decimal"
             value={amount}
-            disabled={busy}
+            disabled={busy || !props.canEdit}
             onChange={(e: { currentTarget: { value: string } }) => setAmount(e.currentTarget.value)}
           />
         </label>
@@ -292,7 +304,7 @@ function TargetDialog(
               aria-label="Target date"
               type="date"
               value={dueDate}
-              disabled={busy}
+              disabled={busy || !props.canEdit}
               onChange={(e: { currentTarget: { value: string } }) => setDate(e.currentTarget.value)}
             />
           </label>

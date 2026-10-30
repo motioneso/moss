@@ -101,3 +101,13 @@ mode before extending manual-ledger corrections. Record linked-transfer correcti
 an audited pair preserving original history, not a destructive edit or real bank action.
 A fresh October 30 GitHub search returned no open Finance PR; current task work remains
 on its isolated branch without a published PR.
+
+## Clean committed verification
+
+Committed `ea6be307`, clean input `b259dbfcd75f`: installed `105937-wGKmFb` passed all 21 browser
+flows; SQL `105944-ajyqpi` passed four files / 22 tests. Foundation `110750-jED2Pr` passed all
+static checks, then passed 1,626 files / 19,626 unit tests, failed 21 files / 277 tests and skipped
+three. All 277 normalized failures exactly match clean baseline `3c620d58` (`040401-c9zwQ0`),
+with zero additions/removals. Aggregate exit 1; later DB stages unrun. This is not an overall
+aggregate pass. See the next [legacy target repair checkpoint](2026-10-30-finance-target-repair-checkpoint.md)
+for its separately identified development checks and unresolved full-browser report wait.

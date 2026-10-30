@@ -186,3 +186,17 @@ covered first. Dated guidance recalculates with balances; no stored monthly inst
 or automatic funding is implied. Full installed synthetic acceptance passed twenty-one
 flows, and the restored SQL regression passed twenty-two cases. Broader goals remain
 partial; clean committed aggregate verification follows preservation.
+
+## October 30 legacy target repair
+
+[Repair checkpoint](../plans/2026-10-30-finance-target-repair-checkpoint.md) records named,
+read-only reviews with metadata removal for old archived/pooled targets. Earlier target history
+and financial records remain unchanged. New pooled target creation/funding stays rejected; the
+synthetic flexible pool is excluded defensively. The installed removal fixture is explicitly
+legacy, not a valid new mode transition. Finance units passed 711 tests and SQL passed 22 cases;
+focused installed acceptance passed three cases. Full installed regression passed 20 / failed
+one unrelated workflow's competing-page selection wait; diagnosis remains open. Clean committed
+selected-funding checks passed 21 browser flows / 22 SQL cases. Its aggregate passed all static
+checks and retained exactly the existing 277 unit-failure identities; later stages were unrun.
+Broader goals remain partial. Next slices are assistant read freshness with preserved typed
+budget review and audited linked-transfer corrections.

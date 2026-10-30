@@ -30,7 +30,7 @@ export const targetSetHandler: ToolFactory = (ports) => async (input) => {
   const expected = readBudgetReview(input);
   const store = await ports.store();
   requireSameReview(expected, await requireBudgetPolicy(store));
-  await assertCategoryFunding(store, month, [categoryId]);
+  if (kind !== "removed") await assertCategoryFunding(store, month, [categoryId]);
   if (!store.targets)
     throw new InputError("storage_upgrade_required", "Update Finance before saving targets");
   if (
