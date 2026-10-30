@@ -363,15 +363,24 @@ export class AcpHost {
         );
         const sessionDir = join(sessionTop.path, "acp", projectId);
         const agentHome = agentHomeForProfile(profile, sessionDir, persistentHome);
+        // #3558: OpenCode settings are per launch, never per person, and live in the session's
+        // own working folder so they end with it. Each launch reads its own config directory,
+        // so one launch writing its provider entry (or clearing a stale one) cannot invalidate
+        // an overlapping launch of the same person that relies on a different entry.
+        const opencodeConfigHome = providerKind === "opencode" ? join(sessionDir, ".config") : null;
+        const opencodeConfigPath = opencodeConfigHome
+          ? join(opencodeConfigHome, "opencode", "opencode.json")
+          : null;
 
         const env: NodeJS.ProcessEnv = {
           ...buildSanitizedCliEnv(process.env),
-          HOME: agentHome
+          HOME: agentHome,
+          ...(opencodeConfigHome ? { XDG_CONFIG_HOME: opencodeConfigHome } : {})
         };
         // One CLI copy: the adapter drives the tools volume CLI when one is installed.
         applyToolsVolumeCli(env, this.deps.toolsPrefix, providerKind, overrides);
         const opencodeProvider = await applyAgentCredential(env, {
-          agentHome,
+          configPath: opencodeConfigPath,
           homeBase,
           providerKind,
           credential,
@@ -385,15 +394,17 @@ export class AcpHost {
         }
 
         const denyFile =
-          providerKind === "opencode" && profile === "chat"
+          providerKind === "opencode" && profile === "chat" && opencodeConfigPath
             ? {
-                path: join(agentHome, ".config", "opencode", "opencode.json"),
+                path: opencodeConfigPath,
                 permissionKeys: [...opencodeDenyPermissionKeys()]
               }
             : null;
         const prepareDirs = [sessionDir];
         if (profile === "no-tools") prepareDirs.push(agentHome);
-        if (denyFile || opencodeProvider) prepareDirs.push(join(agentHome, ".config", "opencode"));
+        if ((denyFile || opencodeProvider) && opencodeConfigHome) {
+          prepareDirs.push(join(opencodeConfigHome, "opencode"));
+        }
         if (codexAuth) prepareDirs.push(join(agentHome, ".codex"));
         const runAgentHomePrepare: AgentHomePrepareRun =
           this.deps.runAgentHomePrepare ??

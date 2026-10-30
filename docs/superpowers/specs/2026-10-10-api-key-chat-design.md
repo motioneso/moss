@@ -87,7 +87,7 @@ closure of issue #307. Ben's ruling, 2026-10-10: "yes, it will override intentio
 | Unsupported kinds         | `packages/chat/src/live/persistence.ts:652-663`                                 | `toLiveProvider` throws a plain `Error` for `ollama`/`custom`                           |
 | Spawn request             | `packages/chat/src/live/rpc-contract.ts:633-652`                                | `acpSpawn` carries project, kind, user, profile. No credential                          |
 | Agent env                 | `packages/cli-runner/src/acp-host.ts:370-379`                                   | Sanitized env, `HOME`, and `CLAUDE_CODE_OAUTH_TOKEN` from the sidecar's own token store |
-| OpenCode settings         | `packages/cli-runner/src/acp-host.ts:386-392`, `agent-home-prepare.mjs:211-233` | Writes `opencode.json` in the agent home with shell and edit denied                     |
+| OpenCode settings         | `packages/cli-runner/src/acp-host.ts:386-392`, `agent-home-prepare.mjs:211-233` | Writes `opencode.json` in a per-launch config directory with shell and edit denied      |
 | Codex login copy          | `packages/cli-runner/src/acp-host.ts:400-430`                                   | Copies a login file into the person's agent home, 0600, as their account                |
 | Anthropic HTTP URL        | `packages/ai/src/adapters/http-api.ts:220-223`                                  | Fixed to `https://api.anthropic.com/v1/messages`. `base_url` ignored                    |
 | Anthropic model discovery | `packages/ai/src/model-discovery.ts:198-202`                                    | Fixed to `https://api.anthropic.com/v1/models`                                          |
@@ -315,8 +315,11 @@ Address format:
   Unverified. Phase 0 checks the agent home after a session.
 - The adapter's `providers/set` logs the base URL (`dist/acp-agent.js:1286`). Moss does not call
   it, but base URLs should be treated as non-secret in any case.
-- Every OpenCode CLI session also reads `opencode.json`. The provider entry is removed on non-API-key
-  spawns, so a CLI session never sees a stale entry.
+- Every OpenCode launch reads the settings file it owns: the sidecar gives each spawn its own
+  `XDG_CONFIG_HOME` inside that session's folder, so the provider entry and the permission denies
+  land in `opencode.json` there (#3558). A launch never writes the person's shared settings, so an
+  overlapping launch cannot lose its provider entry, and a CLI-login launch never inherits a stale
+  one. A re-launch in the same session folder clears the entry it finds there first.
 - The Codex login copy is per person and survives the session. Purge (`acp-host.ts:781-805`)
   removes the working folder and transcripts, not `.codex/auth.json`. That is why this spec does
   not reuse that pattern for keys.
