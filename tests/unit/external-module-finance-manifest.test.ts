@@ -82,6 +82,15 @@ describe("finance manifest app map (#3177)", () => {
     expect(manifest.assistantTools.filter((t) => t.handler === "draft.build")).toEqual([]);
   });
 
+  it("requires the host guard for captured category confirmation", () => {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      assistantTools: { name: string }[];
+    };
+    expect(
+      manifest.assistantTools.find((tool) => tool.name === "finance.transactions.confirm")
+    ).toMatchObject({ risk: "write", executionPolicy: "confirm", confirmWhenKeys: ["rows"] });
+  });
+
   it("lets chat adjust a draft through the drafting family", () => {
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
       assistantTools: { name: string; handler?: string; risk: string; actionFamilyId?: string }[];
@@ -169,7 +178,8 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.flex.assign", "flex.assign"],
         ["finance.transactions.bulk-category", "transactions.bulk-category"],
         ["finance.reports.transactions", "reports.transactions"],
-        ["finance.transactions.export", "transactions.export"]
+        ["finance.transactions.export", "transactions.export"],
+        ["finance.transactions.confirm", "transactions.confirm"]
       ]
     );
     for (const tool of result.manifest.assistantTools ?? []) {

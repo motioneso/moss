@@ -843,3 +843,9 @@ Export remains **partial**: large histories require explicit smaller ranges, and
 budget/goal exports and shared-owner export are not included. Next capability candidate: reviewed
 individual transaction writes and confirm-all concurrency, preserving split/clearing/reconciliation
 state. Household coediting, valuation imports, investments and provider agreements remain gaps.
+
+## Continuation pointer — October 30
+
+The current concise handoff, final manual-net-worth/export receipts and captured-confirmation
+checkpoint now live in [the October 30 checkpoint](2026-10-30-finance-parity-checkpoint.md).
+This file retains the earlier staged implementation and negative-control history.

@@ -1,23 +1,10 @@
-import type { ReviewedTransaction } from "../../domain/transaction-bulk.js";
+import { readReviewedRows } from "./reviewed-transactions.js";
 import type { ToolFactory } from "../registry.js";
 import { InputError, readString } from "../validate.js";
 import { loadCategories } from "./feed.js";
 export const transactionsBulkCategoryHandler: ToolFactory = (ports) => async (input) => {
   const categoryId = readString(input, "categoryId", { required: true });
-  const raw = input.rows;
-  if (!Array.isArray(raw) || raw.length < 1 || raw.length > 200)
-    throw new InputError("Choose between 1 and 200 loaded transactions");
-  const rows: ReviewedTransaction[] = raw.map((value) => {
-    if (!value || typeof value !== "object" || Array.isArray(value))
-      throw new InputError("Review each transaction before saving");
-    const id = readString(value, "id", { required: true });
-    const writeRevision = readString(value, "writeRevision", { required: true });
-    if (id.length > 256 || !/^[a-f0-9]{32}$/.test(writeRevision))
-      throw new InputError("Review each transaction before saving");
-    return { id, writeRevision };
-  });
-  if (new Set(rows.map((r) => r.id)).size !== rows.length)
-    throw new InputError("Choose each transaction only once");
+  const rows = readReviewedRows(input.rows);
   if (
     !(await loadCategories(ports)).some(
       (c) => c.id === categoryId && !c.archived && c.id !== "transfers"
@@ -33,4 +20,20 @@ export const transactionsBulkCategoryHandler: ToolFactory = (ports) => async (in
       "A selected transaction or category changed. Nothing was saved; reload and review your selection."
     );
   return { status: "ok", updated: rows.length };
+};
+
+export const transactionsConfirmHandler: ToolFactory = (ports) => async (input) => {
+  const rows = readReviewedRows(input.rows);
+  const store = await ports.store();
+  if (!store.bulk?.confirm)
+    throw new InputError(
+      "storage_upgrade_required",
+      "Update Finance storage before confirming reviewed batches"
+    );
+  if (!(await store.bulk.confirm(rows)))
+    throw new InputError(
+      "stale_transactions",
+      "A reviewed transaction or category changed. Nothing was confirmed; reload the register and review again."
+    );
+  return { status: "ok", confirmed: rows.length };
 };

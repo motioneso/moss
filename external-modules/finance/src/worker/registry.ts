@@ -1,6 +1,9 @@
 import { historyExportHandler } from "./handlers/history-export.js";
 import { reportsTransactionsHandler } from "./handlers/report-details.js";
-import { transactionsBulkCategoryHandler } from "./handlers/transaction-bulk.js";
+import {
+  transactionsBulkCategoryHandler,
+  transactionsConfirmHandler
+} from "./handlers/transaction-bulk.js";
 import { flexPreviewHandler, flexConfigureHandler, flexAssignHandler } from "./handlers/flex.js";
 import {
   billsReadHandler,
@@ -90,6 +93,7 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "transactions.query": transactionsQueryHandler,
   "transactions.export": historyExportHandler,
   "transactions.bulk-category": transactionsBulkCategoryHandler,
+  "transactions.confirm": transactionsConfirmHandler,
   "transaction.categorize": transactionCategorizeHandler,
   "transaction.categorize-new": transactionCategorizeNewHandler,
   "categorize.apply": categorizeApplyHandler,

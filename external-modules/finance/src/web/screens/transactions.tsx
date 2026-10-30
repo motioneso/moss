@@ -1,9 +1,10 @@
+import { TransactionConfirm } from "../transaction-confirm";
 import { HistoryExportDialog } from "../history-export-dialog";
 // external-modules/finance/src/web/screens/transactions.tsx
 //
 // #3176: the Park Press Transactions screen. One read, finance.transactions.query,
 // returns the month's rows, the categories, the accounts and the Needs a look count.
-// Legacy single-row/Confirm all reviews use finance.review-apply jobs. Selected bulk
+// Legacy single-row/rule reviews use finance.review-apply jobs. Captured confirmation and bulk
 // categorization and split edits await reviewed host-tool persistence.
 //
 // Desktop and phone layouts both render; module CSS shows one and hides the other.
@@ -27,7 +28,7 @@ import { runWrite, type RunOutcome } from "../api";
 import { chunkReviewRows } from "../assign";
 import { currentMonth, dayLabel, formatCents, monthLabel, shiftMonth } from "../format";
 import { announce, EmptyState, outcomeGate } from "../states";
-import { invalidateQueries, useToolQuery } from "../store";
+import { invalidateQueries, invalidateToolQueries, useToolQuery } from "../store";
 import { downloadTransactionsCsv, transactionsCsv } from "../register";
 import { EMPTY_FILTERS, filterInput, RegisterFilterBar } from "../register-filters";
 import { SplitEditor, type SplitTransaction } from "../split-editor";
@@ -73,6 +74,7 @@ interface TxResult extends Record<string, unknown> {
   totalCount?: number;
   supportsSplits?: boolean;
   supportsBulk?: boolean;
+  supportsConfirm?: boolean;
 }
 
 type Filter = "all" | "look";
@@ -466,6 +468,8 @@ export function TransactionsScreen(
   const [selected, setSelected] = useState<ReadonlyMap<string, Tx>>(new Map());
   const [selectionLocked, setSelectionLocked] = useState(false);
   const [supportsBulk, setSupportsBulk] = useState(false);
+  const [supportsConfirm, setSupportsConfirm] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const toggleSelection = (tx: Tx): void => {
     if (selectionLocked || !bulkEligible(tx)) return;
     setSelected((previous) => {
@@ -500,10 +504,12 @@ export function TransactionsScreen(
   });
   const result =
     query.status === "settled" && query.outcome.kind === "ok" ? query.outcome.result : null;
+  useEffect(() => setRetrying(false), [query]);
   useEffect(() => {
     if (result) {
       setFilterOptions({ accounts: result.accounts ?? [], categories: result.categories ?? [] });
       setSupportsBulk(result.supportsBulk === true);
+      setSupportsConfirm(result.supportsConfirm === true);
     }
   }, [result]);
 
@@ -600,7 +606,23 @@ export function TransactionsScreen(
               { value: "look", label: `Needs a look (${lookCount})` }
             ]}
           />
-          {visibleLook.length > 0 ? (
+          {supportsConfirm ? (
+            <TransactionConfirm
+              rows={visibleLook.filter(bulkEligible)}
+              categories={filterOptions.categories}
+              tools={props.tools}
+              readVersion={result}
+              readSnapshot={query}
+              readFailed={query.status === "settled" && query.outcome.kind !== "ok"}
+              onReload={() => invalidateToolQueries("finance.transactions.query")}
+              onSaved={(ids) => {
+                setConfirmed((previous) => new Set([...previous, ...ids]));
+                releaseOnRead.current = [...releaseOnRead.current, ...ids];
+                readArmed.current = true;
+                invalidateQueries();
+              }}
+            />
+          ) : visibleLook.length > 0 ? (
             <Button variant="secondary" onClick={confirmAll}>
               Confirm all {visibleLook.length}
             </Button>
@@ -719,7 +741,23 @@ export function TransactionsScreen(
             onSelect={result?.supportsBulk && props.tools ? toggleSelection : undefined}
           />
         ),
-        { loadingLabel: "Loading transactions" }
+        {
+          loadingLabel: "Loading transactions",
+          errorMessage:
+            "We couldn't load your transactions. Your filters are kept; check your connection or try again.",
+          errorAction: (
+            <Button
+              variant="secondary"
+              disabled={retrying}
+              onClick={() => {
+                setRetrying(true);
+                invalidateToolQueries("finance.transactions.query");
+              }}
+            >
+              {retrying ? "Retrying register…" : "Retry register"}
+            </Button>
+          )
+        }
       )}
       {result !== null &&
       (result.totalCount ?? 0) > (result.transactions ?? []).length &&

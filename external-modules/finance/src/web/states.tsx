@@ -34,12 +34,13 @@ export function EmptyState(props: {
   );
 }
 
-export function ErrorState(props: { message: string }): ReactNodeLike {
+export function ErrorState(props: { message: string; action?: ReactNodeLike }): ReactNodeLike {
   return (
     <Card sunken role="alert">
       <div className="fnm-state">
         <span className="jds-eyebrow">Something went wrong</span>
         <p>{props.message}</p>
+        {props.action ?? null}
       </div>
     </Card>
   );
@@ -78,7 +79,7 @@ export function DegradedState(props: { detail: string }): ReactNodeLike {
 export function outcomeGate<T extends Record<string, unknown>>(
   snapshot: QuerySnapshot<T>,
   render: (result: T) => ReactNodeLike,
-  opts?: { loadingLabel?: string }
+  opts?: { loadingLabel?: string; errorMessage?: string; errorAction?: ReactNodeLike }
 ): ReactNodeLike {
   if (snapshot.status === "loading") {
     return <LoadingState label={opts?.loadingLabel ?? "Loading"} />;
@@ -88,7 +89,10 @@ export function outcomeGate<T extends Record<string, unknown>>(
   if (outcome.kind === "blocked") {
     return <DegradedState detail="This data needs confirmation in the assistant." />;
   }
-  if (outcome.kind === "error") return <ErrorState message={outcome.message} />;
+  if (outcome.kind === "error")
+    return (
+      <ErrorState message={opts?.errorMessage ?? outcome.message} action={opts?.errorAction} />
+    );
   const status = (outcome.result as { status?: unknown }).status;
   if (status === "error") {
     return <DegradedState detail="This section could not load safely. Try again later." />;

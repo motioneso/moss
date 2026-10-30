@@ -1,3 +1,4 @@
+import { exerciseCategoryConfirmation } from "./helpers/finance-live-confirm.js";
 import { exerciseHistoryExport } from "./helpers/finance-live-export.js";
 import { exerciseManualNetWorth } from "./helpers/finance-live-net-worth.js";
 import { exerciseFinanceImport } from "./helpers/finance-live-import.js";
@@ -723,6 +724,18 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
 
     it("prepares and downloads complete owned history with recoverable errors and explicit scope", async () => {
       await exerciseHistoryExport(context, base, readTool, artifacts);
+    }, 90_000);
+
+    it("confirms captured categories only after guarded persistence and recovers stale reviews", async () => {
+      await exerciseCategoryConfirmation(
+        context,
+        base,
+        workerDb,
+        owner.userId,
+        month,
+        readTool,
+        artifacts
+      );
     }, 90_000);
 
     it("confirms and cancels real worker deletion through the actual host dialog", async () => {

@@ -6,4 +6,5 @@ export interface ReviewedTransaction {
 export interface TransactionBulkStore {
   monthRows(month: string): Promise<(TransactionRecord & { writeRevision: string })[]>;
   categorize(rows: readonly ReviewedTransaction[], categoryId: string): Promise<boolean>;
+  confirm?(rows: readonly ReviewedTransaction[]): Promise<boolean>;
 }

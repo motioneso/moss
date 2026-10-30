@@ -247,3 +247,23 @@ describe("Transactions screen (#3176)", () => {
     expect(reads.at(-1)!.body.input).toMatchObject({ needsLookOnly: true });
   });
 });
+
+describe("register read recovery", () => {
+  it("offers an explicit read-only retry with friendly error copy", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("offline");
+      })
+    );
+    const renderer = await render();
+    expect(text(renderer)).toContain("We couldn't load your transactions");
+    expect(text(renderer)).not.toContain("Request failed");
+    fakeFetch({ ...base, transactions: rows, needsLookCount: 2 });
+    await act(async () => button(renderer, "Retry register").props.onClick());
+    expect(text(renderer)).toContain("Payee a");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toContain("finance.transactions.query");
+    await act(async () => renderer.unmount());
+  });
+});

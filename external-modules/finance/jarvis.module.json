@@ -71,7 +71,7 @@
       {
         "id": "finance.transactions",
         "label": "Transactions",
-        "description": "Transactions supports month/account/category/search/posting/direction/review and duplicate filters, clear loaded/full matching counts, splits and confirmed atomic bulk categorization. Selection persists across filters; stale batches save nothing. Export loaded rows keeps the visible scope. Export history prepares an owned-only CSV across stored months with optional inclusive dates and account selection. It shows captured scope/count/time before download, omits notes and household mirrors, and refuses over 5,000 rows or 2 MiB without truncation. Includes useful loading, empty, failed-read and retry states; shared rows stay read only.",
+        "description": "Transactions supports month/account/category/search/posting/direction/review and duplicate filters, clear loaded/full matching counts, splits and confirmed atomic bulk categorization. Selection persists across filters; stale batches save nothing. Export loaded rows keeps the visible scope. Export history prepares an owned-only CSV across stored months with optional inclusive dates and account selection. It shows captured scope/count/time before download, omits notes and household mirrors, and refuses over 5,000 rows or 2 MiB without truncation. Includes useful loading, empty, failed-read and retry states; shared rows stay read only. Loaded category confirmation captures up to 200 owned posted unsplit needs-look rows, waits for atomic persistence, and rejects stale batches. Cancellation retains review; failures require an explicit fresh register check. Individual/rule queues remain separate.",
         "path": "/transactions"
       },
       {
@@ -1375,6 +1375,37 @@
           "through": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
           "accountId": { "type": "string", "minLength": 1, "maxLength": 256 }
         }
+      }
+    },
+    {
+      "name": "finance.transactions.confirm",
+      "permissionId": "finance.transactions.confirm",
+      "actionLabel": "Confirm reviewed categories",
+      "description": "Atomically confirm one to 200 captured owned posted unsplit transaction categories. Rechecks revision tokens, needs-look state and live categories; all persist with metadata-only activity or none do. Preserves amounts, notes, splits, clearing and reconciliation. No category or rule change.",
+      "risk": "write",
+      "handler": "transactions.confirm",
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["rows"],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rows": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": { "type": "string", "minLength": 1, "maxLength": 256 },
+                "writeRevision": { "type": "string", "pattern": "^[a-f0-9]{32}$" }
+              },
+              "required": ["id", "writeRevision"]
+            }
+          }
+        },
+        "required": ["rows"]
       }
     }
   ],

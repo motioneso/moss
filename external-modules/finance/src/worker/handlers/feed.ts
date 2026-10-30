@@ -183,6 +183,7 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
     needsLookCount,
     supportsSplits: store.supportsSplits,
     supportsBulk: Boolean(store.bulk),
+    supportsConfirm: Boolean(store.bulk?.confirm),
     categories: await loadCategories(ports),
     accounts: (accounts.accounts as unknown[] | undefined) ?? []
   };
