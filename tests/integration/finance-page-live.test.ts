@@ -209,9 +209,13 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
             })
           ])
         );
-        expect(
-          (await readTool("finance.transactions.query", { month }, member.cookie)).transactions
-        ).toEqual([]);
+        const memberRows = (await readTool("finance.transactions.query", { month }, member.cookie))
+          .transactions as { id: string }[];
+        // The member now owns a synthetic zero-net net-worth fixture; the owner's market stays private.
+        expect(memberRows.map((row) => row.id).sort()).toEqual([
+          "manual:net-worth-expense",
+          "manual:net-worth-refund"
+        ]);
         await page.reload();
         await page
           .getByRole("button", { name: "Edit split for Synthetic weekend market", exact: true })
