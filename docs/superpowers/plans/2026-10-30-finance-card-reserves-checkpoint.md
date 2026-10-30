@@ -1,5 +1,9 @@
 # Manual card-payment reserves: implementation checkpoint
 
+Later continuation: [reviewed bill-entry checkpoint](2026-10-30-finance-record-bill-entry-checkpoint.md)
+implements the formerly missing record-from-bill slice and supersedes that next-action note below.
+Earlier receipts retain their exact tested inputs.
+
 Date: 2026-10-30. Branch task/finance-parity-20261028. No merge, deployment or PR publication.
 
 Implementation commits: 9b9db8dc (owner/module mutation ordering), d6c6a1c3 (vertical slice),
