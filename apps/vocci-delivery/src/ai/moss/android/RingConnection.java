@@ -47,7 +47,10 @@ final class RingConnection implements AutoCloseable {
             RingTiming.mark("connect_start");
             gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE);
             if (gatt == null) throw new IOException("connection_unavailable");
-            await("connected"); RingTiming.mark("link_up"); stage = "mtu";
+            await("connected"); RingTiming.mark("link_up");
+            // Short connection intervals speed up every request and reply that follows.
+            gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
+            stage = "mtu";
             if (!gatt.requestMtu(247)) throw new IOException("mtu");
             await("mtu"); stage = "services";
             if (!gatt.discoverServices()) throw new IOException("services");
@@ -189,8 +192,10 @@ final class RingConnection implements AutoCloseable {
         stage = "inventory";
         Map<String, Integer> files = new LinkedHashMap<>();
         write(RingProtocol.WRITE, RingAuth.frame(0x11, new byte[0]));
+        RingTiming.mark("listing_requested");
         for (int n = 0; n < 1024; n++) {
             byte[] payload = response(RingProtocol.UART, 0x11);
+            if (n == 0 || n % 40 == 39) RingTiming.mark("listing_entry_" + (n + 1));
             if (RingProtocol.inventoryComplete(payload)) return files;
             RingProtocol.Entry entry = RingProtocol.Entry.parse(payload);
             if (entry == null) continue; // Unsupported or empty files cannot poison an otherwise valid inventory.

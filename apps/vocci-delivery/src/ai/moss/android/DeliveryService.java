@@ -29,6 +29,8 @@ public final class DeliveryService extends Service {
     private int fastRetries, admitRetries;
     private final RecordingReminder reminder = RecordingReminder.SHARED;
     private int latestStartId;
+    private Map<String, Integer> telemetryInventory;
+    private long telemetryAt;
     interface RetryVoice { JSONObject retry(String statusId) throws Exception; }
     private static final class OwnerMismatch extends Exception { }
     static boolean recordingCommand(String action) { return "inspect-ring".equals(action) || "exclude-recording".equals(action); }
@@ -119,6 +121,7 @@ public final class DeliveryService extends Service {
                         retrieve(config, client);
                         reconnectAttempts = 0;
                         deliver(client);
+                        readStatus(config);
                         keepOpen = voice.active() && active != null && !stopping;
                     } else report("storage_capacity");
                 } catch (OwnerMismatch error) { report("owner_mismatch"); break;
@@ -219,23 +222,32 @@ public final class DeliveryService extends Service {
                 if (voice.intent(id) != null) { fastRetries = 0; admitRetries = 0; }
             }
             previousInventory.clear(); previousInventory.putAll(inventory);
-            if (!stopping) {
-                active.readTelemetry();
-                try {
-                    long age = System.currentTimeMillis() - active.telemetry.recordingAt;
-                    boolean recent = active.telemetry.recordingAt > 0 && age >= 0 && age < 60000;
-                    boolean allowed = new DeliveryPreferences(this).recordingReminder() && getSystemService(NotificationManager.class).areNotificationsEnabled();
-                    if (reminder.observe(allowed && recent, active.telemetry.recording,
-                        active.telemetry.recordingSource, SystemClock.elapsedRealtime())) remindRecording();
-                    else if (!reminder.tracking()) getSystemService(NotificationManager.class).cancel(3551);
-                } catch (Exception unavailable) { /* A phone reminder cannot fail recording delivery. */ }
-                int recordings = 0;
-                for (String name : inventory.keySet()) if (name.endsWith(".opus")) recordings++;
-                try { HardwareStatus.publish(this, config, active.telemetry, inventoryAt, recordings); }
-                catch (Exception unavailable) { /* Optional status storage never blocks completed audio delivery. */ }
-            }
+            telemetryInventory = inventory; telemetryAt = inventoryAt;
         } catch (Exception error) { active.close(); active = null; throw error; }
         report(store.canDiscover() ? "waiting_for_completed_recordings" : "storage_capacity");
+    }
+    // Ring status reads run after delivery so they never delay a fresh recording.
+    private void readStatus(JSONObject config) throws InterruptedException {
+        Map<String, Integer> inventory = telemetryInventory;
+        long inventoryAt = telemetryAt;
+        telemetryInventory = null;
+        if (inventory == null || active == null || stopping) return;
+        try {
+            active.readTelemetry();
+            try {
+                long age = System.currentTimeMillis() - active.telemetry.recordingAt;
+                boolean recent = active.telemetry.recordingAt > 0 && age >= 0 && age < 60000;
+                boolean allowed = new DeliveryPreferences(this).recordingReminder() && getSystemService(NotificationManager.class).areNotificationsEnabled();
+                if (reminder.observe(allowed && recent, active.telemetry.recording,
+                    active.telemetry.recordingSource, SystemClock.elapsedRealtime())) remindRecording();
+                else if (!reminder.tracking()) getSystemService(NotificationManager.class).cancel(3551);
+            } catch (Exception unavailable) { /* A phone reminder cannot fail recording delivery. */ }
+            int recordings = 0;
+            for (String name : inventory.keySet()) if (name.endsWith(".opus")) recordings++;
+            try { HardwareStatus.publish(this, config, active.telemetry, inventoryAt, recordings); }
+            catch (Exception unavailable) { /* Optional status storage never blocks completed audio delivery. */ }
+        } catch (InterruptedException interrupted) { throw interrupted;
+        } catch (Exception error) { if (active != null) { active.close(); active = null; } }
     }
     private void remindRecording() {
         NotificationManager manager = getSystemService(NotificationManager.class);
