@@ -142,14 +142,17 @@ test("Long and short recordings both get summaries on the Meeting screen (#3840)
     const notesId = await createMeeting(notesTitle, [
       "We decided to launch the Orchid pilot on Friday. Alex will prepare the checklist."
     ]);
-    const longNotes = Array.from({ length: 320 }, (_, index) => {
+    // Notes cap at 64,000 characters in the app. 62,909 characters of notes plus the
+    // transcript segment, recording details, and guidance push one prompt over the cap,
+    // so the notes must be cut into pieces for this summary.
+    const longNotes = Array.from({ length: 270 }, (_, index) => {
       return (
         `Note ${index + 1}: the team decided to complete step ${index + 1} of the Orchid rollout this week. ` +
         `Alex will prepare checklist ${index + 1} and Priya will review the budget for step ${index + 1}. ` +
         `The open question for step ${index + 1} is whether the vendor can deliver on time. `
       );
     }).join("\n");
-    expect(longNotes.length).toBeGreaterThan(70_000);
+    expect(longNotes.length).toBeGreaterThan(62_000);
     const notesSaved = await page.request.put(`/api/meetings/records/${notesId}/notes`, {
       data: { requestKey: randomUUID(), expectedRevision: 0, personalNotes: longNotes }
     });
