@@ -1,3 +1,4 @@
+import { transactionsBulkCategoryHandler } from "./handlers/transaction-bulk.js";
 import { flexPreviewHandler, flexConfigureHandler, flexAssignHandler } from "./handlers/flex.js";
 import {
   billsReadHandler,
@@ -85,6 +86,7 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "sync.run": syncRunHandler,
   // FIN-02 (#1147) Task 10: the feed surface declared by manifest v2.
   "transactions.query": transactionsQueryHandler,
+  "transactions.bulk-category": transactionsBulkCategoryHandler,
   "transaction.categorize": transactionCategorizeHandler,
   "transaction.categorize-new": transactionCategorizeNewHandler,
   "categorize.apply": categorizeApplyHandler,

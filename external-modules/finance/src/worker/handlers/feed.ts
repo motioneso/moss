@@ -67,6 +67,7 @@ type FeedRow = TransactionRecord & {
   ownerUserId?: string;
   shared?: true;
   possibleDuplicate?: true;
+  writeRevision?: string;
 };
 
 /** Most rows one transactions.query call returns; the screen asks for more in steps of 200. */
@@ -94,7 +95,9 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
   // every account — store.listMonthTransactions already returns the pinned
   // date-desc/id-asc order, so accountId (when given) is just a filter.
   const store = await ports.store();
-  const stored = await store.listMonthTransactions(month);
+  const stored = store.bulk
+    ? await store.bulk.monthRows(month)
+    : await store.listMonthTransactions(month);
   const duplicates = duplicateCandidates(stored);
   const monthTransactions: FeedRow[] = stored.map((row) =>
     duplicates.has(row.id) ? { ...row, possibleDuplicate: true } : row
@@ -179,6 +182,7 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
     totalCount,
     needsLookCount,
     supportsSplits: store.supportsSplits,
+    supportsBulk: Boolean(store.bulk),
     categories: await loadCategories(ports),
     accounts: (accounts.accounts as unknown[] | undefined) ?? []
   };

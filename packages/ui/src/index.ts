@@ -1,3 +1,5 @@
+export { Checkbox } from "./checkbox.js";
+export type { CheckboxProps } from "./checkbox.js";
 export { AgendaRow } from "./agenda-row.js";
 export type { AgendaRowProps, AgendaRowStatus } from "./agenda-row.js";
 export { AllDayChip } from "./all-day-chip.js";

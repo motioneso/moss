@@ -61,6 +61,11 @@ _No enum or boolean props._
 
 _No enum or boolean props._
 
+## checkbox
+
+- **checked** (required boolean flag)
+- **disabled** (optional boolean flag)
+
 ## checklist
 
 _No enum or boolean props._

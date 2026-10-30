@@ -71,7 +71,7 @@
       {
         "id": "finance.transactions",
         "label": "Transactions",
-        "description": "Every bank transaction grouped by day, with a search box, an All and Needs a look filter with a count, a Predicted badge on Moss's guesses, a category picker, an Always for this merchant switch that starts off, Confirm all, a category picker on every confirmed row to change its category, and a Show more button when a month has more than 200 rows. Includes labeled account, category, posting and direction filters, possible duplicate indicators, loaded result counts and CSV export of loaded rows.",
+        "description": "Manual and connected transactions grouped by day, with a search box, an All and Needs a look filter with a count, a Predicted badge on Moss's guesses, a category picker, an Always for this merchant switch that starts off, Confirm all, a category picker on every confirmed row to change its category, and a Show more button when a month has more than 200 rows. Includes labeled account, category, posting and direction filters, possible duplicate indicators, loaded result counts and CSV export of loaded rows. Eligible own posted rows support explicit selection and reviewed atomic category changes; changed selections save nothing.",
         "path": "/transactions"
       },
       {
@@ -156,7 +156,7 @@
       },
       {
         "id": "finance.register-filters",
-        "description": "Transactions can be filtered by account, category, pending or posted status, money in or out, uncategorized rows and possible duplicates. Possible duplicates match account, currency, amount, date and payee; they are suggestions and are never deleted automatically."
+        "description": "Transactions can be filtered by account, category, pending or posted status, money in or out, uncategorized rows and possible duplicates. Possible duplicates match account, currency, amount, date and payee; they are suggestions and are never deleted automatically. Phone filters expand on request and show their active count."
       },
       {
         "id": "finance.register-export",
@@ -164,7 +164,7 @@
       },
       {
         "id": "finance.transaction-splits",
-        "description": "Split a posted transaction across up to 20 non-transfer category allocations. Signed amounts must equal the original amount exactly. Saving checks the bank amount, currency and allocation revision, and awaits the committed result through the host page-tool bridge. Older hosts without that bridge explain the required update and keep the draft. Reduce to one part to remove the split. Provider corrections preserve allocations for repair and mark an unbalanced split for review; reports count its bank amount once as uncategorized until repaired. Split editing requires migrated SQL storage. Household rows are read only. Splitting does not move bank money."
+        "description": "Split owned posted transactions into up to 20 non-transfer allocations totaling the exact signed amount. Saving awaits persistence and checks amount, currency and split revision. Provider corrections retain allocations for repair; unbalanced splits count once as uncategorized. One part removes a split. Select up to 200 loaded owned posted unsplit rows for one reviewed category change. Host confirmation saves all or none using captured row revisions. Amounts, accounts, dates, notes and reconciliation stay unchanged; no rule is created. Cancel retains choices; changed or uncertain saves require checking records before a new review. Shared, pending and legacy-storage rows are excluded. Older hosts explain the update required. Neither action moves bank money."
       },
       {
         "id": "finance.manual-ledger",
@@ -1270,6 +1270,41 @@
         "scale": 100
       },
       "actionLabel": "Set the flexible pool assignment"
+    },
+    {
+      "name": "finance.transactions.bulk-category",
+      "permissionId": "finance.transactions.bulk-category",
+      "actionLabel": "Categorize selected transactions",
+      "description": "Categorize 1 to 200 reviewed owned posted unsplit transactions atomically. A changed or unavailable selection saves nothing. Preserves amounts, dates, clearing and reconciliation; creates no rules.",
+      "risk": "write",
+      "handler": "transactions.bulk-category",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "categoryId": { "type": "string" },
+          "rows": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": { "type": "string", "maxLength": 256 },
+                "writeRevision": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{32}$"
+                }
+              },
+              "required": ["id", "writeRevision"]
+            }
+          }
+        },
+        "required": ["categoryId", "rows"]
+      },
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["categoryId"]
     }
   ],
   "assistantActionFamilies": [

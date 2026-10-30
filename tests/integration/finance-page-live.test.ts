@@ -1,3 +1,4 @@
+import { exerciseBulkCategory } from "./helpers/finance-live-bulk.js";
 import { exerciseFlex } from "./helpers/finance-live-flex.js";
 import { exerciseBills } from "./helpers/finance-live-bills.js";
 // Opt-in live path: built production host, installed bundles, actual auth/API/workers/RLS.
@@ -810,6 +811,22 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
         if (artifacts)
           await page.screenshot({
             path: join(resolve(artifacts), "finance-import-debug.png"),
+            fullPage: true
+          });
+        throw error;
+      } finally {
+        await page.close();
+      }
+    }, 90_000);
+
+    it("reviews, confirms and rejects stale bulk category edits through installed desktop and phone UI", async () => {
+      const page = await context.newPage();
+      try {
+        await exerciseBulkCategory(page, context, base, month, readTool, artifacts);
+      } catch (error) {
+        if (artifacts)
+          await page.screenshot({
+            path: join(resolve(artifacts), "finance-bulk-debug.png"),
             fullPage: true
           });
         throw error;

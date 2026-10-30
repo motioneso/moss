@@ -1,3 +1,5 @@
+import { transactionBulkSqlStore } from "./store-transaction-bulk-sql.js";
+import { TXN_COLUMNS, rowToTransaction, type TransactionRow } from "./store-transaction-rows.js";
 import { flexSqlStore } from "./store-flex-sql.js";
 import { billSqlStore } from "./store-bills-sql.js";
 // external-modules/finance/src/domain/store-sql.ts
@@ -6,13 +8,7 @@ import { billSqlStore } from "./store-bills-sql.js";
 // silently changes what RLS sees. Owner is always written in the SQL text
 // via app.current_actor_user_id(), never a param, and no statement filters
 // by owner (RLS + that GUC own that, per the #1167 classifier's read).
-import type {
-  AccountRecord,
-  ItemErrorDetail,
-  ItemRecord,
-  ReviewState,
-  TransactionRecord
-} from "./records.js";
+import type { AccountRecord, ItemErrorDetail, ItemRecord, TransactionRecord } from "./records.js";
 import type { BudgetDraft, DraftLine } from "./draft.js";
 import type { ActivityRecord, FinanceStore } from "./store-port.js";
 import { commitBudgetSql } from "./store-budget-change-sql.js";
@@ -39,63 +35,6 @@ function monthWindow(month: string): { from: string; to: string } {
   const [y, m] = month.split("-").map(Number) as [number, number];
   const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
   return { from: `${month}-01`, to: `${next}-01` };
-}
-
-const TXN_COLUMNS =
-  "id, account_id, date::text AS date, amount_cents, iso_currency, name, merchant, " +
-  "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits, split_revision, source, cleared, reconciled_at";
-
-type TransactionRow = {
-  id: string;
-  account_id: string;
-  date: string;
-  amount_cents: string | number;
-  iso_currency: string;
-  name: string;
-  merchant: string | null;
-  plaid_category: string | null;
-  category_id: string | null;
-  pending: boolean;
-  pending_transaction_id: string | null;
-  categorized_by: TransactionRecord["categorizedBy"];
-  notes: string | null;
-  review_state: ReviewState;
-  ai_confidence: number | null;
-  splits?: TransactionRecord["splits"];
-  split_revision?: number;
-  source?: string;
-  cleared?: boolean;
-  reconciled_at?: string | null;
-};
-
-function rowToTransaction(row: TransactionRow): TransactionRecord {
-  return {
-    id: row.id,
-    accountId: row.account_id,
-    date: row.date,
-    amountCents: safeCents(row.amount_cents),
-    isoCurrency: row.iso_currency,
-    name: row.name,
-    merchant: row.merchant,
-    plaidCategory: row.plaid_category,
-    categoryId: row.category_id,
-    pending: row.pending,
-    pendingTransactionId: row.pending_transaction_id,
-    categorizedBy: row.categorized_by,
-    notes: row.notes ?? undefined,
-    reviewState: row.review_state,
-    aiConfidence: row.ai_confidence,
-    ...(row.source === "manual"
-      ? {
-          source: "manual" as const,
-          cleared: row.cleared ?? false,
-          reconciledAt: row.reconciled_at ?? null
-        }
-      : {}),
-    ...(row.splits?.length || row.split_revision
-      ? { splits: row.splits ?? [], splitRevision: row.split_revision ?? 0 }
-      : {})
-  };
 }
 
 async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Promise<void> {
@@ -311,6 +250,7 @@ function rowToDraft(row: DraftRow, lines: DraftLine[]): BudgetDraft {
 export function sqlStore(db: FinanceDb): FinanceStore {
   return {
     supportsSplits: true,
+    bulk: transactionBulkSqlStore(db),
     budgetPolicy: budgetSqlStore(db),
     targets: targetSqlStore(db),
     bills: billSqlStore(db),

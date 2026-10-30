@@ -182,6 +182,18 @@
       "flags": []
     },
     {
+      "name": "checkbox",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/checkbox.tsx", "type": "registry:ui" }],
+      "dependencies": ["lucide-react"],
+      "exports": ["Checkbox"],
+      "options": [],
+      "flags": [
+        { "prop": "checked", "optional": false },
+        { "prop": "disabled", "optional": true }
+      ]
+    },
+    {
       "name": "checklist",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/checklist.tsx", "type": "registry:ui" }],

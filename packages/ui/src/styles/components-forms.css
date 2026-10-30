@@ -76,7 +76,7 @@
   border: var(--border-w-strong) solid var(--border-strong);
   border-radius: var(--radius-xs);
   background: var(--surface);
-  color: var(--white);
+  color: var(--text-on-accent);
 }
 .jds-check input:checked + .jds-check__box,
 .jds-check input:indeterminate + .jds-check__box {
@@ -424,4 +424,45 @@
   padding: var(--space-3);
   resize: vertical;
   line-height: var(--leading-normal);
+}
+
+/* Keep the authored 19px mark inside a comfortable selection target. Scoped to the
+   shared component so existing raw-check layouts keep their geometry. */
+.jds-check.jds-checkbox {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+  min-width: 28px;
+  min-height: 28px;
+}
+.jds-check.jds-checkbox input {
+  position: absolute;
+  opacity: 0;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  cursor: pointer;
+}
+.jds-check.jds-checkbox .jds-check__box {
+  width: 19px;
+  height: 19px;
+  flex: none;
+  margin-top: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.jds-check.jds-checkbox .jds-check__box svg {
+  width: 13px;
+  height: 13px;
+  opacity: 0;
+}
+.jds-check.jds-checkbox input:checked + .jds-check__box svg {
+  opacity: 1;
+}
+.jds-check.jds-checkbox input:disabled ~ * {
+  opacity: 0.5;
 }

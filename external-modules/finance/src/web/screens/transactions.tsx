@@ -2,12 +2,13 @@
 //
 // #3176: the Park Press Transactions screen. One read, finance.transactions.query,
 // returns the month's rows, the categories, the accounts and the Needs a look count.
-// Every write is a single finance.review-apply job: one row (optionally making a merchant
-// rule) or Confirm all (the visible Needs a look rows, no rules).
+// Legacy single-row/Confirm all reviews use finance.review-apply jobs. Selected bulk
+// categorization and split edits await reviewed host-tool persistence.
 //
 // Desktop and phone layouts both render; module CSS shows one and hides the other.
 import {
   Badge,
+  Checkbox,
   Button,
   RowIndex,
   RowIndexItem,
@@ -29,6 +30,7 @@ import { invalidateQueries, useToolQuery } from "../store";
 import { downloadTransactionsCsv, transactionsCsv } from "../register";
 import { EMPTY_FILTERS, filterInput, RegisterFilterBar } from "../register-filters";
 import { SplitEditor, type SplitTransaction } from "../split-editor";
+import { TransactionBulkBar, bulkEligible } from "../transaction-bulk";
 import { splitsBalance } from "../../domain/splits";
 
 interface TxCategory {
@@ -58,6 +60,7 @@ interface Tx extends SplitTransaction {
   source?: "manual";
   cleared?: boolean;
   reconciledAt?: string | null;
+  writeRevision?: string;
 }
 
 interface TxResult extends Record<string, unknown> {
@@ -68,6 +71,7 @@ interface TxResult extends Record<string, unknown> {
   needsLookCount?: number;
   totalCount?: number;
   supportsSplits?: boolean;
+  supportsBulk?: boolean;
 }
 
 type Filter = "all" | "look";
@@ -228,6 +232,9 @@ interface RowContext {
   onChange: (tx: Tx, categoryId: string) => Promise<boolean>;
   onSplit: (tx: Tx) => void;
   supportsSplits: boolean;
+  selected: ReadonlySet<string>;
+  selectionLocked: boolean;
+  onSelect?: (tx: Tx) => void;
 }
 
 function CategoryControls({
@@ -277,6 +284,20 @@ function CategoryControls({
   );
 }
 
+function TransactionSelection(props: { tx: Tx; ctx: RowContext }): ReactNodeLike {
+  return props.ctx.onSelect && bulkEligible(props.tx) ? (
+    <Checkbox
+      ariaLabel={`Select ${props.tx.name}`}
+      checked={props.ctx.selected.has(props.tx.id)}
+      disabled={
+        props.ctx.selectionLocked ||
+        (!props.ctx.selected.has(props.tx.id) && props.ctx.selected.size >= 200)
+      }
+      onChange={() => props.ctx.onSelect!(props.tx)}
+    />
+  ) : null;
+}
+
 function DayTable(props: { day: DayGroup; head: boolean; ctx: RowContext }): ReactNodeLike {
   const { day, ctx } = props;
   return (
@@ -306,7 +327,10 @@ function DayTable(props: { day: DayGroup; head: boolean; ctx: RowContext }): Rea
               <tr key={tx.id}>
                 <td>
                   <div className="fnm-block fnm-block--tight">
-                    <span>{tx.name}</span>
+                    <div className="fnm-inline">
+                      <TransactionSelection tx={tx} ctx={ctx} />
+                      <span>{tx.name}</span>
+                    </div>
                     <TransactionStatus tx={tx} />
                     {look && !tx.splits?.length ? (
                       <div>
@@ -344,7 +368,10 @@ function DayRows(props: { day: DayGroup; ctx: RowContext }): ReactNodeLike {
               key={tx.id}
               title={
                 <span className="fnm-block fnm-block--tight">
-                  {tx.name}
+                  <span className="fnm-inline">
+                    <TransactionSelection tx={tx} ctx={ctx} />
+                    {tx.name}
+                  </span>
                   <TransactionStatus tx={tx} />
                 </span>
               }
@@ -372,6 +399,9 @@ function TransactionsBody(props: {
   onConfirm: (tx: Tx, categoryId: string, makeRule: boolean) => void;
   onChange: (tx: Tx, categoryId: string) => Promise<boolean>;
   onSplit: (tx: Tx) => void;
+  selected: ReadonlySet<string>;
+  selectionLocked: boolean;
+  onSelect?: (tx: Tx) => void;
 }): ReactNodeLike {
   const { result, filter, confirmed } = props;
   const accounts = result.accounts ?? [];
@@ -389,6 +419,9 @@ function TransactionsBody(props: {
     onConfirm: props.onConfirm,
     onChange: props.onChange,
     onSplit: props.onSplit,
+    selected: props.selected,
+    selectionLocked: props.selectionLocked,
+    onSelect: props.onSelect,
     supportsSplits: result.supportsSplits === true
   };
   if (rows.length === 0) {
@@ -428,6 +461,18 @@ export function TransactionsScreen(
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [editing, setEditing] = useState<Tx | null>(null);
+  const [selected, setSelected] = useState<ReadonlyMap<string, Tx>>(new Map());
+  const [selectionLocked, setSelectionLocked] = useState(false);
+  const [supportsBulk, setSupportsBulk] = useState(false);
+  const toggleSelection = (tx: Tx): void => {
+    if (selectionLocked || !bulkEligible(tx)) return;
+    setSelected((previous) => {
+      const next = new Map(previous);
+      if (next.has(tx.id)) next.delete(tx.id);
+      else if (next.size < 200) next.set(tx.id, { ...tx });
+      return next;
+    });
+  };
   const [filterOptions, setFilterOptions] = useState<{
     accounts: TxAccount[];
     categories: TxCategory[];
@@ -454,8 +499,10 @@ export function TransactionsScreen(
   const result =
     query.status === "settled" && query.outcome.kind === "ok" ? query.outcome.result : null;
   useEffect(() => {
-    if (result)
+    if (result) {
       setFilterOptions({ accounts: result.accounts ?? [], categories: result.categories ?? [] });
+      setSupportsBulk(result.supportsBulk === true);
+    }
   }, [result]);
 
   // Ids whose server answer should replace the optimistic mark once the next read lands.
@@ -627,6 +674,27 @@ export function TransactionsScreen(
           </Button>
         </div>
       ) : null}
+      {supportsBulk && props.tools ? (
+        <TransactionBulkBar
+          selected={[...selected.values()]}
+          loaded={result?.transactions ?? []}
+          categories={result?.categories ?? filterOptions.categories}
+          tools={props.tools}
+          onClear={() => setSelected(new Map())}
+          onSaved={() => setSelected(new Map())}
+          onLockChange={setSelectionLocked}
+          onLoaded={() => {
+            if (selectionLocked) return;
+            setSelected((previous) => {
+              const next = new Map(previous);
+              for (const tx of result?.transactions ?? [])
+                if (bulkEligible(tx) && !next.has(tx.id) && next.size < 200)
+                  next.set(tx.id, { ...tx });
+              return next;
+            });
+          }}
+        />
+      ) : null}
       {outcomeGate(
         query,
         (data) => (
@@ -638,6 +706,9 @@ export function TransactionsScreen(
             onConfirm={confirmOne}
             onChange={changeOne}
             onSplit={setEditing}
+            selected={new Set(selected.keys())}
+            selectionLocked={selectionLocked}
+            onSelect={result?.supportsBulk && props.tools ? toggleSelection : undefined}
           />
         ),
         { loadingLabel: "Loading transactions" }

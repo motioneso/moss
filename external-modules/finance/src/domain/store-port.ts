@@ -1,3 +1,4 @@
+import type { TransactionBulkStore } from "./transaction-bulk.js";
 import type { FlexStore, FlexPolicy } from "./flex.js";
 import type { BillStore } from "./bills.js";
 import type { TargetStore } from "./targets.js";
@@ -58,6 +59,7 @@ export interface ActivityRecord {
 
 export interface FinanceStore {
   readonly supportsSplits: boolean;
+  readonly bulk?: TransactionBulkStore;
   readonly targets?: TargetStore;
   readonly bills?: BillStore;
   readonly flex?: FlexStore;

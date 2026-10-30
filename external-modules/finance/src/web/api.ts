@@ -4,8 +4,8 @@
 // requestJson — the invoke contract carries its payload
 // ({invocation:{blockedReason,...}}) on 403, and requestJson throws away
 // non-2xx bodies. Only risk:read tools are ever invoked here (D4: the REST
-// invoke route 403s non-read tools); every write goes through the module's
-// manual-run queue endpoint via runQueue below.
+// invoke route 403s non-read tools). Legacy writes use runQueue below;
+// reviewed page writes use the separate host-provided tools handle.
 import type { DirectoryUser } from "./household";
 
 export type ToolOutcome<T> =

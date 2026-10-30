@@ -108,6 +108,7 @@ export const MODULE_STYLES = `
   .fnm-desktop-only { display: none; }
   .fnm-phone-only { display: block; }
   .fnm-chips { max-width: 100%; }
+  .fnm-register-filters[data-expanded="false"] { display: none; }
   .fnm-split-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 `;

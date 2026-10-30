@@ -1,7 +1,8 @@
 # Finance parity checkpoint
 
-Updated 2026-10-28, 10:48 UTC. Local branch `task/finance-parity-20261028`, under `~/Jarv1s`.
-The original checkout is separate. Nothing has been pushed, published, merged or deployed.
+Updated 2026-10-30. Local branch `task/finance-parity-20261028`, under `~/Jarv1s`.
+The original checkout is separate. The user authorized task-branch pushes; remote is verified through
+`0a801a3c` (cash-backed flexible budgeting). No PR, merge or deployment has occurred.
 The [source-linked parity matrix](../specs/2026-10-28-finance-parity.md) records the audited
 baseline and testable acceptance criteria; this document records current implementation.
 
@@ -89,22 +90,22 @@ The Finance manifest is 0.7.0; app-map entries describe the bounded capability a
 
 ## Current capability matrix
 
-| Area                        | Status now                                                                   | Remaining acceptance                                                                      |
-| --------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Accounts                    | Partial: manual/provider accounts, exact opening balances and posted entries | Archive, provider reconciliation and broader currency model                               |
-| Import/reconciliation       | Manual entry, statements and bounded atomic CSV preview/import supported     | Provider-account import/reconciliation, larger files/reviews, category mapping            |
-| Transaction workspace       | Supported bounded filtering, duplicate candidates and loaded-row CSV         | Full-history export, atomic bulk editing, explicit transfer linking                       |
-| Splits                      | Supported posted own SQL category splits; installed UI persistence proven    | Split transfers, line notes/payees and pending edits                                      |
-| Categories/rules            | Partial existing categorization and merchant rules                           | Management/preview and ordinary-write concurrency                                         |
-| Envelope budget/rollover    | Partial envelopes; reviewed currency, exact math and historical funding      | Ordinary-write concurrency, credit-card reserves, configurable carry                      |
-| Flexible budget             | Missing                                                                      | Fixed/non-monthly/flex model without double counting                                      |
-| Targets/goals               | Missing                                                                      | Monthly/date-bound targets, exact remaining funds                                         |
-| Recurring bills             | Missing                                                                      | Cadence, occurrences and one-time import matching                                         |
-| Cash flow/reports/net worth | Partial: currency-safe spending/cash flow/snapshots                          | Ledger valuations, drill-through, saved/custom views                                      |
-| Household                   | Partial existing opt-in shared reads                                         | Explicit co-edit and joint-account policy; preserve private notes                         |
-| Investments                 | Partial balances only                                                        | Provider-dependent holdings/performance; trading out of scope                             |
-| Long-range forecasts        | Out of scope for initial roadmap                                             | Separate assumptions/uncertainty design                                                   |
-| Platform page writes        | Implemented; actual installed Finance and synthetic-module proof passed      | Independent review, CI and release/deployment acceptance; Meals consumer remains separate |
+| Area                        | Status now                                                                    | Remaining acceptance                                                                      |
+| --------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Accounts                    | Partial: manual/provider accounts, exact opening balances and posted entries  | Archive, provider reconciliation and broader currency model                               |
+| Import/reconciliation       | Manual entry, statements and bounded atomic CSV preview/import supported      | Provider-account import/reconciliation, larger files/reviews, category mapping            |
+| Transaction workspace       | Supported bounded filtering, duplicate candidates and loaded-row CSV          | Full-history export, atomic bulk editing, explicit transfer linking                       |
+| Splits                      | Supported posted own SQL category splits; installed UI persistence proven     | Split transfers, line notes/payees and pending edits                                      |
+| Categories/rules            | Partial existing categorization and merchant rules                            | Management/preview and ordinary-write concurrency                                         |
+| Envelope budget/rollover    | Partial envelopes; reviewed currency, exact math and historical funding       | Ordinary-write concurrency, credit-card reserves, configurable carry                      |
+| Flexible budget             | Partial: cash-backed pool, fixed/non-monthly groups and conserved transitions | Optional member-guidance editing and less restrictive future-plan migration               |
+| Targets/goals               | Partial: monthly/date category targets and historical versions                | Account-linked goals, automatic funding and investment growth                             |
+| Recurring bills             | Partial: manual plans, posted matching, skip, undo and stop                   | Automatic detection, calendar, one-off edits and provider Bill Sync                       |
+| Cash flow/reports/net worth | Partial: currency-safe spending/cash flow/snapshots                           | Ledger valuations, drill-through, saved/custom views                                      |
+| Household                   | Partial existing opt-in shared reads                                          | Explicit co-edit and joint-account policy; preserve private notes                         |
+| Investments                 | Partial balances only                                                         | Provider-dependent holdings/performance; trading out of scope                             |
+| Long-range forecasts        | Out of scope for initial roadmap                                              | Separate assumptions/uncertainty design                                                   |
+| Platform page writes        | Implemented; actual installed Finance and synthetic-module proof passed       | Independent review, CI and release/deployment acceptance; Meals consumer remains separate |
 
 Manual account/entry persistence is exercised through the installed app. The remaining
 [manual-ledger design](../specs/2026-10-28-finance-manual-ledger.md) now includes completed bounded reconciliation. Explicit transfers and archive remain unimplemented.
@@ -580,3 +581,48 @@ Tested input **6bd8d45ba567**, base **e8175605**, dirty 31-file implementation s
 Final aggregate static and installation results follow when their running commands finish. No new
 foundation/CI pass is claimed; previous whole-suite and lost-session limitations still apply.
 No live credentials, financial actions, production writes, merge or deployment were performed.
+
+## Reviewed bulk categorization
+
+Posted, owned, unsplit register entries can now be selected by captured row revision, up to 200
+loaded rows. Changing search/filter/month does not replace an old selection. Review displays the
+actual selected records and destination before a separate host confirmation. Category, provenance,
+review metadata and per-row activity commit together, with row locks acquired in stable id order.
+A missing, foreign, stale, pending or split row refuses the entire batch. Reconciliation, amounts,
+dates, accounts and notes remain unchanged; no rule is created. Cancellation retains choice;
+ambiguous/stale responses freeze bulk selection until an explicit records check. Legacy individual
+and Confirm all queues remain a concurrency gap; broader bulk editing is not claimed.
+
+The shared Checkbox uses native keyboard behavior and the authored semantic check treatment.
+Phone filter controls now expand on request with an active count; bulk controls wrap without
+splitting the selected count. These refinements came from actual installed phone inspection.
+
+Development evidence (before the final committed-snapshot acceptance run):
+
+- Focused Finance: **58 files / 578 tests pass**, `finance-bulk-third-unit.log`, rc 0. Includes
+  captured-review cancellation and explicit freeze/check behavior for stale and ambiguous saves.
+- Installed SQL: **6/6 pass** after restoration, `022106-UtBM4F`, rc 0, input `a8a9c9a2718f`.
+  Covers metadata-only reconciled changes, bounds, invalid mixed batches, owner reads, overlapping
+  concurrent saves and a deterministic locked-row change without partial edits.
+- Removing only the SELECT FOR UPDATE guard produced exactly **1 failure / 5 passes** at the
+  deterministic lock test (`021704-DjCwla`, input `469c2d97617a`): the stale batch returned true.
+  SQL was restored before later green acceptance; no disabled guard remains.
+- Removing only transaction RLS in a disposable fixture produced exactly **1 failure / 5 passes**
+  at the mixed foreign-row batch (`021959-9Ks0P9`, input `cc45a452dc6b`). The fixture was restored
+  before the final six-case green run. No production data or guards were changed.
+- Installed browser: **10/10 flows pass**, `022044-qz6gp7`, input `9022a51d1179`, rc 0. Actual
+  keyboard selection, cancelled confirmation, saved categories with other fields unchanged, filter
+  persistence and a real second-tab edit causing zero-write stale rejection. No application
+  responses were mocked. Phone/desktop/light/dark/Sage review and register images were inspected.
+- Removing only bulk host confirmation produced **1 failure / 9 passes**, `022340-AFeYaG`,
+  input `0fb84fcfc0d1`, at the missing host dialog. The manifest is restored before the final run.
+- Aggregate static passed (`finance-bulk-static.log`, rc 0) before the final phone-only polish;
+  fresh static, SQL, focused units and installed UI are required on the frozen checkpoint.
+- The browser caught a real pointer interception by the checkbox mark; pointer-events are now
+  disabled on its decorative box. Contract checks also caught app-map entry and description caps;
+  related transaction capabilities were consolidated without relaxing the platform limits.
+
+A final full foundation gate remains required; earlier baseline receipts are not a pass for these
+new changes. Next independent capability: faithful Reports drill-through, following the committed
+[report details spec](../specs/2026-10-30-finance-report-details.md). Broader charts, saved reports,
+explicit ledger transfer links, account lifecycle, household co-edit and investment data remain gaps.
