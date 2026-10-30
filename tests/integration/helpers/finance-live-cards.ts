@@ -112,6 +112,8 @@ export async function exerciseCardReserves(
         ).toBe(true);
         const footer = await dialog.locator(".jds-dialog__foot").boundingBox();
         expect(footer!.y + footer!.height).toBeLessThanOrEqual(900);
+        const ready = await dialog.getByText("$800.00", { exact: true }).boundingBox();
+        expect(ready!.y + ready!.height).toBeLessThanOrEqual(footer!.y);
       }
       if (artifacts)
         await page.screenshot({
@@ -151,6 +153,9 @@ export async function exerciseCardReserves(
     const reviewButton = page.getByRole("button", { name: "Review payment cash", exact: true });
     await waitForAction(reviewButton);
     await capture("saved");
+    await page.getByRole("button", { name: "See payment activity", exact: true }).click();
+    await page.getByText("Funded purchases this month", { exact: true }).waitFor();
+    await capture("activity");
     const fundDialog = page.getByRole("dialog", { name: "Review card-payment cash", exact: true });
     for (const [amount, ready, available] of [
       ["200.00", 75000, 20000],

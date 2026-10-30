@@ -2,6 +2,7 @@ import {
   Badge,
   Button,
   Dialog,
+  DisclosureToggle,
   Note,
   RowIndex,
   RowIndexItem,
@@ -11,7 +12,8 @@ import {
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import type { CardPaymentState } from "../domain/card-reserves";
-import { formatCents, parseAmountToCents } from "./format";
+import { centsToAmountInput, formatCents } from "./format";
+import { parseLedgerAmount } from "./manual-entry";
 import { invalidateQueries } from "./store";
 export interface CardPaymentView extends CardPaymentState {
   name: string;
@@ -35,6 +37,7 @@ export function CardPayments(props: {
     action: "enroll" | "fund";
     cash: number;
   } | null>(null);
+  const [details, setDetails] = useState<Record<string, boolean>>({});
   const d = props.data;
   if (!d.cardPayments.length && !d.cardChoices.length) return null;
   const disabled = props.disabled || !props.tools || d.month !== d.currentMonth;
@@ -86,23 +89,36 @@ export function CardPayments(props: {
                 d.isoCurrency
               )}
             />
-            <RowIndexItem
-              title="Funded purchases this month"
-              meta={formatCents(c.fundedCents, d.isoCurrency)}
-            />
-            <RowIndexItem
-              title="Refund movement this month"
-              meta={formatCents(c.refundsCents, d.isoCurrency)}
-            />
-            <RowIndexItem
-              title="Recorded payments this month"
-              meta={formatCents(c.paymentsCents, d.isoCurrency)}
-            />
           </RowIndex>
+          <DisclosureToggle
+            expanded={details[c.accountId] === true}
+            onClick={() =>
+              setDetails((current) => ({ ...current, [c.accountId]: !current[c.accountId] }))
+            }
+          >
+            {details[c.accountId] ? "Hide payment activity" : "See payment activity"}
+          </DisclosureToggle>
+          {details[c.accountId] ? (
+            <RowIndex variant="facts">
+              <RowIndexItem
+                title="Funded purchases this month"
+                meta={formatCents(c.fundedCents, d.isoCurrency)}
+              />
+              <RowIndexItem
+                title="Refund movement this month"
+                meta={formatCents(c.refundsCents, d.isoCurrency)}
+              />
+              <RowIndexItem
+                title="Recorded payments this month"
+                meta={formatCents(c.paymentsCents, d.isoCurrency)}
+              />
+            </RowIndex>
+          ) : null}
           {c.availableCents < 0 ? (
             <Note variant="practical">
               Payment cash is overspent. Cover {formatCents(-c.availableCents, d.isoCurrency)}{" "}
-              before funding targets.
+              before funding targets.{" "}
+              {c.archived ? "Reopen this card in Accounts to increase its payment cash." : ""}
             </Note>
           ) : null}
           {c.availableCents > c.owedCents ? (
@@ -162,7 +178,7 @@ function PaymentDialog(props: {
   tools?: ExternalModuleToolsHandleV1;
   onClose: () => void;
 }): ReactNodeLike {
-  const [amount, setAmount] = useState((props.choice.cash / 100).toFixed(2));
+  const [amount, setAmount] = useState(centsToAmountInput(props.choice.cash));
   const [review, setReview] = useState<{ input: Record<string, unknown>; preview: Preview } | null>(
     null
   );
@@ -173,7 +189,7 @@ function PaymentDialog(props: {
     enroll = props.choice.action === "enroll";
   const money = (cents: number) => formatCents(cents, d.isoCurrency);
   async function preview() {
-    const cents = parseAmountToCents(amount);
+    const cents = parseLedgerAmount(amount);
     if (cents === null || cents < 0) {
       setMessage("Enter a nonnegative amount with at most two decimal places.");
       return;
@@ -248,6 +264,7 @@ function PaymentDialog(props: {
     <Dialog
       scrollBody
       title={enroll ? "Set up card-payment reserve" : "Review card-payment cash"}
+      description={`${d.month} · ${d.isoCurrency}`}
       onClose={() => {
         if (!busy) props.onClose();
       }}
@@ -269,11 +286,11 @@ function PaymentDialog(props: {
     >
       <div className="fnm-block">
         <p>
-          <strong>{props.choice.name}</strong> · {d.month}
+          <strong>{props.choice.name}</strong>
         </p>
         <Note variant="practical">
           {enroll
-            ? "From this month, only cash you reserve backs card payments. Earlier months keep full-debt accounting. Funded purchases move category cash into this reserve; starting debt needs its own funding. Enrollment stays in place."
+            ? "Payment reserves stay active from this month; earlier months keep full-debt accounting. Funded purchases add category cash here. Starting debt needs separate cash."
             : "Choose the available cash you want reserved for payment. Increasing it uses Ready to assign; reducing it releases cash."}{" "}
           This never sends a payment.
         </Note>
@@ -296,14 +313,14 @@ function PaymentDialog(props: {
             <SectionHead title="Review the money" rule />
             <RowIndex variant="facts">
               {[
+                ["Payment cash after", review.preview.payment.availableCents],
+                ["Ready after", review.preview.readyAfterCents],
+                ["Ready before", review.preview.readyBeforeCents],
                 ["Starting debt", review.preview.payment.startingDebtCents],
                 ["Current card debt", review.preview.payment.owedCents],
                 ["Funded purchases", review.preview.payment.fundedCents],
                 ["Refund movement", review.preview.payment.refundsCents],
-                ["Recorded payments", review.preview.payment.paymentsCents],
-                ["Payment cash after", review.preview.payment.availableCents],
-                ["Ready before", review.preview.readyBeforeCents],
-                ["Ready after", review.preview.readyAfterCents]
+                ["Recorded payments", review.preview.payment.paymentsCents]
               ].map(([title, cents]) => (
                 <RowIndexItem
                   key={String(title)}

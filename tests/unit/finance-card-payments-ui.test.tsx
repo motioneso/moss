@@ -90,6 +90,45 @@ describe("captured card-payment cash review", () => {
       await act(async () => r.unmount());
     }
   );
+  it("reviews exact safe-integer amounts without the ordinary category assignment cap", async () => {
+    const { r, invoke, change } = await setup();
+    await change("90071992547409.90");
+    await act(async () => button(r, "Review amounts").props.onClick());
+    expect(invoke).toHaveBeenCalledWith("finance.card-reserve.preview", {
+      month: "2026-10",
+      accountId: "card",
+      action: "enroll",
+      availableCents: Number.MAX_SAFE_INTEGER - 1
+    });
+    await act(async () => r.unmount());
+  });
+  it("preserves the last cent when opening an existing large payment reserve", async () => {
+    let r!: ReactTestRenderer;
+    await act(async () => {
+      r = create(
+        createElement(CardPayments, {
+          data: {
+            month: "2026-10",
+            currentMonth: "2026-10",
+            isoCurrency: "USD",
+            cardPayments: [
+              {
+                ...payment,
+                name: "Synthetic card",
+                archived: false,
+                availableCents: Number.MAX_SAFE_INTEGER - 1
+              }
+            ],
+            cardChoices: []
+          },
+          tools: { invoke: vi.fn() }
+        })
+      );
+    });
+    await act(async () => button(r, "Review payment cash").props.onClick());
+    expect(r.root.findByType("input").props.value).toBe("90071992547409.90");
+    await act(async () => r.unmount());
+  });
   it("rejects sub-cent amounts before invoking a tool", async () => {
     const { r, invoke, change } = await setup();
     await change("12.345");
