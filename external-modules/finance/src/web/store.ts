@@ -74,8 +74,9 @@ export function useToolQuery<T extends Record<string, unknown>>(
 
 // After a queue run (or on demand) drop unmounted entries so the next mount refetches, and
 // restart mounted ones in place. Mounted screens keep their current data until the refetch lands.
-export function invalidateQueries(): void {
+function invalidate(onlyTool?: string): void {
   for (const [key, entry] of [...cache]) {
+    if (onlyTool && entry.name !== onlyTool) continue;
     if (entry.listeners.size === 0 || entry.name === undefined) {
       cache.delete(key);
       continue;
@@ -83,6 +84,14 @@ export function invalidateQueries(): void {
     entry.started = false;
     start(key, entry.name, entry.input);
   }
+}
+
+/** Preserve the existing zero-argument callback contract for write/refresh buttons. */
+export function invalidateQueries(): void {
+  invalidate();
+}
+export function invalidateToolQueries(onlyTool: string): void {
+  invalidate(onlyTool);
 }
 
 export function __resetStoreForTests(): void {

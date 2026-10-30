@@ -699,3 +699,37 @@ Final static and installed receipts will be added after the frozen run. No new w
 CI pass is claimed for this slice; the earlier frozen bulk foundation is still pending. The parity
 matrix remains Partial for Reports: saved views, arbitrary timeframes, further charts, full export,
 manual ledger valuations and investment holdings/performance are not completed here.
+
+### Report read-pressure fix and frozen aggregate result
+
+Actual installed report navigation reached the normal 60-per-minute read-tool limit because every
+detail open/reload unnecessarily invalidated both aggregate queries. Details now invalidate only
+their own query; an explicit Refresh reports action updates aggregates. The original zero-argument
+invalidateQueries callback remains intact, with a separate named scoped method; TypeScript caught
+and prevented an intermediate callback-signature regression. No rate limit was raised or disabled.
+
+The resulting development browser run **11/11 passes**, `024933-A4SA38`, rc 0, including an actual
+second-tab category correction, reload of captured report details, changed-total disclosure and all
+previous manual/budget/bill/flex/bulk/platform flows. Focused Finance is **60 files / 596 pass** after
+the scoped-refresh regression test. A final frozen run must cover the compatibility wrapper and the
+CSV-helper extraction before publication of this checkpoint.
+
+Frozen full foundation on clean **68282552**, input **ae01d4e0eaf7**, completed at 02:47:47 UTC:
+`moss_finance_verify-20261030-022830-JvRKTT.log`, **rc 1**. Static passed; units had **1,607 files /
+19,462 tests pass, 24 files / 279 tests fail, 16 skipped**. Failures are Computer root/native trust,
+auth fixtures, missing ACL commands, parity-browser setup hooks and the Sports bundled browser;
+none is a Finance test. Later migration/UAT/full-integration phases did not run. This is the exact
+current result, not a claim that identifiers match an old unavailable log.
+
+Recovered the missing ACL commands from Debian's official signed Trixie index/package into task-local
+tooling. With that PATH and supported CHROMIUM_PATH, the frozen recovery subset has **3 files /
+13 browser tests pass plus 2 ACL tests pass; 3 ACL tests remain failing** at unmapped native user
+100001 (`finance-bulk-environment-recovery.log`). No trust/owner check was weakened and no system
+package was installed. Future full runs must retain both task-local ACL tools and system Chromium.
+The literal Password prompt in unit output came from the existing promptHidden rejection test;
+no credential was requested or entered. All completed gate containers were removed.
+
+Next: [manual ledger net worth](../specs/2026-10-30-finance-ledger-net-worth.md), preserving the existing
+provider snapshot contract and disclosing per-account coverage. Source-linked Reports parity remains
+Partial, including missing saved/custom views and broader export. No PR, merge, deployment, real
+bank connection, production financial write or new credential was performed.

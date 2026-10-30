@@ -10,7 +10,7 @@ import {
 const { read, refresh } = vi.hoisted(() => ({ read: vi.fn(), refresh: vi.fn() }));
 vi.mock("../../external-modules/finance/src/web/store", () => ({
   useToolQuery: read,
-  invalidateQueries: refresh
+  invalidateToolQueries: refresh
 }));
 const selection: ReportSelection = {
   month: "2026-10",
@@ -127,6 +127,7 @@ describe("report detail review scope and pagination", () => {
     expect(JSON.stringify(r.toJSON())).toContain("Report transactions could not load.");
     await act(async () => button(r, "Reload details").props.onClick());
     expect(refresh).toHaveBeenCalledTimes(1);
+    expect(refresh).toHaveBeenCalledWith("finance.reports.transactions");
     await act(async () => r.unmount());
   });
 });

@@ -17,7 +17,7 @@ import { ReportDetails, type ReportSelection } from "../report-details";
 import { fetchUserDirectory } from "../api";
 import { formatCents, monthLabel } from "../format";
 import { EmptyState, outcomeGate } from "../states";
-import { invalidateQueries, useToolQuery } from "../store";
+import { invalidateToolQueries, useToolQuery } from "../store";
 import type { DirectoryUser } from "../household";
 // Deep imports on purpose: the domain barrel re-exports keys.ts (node:crypto),
 // which the browser-platform web bundle cannot resolve. reports/net-worth are
@@ -441,6 +441,17 @@ export function ReportsScreen(): ReactNodeLike {
           </Select>
         </label>
       </div>
+      <div>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            invalidateToolQueries("finance.reports.spending");
+            invalidateToolQueries("finance.reports.net-worth");
+          }}
+        >
+          Refresh reports
+        </Button>
+      </div>
       <p className="jds-caption">
         Each currency is shown separately. No exchange-rate conversion is applied.
       </p>
@@ -467,7 +478,7 @@ export function ReportsScreen(): ReactNodeLike {
                 result={result}
                 directory={directory}
                 onSelect={(scope) => {
-                  invalidateQueries();
+                  invalidateToolQueries("finance.reports.transactions");
                   setSelection(scope);
                 }}
               />

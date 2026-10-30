@@ -16,6 +16,7 @@ vi.mock("../../external-modules/finance/src/web/api", () => ({
 import {
   __resetStoreForTests,
   invalidateQueries,
+  invalidateToolQueries,
   useToolQuery
 } from "../../external-modules/finance/src/web/store";
 
@@ -52,6 +53,30 @@ describe("finance tool query store (#3197)", () => {
 
     expect(invokeTool).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(renderer.toJSON())).toContain("n=2");
+  });
+
+  it("refreshes detail reads without refetching unrelated report totals", async () => {
+    function ScopedProbe(props: { name: string }) {
+      const snap = useToolQuery<{ n: number }>(props.name);
+      return createElement("div", null, snap.status);
+    }
+    invokeTool.mockResolvedValue({ kind: "ok", result: { n: 1 } });
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        createElement(
+          "div",
+          null,
+          createElement(ScopedProbe, { name: "finance.reports.transactions" }),
+          createElement(ScopedProbe, { name: "finance.reports.spending" })
+        )
+      );
+    });
+    invokeTool.mockClear();
+    await act(async () => invalidateToolQueries("finance.reports.transactions"));
+    expect(invokeTool).toHaveBeenCalledTimes(1);
+    expect(invokeTool).toHaveBeenLastCalledWith("finance.reports.transactions", undefined);
+    await act(async () => renderer.unmount());
   });
 
   it("ignores an older answer that arrives after a newer one", async () => {

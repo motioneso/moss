@@ -89,7 +89,7 @@
       {
         "id": "finance.reports",
         "label": "Reports",
-        "description": "Reports is a primary Finance tab. Spending, cash flow and own-account net worth are shown in a selected currency, with no FX conversion. Mixed-currency data requires a choice before totals appear. Pending transactions remain included in spending; transfers are excluded. Snapshot net worth carries earlier balances forward and omits accounts without recorded balances. Monetary overflow is rejected instead of showing rounded totals. Category/payee bars and monthly income/outflow open paginated signed transaction contributions, including split portions. Totals and full counts remain visible beyond the loaded page. Changed totals are disclosed; private notes are omitted. Periods use the owner local calendar.",
+        "description": "Reports is a primary Finance tab. Spending, cash flow and own-account net worth are shown in a selected currency, with no FX conversion. Mixed-currency data requires a choice before totals appear. Pending transactions remain included in spending; transfers are excluded. Snapshot net worth carries earlier balances forward and omits accounts without recorded balances. Monetary overflow is rejected instead of showing rounded totals. Category/payee bars and monthly income/outflow open paginated signed transaction contributions, including split portions. Totals and full counts remain visible beyond the loaded page. Changed totals are disclosed; private notes are omitted. Details reload independently; Refresh reports updates aggregate totals. Periods use the owner local calendar.",
         "path": "/reports"
       },
       {

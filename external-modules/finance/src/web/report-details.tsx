@@ -11,7 +11,7 @@ import {
 import type { ReportDetailRow, ReportDetailScope } from "../domain/report-details";
 import { formatCents, monthLabel } from "./format";
 import { outcomeGate } from "./states";
-import { invalidateQueries, useToolQuery } from "./store";
+import { invalidateToolQueries, useToolQuery } from "./store";
 export interface ReportSelection extends ReportDetailScope {
   label: string;
   expectedCents: number;
@@ -55,7 +55,10 @@ export function ReportDetails(props: {
       closeLabel="Close report transactions"
       footer={
         <>
-          <Button variant="secondary" onClick={() => invalidateQueries()}>
+          <Button
+            variant="secondary"
+            onClick={() => invalidateToolQueries("finance.reports.transactions")}
+          >
             Reload details
           </Button>
           {offset > 0 || (loaded?.totalCount ?? 0) > 50 ? (
