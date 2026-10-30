@@ -89,7 +89,7 @@ import { targetFundHandler } from "../../external-modules/finance/src/worker/han
 import type { ToolFactory } from "../../external-modules/finance/src/worker/registry.js";
 import type { WorkerPorts } from "../../external-modules/finance/src/worker/ports.js";
 const at = "2026-10-30T12:00:00Z";
-const run = (factory: ToolFactory, input: Record<string, unknown>, user = ids.userA) =>
+const run = (factory: ToolFactory, input: Record<string, unknown>, user: string = ids.userA) =>
   runner.withDataContext({ actorUserId: user }, (scope) =>
     factory({
       store: async () => store(scope),
