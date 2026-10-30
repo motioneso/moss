@@ -71,6 +71,11 @@ async function stub(body: string, overrides: Partial<LaunchOptions> = {}): Promi
   };
 }
 const idle = "setInterval(()=>{},1000);";
+/**
+ * A complete acknowledgement: the one 0x01 byte, then the child closes its end so the end of file
+ * marks the end of the message. Nothing after it can arrive.
+ */
+const ack = "fs.writeSync(3,Buffer.from([1]));fs.closeSync(3);";
 
 const neverStarts = async (options: LaunchOptions) => {
   let calls = 0;
@@ -85,7 +90,7 @@ const neverStarts = async (options: LaunchOptions) => {
 
 describe("launchHold", () => {
   it("accepts one start-up byte on the launcher's own channel and returns the identity", async () => {
-    const hold = await launchHold(await stub(`fs.writeSync(3,Buffer.from([1]));${idle}`));
+    const hold = await launchHold(await stub(`${ack}${idle}`));
     pids.push(hold.identity.pid);
     expect(alive(hold.identity.pid)).toBe(true);
     expect(hold.identity.processGroupId).toBe(hold.identity.pid);
@@ -93,16 +98,28 @@ describe("launchHold", () => {
     expect(await gone(hold.identity.pid)).toBe(true);
   });
 
+  it("accepts the acknowledgement as soon as the child closes, not when the deadline passes", async () => {
+    // A 30s deadline: accepting before it proves the decision comes from the end of the
+    // acknowledgement, not from how long the launcher happened to wait.
+    const options = await stub(`${ack}${idle}`, { ackTimeoutMs: 30000 });
+    const started = Date.now();
+    const hold = await launchHold(options);
+    pids.push(hold.identity.pid);
+    expect(Date.now() - started).toBeLessThan(5000);
+    hold.kill();
+  }, 8000);
+
   it.each([
     ["no byte, still alive", idle],
-    ["a different byte", `fs.writeSync(3,Buffer.from([2]));${idle}`],
-    ["two bytes", `fs.writeSync(3,Buffer.from([1,1]));${idle}`],
+    ["one byte, then the channel stays open", `fs.writeSync(3,Buffer.from([1]));${idle}`],
+    ["a different byte", `fs.writeSync(3,Buffer.from([2]));fs.closeSync(3);${idle}`],
+    ["two bytes", `fs.writeSync(3,Buffer.from([1,1]));fs.closeSync(3);${idle}`],
     [
       "two single bytes written back to back",
-      `fs.writeSync(3,Buffer.from([1]));fs.writeSync(3,Buffer.from([1]));${idle}`
+      `fs.writeSync(3,Buffer.from([1]));fs.writeSync(3,Buffer.from([1]));fs.closeSync(3);${idle}`
     ],
     ["an early exit", "process.exit(2);"],
-    ["a closed channel", `fs.closeSync(3);${idle}`]
+    ["a channel closed with no byte", `fs.closeSync(3);${idle}`]
   ])("refuses %s and leaves nothing running", async (_name, body) => {
     const options = await stub(body, { ackTimeoutMs: 600 });
     let pid = 0;
@@ -114,7 +131,7 @@ describe("launchHold", () => {
   });
 
   it("refuses extra bytes even when the socket delivers each byte separately", async () => {
-    const options = await stub(`fs.writeSync(3,Buffer.from([1,1]));${idle}`, {
+    const options = await stub(`fs.writeSync(3,Buffer.from([1,1]));fs.closeSync(3);${idle}`, {
       ackTimeoutMs: 600,
       spawn(command, args, spawnOptions) {
         const child = spawn(command, args, spawnOptions);
@@ -139,7 +156,7 @@ describe("launchHold", () => {
   });
 
   it("starts the child in its own process group", async () => {
-    const options = await stub(`fs.writeSync(3,Buffer.from([1]));${idle}`);
+    const options = await stub(`${ack}${idle}`);
     const hold = await launchHold(options);
     pids.push(hold.identity.pid);
     expect(hold.identity.processGroupId).not.toBe(process.pid);
@@ -148,7 +165,7 @@ describe("launchHold", () => {
 
   it("refuses when the launcher holds no end of the channel", async () => {
     // The child can still write, but nothing in the launcher can read it.
-    const options = await stub(`fs.writeSync(3,Buffer.from([1]));${idle}`, {
+    const options = await stub(`${ack}${idle}`, {
       ackTimeoutMs: 600,
       spawn: (command, args, spawnOptions) =>
         spawn(command, args, {
@@ -164,7 +181,7 @@ describe("launchHold", () => {
   });
 
   it("refuses when the child's identity changes between spawn and the byte", async () => {
-    const options = await stub(`fs.writeSync(3,Buffer.from([1]));${idle}`);
+    const options = await stub(`${ack}${idle}`);
     let calls = 0;
     let pid = 0;
     await expect(
@@ -182,7 +199,7 @@ describe("launchHold", () => {
   });
 
   describe("file verification", () => {
-    const ok = `fs.writeSync(3,Buffer.from([1]));${idle}`;
+    const ok = `${ack}${idle}`;
     it("refuses a bundle whose hash differs and starts nothing", async () => {
       const options = await stub(ok);
       await neverStarts({ ...options, bundleSha256: "0".repeat(64) });
@@ -225,7 +242,7 @@ describe("launchHold", () => {
   });
 
   describe("launchHold runs its own protections", () => {
-    const ok = `fs.writeSync(3,Buffer.from([1]));${idle}`;
+    const ok = `${ack}${idle}`;
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
     const copyNode = async (options: LaunchOptions) => {
       const copy = join(dirs[dirs.length - 1]!, "node-copy");
@@ -284,7 +301,7 @@ describe("launchHold", () => {
       await writeFile(
         options.bundlePath,
         `const fs=require("node:fs");` +
-          `if(process.env.EXECED){setInterval(()=>{},1000)}else{fs.writeSync(3,Buffer.from([1]));` +
+          `if(process.env.EXECED){setInterval(()=>{},1000)}else{fs.writeSync(3,Buffer.from([1]));fs.closeSync(3);` +
           `setTimeout(()=>process.execve(${JSON.stringify(copy)},${argv},{EXECED:"1"}),300)}`
       );
       await refusedAndKilled({
@@ -294,9 +311,9 @@ describe("launchHold", () => {
       });
     });
 
-    it("refuses a second byte that arrives while the final checks run", async () => {
+    it("refuses a second byte written before the child closes its end", async () => {
       const options = await stub(
-        `fs.writeSync(3,Buffer.from([1]));setTimeout(()=>fs.writeSync(3,Buffer.from([1])),150);${idle}`
+        `fs.writeSync(3,Buffer.from([1]));setTimeout(()=>{fs.writeSync(3,Buffer.from([1]));fs.closeSync(3)},150);${idle}`
       );
       await refusedAndKilled({ ...options, ...slowSecondRead(700) });
     });

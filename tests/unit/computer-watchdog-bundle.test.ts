@@ -47,4 +47,13 @@ describe("watchdog bundle", () => {
     expect(text).not.toMatch(/require\("\.{1,2}\//);
     expect(built.sha256).toMatch(/^[0-9a-f]{64}$/);
   });
+
+  it("ships a start-up acknowledgement that ends with the child closing its end", async () => {
+    // The launcher accepts only a complete acknowledgement: one 0x01 byte, then end of file.
+    // The bundle is what runs, so the child's half of that message is asserted here.
+    const text = (await buildWatchdogBundle()).bytes.toString();
+    expect(text).toMatch(
+      /writeAck: async \(\) => \{\s*\(0, [\w.$]+\.writeSync\)\(3, Buffer\.from\(\[1\]\)\);\s*\(0, [\w.$]+\.closeSync\)\(3\);/
+    );
+  });
 });

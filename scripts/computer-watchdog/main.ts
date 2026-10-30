@@ -1,4 +1,4 @@
-import { writeSync } from "node:fs";
+import { closeSync, writeSync } from "node:fs";
 import { isRecord } from "../../apps/api/src/computer/host-contract.js";
 import { computerMonotonicMs, readComputerProcess } from "./linux.js";
 import { observeComputer } from "./observe.js";
@@ -25,7 +25,7 @@ export interface WatchdogDeps {
   readonly clearTimer: (timer: unknown) => void;
   readonly selfPid: () => number;
   readonly parentPid: () => number;
-  /** Writes one byte on descriptor 3. */
+  /** Completes the start-up acknowledgement: one byte on descriptor 3, then the end of the message. */
   readonly writeAck: () => Promise<void>;
 }
 
@@ -39,6 +39,10 @@ export const defaultDeps: WatchdogDeps = {
   parentPid: () => process.ppid,
   writeAck: async () => {
     writeSync(3, Buffer.from([1]));
+    // Closing this end after the byte ends the acknowledgement, exactly as a message needs a
+    // terminator. The launcher then judges the whole byte stream rather than guessing from a
+    // deadline whether more bytes are on the way. Nothing here reads or writes descriptor 3 again.
+    closeSync(3);
   }
 };
 
