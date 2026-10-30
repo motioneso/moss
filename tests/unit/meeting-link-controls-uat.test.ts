@@ -22,6 +22,8 @@ describe("capture UAT single-link source contract (not live browser proof)", () 
 
   it("keeps both real Start and post-revocation upload checks with relinked-device cleanup", () => {
     expect(source).toContain('for (const action of ["revoke", "unlink"] as const)');
+    expect(source).toContain("postWithRateLimitRetry(");
+    expect(source).toContain('"/api/companion/recording-capability/revoke"');
     expect(source).toContain(
       'getByRole("button", { name: "Start recording", exact: true }).click()'
     );
