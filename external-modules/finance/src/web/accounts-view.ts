@@ -11,6 +11,7 @@ export interface AccountsRow {
   itemId: string | null;
   source?: "manual" | "provider";
   openingDate?: string;
+  archivedAt?: string | null;
   name: string;
   mask: string | null;
   type: string;

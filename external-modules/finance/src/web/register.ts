@@ -1,3 +1,4 @@
+import { isCalendarMonth } from "../domain/values.js";
 import { csvText } from "../domain/csv-text.js";
 import { centsToAmountInput } from "./format.js";
 
@@ -60,4 +61,20 @@ export function downloadTransactionsCsv(csv: string, month: string): void {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Read-only history links never authorize another owner or an unchecked calendar scope. */
+export function initialRegisterScope(search: string): {
+  month?: string;
+  accountId?: string;
+  ownOnly: boolean;
+} {
+  const params = new URLSearchParams(search),
+    month = params.get("month"),
+    accountId = params.get("accountId");
+  return {
+    ...(month && isCalendarMonth(month) ? { month } : {}),
+    ...(accountId && accountId.length <= 256 ? { accountId } : {}),
+    ownOnly: params.get("scope") === "own"
+  };
 }

@@ -77,7 +77,7 @@
       {
         "id": "finance.accounts",
         "label": "Accounts",
-        "description": "Manual accounts offer Add transaction Reconcile and Import CSV actions. Connected banks show their names (filled in on the next sync), balances, sync status and reconnect. Latest balance totals keep currencies separate and subtract debts, with no FX conversion. Each account retains its own currency. A total outside safe precision is unavailable while individual balances remain visible.",
+        "description": "Accounts shows separate currency totals, manual ledgers and dated bank balances. Manual accounts support entry, CSV import and statement reconciliation. Manage reads an owned revision for host-confirmed rename/close/reopen; no opening/type/currency or financial history is rewritten. Closing requires a valid zero ledger, current statement or pristine zero baseline, no future entries and resolved future bill plans. Closed accounts keep history and reopen without unlocking reconciled periods. History links initialize validated account/month register filters. Provider/shared accounts never get manual edit controls. Read/stale failures preserve drafts and require fresh review.",
         "path": "/accounts"
       },
       {
@@ -495,7 +495,8 @@
           "direction": { "type": "string", "enum": ["inflow", "outflow"] },
           "uncategorizedOnly": { "type": "boolean" },
           "duplicatesOnly": { "type": "boolean" },
-          "transactionId": { "type": "string" }
+          "transactionId": { "type": "string" },
+          "ownOnly": { "type": "boolean" }
         }
       },
       "handler": "transactions.query"
@@ -1103,7 +1104,7 @@
       "name": "finance.bill.stop",
       "permissionId": "finance.bill.stop",
       "actionLabel": "Stop a bill plan",
-      "description": "Stop a bill plan. Plans are projections; no payment or transaction is created. Writes require the current bills review.",
+      "description": "Stop a bill plan. Plans are projections; no payment or transaction is created. Writes require the current bills review. An already ending plan may stop sooner; recorded occurrence decisions are preserved.",
       "risk": "write",
       "handler": "bill.stop",
       "inputSchema": {
@@ -1406,6 +1407,40 @@
           }
         },
         "required": ["rows"]
+      }
+    },
+    {
+      "name": "finance.manual.account-review",
+      "permissionId": "finance.manual.account-review",
+      "description": "Read an owned manual account and captured row revision, with exact ledger/statement checks and future bill-plan blockers for closing. Never returns credentials or transaction notes.",
+      "risk": "read",
+      "handler": "manual.account-review",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": { "accountId": { "type": "string", "minLength": 1, "maxLength": 256 } },
+        "required": ["accountId"]
+      }
+    },
+    {
+      "name": "finance.manual.account-update",
+      "permissionId": "finance.manual.account-update",
+      "actionLabel": "Update manual account",
+      "description": "Rename, close or reopen an owned manual ledger after reviewing its row revision. Changes metadata only and preserves opening/currency/type, balance dates, transactions and statements. Closing requires a verified zero ledger and resolved future dependencies. Does not operate a bank account.",
+      "risk": "write",
+      "handler": "manual.account-update",
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["accountId", "operation"],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "accountId": { "type": "string", "minLength": 1, "maxLength": 256 },
+          "expectedRevision": { "type": "string", "pattern": "^[a-f0-9]{32}$" },
+          "operation": { "type": "string", "enum": ["rename", "close", "reopen"] },
+          "name": { "type": "string", "minLength": 1, "maxLength": 80 }
+        },
+        "required": ["accountId", "expectedRevision", "operation"]
       }
     }
   ],

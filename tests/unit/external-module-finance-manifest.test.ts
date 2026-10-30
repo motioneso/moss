@@ -91,6 +91,19 @@ describe("finance manifest app map (#3177)", () => {
     ).toMatchObject({ risk: "write", executionPolicy: "confirm", confirmWhenKeys: ["rows"] });
   });
 
+  it("requires the host guard for manual account metadata changes", () => {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      assistantTools: { name: string }[];
+    };
+    expect(
+      manifest.assistantTools.find((t) => t.name === "finance.manual.account-update")
+    ).toMatchObject({
+      risk: "write",
+      executionPolicy: "confirm",
+      confirmWhenKeys: ["accountId", "operation"]
+    });
+  });
+
   it("lets chat adjust a draft through the drafting family", () => {
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
       assistantTools: { name: string; handler?: string; risk: string; actionFamilyId?: string }[];
@@ -179,7 +192,9 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.transactions.bulk-category", "transactions.bulk-category"],
         ["finance.reports.transactions", "reports.transactions"],
         ["finance.transactions.export", "transactions.export"],
-        ["finance.transactions.confirm", "transactions.confirm"]
+        ["finance.transactions.confirm", "transactions.confirm"],
+        ["finance.manual.account-review", "manual.account-review"],
+        ["finance.manual.account-update", "manual.account-update"]
       ]
     );
     for (const tool of result.manifest.assistantTools ?? []) {
@@ -556,7 +571,8 @@ describe("finance manifest contract (#1146)", () => {
       "direction",
       "uncategorizedOnly",
       "duplicatesOnly",
-      "transactionId"
+      "transactionId",
+      "ownOnly"
     ]);
     expect(querySchema.required).toBeUndefined();
     const categorize = tools.find((tool) => tool.name === "finance.transaction.categorize")!;

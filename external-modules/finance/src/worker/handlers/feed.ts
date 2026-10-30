@@ -83,6 +83,7 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
   const transactionId = readString(input, "transactionId");
   const categoryId = readString(input, "categoryId");
   const search = readString(input, "search")?.toLowerCase();
+  const ownOnly = readBool(input, "ownOnly") ?? false;
   const pendingOnly = readBool(input, "pendingOnly") ?? false;
   const needsLookOnly = readBool(input, "needsLookOnly") ?? false;
   const uncategorizedOnly = readBool(input, "uncategorizedOnly") ?? false;
@@ -109,7 +110,7 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
   // filters below, so category/search/pending treat shared rows exactly like
   // own rows. Own-prefix mirror chunks are skipped (own records above are
   // authoritative); this read stays pure — no mirror writes, no GC-on-read.
-  for (const key of await ports.mirror.list()) {
+  for (const key of ownOnly ? [] : await ports.mirror.list()) {
     const parsed = parseSharedKey(key);
     if (!parsed || parsed.suffix !== month) continue;
     if (parsed.ownerUserId === actorUserId) continue;
@@ -185,7 +186,9 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
     supportsBulk: Boolean(store.bulk),
     supportsConfirm: Boolean(store.bulk?.confirm),
     categories: await loadCategories(ports),
-    accounts: (accounts.accounts as unknown[] | undefined) ?? []
+    accounts: ((accounts.accounts as { shared?: boolean }[] | undefined) ?? []).filter(
+      (a) => !ownOnly || a.shared !== true
+    )
   };
 };
 

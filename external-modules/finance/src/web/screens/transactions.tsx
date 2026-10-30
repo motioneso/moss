@@ -29,7 +29,7 @@ import { chunkReviewRows } from "../assign";
 import { currentMonth, dayLabel, formatCents, monthLabel, shiftMonth } from "../format";
 import { announce, EmptyState, outcomeGate } from "../states";
 import { invalidateQueries, invalidateToolQueries, useToolQuery } from "../store";
-import { downloadTransactionsCsv, transactionsCsv } from "../register";
+import { downloadTransactionsCsv, transactionsCsv, initialRegisterScope } from "../register";
 import { EMPTY_FILTERS, filterInput, RegisterFilterBar } from "../register-filters";
 import { SplitEditor, type SplitTransaction } from "../split-editor";
 import { TransactionBulkBar, bulkEligible } from "../transaction-bulk";
@@ -458,12 +458,19 @@ function TransactionsBody(props: {
 export function TransactionsScreen(
   props: { tools?: ExternalModuleToolsHandleV1 } = {}
 ): ReactNodeLike {
-  const [month, setMonth] = useState(currentMonth);
+  const [initial] = useState(() =>
+    initialRegisterScope(typeof window === "undefined" ? "" : window.location.search)
+  );
+  const [ownOnly, setOwnOnly] = useState(initial.ownOnly);
+  const [month, setMonth] = useState(() => initial.month ?? currentMonth());
   const [exporting, setExporting] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [filters, setFilters] = useState(() => ({
+    ...EMPTY_FILTERS,
+    ...(initial.accountId ? { accountId: initial.accountId } : {})
+  }));
   const [editing, setEditing] = useState<Tx | null>(null);
   const [selected, setSelected] = useState<ReadonlyMap<string, Tx>>(new Map());
   const [selectionLocked, setSelectionLocked] = useState(false);
@@ -499,6 +506,7 @@ export function TransactionsScreen(
     month,
     limit: PAGE_SIZE * pages,
     ...filterInput(filters),
+    ...(ownOnly ? { ownOnly: true } : {}),
     ...(search ? { search } : {}),
     ...(filter === "look" ? { needsLookOnly: true } : {})
   });
@@ -595,6 +603,14 @@ export function TransactionsScreen(
 
   return (
     <section aria-label="Transactions" className="fnm-block">
+      {ownOnly ? (
+        <div className="fnm-chips">
+          <p className="jds-hint">Only your own ledger entries are shown.</p>
+          <Button variant="link" onClick={() => setOwnOnly(false)}>
+            Include shared records
+          </Button>
+        </div>
+      ) : null}
       <div className="fnm-spread">
         <div className="fnm-chips">
           <Segmented

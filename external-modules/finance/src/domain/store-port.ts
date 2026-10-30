@@ -1,3 +1,4 @@
+import type { AccountLifecycleStore } from "./account-lifecycle.js";
 import type { HistoryExportStore } from "./history-export.js";
 import type { TransactionBulkStore } from "./transaction-bulk.js";
 import type { FlexStore, FlexPolicy } from "./flex.js";
@@ -59,6 +60,7 @@ export interface ActivityRecord {
 }
 
 export interface FinanceStore {
+  readonly accountLifecycle?: AccountLifecycleStore;
   readonly historyExport?: HistoryExportStore;
   readonly supportsSplits: boolean;
   readonly bulk?: TransactionBulkStore;

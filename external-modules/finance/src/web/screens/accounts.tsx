@@ -1,3 +1,4 @@
+import { ManualAccountManager } from "../account-management";
 // external-modules/finance/src/web/screens/accounts.tsx
 // #3177: the Accounts screen. One read (finance.accounts.list) gives accounts
 // and banks; accounts-view.ts turns them into sections. Own accounts only:
@@ -8,6 +9,7 @@
 import {
   Button,
   Indicator,
+  DisclosureToggle,
   Masthead,
   RowIndex,
   RowIndexItem,
@@ -30,6 +32,7 @@ type HostActions = { openAssistant: (input: { starterPrompt: string }) => void }
 interface AccountsResult extends Record<string, unknown> {
   accounts?: Array<AccountsRow & { shared?: boolean }>;
   banks?: AccountsBank[];
+  supportsManualManagement?: boolean;
 }
 
 function BankStatus(props: {
@@ -56,8 +59,12 @@ function AccountsBody(props: {
   onAddEntry: (account: ManualAccountChoice) => void;
   onReconcile: (account: ManualAccountChoice) => void;
   onImport: (account: ManualAccountChoice) => void;
+  onManage: (accountId: string) => void;
 }): ReactNodeLike {
+  const [showClosed, setShowClosed] = useState(false);
   const own = (props.result.accounts ?? []).filter((account) => !account.shared);
+  const closed = own.filter((a) => a.source === "manual" && a.archivedAt);
+  const active = own.filter((a) => !closed.includes(a));
   const addBank = (): void =>
     props.hostActions.openAssistant({ starterPrompt: "Connect my bank account" });
   if (own.length === 0) {
@@ -73,7 +80,7 @@ function AccountsBody(props: {
       />
     );
   }
-  const view = buildAccountsView(own, props.result.banks ?? [], new Date());
+  const view = buildAccountsView(active, props.result.banks ?? [], new Date());
   const reconnect = (): void =>
     props.hostActions.openAssistant({ starterPrompt: "Reconnect my bank account" });
   return (
@@ -135,6 +142,15 @@ function AccountsBody(props: {
                       {own.find((row) => row.accountId === account.accountId)?.source ===
                       "manual" ? (
                         <div className="fnm-account-actions">
+                          {props.result.supportsManualManagement ? (
+                            <Button
+                              variant="link"
+                              aria-label={`Manage ${account.name}`}
+                              onClick={() => props.onManage(account.accountId)}
+                            >
+                              Manage
+                            </Button>
+                          ) : null}
                           <Button
                             variant="link"
                             aria-label={`Add transaction to ${account.name}`}
@@ -180,6 +196,39 @@ function AccountsBody(props: {
           </section>
         );
       })}
+      {closed.length ? (
+        <section aria-label="Closed manual accounts" className="fnm-block fnm-block--tight">
+          <DisclosureToggle expanded={showClosed} onClick={() => setShowClosed(!showClosed)}>
+            Closed accounts ({closed.length})
+          </DisclosureToggle>
+          {showClosed ? (
+            <>
+              <p className="jds-hint">
+                History is kept in Transactions, Reports and exports. Manage an account to reopen it
+                or view its history.
+              </p>
+              <RowIndex density="compact">
+                {closed.map((a) => (
+                  <RowIndexItem
+                    key={a.accountId}
+                    title={a.name}
+                    excerpt="Closed manual ledger"
+                    meta={
+                      <Button
+                        variant="link"
+                        aria-label={`Manage ${a.name}`}
+                        onClick={() => props.onManage(a.accountId)}
+                      >
+                        Manage
+                      </Button>
+                    }
+                  />
+                ))}
+              </RowIndex>
+            </>
+          ) : null}
+        </section>
+      ) : null}
       <div>
         <Button variant="secondary" onClick={addBank}>
           Add a bank
@@ -194,6 +243,7 @@ export function AccountsScreen(props: {
   tools?: ExternalModuleToolsHandleV1;
 }): ReactNodeLike {
   const [editing, setEditing] = useState<ManualAccountChoice | null | undefined>(undefined);
+  const [managed, setManaged] = useState<string | null>(null);
   const [reconciling, setReconciling] = useState<ManualAccountChoice | null>(null);
   const [importing, setImporting] = useState<ManualAccountChoice | null>(null);
   const accounts = useToolQuery<AccountsResult>("finance.accounts.list");
@@ -217,10 +267,27 @@ export function AccountsScreen(props: {
             onAddEntry={setEditing}
             onReconcile={setReconciling}
             onImport={setImporting}
+            onManage={setManaged}
           />
         ),
         { loadingLabel: "Loading accounts" }
       )}
+      {managed ? (
+        <ManualAccountManager
+          key={managed}
+          accountId={managed}
+          tools={props.tools}
+          onClose={() => setManaged(null)}
+          onSaved={() => {
+            setManaged(null);
+            invalidateQueries();
+          }}
+          onReconcile={(account) => {
+            setManaged(null);
+            setReconciling(account);
+          }}
+        />
+      ) : null}
       {editing !== undefined ? (
         <ManualEntryDialog
           tools={props.tools}

@@ -155,3 +155,68 @@ next; do not reuse a development fingerprint as the final one.
 Next implementation: reviewed manual account rename/close/reopen, retaining financial history,
 opening/currency/type immutability, safe zero/reconciled closure and concurrent-entry protection.
 Explicit transfer links and the rule/individual-write gaps remain separate work.
+
+## Manual account lifecycle continuation
+
+Design: [reviewed manual-account lifecycle](../specs/2026-10-30-finance-manual-account-lifecycle.md).
+Own manual ledgers now have captured rename/close/reopen with mandatory host confirmation. Closing
+requires stored and reconstructed zero, valid original entries, no future entries, today's statement
+or a pristine zero opening, and no future bill references. Original amounts, opening/type/currency,
+statement locks, monetary ledger revision and balance observation time are retained. Closed rows
+keep history/export/report access and reopening. Provider/shared accounts have no manual controls.
+
+Bill attachment locks the account and advances its MVCC dependency version without changing money
+or its observation date; this prevents closing against a snapshot that missed a concurrently attached
+plan. An ending plan may stop sooner without discarding recorded occurrence decisions. Upcoming
+shows linked accounts and distinguishes future stops from already stopped plans.
+
+History links initialize validated month/account filters with an explicit own-only register scope.
+Cancellation keeps the captured account and rename draft. Stale/ambiguous saves block resubmission
+until an explicit fresh successful read; no financial adjustment or silent write retry is invented.
+
+Development evidence on design base `03403a56` (final committed verification still pending):
+
+- 64 focused unit files / 638 passed: handlers, host date boundaries, invalid input, stale status,
+  strict manifest/always-confirm contract and owner-only history filters.
+- Root test types and Finance module types passed. Initial broad `test:unit finance` incorrectly
+  selected integration suites as well: DB gate guards refused before database access. It is a failed
+  invocation, not a Finance pass. The explicit `tests/unit/finance-` and
+  `tests/unit/external-module-finance-` filters above are the corrected run.
+- SQL lifecycle eight passed: `044323-2dGo8V`, input `9d4b6dc395ee`; bill regression eight passed:
+  `044650-9cLZ4G`, input `c1423272b26f`. Exact metadata preservation, pristine/current-statement
+  closure, stale/replay, history, reopen locks, future/corrupt ledger refusal, provider/foreign/admin
+  refusal and held-lock entry/plan races are covered.
+- Installed browser one passed / 14 unrelated flows skipped: `044619-RUxnJj`, input `c1423272b26f`.
+  Actual blocked nonzero closure, cancel/save rename, close/reopen, stale other-tab rejection,
+  draft-preserving fresh review and own history navigation. Screenshots cover 320/390/768/1440
+  in light/dark/Sage. The first browser run failed on a mistaken test-only disclosure label;
+  the corrected test passes. No application response mocks or live bank data are involved.
+- Dependency-version negative: `044704-vdmbOJ`, input `dd5729768bbc`, two failed / six passed.
+  The disposable fixture intercepted only bill creation SQL to omit its no-op account touch.
+  The held plan race then wrongly closed the account. Production SQL was never changed; fixture
+  restored. This establishes why a row lock alone is insufficient for an old statement snapshot.
+- Ownership negative: `044740-66ZCET`, input `178eb3952b95`, foreign review became visible with
+  account RLS temporarily disabled inside the disposable fixture. RLS re-enabled before teardown;
+  fixture restored. One failed / seven passed; restored final receipts are still required.
+- A development static run was invalidated by a temporary negative-control fixture formatting
+  warning; final restored lint/format/static checks must be rerun, never counted as green.
+
+Previous clean aggregate `040401-c9zwQ0` on `3c620d58`, input `bf68260e49dc`, completed rc=1:
+1,615 files / 19,526 tests passed, 21 files / 277 tests failed, three skipped. The complete normalized
+failure identifiers match the preceding `033211-vxi3N1` exactly (comparison of sorted unique FAIL
+lines SHA256 `5e9142647bef82ce34f207f569a547f05e62875a239f6dcb0e5d5e8315f80f1f`).
+These remain the recorded Computer ownership/native prerequisites, Sports bundled browser and
+unmapped-UID ACL baseline. No Finance failure appears. Later aggregate stages and CI e2e remain
+unrun; this receipt predates lifecycle and is not its final aggregate proof. Monthly-history clean
+static `042553-4cR8xV` completed rc=0 on `ccb8a8b3`.
+
+Next: restore and prove the account confirmation guard, finish static and installed verification,
+commit/push this bounded slice, then address explicit linked transfers and awaited individual/rule
+writes. Credit-card reserve budgeting, investment holdings and provider-dependent coverage remain
+separate gaps; do not label the overall product as universal parity.
+
+Host-confirmation negative `044753-RKJqQf`, input `093174ac3cc8`: one failed / 14 skipped. A
+synthetic manifest temporarily allowed routine auto execution for only account-update. The host
+dialog never appeared and the debug screenshot showed the renamed account, proving the metadata
+write had auto-executed. Mandatory confirmation, operation keys and original family policy restored.
+Phone inspection prompted tighter dialog spacing with unchanged semantic typography/colors.

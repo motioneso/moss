@@ -55,13 +55,16 @@ export function billSqlStore(db: FinanceDb): BillStore {
       }));
     },
     async create(p, e, at) {
+      // Attach the plan under the account lock and advance its MVCC dependency version.
+      // Planning preserves the monetary ledger revision, balance and observation timestamp.
       const result = await db.query<{ applied: boolean }>(
-        "WITH " +
+        "WITH account AS MATERIALIZED (SELECT * FROM app.finance_accounts WHERE account_id=$3 AND iso_currency=$5 AND archived_at IS NULL FOR UPDATE), " +
           budgetEligibilitySql(
             10,
-            "NOT EXISTS (SELECT 1 FROM app.finance_bill_plans WHERE id=$1::uuid) AND EXISTS (SELECT 1 FROM app.finance_accounts WHERE account_id=$3 AND iso_currency=$5) AND EXISTS (SELECT 1 FROM app.finance_categories WHERE id=$4 AND archived_at IS NULL AND NOT is_income AND id <> 'transfers') AND iso_currency=$5"
+            "NOT EXISTS (SELECT 1 FROM app.finance_bill_plans WHERE id=$1::uuid) AND EXISTS (SELECT 1 FROM account) AND EXISTS (SELECT 1 FROM app.finance_categories WHERE id=$4 AND archived_at IS NULL AND NOT is_income AND id <> 'transfers') AND iso_currency=$5"
           ) +
           ", saved AS (INSERT INTO app.finance_bill_plans (owner_user_id,id,name,account_id,category_id,iso_currency,amount_cents,anchor_date,cadence,created_at) SELECT app.current_actor_user_id(),$1::uuid,$2,$3,$4,$5,$6,$7::date,$8,$9::timestamptz FROM eligible RETURNING id), " +
+          "touched AS (UPDATE app.finance_accounts SET ledger_revision=ledger_revision WHERE account_id=$3 AND source='manual' AND EXISTS (SELECT 1 FROM saved) RETURNING account_id), " +
           logged("saved", "bill.create", "jsonb_build_object('planId',$1::text)", "$9") +
           " SELECT EXISTS (SELECT 1 FROM saved) AS applied",
         [
@@ -85,7 +88,7 @@ export function billSqlStore(db: FinanceDb): BillStore {
         "WITH " +
           budgetEligibilitySql(
             4,
-            "EXISTS (SELECT 1 FROM app.finance_bill_plans WHERE id=$1::uuid AND end_date IS NULL) AND NOT EXISTS (SELECT 1 FROM app.finance_bill_occurrences WHERE plan_id=$1::uuid AND due_date > $2::date)"
+            "EXISTS (SELECT 1 FROM app.finance_bill_plans WHERE id=$1::uuid AND (end_date IS NULL OR $2::date<end_date)) AND NOT EXISTS (SELECT 1 FROM app.finance_bill_occurrences WHERE plan_id=$1::uuid AND due_date > $2::date)"
           ) +
           ", saved AS (UPDATE app.finance_bill_plans SET end_date=$2::date WHERE id=$1::uuid AND EXISTS (SELECT 1 FROM eligible) RETURNING id), " +
           logged(

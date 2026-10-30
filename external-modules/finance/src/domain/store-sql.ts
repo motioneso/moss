@@ -1,3 +1,4 @@
+import { accountLifecycleSqlStore } from "./store-account-lifecycle-sql.js";
 import { historyExportSqlStore } from "./store-history-export-sql.js";
 import { transactionBulkSqlStore } from "./store-transaction-bulk-sql.js";
 import { TXN_COLUMNS, rowToTransaction, type TransactionRow } from "./store-transaction-rows.js";
@@ -251,6 +252,7 @@ function rowToDraft(row: DraftRow, lines: DraftLine[]): BudgetDraft {
 export function sqlStore(db: FinanceDb): FinanceStore {
   return {
     historyExport: historyExportSqlStore(db),
+    accountLifecycle: accountLifecycleSqlStore(db),
     supportsSplits: true,
     bulk: transactionBulkSqlStore(db),
     budgetPolicy: budgetSqlStore(db),

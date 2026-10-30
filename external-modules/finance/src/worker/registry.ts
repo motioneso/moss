@@ -1,3 +1,4 @@
+import { accountReviewHandler, accountUpdateHandler } from "./handlers/account-lifecycle.js";
 import { historyExportHandler } from "./handlers/history-export.js";
 import { reportsTransactionsHandler } from "./handlers/report-details.js";
 import {
@@ -78,6 +79,8 @@ export const notImplemented: ToolFactory = () => async () => ({ status: "not-imp
 export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "accounts.list": accountsListHandler,
   "manual.context": manualContextHandler,
+  "manual.account-review": accountReviewHandler,
+  "manual.account-update": accountUpdateHandler,
   "manual.account-create": manualAccountCreateHandler,
   "manual.entry-create": manualEntryCreateHandler,
   "import.preview": importPreviewHandler,

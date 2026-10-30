@@ -198,6 +198,11 @@ export const accountsListHandler: ToolFactory = (ports) => async (input) => {
   // nextStep keys off OWN accounts: a member seeing only shared accounts
   // still hasn't connected a bank of their own.
   return own.length === 0
-    ? { accounts, banks, nextStep: "Add a manual account or connect a bank" }
-    : { accounts, banks };
+    ? {
+        accounts,
+        banks,
+        ...(store.accountLifecycle ? { supportsManualManagement: true } : {}),
+        nextStep: "Add a manual account or connect a bank"
+      }
+    : { accounts, banks, ...(store.accountLifecycle ? { supportsManualManagement: true } : {}) };
 };

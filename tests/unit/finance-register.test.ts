@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { duplicateCandidates } from "../../external-modules/finance/src/domain/duplicates.js";
 import { toRecord, type PlaidTx } from "../../external-modules/finance/src/domain/reduce.js";
-import { transactionsCsv } from "../../external-modules/finance/src/web/register.js";
+import {
+  initialRegisterScope,
+  transactionsCsv
+} from "../../external-modules/finance/src/web/register.js";
 
 const raw: PlaidTx = {
   transaction_id: "one",
@@ -73,5 +76,21 @@ describe("register review and export", () => {
     );
     expect(csv).toContain(',90071992547409.90,,"USD"');
     expect(csv).toContain(',,90071992547409.90,"USD"');
+  });
+});
+
+describe("owned account history links", () => {
+  it("keeps an explicit owner-only scope and a valid calendar month", () => {
+    expect(initialRegisterScope("?month=2026-10&accountId=manual%3Atest&scope=own")).toEqual({
+      month: "2026-10",
+      accountId: "manual:test",
+      ownOnly: true
+    });
+  });
+  it("rejects malformed dates and oversized identifiers without broadening authority", () => {
+    expect(
+      initialRegisterScope("?month=2026-13&accountId=" + "x".repeat(257) + "&scope=own")
+    ).toEqual({ ownOnly: true });
+    expect(initialRegisterScope("?scope=another-owner")).toEqual({ ownOnly: false });
   });
 });

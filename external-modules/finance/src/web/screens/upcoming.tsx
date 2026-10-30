@@ -254,9 +254,9 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
                   <RowIndexItem
                     key={p.id}
                     title={p.name}
-                    excerpt={`${p.cadence} from ${p.anchorDate}${p.endDate ? ` · stopped after ${p.endDate}` : ""}`}
+                    excerpt={`${body.accounts.find((a) => a.accountId === p.accountId)?.name ?? "Account unavailable"} · ${p.cadence} from ${p.anchorDate}${p.endDate ? ` · stops after ${p.endDate}` : ""}`}
                     meta={
-                      p.endDate ? (
+                      p.endDate && p.endDate <= body.today ? (
                         <Badge>Stopped</Badge>
                       ) : (
                         <Button
@@ -273,7 +273,7 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
                             setEndDate(body.today);
                           }}
                         >
-                          Stop future bills
+                          {p.endDate ? "Stop sooner" : "Stop future bills"}
                         </Button>
                       )
                     }

@@ -560,6 +560,23 @@ describe("finance transactions.query household merge (#1149)", () => {
     expect((kv as ReturnType<typeof fakeKv>).ops.length).toBe(writesBefore);
   });
 
+  it("restricts an owned history link to own records and account choices", async () => {
+    const kv = fakeKv();
+    await seedFeed(kv);
+    const result = await transactionsQueryHandler(fakePorts(kv, sharedMirror()))({
+      actorUserId: ACTOR,
+      activeUserIds: [ACTOR, OTHER],
+      ownOnly: true,
+      limit: 200
+    });
+    expect(ids(result)).toEqual(["t-a", "t-c", "t-b"]);
+    expect((result.accounts as { accountId: string }[]).map((a) => a.accountId)).toEqual([
+      "acc-1",
+      "acc-2"
+    ]);
+    expect((result.transactions as { shared?: boolean }[]).some((t) => t.shared)).toBe(false);
+  });
+
   it("applies category, search, and pending filters to shared rows too", async () => {
     const kv = fakeKv();
     await seedFeed(kv);

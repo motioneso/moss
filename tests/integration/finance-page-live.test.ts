@@ -1,3 +1,4 @@
+import { exerciseAccountLifecycle } from "./helpers/finance-live-accounts.js";
 import { exerciseCategoryConfirmation } from "./helpers/finance-live-confirm.js";
 import { exerciseHistoryExport } from "./helpers/finance-live-export.js";
 import { exerciseManualNetWorth } from "./helpers/finance-live-net-worth.js";
@@ -710,6 +711,10 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
         await context.setOffline(false);
         await page.close();
       }
+    }, 90_000);
+
+    it("manages manual accounts with captured confirmation and preserved history", async () => {
+      await exerciseAccountLifecycle(context, base, workerDb, owner.userId, readTool, artifacts);
     }, 90_000);
 
     it("shows manual ledger net worth without a bank, with source dates and separated currencies", async () => {
