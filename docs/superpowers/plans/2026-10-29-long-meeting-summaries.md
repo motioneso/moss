@@ -93,7 +93,10 @@ Rework the generator in the module registry runtime around pieces.
   generation reservation must also outlive that deadline. It defaults to
   two minutes, and the first live run proved what that does. The pieces
   finished, then the finished run was discarded as interrupted at save
-  time. The reservation now gets the same ten minutes plus a minute.
+  time. The reservation now gets the same ten minutes plus a minute. The
+  worker role also needs a one-line grant to set that expiry when it
+  reserves a request. The full gate caught that missing grant after the
+  live run passed, because the live run used the manual path.
 
 Tests state behaviour and why a broken build fails.
 
