@@ -2,7 +2,7 @@
 
 Updated 2026-10-30. Local branch `task/finance-parity-20261028`, under `~/Jarv1s`.
 The original checkout is separate. The user authorized task-branch pushes; remote is verified through
-`0a801a3c` (cash-backed flexible budgeting). No PR, merge or deployment has occurred.
+`68282552` (cash-backed flexible budgeting and atomic bulk categories). No PR, merge or deployment has occurred.
 The [source-linked parity matrix](../specs/2026-10-28-finance-parity.md) records the audited
 baseline and testable acceptance criteria; this document records current implementation.
 
@@ -70,7 +70,7 @@ baseline and testable acceptance criteria; this document records current impleme
     income/assignment math now use integer arithmetic throughout. Safe public values are checked
     on output; large intermediate cancellation does not lose cents. Ready-to-assign includes manual
     cash without treating other assets/loans/investments as spendable money. Existing carry and card
-    policies remain. Currency and historical funding follow below; ordinary-write concurrency remains in progress.
+    policies remain. Currency, historical funding and reviewed atomic budget writes are implemented below.
 
 11. **Reviewed budget currency and historical funding.** Migration 0025 adds an owner policy.
     No currency is preselected; setup requires the host confirmation, and existing assignment
@@ -94,10 +94,10 @@ The Finance manifest is 0.7.0; app-map entries describe the bounded capability a
 | --------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | Accounts                    | Partial: manual/provider accounts, exact opening balances and posted entries  | Archive, provider reconciliation and broader currency model                               |
 | Import/reconciliation       | Manual entry, statements and bounded atomic CSV preview/import supported      | Provider-account import/reconciliation, larger files/reviews, category mapping            |
-| Transaction workspace       | Supported bounded filtering, duplicate candidates and loaded-row CSV          | Full-history export, atomic bulk editing, explicit transfer linking                       |
+| Transaction workspace       | Supported bounded filtering, duplicate candidates and loaded-row CSV          | Full-history export, bulk notes/clearing and explicit transfer linking                    |
 | Splits                      | Supported posted own SQL category splits; installed UI persistence proven     | Split transfers, line notes/payees and pending edits                                      |
 | Categories/rules            | Partial existing categorization and merchant rules                            | Management/preview and ordinary-write concurrency                                         |
-| Envelope budget/rollover    | Partial envelopes; reviewed currency, exact math and historical funding       | Ordinary-write concurrency, credit-card reserves, configurable carry                      |
+| Envelope budget/rollover    | Partial envelopes; reviewed currency, exact math and historical funding       | Credit-card reserves and configurable carry                                               |
 | Flexible budget             | Partial: cash-backed pool, fixed/non-monthly groups and conserved transitions | Optional member-guidance editing and less restrictive future-plan migration               |
 | Targets/goals               | Partial: monthly/date category targets and historical versions                | Account-linked goals, automatic funding and investment growth                             |
 | Recurring bills             | Partial: manual plans, posted matching, skip, undo and stop                   | Automatic detection, calendar, one-off edits and provider Bill Sync                       |
@@ -626,3 +626,30 @@ A final full foundation gate remains required; earlier baseline receipts are not
 new changes. Next independent capability: faithful Reports drill-through, following the committed
 [report details spec](../specs/2026-10-30-finance-report-details.md). Broader charts, saved reports,
 explicit ledger transfer links, account lifecycle, household co-edit and investment data remain gaps.
+
+### Committed bulk acceptance
+
+Clean **68282552f32981e8e0de76de92f8153d36b8b907**, input **ae01d4e0eaf7**, Node 24.19.0 /
+pnpm 10.6.2. Final same-snapshot receipts:
+
+- Bulk SQL **6/6**, `022742-LKPu5a`, rc 0.
+- Ledger/currency/target SQL **27/27**, `022743-QoPrGJ`, rc 0.
+- Install/backfill **3 files / 11**, `022745-FM9wTN`, rc 0.
+- Installed browser **10/10**, `022735-pmiQ2q`, rc 0. Includes final phone filter expansion,
+  active count, clear/collapse and nonoverflowing bulk controls. Inspected updated phone/register
+  and dark review images; expected money-in signs are consistent with the register.
+- Focused units **58 files / 578**, `finance-bulk-committed-unit.log`, rc 0.
+- Aggregate static **pass rc 0**, `finance-bulk-committed-static.log`: lint, formatting, all
+  design/maintainability/dependency/migration checks, root/tests/web/module TypeScript and app map.
+
+Normal git push succeeded; independent ls-remote confirms this exact commit on
+`refs/heads/task/finance-parity-20261028`. No PR, merge or deployment. An October 30 connected
+GitHub search found no open Finance PR. A fresh full foundation is running against this frozen
+commit in a separate clean verification checkout: `moss_finance_verify-20261030-022830-JvRKTT.log`.
+Its outcome is pending and must be resumed through the gate's existing wait/session. It does not
+prove CI or broad repository green until it completes. Official pnpm offline installation recovered
+that checkout's dependencies using the existing task-local package store; no new credentials.
+
+The next authorized slice is exact Reports drill-through. Preserve current pending-entry semantics,
+per-owner transfer exclusion and currency separation; fix the report month to the owner's local
+calendar at UTC/month boundaries. Do not equate a clickable chart with a reconciled detail total.
