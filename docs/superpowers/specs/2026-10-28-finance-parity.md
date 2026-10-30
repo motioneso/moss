@@ -281,3 +281,13 @@ separate manual statement-state selector. It intersects existing filters before 
 provider/pending/shared rows have no manual statement meaning. Cleared excludes reconciled
 rows. This is a bounded register improvement, not general query-language parity or provider
 reconciliation. Implementation acceptance is pending the clean unit/static/installed runs.
+
+## October 30 readable transaction details continuation
+
+The [captured details spec](2026-10-30-finance-transaction-details.md) adds an accessible
+payee dialog for exact money, account/date/status, category/splits and full owned notes.
+Household details omit private notes, including a malformed projection in the UI guard
+test; removing that guard was observed failing, then restored. The dialog has no write
+controls or extra network calls. Notes editing, tags, attachments and general merchant/date
+edits remain gaps. Acceptance and the final restored filter run are tracked in the
+[register checkpoint](../plans/2026-10-30-finance-register-details-checkpoint.md).

@@ -1,3 +1,4 @@
+import { exerciseTransactionDetails } from "./finance-live-transaction-details.js";
 import { join, resolve } from "node:path";
 import { sql, type Kysely } from "kysely";
 import { createModuleStorageRpc, DataContextRunner, type MossDatabase } from "@moss/db";
@@ -92,6 +93,7 @@ export async function exerciseIndividualMetadata(
     await page.goto(`${base}/m/finance/transactions`);
     const picker = () =>
       page.getByLabel(`Category for ${record.name}`, { exact: true }).filter({ visible: true });
+    await exerciseTransactionDetails(page, record.name, month, read, artifacts);
     await picker().selectOption("dining");
     const review = page.getByRole("dialog", { name: "Review category change", exact: true });
     await review.getByText("Groceries → Dining & coffee", { exact: true }).waitFor();

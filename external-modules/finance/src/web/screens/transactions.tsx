@@ -1,3 +1,4 @@
+import { TransactionDetails } from "../transaction-details";
 import { TransferCorrectionDialog } from "../transfer-correction-dialog";
 import { TransactionConfirm } from "../transaction-confirm";
 import { HistoryExportDialog } from "../history-export-dialog";
@@ -62,6 +63,7 @@ interface Tx extends SplitTransaction {
   shared?: boolean;
   pending?: boolean;
   possibleDuplicate?: boolean;
+  notes?: string;
   source?: "manual";
   transferId?: string;
   cleared?: boolean;
@@ -353,7 +355,12 @@ function DayTable(props: { day: DayGroup; head: boolean; ctx: RowContext }): Rea
                   <div className="fnm-block fnm-block--tight">
                     <div className="fnm-inline">
                       <TransactionSelection tx={tx} ctx={ctx} />
-                      <span>{tx.name}</span>
+                      <TransactionDetails
+                        row={tx}
+                        accountName={ctx.accountName(tx)}
+                        categoryName={ctx.categoryName(tx)}
+                        categories={ctx.categories}
+                      />
                     </div>
                     <TransactionStatus tx={tx} />
                     {look && !tx.splits?.length ? (
@@ -396,7 +403,12 @@ function DayRows(props: { day: DayGroup; ctx: RowContext }): ReactNodeLike {
                 <span className="fnm-block fnm-block--tight">
                   <span className="fnm-inline">
                     <TransactionSelection tx={tx} ctx={ctx} />
-                    {tx.name}
+                    <TransactionDetails
+                      row={tx}
+                      accountName={ctx.accountName(tx)}
+                      categoryName={ctx.categoryName(tx)}
+                      categories={ctx.categories}
+                    />
                   </span>
                   <TransactionStatus tx={tx} />
                 </span>
