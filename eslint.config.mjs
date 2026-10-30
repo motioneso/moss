@@ -67,6 +67,19 @@ export default tseslint.config(
     }
   },
   {
+    // UAT host helpers are standalone CommonJS Node scripts.
+    files: ["scripts/uat-host/**/*.cjs"],
+    languageOptions: {
+      sourceType: "commonjs",
+      globals: { ...globals.node }
+    },
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+      "no-redeclare": ["error", { builtinGlobals: false }],
+      "@typescript-eslint/no-unused-vars": ["error", { args: "none" }]
+    }
+  },
+  {
     // These ordered classic scripts share top-level bindings through index.html.
     files: [".superpowers/brainstorm/today-briefings-20260909/*.js"],
     languageOptions: {

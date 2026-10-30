@@ -132,6 +132,43 @@
 
 set -euo pipefail
 
+# A1 source-only seam: production activation is sealed before any setup effect.
+# Synthetic reservation/cleanup ownership moves to the actual retained parent.
+owned_foreground_handoff() {
+  local entry="$1" mode="${2:-}" packet="${UAT_HOST_PACKET:-}"
+  [ "$entry" = "__owned_control" ] || {
+    echo "run-gate: owned production foreground is runtime-refused (A2 pending)" >&2
+    return 4
+  }
+  case "$mode" in
+    gate-zero|gate-nonzero23|gate-term|gate-cancel|gate-held|gate-missing-reservation|gate-reused-reservation) ;;
+    *) echo "run-gate: unknown A1 control" >&2; return 4 ;;
+  esac
+  local nonce="${UAT_HOST_NONCE:-}" resource="${UAT_HOST_RESOURCE:-}"
+  [[ "$nonce" =~ ^[a-f0-9]{64}$ && "$resource" =~ ^[a-f0-9]{64}$ ]] || return 4
+  [[ "$packet" = /* && "$packet" != *$'\n'* && "$packet" != *'"'* ]] || return 4
+  local -a parent_argv=()
+  mapfile -d '' -t parent_argv < "/proc/$PPID/cmdline"
+  [[ "/proc/$PPID/exe" -ef /usr/bin/node ]] || return 4
+  [ "${#parent_argv[@]}" = 3 ] || return 4
+  [[ "${parent_argv[0]}" = /usr/bin/node && "${parent_argv[1]}" = "$packet/host-owner.cjs" && "${parent_argv[2]}" = "$mode" ]] || return 4
+  # No log, pointer, probe, sweep, port, daemon or external helper precedes ACK.
+  printf '{"type":"proposal","nonce":"%s","resource":"%s","pid":%s,"ppid":%s}\n' "$nonce" "$resource" "$$" "$PPID" >&5 || return 4
+  local ack=""
+  IFS= read -r -t 5 -u 4 ack || return 4
+  [ "$ack" = "cleanup-owner-ack $nonce $resource $$ $PPID" ] || return 4
+  exec 4<&- 5>&-
+  # Substituted setup/migration: no actual gate resource was created or verified.
+  # No cleanup trap is installed: sole synthetic cleanup owner is now the parent.
+  exec /usr/bin/node "$packet/fixture.cjs" "$mode"
+}
+case "${1:-}" in
+  __owned_control|__owned_foreground)
+    owned_foreground_handoff "$@"
+    exit "$?"
+    ;;
+esac
+
 GATE_IMAGE="${JARVIS_GATE_PGIMAGE:-pgvector/pgvector:pg17}"
 GATE_SHM="${JARVIS_GATE_PGSHM:-1g}"
 GATE_READY_SECS="${JARVIS_GATE_PGREADY_SECS:-60}"
