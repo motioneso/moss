@@ -79,3 +79,64 @@ ProviderHandoffStore vocabulary is now a dependency-free type file; the runtime
 workspace helpers stay worker-only. No import guard is changed or bypassed. This
 is a structural browser-dependency fix; the earlier successful browser bundle is
 not evidence that raw crypto or credentials had actually shipped to the browser.
+
+## Current clean implementation evidence — 682a8162
+
+Current pushed implementation 682a8162999f24d92610fa80fc6702766f5a47f4, fingerprint
+ef9dfd37eadce516be8a9d0ac6ce43239818d16b149c113d22b2152ebc79c7ee, Node 24.19.0 / pnpm 10.6.2.
+All 801 Finance unit tests plus three unchanged browser-source-graph tests passed
+(804 in 85 files). Focused handoff/details/reports/manifest/graph suites passed 43.
+
+Selected installed metadata 142715-Ms9Br9 passed its whole selected flow, with the
+other twenty skipped. Details now remain open across responsive layouts, full account
+names wrap without clipping, all twelve theme/width frames fit and focus returns.
+The [two original screenshots](../evidence/finance-parity-2026-10-30/README.md) were
+inspected at light 1440px/dark 320px. The subsequent full 142921-Z9rN0U passed all
+169 backend and twenty browser flows, including actual shared details. Its only
+failure was the first cleared-filter read returning 400 with the fixed validation
+error Pattern matching failed and was rejected. This is not a failed ledger write.
+The isolated pattern worker has a 100ms/resource budget; rejection during competing
+heavy tests is consistent with resource pressure, but its generic error does not
+prove which underlying worker failure occurred. No guard/timeout is relaxed.
+Retain this failed receipt and repeat whole Finance acceptance without a competing
+broad unit workload. Do not call 142921-Z9rN0U a passing whole run.
+
+Clean snapshot-policy negative 143802-Lq4en4 failed exactly the intended foreign/admin
+content test, with the other 28 passing. Only the disposable fixture removes that
+policy and restores it in finally. Restored positive SQL 144017-p5z2a7 passed all 29
+on the same clean implementation/fingerprint. No live data or credentials were used.
+
+Earlier aggregate 141048-KGoL8T finished with 281 failures: all 277 historical
+identities plus the now-corrected source-graph regression and three chat cases
+contaminated by the browser-only MOSS_CHAT_HOME setting. No historical identity
+disappeared. The three affected chat/source-graph files passed all 21 when that
+directory setting was removed from the unit-test environment. No chat test or
+production priority rule changed. The fresh aggregate 143017-SaB79F is running on
+682a8162 without MOSS_CHAT_HOME; its exact verdict/identity comparison remains pending.
+
+Read-only current GitHub verification: #3723 and #3724 are open task issues, not PRs;
+this branch follows their guarded invoke and host dialog contracts without closing
+them or publishing a PR. #3269 merged October 10 and #3349 merged October 11. A fresh
+main fetch still resolves 3a9c744d035bf1d91220ec13a634c51453282bb3; migration collision
+checking passes. Automatic cross-PR checking is unavailable in the CLI; the documented
+manual four-PR file-list snapshot found no 0354 claim.
+
+## Exact continuation
+
+Wait for aggregate 143017-SaB79F, compare every FAIL identity with 040401-c9zwQ0 and
+record additions/removals. Then run finance-complete alone through verify-gate, using
+the existing isolated toolchain and Chromium plus the private synthetic chat path.
+Keep MOSS_CHAT_HOME out of the broad unit environment. Record the actual whole-suite
+verdict before declaring this checkpoint verified. Keep source frozen while its
+gate runs. All current code is committed/pushed; evidence docs may follow separately.
+
+Next accounting capability: design a versioned, reviewed card-payment-reserve policy
+without reinterpreting the existing conservative net-debt budget or prior months.
+Start with synthetic conservation fixtures for starting debt, funded/unfunded card
+purchases, same-category cash spending, partial payments, cross-month refunds,
+positive balances/overpayment, multiple cards and rollover. Prove the model before
+adding migration/API/native activation. Then add captured, stale-safe activation
+and payment funding with real SQL/native review. Notes editing, richer rules and
+reports, household co-editing, unlinked provider convergence and holdings remain
+separate matrix items. Actual bank/provider HTTP acceptance still needs permitted
+credentials/agreements and is unrun; do not fabricate it or connect a real bank.
