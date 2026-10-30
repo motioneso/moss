@@ -84,6 +84,7 @@ function row(overrides: Partial<ConnectionRow> = {}): ConnectionRow {
     classifierEnabled: true,
     classifierPreparation: emptyPreparationMap(),
     classifierSort: sortedAs(tools),
+    classifierScan: { version: 1, actions: {}, targets: {} },
     classifierKeptOutTools: [],
     lastDiscoveryAt: null,
     lastError: null,

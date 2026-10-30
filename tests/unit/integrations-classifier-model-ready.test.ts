@@ -92,6 +92,7 @@ function connection(overrides: Partial<ConnectionRow> = {}): ConnectionRow {
       sortCurrent(sortFailed(emptySortMap(), lamp, "no_model"), fan),
       door
     ),
+    classifierScan: { version: 1, actions: {}, targets: {} },
     classifierKeptOutTools: [],
     discoveredTools: [lamp, fan, door],
     lastDiscoveryAt: null,
