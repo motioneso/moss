@@ -68,7 +68,7 @@ export function TransactionDetails(props: {
         [...document.querySelectorAll<HTMLButtonElement>("button[data-finance-details]")].find(
           (button) =>
             button.dataset.financeDetails === focusKey.current && button.getClientRects().length > 0
-        ) ?? null
+        ) ?? document.querySelector<HTMLInputElement>('input[aria-label="Search payees or notes"]')
       );
     }
   }));
@@ -106,7 +106,7 @@ export function TransactionDetails(props: {
           onClose={close}
           closeDisabled={editor.busy}
           returnFocusRef={returnFocusRef}
-          closeLabel="Close transaction details"
+          closeLabel={editor.editing ? "Close private note editor" : "Close transaction details"}
           footer={
             editor.editing ? (
               editor.footer

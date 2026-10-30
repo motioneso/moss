@@ -454,7 +454,7 @@ function DayRows(props: { day: DayGroup; ctx: RowContext }): ReactNodeLike {
 }
 
 function TransactionsBody(props: {
-  tools?: ExternalModuleToolsHandleV1;
+  onDetails: (details: CapturedTransactionDetails) => void;
   result: TxResult;
   filter: Filter;
   searching: boolean;
@@ -468,7 +468,6 @@ function TransactionsBody(props: {
   onSelect?: (tx: Tx) => void;
 }): ReactNodeLike {
   const { result, filter, confirmed } = props;
-  const [details, setDetails] = useState<CapturedTransactionDetails | null>(null);
   const accounts = result.accounts ?? [];
   const categories = result.categories ?? [];
   const live = categories.filter((category) => !category.archived);
@@ -482,7 +481,7 @@ function TransactionsBody(props: {
     accountName: (tx) => accounts.find((account) => account.accountId === tx.accountId)?.name ?? "",
     confirmed,
     onDetails: (tx) =>
-      setDetails(
+      props.onDetails(
         captureTransactionDetails({
           row: tx,
           accountName: ctx.accountName(tx),
@@ -513,12 +512,6 @@ function TransactionsBody(props: {
   const days = groupByDay(rows);
   return (
     <div className="fnm-block">
-      <TransactionDetails
-        captured={details}
-        onClose={() => setDetails(null)}
-        tools={props.tools}
-        supportsNotes={result.supportsNotes}
-      />
       <div className="fnm-desktop-only fnm-block">
         {days.map((day, index) => (
           <DayTable key={day.date} day={day} head={index === 0} ctx={ctx} />
@@ -572,6 +565,7 @@ export function TransactionsScreen(
     singlePending.current = null;
     setSingleReview(null);
   };
+  const [details, setDetails] = useState<CapturedTransactionDetails | null>(null);
   const [editing, setEditing] = useState<Tx | null>(null);
   const [transferId, setTransferId] = useState<string | null>(null);
   const [selected, setSelected] = useState<ReadonlyMap<string, Tx>>(new Map());
@@ -905,11 +899,17 @@ export function TransactionsScreen(
           }}
         />
       ) : null}
+      <TransactionDetails
+        captured={details}
+        onClose={() => setDetails(null)}
+        tools={props.tools}
+        supportsNotes={result?.supportsNotes}
+      />
       {outcomeGate(
         query,
         (data) => (
           <TransactionsBody
-            tools={props.tools}
+            onDetails={setDetails}
             result={data}
             filter={filter}
             searching={search !== "" || Object.values(filters).some(Boolean)}

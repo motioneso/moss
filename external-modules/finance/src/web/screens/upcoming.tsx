@@ -17,7 +17,7 @@ import {
 } from "@moss/module-web-sdk";
 import type { BillPlan } from "../../domain/bills";
 import { currentMonth, formatCents } from "../format";
-import { invalidateQueries, setToolQueryResult, useToolQuery } from "../store";
+import { invalidateQueries, publishToolRefresh, useToolQuery } from "../store";
 import { outcomeGate } from "../states";
 import { BillAdjustmentDialog } from "../bill-adjustment-dialog";
 import { BillPlanDialog } from "../bill-plan-dialog";
@@ -123,7 +123,7 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
     try {
       const result = await props.tools.invoke("finance.bills.read", { from, to });
       if (result.status === "succeeded" && result.result.status === "ok") {
-        setToolQueryResult("finance.bills.read", { from, to }, result.result);
+        publishToolRefresh("finance.bills.read", { from, to }, result.result);
         setBlocked(false);
         setMessage("Saved bills refreshed. Review the current records before saving.");
       } else setMessage("Bills could not refresh. Try again when the connection returns.");

@@ -7,7 +7,7 @@ import type { ExternalModuleToolsHandleV1 } from "@moss/module-web-sdk";
 import { useTransactionNoteEditor } from "../../external-modules/finance/src/web/transaction-note-editor";
 import {
   __resetStoreForTests,
-  setToolQueryResult,
+  publishToolRefresh,
   useToolQuery
 } from "../../external-modules/finance/src/web/store";
 const roots = new Set<ReactTestRenderer>();
@@ -37,41 +37,47 @@ function CachedReaders() {
   return createElement("output", {}, `${value(budget)}|${value(activity)}`);
 }
 describe("note saves and captured Finance read caches", () => {
-  it("publishes an explicit bill read immediately and fences a prior delayed cache response", async () => {
+  it("publishes a fresh bill window, invalidates other windows and fences delayed reads", async () => {
     __resetStoreForTests();
-    let finish!: () => void;
-    const fetch = vi.fn(
-      () =>
-        new Promise((resolve) => {
-          finish = () =>
-            resolve({
-              ok: true,
-              status: 200,
-              json: async () => ({
-                invocation: {
-                  status: "succeeded",
-                  result: { value: "old" }
-                }
-              })
-            });
-        })
-    );
+    let finish!: () => void,
+      other = "old previous";
+    const response = (value: string) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ invocation: { status: "succeeded", result: { value } } })
+    });
+    const fetch = vi.fn((_url: string, init: RequestInit) => {
+      const { input } = JSON.parse(String(init.body)) as { input: { from: string } };
+      return input.from === "2026-09-01"
+        ? Promise.resolve(response(other))
+        : new Promise((resolve) => {
+            finish = () => resolve(response("old"));
+          });
+    });
     vi.stubGlobal("fetch", fetch);
-    const scope = { from: "2026-10-01", to: "2026-10-31" };
-    function Bill() {
-      const snapshot = useToolQuery<{ value: string }>("finance.bills.read", scope);
-      return createElement(
-        "output",
-        {},
-        snapshot.status === "settled" && snapshot.outcome.kind === "ok"
-          ? snapshot.outcome.result.value
-          : "loading"
-      );
-    }
+    const scope = { from: "2026-10-01", to: "2026-10-31" },
+      previousScope = { from: "2026-09-01", to: "2026-09-30" };
+    const bill = (input: Record<string, unknown>) =>
+      function Bill() {
+        const snapshot = useToolQuery<{ value: string }>("finance.bills.read", input);
+        return createElement(
+          "output",
+          {},
+          snapshot.status === "settled" && snapshot.outcome.kind === "ok"
+            ? snapshot.outcome.result.value
+            : "loading"
+        );
+      };
+    const Bill = bill(scope),
+      PreviousBill = bill(previousScope);
+    const previous = await mount(PreviousBill);
+    expect(previous.root.findByType("output").children).toEqual(["old previous"]);
+    await unmount(previous);
+    other = "new previous";
     const view = await mount(Bill);
     expect(view.root.findByType("output").children).toEqual(["loading"]);
     await act(async () => {
-      setToolQueryResult("finance.bills.read", scope, { value: "fresh" });
+      publishToolRefresh("finance.bills.read", scope, { value: "fresh" });
     });
     expect(view.root.findByType("output").children).toEqual(["fresh"]);
     await act(async () => {
@@ -81,7 +87,9 @@ describe("note saves and captured Finance read caches", () => {
     await unmount(view);
     const reopened = await mount(Bill);
     expect(reopened.root.findByType("output").children).toEqual(["fresh"]);
-    expect(fetch).toHaveBeenCalledTimes(1);
+    const otherWindow = await mount(PreviousBill);
+    expect(otherWindow.root.findByType("output").children).toEqual(["new previous"]);
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
   it("refreshes an inactive budget fingerprint and activity list after note-only persistence", async () => {
     __resetStoreForTests();

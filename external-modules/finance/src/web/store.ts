@@ -74,8 +74,9 @@ export function useToolQuery<T extends Record<string, unknown>>(
 
 // After a queue run (or on demand) drop unmounted entries so the next mount refetches, and
 // restart mounted ones in place. Mounted screens keep their current data until the refetch lands.
-function invalidate(onlyTool?: string): void {
+function invalidate(onlyTool?: string, exceptKey?: string): void {
   for (const [key, entry] of [...cache]) {
+    if (key === exceptKey) continue;
     if (onlyTool && entry.name !== onlyTool) continue;
     if (entry.listeners.size === 0 || entry.name === undefined) {
       cache.delete(key);
@@ -94,13 +95,15 @@ export function invalidateToolQueries(onlyTool: string): void {
   invalidate(onlyTool);
 }
 
-/** Publish a completed explicit read before enabling actions that depend on its snapshot. */
-export function setToolQueryResult<T extends Record<string, unknown>>(
+/** Complete a refresh with its returned read, invalidating other scopes without a duplicate request. */
+export function publishToolRefresh<T extends Record<string, unknown>>(
   name: string,
   input: Record<string, unknown>,
   result: T
 ): void {
-  const entry = entryFor(`${name}:${JSON.stringify(input)}`);
+  const key = `${name}:${JSON.stringify(input)}`;
+  invalidate(undefined, key);
+  const entry = entryFor(key);
   entry.generation++; // An older in-flight read must not replace this reviewed result.
   entry.started = true;
   entry.name = name;

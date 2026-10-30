@@ -215,6 +215,9 @@ export async function exercisePrivateNotes(
     await approve();
     await editor.waitFor({ state: "detached" });
     expect((await snapshot()).note!.notes).toBe("Retained synthetic draft");
+    const search = page.getByRole("textbox", { name: "Search payees or notes", exact: true });
+    await search.fill("Retained synthetic draft");
+    await page.getByText("1 of 1 matching transactions loaded", { exact: false }).waitFor();
     await start();
     const uncertainDraft = "Committed before synthetic response loss";
     await field().fill(uncertainDraft);
@@ -269,6 +272,23 @@ export async function exercisePrivateNotes(
       await editor.getByRole("button", { name: "Save private note", exact: true }).isDisabled()
     ).toBe(true);
     expect(await snapshot()).toEqual(committed);
+    await editor
+      .getByText("Your draft is already saved. No further change is needed.", { exact: true })
+      .waitFor();
+    await page.getByText("No matches", { exact: true }).waitFor();
+    expect(await editor.isVisible()).toBe(true);
+    expect(await field().inputValue()).toBe(uncertainDraft);
+    await editor.getByRole("button", { name: "Close private note editor", exact: true }).click();
+    await expect.poll(() => search.evaluate((e) => document.activeElement === e)).toBe(true);
+    await search.fill("");
+    await waitForFinanceAction(page, open(), "Check saved records");
+    await open().click();
+    expect(
+      await details
+        .getByRole("textbox", { name: "Private transaction note", exact: true })
+        .inputValue()
+    ).toBe(uncertainDraft);
+    await details.getByRole("button", { name: "Back to register", exact: true }).click();
   } catch (error) {
     if (artifacts)
       await page.screenshot({

@@ -65,6 +65,7 @@ export function useTransactionNoteEditor(props: {
       >("finance.transaction.note-read", { ...target.current });
       if (!alive.current || version !== generation.current) return;
       if (result.kind === "ok" && result.result.available) {
+        if (!first) invalidateQueries();
         setSaved(result.result);
         setDraft((value) =>
           value === null ? (result.result.available ? result.result.notes : "") : value
@@ -74,7 +75,9 @@ export function useTransactionNoteEditor(props: {
         setMessage(
           first
             ? null
-            : "Saved note checked. Your draft is kept. Compare it with the saved note before saving."
+            : draft !== null && draft === result.result.notes
+              ? "Your draft is already saved. No further change is needed."
+              : "Saved note checked. Your draft is kept. Compare it with the saved note before saving."
         );
       } else {
         setBlocked(true);
