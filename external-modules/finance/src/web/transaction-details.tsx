@@ -4,13 +4,16 @@ import {
   RowIndex,
   RowIndexItem,
   Textarea,
+  type ExternalModuleToolsHandleV1,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import type { TransactionSplit } from "../domain/records";
 import { splitsBalance } from "../domain/splits";
 import { formatCents } from "./format";
+import { useTransactionNoteEditor } from "./transaction-note-editor";
 export interface DetailTransaction {
   id: string;
+  accountId?: string;
   name: string;
   date: string;
   amountCents: number;
@@ -47,9 +50,25 @@ export type CapturedTransactionDetails = ReturnType<typeof captureTransactionDet
 export function TransactionDetails(props: {
   captured: CapturedTransactionDetails | null;
   onClose: () => void;
+  tools?: ExternalModuleToolsHandleV1;
+  supportsNotes?: boolean;
 }): ReactNodeLike {
   const { captured } = props;
   const row = captured?.row;
+  const editor = useTransactionNoteEditor({
+    tools: props.tools,
+    target:
+      row?.accountId && !row.shared && props.supportsNotes
+        ? { transactionId: row.id, accountId: row.accountId, month: row.date.slice(0, 7) }
+        : null,
+    onSaved: props.onClose
+  });
+  const close = () => {
+    if (!editor.busy) {
+      editor.reset();
+      props.onClose();
+    }
+  };
   const notes = row?.shared ? null : (row?.notes ?? "");
   const status = row?.pending
     ? "Pending"
@@ -64,86 +83,104 @@ export function TransactionDetails(props: {
     <>
       {captured && row ? (
         <Dialog
-          title="Transaction details"
+          title={editor.editing ? "Edit private note" : "Transaction details"}
           description={row.name}
           scrollBody
-          onClose={props.onClose}
+          onClose={close}
+          closeDisabled={editor.busy}
           closeLabel="Close transaction details"
           footer={
-            <Button variant="secondary" onClick={props.onClose}>
-              Back to register
-            </Button>
+            editor.editing ? (
+              editor.footer
+            ) : (
+              <Button variant="secondary" onClick={close}>
+                Back to register
+              </Button>
+            )
           }
         >
-          <div className="fnm-block">
-            <strong className="fnm-amount">
-              {row.amountCents < 0
-                ? "Money in"
-                : row.amountCents > 0
-                  ? "Money out"
-                  : "No money movement"}
-              {" · "}
-              {formatCents(Math.abs(row.amountCents), row.isoCurrency)}
-            </strong>
-            <p className="jds-hint">
-              As read when you opened this transaction. Close and reload the register to check for
-              changes.
-            </p>
-            {row.shared ? <p>Household · read only</p> : null}
-            <RowIndex variant="facts">
-              <RowIndexItem title="Date" meta={row.date} />
-              <RowIndexItem title="Account" meta={captured.account} />
-              <RowIndexItem title="Status" meta={status} />
-              <RowIndexItem
-                title="Category"
-                meta={
-                  row.transferId
-                    ? "Linked transfer"
-                    : captured.parts.length
-                      ? "Split between categories"
-                      : captured.category
-                }
-              />
-              <RowIndexItem
-                title="Review"
-                meta={
-                  row.shared
-                    ? "Managed by owner"
-                    : row.reviewState === "needs_look" ||
-                        Boolean(row.splits?.length && !splitsBalance(row))
-                      ? "Review needed"
-                      : "Confirmed"
-                }
-              />
-            </RowIndex>
-            {captured.parts.length ? (
-              <section className="fnm-block fnm-block--tight" aria-label="Split allocations">
-                <strong>Split allocations</strong>
-                <RowIndex variant="facts">
-                  {captured.parts.map((part, index) => (
-                    <RowIndexItem
-                      key={index}
-                      title={part.name}
-                      meta={formatCents(part.amountCents, row.isoCurrency)}
-                    />
-                  ))}
-                </RowIndex>
-                <p className="jds-hint">
-                  Allocations describe this transaction; the parent amount is counted once.
-                </p>
+          {editor.editing ? (
+            editor.body
+          ) : (
+            <div className="fnm-block">
+              <strong className="fnm-amount">
+                {row.amountCents < 0
+                  ? "Money in"
+                  : row.amountCents > 0
+                    ? "Money out"
+                    : "No money movement"}
+                {" · "}
+                {formatCents(Math.abs(row.amountCents), row.isoCurrency)}
+              </strong>
+              <p className="jds-hint">
+                As read when you opened this transaction. Close and reload the register to check for
+                changes.
+              </p>
+              {row.shared ? <p>Household · read only</p> : null}
+              <RowIndex variant="facts">
+                <RowIndexItem title="Date" meta={row.date} />
+                <RowIndexItem title="Account" meta={captured.account} />
+                <RowIndexItem title="Status" meta={status} />
+                <RowIndexItem
+                  title="Category"
+                  meta={
+                    row.transferId
+                      ? "Linked transfer"
+                      : captured.parts.length
+                        ? "Split between categories"
+                        : captured.category
+                  }
+                />
+                <RowIndexItem
+                  title="Review"
+                  meta={
+                    row.shared
+                      ? "Managed by owner"
+                      : row.reviewState === "needs_look" ||
+                          Boolean(row.splits?.length && !splitsBalance(row))
+                        ? "Review needed"
+                        : "Confirmed"
+                  }
+                />
+              </RowIndex>
+              {captured.parts.length ? (
+                <section className="fnm-block fnm-block--tight" aria-label="Split allocations">
+                  <strong>Split allocations</strong>
+                  <RowIndex variant="facts">
+                    {captured.parts.map((part, index) => (
+                      <RowIndexItem
+                        key={index}
+                        title={part.name}
+                        meta={formatCents(part.amountCents, row.isoCurrency)}
+                      />
+                    ))}
+                  </RowIndex>
+                  <p className="jds-hint">
+                    Allocations describe this transaction; the parent amount is counted once.
+                  </p>
+                </section>
+              ) : null}
+              <section className="fnm-block fnm-block--tight" aria-label="Transaction note">
+                <strong>Private note</strong>
+                {notes === null ? (
+                  <p>Private notes are not shared.</p>
+                ) : notes === "" ? (
+                  <p>No private note.</p>
+                ) : (
+                  <Textarea aria-label="Private transaction note" readOnly value={notes} rows={5} />
+                )}
+                {!row.shared && row.accountId && props.supportsNotes && props.tools ? (
+                  <Button variant="secondary" onClick={editor.start}>
+                    Edit private note
+                  </Button>
+                ) : !row.shared ? (
+                  <p className="jds-hint">
+                    Update Moss and Finance to edit private notes in this view.
+                  </p>
+                ) : null}
               </section>
-            ) : null}
-            <section className="fnm-block fnm-block--tight" aria-label="Transaction note">
-              <strong>Private note</strong>
-              {notes === null ? (
-                <p>Private notes are not shared.</p>
-              ) : notes === "" ? (
-                <p>No private note.</p>
-              ) : (
-                <Textarea aria-label="Private transaction note" readOnly value={notes} rows={5} />
-              )}
-            </section>
-          </div>
+            </div>
+          )}
         </Dialog>
       ) : null}
     </>

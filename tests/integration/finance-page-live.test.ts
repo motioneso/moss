@@ -1,3 +1,4 @@
+import { exercisePrivateNotes } from "./helpers/finance-live-notes.js";
 import { exerciseBillEntry } from "./helpers/finance-live-bill-entry.js";
 import { exerciseInstalledSplit } from "./helpers/finance-live-splits.js";
 import { exerciseCardReserves } from "./helpers/finance-live-cards.js";
@@ -956,6 +957,11 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
         await page.close();
       }
     }, 90_000);
+    it(
+      "edits and clears owned private notes with host confirmation and stale recovery",
+      () => exercisePrivateNotes(context, base, month, workerDb, owner.userId, artifacts),
+      180_000
+    );
     it(
       "records a due bill expense with explicit approval and stale duplicate protection",
       () => exerciseBillEntry(context, base, month, workerDb, owner.userId, artifacts),

@@ -388,8 +388,9 @@ larger remaining reviewed bill-entry slice. Broader recurring-obligation parity 
 the earlier missing manual-entry-from-bill action. It records all 223 Finance cases passing at
 clean a6a17c7b, including all 23 native flows, actual owner/confirmation guard-removal failures
 and restored positives, exact financial and concurrency boundaries, original UI inspection and
-remaining integration/product gaps. The repository aggregate is running at that frozen input;
-its verdict is pending. This bounded manual workflow does not establish general scheduled
+remaining integration/product gaps. That aggregate passed static checks but found the 277
+recorded baseline failures plus an omitted-tool-list Finance test regression. Commit 4475cb87
+fixes the contract (sixteen focused tests pass); the fresh frozen aggregate verdict is pending. This bounded manual workflow does not establish general scheduled
 posting or universal product parity.
 
 Current official comparison: [YNAB scheduled transaction actions](https://support.ynab.com/en_us/editing-and-deleting-scheduled-transactions-a-guide-Skru9yNJo)

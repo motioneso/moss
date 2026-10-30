@@ -85,6 +85,7 @@ interface TxResult extends Record<string, unknown> {
   supportsSplits?: boolean;
   supportsBulk?: boolean;
   supportsConfirm?: boolean;
+  supportsNotes?: boolean;
 }
 
 type Filter = "all" | "look";
@@ -443,6 +444,7 @@ function DayRows(props: { day: DayGroup; ctx: RowContext }): ReactNodeLike {
 }
 
 function TransactionsBody(props: {
+  tools?: ExternalModuleToolsHandleV1;
   result: TxResult;
   filter: Filter;
   searching: boolean;
@@ -501,7 +503,12 @@ function TransactionsBody(props: {
   const days = groupByDay(rows);
   return (
     <div className="fnm-block">
-      <TransactionDetails captured={details} onClose={() => setDetails(null)} />
+      <TransactionDetails
+        captured={details}
+        onClose={() => setDetails(null)}
+        tools={props.tools}
+        supportsNotes={result.supportsNotes}
+      />
       <div className="fnm-desktop-only fnm-block">
         {days.map((day, index) => (
           <DayTable key={day.date} day={day} head={index === 0} ctx={ctx} />
@@ -892,6 +899,7 @@ export function TransactionsScreen(
         query,
         (data) => (
           <TransactionsBody
+            tools={props.tools}
             result={data}
             filter={filter}
             searching={search !== "" || Object.values(filters).some(Boolean)}

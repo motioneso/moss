@@ -80,13 +80,17 @@ production wait/retry screen. The harness now waits the rendered bounded server 
 explicitly clicks Check saved records. No limit was raised and no financial write is retried.
 The passing full run also observed and honored a real budget-read backoff.
 
-Repository-wide verify:foundation is **currently running** at frozen clean a6a17c7b in the
-separate verification checkout, with the same 1ec108b81a57… input fingerprint and installed
-Chromium configured. Receipt 221307-g9u8mD. All static categories/typechecks have completed;
-the full unit stage is active. Final aggregate verdict, comparison with the recorded unrelated
-failure baseline, and later chained-stage status must be recorded before calling that gate done.
-CI e2e and live provider/bank acceptance remain unrun. Later evidence/docs commits do not
-constitute an additional production-code gate.
+Repository-wide verify:foundation at frozen clean a6a17c7b completed **failed** (receipt
+221307-g9u8mD). Static checks passed; units reported 278 failed, 19,777 passed and three skipped
+across 22 failed/1,639 passed files. Comparing normalized FAIL identities with receipt
+143017-SaB79F found the same 277 baseline failures plus one Finance regression: the manifest
+contract's exact tool list omitted the new bill-entry pair. No baseline identity disappeared.
+Commit 4475cb87 adds both names and explicit read/write/mandatory-confirmation assertions;
+all sixteen focused manifest tests then passed. A fresh aggregate is running at frozen clean
+4475cb87 (receipt 223645-1HZuKL); its final verdict is still pending. Do not call the first run
+baseline-only. Later chained migration/UAT/integration stages did not run after its unit failure
+(the wrapper's initial fresh-database migration did run). CI e2e and live bank/provider acceptance
+remain unrun. Later evidence/docs commits do not constitute another production-code gate.
 
 ## Remaining parity and next implementation
 

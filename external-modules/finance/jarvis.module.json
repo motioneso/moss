@@ -78,7 +78,7 @@
       {
         "id": "finance.transactions",
         "label": "Transactions",
-        "description": "Filter month, account, category, payee/notes, posting, manual ledger status, direction, review and duplicates. Open a payee for captured details, split allocations and owned private notes; shared details omit notes. Manual status isolates owned posted uncleared, cleared or reconciled entries. Captured owned posted unsplit category edits and confirmations ask the host and await persistence; stale batches save nothing and cancellation keeps review. Pending/KV/rule queues remain separate. Splits and transfers retain protections. Loaded CSV uses visible scope; owned date/account history export omits notes and mirrors, refusing over 5,000 rows or 2 MiB. Empty/error/busy states preserve filters. Shared rows remain read only. Manual linked transfers offer captured, host-confirmed audited inverse correction; originals and statements remain. Duplicate corrections refuse; uncertain saves require a fresh read.",
+        "description": "Filter month, account, category, payee/notes, posting, manual ledger status, direction, review and duplicates. Payees open captured facts, splits and owned notes; household details omit notes. Edit private note reads a fresh SQL version, then host-confirms saving or clearing up to 4,000 UTF-8 bytes without changing money, categories, links or reconciliation. Pending, posted, split, linked and reconciled owned notes are supported; KV/shared rows stay read only. Cancel keeps the draft. Changed or uncertain saves require Check saved note, retaining the draft beside current text. Captured category edits/confirmations and audited inverse transfer corrections await host approval; stale/duplicate corrections refuse. Splits retain protections. Pending/KV/rule queues are separate. Loaded CSV reflects visible scope; owned history export omits notes/mirrors and refuses over 5,000 rows or 2 MiB. Busy/error states preserve filters. Bulk notes, tags and attachments remain gaps.",
         "path": "/transactions"
       },
       {
@@ -2061,6 +2061,73 @@
       },
       "executionPolicy": "confirm",
       "confirmWhenKeys": ["name", "accountId", "date", "amountCents", "isoCurrency", "cleared"]
+    },
+    {
+      "name": "finance.transaction.note-read",
+      "permissionId": "finance.transaction.note-read",
+      "handler": "transaction.note-read",
+      "risk": "read",
+      "description": "Read the current private note and captured version of one owned transaction.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "transactionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "accountId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          }
+        },
+        "required": ["transactionId", "accountId", "month"]
+      }
+    },
+    {
+      "name": "finance.transaction.note-save",
+      "permissionId": "finance.transaction.note-save",
+      "handler": "transaction.note-save",
+      "risk": "write",
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["transactionId", "accountId", "month", "writeRevision", "notes"],
+      "actionLabel": "Save private transaction note",
+      "description": "Save or clear one private note using its current captured version; financial and category fields stay unchanged.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "transactionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "accountId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          },
+          "writeRevision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 4000
+          }
+        },
+        "required": ["transactionId", "accountId", "month", "writeRevision", "notes"]
+      }
     }
   ],
   "assistantActionFamilies": [

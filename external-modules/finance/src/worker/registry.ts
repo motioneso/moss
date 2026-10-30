@@ -81,6 +81,10 @@ import { setupStatusHandler } from "./handlers/setup.js";
 import { syncRunHandler } from "./handlers/sync.js";
 import { splitApplyHandler, transactionSplitHandler } from "./handlers/split.js";
 import type { WorkerPorts } from "./ports.js";
+import {
+  transactionNoteReadHandler,
+  transactionNoteSaveHandler
+} from "./handlers/transaction-notes.js";
 import type { ToolHandler } from "./wrap.js";
 
 export type ToolFactory = (ports: WorkerPorts) => ToolHandler;
@@ -112,6 +116,8 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "sync.run": syncRunHandler,
   // FIN-02 (#1147) Task 10: the feed surface declared by manifest v2.
   "transactions.query": transactionsQueryHandler,
+  "transaction.note-read": transactionNoteReadHandler,
+  "transaction.note-save": transactionNoteSaveHandler,
   "transactions.export": historyExportHandler,
   "transactions.bulk-category": transactionsBulkCategoryHandler,
   "transactions.confirm": transactionsConfirmHandler,

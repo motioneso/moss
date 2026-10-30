@@ -221,7 +221,9 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.card-reserve.preview", "card-reserve.preview"],
         ["finance.card-reserve.save", "card-reserve.save"],
         ["finance.bill.entry-preview", "bill.entry-preview"],
-        ["finance.bill.entry-record", "bill.entry-record"]
+        ["finance.bill.entry-record", "bill.entry-record"],
+        ["finance.transaction.note-read", "transaction.note-read"],
+        ["finance.transaction.note-save", "transaction.note-save"]
       ]
     );
     for (const tool of result.manifest.assistantTools ?? []) {
@@ -241,6 +243,11 @@ describe("finance manifest contract (#1146)", () => {
     // #3175: chat sorts a merchant under the family matching its history.
     const tools = result.manifest.assistantTools ?? [];
     const toolByName = (name: string) => tools.find((tool) => tool.name === name)!;
+    expect(toolByName("finance.transaction.note-save")).toMatchObject({
+      risk: "write",
+      executionPolicy: "confirm",
+      confirmWhenKeys: ["transactionId", "accountId", "month", "writeRevision", "notes"]
+    });
     expect(toolByName("finance.bill.entry-preview")).toMatchObject({ risk: "read" });
     expect(toolByName("finance.bill.entry-record")).toMatchObject({
       risk: "write",

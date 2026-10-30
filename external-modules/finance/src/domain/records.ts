@@ -35,7 +35,7 @@ export type TransactionRecord = {
   reviewState?: ReviewState;
   /** 0 to 1; set only when the AI step chose the category. */
   aiConfidence?: number | null;
-  /** Assistant-only free text — never in job payloads (metadata-only rule). */
+  /** Owner-private note — never in job payloads (metadata-only rule). */
   notes?: string;
   /** User allocations; the bank parent remains the sole balance movement. */
   splits?: TransactionSplit[];
