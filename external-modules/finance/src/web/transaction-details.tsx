@@ -4,6 +4,8 @@ import {
   RowIndex,
   RowIndexItem,
   Textarea,
+  useRef,
+  useState,
   type ExternalModuleToolsHandleV1,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
@@ -55,6 +57,21 @@ export function TransactionDetails(props: {
 }): ReactNodeLike {
   const { captured } = props;
   const row = captured?.row;
+  const focusKey = useRef("");
+  if (row) focusKey.current = JSON.stringify([row.id, row.accountId, row.shared === true]);
+  // Desktop and phone render distinct row buttons. Resolve the visible counterpart when
+  // the shared modal restores focus, including if the viewport changed during review.
+  const [returnFocusRef] = useState(() => ({
+    get current(): HTMLElement | null {
+      if (typeof document === "undefined") return null;
+      return (
+        [...document.querySelectorAll<HTMLButtonElement>("button[data-finance-details]")].find(
+          (button) =>
+            button.dataset.financeDetails === focusKey.current && button.getClientRects().length > 0
+        ) ?? null
+      );
+    }
+  }));
   const editor = useTransactionNoteEditor({
     tools: props.tools,
     target:
@@ -88,6 +105,7 @@ export function TransactionDetails(props: {
           scrollBody
           onClose={close}
           closeDisabled={editor.busy}
+          returnFocusRef={returnFocusRef}
           closeLabel="Close transaction details"
           footer={
             editor.editing ? (

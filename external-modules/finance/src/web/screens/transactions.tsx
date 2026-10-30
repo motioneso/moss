@@ -365,6 +365,11 @@ function DayTable(props: { day: DayGroup; head: boolean; ctx: RowContext }): Rea
                         variant="link"
                         size="sm"
                         aria-label={`View transaction details for ${tx.name}`}
+                        data-finance-details={JSON.stringify([
+                          tx.id,
+                          tx.accountId,
+                          tx.shared === true
+                        ])}
                         onClick={() => ctx.onDetails(tx)}
                       >
                         {tx.name}
@@ -415,6 +420,11 @@ function DayRows(props: { day: DayGroup; ctx: RowContext }): ReactNodeLike {
                       variant="link"
                       size="sm"
                       aria-label={`View transaction details for ${tx.name}`}
+                      data-finance-details={JSON.stringify([
+                        tx.id,
+                        tx.accountId,
+                        tx.shared === true
+                      ])}
                       onClick={() => ctx.onDetails(tx)}
                     >
                       {tx.name}
