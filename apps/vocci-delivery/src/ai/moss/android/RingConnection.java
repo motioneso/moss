@@ -44,13 +44,14 @@ final class RingConnection implements AutoCloseable {
             BluetoothManager manager = context.getSystemService(BluetoothManager.class);
             if (manager == null || manager.getAdapter() == null || !manager.getAdapter().isEnabled()) throw new IOException("bluetooth_unavailable");
             BluetoothDevice device = manager.getAdapter().getRemoteDevice(config.getString("address"));
+            RingTiming.mark("connect_start");
             gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE);
             if (gatt == null) throw new IOException("connection_unavailable");
-            await("connected"); stage = "mtu";
+            await("connected"); RingTiming.mark("link_up"); stage = "mtu";
             if (!gatt.requestMtu(247)) throw new IOException("mtu");
             await("mtu"); stage = "services";
             if (!gatt.discoverServices()) throw new IOException("services");
-            await("services"); stage = "subscribe";
+            await("services"); RingTiming.mark("services_done"); stage = "subscribe";
             for (String id : new String[]{RingAuth.AUTH_UUID, RingProtocol.UART, RingProtocol.FILE}) {
                 BluetoothGattCharacteristic c = characteristic(id);
                 BluetoothGattDescriptor d = c.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"));
@@ -73,6 +74,7 @@ final class RingConnection implements AutoCloseable {
             stage = "start_app";
             byte[] success = response(RingAuth.AUTH_UUID, 0x82);
             if (success.length != 1 || success[0] != 3) throw new IOException("auth_rejected");
+            RingTiming.mark("connect_done");
         } catch (InterruptedException error) { close(); throw error; }
         catch (Exception error) { close(); throw new IOException("ring_" + stage, error); }
     }
@@ -118,7 +120,7 @@ final class RingConnection implements AutoCloseable {
     private volatile boolean released;
     private void note(int command, byte[] payload) {
         telemetry.accept(command, payload, System.currentTimeMillis());
-        if (watcher.accept(command, payload)) released = true;
+        if (watcher.accept(command, payload)) { released = true; RingTiming.begin(); RingTiming.mark("press_end_heard"); RingTiming.clock("press_end_heard"); }
     }
     private final ArrayDeque<byte[]> responses = new ArrayDeque<>();
     private byte[] response(String id, int opcode) throws Exception {
@@ -159,6 +161,7 @@ final class RingConnection implements AutoCloseable {
      * about once a second while connected).
      */
     boolean listen(long ms, java.util.function.BooleanSupplier interrupted) throws Exception {
+        boolean firstHeard = false;
         long now = System.nanoTime(), end = now + TimeUnit.MILLISECONDS.toNanos(ms), lastSeen = now;
         while (System.nanoTime() < end && !interrupted.getAsBoolean()) {
             if (released) { released = false; return true; }
@@ -170,6 +173,7 @@ final class RingConnection implements AutoCloseable {
             }
             if (e.kind.equals("disconnected") || e.status != 0) throw new IOException("gatt_timeout_or_error");
             lastSeen = System.nanoTime();
+            if (!firstHeard) { firstHeard = true; RingTiming.clock("first_event_heard"); }
             if (e.kind.equals(RingProtocol.UART)) uart.accept(e.bytes, this::note);
             if (released) { released = false; return true; }
         }

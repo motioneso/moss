@@ -103,6 +103,7 @@ public final class DeliveryService extends Service {
             while (!stopping && !Thread.currentThread().isInterrupted()) {
                 try {
                     keepOpen = false;
+                    RingTiming.clock("cycle_start");
                     wake.acquire(4 * 60 * 60 * 1000L);
                     consumeCommands(client, config);
                     if (!new DeliveryPreferences(this).enabled()) break;
@@ -166,6 +167,7 @@ public final class DeliveryService extends Service {
         if (active == null) active = new RingConnection(this, config);
         try {
             Map<String, Integer> inventory = active.inventory();
+            RingTiming.mark("listing_done");
             long inventoryAt = System.currentTimeMillis();
             store.recordings.inventory(inventory, inventoryAt);
             voice.inventory(inventory, client);
@@ -196,6 +198,7 @@ public final class DeliveryService extends Service {
                 byte[] sidecar;
                 try { sidecar = active.retrieve(sidecarName, sidecarSize); }
                 catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
+                RingTiming.mark("sidecar_fetched");
                 if (!store.admitSidecar(id, sidecar, settled)) { if (voice.intent(id) != null && admitRetries++ < 3) fastRetries = Math.max(fastRetries, 3); continue; }
                 consumeCommands(client, config);
                 if (store.excluded(id)) continue;
@@ -211,6 +214,7 @@ public final class DeliveryService extends Service {
                     }
                 }
                 catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
+                RingTiming.mark("audio_fetched");
                 store.retrieved(id, sidecar);
                 if (voice.intent(id) != null) { fastRetries = 0; admitRetries = 0; }
             }
@@ -261,6 +265,7 @@ public final class DeliveryService extends Service {
                 if (stage.equals("retrieved")) { store.freeze(id); stage = "ready"; }
                 store.checkDelivery(id);
                 store.beginAttempt(id);
+                RingTiming.mark("upload_start");
                 if (stage.equals("voice-status")) {
                     store.chatStatus(id, client.chat(entry.getJSONObject("status").getString("voiceRequestId")));
                 } else {
@@ -268,6 +273,7 @@ public final class DeliveryService extends Service {
                     JSONObject status = stage.equals("accepted") ? (voice ? client.pollVoice(entry.getJSONObject("status").getString("id")) : client.poll(entry.getJSONObject("status").getString("id"))) :
                         (store.file(id, "upload.json").exists() ? ResumableUpload.deliver(client, store, id) :
                           (voice ? client.acceptVoice(PrivateFiles.read(store.file(id, "bundle.json"), 8 * 1024 * 1024)) : client.accept(PrivateFiles.read(store.file(id, "bundle.json"), 8 * 1024 * 1024))));
+                    RingTiming.mark("upload_done");
                     store.accepted(id, status);
                 }
             } catch (DeliveryStore.Excluded excluded) {
