@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chat steering - provider cannot steer</title>
+    <!--
+      Design-only mockup for docs/superpowers/specs/2026-10-29-chat-mid-turn-steering-design.md.
+      Static. Open directly in a browser. Token values copied from
+      apps/web/src/styles/tokens.css so the file renders on its own. The build
+      uses @moss/ui pieces and semantic tokens, never these literals.
+      Build pieces - chat Thread for the transcript, IconButton for Stop,
+      the composer send button, Chip for held messages.
+    -->
+    <style>
+      :root {
+        --font-display: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        --font-sans: "Helvetica Neue", Helvetica, system-ui, Arial, sans-serif;
+        --paper: #f2eee4;
+        --surface: #faf8f1;
+        --surface-2: #f7f3e9;
+        --line-subtle: #e6dfd0;
+        --line: #c6cbbc;
+        --ink: #282c25;
+        --ink-2: #676c60;
+        --text-subtle: #615a48;
+        --forest: #294b39;
+        --forest-soft: #dbe2d3;
+        --forest-ink: #1e3a2a;
+        --gold: #c2872b;
+        --amber-soft: #f8edd7;
+        --amber-ink: #5c3d0d;
+        --red-soft: #f7e2dd;
+        --red-ink: #842519;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--paper);
+        font-family: var(--font-sans);
+        color: var(--ink);
+        display: grid;
+        place-items: start center;
+        padding: 24px 12px;
+      }
+      .panel {
+        width: 380px;
+        max-width: 100%;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .head {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding: 14px 16px 10px;
+        border-bottom: 1px solid var(--line-subtle);
+      }
+      .head h1 {
+        font-family: var(--font-display);
+        font-size: 17px;
+        font-weight: 600;
+        margin: 0;
+      }
+      .head span { font-size: 12px; color: var(--text-subtle); }
+      .thread {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-height: 300px;
+      }
+      .msg { font-size: 13px; line-height: 1.55; }
+      .msg--user {
+        align-self: flex-end;
+        background: var(--forest-soft);
+        color: var(--forest-ink);
+        border-radius: 10px;
+        padding: 8px 12px;
+        max-width: 85%;
+      }
+      .msg--moss { align-self: flex-start; max-width: 92%; }
+      .activity {
+        font-size: 12px;
+        color: var(--text-subtle);
+        border-top: 1px solid var(--line-subtle);
+        padding-top: 8px;
+      }
+      .held, .warn, .fail {
+        margin: 0 16px 12px;
+        font-size: 12px;
+        line-height: 1.5;
+        padding: 8px 12px;
+        border-radius: 8px;
+        display: flex;
+        gap: 8px;
+        align-items: baseline;
+        justify-content: space-between;
+      }
+      .held { background: var(--surface-2); border: 1px solid var(--line-subtle); }
+      .warn { background: var(--amber-soft); color: var(--amber-ink); }
+      .fail { background: var(--red-soft); color: var(--red-ink); }
+      .held button, .fail button {
+        font: inherit;
+        background: none;
+        border: none;
+        color: inherit;
+        font-weight: 600;
+        text-decoration: underline;
+        text-underline-offset: 4px;
+        cursor: pointer;
+        padding: 0;
+      }
+      .composer { border-top: 1px solid var(--line); padding: 12px 16px 16px; }
+      .box {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 12px;
+        display: flex;
+        gap: 8px;
+        align-items: flex-end;
+        background: var(--surface);
+      }
+      .box p { flex: 1; margin: 0; font-size: 13px; line-height: 1.5; min-height: 40px; }
+      .box .ph { color: var(--text-subtle); }
+      .btn {
+        flex: none;
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: var(--surface-2);
+        color: var(--ink);
+        font-size: 13px;
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+      }
+      .btn--send { background: var(--forest); border-color: var(--forest); color: #faf8f1; }
+      .btn:disabled { opacity: 0.45; cursor: default; }
+    </style>
+  </head>
+  <body>
+    <section class="panel" aria-label="Chat">
+      <header class="head">
+        <h1>Moss</h1>
+        <span>Working</span>
+      </header>
+      <div class="thread">
+        <p class="msg msg--user">Plan my Saturday around the market and the dentist at 11.</p>
+        <p class="msg msg--moss">The market opens at 8, so I am putting it first and checking what sits near the dentist.</p>
+        <p class="activity">Reading your calendar</p>
+      </div>
+      <div class="held"><span>“Add the farmers market on Fifth.”</span><span>Sending as a new message</span></div>
+      <div class="composer">
+        <div class="box">
+          <p class="ph">Message Moss</p>
+          <button class="btn" type="button" aria-label="Stop">&#9632;</button>
+          <button class="btn btn--send" type="button" aria-label="Send" disabled>&#8593;</button>
+        </div>
+      </div>
+    </section>
+  </body>
+</html>
