@@ -184,6 +184,7 @@ import {
   chatModuleManifest,
   chatModuleSqlMigrationDirectory,
   CliChatUnavailableError,
+  buildBackgroundReadGatewayDependencies,
   buildEveningInterviewSeed,
   buildCalendarWriteService,
   buildDayPlanApplyComposition,
@@ -2471,18 +2472,21 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           dataContext: deps.dataContext,
           createCliStructuredAdapter: createCliStructuredAdapterFactory()
         }),
-        scheduledReadGateway: new AssistantToolGateway({
-          runner: deps.dataContext,
-          repository: new AiRepository(),
-          tokens: new SessionTokenRegistry(),
-          confirmations: new ConfirmationRegistry(),
-          notifier: { emit() {} },
-          confirmTimeoutMs: 0,
-          resolveActiveModules: createActiveModulesResolver({
-            dataContext: deps.dataContext,
-            manifests: getBuiltInModuleManifests
+        scheduledReadGateway: new AssistantToolGateway(
+          buildBackgroundReadGatewayDependencies({
+            runner: deps.dataContext,
+            repository: new AiRepository(),
+            tokens: new SessionTokenRegistry(),
+            confirmations: new ConfirmationRegistry(),
+            notifier: { emit() {} },
+            // #3819: background source reads need the owner's stored zone, not UTC.
+            localePreferences: new PreferencesRepository(),
+            resolveActiveModules: createActiveModulesResolver({
+              dataContext: deps.dataContext,
+              manifests: getBuiltInModuleManifests
+            })
           })
-        }),
+        ),
         reminderNotifications: new NotificationsRepository(
           quietHoursPortImpl,
           createNotificationPreferencePort(),

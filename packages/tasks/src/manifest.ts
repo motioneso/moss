@@ -519,7 +519,7 @@ export const tasksModuleManifest = {
     {
       name: "tasks.heartbeatWindow",
       description:
-        "Background heartbeat read. Lists the actor's open tasks that are overdue or due soon, with a change revision. Reads only; never advances recurring tasks.",
+        "Background heartbeat read. Lists the actor's open tasks due soon or overdue in the last week, with a change revision. Reads only; never advances recurring tasks.",
       permissionId: "tasks.view",
       risk: "read",
       content: "outside",

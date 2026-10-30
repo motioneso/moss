@@ -141,6 +141,53 @@ export function buildChatToolServices(deps: {
 }
 
 /**
+ * The per-actor locale resolver that fills ToolContext.locale and localTimezone. Shared so a
+ * gateway built outside a chat turn (background source reads, scheduled reports) still sees the
+ * owner's stored zone instead of treating every day as UTC.
+ */
+export function localeResolverFor(
+  runner: Pick<DataContextRunner, "withDataContext">,
+  localePreferences: PreferencesPort
+): NonNullable<AssistantToolGatewayDependencies["resolveLocale"]> {
+  return (actorUserId) =>
+    runner.withDataContext(
+      { actorUserId, requestId: "gateway:resolve-locale" },
+      async (scopedDb) => {
+        const raw = await localePreferences.get(scopedDb, LOCALE_PREFERENCE_KEY);
+        // #2157: match what Settings shows — never leave the tool context blank (→ UTC)
+        // just because the user has not saved a locale yet.
+        return resolveEffectiveLocale(raw);
+      }
+    );
+}
+
+/**
+ * Dependencies for the read-only gateway behind background source reads. It carries the locale
+ * resolver so a read sees the owner's stored time zone; a gateway built without one made every
+ * background read fall back to UTC (#3819).
+ */
+export function buildBackgroundReadGatewayDependencies(args: {
+  resolveActiveModules: ActiveModulesResolver;
+  repository: AiRepository;
+  runner: DataContextRunner;
+  tokens: SessionTokenRegistry;
+  confirmations: ConfirmationRegistry;
+  notifier: SessionNotifier;
+  localePreferences: PreferencesPort;
+}): AssistantToolGatewayDependencies {
+  return {
+    resolveActiveModules: args.resolveActiveModules,
+    repository: args.repository,
+    runner: args.runner,
+    tokens: args.tokens,
+    confirmations: args.confirmations,
+    notifier: args.notifier,
+    confirmTimeoutMs: 0,
+    resolveLocale: localeResolverFor(args.runner, args.localePreferences)
+  };
+}
+
+/**
  * Assembles the AssistantToolGatewayDependencies registerChatRoutes uses, INCLUDING toolServices from
  * buildChatToolServices. Exported so a test can assert the real construction path carries toolServices
  * (i.e. that registerChatRoutes does not forget to pass it) — closing the "factory exists but isn't
@@ -297,16 +344,7 @@ export function buildChatGatewayDependencies(args: {
         : undefined,
     webSearchEngineForActor: args.webSearchEngineForActor,
     resolveLocale: args.localePreferences
-      ? (actorUserId) =>
-          args.runner.withDataContext(
-            { actorUserId, requestId: "gateway:resolve-locale" },
-            async (scopedDb) => {
-              const raw = await args.localePreferences!.get(scopedDb, LOCALE_PREFERENCE_KEY);
-              // #2157: match what Settings shows — never leave the tool context blank (→ UTC)
-              // just because the user has not saved a locale yet.
-              return resolveEffectiveLocale(raw);
-            }
-          )
+      ? localeResolverFor(args.runner, args.localePreferences)
       : undefined
   };
 }

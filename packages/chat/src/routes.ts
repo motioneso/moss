@@ -130,6 +130,7 @@ import { buildCheckTokenMinter, type CheckTokenMinter } from "./check-token-mint
 export { buildCheckTokenMinter, type CheckTokenMinter } from "./check-token-minter.js";
 
 export {
+  buildBackgroundReadGatewayDependencies,
   buildChatGatewayDependencies,
   buildChatToolServices,
   resolveYoloMode
