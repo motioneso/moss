@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MeetingOutputInputs, MeetingTranscriptSegment } from "@moss/shared";
 import {
+  meetingOutputNoteCitationKeys,
   planMeetingOutputChunks,
   shiftMeetingOutputChunkEvidence,
   splitMeetingOutputChunk
@@ -94,6 +95,31 @@ describe("meeting output chunks", () => {
     expect(notes.slice(evidence.startCharacter, evidence.endCharacter)).toBe(
       second.inputs.personalNotes.slice(0, 8)
     );
+  });
+
+  it("shifts only new notes citations and keeps citations from the running summary", () => {
+    const older = {
+      kind: "personal-note",
+      meetingId: "meeting",
+      notesRevision: 1,
+      startCharacter: 10,
+      endCharacter: 20
+    };
+    const fresh = { ...older, startCharacter: 0, endCharacter: 5 };
+    const reply = { decisions: [{ evidence: [older] }, { evidence: [fresh] }] };
+    const preserved = meetingOutputNoteCitationKeys({ decisions: [{ evidence: [older] }] });
+    const shifted = shiftMeetingOutputChunkEvidence(reply, 5000, preserved) as {
+      decisions: { evidence: { startCharacter: number; endCharacter: number }[] }[];
+    };
+    // The older citation was already in full-notes offsets and must not move again.
+    expect(shifted.decisions[0]!.evidence[0]).toMatchObject({
+      startCharacter: 10,
+      endCharacter: 20
+    });
+    expect(shifted.decisions[1]!.evidence[0]).toMatchObject({
+      startCharacter: 5000,
+      endCharacter: 5005
+    });
   });
 
   it("splits a piece into two ordered pieces that keep the same seen evidence", () => {

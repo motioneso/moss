@@ -135,27 +135,69 @@ export function splitMeetingOutputChunk(
   return null;
 }
 
-/** Shift a piece answer's notes evidence back to offsets in the full notes text. */
-export function shiftMeetingOutputChunkEvidence(value: unknown, notesStart: number): unknown {
+function noteCitationKey(record: Record<string, unknown>): string | null {
+  if (
+    record.kind !== "personal-note" ||
+    typeof record.meetingId !== "string" ||
+    typeof record.notesRevision !== "number" ||
+    typeof record.startCharacter !== "number" ||
+    typeof record.endCharacter !== "number"
+  )
+    return null;
+  return JSON.stringify([
+    record.meetingId,
+    record.notesRevision,
+    record.startCharacter,
+    record.endCharacter
+  ]);
+}
+
+/** Keys for every notes citation already expressed in full-notes offsets. */
+export function meetingOutputNoteCitationKeys(value: unknown): Set<string> {
+  const keys = new Set<string>();
+  const visit = (item: unknown): void => {
+    if (Array.isArray(item)) {
+      item.forEach(visit);
+      return;
+    }
+    if (typeof item !== "object" || item === null) return;
+    const record = item as Record<string, unknown>;
+    const key = noteCitationKey(record);
+    if (key) keys.add(key);
+    Object.values(record).forEach(visit);
+  };
+  visit(value);
+  return keys;
+}
+
+/**
+ * Shift a piece answer's new notes evidence back to offsets in the full notes text.
+ * Citations carried over from the running summary are already in full-notes
+ * offsets, so the caller passes their keys as preserved and they stay put.
+ */
+export function shiftMeetingOutputChunkEvidence(
+  value: unknown,
+  notesStart: number,
+  preserved: ReadonlySet<string> = new Set()
+): unknown {
   if (notesStart === 0) return value;
   if (Array.isArray(value))
-    return value.map((item) => shiftMeetingOutputChunkEvidence(item, notesStart));
+    return value.map((item) => shiftMeetingOutputChunkEvidence(item, notesStart, preserved));
   if (typeof value !== "object" || value === null) return value;
   const record = value as Record<string, unknown>;
+  const key = noteCitationKey(record);
   const shifted =
-    record.kind === "personal-note" &&
-    typeof record.startCharacter === "number" &&
-    typeof record.endCharacter === "number"
+    key && !preserved.has(key)
       ? {
           ...record,
-          startCharacter: record.startCharacter + notesStart,
-          endCharacter: record.endCharacter + notesStart
+          startCharacter: (record.startCharacter as number) + notesStart,
+          endCharacter: (record.endCharacter as number) + notesStart
         }
       : record;
   return Object.fromEntries(
     Object.entries(shifted).map(([key, item]) => [
       key,
-      shiftMeetingOutputChunkEvidence(item, notesStart)
+      shiftMeetingOutputChunkEvidence(item, notesStart, preserved)
     ])
   );
 }

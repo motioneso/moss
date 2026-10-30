@@ -137,6 +137,29 @@ test("Long and short recordings both get summaries on the Meeting screen (#3840)
     console.log(`LONG_SUMMARY_UAT long transcript stand-in characters=${longCharacters}`);
     await writeSummaryOnScreen(longId, longTitle);
     console.log("LONG_SUMMARY_UAT long recording summary saved");
+
+    const notesTitle = `Long notes check ${randomUUID()}`;
+    const notesId = await createMeeting(notesTitle, [
+      "We decided to launch the Orchid pilot on Friday. Alex will prepare the checklist."
+    ]);
+    const longNotes = Array.from({ length: 220 }, (_, index) => {
+      return (
+        `Note ${index + 1}: the team decided to complete step ${index + 1} of the Orchid rollout this week. ` +
+        `Alex will prepare checklist ${index + 1} and Priya will review the budget for step ${index + 1}. ` +
+        `The open question for step ${index + 1} is whether the vendor can deliver on time. `
+      );
+    }).join("\n");
+    expect(longNotes.length).toBeGreaterThan(70_000);
+    const notesSaved = await page.request.put(`/api/meetings/records/${notesId}/notes`, {
+      data: { requestKey: randomUUID(), expectedRevision: 0, personalNotes: longNotes }
+    });
+    expect(notesSaved.status()).toBe(200);
+    console.log(`LONG_SUMMARY_UAT long notes stand-in characters=${longNotes.length}`);
+    await writeSummaryOnScreen(notesId, notesTitle);
+    const notesOutputs = await page.request.get(`/api/meetings/records/${notesId}/outputs`);
+    const notesBody = (await notesOutputs.json()) as { artifacts: MeetingOutputArtifact[] };
+    expect(notesBody.artifacts[0]!.inputs.personalNotes.length).toBe(longNotes.length);
+    console.log("LONG_SUMMARY_UAT long notes summary saved");
   } finally {
     for (const meetingId of created)
       await page.request.delete(`/api/meetings/records/${meetingId}`).catch(() => undefined);

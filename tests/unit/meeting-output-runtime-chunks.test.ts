@@ -153,6 +153,39 @@ describe("long meeting summaries in pieces", () => {
     expect(generated.content).toMatchObject({ decisions: [{ text: "Launch date decided" }] });
   });
 
+  it("does not shift an older notes citation again in a later piece", async () => {
+    const h = setup();
+    const request = baseInput();
+    request.inputs.personalNotes = "Alpha decision words for the summary record. ".repeat(2800);
+    const cited = {
+      ...content,
+      decisions: [
+        {
+          text: "Alpha decided",
+          evidence: [
+            {
+              kind: "personal-note",
+              meetingId: "meeting-id",
+              notesRevision: 1,
+              startCharacter: 0,
+              endCharacter: 5
+            }
+          ]
+        }
+      ]
+    };
+    // Every piece returns the running citation. Later pieces must keep its
+    // full-notes offsets instead of shifting it by their own slice start.
+    h.fetch.mockImplementation(async () => response(cited));
+    const generated = await h.generator(actor, request);
+    const decisions = (
+      generated.content as {
+        decisions: { evidence: { startCharacter: number; endCharacter: number }[] }[];
+      }
+    ).decisions;
+    expect(decisions[0]!.evidence[0]).toMatchObject({ startCharacter: 0, endCharacter: 5 });
+  });
+
   it("retries only the failed piece and never resends a finished piece", async () => {
     const h = setup();
     const request = baseInput();

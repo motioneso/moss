@@ -363,7 +363,7 @@ export const meetingFeatures = [
   {
     id: "meetings.grounded_outputs",
     description:
-      "Generate evidence-checked summaries with your default model, without fallback. Subscription summaries run through the same route as chat, with tools off. Long recordings are summarised piece by piece into one summary.",
+      "Generate evidence-checked summaries, without fallback, through the same no-tools route as chat. Long recordings are summarised piece by piece. Compare versions and sources; refresh to check availability without generating.",
     errors: [
       {
         code: "meeting_output_unavailable",

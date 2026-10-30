@@ -14,6 +14,7 @@ import {
 import type { AiProviderKind } from "@moss/shared";
 import {
   getMeetingOutputTemplate,
+  meetingOutputNoteCitationKeys,
   meetingRecordingOutputGuidance,
   planMeetingOutputChunks,
   readMeetingCaptureCompleteness,
@@ -419,7 +420,11 @@ export function createMeetingOutputRuntime(deps: {
           }
           try {
             pieceContent = validateMeetingOutput(
-              shiftMeetingOutputChunkEvidence(result.object, piece.notesStart),
+              shiftMeetingOutputChunkEvidence(
+                result.object,
+                piece.notesStart,
+                content ? meetingOutputNoteCitationKeys(content) : new Set()
+              ),
               piece.seenInputs
             );
           } catch (error) {
