@@ -57,7 +57,7 @@ export function BudgetTargets(props: BudgetTargetsProps): ReactNodeLike {
     <section className="fnm-block" aria-label="Category targets">
       <SectionHead title="Plan for what matters" rule />
       <p className="jds-hint">
-        Targets guide your assignments. They use the money already in your categories.
+        Set a plan for each category. Funding is a separate, reviewed choice.
       </p>
       {props.targets.length ? (
         <RowIndex density="compact">
@@ -82,7 +82,7 @@ export function BudgetTargets(props: BudgetTargetsProps): ReactNodeLike {
           ))}
         </RowIndex>
       ) : (
-        <p>No targets yet. Plan monthly or weekly contributions, or save toward a date.</p>
+        <p>No targets yet. Choose contributions, monthly refill, or dated savings.</p>
       )}
       <div>
         <Button
@@ -173,7 +173,7 @@ function TargetDialog(
   const existing = props.targets.find((t) => t.categoryId === props.initialId);
   const [categoryId, setCategory] = useState(props.initialId || props.categories[0]?.id || "");
   const [kind, setKind] = useState<string>(
-    existing?.kind === "balance" || existing?.kind === "weekly" ? existing.kind : "monthly"
+    existing && existing.kind !== "removed" ? existing.kind : "monthly"
   );
   const [weekday, setWeekday] = useState(
     existing?.weekday === undefined ? "" : String(existing.weekday)
@@ -307,6 +307,7 @@ function TargetDialog(
           >
             <option value="monthly">Monthly contribution</option>
             <option value="weekly">Weekly contribution</option>
+            <option value="refill">Monthly refill</option>
             <option value="balance">Balance by a date</option>
           </Select>
         </label>
@@ -364,9 +365,11 @@ function TargetDialog(
         <p className="jds-hint">
           {kind === "weekly"
             ? "Full-month plan, including when created mid-month. Progress counts new assignments, independent of spending and rollover. Funding is always a separate reviewed choice."
-            : kind === "monthly"
-              ? "Progress counts this month's assigned money, independent of spending and rollover."
-              : "Progress counts the category's available money. Spending reduces progress."}
+            : kind === "refill"
+              ? "Counts carried money plus this month's assignments. Spending and refunds during the month do not change this plan. Future carry is provisional. Funding is a separate reviewed choice."
+              : kind === "monthly"
+                ? "Progress counts this month's assigned money, independent of spending and rollover."
+                : "Progress counts the category's available money. Spending reduces progress."}
         </p>
         {message ? <p role="alert">{message}</p> : null}
       </div>

@@ -116,7 +116,7 @@
       },
       {
         "id": "finance.budget-typing",
-        "description": "Assigned totals save through awaited, reviewed host actions. Cancel keeps typed amounts. Assistant actions refresh saved reads. Typed amounts keep their original review; changed budgets and rejected/uncertain saves require an explicit successful Check saved records before saving. Failed reads end Refreshing and keep the write block; busy reads honor the server wait. Discard clears local input only. Targets guide monthly, weekly or dated saving without moving money; old archived/pooled targets offer read-only removal preserving money/history. New targets exclude the synthetic pool. Flexible mode routes chosen category activity, guidance and carry into one funded pool; members cannot be funded separately. Mode changes need current-month confirmation and no future funding or conflicting targets; leaving needs exact destinations for available money. History and transaction categories stay intact. Open reviews retain captured versions."
+        "description": "Assigned totals save through awaited, reviewed host actions. Cancel keeps typed amounts. Assistant actions refresh saved reads. Typed amounts keep their original review; changed budgets and rejected/uncertain saves require an explicit successful Check saved records before saving. Failed reads end Refreshing and keep the write block; busy reads honor the server wait. Discard clears local input only. Targets guide contributions, refill or dated saving without moving money; old archived/pooled targets offer read-only removal preserving money/history. New targets exclude the synthetic pool. Flexible mode routes chosen category activity, guidance and carry into one funded pool; members cannot be funded separately. Mode changes need current-month confirmation and no future funding or conflicting targets; leaving needs exact destinations for available money. History and transaction categories stay intact. Open reviews retain captured versions."
       },
       {
         "id": "finance.getting-started",
@@ -124,7 +124,7 @@
       },
       {
         "id": "finance.first-budget",
-        "description": "After connected or manual account history exists, Getting started builds a stored draft in the chosen budget currency. Edit amounts with Enter or Save; totals change only after persistence. Starting requires an explicit host confirmation and commits categories, assignments and draft status together. Stale reviews keep typed input for review; ambiguous outcomes require checking saved records. No bank connection is required."
+        "description": "After connected or manual account history exists, Getting started builds a stored draft in the chosen budget currency. Edit amounts with Enter or Save; totals change only after persistence. Starting requires an explicit host confirmation and commits categories, assignments and draft status together. Stale reviews keep typed input for review; ambiguous outcomes require checking saved records. No bank connection is required. Budget offers Monthly refill targets: carried money plus this month's assignments count toward the plan. Current-month spending/refunds do not reopen it; future carry is provisional. Existing monthly targets stay contribution-based. Save is metadata only. Review target funding shows eligible suggestions first and retains current-month, ready-money, overspending, version and mandatory host-confirmation checks. No automatic funding or withdrawal of excess money."
       },
       {
         "id": "finance.needs-a-look",
@@ -989,7 +989,7 @@
       "name": "finance.target.set",
       "permissionId": "finance.target.set",
       "actionLabel": "Save a category target",
-      "description": "Save or remove monthly, full-month weekly contribution or balance-by-date guidance from this month onward. Weekly requires per-week cents and weekday Sunday=0 through Saturday=6; every occurrence in the month counts. Does not assign money. Read budget status first.",
+      "description": "Save or remove monthly contribution/refill, full-month weekly contribution or balance-by-date guidance from this month onward. Weekly requires per-week cents and weekday Sunday=0 through Saturday=6; every occurrence in the month counts. Does not assign money. Read budget status first.",
       "risk": "write",
       "executionPolicy": "auto",
       "actionFamilyId": "drafting",
@@ -1000,7 +1000,10 @@
         "properties": {
           "month": { "type": "string" },
           "categoryId": { "type": "string" },
-          "kind": { "type": "string", "enum": ["monthly", "weekly", "balance", "removed"] },
+          "kind": {
+            "type": "string",
+            "enum": ["monthly", "weekly", "refill", "balance", "removed"]
+          },
           "amountCents": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
           "dueDate": { "type": "string" },
           "weekday": { "type": "integer", "minimum": 0, "maximum": 6 },

@@ -6,7 +6,7 @@ import type { BudgetReview } from "./budget-context.js";
 export interface CategoryTarget {
   categoryId: string;
   effectiveMonth: string;
-  kind: "monthly" | "weekly" | "balance" | "removed";
+  kind: "monthly" | "weekly" | "refill" | "balance" | "removed";
   amountCents: number;
   dueDate: string | null;
   weekday?: number;
@@ -37,13 +37,16 @@ export function targetProgress(
       ? weeklyTargetPeriod(month, target.weekday!, target.amountCents)
       : undefined;
   const amount = BigInt(weekly?.totalCents ?? safeCents(target.amountCents));
-  const base = BigInt(
-    safeCents(
-      target.kind === "monthly" || target.kind === "weekly"
-        ? (state?.assignedCents ?? 0)
-        : (state?.availableCents ?? 0)
-    )
-  );
+  const base =
+    target.kind === "refill"
+      ? BigInt(safeCents(state?.availableCents ?? 0)) + BigInt(safeCents(state?.activityCents ?? 0))
+      : BigInt(
+          safeCents(
+            target.kind === "monthly" || target.kind === "weekly"
+              ? (state?.assignedCents ?? 0)
+              : (state?.availableCents ?? 0)
+          )
+        );
   const remaining = amount > base ? amount - base : 0n;
   const progress = base < 0n ? 0n : base;
   const overdue = target.kind === "balance" && target.dueDate !== null && target.dueDate < asOfDate;

@@ -2,13 +2,15 @@ import type { CategoryTarget, TargetProgress } from "../domain/targets";
 import { WEEKDAYS, type WeeklyTargetPeriod } from "../domain/weekly-targets";
 import { formatCents, monthLabel } from "./format";
 export function targetKindLabel(target: Pick<CategoryTarget, "kind" | "dueDate">): string {
-  return target.kind === "weekly"
-    ? "Weekly contribution"
-    : target.kind === "monthly"
-      ? "Monthly contribution"
-      : target.kind === "balance"
-        ? `Balance by ${target.dueDate}`
-        : "Removed target";
+  return target.kind === "refill"
+    ? "Monthly refill · includes carried money"
+    : target.kind === "weekly"
+      ? "Weekly contribution"
+      : target.kind === "monthly"
+        ? "Monthly contribution"
+        : target.kind === "balance"
+          ? `Balance by ${target.dueDate}`
+          : "Removed target";
 }
 export function weeklyPeriodLabel(
   period: WeeklyTargetPeriod,

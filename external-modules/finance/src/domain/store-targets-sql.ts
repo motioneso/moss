@@ -1,4 +1,4 @@
-import type { TargetStore } from "./targets.js";
+import type { CategoryTarget, TargetStore } from "./targets.js";
 import type { FinanceDb } from "./store-sql.js";
 import { budgetEligibilitySql } from "./budget-review-sql.js";
 import { safeCents } from "./values.js";
@@ -9,7 +9,7 @@ export function targetSqlStore(db: FinanceDb): TargetStore {
       const result = await db.query<{
         category_id: string;
         effective_month: string;
-        kind: "monthly" | "weekly" | "balance" | "removed";
+        kind: CategoryTarget["kind"];
         amount_cents: string;
         due_date: string | null;
         weekday: number | null;
@@ -29,7 +29,7 @@ export function targetSqlStore(db: FinanceDb): TargetStore {
       const result = await db.query<{
         category_id: string;
         effective_month: string;
-        kind: "monthly" | "weekly" | "balance" | "removed";
+        kind: CategoryTarget["kind"];
         amount_cents: string;
         due_date: string | null;
         weekday: number | null;

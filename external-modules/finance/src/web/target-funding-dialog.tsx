@@ -176,37 +176,41 @@ export function TargetFundingDialog(props: {
         ) : (
           <>
             <p className="jds-hint">
-              Choose up to 20 targets. Dated suggestions divide the remaining balance across months
-              left, including this month; they recalculate as you save or spend. Monthly and weekly
-              contributions count assigned money. Weekly plans cover the full calendar month.
+              Choose up to 20 targets. Contributions count assignments; refill also counts carried
+              money. Dated suggestions recalculate from the remaining balance and months left.
             </p>
             <div className="fnm-block fnm-block--tight">
-              {data.lines.map((line) => (
-                <div key={line.categoryId} className="fnm-block fnm-block--tight">
-                  <Checkbox
-                    ariaLabel={`Fund ${line.name}`}
-                    label={line.name}
-                    checked={ids.includes(line.categoryId)}
-                    disabled={
-                      busy ||
-                      Boolean(line.unavailableReason) ||
-                      (ids.length >= 20 && !ids.includes(line.categoryId))
-                    }
-                    onChange={(checked) =>
-                      setIds((old) =>
-                        checked
-                          ? [...old, line.categoryId]
-                          : old.filter((id) => id !== line.categoryId)
-                      )
-                    }
-                  />
-                  <p className="jds-hint">
-                    {line.unavailableReason
-                      ? reason[line.unavailableReason]
-                      : `${targetKindLabel(line)}${line.weekly ? ` · ${weeklyPeriodLabel(line.weekly, data.currency, data.month)}` : ""} · add ${formatCents(line.amountCents, data.currency)} · assigned ${formatCents(line.previousCents, data.currency)} → ${formatCents(line.newAssignedCents!, data.currency)}`}
-                  </p>
-                </div>
-              ))}
+              {[...data.lines]
+                .sort(
+                  (a, b) =>
+                    Number(Boolean(a.unavailableReason)) - Number(Boolean(b.unavailableReason))
+                )
+                .map((line) => (
+                  <div key={line.categoryId} className="fnm-block fnm-block--tight">
+                    <Checkbox
+                      ariaLabel={`Fund ${line.name}`}
+                      label={line.name}
+                      checked={ids.includes(line.categoryId)}
+                      disabled={
+                        busy ||
+                        Boolean(line.unavailableReason) ||
+                        (ids.length >= 20 && !ids.includes(line.categoryId))
+                      }
+                      onChange={(checked) =>
+                        setIds((old) =>
+                          checked
+                            ? [...old, line.categoryId]
+                            : old.filter((id) => id !== line.categoryId)
+                        )
+                      }
+                    />
+                    <p className="jds-hint">
+                      {line.unavailableReason
+                        ? reason[line.unavailableReason]
+                        : `${targetKindLabel(line)}${line.weekly ? ` · ${weeklyPeriodLabel(line.weekly, data.currency, data.month)}` : ""} · add ${formatCents(line.amountCents, data.currency)} · assigned ${formatCents(line.previousCents, data.currency)} → ${formatCents(line.newAssignedCents!, data.currency)}`}
+                    </p>
+                  </div>
+                ))}
             </div>
             <p role="status">
               {ids.length} selected

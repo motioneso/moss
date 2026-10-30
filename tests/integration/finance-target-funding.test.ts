@@ -230,6 +230,102 @@ beforeEach(async () => {
     });
 });
 describe("installed selected target funding", () => {
+  it("refills carry plus assignments without treating current spending/refunds as another funding request", async () => {
+    await owner((s) =>
+      s.manual!.createEntry({
+        id: "manual:refill-spending",
+        accountId,
+        name: "Synthetic saved spending",
+        date: "2026-10-10",
+        amountCents: 1200,
+        isoCurrency: "USD",
+        categoryId: "savings",
+        notes: "Synthetic private note",
+        cleared: false,
+        digest: "d".repeat(64),
+        at
+      })
+    );
+    const before = await snapshot(),
+      view = await status();
+    await owner((s) =>
+      targetSetHandler(ports(s))({
+        month,
+        categoryId: "savings",
+        kind: "refill",
+        amountCents: 12501,
+        expectedRevision: view.revision,
+        expectedFingerprint: view.fingerprint
+      })
+    );
+    const saved = await status();
+    expect(saved.targetFunding).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          categoryId: "savings",
+          kind: "refill",
+          previousCents: 500,
+          amountCents: 2501,
+          newAssignedCents: 3001
+        })
+      ])
+    );
+    const edited = await snapshot();
+    expect(edited.accounts).toEqual(before.accounts);
+    expect(edited.transactions).toEqual(before.transactions);
+    expect(edited.ledger).toEqual(before.ledger);
+    expect(
+      edited.history.find((t) => t.categoryId === "savings" && t.effectiveMonth === month)
+    ).toEqual({
+      categoryId: "savings",
+      effectiveMonth: month,
+      kind: "refill",
+      amountCents: 12501,
+      dueDate: null
+    });
+    expect(await fund(command(saved, ["savings"]))).toMatchObject({
+      status: "ok",
+      totalCents: 2501
+    });
+    const funded = await snapshot();
+    expect(funded.accounts).toEqual(edited.accounts);
+    expect(funded.transactions).toEqual(edited.transactions);
+    expect(funded.history).toEqual(edited.history);
+    expect(funded.prior).toEqual(before.prior);
+    expect(funded.ledger?.assignments.savings).toBe(3001);
+    expect(funded.history.filter((t) => t.effectiveMonth === "2026-09")).toEqual(
+      before.history.filter((t) => t.effectiveMonth === "2026-09")
+    );
+    await owner((s) =>
+      s.manual!.createEntry({
+        id: "manual:refill-refund",
+        accountId,
+        name: "Synthetic saved refund",
+        date: "2026-10-30",
+        amountCents: -500,
+        isoCurrency: "USD",
+        categoryId: "savings",
+        notes: "",
+        cleared: false,
+        digest: "e".repeat(64),
+        at
+      })
+    );
+    expect((await status()).targetFunding).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          categoryId: "savings",
+          amountCents: 0,
+          unavailableReason: "reached"
+        })
+      ])
+    );
+    expect((await status("2026-11")).targetFunding).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ categoryId: "savings", kind: "refill", amountCents: 700 })
+      ])
+    );
+  });
   it("persists weekly plans, funds the calendar total and preserves historical targets and ledger receipts", async () => {
     const before = await snapshot(),
       view = await status();
@@ -356,14 +452,17 @@ describe("installed selected target funding", () => {
     await expect(fund(command(captured, ["groceries"]))).rejects.toThrow();
     expect(await snapshot()).toEqual(stable);
   });
-  it("enforces weekly target shape in installed SQL without changing saved history on rejection", async () => {
+  it("enforces target shapes in installed SQL without changing saved history on rejection", async () => {
     const stable = await snapshot();
     for (const shape of [
       { kind: "weekly" as const, amountCents: 100 },
       { kind: "weekly" as const, amountCents: 100, weekday: 7 },
       { kind: "weekly" as const, amountCents: 100, weekday: 5, dueDate: "2026-10-30" },
       { kind: "weekly" as const, amountCents: 1801439850948199, weekday: 5 },
-      { kind: "monthly" as const, amountCents: 100, weekday: 5 }
+      { kind: "monthly" as const, amountCents: 100, weekday: 5 },
+      { kind: "refill" as const, amountCents: 100, weekday: 5 },
+      { kind: "refill" as const, amountCents: 100, dueDate: "2026-10-30" },
+      { kind: "refill" as const, amountCents: 0 }
     ]) {
       await expect(
         owner(async (s) =>

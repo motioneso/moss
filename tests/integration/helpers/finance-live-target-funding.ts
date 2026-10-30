@@ -3,6 +3,7 @@ import type { BrowserContext, Page, Locator } from "playwright-core";
 import { expect } from "vitest";
 import type { TargetFundingLine } from "../../../external-modules/finance/src/domain/target-funding.js";
 import { exerciseWeeklyTarget } from "./finance-live-weekly-targets.js";
+import { exerciseRefillTarget } from "./finance-live-refill-targets.js";
 async function checkSavedBudget(page: Page) {
   const wait = async (seconds: number) => {
     expect(Number.isFinite(seconds) && seconds >= 1 && seconds <= 60).toBe(true);
@@ -210,6 +211,7 @@ export async function exerciseTargetFunding(
       categories: { groceries: { assignedCents: 40002 }, savings: { assignedCents: 10001 } }
     });
     await exerciseWeeklyTarget(page, month, read, waitForBudgetAction, open, inspect);
+    await exerciseRefillTarget(page, month, read, waitForBudgetAction, open, inspect);
     expect(await read("finance.accounts.list")).toEqual(before.accounts);
     expect(await read("finance.transactions.query", { month, ownOnly: true })).toEqual(
       before.transactions

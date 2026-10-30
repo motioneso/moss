@@ -14,9 +14,14 @@ export const targetSetHandler: ToolFactory = (ports) => async (input) => {
   const month = readString(input, "month", { required: true });
   if (!isCalendarMonth(month)) throw new InputError("month must be YYYY-MM");
   const categoryId = readString(input, "categoryId", { required: true });
-  const kind = readEnum(input, "kind", ["monthly", "weekly", "balance", "removed"] as const, {
-    required: true
-  });
+  const kind = readEnum(
+    input,
+    "kind",
+    ["monthly", "weekly", "refill", "balance", "removed"] as const,
+    {
+      required: true
+    }
+  );
   const amountCents = readInt(input, "amountCents", {
     required: true,
     min: kind === "removed" ? 0 : 1,
