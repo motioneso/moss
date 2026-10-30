@@ -112,12 +112,17 @@ describe("Transactions screen (#3176)", () => {
     expect(text(renderer)).toContain("Export loaded rows");
     expect(text(renderer)).toContain("Clear filters");
   });
-  it("groups by day, flags guesses as Predicted and shows the count and Confirm all", async () => {
-    fakeFetch({ ...base, transactions: rows, needsLookCount: 2 });
+  it("distinguishes predictions from changed user categories and shows grouped review counts", async () => {
+    fakeFetch({
+      ...base,
+      transactions: [...rows, tx("settled", { reviewState: "needs_look", categorizedBy: "user" })],
+      needsLookCount: 3
+    });
     const out = text(await render());
-    expect(out).toContain("Needs a look (2)");
-    expect(out).toContain("Confirm all 2");
+    expect(out).toContain("Needs a look (3)");
+    expect(out).toContain("Confirm all 3");
     expect(out).toContain("Predicted");
+    expect(out).toContain("Review needed");
     expect(out).toContain("Always for this merchant");
     expect(out).toContain("+$4,000.00");
     expect(out).toContain("Checking");

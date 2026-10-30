@@ -3,6 +3,7 @@ import { sql, type Kysely } from "kysely";
 import { createModuleStorageRpc, DataContextRunner, type MossDatabase } from "@moss/db";
 import { setModuleKvValue } from "@moss/settings";
 import { expect } from "vitest";
+import { exercisePendingHandoffReview } from "./finance-live-pending-handoff.js";
 import type { BrowserContext } from "playwright-core";
 import {
   NS,
@@ -251,4 +252,5 @@ export async function exerciseIndividualMetadata(
   } finally {
     await page.close();
   }
+  await exercisePendingHandoffReview(context, base, workerDb, userId, month, read, artifacts);
 }

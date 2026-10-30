@@ -77,3 +77,8 @@ Clean refill e13fb5b0 / decedc828d1d: complete backend 125645-atWZXh passed all
 125935-1xHcOA passed all 21 flows, exit 0, including weekly/refill create, reload,
 eligible-first selection, cancel and confirmed funding. No application code changed
 after these runs. The next committed design addresses durable pending handoffs.
+
+Clean c25939ed refill aggregate 130722-lhhNfr / 0244ab79b45e completed exit 1.
+Static checks passed; 1633 unit files passed / 21 failed, 19691 tests passed / 277 failed /
+3 skipped. All 277 failure identities exactly match 040401-c9zwQ0 (zero additions/removals).
+Later aggregate DB stages were not reached. This is a failed aggregate, not a green gate.

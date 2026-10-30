@@ -8,7 +8,17 @@ import type { WorkerPorts } from "../../external-modules/finance/src/worker/port
 import type { TransactionRecord } from "../../external-modules/finance/src/domain/records.js";
 import { readFile } from "node:fs/promises";
 import { Client } from "pg";
-import { beforeAll, afterAll, describe, it, expect } from "vitest";
+import { beforeAll, afterAll, beforeEach, describe, it, expect } from "vitest";
+import { PlaidError } from "../../external-modules/finance/src/adapters/plaid.js";
+import {
+  providerFeed,
+  feedPage,
+  handoffItem,
+  handoffAccount,
+  handoffPending,
+  handoffPosted
+} from "./helpers/finance-provider-feed.js";
+import { NS } from "../../external-modules/finance/src/domain/index.js";
 import {
   createDatabase,
   DataContextRunner,
@@ -550,5 +560,380 @@ it("retains category Undo for the confirmed native single-row bulk writer", asyn
     categoryId: before.categoryId,
     amountCents: before.amountCents,
     notes: before.notes
+  });
+});
+
+describe("committed provider pending handoffs", () => {
+  const twoPages = async (cursor: string | null) =>
+    cursor === "middle"
+      ? feedPage({ added: [handoffPosted] })
+      : feedPage({
+          removed: [{ transaction_id: handoffPending.id }],
+          nextCursor: "middle",
+          hasMore: true
+        });
+  const postedRows = async (feed: ReturnType<typeof providerFeed>) =>
+    (await feed.store.getTransactionChunk(handoffAccount, "2026-10")) ?? [];
+  const captured = (feed: ReturnType<typeof providerFeed>) =>
+    feed.store.providerHandoffs!.load(handoffItem, [handoffPending.id]);
+  const expectSettled = async (feed: ReturnType<typeof providerFeed>) => {
+    expect(await postedRows(feed)).toEqual([
+      expect.objectContaining({
+        id: handoffPosted.transaction_id,
+        amountCents: 1200,
+        categoryId: "groceries",
+        notes: handoffPending.notes,
+        reviewState: "needs_look"
+      })
+    ]);
+    expect(await feed.store.getTransactionChunk(handoffAccount, "2026-09")).toBe(null);
+    expect(await captured(feed)).toEqual([]);
+    expect(await feed.kv.get(NS.connections, `cursor:${handoffItem}`)).toEqual({
+      cursor: "complete"
+    });
+  };
+  beforeEach(async () => {
+    await runner.withDataContext({ actorUserId: ids.userA }, async (scope) => {
+      const rpc = createModuleStorageRpc(scope, "finance");
+      await rpc.query("DELETE FROM app.finance_provider_handoffs WHERE item_id=$1", [handoffItem]);
+      await rpc.query("DELETE FROM app.finance_transactions WHERE account_id=ANY($1::text[])", [
+        [handoffAccount, "handoff-other-account"]
+      ]);
+      await rpc.query("DELETE FROM app.finance_accounts WHERE account_id=ANY($1::text[])", [
+        [handoffAccount, "handoff-other-account"]
+      ]);
+      await rpc.query("DELETE FROM app.finance_items WHERE item_id=$1", [handoffItem]);
+    });
+    const feed = providerFeed(db, ids.userA, { page: twoPages });
+    await feed.kv.delete(NS.connections, `cursor:${handoffItem}`);
+    await feed.seed();
+  });
+  it("preserves user metadata across a removal-first page, exact money and a replayed update", async () => {
+    const feed = providerFeed(db, ids.userA, { page: twoPages });
+    expect(await feed.run()).toMatchObject({
+      status: "ok",
+      items: [expect.objectContaining({ status: "connected", pages: 2 })]
+    });
+    await expectSettled(feed);
+    const before = await postedRows(feed);
+    await feed.run();
+    expect(await postedRows(feed)).toEqual(before);
+  });
+  it.each(["chunk", "mirror", "cursor"] as const)(
+    "recovers an independently committed %s failure without losing private metadata",
+    async (fault) => {
+      let failed = false;
+      const fail = () => {
+        failed = true;
+        throw new Error("Synthetic committed handoff interruption");
+      };
+      const feed = providerFeed(db, ids.userA, {
+        page: twoPages,
+        beforeQuery: (text) => {
+          if (
+            !failed &&
+            fault === "chunk" &&
+            text.startsWith("INSERT INTO app.finance_transactions")
+          )
+            fail();
+        },
+        beforeMirror: (_key, value) => {
+          if (!failed && fault === "mirror" && Array.isArray(value.transactions)) fail();
+        },
+        beforeSet: (key) => {
+          if (!failed && fault === "cursor" && key === `cursor:${handoffItem}`) fail();
+        }
+      });
+      await feed.store.putAccount({
+        ...(await feed.store.getAccount(handoffAccount))!,
+        sharedToHousehold: true
+      });
+      await expect(feed.run()).rejects.toThrow("Synthetic committed handoff interruption");
+      expect(failed).toBe(true);
+      expect(await captured(feed)).toEqual([
+        expect.objectContaining({ id: handoffPending.id, notes: handoffPending.notes })
+      ]);
+      await feed.run();
+      await expectSettled(feed);
+      expect(JSON.stringify([...feed.mirrors.values()])).not.toContain(handoffPending.notes);
+      expect(
+        [...feed.mirrors.values()].flatMap((v) =>
+          Array.isArray(v.transactions) ? v.transactions : []
+        )
+      ).toEqual([
+        expect.objectContaining({ id: handoffPosted.transaction_id, categoryId: "groceries" })
+      ]);
+    }
+  );
+  it("retains the handoff across the 100-page limit and a subsequent pagination restart", async () => {
+    let restart = false;
+    const feed = providerFeed(db, ids.userA, {
+      page: async (cursor) => {
+        if (cursor === "c100") {
+          restart = true;
+          throw new PlaidError("TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION", 400);
+        }
+        if (restart) return feedPage({ added: [handoffPosted] });
+        const index = cursor ? Number(cursor.slice(1)) : 0;
+        return feedPage({
+          ...(index === 0 ? { removed: [{ transaction_id: handoffPending.id }] } : {}),
+          nextCursor: `c${index + 1}`,
+          hasMore: true
+        });
+      }
+    });
+    expect(await feed.run()).toMatchObject({ items: [expect.objectContaining({ pages: 100 })] });
+    expect(await captured(feed)).toHaveLength(1);
+    expect(await feed.kv.get(NS.connections, `cursor:${handoffItem}`)).toEqual({
+      cursor: "c100",
+      paginationStart: null
+    });
+    await feed.run();
+    await expectSettled(feed);
+  });
+  it("preserves a newer posted user review after the final cursor write fails", async () => {
+    let failed = false;
+    const feed = providerFeed(db, ids.userA, {
+      page: twoPages,
+      beforeSet: (key, value) => {
+        if (!failed && key === `cursor:${handoffItem}` && value.cursor === "complete") {
+          failed = true;
+          throw new Error("Synthetic final checkpoint interruption");
+        }
+      }
+    });
+    await expect(feed.run()).rejects.toThrow("Synthetic final checkpoint interruption");
+    expect(await captured(feed)).toEqual([]);
+    const row = (await feed.store.metadata!.rows(handoffAccount, "2026-10"))[0]!;
+    expect(
+      await feed.store.metadata!.apply(
+        [
+          {
+            id: row.id,
+            writeRevision: row.writeRevision,
+            categoryId: "dining",
+            notes: "Synthetic newer posted choice"
+          }
+        ],
+        "user",
+        at
+      )
+    ).toBe(true);
+    await feed.run();
+    expect(await postedRows(feed)).toEqual([
+      expect.objectContaining({
+        id: handoffPosted.transaction_id,
+        amountCents: 1200,
+        categoryId: "dining",
+        notes: "Synthetic newer posted choice",
+        reviewState: "confirmed"
+      })
+    ]);
+    expect(await feed.kv.get(NS.connections, `cursor:${handoffItem}`)).toEqual({
+      cursor: "complete"
+    });
+  });
+  it("clears an unmatched pending authorization at completion without resurrecting it", async () => {
+    const feed = providerFeed(db, ids.userA, {
+      page: async () => feedPage({ removed: [{ transaction_id: handoffPending.id }] })
+    });
+    await feed.run();
+    expect(await feed.store.getTransactionChunk(handoffAccount, "2026-09")).toBe(null);
+    expect(await captured(feed)).toEqual([]);
+  });
+  it("uses an exact older source month without amount-based matching", async () => {
+    const feed = providerFeed(db, ids.userA, { page: twoPages });
+    await feed.store.putTransaction({ ...handoffPending, date: "2026-07-31" });
+    await feed.run();
+    await expectSettled(feed);
+    expect(await feed.store.getTransactionChunk(handoffAccount, "2026-07")).toBe(null);
+  });
+  it.each(["USD", "EUR"])(
+    "retains split allocations for repair after a changed %s settlement",
+    async (currency) => {
+      const splitId = "handoff:split-pending";
+      const feed = providerFeed(db, ids.userA, {
+        page: async (cursor) =>
+          cursor === "middle"
+            ? feedPage({
+                added: [
+                  { ...handoffPosted, pending_transaction_id: splitId, iso_currency_code: currency }
+                ]
+              })
+            : feedPage({
+                removed: [{ transaction_id: splitId }],
+                nextCursor: "middle",
+                hasMore: true
+              })
+      });
+      const splits = [
+        { categoryId: "groceries", amountCents: 500 },
+        { categoryId: "dining", amountCents: 500 }
+      ];
+      // Legacy pending-split fixture: insert a new source. Normal pending split edits stay prohibited.
+      await feed.store.putTransaction({ ...handoffPending, id: splitId, categoryId: null, splits });
+      expect(
+        (await feed.store.getTransactionChunk(handoffAccount, "2026-09"))!.find(
+          (row) => row.id === splitId
+        )!.splits
+      ).toEqual(splits);
+      await feed.run();
+      expect(await postedRows(feed)).toEqual([
+        expect.objectContaining({
+          amountCents: 1200,
+          isoCurrency: currency,
+          splits,
+          categoryId: null,
+          notes: handoffPending.notes,
+          reviewState: "needs_look"
+        })
+      ]);
+      expect(await feed.store.providerHandoffs!.load(handoffItem, [splitId])).toEqual([]);
+    }
+  );
+  it("does not capture posted, different-account or different-item sources", async () => {
+    const feed = providerFeed(db, ids.userA, { page: twoPages });
+    const secondAccount = {
+      ...(await feed.store.getAccount(handoffAccount))!,
+      accountId: "handoff-other-account"
+    };
+    await feed.store.putAccount(secondAccount);
+    await feed.store.putTransaction({
+      ...handoffPending,
+      id: "handoff:other-account",
+      accountId: secondAccount.accountId
+    });
+    await feed.store.putTransaction({
+      ...handoffPending,
+      id: "handoff:already-posted",
+      pending: false
+    });
+    const protectedRows = await feed.store.getTransactionChunk(handoffAccount, "2026-09");
+    await feed.store.providerHandoffs!.capture(
+      handoffItem,
+      [],
+      [
+        { id: "handoff:other-account", accountId: handoffAccount },
+        { id: "handoff:already-posted", accountId: handoffAccount }
+      ],
+      at
+    );
+    await feed.store.providerHandoffs!.capture("handoff-other-item", [handoffPending.id], [], at);
+    expect(await feed.store.getTransactionChunk(handoffAccount, "2026-09")).toEqual(protectedRows);
+    expect(await feed.store.getTransactionChunk(secondAccount.accountId, "2026-09")).toHaveLength(
+      1
+    );
+    expect(await captured(feed)).toEqual([]);
+  });
+  it("refuses a stale pending metadata edit after canonical capture", async () => {
+    const feed = providerFeed(db, ids.userA, { page: twoPages });
+    const row = (await feed.store.metadata!.rows(handoffAccount, "2026-09"))[0]!;
+    await feed.store.providerHandoffs!.capture(handoffItem, [handoffPending.id], [], at);
+    expect(
+      await feed.store.metadata!.apply(
+        [
+          {
+            id: row.id,
+            writeRevision: row.writeRevision,
+            categoryId: "dining",
+            notes: "Synthetic stale edit"
+          }
+        ],
+        "user",
+        at
+      )
+    ).toBe(false);
+    expect(await captured(feed)).toEqual([
+      expect.objectContaining({ notes: handoffPending.notes })
+    ]);
+  });
+  it("rolls back source removal if its durable snapshot cannot commit", async () => {
+    const feed = providerFeed(db, ids.userA, { page: twoPages });
+    // Explicit malformed legacy fixture: an account outlives its deleted connection item.
+    await runner.withDataContext({ actorUserId: ids.userA }, (scope) =>
+      createModuleStorageRpc(scope, "finance").query(
+        "DELETE FROM app.finance_items WHERE item_id=$1",
+        [handoffItem]
+      )
+    );
+    await expect(
+      feed.store.providerHandoffs!.capture(handoffItem, [handoffPending.id], [], at)
+    ).rejects.toThrow();
+    expect(await feed.store.getTransactionChunk(handoffAccount, "2026-09")).toEqual([
+      expect.objectContaining(handoffPending)
+    ]);
+    expect(await captured(feed)).toEqual([]);
+  });
+  it("captures the latest committed pending user fields while a metadata edit holds its row", async () => {
+    const feed = providerFeed(db, ids.userA, { page: twoPages });
+    let held!: () => void, release!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      held = resolve;
+    });
+    const continueEdit = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const edit = runner.withDataContext({ actorUserId: ids.userA }, async (scope) => {
+      // Explicit synthetic holder for the canonical pending metadata row; no financial fields change.
+      await createModuleStorageRpc(scope, "finance").query(
+        "UPDATE app.finance_transactions SET notes='Synthetic latest pending context' WHERE id=$1",
+        [handoffPending.id]
+      );
+      held();
+      await continueEdit;
+    });
+    await entered;
+    const capture = feed.store.providerHandoffs!.capture(handoffItem, [handoffPending.id], [], at);
+    const observer = new Client({ connectionString: connectionStrings.bootstrap });
+    await observer.connect();
+    let waiting = false;
+    try {
+      for (let attempt = 0; attempt < 80; attempt++) {
+        const result = await observer.query(
+          "SELECT count(*)::int AS n FROM pg_stat_activity WHERE state='active' AND wait_event_type='Lock' AND query LIKE $1",
+          ["%WITH pending AS MATERIALIZED%"]
+        );
+        if (result.rows[0].n > 0) {
+          waiting = true;
+          break;
+        }
+        await new Promise((done) => setTimeout(done, 25));
+      }
+    } finally {
+      release();
+      await Promise.all([edit, capture]);
+      await observer.end();
+    }
+    expect(waiting, "Capture reached the held canonical row lock").toBe(true);
+    expect(await captured(feed)).toEqual([
+      expect.objectContaining({ notes: "Synthetic latest pending context" })
+    ]);
+  });
+  it("keeps snapshot content private from another owner and an admin", async () => {
+    const feed = providerFeed(db, ids.userA, { page: twoPages });
+    await feed.store.providerHandoffs!.capture(handoffItem, [handoffPending.id], [], at);
+    const negative = process.env.MOSS_FINANCE_HANDOFF_RLS_NEGATIVE === "1";
+    const bootstrap = new Client({ connectionString: connectionStrings.bootstrap });
+    await bootstrap.connect();
+    try {
+      if (negative)
+        await bootstrap.query(
+          "ALTER TABLE app.finance_provider_handoffs DISABLE ROW LEVEL SECURITY"
+        );
+      for (const actor of [ids.userB, ids.adminUser]) {
+        const foreign = providerFeed(db, actor, { page: twoPages });
+        expect(
+          await foreign.store.providerHandoffs!.load(handoffItem, [handoffPending.id])
+        ).toEqual([]);
+        await foreign.store.providerHandoffs!.clear(handoffItem);
+      }
+      expect(await captured(feed)).toHaveLength(1);
+    } finally {
+      if (negative)
+        await bootstrap.query(
+          "ALTER TABLE app.finance_provider_handoffs ENABLE ROW LEVEL SECURITY; ALTER TABLE app.finance_provider_handoffs FORCE ROW LEVEL SECURITY"
+        );
+      await bootstrap.end();
+    }
   });
 });

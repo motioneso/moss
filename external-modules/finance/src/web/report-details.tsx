@@ -5,6 +5,7 @@ import {
   Note,
   RowIndex,
   RowIndexItem,
+  useEffect,
   useState,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
@@ -12,6 +13,7 @@ import type { ReportDetailRow, ReportDetailScope } from "../domain/report-detail
 import { formatCents, monthLabel } from "./format";
 import { outcomeGate } from "./states";
 import { invalidateToolQueries, useToolQuery } from "./store";
+import { useReadCooldown } from "./read-cooldown";
 export interface ReportSelection extends ReportDetailScope {
   label: string;
   expectedCents: number;
@@ -46,6 +48,13 @@ export function ReportDetails(props: {
   });
   const loaded =
     query.status === "settled" && query.outcome.kind === "ok" ? query.outcome.result : null;
+  const error = query.status === "settled" && query.outcome.kind === "error" ? query.outcome : null;
+  const seconds = error?.retryAfterSeconds;
+  const cooldown = useReadCooldown();
+  useEffect(() => {
+    if (seconds) cooldown.wait(seconds);
+  }, [seconds]);
+  const paused = cooldown.cooling || query.status === "loading";
   return (
     <Dialog
       title="Report transactions"
@@ -57,7 +66,10 @@ export function ReportDetails(props: {
         <>
           <Button
             variant="secondary"
-            onClick={() => invalidateToolQueries("finance.reports.transactions")}
+            disabled={paused}
+            onClick={() => {
+              if (!paused) invalidateToolQueries("finance.reports.transactions");
+            }}
           >
             Reload details
           </Button>
@@ -65,14 +77,14 @@ export function ReportDetails(props: {
             <>
               <Button
                 variant="secondary"
-                disabled={offset === 0}
+                disabled={paused || offset === 0}
                 onClick={() => setOffset(Math.max(0, offset - 50))}
               >
                 Previous page
               </Button>
               <Button
                 variant="secondary"
-                disabled={!loaded || offset + loaded.rows.length >= loaded.totalCount}
+                disabled={paused || !loaded || offset + loaded.rows.length >= loaded.totalCount}
                 onClick={() => setOffset(offset + 50)}
               >
                 Next page
@@ -95,8 +107,9 @@ export function ReportDetails(props: {
         </p>
         {query.status === "settled" && query.outcome.kind === "error" ? (
           <p role="alert">
-            Report transactions could not load. Your selection is kept. Check your connection and
-            reload details; if the report period changed, close and refresh Reports.
+            {seconds
+              ? `${error!.message} Your report selection is kept.`
+              : "Report transactions could not load. Your selection is kept. Check your connection and reload details; if the report period changed, close and refresh Reports."}
           </p>
         ) : (
           outcomeGate(

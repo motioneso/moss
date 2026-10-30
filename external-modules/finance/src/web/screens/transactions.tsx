@@ -35,6 +35,7 @@ import { EMPTY_FILTERS, filterInput, RegisterFilterBar } from "../register-filte
 import { SplitEditor, type SplitTransaction } from "../split-editor";
 import { TransactionBulkBar, BulkCategoryDialog, bulkEligible } from "../transaction-bulk";
 import { splitsBalance } from "../../domain/splits";
+import type { TransactionRecord } from "../../domain/records";
 
 interface TxCategory {
   id: string;
@@ -57,6 +58,7 @@ interface Tx extends SplitTransaction {
   name: string;
   categoryId: string | null;
   reviewState?: "confirmed" | "needs_look";
+  categorizedBy?: TransactionRecord["categorizedBy"];
   shared?: boolean;
   pending?: boolean;
   possibleDuplicate?: boolean;
@@ -356,7 +358,9 @@ function DayTable(props: { day: DayGroup; head: boolean; ctx: RowContext }): Rea
                     <TransactionStatus tx={tx} />
                     {look && !tx.splits?.length ? (
                       <div>
-                        <Badge tone="amber">Predicted</Badge>
+                        <Badge tone="amber">
+                          {tx.categorizedBy === "user" ? "Review needed" : "Predicted"}
+                        </Badge>
                       </div>
                     ) : null}
                   </div>
@@ -399,7 +403,11 @@ function DayRows(props: { day: DayGroup; ctx: RowContext }): ReactNodeLike {
               }
               excerpt={
                 <div className="fnm-block fnm-block--tight">
-                  {look && !tx.splits?.length ? <Badge tone="amber">Predicted</Badge> : null}
+                  {look && !tx.splits?.length ? (
+                    <Badge tone="amber">
+                      {tx.categorizedBy === "user" ? "Review needed" : "Predicted"}
+                    </Badge>
+                  ) : null}
                   <CategoryControls tx={tx} ctx={ctx} look={look} />
                   <span>{ctx.accountName(tx)}</span>
                 </div>

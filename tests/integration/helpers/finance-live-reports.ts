@@ -62,9 +62,34 @@ export async function exerciseReportDetails(
   await context.setOffline(true);
   await open.click();
   const dialog = page.getByRole("dialog", { name: "Report transactions", exact: true });
+  const reloadDetails = async () => {
+    const reload = dialog.getByRole("button", { name: "Reload details", exact: true });
+    const request = async () =>
+      (
+        await Promise.all([
+          page.waitForResponse((r) =>
+            r.url().includes("/assistant-tools/finance.reports.transactions/invoke")
+          ),
+          reload.click()
+        ])
+      )[0];
+    let response = await request();
+    if (response.status() === 429) {
+      const seconds = Number(await response.headerValue("retry-after"));
+      expect(Number.isFinite(seconds) && seconds >= 1 && seconds <= 60).toBe(true);
+      await dialog
+        .getByRole("alert")
+        .filter({ hasText: `Wait ${seconds} second` })
+        .waitFor();
+      await expect.poll(() => reload.isDisabled()).toBe(true);
+      await page.waitForTimeout(seconds * 1000 + 100);
+      response = await request();
+    }
+    expect(response.status()).toBe(200);
+  };
   await dialog.getByRole("alert").waitFor();
   await context.setOffline(false);
-  await dialog.getByRole("button", { name: "Reload details", exact: true }).click();
+  await reloadDetails();
   await dialog
     .getByText(`Current detail total: ${formatCents(expected, "USD")}`, { exact: true })
     .waitFor();
@@ -146,7 +171,7 @@ export async function exerciseReportDetails(
   } finally {
     await edit.close();
   }
-  await dialog.getByRole("button", { name: "Reload details", exact: true }).click();
+  await reloadDetails();
   await dialog
     .getByText(`Current detail total: ${formatCents(expected - 123, "USD")}`, { exact: true })
     .waitFor();

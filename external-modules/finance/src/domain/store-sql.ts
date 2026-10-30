@@ -1,4 +1,5 @@
 import { transferCorrectionSqlStore } from "./store-transfer-corrections-sql.js";
+import { providerHandoffSqlStore } from "./store-provider-handoffs-sql.js";
 import { billAdjustmentSqlStore } from "./store-bill-adjustments-sql.js";
 import { merchantRuleSqlStore } from "./store-merchant-rules-sql.js";
 import { transactionMetadataSqlStore } from "./store-transaction-metadata-sql.js";
@@ -265,6 +266,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
     historyExport: historyExportSqlStore(db),
     transfers: manualTransferSqlStore(db),
     transferCorrections: transferCorrectionSqlStore(db),
+    providerHandoffs: providerHandoffSqlStore(db),
     metadata: transactionMetadataSqlStore(db),
     rules: merchantRuleSqlStore(db),
     billAdjustments: billAdjustmentSqlStore(db),

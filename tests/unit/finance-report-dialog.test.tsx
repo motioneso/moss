@@ -44,6 +44,34 @@ const settled = (result: Record<string, unknown>) => ({
 const button = (r: ReactTestRenderer, label: string) =>
   r.root.findAllByType("button").find((b) => b.children.includes(label))!;
 describe("report detail review scope and pagination", () => {
+  it("keeps busy-read selection and waits for Retry-After before an explicit reload", async () => {
+    vi.useFakeTimers();
+    refresh.mockClear();
+    read.mockReturnValue({
+      status: "settled",
+      outcome: {
+        kind: "error",
+        message: "Finance is temporarily busy. Wait 8 seconds, then try again.",
+        retryAfterSeconds: 8
+      }
+    });
+    let r!: ReactTestRenderer;
+    try {
+      await act(async () => {
+        r = create(createElement(ReportDetails, { selection, onClose: vi.fn() }));
+      });
+      expect(JSON.stringify(r.toJSON())).toContain("Wait 8 seconds");
+      expect(button(r, "Reload details").props.disabled).toBe(true);
+      await act(async () => vi.advanceTimersByTime(8000));
+      expect(refresh).not.toHaveBeenCalled();
+      expect(button(r, "Reload details").props.disabled).toBe(false);
+      await act(async () => button(r, "Reload details").props.onClick());
+      expect(refresh).toHaveBeenCalledExactlyOnceWith("finance.reports.transactions");
+    } finally {
+      if (r) await act(async () => r.unmount());
+      vi.useRealTimers();
+    }
+  });
   it("keeps its captured scope when the report changes and explains a new total", async () => {
     read.mockReturnValue(
       settled({

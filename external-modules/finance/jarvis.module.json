@@ -60,7 +60,8 @@
       "app.finance_manual_transfers",
       "app.finance_merchant_rules",
       "app.finance_bill_adjustments",
-      "app.finance_transfer_corrections"
+      "app.finance_transfer_corrections",
+      "app.finance_provider_handoffs"
     ]
   },
   "settingsPath": "/settings",
@@ -93,7 +94,7 @@
       {
         "id": "finance.reports",
         "label": "Reports",
-        "description": "Reports is a primary tab with currency-separated spending, cash flow and own-account net worth; mixed currencies require a choice and no FX conversion occurs. Manual net worth reconstructs opening balances and posted ledger entries through the owner local date; connected accounts retain recorded snapshots. Sources, dated coverage, missing balances and accessible history are disclosed. Category/payee bars and monthly income/outflow open bounded exact signed contributions, including split portions, with a full count/total and changed-record disclosure. Pending spending remains included and transfers are excluded per owner. Private notes are omitted; details reload independently and Refresh reports updates aggregates. Unsafe monetary outputs are rejected.",
+        "description": "Reports is a primary tab with currency-separated spending, cash flow and own-account net worth; mixed currencies require a choice and no FX conversion occurs. Manual net worth reconstructs opening balances and posted ledger entries through the owner local date; connected accounts retain recorded snapshots. Sources, dated coverage, missing balances and accessible history are disclosed. Category/payee bars and monthly income/outflow open bounded exact signed contributions, including split portions, with a full count/total and changed-record disclosure. Pending spending remains included and transfers are excluded per owner. Private notes are omitted; details reload independently and Refresh reports updates aggregates. Unsafe monetary outputs are rejected. Busy detail reads show the server wait and disable reload/paging until it ends; retry is explicit.",
         "path": "/reports"
       },
       {
@@ -128,7 +129,7 @@
       },
       {
         "id": "finance.needs-a-look",
-        "description": "Moss sorts each new transaction into a category and marks the ones it is unsure about as Needs a look. Whether Moss confirms its own guesses for merchants you have confirmed before, and for new merchants, follows the Sort purchases settings. A guessed category still counts toward the budget while it waits for review."
+        "description": "Moss sorts each new transaction into a category and marks the ones it is unsure about as Needs a look. Whether Moss confirms its own guesses for merchants you have confirmed before, and for new merchants, follows the Sort purchases settings. A guessed category still counts toward the budget while it waits for review. SQL sync privately captures pending metadata across pages and the 100-page continuation. Posted/manual/cross-account impostors cannot replace a pending source. Changed user-reviewed settlement money requires review; newer posted user choices win. Canonical saved chunks feed shared mirrors. Handoffs clear only after complete durable updates. Legacy KV needs migration for this handoff; full update atomicity remains unavailable. User-set categories needing attention say Review needed instead of Predicted."
       },
       {
         "id": "finance.chat-money-actions",

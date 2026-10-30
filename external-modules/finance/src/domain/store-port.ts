@@ -23,6 +23,7 @@ import type { ManualLedgerStore } from "./manual-ledger.js";
 import type { ImportStore } from "./csv-import.js";
 import type { ReconciliationStore } from "./reconciliation.js";
 import type { SplitChange } from "./splits.js";
+import type { ProviderHandoffStore } from "./provider-handoffs.js";
 
 /**
  * One row of the activity trail (#3174). `params` and `undo` hold ids, cents
@@ -70,6 +71,7 @@ export interface FinanceStore {
   readonly metadata?: TransactionMetadataStore;
   readonly transfers?: ManualTransferStore;
   readonly transferCorrections?: TransferCorrectionStore;
+  readonly providerHandoffs?: ProviderHandoffStore;
   readonly accountLifecycle?: AccountLifecycleStore;
   readonly historyExport?: HistoryExportStore;
   readonly supportsSplits: boolean;
