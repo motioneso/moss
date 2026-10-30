@@ -132,3 +132,10 @@ plus 661 focused Finance unit tests. These are bounded capabilities, not general
 provider convergence, household co-editing or investment parity. Native startup without a preseeded
 migration marker is a separate next acceptance case; current installed-browser fixtures explicitly
 assume completed migration.
+
+The subsequent approved-user startup case exercises the real control queue, reconciler and verified
+installed migration worker, without a preseeded marker or financial data. It exposed the missing
+approval reconciliation hook; the repair passed the complete eighteen-flow installed browser suite
+and forty-seven approval/module route regressions. See the metadata checkpoint for the exact dirty
+receipts and remaining committed aggregate check. Initial-active sign-up modes are not established
+by this administrator-approval case.

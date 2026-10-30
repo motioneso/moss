@@ -1,3 +1,4 @@
+import { exerciseFreshFinanceStartup } from "./helpers/finance-live-startup.js";
 import { exerciseIndividualMetadata } from "./helpers/finance-live-metadata.js";
 import { exerciseManualTransfers } from "./helpers/finance-live-transfers.js";
 import { exerciseAccountLifecycle } from "./helpers/finance-live-accounts.js";
@@ -72,6 +73,12 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
         headers: { cookie, origin: base },
         payload: input as Record<string, unknown>
       });
+    }
+    async function approvedOwner(email: string, name: string) {
+      const person = await signUp(email, name);
+      expect((await post(`/api/admin/users/${person.userId}/approve`, {})).statusCode).toBe(200);
+      expect((await post("/api/onboarding/skip", {}, person.cookie)).statusCode).toBe(200);
+      return person;
     }
     async function readTool(
       name: string,
@@ -350,9 +357,10 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
     }, 90_000);
 
     it("builds and starts a reviewed budget from manual history without a bank", async () => {
-      const person = await signUp("first-budget@finance-page.test", "Synthetic first budget");
-      expect((await post(`/api/admin/users/${person.userId}/approve`, {})).statusCode).toBe(200);
-      expect((await post("/api/onboarding/skip", {}, person.cookie)).statusCode).toBe(200);
+      const person = await approvedOwner(
+        "first-budget@finance-page.test",
+        "Synthetic first budget"
+      );
       await seedFirstBudget(appDb, person.userId, month);
       const other = await browser.newContext({
         viewport: { width: 1440, height: 900 },
@@ -741,12 +749,10 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
     }, 90_000);
 
     it("manages manual accounts with captured confirmation and preserved history", async () => {
-      const person = await signUp(
+      const person = await approvedOwner(
         "account-lifecycle@finance-page.test",
         "Synthetic account lifecycle owner"
       );
-      expect((await post(`/api/admin/users/${person.userId}/approve`, {})).statusCode).toBe(200);
-      expect((await post("/api/onboarding/skip", {}, person.cookie)).statusCode).toBe(200);
       const other = await browser.newContext({
         viewport: { width: 1440, height: 900 },
         reducedMotion: "reduce"
@@ -775,9 +781,7 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
     }, 90_000);
 
     it("records linked manual transfers through real confirmation and rejects stale ledger reviews", async () => {
-      const person = await signUp("transfers@finance-page.test", "Synthetic transfer owner");
-      expect((await post(`/api/admin/users/${person.userId}/approve`, {})).statusCode).toBe(200);
-      expect((await post("/api/onboarding/skip", {}, person.cookie)).statusCode).toBe(200);
+      const person = await approvedOwner("transfers@finance-page.test", "Synthetic transfer owner");
       const other = await browser.newContext({
         viewport: { width: 1440, height: 900 },
         reducedMotion: "reduce"
@@ -806,9 +810,7 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
     }, 90_000);
 
     it("reviews individual categories with actual confirmation and rejects changed financial facts", async () => {
-      const person = await signUp("metadata@finance-page.test", "Synthetic metadata owner");
-      expect((await post(`/api/admin/users/${person.userId}/approve`, {})).statusCode).toBe(200);
-      expect((await post("/api/onboarding/skip", {}, person.cookie)).statusCode).toBe(200);
+      const person = await approvedOwner("metadata@finance-page.test", "Synthetic metadata owner");
       const other = await browser.newContext({
         viewport: { width: 1440, height: 900 },
         reducedMotion: "reduce"
@@ -861,6 +863,19 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
         readTool,
         artifacts
       );
+    }, 90_000);
+
+    it("migrates a newly approved owner through real queue workers before their first ledger and budget", async () => {
+      await exerciseFreshFinanceStartup({
+        modulesDir: join(temp, "modules"),
+        workerDb,
+        browser,
+        base,
+        artifacts,
+        createApprovedOwner: () =>
+          approvedOwner("fresh-startup@finance-page.test", "Synthetic fresh owner"),
+        read: (name, params, cookie) => readTool(name, params, cookie)
+      });
     }, 90_000);
 
     it("confirms and cancels real worker deletion through the actual host dialog", async () => {

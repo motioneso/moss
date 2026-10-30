@@ -82,8 +82,11 @@ repository; shared Park Press primitives/tokens provide the styling.
 1. Commit and push this bounded slice; freeze its committed source for full static/foundation and
    installed-browser confirmation. Keep receipts tied to their actual commit/fingerprint.
 2. Verify native fresh-user startup through the existing approved-user reconciliation and actual
-   migration worker, without preseeded financial records or a fabricated migrated marker. Approval
-   already calls the platform's user-job reconciliation hook; reuse that contract.
+   migration worker, without preseeded financial records or a fabricated migrated marker. Follow-up
+   `061244-EYMpwc` proved approval does not currently call user-job reconciliation: Finance was
+   enabled and the owner active, but no migration job existed. The reactivation hook had been
+   mistaken for approval during the earlier source read. Add the same post-commit hook to approval
+   and prove the actual queued migration and first budget.
 3. Implement reviewed canonical merchant-rule list/edit/disable/preview while preserving legacy
    rules, category history, confirmation, user overrides and metadata-only queues. The latest official
    [Monarch rules guide](https://help.monarch.com/hc/en-us/articles/360048393372-Transaction-Rules)
@@ -96,3 +99,29 @@ repository; shared Park Press primitives/tokens provide the styling.
 The clean transfer aggregate `053648-Oahav4` finished exit 1 with exactly the earlier 277 failure
 identifiers and no Finance additions. It passed static checks and 19,562 tests; later aggregate DB
 stages were unrun after the unit failure. Current metadata source needs its own frozen aggregate.
+
+## Clean committed metadata verification and startup follow-up
+
+Metadata implementation was committed and pushed as
+`5de022142fb2a00b6c47264ba89d2cd1b846661e`. The independent verification checkout was clean,
+with input `6376eb42a495`. `060649-zXgWXF` passed all seventeen installed browser flows;
+`060651-86Cisb` passed all fourteen metadata SQL cases, both exit 0. No negative controls remain.
+The complete static/foundation check is still required for the final continuation snapshot.
+
+The next startup acceptance found and repaired an actual platform gap rather than inserting a
+completion marker. See [the fresh-user specification](../specs/2026-10-30-finance-fresh-user-startup.md).
+Approval lacked the post-commit reconciliation hook that reactivation already used. The hook now
+uses the same lifecycle helper, preserving authorization and soft queue-error handling. Focused
+startup `061636-HhgmXR`, input `3049d6e82de7`, passed one / seventeen skipped. Complete installed
+browser `061837-5QVQ1q`, input `ec8c7c2acb63`, passed eighteen; approval/settings and external-module
+route regression `061838-5n0Art`, same input, passed forty-seven across two files. All exited 0.
+Those are development receipts on base `5de02214`, not clean committed receipts for the follow-up.
+Actual approval, control queue, reconciler, verified migration worker/runtime, empty owned ledger,
+manual cash account, confirmed USD setup, confirmed $250 assignment and reload were exercised.
+No bank worker ran and no migration marker or financial record was written directly by the fixture.
+
+Screenshot `finance-fresh-startup-390.png` remains outside the repository. Its phone budget view was
+inspected. The earlier claim that approval already reconciled was wrong and is corrected above.
+Broader initial-active-registration modes and every production worker/provider remain separate
+acceptance; this case proves the administrator-approval path only. Final scoped lint, root-test types and the sixteen manifest tests passed. Commit/push the follow-up,
+then freeze the combined source for full static/foundation checks and continue the matrix.

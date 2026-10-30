@@ -525,6 +525,17 @@ export function registerSettingsRoutes(
     }
   );
 
+  async function reconcileUserJobsAfterChange(request: FastifyRequest, userId: string) {
+    try {
+      await dependencies.reconcileExternalModuleJobs?.({ kind: "user", userId });
+    } catch (error) {
+      request.log.warn(
+        { userId, errorName: (error as Error).name },
+        "external module user schedule reconcile failed"
+      );
+    }
+  }
+
   server.post(
     "/api/admin/users/:id/approve",
     { schema: adminUserActionRouteSchema },
@@ -549,6 +560,7 @@ export function registerSettingsRoutes(
             });
           }
         );
+        await reconcileUserJobsAfterChange(request, id);
         return { user: serializeUser(user) };
       } catch (error) {
         return handleRouteError(error, reply);
@@ -580,14 +592,7 @@ export function registerSettingsRoutes(
           if (verb === "deactivate" && dependencies.revokeUserSessions) {
             await dependencies.revokeUserSessions(id);
           }
-          try {
-            await dependencies.reconcileExternalModuleJobs?.({ kind: "user", userId: id });
-          } catch (error) {
-            request.log.warn(
-              { userId: id, errorName: (error as Error).name },
-              "external module user schedule reconcile failed"
-            );
-          }
+          await reconcileUserJobsAfterChange(request, id);
           return { user: serializeUser(user) };
         } catch (error) {
           return handleRouteError(error, reply);
@@ -697,14 +702,7 @@ export function registerSettingsRoutes(
       }
       throw error;
     }
-    try {
-      await dependencies.reconcileExternalModuleJobs?.({ kind: "user", userId: id });
-    } catch (error) {
-      request.log.warn(
-        { userId: id, errorName: (error as Error).name },
-        "external module user schedule reconcile failed"
-      );
-    }
+    await reconcileUserJobsAfterChange(request, id);
     return id;
   }
 
