@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Long recordings now get summaries.** Recordings of any length can now be summarised. Long transcripts are summarised piece by piece into the same single summary, instead of failing because the recording was too long. [PR #3841](https://github.com/motioneso/moss/pull/3841)
 - **Meeting summaries keep working after the AI tool updates.** Meeting summaries now use the same route as chat, so an update to the AI tool no longer stops summaries from being written. [PR #3837](https://github.com/motioneso/moss/pull/3837)
 - **Clearer times in Heartbeat messages.** Check-in messages now show times in your own timezone in a readable form instead of a raw timestamp. [PR #3830](https://github.com/motioneso/moss/pull/3830)
 
