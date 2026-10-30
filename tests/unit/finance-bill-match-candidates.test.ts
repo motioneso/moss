@@ -48,7 +48,7 @@ describe("explicit bill candidate presentation", () => {
   it("resolves equal distances by earlier date then identity independently of input order", () => {
     const rows = [row("later", "2026-10-02"), row("z", "2026-09-30"), row("a", "2026-09-30")];
     expect(billMatchCandidates(rows, occurrence).map((r) => r.id)).toEqual(["a", "z", "later"]);
-    expect(billMatchCandidates(rows.toReversed(), occurrence).map((r) => r.id)).toEqual([
+    expect(billMatchCandidates([...rows].reverse(), occurrence).map((r) => r.id)).toEqual([
       "a",
       "z",
       "later"
