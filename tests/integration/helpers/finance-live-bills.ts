@@ -14,7 +14,7 @@ export async function exerciseBills(
   const previousDate = new Date(`${month}-01T00:00:00Z`);
   previousDate.setUTCDate(0);
   const previousMonth = previousDate.toISOString().slice(0, 7);
-  const previousBefore = await read("finance.transactions.query", { month: previousMonth });
+  let previousBefore = await read("finance.transactions.query", { month: previousMonth });
   const transactionsBefore = await read("finance.transactions.query", { month });
   await page.goto(`${base}/m/finance/upcoming`);
   await page.getByRole("heading", { name: "Know what's coming", exact: true }).waitFor();
@@ -97,6 +97,25 @@ export async function exerciseBills(
       await empty.getByRole("button", { name: "Cancel", exact: true }).click();
       await empty.waitFor({ state: "detached" });
     });
+    const restored = await read("finance.transactions.query", { month: previousMonth });
+    const beforeRows = previousBefore.transactions as Record<string, unknown>[];
+    const restoredRows = restored.transactions as Record<string, unknown>[];
+    const fixtureRevision = restoredRows.find(
+      (row) => row.id === "synthetic-market"
+    )!.writeRevision;
+    expect(typeof fixtureRevision).toBe("string");
+    expect(fixtureRevision).not.toBe(
+      beforeRows.find((row) => row.id === "synthetic-market")!.writeRevision
+    );
+    // The controlled pending flip must preserve every field except its expected MVCC review token.
+    expect(restored).toEqual({
+      ...previousBefore,
+      transactions: beforeRows.map((row) =>
+        row.id === "synthetic-market" ? { ...row, writeRevision: fixtureRevision } : row
+      )
+    });
+    // Keep the full, current response (including the new token) as the baseline for actual matching.
+    previousBefore = restored;
     await page.reload();
   }
   await page.getByRole("button", { name: "Match posted", exact: true }).click();
