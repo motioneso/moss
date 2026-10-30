@@ -369,13 +369,17 @@ test("Home table shows the recorded date, a real length and pages older meetings
 
     await search.fill(marker);
     await expect(recordedRow).toBeVisible();
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.screenshot({
-      path: process.env.MEETINGS_TABLE_SHOT_DESKTOP ?? "/tmp/3806-desktop.png"
-    });
-    await page.setViewportSize({ width: 390, height: 844 });
-    await expect(recordedRow).toBeVisible();
-    await page.screenshot({ path: process.env.MEETINGS_TABLE_SHOT_PHONE ?? "/tmp/3806-phone.png" });
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await expect(recordedRow).toBeVisible();
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+          )
+        )
+        .toBe(0);
+    }
   } finally {
     for (const id of ids)
       expect.soft((await page.request.delete(`/api/meetings/records/${id}`)).status()).toBe(204);
