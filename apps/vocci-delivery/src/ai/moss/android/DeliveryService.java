@@ -133,6 +133,7 @@ public final class DeliveryService extends Service {
                 catch (Exception error) {
                     if (stopping || Thread.currentThread().isInterrupted()) break;
                     String message = error.getMessage();
+                    RingTiming.mark("cycle_failed at " + (error.getStackTrace().length > 0 ? error.getStackTrace()[0].getClassName().replace("ai.moss.android.", "") + "." + error.getStackTrace()[0].getMethodName() + ":" + error.getStackTrace()[0].getLineNumber() : "") + " " + (SAFE_FAILURES.contains(message) ? message : error.getClass().getSimpleName()) + (error.getCause() != null && error.getCause().getMessage() != null && error.getCause().getMessage().matches("[a-z_]{1,32}") ? " cause " + error.getCause().getMessage() : ""));
                     store.state.put("lastFailure", SAFE_FAILURES.contains(message) ? message : error.getClass().getSimpleName());
                     reconnectAttempts = RetryPolicy.connectionFailure(reconnectAttempts);
                     report("retry_pending");
@@ -150,7 +151,8 @@ public final class DeliveryService extends Service {
                     } catch (java.io.IOException lost) { active.close(); active = null; lostLinkWait = 3000; }
                 }
                 if (lostLinkWait > 0) { synchronized (signal) { if (commands.isEmpty() && !stopping) signal.wait(lostLinkWait); } continue; }
-                synchronized (signal) { if (commands.isEmpty() && !stopping) signal.wait(RetryPolicy.connectionDelayMs(reconnectAttempts)); }
+                long delay = voice.active() ? RetryPolicy.holdFailureDelayMs(reconnectAttempts) : RetryPolicy.connectionDelayMs(reconnectAttempts);
+                synchronized (signal) { if (commands.isEmpty() && !stopping) signal.wait(delay); }
             }
         } catch (InterruptedException error) { Thread.currentThread().interrupt();
         } catch (Exception error) {
@@ -171,6 +173,10 @@ public final class DeliveryService extends Service {
         try {
             Map<String, Integer> inventory = active.inventory();
             RingTiming.mark("listing_done");
+            String named = active.announced();
+            RingTiming.mark("announced_in_listing opus=" + inventory.containsKey(named) + " opus_ext=" + inventory.containsKey(named + ".opus") + " json_ext=" + inventory.containsKey(named + ".json"));
+            { int index = 0, firstNew = -1, lastNew = -1; for (String entry : inventory.keySet()) { if (!previousInventory.containsKey(entry)) { if (firstNew < 0) firstNew = index; lastNew = index; } index++; }
+              RingTiming.mark("new_entries first=" + firstNew + " last=" + lastNew + " of=" + index); }
             long inventoryAt = System.currentTimeMillis();
             store.recordings.inventory(inventory, inventoryAt);
             voice.inventory(inventory, client);

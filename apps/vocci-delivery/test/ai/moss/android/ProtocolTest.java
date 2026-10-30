@@ -67,6 +67,8 @@ public final class ProtocolTest {
         byte[] query = RingProtocol.read(name);
         check(query[6] == 0x12 && query[7] == 1);
         rejects(() -> RingProtocol.read("1700000000_mono.exe"));
+        // While hold-to-talk is on, the first failed cycle retries soon; repeated failures fall back to the slow backoff.
+        if (RetryPolicy.holdFailureDelayMs(1) != 2000 || RetryPolicy.holdFailureDelayMs(2) != RetryPolicy.connectionDelayMs(2) || RetryPolicy.holdFailureDelayMs(0) != RetryPolicy.connectionDelayMs(0)) throw new AssertionError("hold retry delay");
         check(RetryPolicy.delayMs(1) == 30000 && RetryPolicy.delayMs(8) == 1800000);
         int failures = 0;
         for (int n = 0; n < 100; n++) failures = RetryPolicy.connectionFailure(failures);

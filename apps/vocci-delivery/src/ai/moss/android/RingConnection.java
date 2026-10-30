@@ -126,7 +126,14 @@ final class RingConnection implements AutoCloseable {
         RingTiming.begin();
         RingTiming.clock("press_end_heard");
     }
+    private volatile String announced = "";
+    /** Name the ring last announced in a recording-state message, kept only to compare with the listing. */
+    String announced() { return announced; }
     private void note(int command, byte[] payload) {
+        if (command == RingTelemetry.RECORDING && payload.length > 2 && (payload[1] & 255) <= payload.length - 2) {
+            announced = new String(payload, 2, payload[1] & 255, java.nio.charset.StandardCharsets.UTF_8);
+            RingTiming.mark("announce state" + (payload[0] & 255) + " namelen" + announced.length() + " valid=" + RingProtocol.validName(announced + ".opus"));
+        }
         telemetry.accept(command, payload, System.currentTimeMillis());
         if (watcher.accept(command, payload)) release();
     }
@@ -195,7 +202,7 @@ final class RingConnection implements AutoCloseable {
         RingTiming.mark("listing_requested");
         for (int n = 0; n < 1024; n++) {
             byte[] payload = response(RingProtocol.UART, 0x11);
-            if (n == 0 || n % 40 == 39) RingTiming.mark("listing_entry_" + (n + 1));
+            if (n < 3 || n % 40 == 39) RingTiming.mark("listing_entry_" + (n + 1) + "_len" + payload.length);
             if (RingProtocol.inventoryComplete(payload)) return files;
             RingProtocol.Entry entry = RingProtocol.Entry.parse(payload);
             if (entry == null) continue; // Unsupported or empty files cannot poison an otherwise valid inventory.
