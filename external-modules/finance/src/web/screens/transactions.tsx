@@ -4,7 +4,7 @@ import { HistoryExportDialog } from "../history-export-dialog";
 //
 // #3176: the Park Press Transactions screen. One read, finance.transactions.query,
 // returns the month's rows, the categories, the accounts and the Needs a look count.
-// Legacy single-row/rule reviews use finance.review-apply jobs. Captured confirmation and bulk
+// Legacy pending/KV/rule reviews use finance.review-apply jobs. Captured confirmation and bulk
 // categorization and split edits await reviewed host-tool persistence.
 //
 // Desktop and phone layouts both render; module CSS shows one and hides the other.
@@ -178,7 +178,7 @@ function LookControls(props: {
   );
 }
 
-// The category picker for a row that is already confirmed. Picking another category saves it.
+// The category picker for a confirmed row. Eligible changes open a captured review.
 function ChangeCategory(props: {
   tx: Tx;
   categories: TxCategory[];
@@ -480,6 +480,7 @@ export function TransactionsScreen(
     categoryId: string;
     categoryName: string;
     previousCategory: string;
+    confirmOnly: boolean;
   } | null>(null);
   const singlePending = useRef<((saved: boolean) => void) | null>(null);
   const [singleUncertain, setSingleUncertain] = useState(false);
@@ -602,24 +603,39 @@ export function TransactionsScreen(
     ).then((all) => all.every(Boolean));
   };
 
+  const reviewSingle = (tx: Tx, categoryId: string, confirmOnly: boolean): Promise<boolean> => {
+    if (singlePending.current || singleUncertain) return Promise.resolve(false);
+    return new Promise<boolean>((resolve) => {
+      singlePending.current = resolve;
+      setSingleReview({
+        tx: { ...tx },
+        confirmOnly,
+        categoryId,
+        categoryName: filterOptions.categories.find((c) => c.id === categoryId)?.name ?? categoryId,
+        previousCategory:
+          filterOptions.categories.find((c) => c.id === tx.categoryId)?.name ?? "Uncategorized"
+      });
+    });
+  };
+
   const confirmOne = (tx: Tx, categoryId: string, makeRule: boolean): void => {
+    const unchanged = tx.categoryId === categoryId;
+    if (
+      !makeRule &&
+      props.tools &&
+      bulkEligible(tx) &&
+      categoryId !== "transfers" &&
+      (unchanged ? supportsConfirm : supportsBulk)
+    ) {
+      void reviewSingle(tx, categoryId, unchanged);
+      return;
+    }
     void send([tx], [categoryId], makeRule, "Confirmed.");
   };
 
   const changeOne = (tx: Tx, categoryId: string): Promise<boolean> => {
     if (supportsBulk && props.tools && bulkEligible(tx) && categoryId !== "transfers") {
-      if (singlePending.current || singleUncertain) return Promise.resolve(false);
-      return new Promise<boolean>((resolve) => {
-        singlePending.current = resolve;
-        setSingleReview({
-          tx: { ...tx },
-          categoryId,
-          categoryName:
-            filterOptions.categories.find((c) => c.id === categoryId)?.name ?? categoryId,
-          previousCategory:
-            filterOptions.categories.find((c) => c.id === tx.categoryId)?.name ?? "Uncategorized"
-        });
-      });
+      return reviewSingle(tx, categoryId, false);
     }
     return send([tx], [categoryId], false, "Category changed.").then((saved) => {
       release([tx.id]);
@@ -786,6 +802,7 @@ export function TransactionsScreen(
           rows={[singleReview.tx]}
           category={{ id: singleReview.categoryId, name: singleReview.categoryName }}
           previousCategory={singleReview.previousCategory}
+          confirmOnly={singleReview.confirmOnly}
           tools={props.tools}
           onClose={() => finishSingle(false)}
           onSaved={() => finishSingle(true)}

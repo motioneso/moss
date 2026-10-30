@@ -109,7 +109,7 @@
     "features": [
       {
         "id": "finance.confirm-guesses",
-        "description": "On Transactions, a Needs a look row has a category picker, a Confirm button and an Always for this merchant switch (off by default; on, the new category becomes a rule for that merchant). Confirm all N confirms every Needs a look row the filter and search show, keeps Moss's guessed categories, makes no rules, and disappears when none are left. When no rows remain in Needs a look, the empty state says no transactions in this view need review; the current month, search and local confirmations determine that view."
+        "description": "On Transactions, Needs a look offers a category picker, Confirm and Always for this merchant (off by default). Owned posted unsplit SQL rows without a rule open a captured review: an existing category is confirmed, or a changed category shows before and after. Host approval and persisted success precede completion. Cancellation keeps the review; stale or uncertain outcomes require an explicit successful saved-record check. Loaded Review N categories captures up to 200 existing categories without making rules. Pending, compatibility and merchant-rule requests retain their queued workflow; queue acceptance is not persisted success. Shared, linked and split rows keep separate controls. When none remain, the current month and search determine the empty review state."
       },
       {
         "id": "finance.budget-typing",

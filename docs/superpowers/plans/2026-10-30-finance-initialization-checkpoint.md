@@ -48,8 +48,8 @@ bounds remain; production backlog latency is not established by this fixture.
   idle barrier before creating the approved owner. Focused two-mode acceptance had passed; the full
   fixture had accumulated lifecycle requests with its worker stopped. Cases were moved first without
   deleting jobs, changing time bounds, bypassing migration or skipping assertions. Restored complete
-  run `065921-yLLNaM`, input `a9f930dc3fc9`, base `fb7e1d34` dirty, is pending at this checkpoint.
-  Runtime/test source remains unchanged during that run; later documentation commits are separate.
+  run `065921-yLLNaM`, input `a9f930dc3fc9`, base `fb7e1d34` dirty, passed all nineteen, exit 0.
+  Runtime/test source remained unchanged during that run; later documentation commits are separate.
 - Earlier clean `6bd6caeb`, input `41f4af0b0117`: auth/module 47 passed (`062526-plArv6`); full browser
   eighteen-case `062524-QTRADu` passed seventeen / failed startup with queued duplicate migration work.
   Do not substitute the earlier dirty eighteen-pass receipt for this failed clean run.
@@ -81,3 +81,8 @@ sets remain outside the repository. Synthetic browser proof is distinct from CI 
    separate; credit-card reserves, broader goals, existing-entry transfer matching, household co-editing,
    provider pending-ID convergence and investment holdings remain partial or missing as the matrix says.
    No blanket parity or live bank/provider coverage is claimed.
+
+Initialization implementation was committed and pushed as `61052249ffa904d5f92128363a3c7be4ec6571ce`.
+The separate frozen checkout is clean at that commit. Its full foundation run `070254-PFAraS` is
+running, with Chromium, writable XDG/tool caches and the supported synthetic chat-home configuration.
+The main task branch continues the next reviewed individual-confirmation slice independently.
