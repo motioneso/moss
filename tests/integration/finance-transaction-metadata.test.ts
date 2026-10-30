@@ -1,3 +1,4 @@
+import { blockedFinanceWrites } from "./helpers/finance-write-barrier.js";
 import {
   categorizeApplyHandler,
   reviewApplyHandler,
@@ -329,11 +330,8 @@ it("rejects a captured edit after provider money changes while it waits on the r
   let settled!: [PromiseSettledResult<void>, PromiseSettledResult<boolean>];
   try {
     for (let i = 0; i < 80; i++) {
-      const rows = await observer.query(
-        "SELECT count(*)::int AS n FROM pg_stat_activity WHERE state='active' AND wait_event_type='Lock' AND query LIKE $1",
-        ["%WITH requested AS (%"]
-      );
-      if (rows.rows[0].n > 0) {
+      const rows = await blockedFinanceWrites(observer, "%WITH requested AS (%");
+      if (rows > 0) {
         waiting = true;
         break;
       }
@@ -889,11 +887,8 @@ describe("committed provider pending handoffs", () => {
     let waiting = false;
     try {
       for (let attempt = 0; attempt < 80; attempt++) {
-        const result = await observer.query(
-          "SELECT count(*)::int AS n FROM pg_stat_activity WHERE state='active' AND wait_event_type='Lock' AND query LIKE $1",
-          ["%WITH pending AS MATERIALIZED%"]
-        );
-        if (result.rows[0].n > 0) {
+        const result = await blockedFinanceWrites(observer, "%WITH pending AS MATERIALIZED%");
+        if (result > 0) {
           waiting = true;
           break;
         }
@@ -904,7 +899,7 @@ describe("committed provider pending handoffs", () => {
       await Promise.all([edit, capture]);
       await observer.end();
     }
-    expect(waiting, "Capture reached the held canonical row lock").toBe(true);
+    expect(waiting, "Capture reached the held canonical writer barrier").toBe(true);
     expect(await captured(feed)).toEqual([
       expect.objectContaining({ notes: "Synthetic latest pending context" })
     ]);

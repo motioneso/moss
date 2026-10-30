@@ -1,3 +1,4 @@
+import { blockedFinanceWrites } from "./helpers/finance-write-barrier.js";
 import { BUDGET_FINGERPRINT_SQL } from "../../external-modules/finance/src/domain/budget-review-sql.js";
 import { billsReadHandler } from "../../external-modules/finance/src/worker/handlers/bills.js";
 import type { WorkerPorts } from "../../external-modules/finance/src/worker/ports.js";
@@ -463,10 +464,8 @@ describe("owned one-off bill adjustments", () => {
     try {
       await vi.waitFor(
         async () => {
-          const r = await observer.query(
-            "SELECT count(*)::int AS n FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%reviewed AS MATERIALIZED%' AND pid<>pg_backend_pid()"
-          );
-          expect(r.rows[0].n).toBeGreaterThan(0);
+          const r = await blockedFinanceWrites(observer, "%reviewed AS MATERIALIZED%");
+          expect(r).toBeGreaterThan(0);
         },
         { timeout: 5000, interval: 25 }
       );
@@ -520,10 +519,8 @@ describe("owned one-off bill adjustments", () => {
     try {
       await vi.waitFor(
         async () => {
-          const r = await observer.query(
-            "SELECT count(*)::int AS n FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%account AS MATERIALIZED%' AND pid<>pg_backend_pid()"
-          );
-          expect(r.rows[0].n).toBeGreaterThan(0);
+          const r = await blockedFinanceWrites(observer, "%account AS MATERIALIZED%");
+          expect(r).toBeGreaterThan(0);
         },
         { timeout: 5000, interval: 25 }
       );

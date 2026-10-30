@@ -1,3 +1,4 @@
+import { blockedFinanceWrites } from "./helpers/finance-write-barrier.js";
 import { readFile } from "node:fs/promises";
 import { Client } from "pg";
 import { beforeAll, afterAll, describe, it, expect, vi } from "vitest";
@@ -306,10 +307,8 @@ describe("atomic reviewed transaction categorization", () => {
     try {
       await vi.waitFor(
         async () => {
-          const state = await observer.query(
-            "SELECT count(*)::integer AS waiting FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%reviewed AS MATERIALIZED%' AND pid<>pg_backend_pid()"
-          );
-          expect(state.rows[0].waiting).toBeGreaterThan(0);
+          const state = await blockedFinanceWrites(observer, "%reviewed AS MATERIALIZED%");
+          expect(state).toBeGreaterThan(0);
         },
         { timeout: 5000, interval: 25 }
       );

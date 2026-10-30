@@ -1,3 +1,4 @@
+import { blockedFinanceWrites } from "./helpers/finance-write-barrier.js";
 import {
   rulesListHandler,
   rulesPreviewHandler,
@@ -393,10 +394,8 @@ describe("canonical owned merchant rules", () => {
     try {
       await vi.waitFor(
         async () => {
-          const state = await observer.query(
-            "SELECT count(*)::int AS n FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%previous AS MATERIALIZED%' AND pid<>pg_backend_pid()"
-          );
-          expect(state.rows[0].n).toBeGreaterThan(0);
+          const state = await blockedFinanceWrites(observer, "%previous AS MATERIALIZED%");
+          expect(state).toBeGreaterThan(0);
         },
         { timeout: 5000, interval: 25 }
       );

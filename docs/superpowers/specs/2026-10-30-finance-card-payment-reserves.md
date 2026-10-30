@@ -135,3 +135,8 @@ or the authored row lock, rather than assume every waiting statement has already
 DML CTE. Preserve every stale/replay/financial-state assertion. Add a real locking-read-then-write
 barrier case and lexer cases; the 13 Finance failures in the first complete run are task-related
 regressions, not the historical repository baseline. Resolve them before claiming acceptance.
+
+The shared lexer also follows [PostgreSQL's nested block-comment syntax](https://www.postgresql.org/docs/17/sql-syntax-lexical.html#SQL-SYNTAX-COMMENTS).
+The same iterative scanner handles trailing comments without permitting a second statement.
+A nested-comment locking read is exercised against PostgreSQL, alongside ordinary read,
+read-only mutation rejection and timeout/rollback cases.

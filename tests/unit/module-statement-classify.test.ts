@@ -1,3 +1,4 @@
+import { inspectModuleStatement } from "../../packages/db/src/module-statement-classify.js";
 import { describe, expect, it } from "vitest";
 import { classifyModuleStatement, ModuleQueryError } from "@moss/db";
 
@@ -112,4 +113,39 @@ describe("classifyModuleStatement", () => {
     expect(error.message).toContain("forbidden_statement");
     expect(error.sqlstate).toBeUndefined();
   });
+});
+
+describe("module locking-read classification", () => {
+  it.each([
+    "FOR UPDATE",
+    "for no key update",
+    "FOR SHARE",
+    "FOR KEY SHARE",
+    "FOR /* comment */ UPDATE",
+    "FOR /* outer /* inner */ continued */ UPDATE",
+    "FOR NO -- comment\n KEY UPDATE"
+  ])("orders %s with mutations", (clause) => {
+    expect(inspectModuleStatement(`SELECT id FROM app.t ${clause}`)).toEqual({
+      kind: "select",
+      locksRows: true
+    });
+  });
+  it.each([
+    "SELECT 'FOR UPDATE'",
+    'SELECT "FOR", "UPDATE" FROM app.t',
+    "SELECT id FROM app.t /* FOR SHARE */",
+    "SELECT id FROM app.t -- FOR KEY SHARE"
+  ])("keeps an ordinary read independent: %s", (query) => {
+    expect(inspectModuleStatement(query)).toEqual({ kind: "select", locksRows: false });
+  });
+});
+
+it("does not treat nested-comment words as a row-lock clause or a second statement", () => {
+  expect(inspectModuleStatement("SELECT 1 /* outer /* FOR UPDATE */ continued */")).toEqual({
+    kind: "select",
+    locksRows: false
+  });
+  expect(classifyError("SELECT 1; /* outer /* inner */ continued */ DELETE FROM app.t").code).toBe(
+    "forbidden_statement"
+  );
 });

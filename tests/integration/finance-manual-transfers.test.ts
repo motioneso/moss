@@ -1,3 +1,4 @@
+import { blockedFinanceWrites } from "./helpers/finance-write-barrier.js";
 import { readFile } from "node:fs/promises";
 import { Client } from "pg";
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
@@ -167,11 +168,8 @@ async function whileAccountChanges(
     settled!: [PromiseSettledResult<void>, PromiseSettledResult<Awaited<typeof pending>>];
   try {
     for (let attempt = 0; attempt < 80; attempt++) {
-      const result = await observer.query(
-        "SELECT count(*)::int AS n FROM pg_stat_activity WHERE state='active' AND wait_event_type='Lock' AND query LIKE $1",
-        ["%WITH locked AS MATERIALIZED%"]
-      );
-      if (result.rows[0].n >= 1) {
+      const result = await blockedFinanceWrites(observer, "%WITH locked AS MATERIALIZED%");
+      if (result >= 1) {
         waiting = true;
         break;
       }
@@ -182,7 +180,9 @@ async function whileAccountChanges(
     await observer.end();
     settled = await Promise.allSettled([holder, pending]);
   }
-  expect(waiting, "The transfer reached the account lock before the competing change").toBe(true);
+  expect(waiting, "The transfer reached the held writer barrier before the competing change").toBe(
+    true
+  );
   if (settled[0].status === "rejected") throw settled[0].reason;
   if (settled[1].status === "rejected") throw settled[1].reason;
   return settled[1].value;
@@ -423,17 +423,14 @@ describe("linked manual transfers", () => {
     try {
       let waiting = false;
       for (let attempt = 0; attempt < 80; attempt++) {
-        const result = await observer.query(
-          "SELECT count(*)::int AS n FROM pg_stat_activity WHERE state='active' AND wait_event_type='Lock' AND query LIKE $1",
-          ["%WITH locked AS MATERIALIZED%"]
-        );
-        if (result.rows[0].n >= 2) {
+        const result = await blockedFinanceWrites(observer, "%WITH locked AS MATERIALIZED%");
+        if (result >= 2) {
           waiting = true;
           break;
         }
         await new Promise((done) => setTimeout(done, 25));
       }
-      expect(waiting, "Both opposite transfers reached the held account lock").toBe(true);
+      expect(waiting, "Both opposite transfers reached the held writer barrier").toBe(true);
     } finally {
       release();
       await observer.end();

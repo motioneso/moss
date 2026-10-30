@@ -371,6 +371,71 @@ describe("createModuleStorageRpc", () => {
       ).toEqual([{ label: "after rollback" }, { label: "held" }]);
     });
   });
+  it("orders a locking read before a queued writer without reversing locks on its later mutation", async () => {
+    const owner = randomUUID();
+    await dataContext.withDataContext({ actorUserId: owner }, (scope) =>
+      createModuleStorageRpc(scope, moduleId).query(
+        "INSERT INTO app.storage_rpc_fixture_items(owner_user_id,label) VALUES ($1,'initial')",
+        [owner]
+      )
+    );
+    let entered!: () => void, release!: () => void;
+    let holderPid = 0;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const holder = dataContext.withDataContext({ actorUserId: owner }, async (scope) => {
+      const rpc = createModuleStorageRpc(scope, moduleId);
+      const locked = await rpc.query<{ pid: number }>(
+        "SELECT pg_backend_pid() AS pid FROM app.storage_rpc_fixture_items FOR /* outer /* inner */ continued */ UPDATE"
+      );
+      holderPid = locked.rows[0]!.pid;
+      entered();
+      await held;
+      await rpc.query("UPDATE app.storage_rpc_fixture_items SET label='holder changed'");
+    });
+    await started;
+    const pending = dataContext.withDataContext({ actorUserId: owner }, (scope) =>
+      createModuleStorageRpc(scope, moduleId).query(
+        "UPDATE app.storage_rpc_fixture_items SET label='queued writer'"
+      )
+    );
+    const settled = Promise.allSettled([holder, pending]);
+    const observer = new Client({ connectionString: connectionStrings.bootstrap });
+    await observer.connect();
+    let waiting = false;
+    try {
+      for (let i = 0; i < 100; i++) {
+        const result = await observer.query(
+          "SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event='advisory' AND $1::int=ANY(pg_blocking_pids(pid))",
+          [holderPid]
+        );
+        if (result.rowCount) {
+          waiting = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    } finally {
+      release();
+      await observer.end();
+    }
+    const outcomes = await settled;
+    expect(waiting, "The queued writer waits on this holder before taking row locks").toBe(true);
+    for (const outcome of outcomes) if (outcome.status === "rejected") throw outcome.reason;
+    await dataContext.withDataContext({ actorUserId: owner }, async (scope) => {
+      expect(
+        (
+          await createModuleStorageRpc(scope, moduleId).query(
+            "SELECT label FROM app.storage_rpc_fixture_items"
+          )
+        ).rows
+      ).toEqual([{ label: "queued writer" }]);
+    });
+  });
   it("rejects multi-statement input at the classifier (simple-protocol guard)", async () => {
     const owner = randomUUID();
     await expect(

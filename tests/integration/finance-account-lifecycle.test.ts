@@ -1,3 +1,4 @@
+import { blockedFinanceWrites } from "./helpers/finance-write-barrier.js";
 import { readFile } from "node:fs/promises";
 import { Client } from "pg";
 import { beforeAll, afterAll, describe, it, expect, vi } from "vitest";
@@ -342,10 +343,8 @@ describe("reviewed manual account lifecycle", () => {
     try {
       await vi.waitFor(
         async () => {
-          const result = await observer.query(
-            "SELECT count(*)::integer AS n FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%reviewed AS MATERIALIZED%' AND pid<>pg_backend_pid()"
-          );
-          expect(result.rows[0].n).toBeGreaterThan(0);
+          const result = await blockedFinanceWrites(observer, "%reviewed AS MATERIALIZED%");
+          expect(result).toBeGreaterThan(0);
         },
         { timeout: 5000, interval: 25 }
       );
@@ -401,7 +400,7 @@ describe("reviewed manual account lifecycle", () => {
       archivedAt: null
     });
   });
-  it("detects a bill attachment committed after the closer's initial snapshot", async () => {
+  it("rejects a close reviewed before a competing bill attachment commits", async () => {
     await createAccount("life:bill-race");
     const captured = (await review("life:bill-race"))!,
       expected = await policy();

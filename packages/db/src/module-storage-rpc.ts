@@ -1,7 +1,7 @@
 import { CompiledQuery, sql } from "kysely";
 import type { DataContextDb } from "./data-context.js";
 import { moduleRuntimeRoleName } from "./module-role-broker.js";
-import { classifyModuleStatement, ModuleQueryError } from "./module-statement-classify.js";
+import { inspectModuleStatement, ModuleQueryError } from "./module-statement-classify.js";
 
 // #1167 (#914 D5): the ONLY door module-authored SQL may pass through. The
 // statement allowlist and error redaction are unconditional; timeout and
@@ -79,7 +79,7 @@ export function createModuleStorageRpc(
       queryText: string,
       params: readonly unknown[] = []
     ): Promise<ModuleQueryResult<T>> {
-      const kind = classifyModuleStatement(queryText);
+      const { kind, locksRows } = inspectModuleStatement(queryText);
       if (readOnly && kind !== "select") {
         throw new ModuleQueryError(
           "forbidden_mutation",
@@ -93,9 +93,11 @@ export function createModuleStorageRpc(
       }
       let result;
       try {
-        if (kind !== "select") {
+        if (kind !== "select" || locksRows) {
           // Separate statement: the authored mutation gets a fresh READ COMMITTED snapshot
-          // after earlier writes by this module/actor commit. RLS remains the data boundary.
+          // after earlier writes by this module/actor commit. Locking reads take this key
+          // before their row locks too, so a later mutation cannot reverse the lock order.
+          // RLS remains the data boundary.
           await sql`SELECT pg_advisory_xact_lock(hashtextextended(
             ${`moss:module-write:${moduleId}:`} || app.current_actor_user_id()::text, 0))`.execute(
             scopedDb.db
