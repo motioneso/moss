@@ -397,3 +397,12 @@ Current official comparison: [YNAB scheduled transaction actions](https://suppor
 include entering early and editing future occurrences. Moss's current action deliberately only
 records an already-occurred expense for a due manual occurrence; future/series editing remains
 a distinct gap.
+
+## October 30 private-note continuation (acceptance pending)
+
+The [private-note checkpoint](../plans/2026-10-30-finance-private-notes-checkpoint.md) tracks a
+new note-only editor and captured SQL writer. Thirteen clean SQL/handler cases pass, including
+foreign/admin isolation with observed RLS-removal failures and restored positives, explicit
+clears through pending-to-posted sync, and unchanged reconciled transfer/split fields. Native
+acceptance and the latest aggregate remain pending. Register editing remains Partial; bulk
+notes, merchant/date changes, tags and attachments are not established by this implementation.
