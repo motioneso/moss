@@ -913,6 +913,48 @@ describe("module distribution e2e (#964)", () => {
     expect(report.installed).not.toContain("some-other-module");
     expect(existsSync(join(modulesDir, "some-other-module"))).toBe(false);
   });
+
+  // #3560 — last on purpose: it leaves the fixture module switched off.
+  it("accepting a staged update refreshes the baseline but leaves an admin's switch off (#3560)", async () => {
+    const disable = await server.inject({
+      method: "POST",
+      url: `/api/admin/external-modules/${FIXTURE_MODULE_ID}`,
+      headers: { cookie: adminCookie, "content-type": "application/json" },
+      payload: { enabled: false }
+    });
+    expect(disable.statusCode).toBe(200);
+    expect(disable.json().module).toMatchObject({ status: "disabled" });
+
+    const onDisk = getExternalModuleRegistrations({ modulesDir }).discoveries[0]!;
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    try {
+      // The stage an admin download or JARVIS_MODULES_ENSURE leaves behind, over a stale baseline.
+      await client.query(
+        `UPDATE app.external_modules
+            SET manifest_hash = 'sha256:stale', package_hash = 'sha256:stale',
+                staged_version = '0.3.0', staged_package_hash = $2, staged_at = now(),
+                staged_by = $3, staged_source = 'admin-download', updated_at = now()
+          WHERE id = $1`,
+        [FIXTURE_MODULE_ID, onDisk.packageHash, adminUserId]
+      );
+      expect((await reconcileModules({ modulesDir })).accepted).toEqual([FIXTURE_MODULE_ID]);
+      const row = await client.query(
+        `SELECT status, disabled_reason, manifest_hash, package_hash, staged_package_hash
+           FROM app.external_modules WHERE id = $1`,
+        [FIXTURE_MODULE_ID]
+      );
+      expect(row.rows[0]).toEqual({
+        status: "disabled",
+        disabled_reason: "disabled by admin",
+        manifest_hash: onDisk.manifestHash,
+        package_hash: onDisk.packageHash,
+        staged_package_hash: null
+      });
+    } finally {
+      await client.end();
+    }
+  });
 });
 
 // signUp: copied VERBATIM from tests/integration/external-modules-routes.test.ts:214-end

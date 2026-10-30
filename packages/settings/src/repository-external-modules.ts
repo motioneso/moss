@@ -125,6 +125,9 @@ export async function setExternalModuleEnabled(
       manifest_hash: input.manifestHash,
       package_hash: input.packageHash,
       disabled_reason: null,
+      // #3560: an admin re-approving the module clears the "an admin turned this off" mark,
+      // so a later staged update may accept and activate it again.
+      disabled_by_admin: false,
       descriptor_approved_by: input.actorUserId,
       enabled_by: input.actorUserId,
       enabled_at: new Date(),
@@ -138,6 +141,7 @@ export async function setExternalModuleEnabled(
         manifest_hash: input.manifestHash,
         package_hash: input.packageHash,
         disabled_reason: null,
+        disabled_by_admin: false,
         // #1753: an enabled row must never carry an owner (the DB check constraint that
         // enforces this exists precisely because a leftover owner_user_id from a prior
         // draft row would be meaningless once the module is instance-wide).
@@ -192,6 +196,7 @@ export async function setExternalModuleDraft(
       manifest_hash: input.manifestHash,
       package_hash: input.packageHash,
       disabled_reason: null,
+      disabled_by_admin: false,
       descriptor_approved_by: null,
       enabled_by: null,
       enabled_at: null,
@@ -205,6 +210,7 @@ export async function setExternalModuleDraft(
         manifest_hash: input.manifestHash,
         package_hash: input.packageHash,
         disabled_reason: null,
+        disabled_by_admin: false,
         descriptor_approved_by: null,
         enabled_by: null,
         enabled_at: null,
@@ -249,6 +255,10 @@ export async function writeExternalModuleDisabledRow(
       manifest_hash: "",
       package_hash: "",
       disabled_reason: input.reason,
+      // #3560: only an ADMIN switch is carried across a staged-package acceptance. Drift
+      // auto-disable (same writer, different action) is our own verdict and may be lifted by
+      // accepting a fresh package.
+      disabled_by_admin: action === "module.external_disable",
       descriptor_approved_by: null,
       enabled_by: null,
       enabled_at: null,
@@ -260,6 +270,7 @@ export async function writeExternalModuleDisabledRow(
       oc.column("id").doUpdateSet({
         status: "disabled",
         disabled_reason: input.reason,
+        disabled_by_admin: action === "module.external_disable",
         descriptor_approved_by: null,
         enabled_by: null,
         enabled_at: null,
@@ -464,6 +475,8 @@ export async function markExternalModuleRemoved(
     .set({
       status: "disabled",
       disabled_reason: "removed by admin",
+      // #3560: removing is a different act from the admin's off switch. A later download of the
+      // module is an explicit install, so acceptance may bring it back on (the e2e pins that).
       descriptor_approved_by: null,
       staged_version: null,
       staged_package_hash: null,
@@ -523,6 +536,7 @@ export async function shipExternalModule(
       manifest_hash: input.manifestHash,
       package_hash: input.packageHash,
       disabled_reason: null,
+      disabled_by_admin: false,
       owner_user_id: null,
       descriptor_approved_by: input.actorUserId,
       enabled_by: input.actorUserId,

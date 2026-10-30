@@ -659,7 +659,13 @@ describe("MVP foundation schema catalog", () => {
         { version: "0344", name: "0344_chat_heartbeat_unavailable_sources.sql" },
         { version: "0345", name: "0345_chat_heartbeat_worker_publish.sql" },
         { version: "0352", name: "0352_meeting_output_reservation_expiry.sql" },
-        { version: "0353", name: "0353_integration_classifier_scan.sql" }
+        { version: "0353", name: "0353_integration_classifier_scan.sql" },
+        // #3560 — an admin's switch recorded apart from drift and staging, so accepting a
+        // staged update cannot turn a module back on.
+        {
+          version: "0355",
+          name: "0355_external_modules_disabled_by_admin.sql"
+        }
       ]);
     } finally {
       await client.end();

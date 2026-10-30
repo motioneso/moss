@@ -231,7 +231,10 @@ Order of operations:
 5. **Accept staged**: on-disk package hash equals `staged_package_hash` → write it (and the
    manifest hash) as the trusted baseline, set enabled, clear staged fields. The admin's
    download (or the operator's compose entry) was the explicit authorization; after restart
-   the module is simply on.
+   the module is simply on. The one exception is a module an admin switched off
+   (`disabled_by_admin`, #3560): acceptance still refreshes the baseline and clears the staged
+   fields, but the module stays disabled with the admin's reason. Drift auto-disable and a
+   failed database install do not set that mark, so accepting a fresh package can lift them.
 6. **Install**: for accepted or already-enabled modules whose manifest declares
    `database.ownedTables`, run the #914 `installModule` (4-phase: roles → single-txn DDL +
    generated RLS → ledger → installer login disabled in `finally`). The per-module ledger
@@ -362,7 +365,8 @@ transitions); `JARVIS_MODULES_ENSURE` parsing (`id`, `id@version`, junk).
 test-only URL override):
 
 - download → files staged atomically + staged row recorded; non-admin → 403 on every route.
-- boot reconcile: staged hash accepted → baseline pinned + auto-enabled; hash matching
+- boot reconcile: staged hash accepted → baseline pinned + auto-enabled; staged hash accepted
+  on a module an admin switched off → baseline pinned, module stays off (#3560); hash matching
   neither → drift-disabled; `ownedTables` fixture module → 4-phase install runs (roles
   exist, RLS emitted, ledger rows recorded, installer login disabled after).
 - update: staged new version over enabled module → old version serves until restart, boot

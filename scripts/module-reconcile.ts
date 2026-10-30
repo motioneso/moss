@@ -74,13 +74,18 @@ export function assertQualifiedModuleTable(qualified: string, moduleId: string):
   }
 }
 
-/** Pure decision for phase 5 so the hash-match rule is unit-testable. */
+/**
+ * Pure decision for phase 5 so the hash-match rule is unit-testable. `adminDisabled` is the
+ * row's `disabled_by_admin` mark (#3560): accepting a package always refreshes the baseline
+ * hashes, but only `activate` says whether the module may switch back on.
+ */
 export function decideStagedAcceptance(input: {
   readonly stagedPackageHash: string;
   readonly onDiskPackageHash: string | null;
-}): { accept: true } | { accept: false; reason: string } {
+  readonly adminDisabled: boolean;
+}): { accept: true; activate: boolean } | { accept: false; reason: string } {
   if (input.onDiskPackageHash !== null && input.onDiskPackageHash === input.stagedPackageHash) {
-    return { accept: true };
+    return { accept: true, activate: !input.adminDisabled };
   }
   return {
     accept: false,
@@ -117,6 +122,8 @@ interface ExternalModuleAdminRow {
   readonly staged_version: string | null;
   readonly staged_package_hash: string | null;
   readonly purge_requested_at: Date | null;
+  /** #3560: selected only where the acceptance decision needs it. */
+  readonly disabled_by_admin?: boolean;
 }
 
 export interface ReconcileModulesOptions {
@@ -319,10 +326,13 @@ export async function reconcileModules(options: ReconcileModulesOptions): Promis
 
     // Phase 5 — accept staged downloads: staged hash must equal the on-disk package
     // hash computed by the validating loader. Match → the staged version becomes the
-    // enabled baseline and staged_* fields clear. Mismatch → leave the row staged and
+    // baseline hashes and staged_* fields clear. Mismatch → leave the row staged and
     // warn; the admin UI keeps showing pending-restart with the discrepancy logged.
+    // #3560: a match refreshes the baseline but does NOT switch a module back on when an
+    // admin turned it off — the row keeps status 'disabled' and its reason.
     const stagedRows = await client.query<ExternalModuleAdminRow>(
-      `SELECT id, status, package_hash, staged_version, staged_package_hash, purge_requested_at
+      `SELECT id, status, package_hash, staged_version, staged_package_hash, purge_requested_at,
+              disabled_by_admin
          FROM app.external_modules
         WHERE staged_package_hash IS NOT NULL
         ORDER BY id`
@@ -331,23 +341,28 @@ export async function reconcileModules(options: ReconcileModulesOptions): Promis
       const discovery = discoveriesById.get(row.id);
       const decision = decideStagedAcceptance({
         stagedPackageHash: row.staged_package_hash as string,
-        onDiskPackageHash: discovery?.packageHash ?? null
+        onDiskPackageHash: discovery?.packageHash ?? null,
+        adminDisabled: row.disabled_by_admin === true
       });
       if (!decision.accept) {
         warn(row.id, "accept-staged", new Error(decision.reason));
         continue;
       }
+      const keepDisabled = !decision.activate;
       const accepted = await client.query(
         `UPDATE app.external_modules
-            SET status = 'enabled',
+            SET status = CASE WHEN $4 THEN 'disabled' ELSE 'enabled' END,
                 manifest_hash = $3,
                 package_hash = $2,
-                disabled_reason = NULL,
+                disabled_reason = CASE WHEN $4 THEN disabled_reason ELSE NULL END,
+                disabled_by_admin = $4,
                 descriptor_approved_by = CASE
+                  WHEN $4 THEN NULL
                   WHEN staged_source = 'admin-download' THEN staged_by ELSE NULL END,
                 enabled_by = CASE
+                  WHEN $4 THEN NULL
                   WHEN staged_source = 'admin-download' THEN staged_by ELSE NULL END,
-                enabled_at = now(),
+                enabled_at = CASE WHEN $4 THEN NULL ELSE now() END,
                 staged_version = NULL,
                 staged_package_hash = NULL,
                 staged_at = NULL,
@@ -355,7 +370,7 @@ export async function reconcileModules(options: ReconcileModulesOptions): Promis
                 staged_source = NULL,
                 updated_at = now()
           WHERE id = $1 AND staged_package_hash = $2`,
-        [row.id, row.staged_package_hash, discovery!.manifestHash]
+        [row.id, row.staged_package_hash, discovery!.manifestHash, keepDisabled]
       );
       if (accepted.rowCount === 1) report.accepted.push(row.id);
     }
@@ -417,6 +432,7 @@ export async function reconcileModules(options: ReconcileModulesOptions): Promis
       await client.query(
         `UPDATE app.external_modules
             SET status = 'disabled', disabled_reason = $2,
+                disabled_by_admin = false,
                 descriptor_approved_by = NULL, updated_at = now()
           WHERE id = $1`,
         [row.id, DRIFT_DISABLED_REASON]
