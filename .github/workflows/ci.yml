@@ -183,6 +183,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends acl
 
+      - name: Set up Python for Outlook runtime tests
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Verify Outlook runtime primitives
+        run: pnpm test:outlook-runtime
+
+      - name: Verify Outlook lifecycle client controls
+        run: pnpm test:outlook-client
+
       - name: Run unit tests
         env:
           MOSS_UNIT_TEST_SHARD: ${{ matrix.shard }}/2

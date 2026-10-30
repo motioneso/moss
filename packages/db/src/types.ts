@@ -1,6 +1,34 @@
 import type { ColumnType, Selectable } from "kysely";
 
 type TimestampColumn = ColumnType<Date, Date | string | undefined, Date | string>;
+
+export type OutlookSetupState =
+  | "preparing"
+  | "sign-in"
+  | "confirm"
+  | "active"
+  | "sign-in-needed"
+  | "source-changed"
+  | "removing"
+  | "cleanup-failed"
+  | "removed";
+
+export interface ConnectorOutlookSetupsTable {
+  owner_user_id: string;
+  runtime_id: string;
+  generation: number;
+  state: OutlookSetupState;
+  identity_hash: string | null;
+  setup_expires_at: TimestampColumn;
+  lease_id: string | null;
+  lease_kind: "viewer" | "collector" | null;
+  lease_session_id: string | null;
+  lease_expires_at: NullableTimestampColumn;
+  lease_absolute_expires_at: NullableTimestampColumn;
+  lease_activity_at: NullableTimestampColumn;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
 type NullableTimestampColumn = ColumnType<
   Date | null,
   Date | string | null | undefined,
@@ -2179,6 +2207,7 @@ export interface MossDatabase {
   "app.push_signing_key": PushSigningKeyTable;
   "app.connector_definitions": ConnectorDefinitionsTable;
   "app.connector_accounts": ConnectorAccountsTable;
+  "app.connector_outlook_setups": ConnectorOutlookSetupsTable;
   "app.connector_email_refreshes": ConnectorEmailRefreshesTable;
   "app.connector_email_refresh_keys": ConnectorEmailRefreshKeysTable;
   "app.connector_email_refresh_accounts": ConnectorEmailRefreshAccountsTable;

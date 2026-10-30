@@ -46,3 +46,4 @@ export * from "./work-mail/cursor.js";
 export * from "./work-mail/entry.js";
 export * from "./work-mail/judge.js";
 export * from "./work-mail/pipeline.js";
+export * from "./outlook-lifecycle-client.js";
