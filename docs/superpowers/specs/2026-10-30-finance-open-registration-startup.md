@@ -25,3 +25,13 @@ empty owned accounts, manual cash creation, reviewed currency, confirmed allocat
 Run onboarding and approval/module route regressions, focused units, lint/types/static, complete
 installed browser acceptance and the final frozen aggregate. Update the parity matrix with the
 exact proven signup modes; source claims about additional paths remain bounded by their evidence.
+
+The clean approved-user run `062524-QTRADu` also exposed a reconciliation burst: the owner had six
+created migration jobs behind earlier fixture work. The installed pg-boss 12.18.2 implementation
+only computes `singleton_on` when `singletonSeconds` is supplied; a key alone on a standard queue
+has no time-window uniqueness. Add a bounded thirty-second coalescing window per actor/job/package.
+The package hash must distinguish an updated artifact immediately. This is best effort per database
+time bucket, not a global exactly-once promise; handlers retain their replay markers and retries.
+Prove actual same-bucket queue insertion and package changes against PostgreSQL, using the supported
+send database adapter in one real transaction so a clock-boundary crossing cannot make the test flaky.
+Do not alter existing queue policies, runtime deadlines, migration markers or authorization.
