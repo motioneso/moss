@@ -130,51 +130,53 @@ export function MeetingHistory({
         </p>
       ) : null}
       {!searching && meetings.length ? (
-        <table className="meetings-history-table">
-          <thead>
-            <tr>
-              <th scope="col">Title</th>
-              <th scope="col">Date</th>
-              <th scope="col">Length</th>
-              <th scope="col">Attendees</th>
-              <th scope="col">Type</th>
-            </tr>
-          </thead>
-          <tbody>
-            {meetings.map((meeting) => (
-              <tr key={meeting.id} className="meetings-history-row">
-                <td>
-                  <Button variant="link" onClick={() => onOpen(meeting.id)}>
-                    {meeting.title}
-                  </Button>
-                </td>
-                <td data-label="Date">
-                  <span>{date(meeting.date.at)}</span>
-                  <span className="jds-hint meetings-history-date-source">
-                    {meeting.date.source === "recorded" ? "Recorded" : "Added"}
-                  </span>
-                </td>
-                <td data-label="Length">{meetingLength(meeting.capture.durationMs)}</td>
-                <td data-label="Attendees">—</td>
-                <td data-label="Type">
-                  {meeting.recording?.typeId ? (
-                    <Badge tone="neutral" pill>
-                      {types.data?.types.find((type) => type.id === meeting.recording?.typeId)
-                        ?.name ?? meeting.recording.typeId}
-                    </Badge>
-                  ) : (
-                    "—"
-                  )}
-                  {meeting.recording?.side ? (
-                    <span className="jds-hint meetings-history-side">
-                      {meeting.recording.side === "personal" ? "Personal" : "Work"}
-                    </span>
-                  ) : null}
-                </td>
+        <div className="meetings-history-scroll">
+          <table className="meetings-history-table">
+            <thead>
+              <tr>
+                <th scope="col">Title</th>
+                <th scope="col">Date</th>
+                <th scope="col">Length</th>
+                <th scope="col">Attendees</th>
+                <th scope="col">Type</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {meetings.map((meeting) => (
+                <tr key={meeting.id} className="meetings-history-row">
+                  <td>
+                    <Button variant="link" onClick={() => onOpen(meeting.id)}>
+                      {meeting.title}
+                    </Button>
+                  </td>
+                  <td data-label="Date">
+                    <span>{date(meeting.date.at)}</span>
+                    <span className="jds-hint meetings-history-date-source">
+                      {meeting.date.source === "recorded" ? "Recorded" : "Added"}
+                    </span>
+                  </td>
+                  <td data-label="Length">{meetingLength(meeting.capture.durationMs)}</td>
+                  <td data-label="Attendees">—</td>
+                  <td data-label="Type">
+                    {meeting.recording?.typeId ? (
+                      <Badge tone="neutral" pill>
+                        {types.data?.types.find((type) => type.id === meeting.recording?.typeId)
+                          ?.name ?? meeting.recording.typeId}
+                      </Badge>
+                    ) : (
+                      "—"
+                    )}
+                    {meeting.recording?.side ? (
+                      <span className="jds-hint meetings-history-side">
+                        {meeting.recording.side === "personal" ? "Personal" : "Work"}
+                      </span>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
       {history.hasNextPage && !searching && !denied ? (
         <Button

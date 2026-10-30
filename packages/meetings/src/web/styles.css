@@ -83,8 +83,12 @@
 .meetings-list-heading {
   justify-content: flex-end;
 }
+.meetings-history-scroll {
+  overflow-x: auto;
+}
 .meetings-history-table {
   width: 100%;
+  min-width: 36rem;
   border-collapse: collapse;
 }
 .meetings-history-table th,
