@@ -317,4 +317,47 @@ describe("net worth from installed manual ledger SQL", () => {
     expect(await report("USD")).toMatchObject({ headlineCents: 9000 });
     expect(await report("USD", ids.userB)).toMatchObject({ headlineCents: 6000 });
   });
+  it("projects more than 5,000 daily history dates without raising platform read caps", async () => {
+    await createAccount("worth:long-history", "HKD", {
+      openingDate: "2000-01-01",
+      openingBalanceCents: 100000
+    });
+    await change(
+      `WITH inserted AS (
+      INSERT INTO app.finance_transactions(owner_user_id,id,account_id,date,amount_cents,iso_currency,name,category_id,pending,source,entry_digest,cleared)
+      SELECT app.current_actor_user_id(),'worth:long:'||n,'worth:long-history','2000-01-01'::date+n,1,'HKD','Synthetic historical movement','groceries',false,'manual',$1::text,false
+      FROM generate_series(0,6000) AS n RETURNING amount_cents
+    ) UPDATE app.finance_accounts SET balance_cents=opening_balance_cents-(SELECT sum(amount_cents) FROM inserted),ledger_revision=ledger_revision+1
+      WHERE account_id='worth:long-history'`,
+      ["e".repeat(64)]
+    );
+    const rows = (await movements()).filter((r) => r.accountId === "worth:long-history");
+    expect(rows).toHaveLength(6001);
+    expect(rows[0]).toEqual({
+      accountId: "worth:long-history",
+      date: "2000-01-01",
+      amountCents: "1",
+      valid: true
+    });
+    expect(rows[59]?.date).toBe("2000-02-29");
+    const result = await report("HKD");
+    expect(result).toMatchObject({ headlineCents: 93999, asOf: "2026-10-30" });
+    expect(result.points as unknown[]).toEqual([
+      { date: "2026-05-01", totalCents: 93999 },
+      { date: "2026-10-30", totalCents: 93999 }
+    ]);
+  });
+  it("keeps an odd daily sum above JS precision exact through the monthly JSON projection", async () => {
+    const large = Number.MAX_SAFE_INTEGER;
+    await createAccount("worth:precision", "CNY", { openingBalanceCents: large });
+    await entry("worth:precision", "2026-10-15", large, "CNY");
+    await entry("worth:precision", "2026-10-15", large - 1, "CNY");
+    expect((await movements()).find((r) => r.accountId === "worth:precision")).toEqual({
+      accountId: "worth:precision",
+      date: "2026-10-15",
+      amountCents: "18014398509481981",
+      valid: true
+    });
+    expect(await report("CNY")).toMatchObject({ headlineCents: -(large - 1) });
+  });
 });

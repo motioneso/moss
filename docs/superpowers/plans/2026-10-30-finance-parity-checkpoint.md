@@ -112,3 +112,46 @@ Do not modify a checkout while its frozen gates are running.
 4. Canonical rule management / awaited individual-write and undo paths, credit-card payment reserves,
    recurring calendar/one-off edits, balance-history import and investment holdings remain incomplete.
    Provider/household capabilities require their actual agreements and privacy designs, not mocks.
+
+## Captured confirmation: clean committed checkpoint
+
+`3c620d58657b11d1c862d560e6e41626f9842315` is pushed, unmerged. Clean input `bf68260e49dc`:
+installed browser 14/14 passed (`040051-Lp9u1E`) and installed SQL five passed (`040359-pcKxTO`).
+Its full aggregate is running at `040401-c9zwQ0` on the frozen detached checkout; do not modify that
+checkout, call it green, or substitute the earlier export receipt. Its existing sentinel wait is open.
+
+## Manual net-worth history projection
+
+Design: [month-sized history projection](../specs/2026-10-30-finance-history-projection.md).
+
+A real 6,001-date manual ledger reproduced `row_cap_exceeded` with the old daily SQL projection:
+`040537-fvWPMv`, input `45ad15d90355`, six passed / one failed. An earlier fixture attempt hit the
+SQL literal prefilter; the synthetic digest was changed to a bound parameter before accepting the
+row-cap reproduction. No classifier or platform cap was changed.
+
+The SQL now aggregates exact daily numeric strings and validation flags inside account/month
+records, each containing at most 31 daily movements. The store explicitly flattens date, string cents
+and validity into the same domain API; names/notes never enter it. Lifetime carry and all original
+dates remain, with no balance substitution, new cache, migration, tool or provider-policy change.
+The 5,000-row, 5 MiB and execution-time limits remain active; extreme histories can still exceed
+these bounds and are not claimed unlimited.
+
+Development results: seven installed SQL cases first passed (`040631-Ss3pdo`, input `0f0f094f4a9e`),
+then an eighth exact-cent case passed with all eight (`041451-we2MKQ`, input `763df9aa4d05`). That
+case carries the odd string `18014398509481981` through real monthly JSON aggregation and produces
+the correct safe signed balance; it would lose a cent if encoded as a JS number. The long-history
+case preserves all 6,001 movements, leap day and the exact pre-window/current 93,999-cent total.
+Owner RLS negative `040821-9pt7xR`, input `2288a11dfbef`, failed one / passed six as expected:
+without transaction RLS the synthetic 1,000-cent owned movement became 5,000. The guard was
+re-enabled in finally and the fixture restored. No removed guard remains.
+
+Focused Finance: 63 files / 625 unit tests passed. Full static, root/test/module types and scoped lint
+passed during development. A focused installed net-worth flow (`040820-nq0HyS`) passed with 13
+unrelated flows skipped. The manual-only owner now has an offsetting posted expense/refund pair,
+so its real monthly projection is nonempty while the expected EUR total stays unchanged. The final
+UI helper also checks those owned posted records explicitly. Final committed SQL/UI receipts are
+next; do not reuse a development fingerprint as the final one.
+
+Next implementation: reviewed manual account rename/close/reopen, retaining financial history,
+opening/currency/type immutability, safe zero/reconciled closure and concurrent-entry protection.
+Explicit transfer links and the rule/individual-write gaps remain separate work.

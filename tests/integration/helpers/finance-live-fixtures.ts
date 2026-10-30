@@ -95,6 +95,24 @@ export async function seedFinanceLive(
           at: `${month}-01T00:00:00Z`
         });
       }
+      // A zero-net pair still exercises the real nonempty monthly movement projection in Reports.
+      for (const [suffix, amountCents] of [
+        ["expense", 100],
+        ["refund", -100]
+      ] as const)
+        await store.manual!.createEntry({
+          id: `manual:net-worth-${suffix}`,
+          accountId: "manual:synthetic-EUR",
+          date: `${month}-01`,
+          name: `Synthetic net worth ${suffix}`,
+          amountCents,
+          isoCurrency: "EUR",
+          categoryId: "groceries",
+          notes: "Synthetic owner-only projection note",
+          cleared: true,
+          digest: (suffix === "expense" ? "c" : "d").repeat(64),
+          at: `${month}-01T00:00:00Z`
+        });
       await store.setAssignment(month, "groceries", 2000);
       await setModuleKvValue(
         scope,

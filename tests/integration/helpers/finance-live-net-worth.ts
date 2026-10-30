@@ -16,6 +16,20 @@ export async function exerciseManualNetWorth(
     true
   );
   const date = String((await read("finance.manual.context")).today);
+  const entries = await read("finance.transactions.query", {
+    month: date.slice(0, 7),
+    search: "Synthetic net worth",
+    limit: 200
+  });
+  const recorded = entries.transactions as { source?: string; amountCents: number }[];
+  expect(
+    recorded
+      .map(({ source, amountCents }) => ({ source, amountCents }))
+      .sort((a, b) => a.amountCents - b.amountCents)
+  ).toEqual([
+    { source: "manual", amountCents: -100 },
+    { source: "manual", amountCents: 100 }
+  ]);
   const result = await read("finance.reports.net-worth", { currency: "EUR", months: 6 });
   expect(result).toMatchObject({ headlineCents: 123450, asOf: date });
   expect(result.coverage).toEqual([

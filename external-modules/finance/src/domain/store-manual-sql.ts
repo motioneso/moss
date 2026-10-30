@@ -1,30 +1,37 @@
-import type { ManualLedgerStore } from "./manual-ledger.js";
+import type { ManualDailyMovement, ManualLedgerStore } from "./manual-ledger.js";
 import type { FinanceDb } from "./store-sql.js";
 
 /** All balance changes depend on inserted rows; conflict replays cannot move a balance twice. */
 export function manualSqlStore(db: FinanceDb): ManualLedgerStore {
   return {
     async netWorthMovements(through) {
+      // A calendar month contains at most 31 daily movements per account. Return month-sized
+      // projection records under the unchanged RPC row/byte caps, then keep the domain's daily API.
       const result = await db.query<{
         account_id: string;
-        date: string;
-        amount_cents: string;
-        invalid_count: string;
+        days: Omit<ManualDailyMovement, "accountId">[];
       }>(
-        `SELECT t.account_id,t.date::text AS date,sum(t.amount_cents::numeric)::text AS amount_cents,
-          sum(CASE WHEN t.amount_cents BETWEEN -9007199254740991 AND 9007199254740991
-            AND t.iso_currency=a.iso_currency AND t.date>=a.opening_date THEN 0 ELSE 1 END)::text AS invalid_count
-          FROM app.finance_transactions t JOIN app.finance_accounts a ON a.account_id=t.account_id
-          WHERE t.source='manual' AND a.source='manual' AND NOT t.pending AND t.date<=$1::date
-          GROUP BY t.account_id,t.date ORDER BY t.account_id,t.date`,
+        `WITH daily AS (
+          SELECT t.account_id,t.date,sum(t.amount_cents::numeric)::text AS amount_cents,
+            sum(CASE WHEN t.amount_cents BETWEEN -9007199254740991 AND 9007199254740991
+              AND t.iso_currency=a.iso_currency AND t.date>=a.opening_date THEN 0 ELSE 1 END)=0 AS valid
+            FROM app.finance_transactions t JOIN app.finance_accounts a ON a.account_id=t.account_id
+            WHERE t.source='manual' AND a.source='manual' AND NOT t.pending AND t.date<=$1::date
+            GROUP BY t.account_id,t.date
+        ) SELECT account_id,jsonb_agg(jsonb_build_object(
+            'date',date::text,'amountCents',amount_cents,'valid',valid) ORDER BY date) AS days
+          FROM daily GROUP BY account_id,to_char(date,'YYYY-MM')
+          ORDER BY account_id,to_char(date,'YYYY-MM')`,
         [through]
       );
-      return result.rows.map((row) => ({
-        accountId: row.account_id,
-        date: row.date,
-        amountCents: row.amount_cents,
-        valid: row.invalid_count === "0"
-      }));
+      return result.rows.flatMap((row) =>
+        row.days.map((day) => ({
+          accountId: row.account_id,
+          date: day.date,
+          amountCents: day.amountCents,
+          valid: day.valid
+        }))
+      );
     },
     async createAccount(input) {
       const changed = await db.query<{ account_id: string }>(
