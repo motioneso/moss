@@ -19,6 +19,7 @@ vi.mock("../../external-modules/finance/src/web/screens/reports", () => ({
   ReportsScreen: () => createElement("div", { "data-screen": "reports" })
 }));
 
+import * as financeStore from "../../external-modules/finance/src/web/store";
 import { Root } from "../../external-modules/finance/src/web/root";
 
 describe("Finance module root (#1759)", () => {
@@ -49,5 +50,30 @@ describe("Finance module root (#1759)", () => {
     expect(
       renderer.root.findAll((node) => node.props["data-screen"] === "budget")
     ).not.toHaveLength(0);
+  });
+});
+
+describe("Finance assistant refresh contract", () => {
+  it("skips the initial key and invalidates once per changed host key", async () => {
+    const invalidate = vi.spyOn(financeStore, "invalidateQueries").mockImplementation(() => {});
+    const props = { hostActions: { openAssistant: vi.fn() } };
+    let renderer!: ReactTestRenderer;
+    try {
+      await act(async () => {
+        renderer = create(createElement(Root, { ...props, refreshKey: 4 }));
+      });
+      expect(invalidate).not.toHaveBeenCalled();
+      await act(async () => renderer.update(createElement(Root, { ...props, refreshKey: 4 })));
+      expect(invalidate).not.toHaveBeenCalled();
+      await act(async () => renderer.update(createElement(Root, { ...props, refreshKey: 5 })));
+      expect(invalidate).toHaveBeenCalledTimes(1);
+      await act(async () => renderer.update(createElement(Root, { ...props, refreshKey: 6 })));
+      expect(invalidate).toHaveBeenCalledTimes(2);
+      await act(async () => renderer.update(createElement(Root, props)));
+      expect(invalidate).toHaveBeenCalledTimes(2);
+    } finally {
+      await act(async () => renderer?.unmount());
+      invalidate.mockRestore();
+    }
   });
 });

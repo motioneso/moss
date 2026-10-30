@@ -5,6 +5,7 @@ import { UpcomingScreen } from "./screens/upcoming";
 import {
   Segmented,
   useEffect,
+  useRef,
   useSyncExternalStore,
   type ExternalModuleToolsHandleV1,
   type ReactNodeLike
@@ -16,6 +17,7 @@ import { ReportsScreen } from "./screens/reports";
 import { SettingsScreen } from "./screens/settings";
 import { StartScreen } from "./screens/start";
 import { TransactionsScreen } from "./screens/transactions";
+import { invalidateQueries } from "./store";
 import { currentLiveMessage, subscribeLive } from "./states";
 
 export type HostActions = { openAssistant: (input: { starterPrompt: string }) => void };
@@ -53,9 +55,17 @@ function tabFor(path: string): Tab | "none" {
 
 export function Root(props: {
   hostActions: HostActions;
+  refreshKey?: number;
   tools?: ExternalModuleToolsHandleV1;
 }): ReactNodeLike {
   const path = useModulePath();
+  const lastRefresh = useRef(props.refreshKey);
+  useEffect(() => {
+    const previous = lastRefresh.current;
+    lastRefresh.current = props.refreshKey;
+    if (previous !== undefined && props.refreshKey !== undefined && previous !== props.refreshKey)
+      invalidateQueries();
+  }, [props.refreshKey]);
   // The old Feed and Budget paths now live at Transactions and the Budget home.
   useEffect(() => {
     if (path === "/budget") navigate("/");

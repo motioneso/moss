@@ -139,6 +139,26 @@ export async function exerciseBudgetWrites(
         });
     }
   }
+  expect(await save().isDisabled()).toBe(true);
+  const check = () =>
+    page.getByRole("button", { name: "Check saved records", exact: true }).click();
+  const [checked] = await Promise.all([
+    page.waitForResponse((response) =>
+      response.url().includes("/assistant-tools/finance.budget.status/invoke")
+    ),
+    check()
+  ]);
+  if (checked.status() === 429) {
+    const seconds = Number(await checked.headerValue("retry-after"));
+    expect(Number.isFinite(seconds) && seconds >= 1 && seconds <= 60).toBe(true);
+    await page.waitForTimeout(seconds * 1000 + 100);
+    await check();
+  } else expect(checked.status()).toBe(200);
+  await page
+    .getByText("Saved records refreshed. Review your typed amounts before saving.", { exact: true })
+    .waitFor();
+  expect(await field().inputValue()).toBe("500.00");
+  expect(await assigned()).toBe(26000);
   await save().click();
   await dialog.getByRole("button", { name: "Confirm action", exact: true }).click();
   await expect.poll(assigned).toBe(50000);

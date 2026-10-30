@@ -9,7 +9,10 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BudgetScreen } from "../../external-modules/finance/src/web/screens/budget";
-import { __resetStoreForTests } from "../../external-modules/finance/src/web/store";
+import {
+  invalidateQueries,
+  __resetStoreForTests
+} from "../../external-modules/finance/src/web/store";
 
 const category = (id: string, name: string, tableGroup: string) => ({
   id,
@@ -65,12 +68,17 @@ function status(over: Record<string, unknown> = {}) {
   };
 }
 
-function fakeFetch(respond: () => { status: number; body: unknown }) {
+function fakeFetch(respond: () => { status: number; body: unknown; retryAfter?: string }) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => {
-      const { status: code, body } = respond();
-      return { ok: code >= 200 && code < 300, status: code, json: async () => body };
+      const { status: code, body, retryAfter } = respond();
+      return {
+        ok: code >= 200 && code < 300,
+        status: code,
+        headers: { get: () => retryAfter ?? null },
+        json: async () => body
+      };
     })
   );
 }
@@ -243,6 +251,182 @@ describe("Budget screen reviewed saves", () => {
     expect(box(renderer).props.disabled).toBe(false);
     expect(box(renderer).props.value).toBe("700");
     expect(invoke).toHaveBeenCalledTimes(1);
+  });
+  it("keeps typed amounts tied to their review through a background refresh", async () => {
+    let stored = status();
+    fakeFetch(() => ({
+      status: 200,
+      body: { invocation: { status: "succeeded", result: stored } }
+    }));
+    const invoke = vi.fn(async (): Promise<ModuleToolOutcome> => ({ status: "cancelled" }));
+    const renderer = await render({ invoke });
+    await act(async () => box(renderer).props.onChange({ currentTarget: { value: "700" } }));
+    stored = status({
+      revision: 8,
+      fingerprint: "b".repeat(32),
+      state: {
+        categories: {
+          ...stored.state.categories,
+          groceries: { assignedCents: 66000, activityCents: 41827, availableCents: 24173 }
+        }
+      }
+    });
+    await act(async () => invalidateQueries());
+    expect(box(renderer).props.value).toBe("700");
+    expect(box(renderer).props.disabled).toBe(true);
+    await act(async () => box(renderer).props.onKeyDown({ key: "Enter", preventDefault() {} }));
+    expect(invoke).not.toHaveBeenCalled();
+    expect(text(renderer)).toContain("Saved budget changed");
+    await act(async () =>
+      renderer.root
+        .findAllByType("button")
+        .find((b) => b.children.includes("Check saved records"))!
+        .props.onClick()
+    );
+    expect(box(renderer).props.value).toBe("700");
+    expect(box(renderer).props.disabled).toBe(false);
+    expect(invoke).not.toHaveBeenCalled();
+    await act(async () => box(renderer).props.onKeyDown({ key: "Enter", preventDefault() {} }));
+    expect(invoke).toHaveBeenCalledWith(
+      "finance.budget.assign",
+      expect.objectContaining({
+        amountCents: 70000,
+        previousCents: 66000,
+        expectedRevision: 8,
+        expectedFingerprint: "b".repeat(32)
+      })
+    );
+  });
+  it("ends a failed records check without clearing uncertain writes or retained input", async () => {
+    let code = 200;
+    fakeFetch(() => ({
+      status: code,
+      body: { invocation: { status: "succeeded", result: status() } }
+    }));
+    const invoke = vi.fn(async (): Promise<ModuleToolOutcome> => ({ status: "failed" }));
+    const renderer = await render({ invoke });
+    await type(renderer, "700");
+    code = 503;
+    const check = () =>
+      renderer.root.findAllByType("button").find((b) => b.children.includes("Check saved records"));
+    await act(async () => check()!.props.onClick());
+    expect(check()).toBeTruthy();
+    expect(check()!.props.disabled).toBe(false);
+    expect(invoke).toHaveBeenCalledOnce();
+    code = 200;
+    await act(async () => check()!.props.onClick());
+    expect(box(renderer).props.value).toBe("700");
+    expect(box(renderer).props.disabled).toBe(false);
+    expect(invoke).toHaveBeenCalledOnce();
+  });
+  it("discards local amounts without treating an uncertain save as resolved", async () => {
+    fakeFetch(() => ({
+      status: 200,
+      body: { invocation: { status: "succeeded", result: status() } }
+    }));
+    const invoke = vi.fn(async (): Promise<ModuleToolOutcome> => ({ status: "failed" }));
+    const renderer = await render({ invoke });
+    await type(renderer, "700");
+    const discard = renderer.root
+      .findAllByType("button")
+      .find((b) => b.children.includes("Discard typed amounts"));
+    expect(discard).toBeTruthy();
+    await act(async () => discard!.props.onClick());
+    expect(box(renderer).props.value).toBe("$650.00");
+    expect(box(renderer).props.disabled).toBe(true);
+    expect(invoke).toHaveBeenCalledOnce();
+  });
+  it("requires reviewing other typed categories after one assignment changes the saved budget", async () => {
+    let stored = status();
+    fakeFetch(() => ({
+      status: 200,
+      body: { invocation: { status: "succeeded", result: stored } }
+    }));
+    const invoke = vi.fn(async (): Promise<ModuleToolOutcome> => {
+      if (invoke.mock.calls.length === 1) {
+        stored = status({
+          revision: 8,
+          fingerprint: "b".repeat(32),
+          state: {
+            categories: {
+              ...stored.state.categories,
+              groceries: { assignedCents: 70000, activityCents: 41827, availableCents: 28173 }
+            }
+          }
+        });
+        return { status: "succeeded", result: { status: "ok" } };
+      }
+      return { status: "cancelled" };
+    });
+    const renderer = await render({ invoke });
+    const dining = () =>
+      renderer.root.findAll(
+        (n) => n.type === "input" && n.props["aria-label"] === "Assigned to Dining & coffee"
+      )[0]!;
+    await act(async () => box(renderer).props.onChange({ currentTarget: { value: "700" } }));
+    await act(async () => dining().props.onChange({ currentTarget: { value: "300" } }));
+    await act(async () => box(renderer).props.onKeyDown({ key: "Enter", preventDefault() {} }));
+    expect(box(renderer).props.value).toBe("$700.00");
+    expect(dining().props.value).toBe("300");
+    expect(dining().props.disabled).toBe(true);
+    await act(async () => dining().props.onKeyDown({ key: "Enter", preventDefault() {} }));
+    expect(invoke).toHaveBeenCalledOnce();
+    await act(async () =>
+      renderer.root
+        .findAllByType("button")
+        .find((b) => b.children.includes("Check saved records"))!
+        .props.onClick()
+    );
+    await act(async () => dining().props.onKeyDown({ key: "Enter", preventDefault() {} }));
+    expect(invoke).toHaveBeenCalledTimes(2);
+    expect(invoke).toHaveBeenLastCalledWith(
+      "finance.budget.assign",
+      expect.objectContaining({
+        categoryId: "dining",
+        previousCents: 22000,
+        amountCents: 30000,
+        expectedRevision: 8,
+        expectedFingerprint: "b".repeat(32)
+      })
+    );
+  });
+  it("honors a read cooldown and requires another explicit check after a busy response", async () => {
+    vi.useFakeTimers();
+    let code = 200;
+    fakeFetch(() => ({
+      status: code,
+      retryAfter: "2",
+      body: { invocation: { status: "succeeded", result: status() } }
+    }));
+    const invoke = vi.fn(async (): Promise<ModuleToolOutcome> => ({ status: "failed" }));
+    let renderer!: ReactTestRenderer;
+    try {
+      renderer = await render({ invoke });
+      await type(renderer, "700");
+      const check = () =>
+        renderer.root
+          .findAllByType("button")
+          .find((b) => b.children.includes("Check saved records"))!;
+      code = 429;
+      await act(async () => check().props.onClick());
+      expect(check().props.disabled).toBe(true);
+      const reads = vi.mocked(fetch).mock.calls.length;
+      code = 200;
+      await act(async () => check().props.onClick());
+      expect(vi.mocked(fetch).mock.calls.length).toBe(reads);
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+      expect(check().props.disabled).toBe(false);
+      expect(vi.mocked(fetch).mock.calls.length).toBe(reads);
+      await act(async () => check().props.onClick());
+      expect(box(renderer).props.value).toBe("700");
+      expect(box(renderer).props.disabled).toBe(false);
+      expect(invoke).toHaveBeenCalledOnce();
+    } finally {
+      await act(async () => renderer?.unmount());
+      vi.useRealTimers();
+    }
   });
   it("rejects invalid amounts without invoking a write", async () => {
     fakeFetch(() => ({

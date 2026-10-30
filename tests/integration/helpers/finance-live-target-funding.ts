@@ -1,7 +1,42 @@
 import { join, resolve } from "node:path";
-import type { BrowserContext, Page } from "playwright-core";
+import type { BrowserContext, Page, Locator } from "playwright-core";
 import { expect } from "vitest";
 import type { TargetFundingLine } from "../../../external-modules/finance/src/domain/target-funding.js";
+async function checkSavedBudget(page: Page) {
+  const wait = async (seconds: number) => {
+    expect(Number.isFinite(seconds) && seconds >= 1 && seconds <= 60).toBe(true);
+    await page.waitForTimeout(seconds * 1000 + 100);
+  };
+  const busy = page.getByRole("alert").filter({ hasText: /Finance is temporarily busy/ });
+  if (await busy.isVisible())
+    await wait(Number((await busy.innerText()).match(/Wait (\d+) seconds?/)?.[1]));
+  const check = async () =>
+    (
+      await Promise.all([
+        page.waitForResponse((response) =>
+          response.url().includes("/assistant-tools/finance.budget.status/invoke")
+        ),
+        page.getByRole("button", { name: "Check saved records", exact: true }).click()
+      ])
+    )[0];
+  let response = await check();
+  if (response.status() === 429) {
+    await wait(Number(await response.headerValue("retry-after")));
+    response = await check();
+  }
+  expect(response.status()).toBe(200);
+  await page
+    .getByText("Saved records refreshed. Review your typed amounts before saving.", { exact: true })
+    .waitFor();
+}
+async function waitForBudgetAction(page: Page, action: Locator) {
+  const busy = page.getByRole("alert").filter({ hasText: /Finance is temporarily busy/ });
+  const enabled = action.and(page.locator(":enabled"));
+  await enabled.or(busy).first().waitFor();
+  // Follow only the real explicit read recovery; never retry a financial write.
+  if (await busy.isVisible()) await checkSavedBudget(page);
+  await enabled.waitFor();
+}
 type Read = (name: string, input?: Record<string, unknown>) => Promise<Record<string, unknown>>;
 export async function exerciseTargetFunding(
   context: BrowserContext,
@@ -17,13 +52,17 @@ export async function exerciseTargetFunding(
       (await status()).state as { categories: Record<string, { assignedCents: number }> }
     ).categories
   });
-  const open = (p: Page) =>
-    p
+  const open = async (p: Page) => {
+    const button = p
       .getByRole("region", { name: "Category targets", exact: true })
-      .getByRole("button", { name: "Review target funding", exact: true })
-      .click();
+      .getByRole("button", { name: "Review target funding", exact: true });
+    await waitForBudgetAction(p, button);
+    await button.click();
+  };
   const createTarget = async (category: string, amount: string, dated = false) => {
-    await page.getByRole("button", { name: "Add a target", exact: true }).click();
+    const add = page.getByRole("button", { name: "Add a target", exact: true });
+    await waitForBudgetAction(page, add);
+    await add.click();
     const dialog = page.getByRole("dialog", { name: "Add a target", exact: true });
     await dialog.getByLabel("Target category", { exact: true }).selectOption(category);
     await dialog.getByLabel("Target amount", { exact: true }).fill(amount);
@@ -35,12 +74,13 @@ export async function exerciseTargetFunding(
     await dialog.waitFor({ state: "detached" });
   };
   const editGroceries = async (p: Page, amount: string) => {
-    await p
+    const button = p
       .getByRole("region", { name: "Category targets", exact: true })
       .locator(".jds-index__row")
       .filter({ hasText: "Groceries" })
-      .getByRole("button", { name: "Edit target", exact: true })
-      .click();
+      .getByRole("button", { name: "Edit target", exact: true });
+    await waitForBudgetAction(p, button);
+    await button.click();
     const edit = p.getByRole("dialog", { name: "Edit target", exact: true });
     await edit.getByLabel("Target amount", { exact: true }).fill(amount);
     await edit.getByRole("button", { name: "Save target", exact: true }).click();
@@ -48,6 +88,10 @@ export async function exerciseTargetFunding(
   };
   try {
     await page.goto(`${base}/m/finance`);
+    await waitForBudgetAction(
+      page,
+      page.getByRole("button", { name: "Add a target", exact: true })
+    );
     await page.getByRole("heading", { name: "Plan for what matters", exact: true }).waitFor();
     const before = {
       accounts: await read("finance.accounts.list"),
@@ -154,12 +198,7 @@ export async function exerciseTargetFunding(
     expect(
       await page.getByRole("button", { name: "Review target funding", exact: true }).isDisabled()
     ).toBe(true);
-    await page.getByRole("button", { name: "Check saved records", exact: true }).click();
-    await page
-      .getByText("Saved records refreshed. Review your typed amounts before saving.", {
-        exact: true
-      })
-      .waitFor();
+    await checkSavedBudget(page);
     await open(page);
     await select("Groceries");
     await form.getByRole("button", { name: "Review selected amounts", exact: true }).click();

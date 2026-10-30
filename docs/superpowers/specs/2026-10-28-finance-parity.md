@@ -200,3 +200,14 @@ selected-funding checks passed 21 browser flows / 22 SQL cases. Its aggregate pa
 checks and retained exactly the existing 277 unit-failure identities; later stages were unrun.
 Broader goals remain partial. Next slices are assistant read freshness with preserved typed
 budget review and audited linked-transfer corrections.
+
+## October 30 assistant refresh and typed review
+
+[Refresh checkpoint](../plans/2026-10-30-finance-assistant-refresh-checkpoint.md) records consumption
+of the existing host refresh key, retained typed budget review identity, explicit rechecking after
+changed/rejected/uncertain saves, failed/busy read recovery and local discard. Finance units passed
+717 tests, full types and relevant static checks passed. Native stale-save recovery and responsive
+bounds passed within a 20/21 development browser result; a target-funding read-recovery fixture
+was then corrected and awaits clean full acceptance. The host-prop contract uses labeled unit
+mocks; an actual configured-provider conversation was not exercised. Household co-editing and
+universal cross-tab/native refresh remain missing. Broader transfer corrections remain next.

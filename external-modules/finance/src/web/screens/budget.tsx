@@ -31,6 +31,7 @@ import {
   type ExternalModuleToolsHandleV1,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
+import { useReadCooldown } from "../read-cooldown";
 import { BudgetSetup } from "../budget-setup";
 import { currentMonth, formatCents, monthLabel, parseAmountToCents, shiftMonth } from "../format";
 import { navigate } from "../router";
@@ -566,7 +567,12 @@ function BudgetBody(props: { result: BudgetStatusResult } & AssignProps): ReactN
 
 export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): ReactNodeLike {
   const [month, setMonth] = useState(currentMonth);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [draftState, setDraftState] = useState<{
+    amounts: Record<string, string>;
+    review: string | null;
+  }>({ amounts: {}, review: null });
+  const drafts = draftState.amounts;
+  const cooldown = useReadCooldown();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [uncertain, setUncertain] = useState(false);
@@ -578,6 +584,13 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
   const status = useToolQuery<BudgetStatusResult>("finance.budget.status", { month });
   const result =
     status.status === "settled" && status.outcome.kind === "ok" ? status.outcome.result : null;
+  const checkingFrom = useRef(status);
+  const review =
+    result?.fingerprint && result.revision !== undefined
+      ? JSON.stringify([month, result.revision, result.fingerprint])
+      : null;
+  const hasDrafts = Object.keys(drafts).length > 0;
+  const staleDrafts = hasDrafts && draftState.review !== review;
   useEffect(() => {
     generation.current += 1;
     return () => {
@@ -589,18 +602,43 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
       localMonthChosen.current = true;
       setMonth(result.currentMonth);
     }
-    if (checking && result) {
+    if (
+      status.status === "settled" &&
+      status.outcome.kind === "error" &&
+      status.outcome.retryAfterSeconds
+    )
+      cooldown.wait(status.outcome.retryAfterSeconds);
+    if (checking && status !== checkingFrom.current && status.status === "settled") {
       setChecking(false);
-      setUncertain(false);
-      setMessage("Saved records refreshed. Review your typed amounts before saving.");
+      if (result && review) {
+        setUncertain(false);
+        setErrors({});
+        setDraftState((old) => ({
+          ...old,
+          review: Object.keys(old.amounts).length ? review : null
+        }));
+        setMessage("Saved records refreshed. Review your typed amounts before saving.");
+      } else {
+        setUncertain(true);
+        setMessage(
+          "Saved records could not be checked. Your typed amounts are kept. Check again before saving."
+        );
+      }
     }
   }, [status]);
   const onDraft = (id: string, value: string | null) => {
-    setDrafts((old) => {
-      const next = { ...old };
+    setDraftState((old) => {
+      const next = { ...old.amounts };
       if (value === null) delete next[id];
       else next[id] = value;
-      return next;
+      return {
+        amounts: next,
+        review: Object.keys(next).length
+          ? Object.keys(old.amounts).length
+            ? old.review
+            : review
+          : null
+      };
     });
     setErrors((old) => {
       const next = { ...old };
@@ -616,7 +654,9 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
       !result?.fingerprint ||
       result.revision === undefined ||
       saving.current ||
-      uncertain
+      checking ||
+      uncertain ||
+      staleDrafts
     )
       return;
     const epoch = generation.current;
@@ -644,6 +684,7 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
         } else if (outcome.status === "cancelled") {
           setErrors((old) => ({ ...old, [line.id]: "Cancelled. Your typed amount is kept." }));
         } else if (outcome.status === "rejected" || outcome.status === "invalid_input") {
+          setUncertain(true);
           setErrors((old) => ({
             ...old,
             [line.id]:
@@ -668,6 +709,8 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
     })();
   };
   const refresh = () => {
+    if (saving.current || checking || cooldown.cooling) return;
+    checkingFrom.current = status;
     setChecking(true);
     invalidateQueries();
   };
@@ -680,7 +723,7 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
         setupRequired={result?.setupRequired === true}
         readyCents={result?.readyToAssignCents ?? null}
         onMonth={(delta) => {
-          if (busy || uncertain || Object.keys(drafts).length) {
+          if (busy || checking || uncertain || hasDrafts) {
             setMessage("Save or clear your typed amounts before changing months.");
             return;
           }
@@ -691,16 +734,41 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
       />
       <div className="fnm-pad">
         {!result?.setupRequired ? (
-          <div className="fnm-inline">
+          <div className="fnm-spread">
             <p className="jds-hint">
               Edit Assigned, then press Enter or Save. Totals reflect saved amounts.
             </p>
-            <Button variant="secondary" size="sm" disabled={busy || checking} onClick={refresh}>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy || checking || cooldown.cooling}
+              onClick={refresh}
+            >
               {checking ? "Refreshing…" : "Check saved records"}
             </Button>
+            {hasDrafts ? (
+              <Button
+                variant="link"
+                size="sm"
+                disabled={busy || checking}
+                onClick={() => {
+                  if (saving.current) return;
+                  setDraftState({ amounts: {}, review: null });
+                  setErrors({});
+                }}
+              >
+                Discard typed amounts
+              </Button>
+            ) : null}
           </div>
         ) : null}
         {message ? <p role="status">{message}</p> : null}
+        {staleDrafts && !uncertain ? (
+          <Note variant="practical">
+            Saved budget changed. Your typed amounts are kept. Check saved records and review them
+            before saving.
+          </Note>
+        ) : null}
         {!props.tools && !result?.setupRequired ? (
           <Note variant="practical">Update Moss to enable reviewed budget changes.</Note>
         ) : null}
@@ -727,7 +795,7 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
                     fingerprint={body.fingerprint}
                     categories={(body.categories ?? []).filter((c) => c.id !== FLEX_POOL)}
                     targets={body.targets ?? []}
-                    disabled={busy || checking || uncertain || Object.keys(drafts).length > 0}
+                    disabled={busy || checking || uncertain || hasDrafts}
                     funding={{
                       currentMonth: body.currentMonth ?? "",
                       readyCents: body.readyToAssignCents ?? null,
@@ -744,7 +812,7 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
                 body.currentMonth &&
                 body.state ? (
                   <FlexBudgetPanel
-                    disabled={busy || uncertain || Object.keys(drafts).length > 0}
+                    disabled={busy || checking || uncertain || hasDrafts}
                     tools={props.tools}
                     data={{
                       month,
@@ -762,7 +830,7 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
                 <BudgetBody
                   result={body}
                   drafts={drafts}
-                  disabled={busy || uncertain || !props.tools}
+                  disabled={busy || checking || uncertain || staleDrafts || !props.tools}
                   errors={errors}
                   onDraft={onDraft}
                   onAssign={onAssign}
