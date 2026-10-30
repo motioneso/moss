@@ -129,6 +129,11 @@ export async function exercisePrivateNotes(
       await editor.getByRole("button", { name: "Save private note", exact: true }).isDisabled()
     ).toBe(true);
     await editor.getByRole("alert").waitFor();
+    await field().fill("x".repeat(4001));
+    expect(await field().inputValue()).toHaveLength(4001);
+    expect(
+      await editor.getByRole("button", { name: "Save private note", exact: true }).isDisabled()
+    ).toBe(true);
     const draft = "  Synthetic café 🦉\nReceipt context stays private.  ";
     await field().fill(draft);
     await capture("edit");

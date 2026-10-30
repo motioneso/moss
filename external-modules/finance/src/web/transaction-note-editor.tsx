@@ -185,7 +185,6 @@ export function useTransactionNoteEditor(props: {
               <Textarea
                 aria-label="Edit private transaction note"
                 rows={7}
-                maxLength={4000}
                 value={draft}
                 disabled={busy || blocked}
                 aria-describedby="finance-note-capacity"
