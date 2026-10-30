@@ -26,7 +26,7 @@ export async function exerciseFreshFinanceStartup(input: {
   workerDb: Kysely<MossDatabase>;
   browser: Browser;
   base: string;
-  createApprovedOwner: () => Promise<Person>;
+  createReadyOwner: () => Promise<Person>;
   read: (
     name: string,
     params: Record<string, unknown>,
@@ -94,9 +94,24 @@ export async function exerciseFreshFinanceStartup(input: {
       if (job.data.moduleId === "finance" && job.data.action === "reconcile")
         await reconciler.reconcileModule("finance");
     });
-    // Actual signup/approval emits the normal module-control job. No manual migration job,
-    // migrated marker, account, currency policy or transaction is inserted by this fixture.
-    const person = await input.createApprovedOwner();
+    // Completed older migrations may be coalesced; wait for idle work, not new receipts.
+    // Drain earlier fixture work before signup. Otherwise an unrelated old control
+    // can initialize the new actor and conceal a missing signup/onboarding event.
+    await expect
+      .poll(
+        async () => {
+          const result = await sql<{
+            n: number;
+          }>`SELECT count(*)::int AS n FROM pgboss.job_common WHERE state IN ('created','retry','active') AND (name='finance.storage-migrate' OR (name=${PLATFORM_MODULE_CONTROL_QUEUE} AND data->>'moduleId'='finance'))`.execute(
+            input.workerDb
+          );
+          return result.rows[0]!.n === 0;
+        },
+        { timeout: 45_000, interval: 250 }
+      )
+      .toBe(true);
+    // No manual migration job, marker or financial record is inserted by this fixture.
+    const person = await input.createReadyOwner();
     try {
       await expect
         .poll(() => migrated.has(person.userId), { timeout: 30_000, interval: 250 })

@@ -139,3 +139,18 @@ approval reconciliation hook; the repair passed the complete eighteen-flow insta
 and forty-seven approval/module route regressions. See the metadata checkpoint for the exact dirty
 receipts and remaining committed aggregate check. Initial-active sign-up modes are not established
 by this administrator-approval case.
+
+## October 30 initialization continuation
+
+Approval and completed/skipped onboarding now request the existing post-commit module job
+reconciliation. Focused installed acceptance proves approved and initially active registration
+through real migration and first manual budget; final complete-suite and aggregate limits are
+recorded in the [initialization checkpoint](../plans/2026-10-30-finance-initialization-checkpoint.md).
+Thirty-second package-scoped job coalescing is best effort, not exactly-once delivery or a latency
+promise under arbitrary backlog. No bank worker or production integration was exercised.
+
+The next bounded UX slice is
+[awaited individual confirmation](2026-10-30-finance-individual-confirmation.md). Until verified,
+Needs-a-look individual confirmation and merchant-rule compatibility workflows remain queued;
+native confirmed-row category changes and captured loaded-batch tools have their narrower proven
+contracts. Canonical rule management, payment reserves and the other missing matrix items remain.

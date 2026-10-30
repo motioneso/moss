@@ -848,6 +848,9 @@ export function registerSettingsRoutes(
 
   registerOnboardingRoutes(server, {
     dataContext: dependencies.dataContext,
+    onOnboardingCommitted: async (userId) => {
+      await dependencies.reconcileExternalModuleJobs?.({ kind: "user", userId });
+    },
     resolveAccessContext: dependencies.resolveAccessContext,
     onboardingProbes: dependencies.onboardingProbes,
     onboardingInstall: dependencies.onboardingInstall,

@@ -74,11 +74,37 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
         payload: input as Record<string, unknown>
       });
     }
-    async function approvedOwner(email: string, name: string) {
+    async function readyOwner(email: string, name: string, approve = true, verb = "skip") {
       const person = await signUp(email, name);
-      expect((await post(`/api/admin/users/${person.userId}/approve`, {})).statusCode).toBe(200);
-      expect((await post("/api/onboarding/skip", {}, person.cookie)).statusCode).toBe(200);
+      if (approve)
+        expect((await post(`/api/admin/users/${person.userId}/approve`, {})).statusCode).toBe(200);
+      expect((await post(`/api/onboarding/${verb}`, {}, person.cookie)).statusCode).toBe(200);
       return person;
+    }
+    async function signedInContext(cookie: string) {
+      const other = await browser.newContext({
+        viewport: { width: 1440, height: 900 },
+        reducedMotion: "reduce"
+      });
+      await other.addCookies(
+        cookie.split("; ").map((value) => {
+          const at = value.indexOf("=");
+          return { name: value.slice(0, at), value: value.slice(at + 1), url: base };
+        })
+      );
+      await other.route("**/*", (route) =>
+        new URL(route.request().url()).origin === base ? route.continue() : route.abort()
+      );
+      return other;
+    }
+    async function registrationRequiresApproval(requiresApproval: boolean) {
+      const response = await server.inject({
+        method: "PUT",
+        url: "/api/admin/registration",
+        headers: { cookie: owner.cookie, origin: base },
+        payload: { registrationEnabled: true, requiresApproval }
+      });
+      expect(response.statusCode, response.body).toBe(200);
     }
     async function readTool(
       name: string,
@@ -205,6 +231,36 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
       if (temp) await rm(temp, { recursive: true, force: true });
       vi.unstubAllEnvs();
     });
+
+    it.each(["approved", "open"] as const)(
+      "initializes a fresh Finance owner (%s)",
+      async (mode) => {
+        await exerciseFreshFinanceStartup({
+          modulesDir: join(temp, "modules"),
+          workerDb,
+          browser,
+          base,
+          artifacts,
+          createReadyOwner: async () => {
+            if (mode === "approved")
+              return readyOwner("fresh-approved@finance-page.test", "Synthetic approved owner");
+            await registrationRequiresApproval(false);
+            try {
+              return await readyOwner(
+                "fresh-open@finance-page.test",
+                "Synthetic open owner",
+                false,
+                "complete"
+              );
+            } finally {
+              await registrationRequiresApproval(true);
+            }
+          },
+          read: (name, params, cookie) => readTool(name, params, cookie)
+        });
+      },
+      90_000
+    );
 
     it("saves a split through the signed-in Finance UI, real API and installed SQL worker", async () => {
       const page = await context.newPage();
@@ -357,24 +413,9 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
     }, 90_000);
 
     it("builds and starts a reviewed budget from manual history without a bank", async () => {
-      const person = await approvedOwner(
-        "first-budget@finance-page.test",
-        "Synthetic first budget"
-      );
+      const person = await readyOwner("first-budget@finance-page.test", "Synthetic first budget");
       await seedFirstBudget(appDb, person.userId, month);
-      const other = await browser.newContext({
-        viewport: { width: 1440, height: 900 },
-        reducedMotion: "reduce"
-      });
-      await other.addCookies(
-        person.cookie.split("; ").map((cookie) => {
-          const at = cookie.indexOf("=");
-          return { name: cookie.slice(0, at), value: cookie.slice(at + 1), url: base };
-        })
-      );
-      await other.route("**/*", (route) =>
-        new URL(route.request().url()).origin === base ? route.continue() : route.abort()
-      );
+      const other = await signedInContext(person.cookie);
       const page = await other.newPage();
       try {
         await exerciseFirstBudget(
@@ -749,23 +790,11 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
     }, 90_000);
 
     it("manages manual accounts with captured confirmation and preserved history", async () => {
-      const person = await approvedOwner(
+      const person = await readyOwner(
         "account-lifecycle@finance-page.test",
         "Synthetic account lifecycle owner"
       );
-      const other = await browser.newContext({
-        viewport: { width: 1440, height: 900 },
-        reducedMotion: "reduce"
-      });
-      await other.addCookies(
-        person.cookie.split("; ").map((cookie) => {
-          const at = cookie.indexOf("=");
-          return { name: cookie.slice(0, at), value: cookie.slice(at + 1), url: base };
-        })
-      );
-      await other.route("**/*", (route) =>
-        new URL(route.request().url()).origin === base ? route.continue() : route.abort()
-      );
+      const other = await signedInContext(person.cookie);
       try {
         await exerciseAccountLifecycle(
           other,
@@ -781,20 +810,8 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
     }, 90_000);
 
     it("records linked manual transfers through real confirmation and rejects stale ledger reviews", async () => {
-      const person = await approvedOwner("transfers@finance-page.test", "Synthetic transfer owner");
-      const other = await browser.newContext({
-        viewport: { width: 1440, height: 900 },
-        reducedMotion: "reduce"
-      });
-      await other.addCookies(
-        person.cookie.split("; ").map((cookie) => {
-          const at = cookie.indexOf("=");
-          return { name: cookie.slice(0, at), value: cookie.slice(at + 1), url: base };
-        })
-      );
-      await other.route("**/*", (route) =>
-        new URL(route.request().url()).origin === base ? route.continue() : route.abort()
-      );
+      const person = await readyOwner("transfers@finance-page.test", "Synthetic transfer owner");
+      const other = await signedInContext(person.cookie);
       try {
         await exerciseManualTransfers(
           other,
@@ -810,20 +827,8 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
     }, 90_000);
 
     it("reviews individual categories with actual confirmation and rejects changed financial facts", async () => {
-      const person = await approvedOwner("metadata@finance-page.test", "Synthetic metadata owner");
-      const other = await browser.newContext({
-        viewport: { width: 1440, height: 900 },
-        reducedMotion: "reduce"
-      });
-      await other.addCookies(
-        person.cookie.split("; ").map((cookie) => {
-          const at = cookie.indexOf("=");
-          return { name: cookie.slice(0, at), value: cookie.slice(at + 1), url: base };
-        })
-      );
-      await other.route("**/*", (route) =>
-        new URL(route.request().url()).origin === base ? route.continue() : route.abort()
-      );
+      const person = await readyOwner("metadata@finance-page.test", "Synthetic metadata owner");
+      const other = await signedInContext(person.cookie);
       try {
         await exerciseIndividualMetadata(
           other,
@@ -863,19 +868,6 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
         readTool,
         artifacts
       );
-    }, 90_000);
-
-    it("migrates a newly approved owner through real queue workers before their first ledger and budget", async () => {
-      await exerciseFreshFinanceStartup({
-        modulesDir: join(temp, "modules"),
-        workerDb,
-        browser,
-        base,
-        artifacts,
-        createApprovedOwner: () =>
-          approvedOwner("fresh-startup@finance-page.test", "Synthetic fresh owner"),
-        read: (name, params, cookie) => readTool(name, params, cookie)
-      });
     }, 90_000);
 
     it("confirms and cancels real worker deletion through the actual host dialog", async () => {
