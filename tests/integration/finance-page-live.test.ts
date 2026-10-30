@@ -40,6 +40,12 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
     let context: BrowserContext;
     let month = new Date().toISOString().slice(0, 7);
     const artifacts = process.env.MOSS_VISUAL_ARTIFACT_DIR;
+    const rejectedRequests: {
+      tool: string;
+      status: number;
+      retryAfter: string | null;
+      patternRejected: boolean;
+    }[] = [];
 
     async function signUp(email: string, name: string) {
       const response = await server.inject({
@@ -155,6 +161,17 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
         viewport: { width: 1440, height: 1000 },
         reducedMotion: "reduce"
       });
+      context.on("response", async (response) => {
+        const path = new URL(response.url()).pathname;
+        if (!path.startsWith("/api/ai/assistant-tools/") || response.status() < 400) return;
+        const body = await response.text().catch(() => "");
+        rejectedRequests.push({
+          tool: path.split("/")[4] ?? "unknown",
+          status: response.status(),
+          retryAfter: response.headers()["retry-after"] ?? null,
+          patternRejected: body.includes("Pattern matching failed and was rejected")
+        });
+      });
       await context.addCookies(
         owner.cookie.split("; ").map((cookie) => {
           const at = cookie.indexOf("=");
@@ -168,6 +185,10 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
     }, 120_000);
 
     afterAll(async () => {
+      if (rejectedRequests.length)
+        process.stderr.write(
+          `Finance browser request diagnostics (no bodies): ${JSON.stringify(rejectedRequests.slice(-30))}\n`
+        );
       await context?.close();
       await browser?.close();
       await server?.close();
