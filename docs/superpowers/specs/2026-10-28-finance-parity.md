@@ -329,3 +329,22 @@ correction, and its later chained stages remain unrun. Receipts, screenshots and
 commits are maintained in the
 [card-reserve checkpoint](../plans/2026-10-30-finance-card-reserves-checkpoint.md). These bounds
 do not establish universal YNAB or Monarch parity.
+
+## October 30 bounded bill-match date continuity
+
+Continuation of the existing recurring-obligation work (#1148): a bill due on the first or last
+of a month must be matchable to an existing posted expense across that month boundary. Extend
+only the read candidate window by seven calendar days at each end, clamped to years 0001–9999.
+Keep the occurrence projection window unchanged. Use UTC calendar arithmetic, including leap
+days and DST periods. Include the boundary transaction partitions even when the month index
+has not listed them yet. Retain the existing 1,000-candidate bound and the existing positive,
+posted, currency, category and claimed-transaction filters. The native match review states the
+candidate dates explicitly; it never selects or saves a candidate automatically. Existing
+account matching, captured-review and host-confirmation write contracts remain in force.
+
+Acceptance: unit cases prove year/leap/day-range boundaries and rejection of invalid windows;
+handler cases exercise actual adjacent-month candidate reads, excluded pending/refund/other-
+currency/outside-window rows and claimed matches. Installed UI acceptance must show the date
+range and match a synthetic prior-month posted expense through the existing confirmation route.
+No transaction creation or bank instruction is added by this slice. The separate reviewed
+“Record bill entry” implementation remains the next larger action.
