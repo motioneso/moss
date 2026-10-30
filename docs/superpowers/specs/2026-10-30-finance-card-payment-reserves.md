@@ -119,3 +119,19 @@ the caller's transaction and rolls back normally. A real barrier test must demon
 then rejection of the old fingerprint after the earlier ledger mutation commits. Observe that
 same test fail without serialization, then restore it. This is necessary platform work within
 the user's expanded authorization, not a Finance-only alternate SQL route.
+
+### Locking reads use the same ordering
+
+Full acceptance at 5817d0f4 exposed real deadlocks: a transaction could take a row lock with
+`SELECT ... FOR UPDATE`, another writer could take the owner/module lock and wait for that row,
+then the first transaction's later mutation would wait for the owner/module lock. Locking SELECT
+statements must acquire the same owner/module key before taking row locks. Cover FOR UPDATE,
+FOR NO KEY UPDATE, FOR SHARE and FOR KEY SHARE through the existing canonical statement lexer,
+including comments between keywords; quoted text is not a locking clause. Ordinary reads remain
+independent. Statement allowlisting and read-only mutation rejection must retain their behavior.
+
+Existing race fixtures must observe actual blocking PIDs at either the owner ordering boundary
+or the authored row lock, rather than assume every waiting statement has already entered its
+DML CTE. Preserve every stale/replay/financial-state assertion. Add a real locking-read-then-write
+barrier case and lexer cases; the 13 Finance failures in the first complete run are task-related
+regressions, not the historical repository baseline. Resolve them before claiming acceptance.
