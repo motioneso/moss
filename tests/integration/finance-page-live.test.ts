@@ -440,7 +440,11 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
 
     it(
       "plans matches skips and stops bills through the installed app without changing the ledger",
-      () => exercisePlanning(context, base, month, readTool, "bills", artifacts),
+      () =>
+        exercisePlanning(context, base, month, readTool, "bills", artifacts, {
+          db: workerDb,
+          actorUserId: owner.userId
+        }),
       120_000
     );
     it(

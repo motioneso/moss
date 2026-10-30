@@ -36,6 +36,8 @@ export interface Occurrence {
 }
 export interface BillsView extends Record<string, unknown> {
   today: string;
+  matchFrom?: string;
+  matchTo?: string;
   isoCurrency: string;
   revision: number;
   fingerprint: string;
@@ -369,6 +371,12 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
               Choose a posted transaction from the same account. Its actual amount may differ. This
               does not edit the transaction.
             </p>
+            {data.matchFrom && data.matchTo ? (
+              <p className="jds-hint">
+                Posted expenses from {data.matchFrom} through {data.matchTo}, including seven days
+                either side of this month. Previously matched transactions are excluded.
+              </p>
+            ) : null}
             {message ? (
               <p role="alert">
                 {message} Close this review and check saved bills before trying again.

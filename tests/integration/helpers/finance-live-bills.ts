@@ -1,3 +1,4 @@
+import { billMatchWindow } from "../../../external-modules/finance/src/domain/recurrence.js";
 import { exerciseBillAdjustments } from "./finance-live-bill-adjustments.js";
 import { join, resolve } from "node:path";
 import { expect } from "vitest";
@@ -9,6 +10,10 @@ export async function exerciseBills(
   read: (name: string, input: Record<string, unknown>) => Promise<Record<string, unknown>>,
   artifacts?: string
 ) {
+  const previousDate = new Date(`${month}-01T00:00:00Z`);
+  previousDate.setUTCDate(0);
+  const previousMonth = previousDate.toISOString().slice(0, 7);
+  const previousBefore = await read("finance.transactions.query", { month: previousMonth });
   const transactionsBefore = await read("finance.transactions.query", { month });
   await page.goto(`${base}/m/finance/upcoming`);
   await page.getByRole("heading", { name: "Know what's coming", exact: true }).waitFor();
@@ -60,6 +65,35 @@ export async function exerciseBills(
   await page.getByRole("button", { name: "Match posted", exact: true }).click();
   const match = page.getByRole("dialog", { name: "Match a posted transaction", exact: true });
   await match.getByLabel("Posted transaction", { exact: true }).selectOption("synthetic-market");
+  const last = new Date(Number(month.slice(0, 4)), Number(month.slice(5)), 0).getDate();
+  const window = billMatchWindow(`${month}-01`, `${month}-${last}`);
+  await match
+    .getByText(
+      `Posted expenses from ${window.from} through ${window.to}, including seven days either side of this month. Previously matched transactions are excluded.`,
+      { exact: true }
+    )
+    .waitFor();
+  const selectedOption = await match
+    .getByLabel("Posted transaction", { exact: true })
+    .locator("option:checked")
+    .textContent();
+  expect(selectedOption).toContain(previousDate.toISOString().slice(0, 10));
+  for (const [theme, width] of [
+    ["light", 1440],
+    ["dark", 320]
+  ] as const) {
+    await page.evaluate((theme) => {
+      document.documentElement.dataset.theme = theme;
+    }, theme);
+    await page.setViewportSize({ width, height: 900 });
+    expect(await match.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(false);
+    const footer = await match.locator(".jds-dialog__foot").boundingBox();
+    expect(footer!.y + footer!.height).toBeLessThanOrEqual(900);
+    if (artifacts)
+      await page.screenshot({
+        path: join(resolve(artifacts), `finance-bill-match-${theme}-${width}.png`)
+      });
+  }
   await match.getByRole("button", { name: "Save match", exact: true }).click();
   await match.waitFor({ state: "detached" });
   await page.getByText("Posted $82.43", { exact: true }).waitFor();
@@ -96,4 +130,7 @@ export async function exerciseBills(
     (await read("finance.bills.read", { from: `${month}-01`, to: `${month}-28` })).occurrences
   ).toEqual(expect.arrayContaining([expect.objectContaining({ state: "skipped" })]));
   expect(await read("finance.transactions.query", { month })).toEqual(transactionsBefore);
+  expect(await read("finance.transactions.query", { month: previousMonth })).toEqual(
+    previousBefore
+  );
 }

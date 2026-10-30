@@ -92,3 +92,16 @@ export function billOccurrences(schedule: BillSchedule, from: string, to: string
   }
   return result;
 }
+
+/** Candidate dates may cross the projected month; never use local-time arithmetic. */
+export function billMatchWindow(from: string, to: string): { from: string; to: string } {
+  billOccurrences({ anchorDate: from, cadence: "once" }, from, to);
+  const shift = (day: string, days: number) => {
+    const date = utc(day);
+    date.setUTCDate(date.getUTCDate() + days);
+    if (date.getUTCFullYear() < 1) return "0001-01-01";
+    if (date.getUTCFullYear() > 9999) return "9999-12-31";
+    return date.toISOString().slice(0, 10);
+  };
+  return { from: shift(from, -7), to: shift(to, 7) };
+}

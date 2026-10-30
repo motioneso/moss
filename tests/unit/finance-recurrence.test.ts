@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  billMatchWindow,
   billOccurrence,
   billOccurrences
 } from "../../external-modules/finance/src/domain/recurrence.js";
@@ -46,5 +47,25 @@ describe("anchored bill projections", () => {
     expect(() =>
       billOccurrences({ anchorDate: "2026-01-01", cadence: "monthly" }, "2026-01-01", "2028-01-01")
     ).toThrow();
+  });
+});
+
+describe("bill match candidate date windows", () => {
+  it.each([
+    ["2026-01-01", "2026-01-31", "2025-12-25", "2026-02-07"],
+    ["2024-03-01", "2024-03-31", "2024-02-23", "2024-04-07"],
+    ["2026-03-08", "2026-03-08", "2026-03-01", "2026-03-15"],
+    ["0001-01-01", "0001-01-01", "0001-01-01", "0001-01-08"],
+    ["9999-12-31", "9999-12-31", "9999-12-24", "9999-12-31"]
+  ])("extends %s through %s using calendar days", (from, to, start, end) => {
+    expect(billMatchWindow(from, to)).toEqual({ from: start, to: end });
+  });
+  it("rejects impossible, reversed and overlong projection windows", () => {
+    for (const [from, to] of [
+      ["2026-02-30", "2026-03-01"],
+      ["2026-03-01", "2026-02-28"],
+      ["2026-01-01", "2028-01-01"]
+    ] as const)
+      expect(() => billMatchWindow(from, to)).toThrow();
   });
 });

@@ -2,7 +2,7 @@ import { projectBillOccurrences } from "../../domain/bill-adjustments.js";
 import type { ToolFactory } from "../registry.js";
 import { InputError, readEnum, readInt, readString } from "../validate.js";
 import { isCalendarDate } from "../../domain/values.js";
-import { billOccurrences } from "../../domain/recurrence.js";
+import { billMatchWindow, billOccurrences } from "../../domain/recurrence.js";
 import {
   readBudgetReview,
   requireBudgetPolicy,
@@ -24,7 +24,7 @@ export const billsReadHandler: ToolFactory = (ports) => async (input) => {
   const from = date(readString(input, "from", { required: true })),
     to = date(readString(input, "to", { required: true }));
   // Validate even if there are no plans, and cap output before collecting private records.
-  billOccurrences({ anchorDate: from, cadence: "once" }, from, to);
+  const matchWindow = billMatchWindow(from, to);
   const store = await ports.store();
   const policy = await requireBudgetPolicy(store);
   if (!store.bills)
@@ -61,14 +61,16 @@ export const billsReadHandler: ToolFactory = (ports) => async (input) => {
   const months = new Set<string>([
     ...(await store.listTransactionMonths()),
     from.slice(0, 7),
-    to.slice(0, 7)
+    to.slice(0, 7),
+    matchWindow.from.slice(0, 7),
+    matchWindow.to.slice(0, 7)
   ]);
   for (const month of [...months].sort()) {
-    if (month < from.slice(0, 7) || month > to.slice(0, 7)) continue;
+    if (month < matchWindow.from.slice(0, 7) || month > matchWindow.to.slice(0, 7)) continue;
     for (const t of await store.listMonthTransactions(month))
       if (
-        t.date >= from &&
-        t.date <= to &&
+        t.date >= matchWindow.from &&
+        t.date <= matchWindow.to &&
         !t.pending &&
         t.amountCents > 0 &&
         t.isoCurrency === policy.isoCurrency &&
@@ -84,7 +86,9 @@ export const billsReadHandler: ToolFactory = (ports) => async (input) => {
         });
   }
   if (transactions.length > 1000)
-    throw new InputError("Use a shorter window to review bill matches");
+    throw new InputError(
+      "Use a shorter window to review bill matches, including seven days either side"
+    );
   const used = new Set(
     store.billAdjustments
       ? await store.billAdjustments.claimedTransactionIds(transactions.map((t) => t.id))
@@ -110,6 +114,8 @@ export const billsReadHandler: ToolFactory = (ports) => async (input) => {
   return {
     status: "ok",
     today: today(ports),
+    matchFrom: matchWindow.from,
+    matchTo: matchWindow.to,
     isoCurrency: policy.isoCurrency,
     revision: policy.revision,
     fingerprint: policy.fingerprint,
