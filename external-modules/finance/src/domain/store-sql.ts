@@ -1,3 +1,4 @@
+import { flexSqlStore } from "./store-flex-sql.js";
 import { billSqlStore } from "./store-bills-sql.js";
 // external-modules/finance/src/domain/store-sql.ts
 // FIN-06 (#1166, F6-D3): FinanceStore over module db.query (#1167). Every
@@ -313,6 +314,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
     budgetPolicy: budgetSqlStore(db),
     targets: targetSqlStore(db),
     bills: billSqlStore(db),
+    flex: flexSqlStore(db),
     manual: manualSqlStore(db),
     reconciliation: reconciliationSqlStore(db),
     imports: importSqlStore(db),

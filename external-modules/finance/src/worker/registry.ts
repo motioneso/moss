@@ -1,3 +1,4 @@
+import { flexPreviewHandler, flexConfigureHandler, flexAssignHandler } from "./handlers/flex.js";
 import {
   billsReadHandler,
   billClearHandler,
@@ -93,6 +94,9 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "transaction.split": transactionSplitHandler,
   // FIN-03 (#1148) Task 3: the envelope-budget surface of manifest v0.2.0.
   "budget.status": budgetStatusHandler,
+  "flex.preview": flexPreviewHandler,
+  "flex.configure": flexConfigureHandler,
+  "flex.assign": flexAssignHandler,
   "target.set": targetSetHandler,
   "bills.read": billsReadHandler,
   billClearHandler,

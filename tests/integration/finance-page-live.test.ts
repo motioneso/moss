@@ -1,3 +1,4 @@
+import { exerciseFlex } from "./helpers/finance-live-flex.js";
 import { exerciseBills } from "./helpers/finance-live-bills.js";
 // Opt-in live path: built production host, installed bundles, actual auth/API/workers/RLS.
 // No application response interception. All identities/records live in the gate's throwaway DB.
@@ -29,7 +30,7 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
     let owner: { cookie: string; userId: string };
     let member: { cookie: string; userId: string };
     let context: BrowserContext;
-    const month = new Date().toISOString().slice(0, 7);
+    let month = new Date().toISOString().slice(0, 7);
     const artifacts = process.env.MOSS_VISUAL_ARTIFACT_DIR;
 
     async function signUp(email: string, name: string) {
@@ -126,6 +127,7 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
       member = await signUp("member@finance-page.test", "Synthetic member");
       expect((await post(`/api/admin/users/${member.userId}/approve`, {})).statusCode).toBe(200);
       expect((await post("/api/onboarding/skip", {}, member.cookie)).statusCode).toBe(200);
+      month = String((await readTool("finance.manual.context")).today).slice(0, 7);
       await seedFinanceLive(workerDb, appDb, owner, member, month);
       if (artifacts) await mkdir(artifacts, { recursive: true });
       browser = await chromium.launch({
@@ -358,6 +360,22 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
         await page.close();
       }
     }, 120_000);
+
+    it("confirms one funded flexible pool and an exact return to envelopes without changing transactions", async () => {
+      const page = await context.newPage();
+      try {
+        await exerciseFlex(page, base, month, readTool, artifacts);
+      } catch (error) {
+        if (artifacts)
+          await page.screenshot({
+            path: join(resolve(artifacts), "finance-flex-debug.png"),
+            fullPage: true
+          });
+        throw error;
+      } finally {
+        await page.close();
+      }
+    }, 180_000);
 
     it("reviews unchanged legacy amounts in EUR and excludes the other currency in the actual page", async () => {
       const other = await browser.newContext({

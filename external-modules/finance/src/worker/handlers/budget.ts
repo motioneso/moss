@@ -1,3 +1,5 @@
+import { FLEX_POOL } from "../../domain/flex.js";
+import { assertCategoryFunding, storedFlexTotal } from "./flex-guards.js";
 import { today } from "./manual-ledger.js";
 import { targetProgress } from "../../domain/targets.js";
 import {
@@ -39,10 +41,39 @@ export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
   const month = readMonth(input);
   const store = await ports.store();
   const context = await budgetContext(ports, store, month);
-  const categories = (await loadCategories(ports)).map((category) => ({
+  const allCategories = await loadCategories(ports);
+  let categories: {
+    id: string;
+    name: string;
+    group: string;
+    archived: boolean;
+    tableGroup: string;
+  }[] = allCategories.map((category) => ({
     ...category,
     tableGroup: tableGroupFor(category.group)
   }));
+  if (!context.setupRequired && context.flex?.active) {
+    const flex = context.flex;
+    categories = categories
+      .filter((c) => !flex.flexIds.includes(c.id))
+      .map((c) => ({
+        ...c,
+        tableGroup: flex.nonMonthlyIds.includes(c.id) ? "Non-monthly" : "Fixed"
+      }));
+    categories.push({
+      id: FLEX_POOL,
+      name: "Flexible spending",
+      group: "everyday",
+      archived: false,
+      tableGroup: "Flexible"
+    });
+  }
+  const flexDetail = !context.setupRequired
+    ? context.flexDetail.map((row) => ({
+        ...row,
+        name: allCategories.find((c) => c.id === row.id)?.name ?? row.id
+      }))
+    : [];
   const targets = context.setupRequired
     ? []
     : ((await store.targets?.forMonth(month)) ?? []).map((target) =>
@@ -58,7 +89,16 @@ export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
         )
       );
   if (!context.setupRequired) requireSameReview(context, await requireBudgetPolicy(store));
-  return { month, ...context, categories, targets };
+  return {
+    month,
+    ...context,
+    categories,
+    targets,
+    flexDetail,
+    flexChoices: allCategories
+      .filter((c) => !c.archived && c.id !== "income" && c.id !== "transfers")
+      .map((c) => ({ id: c.id, name: c.name, group: c.group }))
+  };
 };
 
 async function applyAssignments(
@@ -72,6 +112,11 @@ async function applyAssignments(
   requireSameReview(expected, await requireBudgetPolicy(store));
   const live = await liveCategories(ports);
   const ledger = (await store.getLedger(month))?.assignments ?? {};
+  await assertCategoryFunding(
+    store,
+    month,
+    assignments.map((a) => a.categoryId)
+  );
   for (const a of assignments) {
     if (!live.has(a.categoryId))
       throw new InputError("invalid_category", "categoryId is not a live category");
@@ -131,12 +176,20 @@ export const budgetMoveHandler: ToolFactory = (ports) => async (input) => {
   const expected = readBudgetReview(input);
   const store = await ports.store();
   requireSameReview(expected, await requireBudgetPolicy(store));
-  const live = await liveCategories(ports);
-  if (!live.has(toCategoryId) || (fromCategoryId !== READY_TO_ASSIGN && !live.has(fromCategoryId)))
-    throw new InputError("invalid_category", "a category id is not a live category");
   const context = await budgetContext(ports, store, month);
   if (context.setupRequired) throw staleBudget();
   requireSameReview(expected, context);
+  const live = await liveCategories(ports);
+  if (context.flex?.active) {
+    for (const id of context.flex.flexIds) live.delete(id);
+    live.add(FLEX_POOL);
+  }
+  if (!live.has(toCategoryId) || (fromCategoryId !== READY_TO_ASSIGN && !live.has(fromCategoryId)))
+    throw new InputError(
+      "invalid_category",
+      "a category id is not a live category or is funded through the flexible pool"
+    );
+  const ledger = (await store.getLedger(month))?.assignments ?? {};
   const fromBefore =
     fromCategoryId === READY_TO_ASSIGN
       ? null
@@ -163,13 +216,26 @@ export const budgetMoveHandler: ToolFactory = (ports) => async (input) => {
       expected,
       month,
       assignments: [
-        ...(fromAfter === null ? [] : [{ categoryId: fromCategoryId, amountCents: fromAfter }]),
-        { categoryId: toCategoryId, amountCents: toAfter }
+        ...(fromAfter === null
+          ? []
+          : [
+              {
+                categoryId: fromCategoryId,
+                amountCents: storedFlexTotal(fromCategoryId, fromAfter, ledger, context.flex)
+              }
+            ]),
+        {
+          categoryId: toCategoryId,
+          amountCents: storedFlexTotal(toCategoryId, toAfter, ledger, context.flex)
+        }
       ],
       activity: [
         {
           actor: "moss",
-          kind: "budget.move",
+          kind:
+            fromCategoryId === FLEX_POOL || toCategoryId === FLEX_POOL
+              ? "flex.move"
+              : "budget.move",
           params: { month, fromCategoryId, toCategoryId, amountCents },
           undo: {
             month,

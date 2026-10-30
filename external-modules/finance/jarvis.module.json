@@ -55,7 +55,8 @@
       "app.finance_budget_policy",
       "app.finance_targets",
       "app.finance_bill_plans",
-      "app.finance_bill_occurrences"
+      "app.finance_bill_occurrences",
+      "app.finance_flex_policies"
     ]
   },
   "settingsPath": "/settings",
@@ -111,7 +112,7 @@
       },
       {
         "id": "finance.budget-typing",
-        "description": "Budget amounts save with Enter or Save through awaited host actions. Totals show persisted amounts; cancelled, stale or ambiguous responses retain typed input. Check saved records before retrying an ambiguous save. Reviewed revision, fingerprint and previous totals prevent stale overwrites. Currency setup is required. Category targets guide monthly contributions or balance-by-date savings without assigning money; versions preserve earlier months and show exact remaining cents, reached or overdue. Upcoming shows manually planned bills with projected, skipped, posted or needs-review states. Match one owned posted transaction in the same account and currency, undo a review, or stop future projections while retaining history. Actual amounts are shown separately. Plans never pay bills or post transactions."
+        "description": "Budget totals save through awaited, reviewed host actions. Enter or Save; cancelled/stale/ambiguous saves retain input and require checking records before retry. Category targets guide monthly or dated savings without moving money. Flexible mode routes selected category activity, assignment guidance and carry into one funded pool. Changing mode requires current-month review and confirmation, no funded future plans or conflicting targets. Leaving requires explicit destinations for available money; historical policies and transaction categories stay intact. Pool members cannot be funded independently. Upcoming plans projected bills with owned posted matching, skip, undo and stop; no payments or transactions are created."
       },
       {
         "id": "finance.getting-started",
@@ -173,7 +174,7 @@
   },
   "runtime": { "workerEntrypoint": "dist/worker.js", "workerContractVersion": 1 },
   "assistantOnboarding": {
-    "guidance": "Read before writing. Budget amounts are integer cents in one reviewed currency. Use finance.budget.status for assigned totals, ready-to-assign, revision and fingerprint; pass these tokens as expectedRevision and expectedFingerprint on every assignment or move. budget.assign also needs the displayed previousCents. Never guess categories. A changed review rejects the write: show the conflict and ask for a new review, never silently retry. Moves above the configured limit require confirmation. Quote returned before/after amounts. Drafts build from stored history without assigning money. Read finance.budget.draft.get before editing or starting, passing its current tokens. Start only when explicitly requested and confirmed. No bank transfers or payments occur."
+    "guidance": "Read before writing. Budget amounts are integer cents in one reviewed currency. Read finance.budget.status for totals, ready money, revision and fingerprint; pass its tokens on writes. Never guess category ids. In flexible mode, fund the pool with finance.flex.assign; member amounts are informational. Mode changes use finance.flex.preview then explicit confirmed finance.flex.configure, including destinations when leaving. Assignment and move confirmations bind to previous totals; changed reviews reject without automatic retry. Read drafts before editing or explicitly confirmed start. Targets and bill plans do not move money. Bill reviews match owned posted transactions once; skip, undo or stop projections explicitly. Quote returned actual amounts and before/after totals. Ambiguous responses require checking saved records before retrying. No bank transfers or payments occur."
   },
   "preferences": [
     {
@@ -1145,6 +1146,130 @@
       },
       "executionPolicy": "auto",
       "actionFamilyId": "drafting"
+    },
+    {
+      "name": "finance.flex.preview",
+      "permissionId": "finance.flex.preview",
+      "actionLabel": "Review flexible budget",
+      "description": "Review cash-backed pool routing or explicitly allocate available money when leaving. Past months and transaction categories are preserved. Mode changes require current-month review and confirmation.",
+      "risk": "read",
+      "handler": "flex.preview",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "month": { "type": "string" },
+          "mode": { "type": "string", "enum": ["flex", "envelopes"] },
+          "flexIds": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": { "type": "string" }
+          },
+          "nonMonthlyIds": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": { "type": "string" }
+          },
+          "distribution": {
+            "type": "object",
+            "additionalProperties": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+          }
+        },
+        "required": ["month", "mode"]
+      }
+    },
+    {
+      "name": "finance.flex.configure",
+      "permissionId": "finance.flex.configure",
+      "actionLabel": "Change budget planning mode",
+      "description": "Review cash-backed pool routing or explicitly allocate available money when leaving. Past months and transaction categories are preserved. Mode changes require current-month review and confirmation.",
+      "risk": "write",
+      "handler": "flex.configure",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "month": { "type": "string" },
+          "mode": { "type": "string", "enum": ["flex", "envelopes"] },
+          "flexIds": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": { "type": "string" }
+          },
+          "nonMonthlyIds": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": { "type": "string" }
+          },
+          "distribution": {
+            "type": "object",
+            "additionalProperties": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+          },
+          "expectedRevision": { "type": "integer", "minimum": 0 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": ["month", "mode", "expectedRevision", "expectedFingerprint"]
+      },
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["month"]
+    },
+    {
+      "name": "finance.flex.assign",
+      "permissionId": "finance.flex.assign",
+      "description": "Set the total funding for the flexible pool, counted once. Pass its displayed previous total and review tokens from Budget. Member amounts remain informational guidance.",
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$",
+            "description": "Budget month, YYYY-MM."
+          },
+          "amountCents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000,
+            "description": "The new assigned total in integer cents (50 dollars is 5000)."
+          },
+          "previousCents": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "The category's assigned total right now, in integer cents."
+          },
+          "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": [
+          "month",
+          "amountCents",
+          "previousCents",
+          "expectedRevision",
+          "expectedFingerprint"
+        ]
+      },
+      "handler": "flex.assign",
+      "actionFamilyId": "moving_money",
+      "executionPolicy": "auto",
+      "confirmAbove": {
+        "inputKey": "amountCents",
+        "baseKey": "previousCents",
+        "preferenceKey": "freedomLimitDollars",
+        "scale": 100
+      },
+      "actionLabel": "Set the flexible pool assignment"
     }
   ],
   "assistantActionFamilies": [

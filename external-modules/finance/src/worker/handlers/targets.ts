@@ -1,3 +1,4 @@
+import { assertCategoryFunding } from "./flex-guards.js";
 import type { ToolFactory } from "../registry.js";
 import { InputError, readEnum, readInt, readString } from "../validate.js";
 import { isCalendarMonth, isCalendarDate } from "../../domain/values.js";
@@ -29,6 +30,7 @@ export const targetSetHandler: ToolFactory = (ports) => async (input) => {
   const expected = readBudgetReview(input);
   const store = await ports.store();
   requireSameReview(expected, await requireBudgetPolicy(store));
+  await assertCategoryFunding(store, month, [categoryId]);
   if (!store.targets)
     throw new InputError("storage_upgrade_required", "Update Finance before saving targets");
   if (

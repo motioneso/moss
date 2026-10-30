@@ -1,3 +1,5 @@
+import { allocations } from "../../domain/splits.js";
+import { flexForMonth, type FlexPolicy } from "../../domain/flex.js";
 import {
   budgetRows,
   deriveBudgetMonths,
@@ -89,7 +91,12 @@ export const budgetConfigureHandler: ToolFactory = (ports) => async (input) => {
   return { status: "ok", isoCurrency: code, unchanged: outcome === "unchanged" };
 };
 
-export async function budgetContext(ports: WorkerPorts, store: FinanceStore, month: string) {
+export async function budgetContext(
+  ports: WorkerPorts,
+  store: FinanceStore,
+  month: string,
+  flexOverride?: FlexPolicy
+) {
   const policy = await store.budgetPolicy?.get();
   const accounts = await store.listAccounts();
   const assignmentMonths = await store.listAssignmentMonths();
@@ -123,6 +130,10 @@ export async function budgetContext(ports: WorkerPorts, store: FinanceStore, mon
       "storage_upgrade_required",
       "Finish Finance category migration before budgeting"
     );
+  let flexPolicies = (await store.flex?.policies()) ?? [];
+  if (flexOverride)
+    flexPolicies = [...flexPolicies.filter((p) => p.month !== flexOverride.month), flexOverride];
+  const flex = flexForMonth(flexPolicies, month);
   const date = today(ports);
   const fundingAccounts = accounts.filter((account) => budgetAccount(account, policy.isoCurrency));
   const ledgers: Record<string, BudgetLedger> = {};
@@ -140,7 +151,7 @@ export async function budgetContext(ports: WorkerPorts, store: FinanceStore, mon
   ledgers[month] ??= { assignments: {} };
   const state = {
     computedAt: ports.now().toISOString(),
-    ...deriveBudgetMonths({ ledgers, transactionsByMonth })[month]!
+    ...deriveBudgetMonths({ ledgers, transactionsByMonth, flexPolicies })[month]!
   };
   const balances = await fundingAt(store, fundingAccounts, all, month, date);
   const readyUnavailable =
@@ -186,6 +197,19 @@ export async function budgetContext(ports: WorkerPorts, store: FinanceStore, mon
   requireSameReview(policy, await requireBudgetPolicy(store));
   return {
     setupRequired: false as const,
+    flex,
+    flexDetail: flex?.active
+      ? flex.flexIds.map((id) => ({
+          id,
+          guidanceCents: ledgers[month]?.assignments[id] ?? 0,
+          activityCents: safeCents(
+            (transactionsByMonth[month] ?? [])
+              .flatMap(allocations)
+              .filter((t) => t.categoryId === id)
+              .reduce((sum, t) => sum + BigInt(t.amountCents), 0n)
+          )
+        }))
+      : [],
     isoCurrency: policy.isoCurrency,
     revision: policy.revision,
     fingerprint: policy.fingerprint,

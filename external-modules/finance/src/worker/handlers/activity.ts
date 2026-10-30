@@ -1,3 +1,5 @@
+import { assertCategoryFunding } from "./flex-guards.js";
+import { FLEX_POOL } from "../../domain/flex.js";
 // external-modules/finance/src/worker/handlers/activity.ts
 //
 // #3186: the activity trail on Finance Settings.
@@ -104,7 +106,12 @@ async function namesFor(ports: WorkerPorts, store: FinanceStore): Promise<Names>
   const chunks = new Map<string, TransactionRecord[] | null>();
   return {
     currency: (await store.budgetPolicy?.get())?.isoCurrency ?? null,
-    category: (id) => (id === null ? "no category" : (byId.get(id) ?? "a category")),
+    category: (id) =>
+      id === FLEX_POOL
+        ? "Flexible spending"
+        : id === null
+          ? "no category"
+          : (byId.get(id) ?? "a category"),
     merchantForRule: async (ruleId) => {
       const rule = ruleId === null ? null : await readRule(ports, ruleId);
       return rule?.value.payeeKey ? titleCase(rule.value.payeeKey) : "a merchant";
@@ -132,6 +139,10 @@ async function describe(row: ActivityRecord, names: Names): Promise<string> {
       return "Reconciled a manual statement";
     case "transaction.import":
       return `Imported ${num(p.entryCount) ?? 0} manual transaction${p.entryCount === 1 ? "" : "s"}`;
+    case "flex.mode":
+      return "Changed the budget planning mode";
+    case "flex.assign":
+      return "Changed the flexible pool assignment";
     case "bill.create":
       return "Added a bill plan";
     case "bill.stop":
@@ -146,6 +157,7 @@ async function describe(row: ActivityRecord, names: Names): Promise<string> {
       return `Chose ${str(p.isoCurrency) ?? "a"} budget currency`;
     case "budget.assign":
       return `Set ${names.category(str(p.categoryId))} to ${money(num(p.amountCents) ?? 0, names.currency)} for ${monthLabel(str(p.month))}`;
+    case "flex.move":
     case "budget.move": {
       const from = str(p.fromCategoryId);
       const fromName = from === READY_TO_ASSIGN ? READY_LABEL : names.category(from);
@@ -352,6 +364,7 @@ async function undoCategory(
 ): Promise<{ category: Category; reversal: ActivityInput }> {
   const categoryId = str(row.params.categoryId);
   if (categoryId === null) throw new InputError("not_undoable", "this row has no usable undo data");
+  await assertCategoryFunding(store, today(ports).slice(0, 7), [categoryId]);
   const all = await loadCategories(ports);
   const current = all.find((entry) => entry.id === categoryId);
   if (!current) throw new InputError("not_found", "the category is no longer on record");
@@ -400,6 +413,11 @@ export const activityUndoHandler: ToolFactory = (ports) => async (input) => {
       row.kind === "budget.assign"
         ? await planUndoAssign(store, row)
         : await planUndoMove(store, row);
+    await assertCategoryFunding(
+      store,
+      plan.month,
+      plan.assignments.map((a) => a.categoryId)
+    );
     const applied = await store.commitBudgetChange({
       expected,
       month: plan.month,

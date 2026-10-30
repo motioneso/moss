@@ -83,7 +83,8 @@ const ownedTables = [
   "app.finance_budget_policy",
   "app.finance_targets",
   "app.finance_bill_plans",
-  "app.finance_bill_occurrences"
+  "app.finance_bill_occurrences",
+  "app.finance_flex_policies"
 ];
 
 const NOW_1 = "2026-07-18T12:00:00.000Z";

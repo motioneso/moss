@@ -17,6 +17,7 @@ export interface TargetProgress extends CategoryTarget {
 }
 export interface TargetStore {
   forMonth(month: string): Promise<CategoryTarget[]>;
+  versions?(): Promise<CategoryTarget[]>;
   save(target: CategoryTarget, expected: BudgetReview, at: string): Promise<boolean>;
 }
 const monthIndex = (month: string): number =>

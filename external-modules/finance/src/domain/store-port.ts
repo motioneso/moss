@@ -1,3 +1,4 @@
+import type { FlexStore, FlexPolicy } from "./flex.js";
 import type { BillStore } from "./bills.js";
 import type { TargetStore } from "./targets.js";
 // external-modules/finance/src/domain/store-port.ts
@@ -33,6 +34,7 @@ export interface ActivityInput {
  */
 export interface BudgetChange {
   expected: BudgetReview;
+  flexPolicy?: FlexPolicy;
   categories?: Category[];
   month: string;
   assignments: { categoryId: string; amountCents: number }[];
@@ -58,6 +60,7 @@ export interface FinanceStore {
   readonly supportsSplits: boolean;
   readonly targets?: TargetStore;
   readonly bills?: BillStore;
+  readonly flex?: FlexStore;
   readonly budgetPolicy?: BudgetPolicyStore;
   /** SQL-only ledger; legacy KV must migrate before manual entry. */
   readonly manual?: ManualLedgerStore;

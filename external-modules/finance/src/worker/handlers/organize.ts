@@ -1,3 +1,4 @@
+import { assertCategoryFunding } from "./flex-guards.js";
 // external-modules/finance/src/worker/handlers/organize.ts
 //
 // #3185: the assistant writes that reshape how money is sorted: merchant rules and
@@ -194,6 +195,7 @@ export const categoryArchiveHandler: ToolFactory = (ports) => async (input) => {
     throw new InputError("invalid_category", "id is not a live category");
   }
   const month = today(ports).slice(0, 7);
+  await assertCategoryFunding(store, month, [id]);
   const assigned = (await store.getLedger(month))?.assignments[id] ?? 0;
   if (assigned !== 0) {
     throw new InputError(

@@ -202,7 +202,8 @@
     "test:integration:finance-manual": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-manual-ledger.test.ts",
     "test:integration:finance-live": "pnpm build:app-map && pnpm --filter @moss/web build && MOSS_FINANCE_LIVE=1 tsx scripts/test-integration.ts tests/integration/finance-page-live.test.ts",
     "test:integration:finance-parity": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-tables-install.test.ts tests/integration/finance-storage-migrate.test.ts tests/integration/external-module-finance.test.ts",
-    "test:integration:finance-bills": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-bills.test.ts"
+    "test:integration:finance-bills": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-bills.test.ts",
+    "test:integration:finance-flex": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-flex.test.ts"
   },
   "dependencies": {
     "@fastify/helmet": "^13",

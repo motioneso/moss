@@ -1,3 +1,5 @@
+import { FLEX_POOL } from "../../domain/flex";
+import { FlexBudgetPanel, type FlexBudgetView } from "../flex-budget";
 import { BudgetTargets } from "../budget-targets";
 import type { TargetProgress } from "../../domain/targets";
 // external-modules/finance/src/web/screens/budget.tsx
@@ -59,6 +61,9 @@ interface BudgetAccount {
 interface BudgetStatusResult extends Record<string, unknown> {
   month: string;
   targets?: TargetProgress[];
+  flex?: FlexBudgetView["flex"];
+  flexChoices?: FlexBudgetView["flexChoices"];
+  flexDetail?: FlexBudgetView["flexDetail"];
   currentMonth?: string;
   revision?: number;
   fingerprint?: string;
@@ -86,7 +91,7 @@ interface BudgetStatusResult extends Record<string, unknown> {
 const money = (cents: number, currency: string): string => formatCents(cents, currency);
 
 // Display order. Income and Transfers are not envelopes.
-const GROUPS = ["Bills", "Everyday", "Fun", "Savings"] as const;
+const GROUPS = ["Flexible", "Fixed", "Non-monthly", "Bills", "Everyday", "Fun", "Savings"] as const;
 const NOT_ENVELOPES: ReadonlySet<string> = new Set(["income", "transfers"]);
 const ZERO: CategoryState = { assignedCents: 0, activityCents: 0, availableCents: 0 };
 
@@ -617,14 +622,17 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
     setMessage(null);
     void (async () => {
       try {
-        const outcome = await props.tools!.invoke("finance.budget.assign", {
-          month,
-          categoryId: line.id,
-          amountCents: cents,
-          previousCents: line.assigned,
-          expectedRevision: result.revision!,
-          expectedFingerprint: result.fingerprint!
-        });
+        const outcome = await props.tools!.invoke(
+          line.id === FLEX_POOL ? "finance.flex.assign" : "finance.budget.assign",
+          {
+            month,
+            ...(line.id === FLEX_POOL ? {} : { categoryId: line.id }),
+            amountCents: cents,
+            previousCents: line.assigned,
+            expectedRevision: result.revision!,
+            expectedFingerprint: result.fingerprint!
+          }
+        );
         if (generation.current !== epoch) return;
         if (outcome.status === "succeeded" && outcome.result.status === "ok") {
           onDraft(line.id, null);
@@ -714,9 +722,30 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
                     currency={body.isoCurrency}
                     revision={body.revision}
                     fingerprint={body.fingerprint}
-                    categories={body.categories ?? []}
+                    categories={(body.categories ?? []).filter((c) => c.id !== FLEX_POOL)}
                     targets={body.targets ?? []}
                     tools={props.tools}
+                  />
+                ) : null}
+                {body.isoCurrency &&
+                body.revision !== undefined &&
+                body.fingerprint &&
+                body.currentMonth &&
+                body.state ? (
+                  <FlexBudgetPanel
+                    disabled={busy || uncertain || Object.keys(drafts).length > 0}
+                    tools={props.tools}
+                    data={{
+                      month,
+                      currentMonth: body.currentMonth,
+                      isoCurrency: body.isoCurrency,
+                      revision: body.revision,
+                      fingerprint: body.fingerprint,
+                      flex: body.flex ?? null,
+                      flexChoices: body.flexChoices ?? [],
+                      flexDetail: body.flexDetail ?? [],
+                      state: body.state
+                    }}
                   />
                 ) : null}
                 <BudgetBody

@@ -537,3 +537,46 @@ Finance work. The next implementation must follow the [flex conservation plan](2
 then fill calendar/detection/occurrence-edit gaps and the other partial rows in the parity matrix.
 Branch pushes are authorized; merges, deployments, real financial actions and new bank credentials
 remain unauthorized.
+
+## Cash-backed flexible-budget acceptance (2026-10-30)
+
+Migration 0030 adds owner/month planning policies. Budget now groups Fixed, Non-monthly and a
+single Flexible pool. Original category assignments remain informational guidance; activity,
+splits/refunds and incoming carry route to the pool once. Transactions retain their categories.
+Pool assignments and moves use the ordinary reviewed atomic budget commit. Pooled categories
+cannot also be funded or targeted independently. Current or future conflicting targets, nonzero
+future assignments and an open first-budget draft block mode changes with a remediation.
+
+Mode changes require explicit current-month review and host confirmation. Returning to envelopes
+requires nonnegative destinations summing exactly to available pool money. The commit replaces
+member assignments and clears incoming pool carry without adding old guidance a second time.
+Past policies remain historical. This is cash-backed planning, not every Monarch forecast mode.
+The evidence matrix is Partial; optional member-guidance editing and less restrictive future-plan
+migration remain missing. Atomic transaction bulk categorization is the next independent slice,
+following the committed reviewed-bulk spec.
+
+Tested input **6bd8d45ba567**, base **e8175605**, dirty 31-file implementation snapshot:
+
+- Focused Finance units: **57 files / 575 tests pass**, `finance-flex-final-unit.log`, rc 0.
+- Installed flexible-budget SQL: **9/9 pass**, `021004-oHVRke`, rc 0. Includes split/refund
+  math in pure tests, cash conservation on exit with prior carry, future history, stale review,
+  competing pool saves, move conservation and owner reads. Existing ledger/target SQL:
+  **27/27 pass**, `021006-krzTGq`, rc 0.
+- Installed browser: **9/9 flows pass**, `020639-i9PeYI`, rc 0. Cancelled setup retains choices;
+  confirmed funding saves exact amounts; future carry and exit destinations persist with
+  transactions unchanged. Real signed-in production bundles and synthetic SQL records, no
+  application response mocks. Phone/desktop/light/dark/Sage were inspected; 320/390/768/1440
+  overflow checks and dialog footer bounds pass. Artifacts are retained outside the checkout.
+- Owner-policy negative control `020017-34xow5` removed only the new table's RLS in its
+  disposable fixture: **1 failure / 8 passes**, input `fedb65b53b95`. It leaked policy months,
+  as expected. Restored before later green SQL; no disabled guard remains.
+- Host-confirmation negative control `020350-VJAELv` temporarily made only configure automatic:
+  **1 failure / 8 passes**, input `88379de6d290`, at the expected missing confirmation dialog.
+  The confirmed manifest was restored before the final nine-flow browser run.
+- Earlier browser execution caught a real synthetic-event lifetime crash in the mode selector;
+  extracting the selected value before the functional setter fixed it. Initial root test typing
+  also caught fixture user ids inferred too narrowly; explicit string parameters fixed that.
+
+Final aggregate static and installation results follow when their running commands finish. No new
+foundation/CI pass is claimed; previous whole-suite and lost-session limitations still apply.
+No live credentials, financial actions, production writes, merge or deployment were performed.

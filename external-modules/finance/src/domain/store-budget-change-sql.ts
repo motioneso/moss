@@ -31,6 +31,16 @@ export async function commitBudgetSql(db: FinanceDb, change: BudgetChange): Prom
       `EXISTS (SELECT 1 FROM app.finance_activity WHERE id = $${undoneIndex} AND undone_at IS NULL)`
     );
   }
+  let flexIndex = 0;
+  if (change.flexPolicy) {
+    params.push(
+      change.flexPolicy.month,
+      change.flexPolicy.active,
+      JSON.stringify(change.flexPolicy.flexIds),
+      JSON.stringify(change.flexPolicy.nonMonthlyIds)
+    );
+    flexIndex = params.length - 3;
+  }
   const result = await db.query<{ applied: boolean }>(
     "WITH " +
       budgetEligibilitySql(4, guards.length ? guards.join(" AND ") : "true") +
@@ -49,6 +59,9 @@ export async function commitBudgetSql(db: FinanceDb, change: BudgetChange): Prom
         : "") +
       (undoneIndex
         ? `, u AS (UPDATE app.finance_activity SET undone_at = $${undoneIndex + 1}::timestamptz WHERE id = $${undoneIndex} AND EXISTS (SELECT 1 FROM eligible) RETURNING 1)`
+        : "") +
+      (flexIndex
+        ? `, f AS (INSERT INTO app.finance_flex_policies (owner_user_id,month,active,flex_ids,non_monthly_ids,updated_at) SELECT app.current_actor_user_id(),$${flexIndex},$${flexIndex + 1},$${flexIndex + 2}::jsonb,$${flexIndex + 3}::jsonb,now() FROM eligible ON CONFLICT (owner_user_id,month) DO UPDATE SET active=EXCLUDED.active,flex_ids=EXCLUDED.flex_ids,non_monthly_ids=EXCLUDED.non_monthly_ids,updated_at=EXCLUDED.updated_at RETURNING month)`
         : "") +
       " SELECT EXISTS (SELECT 1 FROM eligible) AS applied",
     params

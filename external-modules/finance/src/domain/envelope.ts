@@ -1,3 +1,4 @@
+import { FLEX_POOL, flexForMonth, routeFlexAmounts, type FlexPolicy } from "./flex.js";
 // external-modules/finance/src/domain/envelope.ts
 //
 // FIN-03 (#1148) Task 1: pure YNAB-semantics budget derivation (spec delta
@@ -36,6 +37,7 @@ export type BudgetMonthState = BudgetMonthStateCore & {
 
 export type BudgetDerivationInput = {
   /** YYYY-MM → assignment ledger. */
+  flexPolicies?: readonly FlexPolicy[];
   ledgers: Record<string, BudgetLedger>;
   /** YYYY-MM → all transactions dated in that month, every account merged. */
   transactionsByMonth: Record<string, TransactionRecord[]>;
@@ -60,7 +62,11 @@ export function deriveBudgetMonths(
   input: BudgetDerivationInput
 ): Record<string, BudgetMonthStateCore> {
   const months = [
-    ...new Set([...Object.keys(input.ledgers), ...Object.keys(input.transactionsByMonth)])
+    ...new Set([
+      ...Object.keys(input.ledgers),
+      ...Object.keys(input.transactionsByMonth),
+      ...(input.flexPolicies ?? []).map((p) => p.month)
+    ])
   ].sort();
 
   const result: Record<string, BudgetMonthStateCore> = {};
@@ -73,15 +79,23 @@ export function deriveBudgetMonths(
   let cumOverspend = 0n; // ≤ 0; applies to months AFTER the one that overspent
 
   for (const month of months) {
-    const assignments = input.ledgers[month]?.assignments ?? {};
+    const flex = flexForMonth(input.flexPolicies ?? [], month);
+    if (flex?.active) {
+      for (const id of flex.flexIds) {
+        carry[FLEX_POOL] = (carry[FLEX_POOL] ?? 0n) + (carry[id] ?? 0n);
+        delete carry[id];
+      }
+    }
+    const assignments = routeFlexAmounts(input.ledgers[month]?.assignments ?? {}, flex);
     const activity: Record<string, bigint> = {};
     let income = 0n;
     const sourceRows = input.transactionsByMonth[month] ?? [];
     for (const txn of sourceRows) safeCents(txn.amountCents);
     for (const txn of sourceRows.flatMap(allocations)) {
       if (txn.categoryId === null || txn.categoryId === "transfers") continue;
-      activity[txn.categoryId] =
-        (activity[txn.categoryId] ?? 0n) + BigInt(safeCents(txn.amountCents));
+      const categoryId =
+        flex?.active && flex.flexIds.includes(txn.categoryId) ? FLEX_POOL : txn.categoryId;
+      activity[categoryId] = (activity[categoryId] ?? 0n) + BigInt(safeCents(txn.amountCents));
       if (txn.categoryId === "income") income -= BigInt(safeCents(txn.amountCents));
     }
 

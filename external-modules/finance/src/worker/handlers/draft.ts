@@ -1,11 +1,12 @@
+import { assertEnvelopeDraft } from "./flex-guards.js";
 // external-modules/finance/src/worker/handlers/draft.ts
 //
 // #3180 (Finance R1): the first-budget draft. Three entry points share one record.
 //   finance.budget.draft.get  read tool: the draft as the screen and Moss see it
 //   finance.draft-build       queue: builds the draft from the stored history
 //   finance.draft-start       queue: turns the draft into this month's budget
-// There is deliberately no assistant tool that starts a draft. Starting runs only
-// from the screen's button, through the queue (spec: First budget, step 7).
+// Reviewed host tools and legacy queues share the stored draft. Start and edits
+// require current review tokens; the host confirmation guards starting a budget.
 import {
   budgetRows,
   CATEGORY_GROUP_NAMES,
@@ -294,6 +295,7 @@ export const draftBuildHandler: ToolFactory = (ports) => async (input) => {
 
   const currentDate = today(ports);
   const currentMonth = currentDate.slice(0, 7);
+  await assertEnvelopeDraft(store, currentMonth);
   const accounts = await store.listAccounts();
   const transactionsByMonth: Record<string, TransactionRecord[]> = {};
   for (const month of pickBasisMonths(await store.listTransactionMonths(), currentMonth)) {
@@ -365,6 +367,7 @@ async function plannedCategories(ports: WorkerPorts, draft: BudgetDraft): Promis
 async function startDraft(ports: WorkerPorts, params: Record<string, unknown>) {
   const draftId = readString(params, "draftId", { required: true });
   const store = await ports.store();
+  await assertEnvelopeDraft(store, today(ports).slice(0, 7));
   const expected = readBudgetReview(params);
   requireSameReview(expected, await requireBudgetPolicy(store));
   const draft = await store.getLatestDraft();

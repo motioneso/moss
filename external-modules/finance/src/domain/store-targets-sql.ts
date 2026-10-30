@@ -5,6 +5,24 @@ import { safeCents } from "./values.js";
 
 export function targetSqlStore(db: FinanceDb): TargetStore {
   return {
+    async versions() {
+      const result = await db.query<{
+        category_id: string;
+        effective_month: string;
+        kind: "monthly" | "balance" | "removed";
+        amount_cents: string;
+        due_date: string | null;
+      }>(
+        "SELECT category_id,effective_month,kind,amount_cents,due_date::text AS due_date FROM app.finance_targets ORDER BY effective_month,category_id"
+      );
+      return result.rows.map((r) => ({
+        categoryId: r.category_id,
+        effectiveMonth: r.effective_month,
+        kind: r.kind,
+        amountCents: safeCents(r.amount_cents),
+        dueDate: r.due_date
+      }));
+    },
     async forMonth(month) {
       const result = await db.query<{
         category_id: string;
