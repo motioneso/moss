@@ -172,6 +172,7 @@ export function BillEntryDialog(props: {
       }
     >
       <div className="fnm-block">
+        {message ? <p role="status">{message}</p> : null}
         <Note variant="practical">
           Record an expense that already happened. This adds a transaction in Moss and matches this
           bill; no bank payment is sent.
@@ -294,7 +295,6 @@ export function BillEntryDialog(props: {
             </p>
           </>
         )}
-        {message ? <p role="status">{message}</p> : null}
       </div>
     </Dialog>
   );

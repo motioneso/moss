@@ -1,3 +1,4 @@
+import { waitForFinanceAction } from "./finance-live-ready.js";
 import { join, resolve } from "node:path";
 import { expect } from "vitest";
 import type { Page } from "playwright-core";
@@ -13,7 +14,9 @@ export async function exerciseFlex(
 ) {
   const before = await read("finance.transactions.query", { month });
   await page.goto(`${base}/m/finance`);
-  await page.getByRole("button", { name: "Set up flexible budget", exact: true }).click();
+  const setupAction = page.getByRole("button", { name: "Set up flexible budget", exact: true });
+  await waitForFinanceAction(page, setupAction);
+  await setupAction.click();
   const setup = page.getByRole("dialog", { name: "Set up a flexible budget", exact: true });
   const original = await read("finance.budget.status", { month });
   const starting = (

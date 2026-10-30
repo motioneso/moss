@@ -1,3 +1,4 @@
+import { waitForFinanceAction } from "./finance-live-ready.js";
 import { randomUUID } from "node:crypto";
 import { join, resolve } from "node:path";
 import { expect } from "vitest";
@@ -81,6 +82,11 @@ export async function exerciseBillEntry(
       expect(await dialog.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(false);
       const footer = await dialog.locator(".jds-dialog__foot").boundingBox();
       expect(footer!.y + footer!.height).toBeLessThanOrEqual(900);
+      if (name === "stale") {
+        const status = await dialog.getByRole("status").boundingBox();
+        expect(status!.y).toBeGreaterThanOrEqual(0);
+        expect(status!.y + status!.height).toBeLessThanOrEqual(footer!.y);
+      }
       await page.keyboard.press("Tab");
       expect(
         await page.evaluate(() => Boolean(document.activeElement?.closest('[role="dialog"]')))
@@ -101,6 +107,7 @@ export async function exerciseBillEntry(
   const guard = page.getByRole("dialog", { name: "Confirm Finance action", exact: true });
   try {
     await page.goto(`${base}/m/finance/upcoming`);
+    await waitForFinanceAction(page, button(plan.name), "Check saved bills");
     await button(plan.name).click();
     expect(await edit.getByLabel("Bill entry amount", { exact: true }).inputValue()).toBe("100.01");
     await edit.getByLabel("Bill entry amount", { exact: true }).fill("100.99");
@@ -119,6 +126,10 @@ export async function exerciseBillEntry(
       .waitFor();
     expect(await snapshot()).toEqual(before);
     expect(await guard.isVisible()).toBe(true);
+    if (artifacts)
+      await page.screenshot({
+        path: join(resolve(artifacts), "finance-bill-entry-host-confirm.png")
+      });
     await guard.getByRole("button", { name: "Cancel", exact: true }).click();
     await review
       .getByText("Cancelled. Your captured entry review is kept.", { exact: true })
@@ -158,6 +169,7 @@ export async function exerciseBillEntry(
       expect(await s.bills!.create(duplicate, (await s.budgetPolicy!.get())!, at)).toBe(true)
     );
     await page.reload();
+    await waitForFinanceAction(page, button(duplicate.name), "Check saved bills");
     await button(duplicate.name).click();
     await edit.getByRole("button", { name: "Review entry", exact: true }).click();
     await review.getByText(/Review existing expenses first/).waitFor();
@@ -174,6 +186,7 @@ export async function exerciseBillEntry(
       expect(await s.bills!.create(stale, (await s.budgetPolicy!.get())!, at)).toBe(true)
     );
     await page.reload();
+    await waitForFinanceAction(page, button(stale.name), "Check saved bills");
     await button(stale.name).click();
     await edit.getByRole("button", { name: "Review entry", exact: true }).click();
     await review.waitFor();
@@ -208,6 +221,7 @@ export async function exerciseBillEntry(
         exact: true
       })
       .waitFor();
+    await waitForFinanceAction(page, button(stale.name), "Check saved bills");
     await button(stale.name).click();
     await edit.getByRole("button", { name: "Review entry", exact: true }).click();
     await review.getByRole("button", { name: "Confirm record entry", exact: true }).click();
@@ -218,6 +232,11 @@ export async function exerciseBillEntry(
     expect((await snapshot()).transactions).toHaveLength(3);
     await page.reload();
     await page.getByText("Posted $50.00", { exact: true }).waitFor();
+    if (artifacts)
+      await page.screenshot({
+        path: join(resolve(artifacts), "finance-bill-entry-saved.png"),
+        fullPage: true
+      });
   } catch (error) {
     if (artifacts)
       await page.screenshot({
