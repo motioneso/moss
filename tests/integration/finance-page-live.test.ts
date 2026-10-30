@@ -1,3 +1,4 @@
+import { exerciseHistoryExport } from "./helpers/finance-live-export.js";
 import { exerciseManualNetWorth } from "./helpers/finance-live-net-worth.js";
 import { exerciseFinanceImport } from "./helpers/finance-live-import.js";
 import { seedReportDetails } from "./helpers/finance-live-report-data.js";
@@ -718,6 +719,10 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
         (name, input) => readTool(name, input, member.cookie),
         artifacts
       );
+    }, 90_000);
+
+    it("prepares and downloads complete owned history with recoverable errors and explicit scope", async () => {
+      await exerciseHistoryExport(context, base, readTool, artifacts);
     }, 90_000);
 
     it("confirms and cancels real worker deletion through the actual host dialog", async () => {

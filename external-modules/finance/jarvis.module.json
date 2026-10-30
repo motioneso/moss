@@ -71,7 +71,7 @@
       {
         "id": "finance.transactions",
         "label": "Transactions",
-        "description": "Manual and connected transactions grouped by day, with a search box, an All and Needs a look filter with a count, a Predicted badge on Moss's guesses, a category picker, an Always for this merchant switch that starts off, Confirm all, a category picker on every confirmed row to change its category, and a Show more button when a month has more than 200 rows. Includes labeled account, category, posting and direction filters, possible duplicate indicators, loaded result counts and CSV export of loaded rows. Eligible own posted rows support explicit selection and reviewed atomic category changes; changed selections save nothing.",
+        "description": "Transactions supports month/account/category/search/posting/direction/review and duplicate filters, clear loaded/full matching counts, splits and confirmed atomic bulk categorization. Selection persists across filters; stale batches save nothing. Export loaded rows keeps the visible scope. Export history prepares an owned-only CSV across stored months with optional inclusive dates and account selection. It shows captured scope/count/time before download, omits notes and household mirrors, and refuses over 5,000 rows or 2 MiB without truncation. Includes useful loading, empty, failed-read and retry states; shared rows stay read only.",
         "path": "/transactions"
       },
       {
@@ -1359,6 +1359,22 @@
           }
         },
         "required": ["month", "currency", "group"]
+      }
+    },
+    {
+      "name": "finance.transactions.export",
+      "permissionId": "finance.transactions.export",
+      "description": "Prepare a spreadsheet-safe CSV of owned transaction history across stored months. Optional inclusive dates and account filters; reads one SQL snapshot. Omits household mirrors and private notes. Refuses files above 5,000 rows or 2 MiB instead of truncating. Does not change financial data.",
+      "risk": "read",
+      "handler": "transactions.export",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "from": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+          "through": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+          "accountId": { "type": "string", "minLength": 1, "maxLength": 256 }
+        }
       }
     }
   ],

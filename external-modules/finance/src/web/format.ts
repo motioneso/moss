@@ -70,11 +70,7 @@ export function parseAmountToCents(text: string): number | null {
 }
 
 /** Integer cents → the plain "1234.56" form the assign input edits. */
-export function centsToAmountInput(cents: number): string {
-  const value = BigInt(safeCents(cents));
-  const absolute = value < 0n ? -value : value;
-  return `${value < 0n ? "-" : ""}${absolute / 100n}.${String(absolute % 100n).padStart(2, "0")}`;
-}
+export { centsToAmountInput } from "../domain/money-format.js";
 
 /** "2026-07-15" → "Wednesday · July 15" (date group heading). */
 export function dayLabel(date: string): string {

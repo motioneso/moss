@@ -795,3 +795,51 @@ but its lost log prevents a claim that all individual failure identifiers match.
 Net worth remains **partial**, with provider valuation freshness and manual-only provenance explicit.
 Next independent slice: full owned transaction export, with honest bounded/consistent scope and
 spreadsheet-safe output; account lifecycle and legacy individual-write concurrency also remain gaps.
+
+### Manual net worth: final frozen checkpoint
+
+Commit `ccb55946886d16d585b590b13b16690e35ea59db` is pushed to the task branch, unmerged; remote
+HEAD independently verified. On a clean detached checkout with input `69e85089d890`, all final gates
+passed: installed SQL six (`032028-o7J3Wj`), installed module parity three files / 11 tests
+(`032030-QU3Lss`), installed browser 12 flows (`032021-GlTUIH`) and complete static checks
+(`032204-kAPbXb`). The restored final scoped unit run passed 61 files / 609 tests. No missing guard
+remains. Earlier broad Vitest filter accidentally selected integration files too; the gate guard
+refused setup and local connection attempts were refused. That failed invocation is not a passing
+receipt. The new fixture also avoids teardown when guarded setup never began. Subsequent SQL runs
+used only disposable gate containers.
+
+## Owned history export — October 30 implementation
+
+Implements committed design `2026-10-30-finance-history-export.md`. New read tool uses one SQL
+snapshot, including the count, for owned transactions across all stored months and optional inclusive
+dates/account. It names categories/accounts under owner RLS, retains archived and orphan history,
+preserves parent rows, split allocations, pending/posted, per-row currencies and reconciliation
+metadata, and excludes notes/mirrors. No bank connections, financial writes, jobs, stored files or
+migration. The count gate returns no rows above 5,000; CSV is refused above 2 MiB, never truncated.
+Loaded export keeps its prior scope and shares the same escaping and exact-cent format primitives.
+
+The dialog prepares on explicit action, keeps choices after errors, and clears the prepared file
+when choices change. It discloses own-only scope, limits, captured count/range and preparation time;
+only Download starts a browser download. Phone inspection led to a count/account summary in the
+footer and a prepared summary above the filters, plus shorter copy and readable UTC timestamps.
+
+Development checks: 62 Finance unit files / 619 tests passed. Installed SQL four passed at
+`032453-Uucwgw`, input `8c1cb5de799d`: 2,501 multi-month rows, exactly 5,000 accepted / 5,001 refused,
+leap/inclusive boundaries, empty header-only export, owned isolation, archived/orphan names,
+split/currency/status fidelity and note omission. Owner negative control `032636-hFMt8Q`, input
+`c6ef743dae4c`, failed one / passed three: disabling transaction RLS in the disposable fixture
+changed the first owner's count from 2,501 to 2,502. Protection was re-enabled in `finally` and the
+fixture modification restored. Root/test/module type checks and scoped lint passed during development.
+
+The installed development browser run completed all 13 flows, including actual CSV download/content,
+no automatic download, changing-scope invalidation, reversed dates, offline retry preserving input,
+empty/header-only output, reload and keyboard close. Desktop/phone light/dark/Sage screenshots
+were inspected; the first phone capture prompted the summary placement polish above. This development
+run was edited while building and is not a frozen receipt. Final SQL/browser/static checks on the
+committed source remain required before this checkpoint is called verified. Screenshots named
+`finance-history-export-<theme>-<width>.png` remain outside the checkout.
+
+Export remains **partial**: large histories require explicit smaller ranges, and notes, balance history,
+budget/goal exports and shared-owner export are not included. Next capability candidate: reviewed
+individual transaction writes and confirm-all concurrency, preserving split/clearing/reconciliation
+state. Household coediting, valuation imports, investments and provider agreements remain gaps.

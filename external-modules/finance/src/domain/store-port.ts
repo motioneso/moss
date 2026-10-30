@@ -1,3 +1,4 @@
+import type { HistoryExportStore } from "./history-export.js";
 import type { TransactionBulkStore } from "./transaction-bulk.js";
 import type { FlexStore, FlexPolicy } from "./flex.js";
 import type { BillStore } from "./bills.js";
@@ -58,6 +59,7 @@ export interface ActivityRecord {
 }
 
 export interface FinanceStore {
+  readonly historyExport?: HistoryExportStore;
   readonly supportsSplits: boolean;
   readonly bulk?: TransactionBulkStore;
   readonly targets?: TargetStore;

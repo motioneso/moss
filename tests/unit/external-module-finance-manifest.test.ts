@@ -168,7 +168,8 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.flex.configure", "flex.configure"],
         ["finance.flex.assign", "flex.assign"],
         ["finance.transactions.bulk-category", "transactions.bulk-category"],
-        ["finance.reports.transactions", "reports.transactions"]
+        ["finance.reports.transactions", "reports.transactions"],
+        ["finance.transactions.export", "transactions.export"]
       ]
     );
     for (const tool of result.manifest.assistantTools ?? []) {

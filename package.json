@@ -205,6 +205,7 @@
     "test:integration:finance-bills": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-bills.test.ts",
     "test:integration:finance-flex": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-flex.test.ts",
     "test:integration:finance-bulk": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-bulk.test.ts",
+    "test:integration:finance-export": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-history-export.test.ts",
     "test:integration:finance-net-worth": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-net-worth.test.ts"
   },
   "dependencies": {

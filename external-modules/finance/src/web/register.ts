@@ -1,3 +1,4 @@
+import { csvText } from "../domain/csv-text.js";
 import { centsToAmountInput } from "./format.js";
 
 /** The explicit, loaded register selection exported by the user. Never fetches hidden rows. */
@@ -12,13 +13,6 @@ export interface ExportTransaction {
   pending?: boolean;
   shared?: boolean;
   splits?: { categoryId: string; amountCents: number }[];
-}
-
-function csvText(value: string): string {
-  // Spreadsheet applications may evaluate a quoted cell as a formula. Prefix only text;
-  // numeric amount columns are generated from validated integer cents.
-  const safe = /^[\s]*[=+\-@\t\r\n]/.test(value) ? `'${value}` : value;
-  return `"${safe.replace(/"/g, '""')}"`;
 }
 
 export function transactionsCsv(

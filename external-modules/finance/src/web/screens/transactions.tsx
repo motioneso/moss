@@ -1,3 +1,4 @@
+import { HistoryExportDialog } from "../history-export-dialog";
 // external-modules/finance/src/web/screens/transactions.tsx
 //
 // #3176: the Park Press Transactions screen. One read, finance.transactions.query,
@@ -456,6 +457,7 @@ export function TransactionsScreen(
   props: { tools?: ExternalModuleToolsHandleV1 } = {}
 ): ReactNodeLike {
   const [month, setMonth] = useState(currentMonth);
+  const [exporting, setExporting] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
@@ -650,28 +652,34 @@ export function TransactionsScreen(
             {result.totalCount ?? result.transactions?.length ?? 0} matching transactions loaded ·{" "}
             {monthLabel(month)}
           </span>
-          <Button
-            variant="secondary"
-            disabled={!result.transactions?.length}
-            onClick={() => {
-              downloadTransactionsCsv(
-                transactionsCsv(
-                  result.transactions ?? [],
-                  (tx) =>
-                    result.accounts?.find((a) => a.accountId === tx.accountId)?.name ??
-                    tx.accountId,
-                  (tx) =>
-                    result.categories?.find((c) => c.id === tx.categoryId)?.name ?? "Uncategorized"
-                ),
-                month
-              );
-              announce(
-                "Exported loaded transactions. The file includes only the rows loaded in this view."
-              );
-            }}
-          >
-            Export loaded rows
-          </Button>
+          <div className="fnm-chips">
+            <Button variant="secondary" onClick={() => setExporting(true)}>
+              Export history
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!result.transactions?.length}
+              onClick={() => {
+                downloadTransactionsCsv(
+                  transactionsCsv(
+                    result.transactions ?? [],
+                    (tx) =>
+                      result.accounts?.find((a) => a.accountId === tx.accountId)?.name ??
+                      tx.accountId,
+                    (tx) =>
+                      result.categories?.find((c) => c.id === tx.categoryId)?.name ??
+                      "Uncategorized"
+                  ),
+                  month
+                );
+                announce(
+                  "Exported loaded transactions. The file includes only the rows loaded in this view."
+                );
+              }}
+            >
+              Export loaded rows
+            </Button>
+          </div>
         </div>
       ) : null}
       {supportsBulk && props.tools ? (
@@ -729,6 +737,12 @@ export function TransactionsScreen(
           This view shows at most 2,000 rows. Narrow the filters to see and export the remaining
           transactions.
         </p>
+      ) : null}
+      {exporting ? (
+        <HistoryExportDialog
+          accounts={filterOptions.accounts}
+          onClose={() => setExporting(false)}
+        />
       ) : null}
       {editing ? (
         <SplitEditor
