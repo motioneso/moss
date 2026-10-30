@@ -83,3 +83,19 @@ focused/full Finance units, types, lint, format/style/file-size checks, SQL/migr
 complete installed browser and aggregate gates. Record exact clean commits and honest baseline
 failures. Payment reserves, account-linked goals, debt payoff, target recurrence/refill modes,
 automatic priorities and automatic funding remain separate parity gaps.
+
+## Acceptance refinements from implementation
+
+The existing ready-to-assign formula includes signed category availability. A positive
+headline can coexist with an overspent category. This bounded assistant therefore requires
+covering current category overspending before target funding; show that remedy instead of
+claiming automatic overspending priority. Do not change existing budget math or silently
+reserve, move or forgive another category's deficit. Server and native guards must agree,
+with a synthetic negative-category regression.
+
+Actual rapid sequential target creation exposed another stale-review window: successful
+metadata saves close before the refreshed budget snapshot reaches the page. Disable new
+target edit/funding actions until a successful read with a changed saved fingerprint lands.
+Tie that wait to the form's original captured fingerprint, so a read that already arrived
+cannot leave the page stuck. Failed reads retain the wait and the existing explicit records
+check. Apply the same rule after funding success. Cancellation never starts that wait.
