@@ -30,9 +30,7 @@ test("Minimal meeting workspace edits titles, autosaves notes, resolves conflict
     expect(originalPreferences.status()).toBe(200);
     const savedPreferences = await originalPreferences.json();
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
-    await expect(
-      page.getByRole("searchbox", { name: "Search meetings", exact: true })
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add recording", exact: true })).toBeVisible();
     await expect(page.getByText("Link your Mac", { exact: true })).toBeVisible();
     await expect(
       page.getByText("Open Trail Marker and follow its linking instructions.", { exact: true })

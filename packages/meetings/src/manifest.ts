@@ -104,7 +104,7 @@ export const meetingsModuleManifest = {
       icon: "mic",
       order: 36,
       description:
-        "Add a pasted recording without a Mac; review summaries, types, personal/work labels and transcripts. Live recording needs a linked Mac and configured transcription.",
+        "Meetings home table with title, recorded or added date, length, attendees and type; search titles, notes and transcripts or add a pasted recording without a Mac. Live recording needs a linked Mac and configured transcription.",
       permissionId: "meetings.read"
     }
   ],

@@ -152,15 +152,15 @@ export function MeetingHistory({
                       {meeting.title}
                     </RowButton>
                   </td>
-                  <td data-label="Date">
+                  <td>
                     <span>{date(meeting.date.at)}</span>
                     <span className="jds-hint meetings-history-date-source">
                       {meeting.date.source === "recorded" ? "Recorded" : "Added"}
                     </span>
                   </td>
-                  <td data-label="Length">{meetingLength(meeting.capture.durationMs)}</td>
-                  <td data-label="Attendees">—</td>
-                  <td data-label="Type">
+                  <td>{meetingLength(meeting.capture.durationMs)}</td>
+                  <td>—</td>
+                  <td>
                     {meeting.recording?.typeId ? (
                       <Badge tone="neutral" pill>
                         {types.data?.types.find((type) => type.id === meeting.recording?.typeId)
