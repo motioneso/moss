@@ -46,6 +46,7 @@ function connection(ownerUserId: string): ConnectionRow {
     classifierEnabled: false,
     classifierPreparation: { version: 1, entries: {} },
     classifierSort: { version: 1, entries: {} },
+    classifierScan: { version: 1, actions: {}, targets: {} },
     classifierKeptOutTools: [],
     discoveredTools: [
       {

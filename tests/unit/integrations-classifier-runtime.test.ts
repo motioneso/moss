@@ -651,6 +651,7 @@ function connection(overrides: Partial<ConnectionRow>): ConnectionRow {
     classifierEnabled: true,
     classifierPreparation: emptyPreparationMap(),
     classifierSort: { version: 1, entries: {} },
+    classifierScan: { version: 1, actions: {}, targets: {} },
     classifierKeptOutTools: [],
     discoveredTools: [],
     lastDiscoveryAt: null,
