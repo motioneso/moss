@@ -158,12 +158,12 @@ test("Minimal list searches all current text, preserves API filters and opens a 
     ]);
     const targetButton = meetingRow(page, title);
     await expect(targetButton).toBeVisible();
-    await expect(targetButton).toContainText("Personal notes");
+    await expect(targetButton).toContainText("Added");
     await expect(page.getByLabel("State", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Capture: Unavailable", { exact: false })).toHaveCount(0);
     await assertMeetingHistoryLayout(page, title);
-    await targetButton.focus();
-    await targetButton.press("Enter");
+    await targetButton.getByRole("button").focus();
+    await targetButton.getByRole("button").press("Enter");
     await expect(page).toHaveURL(new RegExp(`id=${target.id}`));
     await expect(page.getByRole("region", { name: "Transcript", exact: true })).toContainText(
       "Maple concern."
@@ -209,7 +209,7 @@ test("Minimal list searches all current text, preserves API filters and opens a 
         expectedId
       ]);
     }
-    await expect(meetingRow(page, notesOnly.title)).toContainText("Personal notes");
+    await expect(meetingRow(page, notesOnly.title)).toContainText("Added");
 
     // Correction must remove superseded words while retaining the corrected current turn.
     const corrected = await page.request.post(`/api/meetings/records/${target.id}/transcript`, {
@@ -237,7 +237,7 @@ test("Minimal list searches all current text, preserves API filters and opens a 
     expect((await search(page, `${marker} willow`)).meetings.map((meeting) => meeting.id)).toEqual([
       target.id
     ]);
-    await targetButton.click();
+    await targetButton.getByRole("button").click();
     await expect(page.getByRole("region", { name: "Transcript", exact: true })).toContainText(
       "Willow resolution."
     );

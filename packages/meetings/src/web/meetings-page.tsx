@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
-import { Link, useLocation, useSearchParams } from "react-router";
+import { useLocation, useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { randomUuid } from "@moss/module-web-sdk";
-import { Button, SectionHead, buttonLinkClassName } from "@moss/ui";
+import { Button } from "@moss/ui";
 import { ManualEntry } from "./manual-entry.js";
 import { MeetingNotLinked } from "./meeting-not-linked.js";
 import { useMeetingConnection } from "./meeting-connection.js";
@@ -83,13 +83,6 @@ export function MeetingsPage() {
       ) : (
         <>
           <div className="meetings-list-heading">
-            <SectionHead title="Meetings" titleAs="h1" />
-            <Link
-              className={buttonLinkClassName("link")}
-              to="/settings?section=modules&module=meetings"
-            >
-              Settings
-            </Link>
             <Button onClick={() => setParams({ entry: "new" })}>Add recording</Button>
             {connection.linked.length ? (
               <Button

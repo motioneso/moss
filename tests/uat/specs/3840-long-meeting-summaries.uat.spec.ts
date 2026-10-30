@@ -80,7 +80,7 @@ test("Long and short recordings both get summaries on the Meeting screen (#3840)
 
   async function writeSummaryOnScreen(meetingId: string, title: string): Promise<void> {
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
-    await meetingRow(page, title).click();
+    await meetingRow(page, title).getByRole("button").click();
     await openMeetingAction(page, "Rewrite summary");
     const summary = page.getByRole("region", { name: "Summary and actions", exact: true });
     const write = summary.getByRole("button", { name: "Write summary", exact: true });

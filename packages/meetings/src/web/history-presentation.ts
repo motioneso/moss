@@ -13,6 +13,16 @@ export function historyFilter(value: string | null): MeetingHistoryFilter {
   return historyFilters.find((filter) => filter.value === value)?.value ?? "all";
 }
 
+/** A real recorded duration only; unknown length is a dash, never transcript coverage. */
+export function meetingLength(durationMs: number | null | undefined): string {
+  if (durationMs == null) return "—";
+  const minutes = Math.round(durationMs / 60000);
+  if (minutes < 60) return `${Math.max(1, minutes)} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours} hr ${rest} min` : `${hours} hr`;
+}
+
 export function transcriptSpan(meeting: MeetingHistoryItem): string | null {
   const span = meeting.transcript.span;
   return span ? `${transcriptTime(span.startMs)}–${transcriptTime(span.endMs)}` : null;

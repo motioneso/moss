@@ -49,7 +49,7 @@ test("Minimal meeting workspace edits titles, autosaves notes, resolves conflict
     expect(capture.status()).toBe(200);
     expect((await capture.json()).capture).toBeNull();
     await page.reload();
-    await meetingRow(page, "Untitled meeting").click();
+    await meetingRow(page, "Untitled meeting").getByRole("button").click();
     await expect(page).toHaveURL(new RegExp(`id=${fixtureId}`));
     await assertMinimalMeetingWorkspace(page);
     await expect(page.getByRole("button", { name: "Start recording", exact: true })).toBeDisabled();
@@ -82,11 +82,11 @@ test("Minimal meeting workspace edits titles, autosaves notes, resolves conflict
     expect((await saved).status()).toBe(200);
     await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
     await page.getByRole("button", { name: "Meetings", exact: true }).click();
-    await expect(meetingRow(page, title)).toContainText("Personal notes");
+    await expect(meetingRow(page, title)).toContainText("Added");
     await page.goBack();
     await expect(notes).toHaveValue(notesText);
     await page.goForward();
-    await meetingRow(page, title).click();
+    await meetingRow(page, title).getByRole("button").click();
     await expect(notes).toHaveValue(notesText);
     await page.reload();
     await expect(notes).toHaveValue(notesText);
@@ -203,7 +203,7 @@ test("Confirmed sign-out discards meeting notes without a second native warning 
     expect(created.status()).toBe(201);
     fixtureId = (await created.json()).meeting.id as string;
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
-    await meetingRow(page, title).click();
+    await meetingRow(page, title).getByRole("button").click();
     const notes = page.getByRole("textbox", { name: "Notes", exact: true });
     // A row click changes the route before its initial record GET necessarily resolves.
     // Go offline only once the real, labelled editor is mounted and editable.
@@ -318,7 +318,7 @@ test("Retained transcript review shows real source labels and immutable earlier 
     expect(first.status()).toBe(201);
     const firstReceipt = (await first.json()).receipt;
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
-    await meetingRow(page, title).click();
+    await meetingRow(page, title).getByRole("button").click();
     const transcript = page.getByRole("region", { name: "Transcript", exact: true });
     await expect(transcript).toContainText("You");
     await expect(transcript).toContainText("Synthetic draft wording.");

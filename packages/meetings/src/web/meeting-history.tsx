@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@moss/module-web-sdk";
-import { Button, Divider, Eyebrow, Field, FormLabel, RowButton, Select, Badge } from "@moss/ui";
-import type { MeetingHistoryItem, MeetingRecordCursor } from "@moss/shared";
+import { Button, Field, FormLabel, Select, Badge } from "@moss/ui";
+import type { MeetingHistoryCursor } from "@moss/shared";
 import { getRecordingTypes, recordingKeys } from "./recording-client.js";
 import { isMeetingAccessDenied, PAGE_SIZE } from "./client.js";
 import { discardDeniedHistory, historyKeys, searchMeetingHistory } from "./history-client.js";
-import { useMeetingDate, useMeetingWeek } from "./locale.js";
+import { meetingLength } from "./history-presentation.js";
+import { useMeetingDate } from "./locale.js";
 
 export interface MeetingHistoryProps {
   readonly search: string;
@@ -28,7 +29,6 @@ export function MeetingHistory({
     hour: "numeric",
     minute: "2-digit"
   });
-  const week = useMeetingWeek();
   const client = useQueryClient();
   const [typeId, setTypeId] = useState("");
   const types = useQuery({
@@ -43,7 +43,7 @@ export function MeetingHistory({
   }, [search]);
   const history = useInfiniteQuery({
     queryKey: historyKeys.search(query, "all", typeId || undefined),
-    initialPageParam: undefined as MeetingRecordCursor | undefined,
+    initialPageParam: undefined as MeetingHistoryCursor | undefined,
     queryFn: ({ pageParam, signal }) =>
       searchMeetingHistory(
         { query, filter: "all", typeId: typeId || undefined, limit: PAGE_SIZE, before: pageParam },
@@ -60,11 +60,6 @@ export function MeetingHistory({
   }, [client, denied, query, typeId]);
   const meetings = denied ? [] : (history.data?.pages.flatMap((page) => page.meetings) ?? []);
   const searching = search.trim() !== query;
-  const groups = new Map<string, MeetingHistoryItem[]>();
-  for (const meeting of meetings) {
-    const key = week(meeting.createdAt).label;
-    groups.set(key, [...(groups.get(key) ?? []), meeting]);
-  }
   if (hideWhenEmpty && history.isSuccess && !meetings.length && !search && !typeId) return null;
   return (
     <section className="meetings-section" aria-label="Your meetings">
@@ -134,54 +129,53 @@ export function MeetingHistory({
             : "No meetings yet. Start with Add recording or New meeting."}
         </p>
       ) : null}
-      {!searching &&
-        [...groups].map(([start, items]) => (
-          <section key={start} className="meetings-section" aria-label={start}>
-            <Eyebrow>{start}</Eyebrow>
-            <div>
-              {items.map((meeting) => (
-                <div key={meeting.id}>
-                  <Divider />
-                  <RowButton className="meetings-history-row" onClick={() => onOpen(meeting.id)}>
-                    <span className="jds-hint">{date(meeting.createdAt)}</span>
-                    <span className="meetings-history-heading">
-                      <span className="jds-label">{meeting.title}</span>
-                      {meeting.recording?.typeId || meeting.recording?.side ? (
-                        <span className="meetings-actions">
-                          {meeting.recording.typeId ? (
-                            <Badge tone="neutral" pill>
-                              {types.data?.types.find(
-                                (type) => type.id === meeting.recording?.typeId
-                              )?.name ?? meeting.recording.typeId}
-                            </Badge>
-                          ) : null}
-                          {meeting.recording.side ? (
-                            <span className="jds-hint">
-                              {meeting.recording.side === "personal" ? "Personal" : "Work"}
-                            </span>
-                          ) : null}
-                        </span>
-                      ) : null}
-                      <span className="jds-hint meetings-history-gist">
-                        {meeting.summary.overview ??
-                          (meeting.hasNotes
-                            ? "Personal notes"
-                            : meeting.transcript.segmentCount
-                              ? "Transcript available"
-                              : "Ready when you are")}
-                      </span>
+      {!searching && meetings.length ? (
+        <table className="meetings-history-table">
+          <thead>
+            <tr>
+              <th scope="col">Title</th>
+              <th scope="col">Date</th>
+              <th scope="col">Length</th>
+              <th scope="col">Attendees</th>
+              <th scope="col">Type</th>
+            </tr>
+          </thead>
+          <tbody>
+            {meetings.map((meeting) => (
+              <tr key={meeting.id} className="meetings-history-row">
+                <td>
+                  <Button variant="link" onClick={() => onOpen(meeting.id)}>
+                    {meeting.title}
+                  </Button>
+                </td>
+                <td data-label="Date">
+                  <span>{date(meeting.date.at)}</span>
+                  <span className="jds-hint meetings-history-date-source">
+                    {meeting.date.source === "recorded" ? "Recorded" : "Added"}
+                  </span>
+                </td>
+                <td data-label="Length">{meetingLength(meeting.capture.durationMs)}</td>
+                <td data-label="Attendees">—</td>
+                <td data-label="Type">
+                  {meeting.recording?.typeId ? (
+                    <Badge tone="neutral" pill>
+                      {types.data?.types.find((type) => type.id === meeting.recording?.typeId)
+                        ?.name ?? meeting.recording.typeId}
+                    </Badge>
+                  ) : (
+                    "—"
+                  )}
+                  {meeting.recording?.side ? (
+                    <span className="jds-hint meetings-history-side">
+                      {meeting.recording.side === "personal" ? "Personal" : "Work"}
                     </span>
-                    <span className="jds-hint">
-                      {meeting.capture.durationMs == null
-                        ? ""
-                        : `${Math.max(1, Math.round(meeting.capture.durationMs / 60000))} min`}
-                    </span>
-                  </RowButton>
-                </div>
-              ))}
-            </div>
-          </section>
-        ))}
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
       {history.hasNextPage && !searching && !denied ? (
         <Button
           variant="secondary"

@@ -152,7 +152,7 @@ test("Meeting summaries work on a non-allowlisted Claude CLI, including an impor
         await page.goto(`/meetings?id=${targetMeetingId}`);
       } else {
         await page.getByRole("link", { name: "Meetings", exact: true }).click();
-        await meetingRow(page, title).click();
+        await meetingRow(page, title).getByRole("button").click();
       }
       await openMeetingAction(page, "Rewrite summary");
       const summary = page.getByRole("region", { name: "Summary and actions", exact: true });

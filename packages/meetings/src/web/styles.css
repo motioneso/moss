@@ -80,19 +80,33 @@
   margin: 0;
   padding-block: var(--space-3);
 }
-.meetings-history-row {
-  display: grid;
-  grid-template-columns: minmax(7rem, 10rem) minmax(0, 1fr) auto;
-  gap: var(--space-4);
-  align-items: center;
-  width: 100%;
-  padding-block: var(--space-4);
+.meetings-list-heading {
+  justify-content: flex-end;
 }
-.meetings-history-gist {
+.meetings-history-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.meetings-history-table th,
+.meetings-history-table td {
+  padding: var(--space-3) var(--space-4) var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.meetings-history-table th {
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.meetings-history-row {
+  border-bottom: 1px solid var(--border);
+}
+.meetings-history-date-source,
+.meetings-history-side {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  margin-top: var(--space-1);
 }
 .meetings-sources {
   display: grid;
@@ -107,12 +121,9 @@
   .meetings-page {
     padding-block-end: var(--space-12);
   }
-  .meetings-history-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: var(--space-2);
-  }
-  .meetings-history-row > :first-child {
-    grid-column: 1 / -1;
+  .meetings-history-table th,
+  .meetings-history-table td {
+    padding: var(--space-3) var(--space-2) var(--space-3) 0;
   }
   .meetings-record-tools {
     margin-left: auto;
