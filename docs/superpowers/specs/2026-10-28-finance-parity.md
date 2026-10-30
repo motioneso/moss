@@ -355,3 +355,21 @@ skipped. The 18 focused recurrence/handler cases pass, including an observed-red
 regression. See the [bill-match checkpoint](../plans/2026-10-30-finance-bill-match-checkpoint.md)
 for exact receipts, static-check outcome, original screenshots and manual continuation. Recurring
 obligations remain Partial; recording an entry directly from an occurrence remains missing.
+
+## October 30 bill-match review usability
+
+Continue #1148 with a read-only review refinement. Keep all available candidates for the selected
+account; order them by nearest calendar date to the effective planned date, then nearest expected
+amount, then date and stable identity. Do not auto-select, infer a match, hide different amounts,
+or change the matching write contract. Use exact integer arithmetic for amount distances. Explain
+the ordering in the native review. An empty account candidate list disables selection/save and
+explains how to check Transactions and refresh saved bills. A selected identity absent from the
+current candidate list must not leave Save enabled. Existing date-window, capture and host
+confirmation protections remain.
+
+Acceptance: pure cases cover adjusted dates, cross-month/leap distances, exact amount tie-breaks,
+account scope, input immutability and deterministic ties. Installed UI must exercise a real empty
+candidate read using an explicitly pending synthetic fixture expense, refuse saving, then restore
+the fixture and prove explicit selection, confirmed match and unchanged final ledger. Inspect
+phone/desktop layouts; preserve the original date-range explanation. This adds no transaction,
+bank payment or automatic match. Larger reviewed manual bill-entry creation remains separate.
