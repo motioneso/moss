@@ -10,7 +10,7 @@ Every fact below was read in this worktree on 2026-10-29.
 
 - The connection row already holds two versioned JSON maps. The preparation map came from `packages/integrations/sql/0253_integration_classifier_settings.sql:9-15` and the sort map from `packages/integrations/sql/0268_integration_classifier_sort.sql:9-15`. Both default to an empty versioned map and carry an object check. The new column follows that shape.
 - Row-level security does not change. The spec states the row is already owner-only with no admin bypass (spec section 2.4), and both earlier migrations note the new columns inherit that policy.
-- The highest migration number in the repo is 0345 (`packages/chat/sql/0345_chat_heartbeat_worker_publish.sql`). The next free number is 0346. The file lives in the owning module at `packages/integrations/sql/0346_integration_classifier_scan.sql`, per the rule in CLAUDE.md that module SQL lives in the owning module.
+- The highest migration number on main is 0345 (`packages/chat/sql/0345_chat_heartbeat_worker_publish.sql`). An open pull request already claims 0346 and another claims up to 0352, so the file uses 0353. It lives in the owning module at `packages/integrations/sql/0353_integration_classifier_scan.sql`, per the rule in CLAUDE.md that module SQL lives in the owning module.
 - The old maps are read and written defensively in one place. `packages/integrations/src/classifier-settings.ts` holds the preparation map (line 46 onward), the sort map (line 566 onward), `parsePreparationMap`, `parseSortMap`, `toolSortState`, `withSortResult` and `toolRunsWithoutAsking`. That file is 929 lines, so the scan shapes go in a new file instead of pushing it past 1000.
 - The send choice lives on the sort entry as `sendWithoutAsking` (`classifier-settings.ts:581`), and it counts only while the raised risk is outbound (`classifier-settings.ts:732-733`, `classifier-settings.ts:775`). That is the rule the conversion must match.
 - Two fingerprints exist. The preparation entry keys on the tool definition fingerprint from `packages/integrations/src/classifier-fingerprint.ts:29`. The sort entry keys on the risk-input fingerprint from `packages/integrations/src/classifier-risk-inputs.ts:37`. Spec section 2.4 keys a scan action on the fingerprint of the tool definition, so the scan map uses the definition fingerprint.
@@ -78,7 +78,7 @@ Nothing reads the new map for asking in this slice. `toolRunsWithoutAsking`, the
 
 ## Tasks
 
-1. Migration 0346 plus a repository read of the new column.
+1. Migration 0353 plus a repository read of the new column.
 2. `classifier-scan.ts` with the read and write shapes, exported from the module index.
 3. `scanMapFromLegacy` with the conversion rules above.
 4. Unit tests in `tests/unit/integrations-classifier-scan.test.ts`.
