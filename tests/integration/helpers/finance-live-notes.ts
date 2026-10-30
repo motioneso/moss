@@ -203,6 +203,56 @@ export async function exercisePrivateNotes(
     await approve();
     await editor.waitFor({ state: "detached" });
     expect((await snapshot()).note!.notes).toBe("Retained synthetic draft");
+    await start();
+    const uncertainDraft = "Committed before synthetic response loss";
+    await field().fill(uncertainDraft);
+    const writeUrl = /\/api\/modules\/finance\/tools\/finance\.transaction\.note-save\/invoke$/;
+    let confirmedRequests = 0;
+    await page.route(writeUrl, async (route) => {
+      const body = route.request().postDataJSON() as { confirmationId?: string };
+      if (!body.confirmationId) {
+        await route.continue();
+        return;
+      }
+      confirmedRequests++;
+      const response = await route.fetch();
+      expect(response.ok()).toBe(true);
+      // The actual approved SQL commit and audit have completed. Lose only its response.
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Synthetic response lost after commit" })
+      });
+    });
+    await approve();
+    await editor
+      .getByRole("status")
+      .filter({ hasText: /saving could not be confirmed/i })
+      .waitFor();
+    await page.unroute(writeUrl);
+    expect(confirmedRequests).toBe(1);
+    expect(await field().inputValue()).toBe(uncertainDraft);
+    expect(
+      await editor.getByRole("button", { name: "Save private note", exact: true }).isDisabled()
+    ).toBe(true);
+    const committed = await snapshot();
+    expect(committed.note!.notes).toBe(uncertainDraft);
+    await capture("uncertain");
+    await editor.getByRole("button", { name: "Check saved note", exact: true }).click();
+    await waitForFinanceAction(
+      page,
+      editor.getByRole("textbox", { name: "Currently saved private note", exact: true }),
+      "Check saved note"
+    );
+    expect(
+      await editor
+        .getByRole("textbox", { name: "Currently saved private note", exact: true })
+        .inputValue()
+    ).toBe(uncertainDraft);
+    expect(
+      await editor.getByRole("button", { name: "Save private note", exact: true }).isDisabled()
+    ).toBe(true);
+    expect(await snapshot()).toEqual(committed);
   } catch (error) {
     if (artifacts)
       await page.screenshot({
