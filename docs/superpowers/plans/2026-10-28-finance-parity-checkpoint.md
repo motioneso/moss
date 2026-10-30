@@ -514,3 +514,26 @@ Observed development verification:
 A committed snapshot rerun follows before pushing the slice. No merge/deployment/real bank action
 is authorized. Flexible-pool budget semantics are next, including conservation across mode changes
 and historical versions; do not claim a cosmetic grouping as flexible-budget parity.
+
+### Committed recurring-bill acceptance
+
+Clean **`f827414426a5c244f0acae17cfa872578f0aa4c5`**, input **`90b270f0ee26`**, Node 24.19.0 /
+pnpm 10.6.2. All four final narrow gates ran on that same committed snapshot:
+
+- Bill SQL: **8/8 pass**, `moss_finance-20261030-013133-Jt67Ns.log`, rc 0.
+- Existing ledger/currency/target SQL: **27/27 pass**, `013133-gMxekN`, rc 0.
+- Install/backfill: **3 files / 11 pass**, `013133-ofWvME`, rc 0; 29 module migrations.
+- Installed browser: **8/8 pass**, `013133-5qlDnP`, rc 0. Includes unchanged-transaction query
+  before/after create/match/undo/skip/stop, dialog bounds and saved actual amount after reload.
+- Focused units: **56 files / 570 tests pass**, `finance-bills-committed-unit.log`, rc 0.
+- Aggregate static: **pass rc 0**, `finance-bills-committed-static.log`; lint/format/design/file
+  sizes/dependencies/migrations, root/tests/web/all external-module TypeScript and app-map build.
+
+The installed harness closed its browsers/API and each gate removed its disposable container.
+These receipts prove this bounded bills slice, not CI, the whole foundation suite, or universal
+Finance parity. A fresh full foundation/CI run remains unrun for this slice; earlier failures and
+lost-session evidence limits are recorded above. No access or approval blocker stops independent
+Finance work. The next implementation must follow the [flex conservation plan](2026-10-30-finance-flex-conservation.md),
+then fill calendar/detection/occurrence-edit gaps and the other partial rows in the parity matrix.
+Branch pushes are authorized; merges, deployments, real financial actions and new bank credentials
+remain unauthorized.
