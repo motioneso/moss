@@ -733,3 +733,23 @@ Next: [manual ledger net worth](../specs/2026-10-30-finance-ledger-net-worth.md)
 provider snapshot contract and disclosing per-account coverage. Source-linked Reports parity remains
 Partial, including missing saved/custom views and broader export. No PR, merge, deployment, real
 bank connection, production financial write or new credential was performed.
+
+### Committed report acceptance
+
+Clean **3868564e69df715a8f2d1ea989cc4800bc00339e**, input **1cbfcde236a5**, Node 24.19.0 /
+pnpm 10.6.2:
+
+- Installed app **11/11 pass**, `025351-P4SH9b`, rc 0. Includes final scoped refresh, actual
+  offline/reload and second-tab correction with changed-total disclosure, safe currency/shared
+  contributions and every prior Finance/platform flow. No application responses mocked.
+- Install/backfill **3 files / 11 pass**, `025353-EG7IVH`, rc 0; no new schema migration needed.
+- Focused Finance **60 files / 596 pass**, `finance-report-final-unit.log`, rc 0.
+- Aggregate static **pass rc 0**, `finance-report-final-static.log`, including the compatibility
+  wrapper and extracted CSV test helper. The final phone review hides unnecessary page controls;
+  source amounts, counts, headings/actions and horizontal bounds were inspected/asserted.
+
+Normal git push succeeded through this exact commit. The fresh full foundation runs on that frozen
+commit with restored ACL tools and supported system Chromium in the separate clean verification
+checkout: `moss_finance_verify-20261030-025417-pHZUqY.log`. Resume its existing wait; do not confuse
+its pending outcome with a pass or with the completed earlier 68282552 receipt. CI and release
+acceptance remain separate. The next work follows the committed manual-ledger net-worth spec.
