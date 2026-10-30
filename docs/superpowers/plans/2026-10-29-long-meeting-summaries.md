@@ -89,7 +89,11 @@ Rework the generator in the module registry runtime around pieces.
 - The final answer goes back through the untouched service path, which
   re-checks it against the full evidence and saves it as one version.
 - Raise the service generation deadline to 10 minutes and the automatic
-  summary queue's stuck limit to match, plus a minute of slack.
+  summary queue's stuck limit to match, plus a minute of slack. The
+  generation reservation must also outlive that deadline. It defaults to
+  two minutes, and the first live run proved what that does. The pieces
+  finished, then the finished run was discarded as interrupted at save
+  time. The reservation now gets the same ten minutes plus a minute.
 
 Tests state behaviour and why a broken build fails.
 
