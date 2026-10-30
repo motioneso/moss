@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-30
+
+#### Changed
+
+- **A clearer Meetings list.** Your meetings now appear in a simple table that shows when each recording was made and how long it is, and you can still find one by words from its transcript. [PR #3851](https://github.com/motioneso/moss/pull/3851)
+
 ### 2026-10-29
 
 #### Fixed
