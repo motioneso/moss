@@ -178,15 +178,34 @@ export function BillEntryDialog(props: {
         </Note>
         {review ? (
           <>
+            {!review.preview.canRecord ? (
+              <Note variant="practical">
+                Review existing expenses first. {review.preview.candidateCount} posted{" "}
+                {review.preview.candidateCount === 1 ? "expense has" : "expenses have"} this amount
+                within seven days. Nothing was recorded. Check Transactions and existing bill
+                matches. Use Match posted for an available expense. For a genuinely separate
+                expense, record it in Accounts first, then match it.
+              </Note>
+            ) : null}
             <dl className="fnm-block fnm-block--tight">
+              {review.preview.canRecord ? (
+                <div>
+                  <dt>{review.preview.debt ? "Amount owed after" : "Balance after"}</dt>
+                  <dd>
+                    <strong>{money(review.preview.afterCents)}</strong>
+                  </dd>
+                </div>
+              ) : null}
               <div>
-                <dt>{review.preview.debt ? "Amount owed after" : "Balance after"}</dt>
-                <dd>
-                  <strong>{money(review.preview.afterCents)}</strong>
-                </dd>
-              </div>
-              <div>
-                <dt>{review.preview.debt ? "Amount owed before" : "Balance before"}</dt>
+                <dt>
+                  {review.preview.debt
+                    ? review.preview.canRecord
+                      ? "Amount owed before"
+                      : "Current amount owed"
+                    : review.preview.canRecord
+                      ? "Balance before"
+                      : "Current balance"}
+                </dt>
                 <dd>{money(review.preview.beforeCents)}</dd>
               </div>
               <div>
@@ -208,12 +227,16 @@ export function BillEntryDialog(props: {
                 <dd>{money(review.preview.expectedCents)}</dd>
               </div>
             </dl>
-            {!review.preview.canRecord ? (
-              <Note variant="practical">
-                Review existing expenses first. {review.preview.candidateCount} posted expense(s)
-                with this amount exist within seven days. Close and use Match posted. For a
-                genuinely separate expense, record it in Accounts first, then match it.
-              </Note>
+            {review.preview.debt ? (
+              <p className="jds-hint">
+                Positive amounts are owed. A negative balance is a credit in your favor.
+              </p>
+            ) : null}
+            {review.preview.candidateCount > review.preview.candidates.length ? (
+              <p className="jds-hint">
+                Showing the first {review.preview.candidates.length} of{" "}
+                {review.preview.candidateCount} possible duplicates.
+              </p>
             ) : null}
             {review.preview.candidates.length ? (
               <ul>
