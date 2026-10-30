@@ -118,9 +118,14 @@ final class RingConnection implements AutoCloseable {
     }
     private final HoldWatcher watcher = new HoldWatcher();
     private volatile boolean released;
+    private void release() {
+        released = true;
+        RingTiming.begin();
+        RingTiming.clock("press_end_heard");
+    }
     private void note(int command, byte[] payload) {
         telemetry.accept(command, payload, System.currentTimeMillis());
-        if (watcher.accept(command, payload)) { released = true; RingTiming.begin(); RingTiming.mark("press_end_heard"); RingTiming.clock("press_end_heard"); }
+        if (watcher.accept(command, payload)) release();
     }
     private final ArrayDeque<byte[]> responses = new ArrayDeque<>();
     private byte[] response(String id, int opcode) throws Exception {
@@ -164,9 +169,10 @@ final class RingConnection implements AutoCloseable {
         boolean firstHeard = false;
         long now = System.nanoTime(), end = now + TimeUnit.MILLISECONDS.toNanos(ms), lastSeen = now;
         while (System.nanoTime() < end && !interrupted.getAsBoolean()) {
+            if (watcher.quiet(System.currentTimeMillis())) release();
             if (released) { released = false; return true; }
             if (closed || overflow) throw new IOException("connection_closed");
-            Event e = pending.isEmpty() ? events.poll(500, TimeUnit.MILLISECONDS) : pending.remove();
+            Event e = pending.isEmpty() ? events.poll(100, TimeUnit.MILLISECONDS) : pending.remove();
             if (e == null) {
                 if (System.nanoTime() - lastSeen > TimeUnit.SECONDS.toNanos(10)) throw new IOException("link_silent");
                 continue;
