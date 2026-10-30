@@ -1,3 +1,4 @@
+import type { BillStore } from "./bills.js";
 import type { TargetStore } from "./targets.js";
 // external-modules/finance/src/domain/store-port.ts
 // FIN-06 (#1166, F6-D3): the storage port both impls satisfy. Vocabulary is
@@ -56,6 +57,7 @@ export interface ActivityRecord {
 export interface FinanceStore {
   readonly supportsSplits: boolean;
   readonly targets?: TargetStore;
+  readonly bills?: BillStore;
   readonly budgetPolicy?: BudgetPolicyStore;
   /** SQL-only ledger; legacy KV must migrate before manual entry. */
   readonly manual?: ManualLedgerStore;

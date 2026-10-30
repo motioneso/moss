@@ -9,7 +9,9 @@ export const BUDGET_FINGERPRINT_SQL =
     ["finance_budget_drafts", "id"],
     ["finance_budget_draft_lines", "jsonb_build_array(draft_id, category_key)"],
     ["finance_categories", "id"],
-    ["finance_targets", "jsonb_build_array(category_id, effective_month)"]
+    ["finance_targets", "jsonb_build_array(category_id, effective_month)"],
+    ["finance_bill_plans", "id"],
+    ["finance_bill_occurrences", "jsonb_build_array(plan_id, due_date)"]
   ]
     .map(
       ([table, key]) =>

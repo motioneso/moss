@@ -1,3 +1,10 @@
+import {
+  billsReadHandler,
+  billClearHandler,
+  billCreateHandler,
+  billDecideHandler,
+  billStopHandler
+} from "./handlers/bills.js";
 // external-modules/finance/src/worker/registry.ts
 //
 // FIN-01 (#1146): the handler-key → factory registry, split out of index.ts
@@ -87,6 +94,12 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   // FIN-03 (#1148) Task 3: the envelope-budget surface of manifest v0.2.0.
   "budget.status": budgetStatusHandler,
   "target.set": targetSetHandler,
+  "bills.read": billsReadHandler,
+  billClearHandler,
+  "bill.create": billCreateHandler,
+  "bill.decide": billDecideHandler,
+  "bill.stop": billStopHandler,
+  "bill.clear": billClearHandler,
   "budget.configure": budgetConfigureHandler,
   "budget.assign": budgetAssignHandler,
   "budget.apply": budgetApplyHandler,

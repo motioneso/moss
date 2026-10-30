@@ -33,10 +33,7 @@ export function billOccurrence(schedule: BillSchedule, index: number): string | 
     index > 3_652_058
   )
     throw new Error("Invalid bill schedule or occurrence index");
-  if (
-    schedule.endDate &&
-    (!isCalendarDate(schedule.endDate) || schedule.endDate < schedule.anchorDate)
-  )
+  if (schedule.endDate && !isCalendarDate(schedule.endDate))
     throw new Error("Invalid bill end date");
   const [year, month, day] = dateParts(schedule.anchorDate);
   let result: string | null;

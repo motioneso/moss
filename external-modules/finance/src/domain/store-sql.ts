@@ -1,3 +1,4 @@
+import { billSqlStore } from "./store-bills-sql.js";
 // external-modules/finance/src/domain/store-sql.ts
 // FIN-06 (#1166, F6-D3): FinanceStore over module db.query (#1167). Every
 // statement here IS the contract — string-equality tested, since a drift
@@ -311,6 +312,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
     supportsSplits: true,
     budgetPolicy: budgetSqlStore(db),
     targets: targetSqlStore(db),
+    bills: billSqlStore(db),
     manual: manualSqlStore(db),
     reconciliation: reconciliationSqlStore(db),
     imports: importSqlStore(db),

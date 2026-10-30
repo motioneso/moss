@@ -1,3 +1,4 @@
+import { UpcomingScreen } from "./screens/upcoming";
 // external-modules/finance/src/web/root.tsx
 // Module Root: chrome (eyebrow + heading), one polite live region for the whole
 // surface, and the in-module router; jds-* primitives + layout-only fnm-* styles.
@@ -32,11 +33,12 @@ function LiveRegion(): ReactNodeLike {
 }
 
 // Getting started and Settings retain a way back to the four primary views.
-type Tab = "budget" | "transactions" | "accounts" | "reports";
+type Tab = "budget" | "transactions" | "accounts" | "reports" | "upcoming";
 const TAB_PATHS: Record<Tab, string> = {
   budget: "/",
   transactions: "/transactions",
   accounts: "/accounts",
+  upcoming: "/upcoming",
   reports: "/reports"
 };
 
@@ -44,6 +46,7 @@ function tabFor(path: string): Tab | "none" {
   if (path === "/") return "budget";
   if (path === "/transactions") return "transactions";
   if (path === "/accounts") return "accounts";
+  if (path === "/upcoming") return "upcoming";
   if (path === "/reports") return "reports";
   return "none";
 }
@@ -69,7 +72,8 @@ export function Root(props: {
             { value: "budget", label: "Budget" },
             { value: "transactions", label: "Transactions" },
             { value: "accounts", label: "Accounts" },
-            { value: "reports", label: "Reports" }
+            { value: "reports", label: "Reports" },
+            { value: "upcoming", label: "Upcoming" }
           ]}
         />
       </div>
@@ -83,6 +87,8 @@ export function Root(props: {
         <AccountsScreen hostActions={props.hostActions} tools={props.tools} />
       ) : path === "/reports" ? (
         <ReportsScreen />
+      ) : path === "/upcoming" ? (
+        <UpcomingScreen tools={props.tools} />
       ) : path === "/settings" ? (
         <SettingsScreen />
       ) : null}

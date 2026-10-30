@@ -35,11 +35,7 @@
     { "namespace": "finance.rules", "scopes": ["user"] },
     { "namespace": "finance.snapshots", "scopes": ["user"] },
     { "namespace": "finance.budgets", "scopes": ["user"] },
-    {
-      "namespace": "finance.shared",
-      "scopes": ["instance"],
-      "instanceWritePolicy": "module"
-    },
+    { "namespace": "finance.shared", "scopes": ["instance"], "instanceWritePolicy": "module" },
     { "namespace": "finance.settings", "scopes": ["user", "instance"] },
     { "namespace": "finance.meta", "scopes": ["user"] }
   ],
@@ -57,7 +53,9 @@
       "app.finance_reconciliations",
       "app.finance_imports",
       "app.finance_budget_policy",
-      "app.finance_targets"
+      "app.finance_targets",
+      "app.finance_bill_plans",
+      "app.finance_bill_occurrences"
     ]
   },
   "settingsPath": "/settings",
@@ -98,6 +96,12 @@
         "label": "Finance settings",
         "description": "Everything Finance can configure: How much Moss does alone (Ask about everything, Handle routine and ask about new, Run it all and review weekly, or Custom; a new install starts on Handle routine and ask about new), the Maximum per budget move dollar limit, a Customize list of per-action switches, Bank connection keys for admins, and this week's activity with an Undo button on each row and an Earlier weeks button. Freedom and dollar-limit controls stay unavailable until their reads succeed. Read failures have separate explanations and Retry; unverified fallback values are not presented as confirmed settings.",
         "path": "/settings"
+      },
+      {
+        "id": "finance.upcoming",
+        "path": "/upcoming",
+        "description": "Review projected bills, match a posted transaction once, skip an occurrence, or stop future plans. Plans do not post payments.",
+        "label": "Upcoming bills"
       }
     ],
     "features": [
@@ -107,7 +111,7 @@
       },
       {
         "id": "finance.budget-typing",
-        "description": "On Budget, edit Assigned and press Enter or Save. Totals update only after persistence. Writes use the reviewed budget and ledger revision; a stale review preserves typed input and requires refresh. Changes above the configured limit open host confirmation. Cancellation preserves input; uncertain saves require checking saved records. Assignments and metadata activity commit together. Archived categories retain historical amounts. Monthly contribution or balance-by-date guidance uses existing envelope money. Targets take effect from the selected month, with exact remaining cents, overdue and reached states. Saving a target does not move money; stale reviews require refresh."
+        "description": "Budget amounts save with Enter or Save through awaited host actions. Totals show persisted amounts; cancelled, stale or ambiguous responses retain typed input. Check saved records before retrying an ambiguous save. Reviewed revision, fingerprint and previous totals prevent stale overwrites. Currency setup is required. Category targets guide monthly contributions or balance-by-date savings without assigning money; versions preserve earlier months and show exact remaining cents, reached or overdue. Upcoming shows manually planned bills with projected, skipped, posted or needs-review states. Match one owned posted transaction in the same account and currency, undo a review, or stop future projections while retaining history. Actual amounts are shown separately. Plans never pay bills or post transactions."
       },
       {
         "id": "finance.getting-started",
@@ -1008,6 +1012,139 @@
           "expectedFingerprint"
         ]
       }
+    },
+    {
+      "name": "finance.bills.read",
+      "permissionId": "finance.bills.read",
+      "actionLabel": "Review upcoming bills",
+      "description": "Review upcoming bills. Plans are projections; no payment or transaction is created. Writes require the current bills review.",
+      "risk": "read",
+      "handler": "bills.read",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "from": { "type": "string" },
+          "to": { "type": "string" }
+        },
+        "required": ["from", "to"]
+      }
+    },
+    {
+      "name": "finance.bill.create",
+      "permissionId": "finance.bill.create",
+      "actionLabel": "Save a recurring bill",
+      "description": "Save a recurring bill. Plans are projections; no payment or transaction is created. Writes require the current bills review.",
+      "risk": "write",
+      "handler": "bill.create",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string", "maxLength": 160 },
+          "accountId": { "type": "string" },
+          "categoryId": { "type": "string" },
+          "amountCents": { "type": "integer", "minimum": 1, "maximum": 100000000 },
+          "anchorDate": { "type": "string" },
+          "cadence": {
+            "type": "string",
+            "enum": ["once", "weekly", "fortnightly", "monthly", "yearly"]
+          },
+          "expectedRevision": { "type": "integer", "minimum": 0 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "accountId",
+          "categoryId",
+          "amountCents",
+          "anchorDate",
+          "cadence",
+          "expectedRevision",
+          "expectedFingerprint"
+        ]
+      },
+      "executionPolicy": "auto",
+      "actionFamilyId": "drafting"
+    },
+    {
+      "name": "finance.bill.decide",
+      "permissionId": "finance.bill.decide",
+      "actionLabel": "Review a bill occurrence",
+      "description": "Review a bill occurrence. Plans are projections; no payment or transaction is created. Writes require the current bills review.",
+      "risk": "write",
+      "handler": "bill.decide",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "planId": { "type": "string", "format": "uuid" },
+          "dueDate": { "type": "string" },
+          "state": { "type": "string", "enum": ["skipped", "matched"] },
+          "transactionId": { "type": "string" },
+          "expectedRevision": { "type": "integer", "minimum": 0 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": ["planId", "dueDate", "state", "expectedRevision", "expectedFingerprint"]
+      },
+      "executionPolicy": "auto",
+      "actionFamilyId": "drafting"
+    },
+    {
+      "name": "finance.bill.stop",
+      "permissionId": "finance.bill.stop",
+      "actionLabel": "Stop a bill plan",
+      "description": "Stop a bill plan. Plans are projections; no payment or transaction is created. Writes require the current bills review.",
+      "risk": "write",
+      "handler": "bill.stop",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "endDate": { "type": "string" },
+          "expectedRevision": { "type": "integer", "minimum": 0 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": ["id", "endDate", "expectedRevision", "expectedFingerprint"]
+      },
+      "executionPolicy": "auto",
+      "actionFamilyId": "drafting"
+    },
+    {
+      "name": "finance.bill.clear",
+      "permissionId": "finance.bill.clear",
+      "actionLabel": "Undo a bill review",
+      "description": "Return a skipped or matched occurrence to projected. Does not change the ledger.",
+      "risk": "write",
+      "handler": "bill.clear",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "planId": { "type": "string", "format": "uuid" },
+          "dueDate": { "type": "string" },
+          "expectedRevision": { "type": "integer", "minimum": 0 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": ["planId", "dueDate", "expectedRevision", "expectedFingerprint"]
+      },
+      "executionPolicy": "auto",
+      "actionFamilyId": "drafting"
     }
   ],
   "assistantActionFamilies": [

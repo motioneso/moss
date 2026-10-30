@@ -1,3 +1,4 @@
+import { exerciseBills } from "./helpers/finance-live-bills.js";
 // Opt-in live path: built production host, installed bundles, actual auth/API/workers/RLS.
 // No application response interception. All identities/records live in the gate's throwaway DB.
 import { cp, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
@@ -341,6 +342,22 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
         await other.close();
       }
     }, 90_000);
+
+    it("plans matches skips and stops bills through the installed app without changing the ledger", async () => {
+      const page = await context.newPage();
+      try {
+        await exerciseBills(page, base, month, readTool, artifacts);
+      } catch (error) {
+        if (artifacts)
+          await page.screenshot({
+            path: join(resolve(artifacts), "finance-bills-debug.png"),
+            fullPage: true
+          });
+        throw error;
+      } finally {
+        await page.close();
+      }
+    }, 120_000);
 
     it("reviews unchanged legacy amounts in EUR and excludes the other currency in the actual page", async () => {
       const other = await browser.newContext({

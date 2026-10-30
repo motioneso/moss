@@ -475,3 +475,42 @@ not completed recurring-bill capability; persistence, guarded edits, paid matchi
 and the Upcoming UI still require implementation and installed acceptance. The matrix remains
 Missing for recurring bills. Scoped lint and Finance TypeScript passed; the focused Finance
 unit suite passed: 54 files / 563 tests. No DB or browser behavior changes in this foundation.
+
+## Recurring-bill vertical slice
+
+Migrations 0028/0029 add private bill plans and occurrence decisions. The Upcoming primary tab
+supports one-time/weekly/fortnightly/monthly/yearly plans, expected amounts, explicit posted matching,
+skip, undo review and stopping future dates while preserving reviewed history. Plans never post a
+transaction or payment. Replacing a plan currently means stopping it and adding another; single
+occurrence date/amount edits, calendar presentation, detection and bank Bill Sync remain missing.
+The matrix says Partial rather than universal recurring-bill parity.
+
+All writes share the reviewed policy revision/fingerprint gate with budgets and targets. Account,
+category, currency, posted status and duplicate transaction matching are checked in SQL. A match
+shows actual cents independently of its expected amount. Later provider corrections/deletions can
+make a saved match need review; transaction removal is not blocked by a bill foreign key. Reviewed
+occurrences must be undone before stopping earlier than their due dates. Metadata activity contains
+ids and enums; bill names stay in the owner-scoped plan row. Ambiguous saves retain input and stop
+further writes until the user checks saved records. Dialogs keep their captured review tokens.
+
+Observed development verification:
+
+- 8 installed bill SQL cases pass after fixing a pending-transaction fixture that incorrectly tried
+  to change an immutable posted manual row. The corrected fixture uses a synthetic provider row.
+  `moss_finance-20261030-012732-azJkGF.log`, rc 0.
+- RLS negative control removed protection only on the two new tables in a disposable DB:
+  `moss_finance-20261030-012656-VC7eVF.log`, exactly 2 owner-read failures / 6 passes. Restored
+  before the green eight-case run. No disabled production or test guard remains.
+- Existing ledger/currency/target tests: 27 pass (`012735-oHEeFm`); install/backfill: 3 files /
+  11 pass (`012734-0N7HoB`). Both October 30 logs cleaned up their containers.
+- Installed browser: 8 flows pass (`012821-0TlaSn`), including create/match/reload/undo/skip/stop.
+  The first phone inspection found a long form hiding its footer. Shared scrollBody and close
+  controls fixed it; the rerun asserts fixed header/footer and horizontal button bounds.
+  Desktop/phone/light/dark/Sage screenshots were inspected.
+- Static aggregate passed; focused core units passed 55 files / 567 tests. Three additional form
+  tests now pass and cover explicit account/category selection, captured review, cancellation,
+  ambiguous responses and sub-cent rejection. Early selector mistakes in those tests were fixed.
+
+A committed snapshot rerun follows before pushing the slice. No merge/deployment/real bank action
+is authorized. Flexible-pool budget semantics are next, including conservation across mode changes
+and historical versions; do not claim a cosmetic grouping as flexible-budget parity.
