@@ -126,3 +126,12 @@ Privacy negative receipt 135757-B8mg7E / 51bc8cd1a1fc (358524bf plus matrix whit
 failed exactly the intended foreign/admin snapshot test, with the other 28 passing.
 Only the disposable fixture disables the snapshot policy, restored in finally. The
 restored positive Finance run must follow; this expected red is not a passing gate.
+
+Clean bf918fb8 / 291ac9885240 complete receipt 135851-vyBBvA passed all 169
+backend tests and 20 of 21 installed flows. Its only failure is the new filter
+fixture assuming expanded desktop filters remain visible after shrinking to phone
+width (finance-live-ledger-filter line 63). The product correctly starts collapsed;
+the fixture now opens Show filters at each responsive transition. The earlier
+cleared screenshots were inspected at dark 320px/light 1440px; the reconciled phone
+branch needs a restored run. No timeout, financial assertion, rate limit or product
+visibility behavior is weakened. The complete run is failed, not a 190-test pass.

@@ -60,6 +60,8 @@ export async function exerciseLedgerFilter(
       expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
         false
       );
+      if (!(await filter.isVisible()))
+        await page.getByRole("button", { name: /^Show filters/ }).click();
       expect(await filter.isVisible()).toBe(true);
       if (artifacts)
         await page.screenshot({
