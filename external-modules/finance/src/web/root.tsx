@@ -90,7 +90,7 @@ export function Root(props: {
       ) : path === "/upcoming" ? (
         <UpcomingScreen tools={props.tools} />
       ) : path === "/settings" ? (
-        <SettingsScreen />
+        <SettingsScreen tools={props.tools} />
       ) : null}
     </div>
   );

@@ -1,3 +1,4 @@
+import { setCanonicalMerchantRule } from "../merchant-rules.js";
 // external-modules/finance/src/worker/handlers/feed.ts
 //
 // FIN-02 (#1147) Task 10: the feed surface. transactions.query is the web
@@ -481,7 +482,15 @@ export const reviewApplyHandler: ToolFactory = (ports) => async (input) => {
   }
   if (createRule) {
     const payeeKey = normalizePayee(applied[0]!.record.name);
-    if (payeeKey !== "") {
+    if (payeeKey !== "" && store.rules) {
+      await setCanonicalMerchantRule(
+        ports,
+        store,
+        applied[0]!.record.name,
+        categoryIds[0]!,
+        "user"
+      );
+    } else if (payeeKey !== "") {
       const hash = contentHash(payeeKey);
       // One rule per merchant: write the current key format, drop the old bare-hash key.
       await ports.kv.set(NS.rules, ruleKey(payeeKey), {

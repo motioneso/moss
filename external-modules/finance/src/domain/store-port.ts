@@ -1,3 +1,4 @@
+import type { MerchantRuleStore } from "./merchant-rules.js";
 import type { TransactionMetadataStore } from "./transaction-metadata.js";
 import type { ManualTransferStore } from "./manual-transfers.js";
 import type { AccountLifecycleStore } from "./account-lifecycle.js";
@@ -62,6 +63,7 @@ export interface ActivityRecord {
 }
 
 export interface FinanceStore {
+  readonly rules?: MerchantRuleStore;
   readonly metadata?: TransactionMetadataStore;
   readonly transfers?: ManualTransferStore;
   readonly accountLifecycle?: AccountLifecycleStore;

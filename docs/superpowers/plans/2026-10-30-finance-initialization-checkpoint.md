@@ -83,6 +83,8 @@ sets remain outside the repository. Synthetic browser proof is distinct from CI 
    No blanket parity or live bank/provider coverage is claimed.
 
 Initialization implementation was committed and pushed as `61052249ffa904d5f92128363a3c7be4ec6571ce`.
-The separate frozen checkout is clean at that commit. Its full foundation run `070254-PFAraS` is
-running, with Chromium, writable XDG/tool caches and the supported synthetic chat-home configuration.
-The main task branch continues the next reviewed individual-confirmation slice independently.
+The separate frozen checkout is clean at that commit. Its full foundation `070254-PFAraS` finished
+exit 1 with all static checks passed, 19,570 tests passed and the exact same 277 failure identifiers
+as the clean baseline (added zero, removed zero). Later aggregate database stages were unrun. The
+current [merchant-rules checkpoint](2026-10-30-finance-merchant-rules-checkpoint.md) records subsequent
+implementation and verification; the initialization receipt does not cover those newer changes.

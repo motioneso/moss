@@ -1,9 +1,12 @@
+import { MerchantRulesSection } from "../merchant-rules";
+import type { ExternalModuleToolsHandleV1 } from "@moss/module-web-sdk";
 // external-modules/finance/src/web/screens/settings.tsx
 //
 // #3186: Finance Settings. How much Moss does alone (preset or custom), the dollar limit,
 // per-action switches, the admin-only bank keys and the activity list with Undo.
 //
-// Every control saves at once and reverts with an inline error when the save fails.
+// Preference controls save at once and revert with an inline error on failure.
+// Merchant rules use captured previews and awaited host confirmation.
 // Activity rows come from finance.activity.list; Undo runs the finance.activity-undo queue
 // and then refetches until the row shows as undone.
 import {
@@ -339,7 +342,7 @@ function BankKeys(): ReactNodeLike {
 
 // ---- Screen ----
 
-export function SettingsScreen(): ReactNodeLike {
+export function SettingsScreen(props: { tools?: ExternalModuleToolsHandleV1 } = {}): ReactNodeLike {
   const [tiers, setTiers] = useState<Tiers>(tiersForStep("routine"));
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -549,6 +552,7 @@ export function SettingsScreen(): ReactNodeLike {
               </div>
             ) : null}
           </section>
+          <MerchantRulesSection tools={props.tools} />
           <BankKeys />
         </div>
         <aside className="fnm-rail fnm-desktop-only">

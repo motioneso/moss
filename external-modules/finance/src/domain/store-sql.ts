@@ -1,3 +1,4 @@
+import { merchantRuleSqlStore } from "./store-merchant-rules-sql.js";
 import { transactionMetadataSqlStore } from "./store-transaction-metadata-sql.js";
 import { manualTransferSqlStore } from "./store-manual-transfers-sql.js";
 import { accountLifecycleSqlStore } from "./store-account-lifecycle-sql.js";
@@ -262,6 +263,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
     historyExport: historyExportSqlStore(db),
     transfers: manualTransferSqlStore(db),
     metadata: transactionMetadataSqlStore(db),
+    rules: merchantRuleSqlStore(db),
     accountLifecycle: accountLifecycleSqlStore(db),
     supportsSplits: true,
     bulk: transactionBulkSqlStore(db),

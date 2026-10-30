@@ -85,7 +85,8 @@ const ownedTables = [
   "app.finance_bill_plans",
   "app.finance_bill_occurrences",
   "app.finance_flex_policies",
-  "app.finance_manual_transfers"
+  "app.finance_manual_transfers",
+  "app.finance_merchant_rules"
 ];
 
 const NOW_1 = "2026-07-18T12:00:00.000Z";
@@ -350,7 +351,7 @@ async function seedOwnerAData(): Promise<void> {
     itemKey(ITEM_2.itemId),
     ITEM_2 as unknown as Record<string, unknown>
   );
-  // Survivor — never read or copied by storage-migrate.
+  // Legacy rule survives in KV and is also copied into canonical rule state.
   await kv.set(NS.connections, cursorKey("item-1"), { cursor: "opaque-cursor-value" });
 
   await kv.set(NS.accounts, ACCOUNT_1.accountId, ACCOUNT_1 as unknown as Record<string, unknown>);
@@ -376,7 +377,7 @@ async function seedOwnerAData(): Promise<void> {
     computedAt: "2026-07-01T00:00:00.000Z"
   });
 
-  // Survivor — never read or copied by storage-migrate.
+  // Legacy rule survives in KV and is also copied into canonical rule state.
   await kv.set(NS.rules, "trader-joes", {
     payeeKey: "trader joes",
     categoryId: "groceries",

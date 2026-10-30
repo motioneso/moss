@@ -123,7 +123,7 @@ async function categorizeSteps(
       continue;
     }
     const ruleCategory = ruleByPayee.get(normalizePayee(record.name));
-    if (ruleCategory !== undefined) {
+    if (ruleCategory !== undefined && liveIdSet.has(ruleCategory)) {
       out.push({
         ...record,
         categoryId: ruleCategory,

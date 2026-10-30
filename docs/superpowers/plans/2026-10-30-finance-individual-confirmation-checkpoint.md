@@ -41,7 +41,8 @@ Screenshots `finance-single-confirm-<theme>-<width>.png` cover light/dark/Sage a
 Actual phone dark and desktop light were inspected. No horizontal overflow; the footer stays within
 900px height. Screenshots remain outside the repository and contain only synthetic records.
 
-The frozen `61052249` foundation run `070254-PFAraS` is still checking the previous initialization
-snapshot. Keep it frozen until terminal, diagnose differences against the recorded baseline, then
-run final combined verification. Continue canonical merchant-rule list/edit/disable/preview and
-remaining matrix capabilities; neither this single-row flow nor its test count implies parity.
+The frozen `61052249` foundation run `070254-PFAraS` finished exit 1: all static checks passed,
+19,570 tests passed and the same 277 baseline failure identifiers remained, with no additions or
+removals. Later aggregate DB stages were unrun. This predates this UI slice; final combined checks
+remain required. See the subsequent [merchant-rules checkpoint](2026-10-30-finance-merchant-rules-checkpoint.md)
+for ongoing implementation and verification limits.

@@ -209,7 +209,10 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.manual.account-review", "manual.account-review"],
         ["finance.manual.account-update", "manual.account-update"],
         ["finance.manual.transfer-context", "manual.transfer-context"],
-        ["finance.manual.transfer-create", "manual.transfer-create"]
+        ["finance.manual.transfer-create", "manual.transfer-create"],
+        ["finance.rules.list", "rules.list"],
+        ["finance.rules.preview", "rules.preview"],
+        ["finance.rules.update", "rules.update"]
       ]
     );
     for (const tool of result.manifest.assistantTools ?? []) {

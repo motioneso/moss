@@ -1,3 +1,4 @@
+import { exerciseMerchantRules } from "./helpers/finance-live-rules.js";
 import { exerciseFreshFinanceStartup } from "./helpers/finance-live-startup.js";
 import { exerciseIndividualMetadata } from "./helpers/finance-live-metadata.js";
 import { exerciseManualTransfers } from "./helpers/finance-live-transfers.js";
@@ -40,6 +41,8 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
     let browser: Browser;
     let owner: { cookie: string; userId: string };
     let member: { cookie: string; userId: string };
+    let freshApproved: { cookie: string; userId: string };
+    let freshOpen: { cookie: string; userId: string };
     let context: BrowserContext;
     let month = new Date().toISOString().slice(0, 7);
     const artifacts = process.env.MOSS_VISUAL_ARTIFACT_DIR;
@@ -242,18 +245,19 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
           base,
           artifacts,
           createReadyOwner: async () => {
-            if (mode === "approved")
-              return readyOwner("fresh-approved@finance-page.test", "Synthetic approved owner");
-            await registrationRequiresApproval(false);
+            if (mode === "open") await registrationRequiresApproval(false);
             try {
-              return await readyOwner(
-                "fresh-open@finance-page.test",
-                "Synthetic open owner",
-                false,
-                "complete"
+              const person = await readyOwner(
+                `fresh-${mode}@finance-page.test`,
+                `Synthetic ${mode} owner`,
+                mode === "approved",
+                mode === "approved" ? "skip" : "complete"
               );
+              if (mode === "approved") freshApproved = person;
+              else freshOpen = person;
+              return person;
             } finally {
-              await registrationRequiresApproval(true);
+              if (mode === "open") await registrationRequiresApproval(true);
             }
           },
           read: (name, params, cookie) => readTool(name, params, cookie)
@@ -261,6 +265,28 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
       },
       90_000
     );
+
+    it("manages merchant rules with actual preview confirmation and stale recovery", async () => {
+      const other = await signedInContext(freshApproved.cookie);
+      try {
+        await exerciseMerchantRules(
+          other,
+          base,
+          workerDb,
+          freshApproved.userId,
+          month,
+          (name, input) => readTool(name, input, freshApproved.cookie),
+          artifacts
+        );
+        expect(await readTool("finance.rules.list", {}, freshOpen.cookie)).toMatchObject({
+          ready: true,
+          rules: [],
+          total: 0
+        });
+      } finally {
+        await other.close();
+      }
+    }, 90_000);
 
     it("saves a split through the signed-in Finance UI, real API and installed SQL worker", async () => {
       const page = await context.newPage();
@@ -789,60 +815,45 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
       }
     }, 90_000);
 
-    it("manages manual accounts with captured confirmation and preserved history", async () => {
-      const person = await readyOwner(
-        "account-lifecycle@finance-page.test",
-        "Synthetic account lifecycle owner"
-      );
+    async function ownedScenario(kind: "accounts" | "transfers" | "metadata") {
+      const identities = {
+        accounts: ["account-lifecycle", "Synthetic account lifecycle owner"],
+        transfers: ["transfers", "Synthetic transfer owner"],
+        metadata: ["metadata", "Synthetic metadata owner"]
+      } as const;
+      const [email, name] = identities[kind];
+      const person = await readyOwner(`${email}@finance-page.test`, name);
       const other = await signedInContext(person.cookie);
+      const args = [other, base, workerDb, person.userId] as const;
+      const read = (name: string, input?: Record<string, unknown>) =>
+        readTool(name, input, person.cookie);
       try {
-        await exerciseAccountLifecycle(
-          other,
-          base,
-          workerDb,
-          person.userId,
-          (name, input) => readTool(name, input, person.cookie),
-          artifacts
-        );
+        if (kind === "metadata") await exerciseIndividualMetadata(...args, month, read, artifacts);
+        else
+          await (kind === "accounts" ? exerciseAccountLifecycle : exerciseManualTransfers)(
+            ...args,
+            read,
+            artifacts
+          );
       } finally {
         await other.close();
       }
-    }, 90_000);
-
-    it("records linked manual transfers through real confirmation and rejects stale ledger reviews", async () => {
-      const person = await readyOwner("transfers@finance-page.test", "Synthetic transfer owner");
-      const other = await signedInContext(person.cookie);
-      try {
-        await exerciseManualTransfers(
-          other,
-          base,
-          workerDb,
-          person.userId,
-          (name, input) => readTool(name, input, person.cookie),
-          artifacts
-        );
-      } finally {
-        await other.close();
-      }
-    }, 90_000);
-
-    it("reviews individual categories with actual confirmation and rejects changed financial facts", async () => {
-      const person = await readyOwner("metadata@finance-page.test", "Synthetic metadata owner");
-      const other = await signedInContext(person.cookie);
-      try {
-        await exerciseIndividualMetadata(
-          other,
-          base,
-          workerDb,
-          person.userId,
-          month,
-          (name, input) => readTool(name, input, person.cookie),
-          artifacts
-        );
-      } finally {
-        await other.close();
-      }
-    }, 90_000);
+    }
+    it(
+      "manages manual accounts with captured confirmation and preserved history",
+      () => ownedScenario("accounts"),
+      90_000
+    );
+    it(
+      "records linked manual transfers through real confirmation and rejects stale ledger reviews",
+      () => ownedScenario("transfers"),
+      90_000
+    );
+    it(
+      "reviews individual categories with actual confirmation and rejects changed financial facts",
+      () => ownedScenario("metadata"),
+      90_000
+    );
 
     it("shows manual ledger net worth without a bank, with source dates and separated currencies", async () => {
       await exerciseManualNetWorth(

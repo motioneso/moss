@@ -26,3 +26,6 @@ export * from "./reconciliation.js";
 
 export * from "./csv-import.js";
 export * from "./budget-context.js";
+
+export * from "./merchant-rules.js";
+export * from "./store-merchant-rules-sql.js";

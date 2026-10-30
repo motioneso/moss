@@ -1,3 +1,4 @@
+import { copyLegacyMerchantRules } from "../merchant-rules.js";
 import { assertCategoryFunding } from "./flex-guards.js";
 import { FLEX_POOL } from "../../domain/flex.js";
 // external-modules/finance/src/worker/handlers/activity.ts
@@ -90,6 +91,12 @@ async function readRule(
   ports: WorkerPorts,
   ruleId: string
 ): Promise<{ key: string; value: { categoryId?: string; payeeKey?: string } } | null> {
+  const canonical = (await (await ports.store()).rules?.all())?.find((r) => r.id === ruleId);
+  if (canonical)
+    return {
+      key: ruleId,
+      value: { categoryId: canonical.categoryId, payeeKey: canonical.payeeKey }
+    };
   for (const key of [`rule:${ruleId}`, ruleId]) {
     const value = (await ports.kv.get(NS.rules, key)) as {
       categoryId?: string;
@@ -178,7 +185,9 @@ async function describe(row: ActivityRecord, names: Names): Promise<string> {
         ? "Returned a transaction to one category"
         : `Split a transaction between ${num(p.parts) ?? 0} categories`;
     case "merchant-rule.set":
-      return `Made a rule: ${await names.merchantForRule(str(p.ruleId))} goes to ${names.category(str(p.categoryId))}`;
+      return p.enabled === 0
+        ? `Disabled merchant rule: ${await names.merchantForRule(str(p.ruleId))}`
+        : `Made a rule: ${await names.merchantForRule(str(p.ruleId))} goes to ${names.category(str(p.categoryId))}`;
     case "category.add":
       return `Added the category ${names.category(str(p.categoryId))}`;
     case "category.edit":
@@ -459,6 +468,13 @@ export const activityUndoHandler: ToolFactory = (ports) => async (input) => {
       (r) => r.id === row.params.transactionId
     );
     if (!current || !(await store.metadata.undo(activityId, current.writeRevision, at)))
+      throw CHANGED();
+    return { status: "ok", undone: true };
+  }
+  if (row.kind === "merchant-rule.set" && store.rules) {
+    await copyLegacyMerchantRules(ports, store.rules);
+    const current = (await store.rules.all()).find((r) => r.id === row.params.ruleId);
+    if (!current || !(await store.rules.undo(activityId, current.writeRevision, at)))
       throw CHANGED();
     return { status: "ok", undone: true };
   }

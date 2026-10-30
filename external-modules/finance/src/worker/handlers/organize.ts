@@ -1,3 +1,4 @@
+import { setCanonicalMerchantRule } from "../merchant-rules.js";
 import { assertCategoryFunding } from "./flex-guards.js";
 // external-modules/finance/src/worker/handlers/organize.ts
 //
@@ -57,6 +58,23 @@ export const ruleSetHandler: ToolFactory = (ports) => async (input) => {
   const payeeKey = normalizePayee(merchant);
   if (payeeKey === "") {
     throw new InputError("invalid_merchant", "merchant has no letters to match on");
+  }
+
+  const selectedStore = await ports.store();
+  if (selectedStore.rules) {
+    const { ruleId, previousCategoryId } = await setCanonicalMerchantRule(
+      ports,
+      selectedStore,
+      merchant,
+      categoryId,
+      "moss"
+    );
+    return {
+      status: "ok",
+      ruleId,
+      before: { categoryId: previousCategoryId },
+      after: { categoryId }
+    };
   }
 
   const key = ruleKey(payeeKey);

@@ -57,7 +57,8 @@
       "app.finance_bill_plans",
       "app.finance_bill_occurrences",
       "app.finance_flex_policies",
-      "app.finance_manual_transfers"
+      "app.finance_manual_transfers",
+      "app.finance_merchant_rules"
     ]
   },
   "settingsPath": "/settings",
@@ -96,7 +97,7 @@
       {
         "id": "finance.settings",
         "label": "Finance settings",
-        "description": "Everything Finance can configure: How much Moss does alone (Ask about everything, Handle routine and ask about new, Run it all and review weekly, or Custom; a new install starts on Handle routine and ask about new), the Maximum per budget move dollar limit, a Customize list of per-action switches, Bank connection keys for admins, and this week's activity with an Undo button on each row and an Earlier weeks button. Freedom and dollar-limit controls stay unavailable until their reads succeed. Read failures have separate explanations and Retry; unverified fallback values are not presented as confirmed settings.",
+        "description": "Finance preferences, merchant rules, bank keys and recent activity. Freedom presets and the Maximum per budget move stay unavailable until confirmed reads; failures offer Retry and preserve previous values. Customize sets per-action assistant preferences. Merchant rules have server-side normalized search, exact matching counts and bounded Show more. Add/edit/disable/enable use a captured rule revision, read-only monthly examples and mandatory host confirmation. Existing history is never retroactively edited. Cancel retains review; stale/uncertain saves block until an explicit successful saved-rule check. Initialization and empty lists are distinct; persistent setup needs the Finance migration worker. Bank keys remain admin-only. Recent activity has Undo and Earlier weeks. Busy rule reads honor the server wait before an explicit retry; no write or read is automatically retried.",
         "path": "/settings"
       },
       {
@@ -129,7 +130,7 @@
       },
       {
         "id": "finance.chat-money-actions",
-        "description": "In chat, Moss can move money between categories, set a category's assigned total, make a merchant rule, and add, rename or archive categories. Each reports what it changed, before and after, and is logged. A move or change larger than the Maximum per budget move setting in Finance settings (default $100) asks for approval first; smaller ones follow the freedom setting."
+        "description": "In chat, Moss can move money between categories, set a category's assigned total, make a merchant rule, and add, rename or archive categories. Each reports what it changed, before and after, and is logged. A move or change larger than the Maximum per budget move setting in Finance settings (default $100) asks for approval first; smaller ones follow the freedom setting. SQL merchant rules use captured revisions and atomic configuration/activity. Legacy rules copy without deletion; disabled canonical rows prevent old KV rules returning. Undo restores configuration and its activity mark together. Rule-plus-category queued writes remain separate. Settings offers rule search/counts and up to 20 owned history examples in a chosen month. Add/edit/disable/enable always ask through the host, preserve cancellation and require a saved-rule check after stale or uncertain results. Rules initialization has a separate worker/retry state; history is never retroactively edited."
       },
       {
         "id": "finance.settings-freedom",
@@ -141,7 +142,7 @@
       },
       {
         "id": "finance.settings-actions",
-        "description": "On Finance settings, Customize lists one switch per action Moss can take (sort purchases from merchants you have seen, move money between categories, sort purchases from new merchants, make merchant rules, add, rename or archive categories). On lets Moss do it alone, off makes Moss ask first. Connect a bank and Share an account show Always asks and cannot be switched."
+        "description": "On Finance settings, Customize lists one switch per action Moss can take (sort purchases from merchants you have seen, move money between categories, sort purchases from new merchants, make merchant rules, add, rename or archive categories). On lets Moss do it alone, off makes Moss ask first. Connect a bank and Share an account show Always asks and cannot be switched. Reviewed native merchant-rule management always asks, independently of these assistant preferences."
       },
       {
         "id": "finance.settings-bank-keys",
@@ -1531,6 +1532,86 @@
           "isoCurrency",
           "cleared"
         ]
+      }
+    },
+    {
+      "name": "finance.rules.list",
+      "permissionId": "finance.rules.list",
+      "description": "List owned canonical merchant rules, enabled state, captured revisions and categories. Normalized merchant search with exact matching count and an explicit loaded limit. Reads only; reports initialization separately from an empty list.",
+      "risk": "read",
+      "handler": "rules.list",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "search": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          }
+        }
+      }
+    },
+    {
+      "name": "finance.rules.preview",
+      "permissionId": "finance.rules.preview",
+      "description": "Preview one normalized merchant match against owned history in a selected month. Returns a matching count, up to twenty examples and current rule. Never edits existing history or applies a rule retroactively; notes and household mirrors are omitted.",
+      "risk": "read",
+      "handler": "rules.preview",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "merchant": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          }
+        },
+        "required": ["merchant", "month"]
+      }
+    },
+    {
+      "name": "finance.rules.update",
+      "permissionId": "finance.rules.update",
+      "actionLabel": "Save merchant rule",
+      "description": "After captured review, create or change an owned normalized merchant-to-category rule, or disable/re-enable it. Requires the captured revision for edits and expected absence for creation. Commits rule configuration and identifier-only activity atomically; stale edits save nothing. Does not modify existing transactions.",
+      "risk": "write",
+      "handler": "rules.update",
+      "executionPolicy": "confirm",
+      "actionFamilyId": "rules",
+      "confirmWhenKeys": ["merchant", "categoryId", "enabled"],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "merchant": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "categoryId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "expectedRevision": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{32}$"
+          }
+        },
+        "required": ["merchant", "categoryId", "enabled"]
       }
     }
   ],

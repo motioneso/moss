@@ -1,3 +1,4 @@
+import { effectiveMerchantRules } from "../merchant-rules.js";
 // external-modules/finance/src/worker/handlers/sync.ts
 //
 // FIN-01 (#1146) Task 6: the sync engine. ONE handler serves both the
@@ -115,16 +116,7 @@ async function loadCategorizeCtx(ports: WorkerPorts, store: FinanceStore): Promi
   const categories = await loadCategories(ports);
   if (!store.budgetPolicy && (await ports.kv.get(NS.categories, "taxonomy")) === null)
     await ports.kv.set(NS.categories, "taxonomy", { categories });
-  // Old-format and new-format keys both load. If one merchant ever holds two
-  // rules, the newest wins so load order cannot pick the loser.
-  const newest = new Map<string, Rule>();
-  for (const key of await ports.kv.list(NS.rules)) {
-    const rule = (await ports.kv.get(NS.rules, key)) as Rule | null;
-    if (!rule) continue;
-    const held = newest.get(rule.payeeKey);
-    if (!held || rule.createdAt >= held.createdAt) newest.set(rule.payeeKey, rule);
-  }
-  const rules = [...newest.values()];
+  const rules = await effectiveMerchantRules(ports, store);
   return {
     rules,
     categories,
