@@ -45,6 +45,8 @@ export type TransactionRecord = {
   cleared?: boolean;
   reconciledAt?: string | null;
   transferId?: string;
+  /** Captured SQL row version; omitted from shared projections and persisted payloads. */
+  writeRevision?: string;
 };
 
 /** One month-chunk value at monthKey(); sorted date desc, then id asc. */

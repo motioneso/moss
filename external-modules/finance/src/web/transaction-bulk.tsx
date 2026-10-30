@@ -6,6 +6,7 @@ import {
   RowIndexItem,
   Select,
   useState,
+  useRef,
   type ExternalModuleToolsHandleV1,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
@@ -135,21 +136,26 @@ export function TransactionBulkBar(props: {
     </section>
   );
 }
-function BulkCategoryDialog(props: {
+export function BulkCategoryDialog(props: {
   rows: readonly BulkRow[];
   category: { id: string; name: string };
+  previousCategory?: string;
   tools?: ExternalModuleToolsHandleV1;
   onClose: () => void;
   onSaved: () => void;
   onUncertain: () => void;
 }): ReactNodeLike {
+  const [previousCategory] = useState(props.previousCategory);
+  const individual = previousCategory !== undefined;
   const [rows] = useState(() => props.rows.map((r) => ({ ...r })));
   const [category] = useState(props.category);
   const [busy, setBusy] = useState(false),
     [blocked, setBlocked] = useState(false),
     [message, setMessage] = useState<string | null>(null);
+  const inFlight = useRef(false);
   const save = async () => {
-    if (!props.tools || busy || blocked) return;
+    if (!props.tools || inFlight.current || blocked) return;
+    inFlight.current = true;
     setBusy(true);
     setMessage(null);
     try {
@@ -158,7 +164,11 @@ function BulkCategoryDialog(props: {
         rows: rows.map((r) => ({ id: r.id, writeRevision: r.writeRevision! }))
       });
       if (result.status === "succeeded" && result.result.status === "ok") {
-        announce(`Changed the category for ${rows.length} transactions.`);
+        announce(
+          rows.length === 1
+            ? "Category changed."
+            : `Changed the category for ${rows.length} transactions.`
+        );
         invalidateQueries();
         props.onSaved();
         return;
@@ -189,16 +199,21 @@ function BulkCategoryDialog(props: {
         "Saving could not be confirmed. Close this review and check saved records before trying again."
       );
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   };
   return (
     <Dialog
-      title="Review selected transactions"
-      description={`${rows.length} transactions → ${category.name}`}
+      title={individual ? "Review category change" : "Review selected transactions"}
+      description={
+        rows.length === 1
+          ? `${previousCategory ?? "Current category"} → ${category.name}`
+          : `${rows.length} transactions → ${category.name}`
+      }
       scrollBody
       onClose={() => {
-        if (!busy) props.onClose();
+        if (!inFlight.current) props.onClose();
       }}
       closeLabel="Close category review"
       closeDisabled={busy}
@@ -206,8 +221,14 @@ function BulkCategoryDialog(props: {
       dismissOnBackdrop={!busy}
       footer={
         <>
-          <Button variant="secondary" disabled={busy} onClick={props.onClose}>
-            Back to selection
+          <Button
+            variant="secondary"
+            disabled={busy}
+            onClick={() => {
+              if (!inFlight.current) props.onClose();
+            }}
+          >
+            {individual ? "Back to transactions" : "Back to selection"}
           </Button>
           <Button disabled={busy || blocked} onClick={() => void save()}>
             {busy ? "Confirming change…" : "Confirm category change"}
@@ -217,8 +238,9 @@ function BulkCategoryDialog(props: {
     >
       <div className="fnm-block">
         <p>
-          Change all selected categories to {category.name}. Amounts, dates, notes and
-          reconciliation stay unchanged. No merchant rule is created.
+          {individual ? "Change this category" : "Change all selected categories"} to{" "}
+          {category.name}. Amounts, dates, notes and reconciliation stay unchanged. No merchant rule
+          is created.
         </p>
         <RowIndex density="compact">
           {rows.map((row) => (

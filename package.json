@@ -207,6 +207,8 @@
     "test:integration:finance-bulk": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-bulk.test.ts",
     "test:integration:finance-accounts-live": "pnpm build:app-map && pnpm --filter @moss/web build && MOSS_FINANCE_LIVE=1 tsx scripts/test-integration.ts tests/integration/finance-page-live.test.ts --testNamePattern 'manages manual accounts'",
     "test:integration:finance-transfers-live": "pnpm build:app-map && pnpm --filter @moss/web build && MOSS_FINANCE_LIVE=1 tsx scripts/test-integration.ts tests/integration/finance-page-live.test.ts --testNamePattern 'records linked manual transfers'",
+    "test:integration:finance-metadata-live": "pnpm build:app-map && pnpm --filter @moss/web build && MOSS_FINANCE_LIVE=1 tsx scripts/test-integration.ts tests/integration/finance-page-live.test.ts --testNamePattern 'reviews individual categories'",
+    "test:integration:finance-metadata": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-transaction-metadata.test.ts",
     "test:integration:finance-transfers": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-manual-transfers.test.ts",
     "test:integration:finance-accounts": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-account-lifecycle.test.ts",
     "test:integration:finance-confirm-live": "pnpm build:app-map && pnpm --filter @moss/web build && MOSS_FINANCE_LIVE=1 tsx scripts/test-integration.ts tests/integration/finance-page-live.test.ts --testNamePattern 'confirms captured categories'",

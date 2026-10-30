@@ -73,10 +73,12 @@ export function transactionBulkSqlStore(db: FinanceDb): TransactionBulkStore {
           UPDATE app.finance_transactions t SET category_id=$2,categorized_by='user',review_state='confirmed'
           FROM reviewed r WHERE t.id=r.id AND EXISTS(SELECT 1 FROM eligible) RETURNING t.id
         ), logged AS (
-          INSERT INTO app.finance_activity(owner_user_id,id,at,actor,kind,params)
+          INSERT INTO app.finance_activity(owner_user_id,id,at,actor,kind,params,undo)
           SELECT app.current_actor_user_id(),gen_random_uuid(),now(),'user','transaction.categorize',
             jsonb_build_object('transactionId',r.id,'accountId',r.account_id,'month',to_char(r.date,'YYYY-MM'),
-              'categoryId',$2::text,'previousCategoryId',r.category_id)
+              'categoryId',$2::text,'previousCategoryId',r.category_id),
+            CASE WHEN r.category_id IS DISTINCT FROM $2 THEN jsonb_build_object('transactionId',r.id,
+              'accountId',r.account_id,'month',to_char(r.date,'YYYY-MM'),'categoryId',r.category_id) ELSE NULL END
           FROM reviewed r JOIN changed c ON c.id=r.id RETURNING id
         ) SELECT EXISTS(SELECT 1 FROM eligible) AS applied`,
         [JSON.stringify(rows), categoryId]

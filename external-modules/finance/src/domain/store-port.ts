@@ -1,3 +1,4 @@
+import type { TransactionMetadataStore } from "./transaction-metadata.js";
 import type { ManualTransferStore } from "./manual-transfers.js";
 import type { AccountLifecycleStore } from "./account-lifecycle.js";
 import type { HistoryExportStore } from "./history-export.js";
@@ -61,6 +62,7 @@ export interface ActivityRecord {
 }
 
 export interface FinanceStore {
+  readonly metadata?: TransactionMetadataStore;
   readonly transfers?: ManualTransferStore;
   readonly accountLifecycle?: AccountLifecycleStore;
   readonly historyExport?: HistoryExportStore;
@@ -91,7 +93,8 @@ export interface FinanceStore {
   /**
    * Replace one (account, month) window: upsert `records`, prune rows whose
    * id is absent (pending-twin removal / provider removals). Not atomic —
-   * both halves are idempotent and re-sync converges (cursor persists last).
+   * SQL preserves current user metadata for same-ID provider updates. Different-ID
+   * pending replacement and concurrent pages are separate convergence limits.
    */
   putTransactionChunk(
     accountId: string,
@@ -103,7 +106,7 @@ export interface FinanceStore {
    * confirmed. A merchant counts as "seen" when its normalized name is here.
    */
   listConfirmedPayeeNames(): Promise<string[]>;
-  /** Rewrite a single transaction in place (feed categorize/note paths). */
+  /** General/compatibility persistence. SQL category handlers use metadata instead. */
   putTransaction(record: TransactionRecord): Promise<void>;
   /** Compare-and-set allocations plus activity in one SQL statement. False leaves data unchanged. */
   setTransactionSplits(change: SplitChange): Promise<boolean>;

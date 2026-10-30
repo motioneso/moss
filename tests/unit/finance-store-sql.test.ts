@@ -142,10 +142,10 @@ describe("sqlStore (FIN-06b #1166)", () => {
           "ON CONFLICT (owner_user_id, id) DO UPDATE SET account_id = EXCLUDED.account_id, " +
           "date = EXCLUDED.date, amount_cents = EXCLUDED.amount_cents, iso_currency = EXCLUDED.iso_currency, " +
           "name = EXCLUDED.name, merchant = EXCLUDED.merchant, plaid_category = EXCLUDED.plaid_category, " +
-          "category_id = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN finance_transactions.category_id ELSE EXCLUDED.category_id END, pending = EXCLUDED.pending, " +
+          "category_id = CASE WHEN finance_transactions.splits <> '[]'::jsonb OR ($17 AND finance_transactions.categorized_by = 'user') THEN finance_transactions.category_id ELSE EXCLUDED.category_id END, pending = EXCLUDED.pending, " +
           "pending_transaction_id = EXCLUDED.pending_transaction_id, " +
-          "categorized_by = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN finance_transactions.categorized_by ELSE EXCLUDED.categorized_by END, notes = EXCLUDED.notes, " +
-          "review_state = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN " +
+          "categorized_by = CASE WHEN finance_transactions.splits <> '[]'::jsonb OR ($17 AND finance_transactions.categorized_by = 'user') THEN finance_transactions.categorized_by ELSE EXCLUDED.categorized_by END, notes = CASE WHEN $17 THEN finance_transactions.notes ELSE EXCLUDED.notes END, " +
+          "review_state = CASE WHEN finance_transactions.splits <> '[]'::jsonb OR ($17 AND finance_transactions.categorized_by = 'user') THEN " +
           "CASE WHEN finance_transactions.amount_cents <> EXCLUDED.amount_cents OR finance_transactions.iso_currency <> EXCLUDED.iso_currency THEN 'needs_look' ELSE finance_transactions.review_state END " +
           "ELSE EXCLUDED.review_state END, ai_confidence = EXCLUDED.ai_confidence WHERE finance_transactions.source = 'provider'"
       );
@@ -166,7 +166,8 @@ describe("sqlStore (FIN-06b #1166)", () => {
       null,
       "confirmed",
       null,
-      "[]"
+      "[]",
+      true
     ]);
     expect(db.calls[1]!.params).toEqual([
       "b",
@@ -184,7 +185,8 @@ describe("sqlStore (FIN-06b #1166)", () => {
       null,
       "confirmed",
       null,
-      "[]"
+      "[]",
+      true
     ]);
     expect(db.calls[2]!.text).toBe(
       "DELETE FROM app.finance_transactions WHERE source = 'provider' AND account_id = $1 AND date >= $2 AND date < $3 " +
@@ -252,10 +254,10 @@ describe("sqlStore (FIN-06b #1166)", () => {
         "ON CONFLICT (owner_user_id, id) DO UPDATE SET account_id = EXCLUDED.account_id, " +
         "date = EXCLUDED.date, amount_cents = EXCLUDED.amount_cents, iso_currency = EXCLUDED.iso_currency, " +
         "name = EXCLUDED.name, merchant = EXCLUDED.merchant, plaid_category = EXCLUDED.plaid_category, " +
-        "category_id = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN finance_transactions.category_id ELSE EXCLUDED.category_id END, pending = EXCLUDED.pending, " +
+        "category_id = CASE WHEN finance_transactions.splits <> '[]'::jsonb OR ($17 AND finance_transactions.categorized_by = 'user') THEN finance_transactions.category_id ELSE EXCLUDED.category_id END, pending = EXCLUDED.pending, " +
         "pending_transaction_id = EXCLUDED.pending_transaction_id, " +
-        "categorized_by = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN finance_transactions.categorized_by ELSE EXCLUDED.categorized_by END, notes = EXCLUDED.notes, " +
-        "review_state = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN " +
+        "categorized_by = CASE WHEN finance_transactions.splits <> '[]'::jsonb OR ($17 AND finance_transactions.categorized_by = 'user') THEN finance_transactions.categorized_by ELSE EXCLUDED.categorized_by END, notes = CASE WHEN $17 THEN finance_transactions.notes ELSE EXCLUDED.notes END, " +
+        "review_state = CASE WHEN finance_transactions.splits <> '[]'::jsonb OR ($17 AND finance_transactions.categorized_by = 'user') THEN " +
         "CASE WHEN finance_transactions.amount_cents <> EXCLUDED.amount_cents OR finance_transactions.iso_currency <> EXCLUDED.iso_currency THEN 'needs_look' ELSE finance_transactions.review_state END " +
         "ELSE EXCLUDED.review_state END, ai_confidence = EXCLUDED.ai_confidence WHERE finance_transactions.source = 'provider'"
     );
@@ -275,7 +277,8 @@ describe("sqlStore (FIN-06b #1166)", () => {
       null,
       "confirmed",
       null,
-      "[]"
+      "[]",
+      false
     ]);
   });
 

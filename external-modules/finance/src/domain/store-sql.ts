@@ -1,3 +1,4 @@
+import { transactionMetadataSqlStore } from "./store-transaction-metadata-sql.js";
 import { manualTransferSqlStore } from "./store-manual-transfers-sql.js";
 import { accountLifecycleSqlStore } from "./store-account-lifecycle-sql.js";
 import { historyExportSqlStore } from "./store-history-export-sql.js";
@@ -40,8 +41,13 @@ function monthWindow(month: string): { from: string; to: string } {
   return { from: `${month}-01`, to: `${next}-01` };
 }
 
-async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Promise<void> {
+async function upsertTransaction(
+  db: FinanceDb,
+  record: TransactionRecord,
+  preserveUserMetadata = false
+): Promise<void> {
   if (record.source === "manual") {
+    if (preserveUserMetadata) return;
     // Categories/notes remain editable after reconciliation; these fields never move money.
     await db.query(
       "UPDATE app.finance_transactions SET category_id = CASE WHEN splits = '[]'::jsonb THEN $2 ELSE category_id END, " +
@@ -66,10 +72,10 @@ async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Prom
       "ON CONFLICT (owner_user_id, id) DO UPDATE SET account_id = EXCLUDED.account_id, " +
       "date = EXCLUDED.date, amount_cents = EXCLUDED.amount_cents, iso_currency = EXCLUDED.iso_currency, " +
       "name = EXCLUDED.name, merchant = EXCLUDED.merchant, plaid_category = EXCLUDED.plaid_category, " +
-      "category_id = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN finance_transactions.category_id ELSE EXCLUDED.category_id END, pending = EXCLUDED.pending, " +
+      "category_id = CASE WHEN finance_transactions.splits <> '[]'::jsonb OR ($17 AND finance_transactions.categorized_by = 'user') THEN finance_transactions.category_id ELSE EXCLUDED.category_id END, pending = EXCLUDED.pending, " +
       "pending_transaction_id = EXCLUDED.pending_transaction_id, " +
-      "categorized_by = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN finance_transactions.categorized_by ELSE EXCLUDED.categorized_by END, notes = EXCLUDED.notes, " +
-      "review_state = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN " +
+      "categorized_by = CASE WHEN finance_transactions.splits <> '[]'::jsonb OR ($17 AND finance_transactions.categorized_by = 'user') THEN finance_transactions.categorized_by ELSE EXCLUDED.categorized_by END, notes = CASE WHEN $17 THEN finance_transactions.notes ELSE EXCLUDED.notes END, " +
+      "review_state = CASE WHEN finance_transactions.splits <> '[]'::jsonb OR ($17 AND finance_transactions.categorized_by = 'user') THEN " +
       "CASE WHEN finance_transactions.amount_cents <> EXCLUDED.amount_cents OR finance_transactions.iso_currency <> EXCLUDED.iso_currency THEN 'needs_look' ELSE finance_transactions.review_state END " +
       "ELSE EXCLUDED.review_state END, ai_confidence = EXCLUDED.ai_confidence WHERE finance_transactions.source = 'provider'",
     [
@@ -88,7 +94,8 @@ async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Prom
       record.notes ?? null,
       record.reviewState ?? (record.categoryId == null ? "needs_look" : "confirmed"),
       record.aiConfidence ?? null,
-      JSON.stringify(record.splits ?? [])
+      JSON.stringify(record.splits ?? []),
+      preserveUserMetadata
     ]
   );
 }
@@ -254,6 +261,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
   return {
     historyExport: historyExportSqlStore(db),
     transfers: manualTransferSqlStore(db),
+    metadata: transactionMetadataSqlStore(db),
     accountLifecycle: accountLifecycleSqlStore(db),
     supportsSplits: true,
     bulk: transactionBulkSqlStore(db),
@@ -417,7 +425,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
 
     async putTransactionChunk(accountId, month, records) {
       for (const record of records) {
-        await upsertTransaction(db, record);
+        await upsertTransaction(db, record, true);
       }
       const { from, to } = monthWindow(month);
       await db.query(

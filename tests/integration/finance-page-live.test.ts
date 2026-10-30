@@ -1,3 +1,4 @@
+import { exerciseIndividualMetadata } from "./helpers/finance-live-metadata.js";
 import { exerciseManualTransfers } from "./helpers/finance-live-transfers.js";
 import { exerciseAccountLifecycle } from "./helpers/finance-live-accounts.js";
 import { exerciseCategoryConfirmation } from "./helpers/finance-live-confirm.js";
@@ -796,6 +797,38 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
           base,
           workerDb,
           person.userId,
+          (name, input) => readTool(name, input, person.cookie),
+          artifacts
+        );
+      } finally {
+        await other.close();
+      }
+    }, 90_000);
+
+    it("reviews individual categories with actual confirmation and rejects changed financial facts", async () => {
+      const person = await signUp("metadata@finance-page.test", "Synthetic metadata owner");
+      expect((await post(`/api/admin/users/${person.userId}/approve`, {})).statusCode).toBe(200);
+      expect((await post("/api/onboarding/skip", {}, person.cookie)).statusCode).toBe(200);
+      const other = await browser.newContext({
+        viewport: { width: 1440, height: 900 },
+        reducedMotion: "reduce"
+      });
+      await other.addCookies(
+        person.cookie.split("; ").map((cookie) => {
+          const at = cookie.indexOf("=");
+          return { name: cookie.slice(0, at), value: cookie.slice(at + 1), url: base };
+        })
+      );
+      await other.route("**/*", (route) =>
+        new URL(route.request().url()).origin === base ? route.continue() : route.abort()
+      );
+      try {
+        await exerciseIndividualMetadata(
+          other,
+          base,
+          workerDb,
+          person.userId,
+          month,
           (name, input) => readTool(name, input, person.cookie),
           artifacts
         );

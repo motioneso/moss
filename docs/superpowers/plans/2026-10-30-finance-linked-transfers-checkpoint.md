@@ -115,3 +115,36 @@ They remain outside the repository; no real financial data or credentials are in
 The final test-type run after correcting the fixture tuple/literal annotations completed rc=0.
 Source is ready for a reviewable implementation commit; final committed static, browser and
 aggregate receipts are the next step, with no merge or deployment implied.
+
+## Committed verification — 22c1573e
+
+The slice was committed and pushed as `22c1573e545d72057a4167d4f5cb323f7b3976a4`.
+A clean, independent dependency install in the frozen verification checkout resolved the earlier
+outside-repository Computer packaging failures. Supported official tooling used workspace-local
+Node/XDG caches; ONNX's documented CPU install configuration skipped its optional CUDA download.
+No source guard, signing requirement, timeout or owner check was weakened. Chromium was supplied
+through the supported environment variable, not a fabricated browser installation.
+
+All receipts below have clean input fingerprint `c91876f86f34`, Node 24.19.0 and pnpm 10.6.2:
+
+- Full installed browser: `053246-VVPVHF`, sixteen passed, exit 0. Actual auth/API/installed worker
+  and owner SQL, synthetic data, no application response mocks. This supersedes the earlier failed
+  development runs as committed browser proof.
+- Transfer SQL: `053649-Huh0AM`, twelve passed, exit 0.
+- Installer/backfill/parity: `053651-qGDY16`, three files / eleven passed, exit 0.
+- Manual ledger/import/reconciliation: `053652-nhotcA`, twenty-seven passed, exit 0.
+- Full foundation: `053648-Oahav4`, exit 1. Static checks passed, then the unit stage reported
+  1,618 files / 19,562 tests passed; 21 files / 277 tests failed; three skipped. The normalized
+  failure-identifier set exactly equals the 277 identifiers in `040401-c9zwQ0`: no additions or
+  removals. Computer trust/native/session prerequisites, the unavailable bundled Sports browser
+  and unmapped UID 100001 ACL cases remain. Later aggregate database stages were unrun because
+  the unit stage failed; the separate database receipts above are passes, not aggregate passes.
+
+The lifecycle run `050444-DT3I8N` also ended exit 1: 285 unique failure identifiers, comprising
+those 277 plus four outside-repository packaging cases and four Parity setup/hook failures from
+missing browser configuration. The clean install and browser configuration recovered all eight;
+those setup failures are absent from the final transfer aggregate. Do not describe that earlier
+lifecycle run itself as equal to the 277-case baseline.
+
+The next implemented continuation is [reviewed metadata](2026-10-30-finance-metadata-checkpoint.md).
+Its scope and receipts are separate from the clean transfer commit above.

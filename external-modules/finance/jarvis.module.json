@@ -72,7 +72,7 @@
       {
         "id": "finance.transactions",
         "label": "Transactions",
-        "description": "Transactions filters by month/account/category/search/posting/direction/review/duplicates, with loaded/full counts, splits and confirmed atomic bulk categorization. Selection survives filters; stale batches save nothing. Loaded category confirmation captures up to 200 owned posted unsplit needs-look rows, awaits persistence and requires fresh reads after failure. Cancellation retains review. Individual/rule queues remain separate. Linked manual transfer legs cannot become category spending or splits. Export loaded rows keeps visible scope. Export history prepares an owned-only cross-month CSV by inclusive dates/account, with captured scope/count/time and durable transfer links. Notes and household mirrors are omitted; over 5,000 rows or 2 MiB refuses rather than truncates. Loading/empty/error/retry states preserve filters; busy reads explain the server wait. Shared records remain read only.",
+        "description": "Filter by month, account, category, payee/notes, posting, direction, review or possible duplicates. Owned posted unsplit edits to non-transfer categories and loaded confirmation capture revisions, ask for host confirmation and await persistence. Stale batches save nothing; cancellation keeps review. Pending/KV and merchant-rule queues remain separate. Splits and linked transfers retain their protections. Loaded CSV reflects visible scope; owned history export captures cross-month dates/account/count, omits notes and mirrors, and refuses beyond 5,000 rows or 2 MiB. Loading, empty, error and busy states preserve filters. Shared records remain read only.",
         "path": "/transactions"
       },
       {
@@ -153,7 +153,7 @@
       },
       {
         "id": "finance.ledger-safety",
-        "description": "Amounts use safe integer hundredths and decimal provider rounding. Invalid calendar months are rejected. Transfer inference requires the same currency. A batch of budget assignments validates every category and amount before one SQL commit; a rejected batch changes nothing."
+        "description": "Amounts use safe integer hundredths and decimal provider rounding. Invalid calendar months are rejected. Transfer inference requires the same currency. A batch of budget assignments validates every category and amount before one SQL commit; a rejected batch changes nothing. SQL chat and queued category edits use captured revisions and one metadata-only batch with activity. Stale, split, linked, foreign or unavailable-category rows refuse without partial edits. Explicit notes stay off activity and job payloads. Same-ID provider-window updates preserve current user categories and notes; changed money requests review. Different-ID pending replacement and concurrent sync pages need separate acceptance. Category Undo restores metadata, reversal activity and the undone mark atomically. Queue acceptance is not proof of persistence; merchant-rule and category writes remain separate."
       },
       {
         "id": "finance.register-filters",

@@ -231,13 +231,15 @@ async function applyCategory(
   if (!liveCategoryIds.has(ids.categoryId)) {
     throw new InputError("invalid_category", "categoryId is not a live category");
   }
-  // FIN-06c (#1166) Task 9: locate the record via the chunk read, but write
-  // it back through store.putTransaction — the store re-derives the same
-  // (accountId, month) chunk from the record itself, so there's no chunk to
-  // hand back and re-set anymore.
+  // Read the captured revision with the record; SQL writes update metadata only.
   const chunkKey = `${ids.accountId}:${ids.month}`;
   if (!chunks.has(chunkKey)) {
-    chunks.set(chunkKey, await store.getTransactionChunk(ids.accountId, ids.month));
+    chunks.set(
+      chunkKey,
+      store.metadata
+        ? await store.metadata.rows(ids.accountId, ids.month)
+        : await store.getTransactionChunk(ids.accountId, ids.month)
+    );
   }
   const chunk = chunks.get(chunkKey);
   const record = chunk?.find((entry) => entry.id === ids.transactionId);
@@ -255,6 +257,37 @@ async function applyCategory(
   // Choosing a category is the user's confirmation, whatever Moss guessed.
   record.reviewState = "confirmed";
   return { record, previousCategoryId };
+}
+
+/** SQL rejects a stale batch without rewriting any financial fields. */
+async function saveMetadata(
+  ports: WorkerPorts,
+  store: FinanceStore,
+  records: TransactionRecord[],
+  actor: "user" | "moss",
+  explicitNotes = false
+): Promise<boolean> {
+  if (!store.metadata) return false;
+  const rows = records.map((record) => {
+    if (!record.writeRevision || !record.categoryId)
+      throw new InputError(
+        "stale_transaction",
+        "Read current transactions before changing categories"
+      );
+    return {
+      id: record.id,
+      writeRevision: record.writeRevision,
+      categoryId: record.categoryId,
+      ...(explicitNotes ? { notes: record.notes ?? "" } : {})
+    };
+  });
+  if (!(await store.metadata.apply(rows, actor, ports.now().toISOString())))
+    throw new InputError(
+      "stale_transaction",
+      "Transactions or categories changed. Read saved records before trying again"
+    );
+  for (const record of records) delete record.writeRevision;
+  return true;
 }
 
 /** Logs a category change; ids only, and undo restores the earlier category. */
@@ -319,8 +352,10 @@ function categorizeTool(mode: "seen" | "new"): ToolFactory {
       );
     }
     if (notes !== undefined) record.notes = notes;
-    await store.putTransaction(record);
-    await logCategorize(store, "moss", ids, previousCategoryId);
+    if (!(await saveMetadata(ports, store, [record], "moss", notes !== undefined))) {
+      await store.putTransaction(record);
+      await logCategorize(store, "moss", ids, previousCategoryId);
+    }
     return {
       status: "ok",
       transaction: record,
@@ -353,8 +388,10 @@ export const categorizeApplyHandler: ToolFactory = (ports) => async (input) => {
   const ids = readApplyIds(params as Record<string, unknown>);
   const store = await ports.store();
   const { record, previousCategoryId } = await applyCategory(ports, store, ids);
-  await store.putTransaction(record);
-  await logCategorize(store, "user", ids, previousCategoryId);
+  if (!(await saveMetadata(ports, store, [record], "user"))) {
+    await store.putTransaction(record);
+    await logCategorize(store, "user", ids, previousCategoryId);
+  }
   return { status: "ok", transaction: record };
 };
 
@@ -419,7 +456,13 @@ export const reviewApplyHandler: ToolFactory = (ports) => async (input) => {
     const { record, previousCategoryId } = await applyCategory(ports, store, ids, context);
     applied.push({ record, ids, previousCategoryId });
   }
-  for (const { record, ids, previousCategoryId } of applied) {
+  const savedMetadata = await saveMetadata(
+    ports,
+    store,
+    applied.map(({ record }) => record),
+    "user"
+  );
+  for (const { record, ids, previousCategoryId } of savedMetadata ? [] : applied) {
     await store.putTransaction(record);
     if (previousCategoryId === ids.categoryId) {
       await store.appendActivity({

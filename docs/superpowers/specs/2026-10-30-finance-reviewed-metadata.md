@@ -27,6 +27,9 @@ Category-only requests preserve the current note. Explicit empty notes clear it.
 possible after reconciliation because they do not alter statement money. Stale rows reject a batch
 without partial changes. Existing job envelopes/metadata and authorization families remain intact.
 Queue acceptance is still not proof of persistence; do not call the legacy UI awaited or ordered.
+SQL category Undo also uses a captured row revision and metadata-only update; its reversal activity
+and original undone mark commit together, including restoration to uncategorized. Notes remain
+unchanged. Repeated/stale/foreign Undo saves nothing. KV compatibility retains its old path.
 
 Separate provider-window upsert behavior from the legacy/general seed upsert. A stale provider-window
 snapshot must not erase the current user category or current notes while legitimate provider money,
@@ -46,6 +49,10 @@ category tool. Reuse the bulk review implementation where practical; support sin
 exact money/currency/date and before/after category context. Wait for actual persistence before
 reporting success. Host cancellation retains the open review. Stale/ambiguous saves block submission
 and require checking saved records before a new review. Suppress duplicate submissions immediately.
+
+Retain category Undo when a single-row native edit uses the bulk writer: save a per-record category
+undo payload with activity and use the atomic metadata Undo path. Bulk edits expose the same per-record
+category reversal. Notes and financial facts remain unchanged.
 
 Retain existing pending/KV compatibility and merchant-rule workflows, with their limitations explicit.
 This slice does not replace canonical merchant-rule management, make rule-plus-category writes atomic,

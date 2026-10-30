@@ -32,7 +32,7 @@ import { invalidateQueries, invalidateToolQueries, useToolQuery } from "../store
 import { downloadTransactionsCsv, transactionsCsv, initialRegisterScope } from "../register";
 import { EMPTY_FILTERS, filterInput, RegisterFilterBar } from "../register-filters";
 import { SplitEditor, type SplitTransaction } from "../split-editor";
-import { TransactionBulkBar, bulkEligible } from "../transaction-bulk";
+import { TransactionBulkBar, BulkCategoryDialog, bulkEligible } from "../transaction-bulk";
 import { splitsBalance } from "../../domain/splits";
 
 interface TxCategory {
@@ -186,6 +186,7 @@ function ChangeCategory(props: {
 }): ReactNodeLike {
   const { tx } = props;
   const [categoryId, setCategoryId] = useState(tx.categoryId ?? "");
+  useEffect(() => setCategoryId(tx.categoryId ?? ""), [tx.categoryId, tx.writeRevision]);
   return (
     <Select
       aria-label={`Category for ${tx.name}`}
@@ -474,6 +475,28 @@ export function TransactionsScreen(
     ...EMPTY_FILTERS,
     ...(initial.accountId ? { accountId: initial.accountId } : {})
   }));
+  const [singleReview, setSingleReview] = useState<{
+    tx: Tx;
+    categoryId: string;
+    categoryName: string;
+    previousCategory: string;
+  } | null>(null);
+  const singlePending = useRef<((saved: boolean) => void) | null>(null);
+  const [singleUncertain, setSingleUncertain] = useState(false);
+  const [checkingSingle, setCheckingSingle] = useState(false);
+  const singleReadSnapshot = useRef<unknown>(null);
+  useEffect(
+    () => () => {
+      singlePending.current?.(false);
+      singlePending.current = null;
+    },
+    []
+  );
+  const finishSingle = (saved: boolean): void => {
+    singlePending.current?.(saved);
+    singlePending.current = null;
+    setSingleReview(null);
+  };
   const [editing, setEditing] = useState<Tx | null>(null);
   const [selected, setSelected] = useState<ReadonlyMap<string, Tx>>(new Map());
   const [selectionLocked, setSelectionLocked] = useState(false);
@@ -516,6 +539,12 @@ export function TransactionsScreen(
   const result =
     query.status === "settled" && query.outcome.kind === "ok" ? query.outcome.result : null;
   useEffect(() => setRetrying(false), [query]);
+  useEffect(() => {
+    if (checkingSingle && query !== singleReadSnapshot.current && query.status === "settled") {
+      setCheckingSingle(false);
+      if (result !== null) setSingleUncertain(false);
+    }
+  }, [query]);
   useEffect(() => {
     if (result) {
       setFilterOptions({ accounts: result.accounts ?? [], categories: result.categories ?? [] });
@@ -577,13 +606,26 @@ export function TransactionsScreen(
     void send([tx], [categoryId], makeRule, "Confirmed.");
   };
 
-  // Changing an already-confirmed row only rewrites its category; it is never hidden.
-  const changeOne = (tx: Tx, categoryId: string): Promise<boolean> =>
-    send([tx], [categoryId], false, "Category changed.").then((saved) => {
-      // The row was never in Needs a look here, so take off the optimistic mark right away.
+  const changeOne = (tx: Tx, categoryId: string): Promise<boolean> => {
+    if (supportsBulk && props.tools && bulkEligible(tx) && categoryId !== "transfers") {
+      if (singlePending.current || singleUncertain) return Promise.resolve(false);
+      return new Promise<boolean>((resolve) => {
+        singlePending.current = resolve;
+        setSingleReview({
+          tx: { ...tx },
+          categoryId,
+          categoryName:
+            filterOptions.categories.find((c) => c.id === categoryId)?.name ?? categoryId,
+          previousCategory:
+            filterOptions.categories.find((c) => c.id === tx.categoryId)?.name ?? "Uncategorized"
+        });
+      });
+    }
+    return send([tx], [categoryId], false, "Category changed.").then((saved) => {
       release([tx.id]);
       return saved;
     });
+  };
 
   // Exactly the Needs a look rows on screen: the filter, the search and the month decide them.
   const visibleLook = (result?.transactions ?? []).filter(
@@ -722,6 +764,33 @@ export function TransactionsScreen(
             </Button>
           </div>
         </div>
+      ) : null}
+      {singleUncertain ? (
+        <div className="fnm-chips" role="status">
+          <p>Check saved records before reviewing another category change.</p>
+          <Button
+            variant="secondary"
+            disabled={checkingSingle}
+            onClick={() => {
+              singleReadSnapshot.current = query;
+              setCheckingSingle(true);
+              invalidateQueries();
+            }}
+          >
+            {checkingSingle ? "Checking saved records…" : "Check saved records"}
+          </Button>
+        </div>
+      ) : null}
+      {singleReview ? (
+        <BulkCategoryDialog
+          rows={[singleReview.tx]}
+          category={{ id: singleReview.categoryId, name: singleReview.categoryName }}
+          previousCategory={singleReview.previousCategory}
+          tools={props.tools}
+          onClose={() => finishSingle(false)}
+          onSaved={() => finishSingle(true)}
+          onUncertain={() => setSingleUncertain(true)}
+        />
       ) : null}
       {supportsBulk && props.tools ? (
         <TransactionBulkBar

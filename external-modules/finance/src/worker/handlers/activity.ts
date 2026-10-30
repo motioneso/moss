@@ -450,6 +450,18 @@ export const activityUndoHandler: ToolFactory = (ports) => async (input) => {
       throw staleBudget();
     return { status: "ok", undone: true };
   }
+  if (row.kind === "transaction.categorize" && store.metadata) {
+    const accountId = str(row.params.accountId),
+      month = str(row.params.month);
+    if (!accountId || !month)
+      throw new InputError("not_undoable", "this row has no usable undo data");
+    const current = (await store.metadata.rows(accountId, month)).find(
+      (r) => r.id === row.params.transactionId
+    );
+    if (!current || !(await store.metadata.undo(activityId, current.writeRevision, at)))
+      throw CHANGED();
+    return { status: "ok", undone: true };
+  }
   let reversal: ActivityInput;
   switch (row.kind) {
     case "transaction.categorize":
