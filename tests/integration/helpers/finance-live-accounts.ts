@@ -63,6 +63,21 @@ export async function exerciseAccountLifecycle(
       revision: string;
     };
   const page = await context.newPage();
+  const failedReads: { status: number; retryAfter: number | null; patternRejected: boolean }[] = [];
+  page.on("response", async (response) => {
+    if (
+      !response.url().includes("/finance.manual.account-review/invoke") ||
+      response.status() < 400
+    )
+      return;
+    const body = await response.text().catch(() => "");
+    failedReads.push({
+      status: response.status(),
+      retryAfter: Number(response.headers()["retry-after"]) || null,
+      patternRejected: body.includes("Pattern matching failed and was rejected")
+    });
+  });
+
   try {
     await page.goto(`${base}/m/finance/accounts`);
     await page
@@ -168,7 +183,9 @@ export async function exerciseAccountLifecycle(
         path: join(resolve(artifacts), "finance-accounts-debug.png"),
         fullPage: true
       });
-    throw error;
+    throw new Error(`Account lifecycle UI failed; read failures: ${JSON.stringify(failedReads)}`, {
+      cause: error
+    });
   } finally {
     await page.close();
   }

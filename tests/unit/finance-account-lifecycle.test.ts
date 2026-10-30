@@ -55,12 +55,11 @@ describe("reviewed manual account handler", () => {
   });
   it("requires a supplied timezone before mutation and reports a stale captured version", async () => {
     const f = fixture();
-    f.ports.localTimezone = undefined;
-    await expect(accountUpdateHandler(f.ports)(input)).rejects.toMatchObject({
+    const missingTimezone = { ...f.ports, localTimezone: undefined };
+    await expect(accountUpdateHandler(missingTimezone)(input)).rejects.toMatchObject({
       code: "timezone_required"
     });
     expect(f.update).not.toHaveBeenCalled();
-    f.ports.localTimezone = "Etc/UTC";
     f.update.mockResolvedValueOnce(false);
     await expect(accountUpdateHandler(f.ports)(input)).rejects.toMatchObject({
       code: "account_changed"
