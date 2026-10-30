@@ -261,7 +261,7 @@ export const meetingFeatures = [
   {
     id: "meetings.history",
     description:
-      "The Meetings list searches titles, notes and transcripts. Rows grouped by week open the meeting directly and show the latest summary excerpt and acknowledged recording length when available.",
+      "Meetings home is a full-width table: title, date, length, attendees, type. Search covers titles, notes and transcripts, narrowed by type. Date is recorded time when known, else added time, labelled either way. Unknown length shows a dash.",
     errors: [
       {
         code: "meeting_history_access_denied",

@@ -69,7 +69,7 @@ test("Meetings delete cancels safely and the companion link request distinguishe
   const row = page
     .locator(".meetings-history-row")
     .filter({ has: page.getByText(title, { exact: true }) });
-  await row.click();
+  await row.getByRole("button").click();
   await expect(page).toHaveURL(new RegExp(`id=${meetingId}`));
 
   const actions = page.getByRole("button", { name: "Meeting actions", exact: true });

@@ -8,6 +8,7 @@ export function historyItem(
   return {
     id: record.id,
     title: record.title,
+    date: { at: record.createdAt, source: "added" },
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     hasNotes: !!record.personalNotes.trim(),

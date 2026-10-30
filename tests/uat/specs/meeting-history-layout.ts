@@ -14,7 +14,7 @@ export async function assertMeetingHistoryLayout(page: Page, title: string): Pro
     const geometry = await row.evaluate((element) => {
       const bounds = element.getBoundingClientRect();
       const list = element.closest('[aria-label="Your meetings"]')!.getBoundingClientRect();
-      const text = [...element.querySelectorAll(".jds-label, .jds-hint")];
+      const text = [...element.querySelectorAll("td")];
       return {
         width: bounds.width,
         listWidth: list.width,
@@ -31,7 +31,7 @@ export async function assertMeetingHistoryLayout(page: Page, title: string): Pro
       )
       .toBe(0);
   }
-  await assertMeetingTextContrast(page, row.locator(".jds-label"));
+  await assertMeetingTextContrast(page, row.getByRole("button"));
   await assertMeetingTextContrast(page, row.locator(".jds-hint").first());
   await page.setViewportSize({ width: 1440, height: 1000 });
   await assertMeetingHistoryKeyboardFocus(page, title);
@@ -43,8 +43,9 @@ export async function assertMeetingHistoryKeyboardFocus(page: Page, title: strin
   await page.keyboard.press("Tab");
   await expect(page.getByLabel("Recording type", { exact: true })).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(row).toBeFocused();
-  expect(await row.evaluate((element) => element.matches(":focus-visible"))).toBe(true);
-  await expect(row).toHaveCSS("box-shadow", /0px 0px 0px 3px$/);
-  await expect(row).not.toHaveCSS("box-shadow", /^rgba\([^)]*,\s*0\) /);
+  const titleButton = row.getByRole("button");
+  await expect(titleButton).toBeFocused();
+  expect(await titleButton.evaluate((element) => element.matches(":focus-visible"))).toBe(true);
+  await expect(titleButton).toHaveCSS("box-shadow", /0px 0px 0px 3px$/);
+  await expect(titleButton).not.toHaveCSS("box-shadow", /^rgba\([^)]*,\s*0\) /);
 }

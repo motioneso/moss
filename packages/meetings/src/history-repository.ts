@@ -6,7 +6,7 @@ import type {
   MeetingHistoryPage,
   SearchMeetingHistoryInput
 } from "@moss/shared";
-import { normalizeMeetingSearchText } from "./history-projection.js";
+import { normalizeMeetingSearchText, validatedImportDurationMs } from "./history-projection.js";
 
 export class MeetingHistoryInputError extends Error {
   constructor() {
@@ -53,13 +53,13 @@ export function validateMeetingHistoryInput(input: SearchMeetingHistoryInput = {
   )
     throw new MeetingHistoryInputError();
   if (input.before) {
-    const { id, createdAt } = input.before;
-    const timestamp = new Date(createdAt);
+    const { id, dateAt } = input.before;
+    const timestamp = new Date(dateAt);
     if (
-      Object.keys(input.before).some((key) => key !== "id" && key !== "createdAt") ||
+      Object.keys(input.before).some((key) => key !== "id" && key !== "dateAt") ||
       !isUuid(id) ||
       !Number.isFinite(timestamp.getTime()) ||
-      timestamp.toISOString() !== createdAt
+      timestamp.toISOString() !== dateAt
     )
       throw new MeetingHistoryInputError();
   }
@@ -72,6 +72,9 @@ interface HistoryRow {
   title: string;
   created_at: Date;
   updated_at: Date;
+  recorded_at?: Date | null;
+  history_date?: Date;
+  import_metadata_json?: string | null;
   has_notes: boolean;
   notes_revision: number;
   capture_duration_ms?: number | null;
@@ -103,6 +106,9 @@ export function meetingHistoryItem(row: HistoryRow): MeetingHistoryItem {
   return {
     id: row.id,
     title: row.title,
+    date: row.recorded_at
+      ? { at: row.recorded_at.toISOString(), source: "recorded" as const }
+      : { at: row.created_at.toISOString(), source: "added" as const },
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
     ...(row.type_id || row.recording_side
@@ -110,7 +116,10 @@ export function meetingHistoryItem(row: HistoryRow): MeetingHistoryItem {
       : {}),
     hasNotes: row.has_notes,
     notesRevision: row.notes_revision,
-    capture: { status: "unavailable", durationMs: row.capture_duration_ms ?? null },
+    capture: {
+      status: "unavailable",
+      durationMs: row.capture_duration_ms ?? validatedImportDurationMs(row.import_metadata_json)
+    },
     transcript: {
       status: row.segment_count ? "retained" : "none",
       revision: row.transcript_revision,
@@ -207,7 +216,7 @@ export class MeetingHistoryRepository {
       )}`;
     }
     const cursor = input.before
-      ? sql<boolean>`(r.created_at, r.id) < (${new Date(input.before.createdAt)}, ${input.before.id}::uuid)`
+      ? sql<boolean>`(coalesce(m.recorded_at, r.created_at), r.id) < (${new Date(input.before.dateAt)}, ${input.before.id}::uuid)`
       : sql<boolean>`true`;
     const identity = id ? sql<boolean>`r.id = ${id}::uuid` : sql<boolean>`true`;
     const typeFilter = input.typeId ? sql<boolean>`m.type_id=${input.typeId}` : sql<boolean>`true`;
@@ -215,13 +224,14 @@ export class MeetingHistoryRepository {
     const result = await sql<HistoryRow>`
       WITH records AS MATERIALIZED (
         SELECT r.id,r.title,r.created_at,r.updated_at,r.notes_revision,m.type_id,m.side AS recording_side,
+          m.recorded_at, coalesce(m.recorded_at, r.created_at) AS history_date,
           btrim(r.personal_notes, ${whitespace}) <> '' AS has_notes
         FROM app.meeting_records r
         LEFT JOIN app.meeting_recording_metadata m ON m.meeting_id=r.id
         WHERE r.owner_user_id = app.current_actor_user_id() AND ${identity} AND ${cursor} AND ${search} AND ${typeFilter}
-        ORDER BY r.created_at DESC,r.id DESC ${earlyLimit}
+        ORDER BY history_date DESC,r.id DESC ${earlyLimit}
       ), history AS (
-        SELECT r.*, capture.duration_ms AS capture_duration_ms, coalesce(a.history_overview,n.history_overview) AS output_overview, coalesce(t.transcript_revision,0) AS transcript_revision,
+        SELECT r.*, capture.duration_ms AS capture_duration_ms, imp.import_metadata_json, coalesce(a.history_overview,n.history_overview) AS output_overview, coalesce(t.transcript_revision,0) AS transcript_revision,
           s.segment_count,s.final_count,s.provisional_count,s.start_ms,s.end_ms,
           coalesce(t.history_sources_json,'[]') AS sources_json,coalesce(t.history_omitted_sources,0) AS omitted_sources,
           coalesce(a.version,n.version) AS output_version,coalesce(a.history_origin,n.history_origin) AS output_origin,
@@ -243,6 +253,10 @@ export class MeetingHistoryRepository {
           SELECT recorded_duration_ms AS duration_ms
           FROM app.meeting_capture_grants WHERE meeting_id=r.id AND state_json IS NOT NULL ORDER BY created_at DESC,id DESC LIMIT 1
         ) capture ON true
+        LEFT JOIN LATERAL (
+          SELECT metadata_json AS import_metadata_json
+          FROM app.meeting_recording_imports WHERE meeting_id=r.id ORDER BY created_at DESC,id DESC LIMIT 1
+        ) imp ON true
         LEFT JOIN LATERAL (
           SELECT transcript_revision,history_sources_json,history_omitted_sources
           FROM app.meeting_transcript_batches WHERE meeting_id=r.id ORDER BY version DESC LIMIT 1
@@ -282,7 +296,7 @@ export class MeetingHistoryRepository {
         ) saved
       )
       SELECT * FROM history WHERE ${stateFilter(input.filter)}
-      ORDER BY created_at DESC,id DESC LIMIT ${input.limit + 1}
+      ORDER BY history_date DESC,id DESC LIMIT ${input.limit + 1}
     `.execute(db.db);
     return result.rows;
   }
@@ -298,8 +312,7 @@ export class MeetingHistoryRepository {
       const last = meetings.at(-1);
       return {
         meetings,
-        nextCursor:
-          rows.length > valid.limit && last ? { id: last.id, createdAt: last.createdAt } : null
+        nextCursor: rows.length > valid.limit && last ? { id: last.id, dateAt: last.date.at } : null
       };
     } catch (error) {
       if (error instanceof MeetingHistoryInputError) throw error;

@@ -91,7 +91,7 @@ describe("meeting history input", () => {
     { filter: "recording" },
     { query: null },
     { before: null },
-    { before: { id, createdAt: "2026-10-04" } },
+    { before: { id, dateAt: "2026-10-04" } },
     { before: { id } },
     { extra: "hidden" }
   ])("rejects unsupported bounded input %j", (input) => {
@@ -101,13 +101,13 @@ describe("meeting history input", () => {
     expect(
       validateMeetingHistoryInput({
         query: "  Words  ",
-        before: { id, createdAt: "2026-10-04T00:00:00.000Z" }
+        before: { id, dateAt: "2026-10-04T00:00:00.000Z" }
       })
     ).toEqual({
       query: "Words",
       filter: "all",
       limit: 30,
-      before: { id, createdAt: "2026-10-04T00:00:00.000Z" }
+      before: { id, dateAt: "2026-10-04T00:00:00.000Z" }
     });
   });
 });

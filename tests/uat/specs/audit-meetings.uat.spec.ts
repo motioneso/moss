@@ -90,7 +90,7 @@ test("Meeting search names its timeline scope and keeps separate cited evidence 
     expect(retained.snapshot.segments.some((line) => line.text === omittedPhrase)).toBe(false);
 
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
-    await meetingRow(page, title).click();
+    await meetingRow(page, title).getByRole("button").click();
     await expect(page).toHaveURL(new RegExp(`id=${meetingId}`));
     for (const width of [1280, 390, 320]) {
       await page.setViewportSize({ width, height: 900 });
@@ -148,7 +148,7 @@ test("Meeting search names its timeline scope and keeps separate cited evidence 
     await expect(citedPane.locator(".meetings-transcript-turn")).toHaveCount(500);
     await expect(excerpt).toContainText(omittedPhrase);
     await page.getByRole("button", { name: "Meetings", exact: true }).click();
-    await meetingRow(page, title).click();
+    await meetingRow(page, title).getByRole("button").click();
     await openMeetingAction(page, "Search transcript");
     await expect(
       page.getByRole("searchbox", { name: "Search transcript timeline", exact: true })

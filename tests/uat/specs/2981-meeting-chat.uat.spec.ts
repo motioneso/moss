@@ -199,7 +199,7 @@ test("Normal docked chat follows the meeting route, answers notes-only questions
     const selected = await createMeeting(title, MEETING_FIXTURE_OLD);
     await createMeeting(`Other synthetic meeting ${randomUUID()}`, MEETING_FIXTURE_UNRELATED);
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
-    await meetingRow(page, title).click();
+    await meetingRow(page, title).getByRole("button").click();
     await openMeetingChat(page);
     await expect(page.locator(".chatd--docked")).toBeVisible();
     await expect(
@@ -508,7 +508,7 @@ test("Normal docked chat follows the meeting route, answers notes-only questions
       });
       expect(saved.status()).toBe(200);
       await page.goto("/meetings");
-      await meetingRow(page, notesTitle).click();
+      await meetingRow(page, notesTitle).getByRole("button").click();
       await expect(page.getByRole("textbox", { name: "Notes", exact: true })).toHaveValue(
         MEETING_FIXTURE_NOTES
       );
@@ -549,7 +549,7 @@ test("Normal docked chat follows the meeting route, answers notes-only questions
       ).toHaveCount(0);
       await expect(page.getByRole("textbox", { name: /^Message/ })).toBeVisible();
       await page.getByRole("button", { name: "Meetings", exact: true }).click();
-      await meetingRow(page, title).click();
+      await meetingRow(page, title).getByRole("button").click();
       await expect(
         page.getByRole("button", { name: "Remove meeting context", exact: true })
       ).toBeVisible();

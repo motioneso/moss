@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Page, type Request } from "@playwright/test";
 import type { MeetingHistoryPage, MeetingRecord } from "@moss/shared";
 import { requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
+import { recordingBundle, recordingFile } from "../../fixtures/recording-bundle.js";
 import { meetingRow } from "./meeting-minimal-ui.js";
 import { assertMeetingHistoryLayout } from "./meeting-history-layout.js";
 
@@ -158,12 +159,12 @@ test("Minimal list searches all current text, preserves API filters and opens a 
     ]);
     const targetButton = meetingRow(page, title);
     await expect(targetButton).toBeVisible();
-    await expect(targetButton).toContainText("Personal notes");
+    await expect(targetButton).toContainText("Added");
     await expect(page.getByLabel("State", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Capture: Unavailable", { exact: false })).toHaveCount(0);
     await assertMeetingHistoryLayout(page, title);
-    await targetButton.focus();
-    await targetButton.press("Enter");
+    await targetButton.getByRole("button").focus();
+    await targetButton.getByRole("button").press("Enter");
     await expect(page).toHaveURL(new RegExp(`id=${target.id}`));
     await expect(page.getByRole("region", { name: "Transcript", exact: true })).toContainText(
       "Maple concern."
@@ -209,7 +210,7 @@ test("Minimal list searches all current text, preserves API filters and opens a 
         expectedId
       ]);
     }
-    await expect(meetingRow(page, notesOnly.title)).toContainText("Personal notes");
+    await expect(meetingRow(page, notesOnly.title)).toContainText("Added");
 
     // Correction must remove superseded words while retaining the corrected current turn.
     const corrected = await page.request.post(`/api/meetings/records/${target.id}/transcript`, {
@@ -237,7 +238,7 @@ test("Minimal list searches all current text, preserves API filters and opens a 
     expect((await search(page, `${marker} willow`)).meetings.map((meeting) => meeting.id)).toEqual([
       target.id
     ]);
-    await targetButton.click();
+    await targetButton.getByRole("button").click();
     await expect(page.getByRole("region", { name: "Transcript", exact: true })).toContainText(
       "Willow resolution."
     );
@@ -285,5 +286,102 @@ test("Minimal list searches all current text, preserves API filters and opens a 
     } finally {
       page.off("request", countDeletedSelectionSearches);
     }
+  }
+});
+
+// Real endpoints only: a pasted transcript with a recorded date, a recording import that carries a
+// length, and enough filler meetings to force a second page. Transcription is not awaited, so this
+// proves the table's date, length and paging columns and nothing about speech recognition.
+test("Home table shows the recorded date, a real length and pages older meetings (#3806)", async ({
+  page
+}) => {
+  test.setTimeout(180_000);
+  if (!requireUatProjectName().startsWith("uat-"))
+    throw new Error("Use the isolated UAT provisioner");
+  await signInUatAdmin(page);
+  const ids: string[] = [];
+  const marker = `table${randomUUID().replaceAll("-", "")}`;
+  const recordedAt = "2024-03-05T14:30:00.000Z";
+  try {
+    const recorded = await page.request.post("/api/meetings/manual-transcripts", {
+      data: {
+        requestKey: randomUUID(),
+        title: `Recorded ${marker}`,
+        recordedAt,
+        transcript: "Synthetic pasted transcript."
+      }
+    });
+    expect(recorded.status()).toBe(201);
+    ids.push((await recorded.json()).meetingId);
+
+    const bundle = { ...recordingBundle(), sourceDeviceId: randomUUID() };
+    const wav = Buffer.from(bundle.wav.base64, "base64");
+    const imported = await page.request.post("/api/meetings/recording-imports", {
+      data: { ...bundle, wav: recordingFile(bundle.wav.name, wav) }
+    });
+    expect(imported.status()).toBe(202);
+    const importedId = (await imported.json()).meetingId as string;
+    ids.push(importedId);
+    const current = await page.request.get(`/api/meetings/records/${importedId}`);
+    expect(current.status()).toBe(200);
+    const renamed = await page.request.put(`/api/meetings/records/${importedId}/title`, {
+      data: { title: `Imported ${marker}`, expectedTitle: (await current.json()).meeting.title }
+    });
+    expect(renamed.status()).toBe(200);
+    for (let index = 0; index < 31; index++) {
+      const response = await page.request.post("/api/meetings/records", {
+        data: { requestKey: randomUUID(), title: `Table filler ${index} ${marker}` }
+      });
+      expect(response.status()).toBe(201);
+      ids.push((await response.json()).meeting.id);
+    }
+
+    await page.getByRole("link", { name: "Meetings", exact: true }).click();
+    const search = page.getByRole("searchbox", { name: "Search meetings", exact: true });
+    await search.fill(marker);
+    const rows = page.locator(".meetings-history-row");
+    await expect(rows.first()).toBeVisible();
+
+    // Paging: the first page is full and older meetings load on request.
+    const first = await rows.count();
+    expect(first).toBeGreaterThan(0);
+    const more = page.getByRole("button", { name: "Load older meetings", exact: true });
+    await expect(more).toBeVisible();
+    await more.click();
+    await expect.poll(() => rows.count()).toBeGreaterThan(first);
+
+    // Recorded date: shown as "Recorded", with the recorded day rather than the day it was added.
+    const recordedRow = meetingRow(page, `Recorded ${marker}`);
+    await expect(recordedRow).toContainText("Recorded");
+    await expect(recordedRow).toContainText(/Mar 5\b/);
+
+    // Real length: the table shows the length the history endpoint reports for the import.
+    const history = await page.request.post("/api/meetings/history/search", {
+      data: { query: `Imported ${marker}`, filter: "all", limit: 30 }
+    });
+    const item = ((await history.json()) as MeetingHistoryPage).meetings.find(
+      (meeting) => meeting.id === importedId
+    );
+    expect(item?.capture.durationMs).toBeGreaterThan(0);
+    const minutes = Math.max(1, Math.round((item?.capture.durationMs ?? 0) / 60000));
+    await search.fill(`Imported ${marker}`);
+    await expect(meetingRow(page, `Imported ${marker}`)).toContainText(`${minutes} min`);
+
+    await search.fill(marker);
+    await expect(recordedRow).toBeVisible();
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await expect(recordedRow).toBeVisible();
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+          )
+        )
+        .toBe(0);
+    }
+  } finally {
+    for (const id of ids)
+      expect.soft((await page.request.delete(`/api/meetings/records/${id}`)).status()).toBe(204);
   }
 });
