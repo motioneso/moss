@@ -81,7 +81,7 @@ export async function exercisePrivateNotes(
   const start = async () => {
     await open().click();
     await details.getByRole("button", { name: "Edit private note", exact: true }).click();
-    await field().waitFor();
+    await waitForFinanceAction(page, field(), "Check saved note");
     await expect.poll(() => field().isEnabled()).toBe(true);
   };
   const save = async () => {
@@ -188,9 +188,11 @@ export async function exercisePrivateNotes(
     ).toBe(true);
     await capture("stale");
     await editor.getByRole("button", { name: "Check saved note", exact: true }).click();
-    await editor
-      .getByRole("textbox", { name: "Currently saved private note", exact: true })
-      .waitFor();
+    await waitForFinanceAction(
+      page,
+      editor.getByRole("textbox", { name: "Currently saved private note", exact: true }),
+      "Check saved note"
+    );
     expect(await field().inputValue()).toBe("Retained synthetic draft");
     expect(
       await editor

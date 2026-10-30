@@ -7,7 +7,10 @@ export async function waitForFinanceAction(
   refreshLabel = "Check saved records"
 ) {
   const enabled = action.and(page.locator(":enabled"));
-  const busy = page.getByRole("alert").filter({ hasText: /Finance is temporarily busy/ });
+  const busy = page
+    .getByRole("alert")
+    .or(page.getByRole("status"))
+    .filter({ hasText: /Finance is temporarily busy/ });
   await enabled.or(busy).first().waitFor();
   if (await busy.isVisible()) {
     const seconds = Number((await busy.innerText()).match(/Wait (\d+) seconds?/)?.[1]);
