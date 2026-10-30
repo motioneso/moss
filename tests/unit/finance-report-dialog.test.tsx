@@ -62,7 +62,9 @@ describe("report detail review scope and pagination", () => {
       });
       expect(JSON.stringify(r.toJSON())).toContain("Wait 8 seconds");
       expect(button(r, "Reload details").props.disabled).toBe(true);
-      await act(async () => vi.advanceTimersByTime(8000));
+      await act(async () => {
+        vi.advanceTimersByTime(8000);
+      });
       expect(refresh).not.toHaveBeenCalled();
       expect(button(r, "Reload details").props.disabled).toBe(false);
       await act(async () => button(r, "Reload details").props.onClick());

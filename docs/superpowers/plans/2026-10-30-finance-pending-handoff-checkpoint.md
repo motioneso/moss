@@ -114,3 +114,15 @@ found no claim on 0354. The unshipped task migration is therefore renamed to 035
 with identical SQL bytes and the schema-catalog expectation updated. No deployed
 migration, production database, or main branch is changed. Fresh disposable gates
 must validate the renamed migration and schema catalog before accepting this fix.
+
+Renamed migration clean e07ea6d1 / 92dff8edc299: module-page-writes receipt
+135350-LQMB1Z passed all 78 in nine files, including schema catalog and authorization,
+confirmation, audit and bearer regressions. Aggregate 135348-2Y1sLc passed the migration
+collision check but stopped at the report fake-timer test's callback return type (TS2769).
+The callback now explicitly returns void. This is a task regression being corrected,
+not a historical baseline failure.
+
+Privacy negative receipt 135757-B8mg7E / 51bc8cd1a1fc (358524bf plus matrix whitespace)
+failed exactly the intended foreign/admin snapshot test, with the other 28 passing.
+Only the disposable fixture disables the snapshot policy, restored in finally. The
+restored positive Finance run must follow; this expected red is not a passing gate.
