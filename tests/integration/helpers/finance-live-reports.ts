@@ -1,3 +1,4 @@
+import { exerciseSharedTransactionDetails } from "./finance-live-transaction-details.js";
 import { join, resolve } from "node:path";
 import { expect } from "vitest";
 import type { BrowserContext, Page } from "playwright-core";
@@ -137,6 +138,7 @@ export async function exerciseReportDetails(
       ]);
       expect(retried.status()).toBe(200);
     } else expect(loaded.status()).toBe(200);
+    await exerciseSharedTransactionDetails(edit);
     await edit
       .getByRole("checkbox", { name: "Select Synthetic manual market", exact: true })
       .filter({ visible: true })

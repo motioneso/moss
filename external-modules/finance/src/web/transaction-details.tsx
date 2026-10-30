@@ -90,13 +90,13 @@ export function TransactionDetails(props: {
               changes.
             </p>
             {row.shared ? <p>Household · read only</p> : null}
-            <RowIndex density="compact">
+            <RowIndex variant="facts">
               <RowIndexItem title="Date" meta={row.date} />
-              <RowIndexItem title="Account" excerpt={captured.account} />
+              <RowIndexItem title="Account" meta={captured.account} />
               <RowIndexItem title="Status" meta={status} />
               <RowIndexItem
                 title="Category"
-                excerpt={
+                meta={
                   row.transferId
                     ? "Linked transfer"
                     : captured.parts.length
@@ -119,7 +119,7 @@ export function TransactionDetails(props: {
             {captured.parts.length ? (
               <section className="fnm-block fnm-block--tight" aria-label="Split allocations">
                 <strong>Split allocations</strong>
-                <RowIndex density="compact">
+                <RowIndex variant="facts">
                   {captured.parts.map((part, index) => (
                     <RowIndexItem
                       key={index}

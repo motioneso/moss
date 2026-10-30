@@ -62,3 +62,20 @@ shared modal lifecycle is changed. Capture helpers clone the row and splits, and
 focused restored details/register suites passed all 100 in 13 files. The shared-note
 negative was repeated against the moved renderer (expected red, restored in finally);
 new clean installed acceptance and full verification must establish the final result.
+
+Selected 785c6eb5 / 3e65cd0a7733 installed receipt 142047-6ukqSP proved owned
+details, full notes, all 12 responsive/theme frames and focus return after the dialog
+move. It then failed because the new private metadata owner has no shared report row.
+The shared-details assertion now runs inside the existing owner report fixture that
+actually creates that shared mirror. The selected metadata flow remains independently
+owned; the complete suite must prove the shared path. No fallback skips that assertion.
+Phone/desktop screenshots also exposed clipped account text in the compact three-column
+index; details now use the existing two-column facts variant and wrapped values.
+
+The wider unit run also caught an added module-web-browser-safety failure, not in
+the 277 historical failures. Its source graph traversed the shared store interface
+into the pending-handoff worker implementation and node:crypto key helpers. The
+ProviderHandoffStore vocabulary is now a dependency-free type file; the runtime
+workspace helpers stay worker-only. No import guard is changed or bypassed. This
+is a structural browser-dependency fix; the earlier successful browser bundle is
+not evidence that raw crypto or credentials had actually shipped to the browser.

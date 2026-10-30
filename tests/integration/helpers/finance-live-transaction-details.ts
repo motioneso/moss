@@ -46,6 +46,11 @@ export async function exerciseTransactionDetails(
   }
   await dialog.getByRole("button", { name: "Back to register", exact: true }).click();
   await expect.poll(() => open().evaluate((e) => document.activeElement === e)).toBe(true);
+  expect(await read("finance.transactions.query", { month, ownOnly: true })).toEqual(before);
+}
+
+export async function exerciseSharedTransactionDetails(page: Page) {
+  const dialog = page.getByRole("dialog", { name: "Transaction details", exact: true });
   const shared = page
     .getByRole("button", {
       name: "View transaction details for Synthetic household groceries",
@@ -56,8 +61,9 @@ export async function exerciseTransactionDetails(
   await dialog.getByText("Household · read only", { exact: true }).waitFor();
   await dialog.getByText("Private notes are not shared.", { exact: true }).waitFor();
   expect(await dialog.getByRole("textbox").count()).toBe(0);
-  expect(await dialog.getByText("Synthetic private context", { exact: true }).count()).toBe(0);
+  expect(
+    await dialog.getByText("Synthetic malformed-mirror private note", { exact: true }).count()
+  ).toBe(0);
   await dialog.getByRole("button", { name: "Back to register", exact: true }).click();
   await expect.poll(() => shared.evaluate((e) => document.activeElement === e)).toBe(true);
-  expect(await read("finance.transactions.query", { month, ownOnly: true })).toEqual(before);
 }

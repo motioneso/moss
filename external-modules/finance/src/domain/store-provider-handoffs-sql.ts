@@ -1,4 +1,4 @@
-import type { ProviderHandoffStore } from "./provider-handoffs.js";
+import type { ProviderHandoffStore } from "./provider-handoff-store.js";
 import type { FinanceDb } from "./store-sql.js";
 import { TXN_COLUMNS, rowToTransaction, type TransactionRow } from "./store-transaction-rows.js";
 export function providerHandoffSqlStore(db: FinanceDb): ProviderHandoffStore {

@@ -23,7 +23,7 @@ import type { ManualLedgerStore } from "./manual-ledger.js";
 import type { ImportStore } from "./csv-import.js";
 import type { ReconciliationStore } from "./reconciliation.js";
 import type { SplitChange } from "./splits.js";
-import type { ProviderHandoffStore } from "./provider-handoffs.js";
+import type { ProviderHandoffStore } from "./provider-handoff-store.js";
 
 /**
  * One row of the activity trail (#3174). `params` and `undo` hold ids, cents

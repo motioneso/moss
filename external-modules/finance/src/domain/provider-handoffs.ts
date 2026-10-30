@@ -1,16 +1,6 @@
 import { monthKey } from "./keys.js";
 import type { ChunkMap, SyncPage } from "./reduce.js";
 import type { TransactionRecord } from "./records.js";
-export interface ProviderHandoffStore {
-  capture(
-    itemId: string,
-    removedIds: string[],
-    posted: { id: string; accountId: string }[],
-    at: string
-  ): Promise<void>;
-  load(itemId: string, ids: string[]): Promise<TransactionRecord[]>;
-  clear(itemId: string): Promise<void>;
-}
 export function handoffRequest(page: SyncPage) {
   const incoming = [...page.added, ...page.modified];
   const posted = incoming
