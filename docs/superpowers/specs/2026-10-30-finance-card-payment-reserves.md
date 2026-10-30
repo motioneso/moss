@@ -105,3 +105,17 @@ No private notes enter captures or activity. No automatic financial-write retrie
   positive card assets require different treatment from owed balances.
 
 These sources motivate the capability; the equations above define Moss behavior and its bounds.
+
+## Concurrency implementation decision
+
+Inspection found that module SQL calls have individual transactions and snapshot-based budget
+fingerprints, but no common mutation lock. A fingerprint checked within a statement can miss a
+ledger transaction committing during that statement. Before enabling reserve writes, serialize
+module mutations per module and actor in the canonical module-storage RPC using a transaction
+advisory lock acquired in a separate statement before the authored SQL snapshot. Existing RLS,
+read-only classification, timeout, result limits and redaction remain unchanged. Reads do not
+acquire this lock. Different users/modules have independent keys. The lock survives only for
+the caller's transaction and rolls back normally. A real barrier test must demonstrate waiting,
+then rejection of the old fingerprint after the earlier ledger mutation commits. Observe that
+same test fail without serialization, then restore it. This is necessary platform work within
+the user's expanded authorization, not a Finance-only alternate SQL route.
