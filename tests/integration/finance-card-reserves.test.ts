@@ -218,6 +218,62 @@ describe("installed manual-card payment reserves", () => {
       run(cardReserveSaveHandler, { ...fund, availableCents: 90001, ...(await tokens()) })
     ).rejects.toThrow(/less payment cash/);
   });
+  it("keeps a closed card's reserve visible and allows releasing its excess cash", async () => {
+    await owner((s) =>
+      s.manual!.createAccount({
+        accountId: "zero-card",
+        type: "credit",
+        subtype: "credit card",
+        name: "Synthetic zero card",
+        isoCurrency: "USD",
+        openingDate: "2026-09-01",
+        openingBalanceCents: 0,
+        digest: "a".repeat(64),
+        at
+      })
+    );
+    await run(cardReserveSaveHandler, {
+      ...enroll,
+      accountId: "zero-card",
+      availableCents: 5000,
+      ...(await tokens())
+    });
+    const review = (await owner((s) => s.accountLifecycle!.review("zero-card", "2026-10-30")))!;
+    expect(review.canClose).toBe(true);
+    expect(
+      await owner((s) =>
+        s.accountLifecycle!.update({
+          accountId: "zero-card",
+          operation: "close",
+          expectedRevision: review.revision,
+          today: "2026-10-30",
+          at
+        })
+      )
+    ).toBe(true);
+    expect(await run(budgetStatusHandler, { month: "2026-10" })).toMatchObject({
+      readyToAssignCents: 35000,
+      cardPayments: [{ accountId: "zero-card", archived: true, availableCents: 5000 }]
+    });
+    await expect(
+      run(cardReserveSaveHandler, {
+        ...fund,
+        accountId: "zero-card",
+        availableCents: 6000,
+        ...(await tokens())
+      })
+    ).rejects.toThrow(/reopen/i);
+    await run(cardReserveSaveHandler, {
+      ...fund,
+      accountId: "zero-card",
+      availableCents: 0,
+      ...(await tokens())
+    });
+    expect(await run(budgetStatusHandler, { month: "2026-10" })).toMatchObject({
+      readyToAssignCents: 40000,
+      cardPayments: [{ accountId: "zero-card", archived: true, availableCents: 0 }]
+    });
+  });
   it("rejects stale reviews after ledger movement, without activity or partial assignment", async () => {
     await run(cardReserveSaveHandler, { ...enroll, ...(await tokens()) });
     const capture = await tokens();
