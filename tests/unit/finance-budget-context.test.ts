@@ -61,6 +61,48 @@ function fixture() {
   return { store, ports, kv };
 }
 describe("budget currency, funding scope and dates", () => {
+  it("keeps earlier months readable when a later enrolled-card ledger needs repair", async () => {
+    const { store, ports } = fixture();
+    await store.putAccount(account("cash", { balanceCents: 10000 }));
+    await store.putAccount(
+      account("card", {
+        type: "credit",
+        subtype: "credit card",
+        openingBalanceCents: 4000,
+        balanceCents: 4000
+      })
+    );
+    await store.setAssignment("2026-02", "groceries", 1000);
+    await store.putTransactionChunk("card", "2026-02", [
+      row("purchase", { accountId: "card", date: "2026-02-10", source: "manual" })
+    ]);
+    await store.putTransactionChunk("card", "2026-03", [
+      row("unlinked", {
+        accountId: "card",
+        date: "2026-03-10",
+        amountCents: -100,
+        categoryId: "transfers",
+        source: "manual"
+      })
+    ]);
+    const cards = {
+      ...store,
+      cardReserves: {
+        policies: async () => [{ accountId: "card", effectiveMonth: "2026-02" }],
+        assignments: async () => [{ accountId: "card", month: "2026-02", assignedCents: 400 }]
+      }
+    };
+    const clock = { ...ports, now: () => new Date("2026-04-15T12:00:00Z") };
+    expect(await budgetContext(clock, cards, "2026-01")).toMatchObject({
+      readyToAssignCents: 6000,
+      cardPayments: []
+    });
+    expect(await budgetContext(clock, cards, "2026-02")).toMatchObject({
+      readyToAssignCents: 8600,
+      cardPayments: [{ owedCents: 4100, availableCents: 500 }]
+    });
+    await expect(budgetContext(clock, cards, "2026-03")).rejects.toThrow(/unlinked/);
+  });
   it("does not silently infer a currency for old storage or legacy assignments", async () => {
     const { store, ports } = fixture();
     const legacy = { ...store, budgetPolicy: undefined };

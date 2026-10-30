@@ -337,6 +337,10 @@ describe("installed manual-card payment reserves", () => {
   it("shows a repair path rather than guessed totals after a later unlinked card transfer", async () => {
     await run(cardReserveSaveHandler, { ...enroll, ...(await tokens()) });
     await entry("unlinked-later", -100, "transfers");
+    expect(await run(budgetStatusHandler, { month: "2026-09" })).toMatchObject({
+      readyToAssignCents: 50000,
+      cardPayments: []
+    });
     expect(await run(budgetStatusHandler, { month: "2026-10" })).toEqual({
       month: "2026-10",
       cardLedgerReviewRequired: true,

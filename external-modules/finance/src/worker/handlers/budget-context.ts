@@ -175,9 +175,10 @@ export async function budgetContext(
     payments =
       deriveCardReserves({
         accounts,
-        rows,
-        policies: cardPolicies,
-        assignments: cardAssignments,
+        // Later ledger repairs must not invalidate an earlier month's saved accounting.
+        rows: rows.filter((row) => row.date.slice(0, 7) <= month),
+        policies: cardPolicies.filter((policy) => policy.effectiveMonth <= month),
+        assignments: cardAssignments.filter((assignment) => assignment.month <= month),
         ordinary,
         flexPolicies,
         transferIds: excluded,
