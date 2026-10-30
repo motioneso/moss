@@ -124,7 +124,10 @@
 #     never share a server with each other or with the dev instance. The
 #     container is removed when the run ends on every path — pass, fail,
 #     killed, aborted start — and each start sweeps leftover gate containers
-#     whose run is no longer alive, unless `--no-sweep` skips that sweep.
+#     whose run is no longer alive, unless `--no-sweep` skips that sweep. A
+#     server records the exact log it was launched for, so a sweep started
+#     with a different JARVIS_GATE_DIR still sees a live run's log instead of
+#     removing its database (#3672).
 #     `--keep-db` is accepted for compatibility
 #     but keeps nothing: the database dies with its server.
 #   - The gate's output is only ever redirected to a file, never piped. A pipe
@@ -289,6 +292,7 @@ launch_gate_postgres() {
     port="$(pick_free_port)" || die "could not find a free port for the gate database server"
     if docker run -d --name "$name" \
       --label jarv1s.gate=1 --label "jarv1s.gate.slug=$slug" --label "jarv1s.gate.startpid=$$" \
+      --label "jarv1s.gate.log=${LAUNCH_LOG:-}" \
       -p "127.0.0.1:${port}:5432" --shm-size="$GATE_SHM" \
       -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=postgres \
       "$GATE_IMAGE" >/dev/null 2>&1; then
@@ -336,8 +340,15 @@ remove_log_container() {
 # True when some recorded run still references this container AND that run is
 # not terminal (RUNNING verdict). A container whose runs all reached a
 # sentinel, a launch marker, or a dead runner is a leftover.
+#
+# The run's log does not have to live in the caller's state directory. Each
+# container records the exact log it was launched for (`jarv1s.gate.log`), so a
+# gate started with another JARVIS_GATE_DIR is still judged from here instead of
+# being swept as an orphan (#3672). A container that records no log, or whose
+# log is gone, has no run that can be checked — the sweep treats it as the
+# leftover it is, exactly as before.
 gate_container_in_live_run() {
-  local name="$1" candidate rc
+  local name="$1" candidate rc owner
   for candidate in "$STATE_DIR"/*.log; do
     [ -f "$candidate" ] || continue
     grep -qF "$name" "$candidate" 2>/dev/null || continue
@@ -345,7 +356,31 @@ gate_container_in_live_run() {
     verdict "$candidate" 1 >/dev/null 2>&1 || rc=$?
     [ "$rc" = "3" ] && return 0
   done
-  return 1
+  owner="$(gate_container_owner_log "$name")"
+  [ -n "$owner" ] || return 1
+  # Only an absolute path taken from the label is read, and only when it exists.
+  case "$owner" in
+    /*) ;;
+    *) return 1 ;;
+  esac
+  [ -f "$owner" ] || return 1
+  # A subshell so an unreadable foreign log cannot abort this start mid-sweep: no proof of
+  # liveness is the existing leftover rule, not a fatal error.
+  rc=0
+  ( verdict "$owner" 1 >/dev/null 2>&1 ) || rc=$?
+  [ "$rc" = "3" ]
+}
+
+# Prints the log path a container was launched for, or nothing when it records
+# none. Older containers carry no such label; `docker inspect` answers
+# `<no value>` for a label it does not have, which is not a path.
+gate_container_owner_log() {
+  local name="$1" owner
+  owner="$(docker inspect --format '{{index .Config.Labels "jarv1s.gate.log"}}' "$name" 2>/dev/null || true)"
+  case "$owner" in
+    "" | "<no value>" | "<no-value>") return 0 ;;
+  esac
+  printf '%s\n' "$owner"
 }
 
 # Removes leftover gate servers whose run is no longer alive. Runs at each
