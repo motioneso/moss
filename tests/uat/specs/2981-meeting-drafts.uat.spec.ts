@@ -30,7 +30,9 @@ test("Minimal meeting workspace edits titles, autosaves notes, resolves conflict
     expect(originalPreferences.status()).toBe(200);
     const savedPreferences = await originalPreferences.json();
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Meetings", exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("searchbox", { name: "Search meetings", exact: true })
+    ).toBeVisible();
     await expect(page.getByText("Link your Mac", { exact: true })).toBeVisible();
     await expect(
       page.getByText("Open Trail Marker and follow its linking instructions.", { exact: true })
@@ -162,7 +164,9 @@ test("Minimal meeting workspace edits titles, autosaves notes, resolves conflict
     );
     await page.getByRole("button", { name: "Permanently delete meeting", exact: true }).click();
     expect((await deletion).status()).toBe(204);
-    await expect(page.getByRole("heading", { name: "Meetings", exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("searchbox", { name: "Search meetings", exact: true })
+    ).toBeVisible();
     await expect(page).toHaveURL((url) => url.pathname === "/meetings" && !url.search);
     await expect(page.getByRole("main")).toHaveCount(1);
     await expect(meetingRow(page, title)).toHaveCount(0);
