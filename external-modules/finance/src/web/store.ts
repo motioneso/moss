@@ -94,6 +94,21 @@ export function invalidateToolQueries(onlyTool: string): void {
   invalidate(onlyTool);
 }
 
+/** Publish a completed explicit read before enabling actions that depend on its snapshot. */
+export function setToolQueryResult<T extends Record<string, unknown>>(
+  name: string,
+  input: Record<string, unknown>,
+  result: T
+): void {
+  const entry = entryFor(`${name}:${JSON.stringify(input)}`);
+  entry.generation++; // An older in-flight read must not replace this reviewed result.
+  entry.started = true;
+  entry.name = name;
+  entry.input = input;
+  entry.snapshot = { status: "settled", outcome: { kind: "ok", result } };
+  for (const listener of entry.listeners) listener();
+}
+
 export function __resetStoreForTests(): void {
   cache.clear();
   resetWriteQueues();

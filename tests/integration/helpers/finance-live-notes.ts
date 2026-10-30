@@ -237,6 +237,10 @@ export async function exercisePrivateNotes(
       });
     });
     await approve();
+    await page
+      .getByRole("dialog", { name: "Check this change", exact: true })
+      .getByRole("button", { name: "Close", exact: true })
+      .click();
     await editor
       .getByRole("status")
       .filter({ hasText: /saving could not be confirmed/i })

@@ -13,7 +13,7 @@ import {
 } from "../domain/transaction-notes";
 import { invokeTool } from "./api";
 import { useReadCooldown } from "./read-cooldown";
-import { invalidateToolQueries } from "./store";
+import { invalidateQueries } from "./store";
 import { announce } from "./states";
 
 /** The parent keeps one shared Dialog mounted, preserving its original focus return target. */
@@ -134,7 +134,8 @@ export function useTransactionNoteEditor(props: {
       });
       if (!alive.current || version !== generation.current) return;
       if (result.status === "succeeded" && result.result.status === "ok") {
-        invalidateToolQueries("finance.transactions.query");
+        // Note edits change xmin, which also invalidates captured budget/bill fingerprints.
+        invalidateQueries();
         announce("Private note saved.");
         pending.current = false;
         setBusy(false);
