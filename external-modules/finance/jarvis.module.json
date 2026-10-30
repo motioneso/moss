@@ -108,7 +108,7 @@
       {
         "id": "finance.upcoming",
         "path": "/upcoming",
-        "description": "Upcoming changes or resets one unreviewed occurrence on an active owned account through captured review and mandatory host confirmation. Effective dates may cross months or years; original cadence, matched actuals and money stay intact. Cancel retains input. Stale or uncertain saves block until checking saved bills. Undo review before changing matched/skipped projections; closed-ledger projection changes are read only. Reset later one-off changes and undo later reviews before stopping earlier. Matching includes posted expenses seven calendar days either side of the selected month, with the candidate date range shown and no automatic selection. Match options show nearest dates then amounts; an empty list explains checking Transactions and refreshing saved bills, and disables saving. No payments, ledger entries or automatic retries.",
+        "description": "Upcoming plans, matches, skips and stops bills. One-off changes/reset use captured review and host confirmation, preserve original cadence and actuals, and may cross months/years. Undo review before changing matched/skipped occurrences; reset later changes/reviews before stopping earlier. Match posted reviews seven days either side of the month, nearest dates then amounts, with no automatic selection. Empty lists explain Transactions and saved-bill refresh. Record bill entry previews an already-occurred expense on an active manual account for a due occurrence, exact balance/debt effects and same-amount duplicates within seven days. Confirmed recording atomically adds one expense and match; statement/date/currency/revision/precision guards apply. Duplicates block recording; use Accounts then Match for genuinely separate expenses. Cancel retains input; stale/uncertain writes block until checking saved bills. No bank instruction, future entry or automatic retry.",
         "label": "Upcoming bills"
       }
     ],
@@ -1909,6 +1909,158 @@
       },
       "executionPolicy": "confirm",
       "confirmWhenKeys": ["accountId", "month", "action", "availableCents"]
+    },
+    {
+      "name": "finance.bill.entry-preview",
+      "permissionId": "finance.bill.entry-preview",
+      "actionLabel": "Review a bill entry",
+      "description": "Record an already-occurred expense for a due bill on an active manual account. Preview exact balance effects and existing same-amount expenses first. Creation and matching are atomic; no bank instruction. Captured reviews, statement bounds and host confirmation protect writes.",
+      "risk": "read",
+      "handler": "bill.entry-preview",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "dueDate": {
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "categoryId": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1
+          },
+          "isoCurrency": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "amountCents": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "cleared": {
+            "type": "boolean"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "operationId",
+          "planId",
+          "dueDate",
+          "accountId",
+          "categoryId",
+          "name",
+          "isoCurrency",
+          "date",
+          "expectedFingerprint",
+          "amountCents",
+          "cleared",
+          "expectedRevision"
+        ]
+      }
+    },
+    {
+      "name": "finance.bill.entry-record",
+      "permissionId": "finance.bill.entry-record",
+      "actionLabel": "Record an expense and match its bill",
+      "description": "Record an already-occurred expense for a due bill on an active manual account. Preview exact balance effects and existing same-amount expenses first. Creation and matching are atomic; no bank instruction. Captured reviews, statement bounds and host confirmation protect writes.",
+      "risk": "write",
+      "handler": "bill.entry-record",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "dueDate": {
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "categoryId": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1
+          },
+          "isoCurrency": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "amountCents": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "cleared": {
+            "type": "boolean"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "operationId",
+          "planId",
+          "dueDate",
+          "accountId",
+          "categoryId",
+          "name",
+          "isoCurrency",
+          "date",
+          "expectedFingerprint",
+          "amountCents",
+          "cleared",
+          "expectedRevision"
+        ]
+      },
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["name", "accountId", "date", "amountCents", "isoCurrency", "cleared"]
     }
   ],
   "assistantActionFamilies": [

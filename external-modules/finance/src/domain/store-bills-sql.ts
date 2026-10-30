@@ -1,3 +1,4 @@
+import { billEntrySqlStore } from "./store-bill-entry-sql.js";
 import type { BillCadence } from "./recurrence.js";
 import type { BillStore } from "./bills.js";
 import type { FinanceDb } from "./store-sql.js";
@@ -7,6 +8,7 @@ const logged = (gate: string, kind: string, params: string, at: string) =>
   `logged AS (INSERT INTO app.finance_activity (owner_user_id,id,at,actor,kind,params) SELECT app.current_actor_user_id(),gen_random_uuid(),${at}::timestamptz,'user','${kind}',${params} FROM ${gate} RETURNING id)`;
 export function billSqlStore(db: FinanceDb): BillStore {
   return {
+    ...billEntrySqlStore(db),
     async plans() {
       const result = await db.query<{
         id: string;

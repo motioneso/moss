@@ -1,3 +1,4 @@
+import { BillEntryDialog } from "../bill-entry-dialog";
 import {
   Badge,
   Button,
@@ -30,6 +31,7 @@ export interface Occurrence {
   plannedDate?: string;
   adjusted?: boolean;
   canAdjust?: boolean;
+  canRecordEntry?: boolean;
   expectedCents: number;
   state: "projected" | "posted" | "skipped" | "review";
   actualCents: number | null;
@@ -59,6 +61,7 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
   const [adjusting, setAdjusting] = useState<{ occurrence: Occurrence; reset: boolean } | null>(
     null
   );
+  const [recording, setRecording] = useState<Occurrence | null>(null);
   const [adding, setAdding] = useState(false);
   const [selected, setSelected] = useState<Occurrence | null>(null);
   const [stopping, setStopping] = useState<BillPlan | null>(null);
@@ -147,7 +150,12 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
             type="month"
             value={month}
             disabled={
-              busy || adding || Boolean(selected) || Boolean(stopping) || Boolean(adjusting)
+              busy ||
+              adding ||
+              Boolean(selected) ||
+              Boolean(stopping) ||
+              Boolean(adjusting) ||
+              Boolean(recording)
             }
             onChange={(e: { currentTarget: { value: string } }) => {
               if (/^\d{4}-(0[1-9]|1[0-2])$/.test(e.currentTarget.value))
@@ -173,8 +181,9 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
         </div>
       </div>
       <Note variant="practical">
-        These are projections. Adding or reviewing a bill never pays it or creates a transaction.
-        Posted amounts come from the transaction you match.
+        Plans are projections. Match posted links an existing expense; Record bill entry adds an
+        already-occurred manual expense after review and confirmation. Moss never sends a bank
+        payment.
       </Note>
       {message ? <p role="status">{message}</p> : null}
       {outcomeGate(
@@ -226,6 +235,16 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
                           </div>
                         ) : o.state !== "projected" ? (
                           <p className="jds-hint">Undo review before changing this projection.</p>
+                        ) : null}
+                        {o.canRecordEntry ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={busy || blocked || !props.tools}
+                            onClick={() => setRecording(o)}
+                          >
+                            Record bill entry
+                          </Button>
                         ) : null}
                         <div className="fnm-spread">
                           {o.state === "projected" ? (
@@ -325,6 +344,15 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
         ),
         { loadingLabel: "Loading bills" }
       )}
+      {data && recording ? (
+        <BillEntryDialog
+          data={data}
+          occurrence={recording}
+          tools={props.tools}
+          onClose={() => setRecording(null)}
+          onUncertain={() => setBlocked(true)}
+        />
+      ) : null}
       {data && adjusting ? (
         <BillAdjustmentDialog
           data={data}

@@ -1,3 +1,4 @@
+import type { BillEntryStore } from "./bill-entry.js";
 import type { BillSchedule } from "./recurrence.js";
 import type { BudgetReview } from "./budget-context.js";
 export interface BillPlan extends BillSchedule {
@@ -16,7 +17,7 @@ export interface BillDecision {
   actualCents?: number | null;
   matchedValid?: boolean;
 }
-export interface BillStore {
+export interface BillStore extends Partial<BillEntryStore> {
   plans(): Promise<BillPlan[]>;
   decisions(
     from: string,

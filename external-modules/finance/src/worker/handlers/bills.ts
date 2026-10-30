@@ -100,6 +100,14 @@ export const billsReadHandler: ToolFactory = (ports) => async (input) => {
     return {
       ...o,
       canAdjust: Boolean(store.billAdjustments && account && !account.archivedAt && !decision),
+      canRecordEntry: Boolean(
+        store.bills?.recordEntry &&
+        account?.source === "manual" &&
+        !account.archivedAt &&
+        !decision &&
+        o.plannedDate <= today(ports) &&
+        categories.some((c) => c.id === o.categoryId && c.group.toLowerCase() !== "income")
+      ),
       state:
         decision?.state === "matched"
           ? decision.matchedValid

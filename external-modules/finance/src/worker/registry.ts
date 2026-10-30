@@ -1,3 +1,4 @@
+import { billEntryPreviewHandler, billEntryRecordHandler } from "./handlers/bill-entry.js";
 import { cardReservePreviewHandler, cardReserveSaveHandler } from "./handlers/card-reserves.js";
 import { transferReviewHandler, transferReverseHandler } from "./handlers/transfer-corrections.js";
 import { targetFundHandler } from "./handlers/target-funding.js";
@@ -131,6 +132,8 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "target.set": targetSetHandler,
   "targets.fund": targetFundHandler,
   "bills.read": billsReadHandler,
+  "bill.entry-preview": billEntryPreviewHandler,
+  "bill.entry-record": billEntryRecordHandler,
   billClearHandler,
   "bill.create": billCreateHandler,
   "bill.decide": billDecideHandler,

@@ -158,6 +158,8 @@ async function describe(row: ActivityRecord, names: Names): Promise<string> {
       return "Changed the budget planning mode";
     case "flex.assign":
       return "Changed the flexible pool assignment";
+    case "bill.record-entry":
+      return "Recorded an expense and matched its bill";
     case "bill.create":
       return "Added a bill plan";
     case "bill.stop":
