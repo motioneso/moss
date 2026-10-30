@@ -86,3 +86,6 @@ docs/superpowers/specs/outlook-mail-mockup/moss-ui.css
 
 # Byte-identical copy of the reviewed stage 4 runner protocol (#3538)
 scripts/uat-campaign/PROTOCOL.md
+
+# Reviewed UAT host helpers stay byte-identical to their approved commits.
+scripts/uat-host/
