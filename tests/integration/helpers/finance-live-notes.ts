@@ -139,7 +139,10 @@ export async function exercisePrivateNotes(
     await capture("edit");
     const before = await snapshot();
     await save();
-    await guard.or(open()).first().waitFor();
+    await guard
+      .or(page.getByText("Private note saved.", { exact: true }))
+      .first()
+      .waitFor();
     expect(await snapshot()).toEqual(before);
     expect(await guard.isVisible()).toBe(true);
     await guard.getByRole("button", { name: "Cancel", exact: true }).click();

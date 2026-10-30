@@ -228,7 +228,7 @@ export function useTransactionNoteEditor(props: {
           Back to details
         </Button>
         <Button disabled={busy || blocked || !valid || !changed} onClick={() => void save()}>
-          {busy ? "Saving…" : "Save private note"}
+          {busy ? (blocked || draft === null ? "Checking…" : "Saving…") : "Save private note"}
         </Button>
       </div>
     )
