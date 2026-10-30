@@ -108,7 +108,7 @@
       {
         "id": "finance.upcoming",
         "path": "/upcoming",
-        "description": "Upcoming changes or resets one unreviewed occurrence on an active owned account through captured review and mandatory host confirmation. Effective dates may cross months or years; original cadence, matched actuals and money stay intact. Cancel retains input. Stale or uncertain saves block until checking saved bills. Undo review before changing matched/skipped projections; closed-ledger projection changes are read only. Reset later one-off changes and undo later reviews before stopping earlier. Matching includes posted expenses seven calendar days either side of the selected month, with the candidate date range shown and no automatic selection. No payments, ledger entries or automatic retries.",
+        "description": "Upcoming changes or resets one unreviewed occurrence on an active owned account through captured review and mandatory host confirmation. Effective dates may cross months or years; original cadence, matched actuals and money stay intact. Cancel retains input. Stale or uncertain saves block until checking saved bills. Undo review before changing matched/skipped projections; closed-ledger projection changes are read only. Reset later one-off changes and undo later reviews before stopping earlier. Matching includes posted expenses seven calendar days either side of the selected month, with the candidate date range shown and no automatic selection. Match options show nearest dates then amounts; an empty list explains checking Transactions and refreshing saved bills, and disables saving. No payments, ledger entries or automatic retries.",
         "label": "Upcoming bills"
       }
     ],

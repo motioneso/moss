@@ -17,6 +17,7 @@ export async function exercisePlanning(
   legacy?: { db: Kysely<MossDatabase>; actorUserId: string }
 ) {
   const page = await context.newPage();
+  let inspectEmptyBills: ((inspect: () => Promise<void>) => Promise<void>) | undefined;
   let restoreBillFixture: (() => Promise<void>) | undefined;
   try {
     if (kind === "bills" && legacy) {
@@ -26,9 +27,22 @@ export async function exercisePlanning(
           createModuleStorageRpc(scope, "finance").query(text, params)
         );
       const original = await query(
-        "SELECT date::text AS day FROM app.finance_transactions WHERE id='synthetic-market'"
+        "SELECT date::text AS day,pending FROM app.finance_transactions WHERE id='synthetic-market'"
       );
       expect(original.rows).toHaveLength(1);
+      expect(original.rows[0]!.pending).toBe(false);
+      inspectEmptyBills = async (inspect) => {
+        try {
+          await query(
+            "UPDATE app.finance_transactions SET pending=true WHERE id='synthetic-market'"
+          );
+          await inspect();
+        } finally {
+          await query(
+            "UPDATE app.finance_transactions SET pending=false WHERE id='synthetic-market'"
+          );
+        }
+      };
       restoreBillFixture = async () => {
         await query(
           "UPDATE app.finance_transactions SET date=$1::date WHERE id='synthetic-market'",
@@ -41,7 +55,8 @@ export async function exercisePlanning(
         [`${month}-01`]
       );
     }
-    if (kind === "bills") await exerciseBills(page, base, month, read, artifacts);
+    if (kind === "bills")
+      await exerciseBills(page, base, month, read, artifacts, inspectEmptyBills);
     else
       await exerciseFlex(
         page,

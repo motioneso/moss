@@ -20,6 +20,7 @@ import { invalidateQueries, useToolQuery } from "../store";
 import { outcomeGate } from "../states";
 import { BillAdjustmentDialog } from "../bill-adjustment-dialog";
 import { BillPlanDialog } from "../bill-plan-dialog";
+import { billMatchCandidates } from "../bill-match-candidates";
 export interface Occurrence {
   planId: string;
   name: string;
@@ -75,6 +76,8 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
   const query = useToolQuery<BillsView>("finance.bills.read", { from, to });
   const data =
     query.status === "settled" && query.outcome.kind === "ok" ? query.outcome.result : null;
+  const matchCandidates = data && selected ? billMatchCandidates(data.transactions, selected) : [];
+  const canMatch = matchCandidates.some((row) => row.id === transactionId);
   useEffect(() => {
     setSelected(null);
     setStopping(null);
@@ -351,7 +354,7 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
                 Cancel
               </Button>
               <Button
-                disabled={!transactionId || busy || blocked}
+                disabled={!canMatch || busy || blocked}
                 onClick={() =>
                   void write("finance.bill.decide", {
                     planId: selected.planId,
@@ -385,24 +388,31 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
             <Select
               aria-label="Posted transaction"
               value={transactionId}
-              disabled={busy}
+              disabled={busy || !matchCandidates.length}
               onChange={(e: { currentTarget: { value: string } }) =>
                 setTransaction(e.currentTarget.value)
               }
             >
-              <option value="">Choose a transaction</option>
-              {data.transactions
-                .filter((t) => t.accountId === selected.accountId)
-                .map((t) => (
-                  <option value={t.id} key={t.id}>
-                    {t.date} · {t.name} · {formatCents(t.amountCents, data.isoCurrency)}
-                  </option>
-                ))}
+              <option value="">
+                {matchCandidates.length ? "Choose a transaction" : "No posted expenses available"}
+              </option>
+              {matchCandidates.map((t) => (
+                <option value={t.id} key={t.id}>
+                  {t.date} · {t.name} · {formatCents(t.amountCents, data.isoCurrency)}
+                </option>
+              ))}
             </Select>
-            <p className="jds-hint">
-              Showing posted transactions in this month's review window. A transaction already
-              matched elsewhere cannot be used twice.
-            </p>
+            {matchCandidates.length ? (
+              <p className="jds-hint">
+                Nearest date first, then nearest expected amount. Different amounts can still be
+                valid. Choose the expense you recognize.
+              </p>
+            ) : (
+              <Note variant="practical">
+                No unmatched posted expenses for this account in the shown date range. Check
+                Transactions for the payment, then close this review and use Check saved bills.
+              </Note>
+            )}
           </div>
         </Dialog>
       ) : null}

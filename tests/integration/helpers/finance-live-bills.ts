@@ -8,7 +8,8 @@ export async function exerciseBills(
   base: string,
   month: string,
   read: (name: string, input: Record<string, unknown>) => Promise<Record<string, unknown>>,
-  artifacts?: string
+  artifacts?: string,
+  inspectEmpty?: (inspect: () => Promise<void>) => Promise<void>
 ) {
   const previousDate = new Date(`${month}-01T00:00:00Z`);
   previousDate.setUTCDate(0);
@@ -62,8 +63,54 @@ export async function exerciseBills(
     ])
   );
   await exerciseBillAdjustments(page, base, month, plan.id, read, artifacts);
+  if (inspectEmpty) {
+    await inspectEmpty(async () => {
+      await page.reload();
+      await page.getByRole("button", { name: "Match posted", exact: true }).click();
+      const empty = page.getByRole("dialog", { name: "Match a posted transaction", exact: true });
+      await empty
+        .getByText(
+          "No unmatched posted expenses for this account in the shown date range. Check Transactions for the payment, then close this review and use Check saved bills.",
+          { exact: true }
+        )
+        .waitFor();
+      expect(await empty.getByLabel("Posted transaction", { exact: true }).isDisabled()).toBe(true);
+      expect(
+        await empty.getByRole("button", { name: "Save match", exact: true }).isDisabled()
+      ).toBe(true);
+      for (const [theme, width] of [
+        ["light", 1440],
+        ["dark", 320]
+      ] as const) {
+        await page.evaluate((theme) => {
+          document.documentElement.dataset.theme = theme;
+        }, theme);
+        await page.setViewportSize({ width, height: 900 });
+        expect(await empty.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(false);
+        const footer = await empty.locator(".jds-dialog__foot").boundingBox();
+        expect(footer!.y + footer!.height).toBeLessThanOrEqual(900);
+        if (artifacts)
+          await page.screenshot({
+            path: join(resolve(artifacts), `finance-bill-match-empty-${theme}-${width}.png`)
+          });
+      }
+      await empty.getByRole("button", { name: "Cancel", exact: true }).click();
+      await empty.waitFor({ state: "detached" });
+    });
+    await page.reload();
+  }
   await page.getByRole("button", { name: "Match posted", exact: true }).click();
   const match = page.getByRole("dialog", { name: "Match a posted transaction", exact: true });
+  expect(await match.getByLabel("Posted transaction", { exact: true }).inputValue()).toBe("");
+  expect(await match.getByRole("button", { name: "Save match", exact: true }).isDisabled()).toBe(
+    true
+  );
+  await match
+    .getByText(
+      "Nearest date first, then nearest expected amount. Different amounts can still be valid. Choose the expense you recognize.",
+      { exact: true }
+    )
+    .waitFor();
   await match.getByLabel("Posted transaction", { exact: true }).selectOption("synthetic-market");
   const last = new Date(Number(month.slice(0, 4)), Number(month.slice(5)), 0).getDate();
   const window = billMatchWindow(`${month}-01`, `${month}-${last}`);
