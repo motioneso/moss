@@ -311,14 +311,15 @@ export function createMeetingOutputRuntime(deps: {
         `externalData (escaped JSON):\n${escapeData(piece)}`;
       const promptBytes = (piece: MeetingOutputInputs, previous?: MeetingOutputContent) =>
         Buffer.byteLength(promptFor(piece, previous), "utf8");
-      // Room for the running summary and merge wording in later piece prompts.
-      const pieceReserve = 16384;
+      // Pieces target half the cap. That leaves room for the running summary in
+      // later prompts and keeps each call well inside its own time limit.
+      const piecePromptTarget = Math.floor(STRUCTURED_PROMPT_MAX_BYTES / 2);
       const chunks: MeetingOutputChunk[] =
         promptBytes(input.inputs) <= STRUCTURED_PROMPT_MAX_BYTES
           ? planMeetingOutputChunks(input.inputs, () => true)
           : planMeetingOutputChunks(
               input.inputs,
-              (candidate) => promptBytes(candidate) <= STRUCTURED_PROMPT_MAX_BYTES - pieceReserve
+              (candidate) => promptBytes(candidate) <= piecePromptTarget
             );
       const selected = await deps.dataContext.withDataContext(actor, (db) => resolve(db));
       modelName = selected.model.provider_model_id;
