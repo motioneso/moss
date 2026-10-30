@@ -459,3 +459,19 @@ Next concrete slice: recurring bill plans with anchored calendar recurrence, pro
 states, explicit transaction matching and skip/stop history, following the committed targets/bills/flex
 spec. Then implement flexible-pool conservation and mode transitions. No user decision blocks either
 slice; no provider connection or live financial action is authorized.
+
+## Remote branch and recurring-bill foundation
+
+The user subsequently authorized pushing this task branch while keeping it unmerged. Normal git
+push succeeded and `ls-remote` independently confirmed `affdbed3ab160a02355ca07f61d8d23fb100e54e`
+on `refs/heads/task/finance-parity-20261028` in `motioneso/moss`. No PR or merge was performed.
+This authorization supersedes the earlier publication restriction for branch pushes only.
+
+Continued the recurring-bill slice with pure anchored recurrence calculations and six regression
+cases: monthly end clamps without drift, leap years including 2100, DST boundaries, fortnightly
+and inclusive stop dates, early years/long-lived schedules and invalid input/window bounds.
+The engine projects bounded date windows and never posts transactions. This is infrastructure,
+not completed recurring-bill capability; persistence, guarded edits, paid matching, skip history,
+and the Upcoming UI still require implementation and installed acceptance. The matrix remains
+Missing for recurring bills. Scoped lint and Finance TypeScript passed; the focused Finance
+unit suite passed: 54 files / 563 tests. No DB or browser behavior changes in this foundation.
