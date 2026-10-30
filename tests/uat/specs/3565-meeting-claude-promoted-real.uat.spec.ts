@@ -75,7 +75,7 @@ test("Meeting summary uses the configured Claude default after a CLI update (#35
   });
   expect(transcript.status()).toBe(201);
   await page.getByRole("link", { name: "Meetings", exact: true }).click();
-  await meetingRow(page, title).click();
+  await meetingRow(page, title).getByRole("button").click();
   await openMeetingAction(page, "Rewrite summary");
   const summary = page.getByRole("region", { name: "Summary and actions", exact: true });
   const write = summary.getByRole("button", { name: "Write summary", exact: true });

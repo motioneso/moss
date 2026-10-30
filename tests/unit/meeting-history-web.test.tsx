@@ -27,6 +27,8 @@ const record: MeetingRecord = {
   updatedAt: "2026-10-03T12:00:00Z"
 };
 const first = historyItem(record, {
+  date: { at: "2026-10-02T09:30:00Z", source: "recorded" },
+  capture: { status: "unavailable", durationMs: 1_920_000 },
   transcript: {
     status: "retained",
     revision: 1,
@@ -213,26 +215,37 @@ describe("minimal meeting list (synthetic transport, not live proof)", () => {
   function row(id: string) {
     return renderer.root
       .findAllByType("button")
-      .find(
-        (node) =>
-          String(node.props.className).includes("meetings-history-row") &&
-          node
-            .findAllByType("span")
-            .some(
-              (span) => span.children.join("") === (id === first.id ? first.title : second.title)
-            )
-      )!;
+      .find((node) => node.children.join("") === (id === first.id ? first.title : second.title))!;
   }
-  it("shows summary gist and duration with direct one-click navigation", async () => {
+  it("shows the home table with honest date and length, and opens a meeting", async () => {
     await mount();
+    const table = renderer.root.findByType("table");
+    expect(table.findAllByType("th").map((cell) => cell.children.join(""))).toEqual([
+      "Title",
+      "Date",
+      "Length",
+      "Attendees",
+      "Type"
+    ]);
+    expect(html()).toContain("32 min");
+    expect(html()).toContain("Recorded");
+    expect(html()).toContain("Added");
+    expect(html()).toContain("—");
     expect(html()).not.toContain("Capture unavailable");
     expect(html()).not.toContain("Open review");
+    expect(html()).not.toContain("Personal notes");
     expect(historyApi.getMeetingHistoryItem).not.toHaveBeenCalled();
     await act(async () => row(first.id).props.onClick());
     await flush();
     expect(location).toBe(`?id=${first.id}`);
-    expect(html()).toContain("Personal notes");
     expect(chat.openMeetingChat).not.toHaveBeenCalled();
+  });
+  it("has no duplicate Meetings heading or Settings link in the page body", async () => {
+    await mount();
+    expect(
+      renderer.root.findAllByType("a").some((node) => node.children.join("") === "Settings")
+    ).toBe(false);
+    expect(renderer.root.findAllByType("h1")).toHaveLength(0);
   });
   it("keeps search in signed-in memory through direct meeting navigation and Back", async () => {
     await mount();
@@ -257,7 +270,7 @@ describe("minimal meeting list (synthetic transport, not live proof)", () => {
     expect(location).toBe(`?id=${first.id}`);
   });
   it("uses authoritative pagination cursor even for a short page", async () => {
-    const cursor = { id: first.id, createdAt: first.createdAt };
+    const cursor = { id: first.id, dateAt: first.date.at };
     vi.mocked(historyApi.searchMeetingHistory)
       .mockResolvedValueOnce({ meetings: [first], nextCursor: cursor })
       .mockResolvedValueOnce({ meetings: [second], nextCursor: null });

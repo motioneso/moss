@@ -16,7 +16,7 @@ import {
 import type {
   RecordingInterpretation,
   ManualTranscriptInput,
-  MeetingRecordCursor
+  MeetingHistoryCursor
 } from "@moss/shared";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
@@ -246,7 +246,7 @@ describe("recording identity and pasted transcript admission (#3777)", () => {
     }
     const actual: string[] = [];
     await context.withDataContext(owner, async (db) => {
-      let before: MeetingRecordCursor | undefined;
+      let before: MeetingHistoryCursor | undefined;
       for (let i = 0; i < 4; i++) {
         const page = await new MeetingHistoryRepository().search(db, {
           query: marker,

@@ -31,7 +31,7 @@ describe("history transport and truthful labels", () => {
       query: "private words",
       filter: "transcript" as const,
       limit: 30,
-      before: { id: draft.id, createdAt: draft.createdAt }
+      before: { id: draft.id, dateAt: draft.createdAt }
     };
     await searchMeetingHistory(input, controller.signal);
     const [path, options] = fetch.mock.calls[0]!;

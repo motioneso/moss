@@ -7,6 +7,7 @@ export * from "./classifier-preparation-jobs.js";
 export * from "./classifier-readable-name.js";
 export * from "./classifier-reply.js";
 export * from "./classifier-risk-inputs.js";
+export * from "./classifier-scan.js";
 export * from "./classifier-settings.js";
 export * from "./classifier-standing.js";
 export * from "./classifier-sort-jobs.js";

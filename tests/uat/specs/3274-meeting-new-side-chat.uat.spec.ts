@@ -247,7 +247,7 @@ test("Meeting New side chat ignores a real late success or failure, and Conversa
     const surface = meetingChatSurface(meetingId);
 
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
-    await meetingRow(page, title).click();
+    await meetingRow(page, title).getByRole("button").click();
     await openMeetingChat(page);
     const drawer = page.locator(".chatd--docked");
     await expect(drawer).toBeVisible();

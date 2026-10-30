@@ -363,7 +363,9 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
     await native.close();
     await connection.refresh();
     await panel.getByRole("link", { name: "New meeting", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Meetings", exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("searchbox", { name: "Search meetings", exact: true })
+    ).toBeVisible();
     await expect(page.getByRole("region", { name: "Transcript", exact: true })).toHaveCount(0);
     await expect(strip).toHaveCount(0);
     await expect(page.locator(".meetings-recording-indicator")).toHaveCount(0);
