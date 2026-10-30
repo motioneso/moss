@@ -35,3 +35,11 @@ time bucket, not a global exactly-once promise; handlers retain their replay mar
 Prove actual same-bucket queue insertion and package changes against PostgreSQL, using the supported
 send database adapter in one real transaction so a clock-boundary crossing cannot make the test flaky.
 Do not alter existing queue policies, runtime deadlines, migration markers or authorization.
+
+The complete nineteen-flow fixture starts its migration workers only inside startup acceptance.
+Running startup after every seeded scenario accumulates lifecycle control requests while no worker
+is running, unlike the deployed worker lifecycle. Run the independent fresh-owner cases first,
+still after real installation and before creating each new owner. Retain the existing idle barrier,
+new-owner post-commit receipt, real empty-ledger assertions and unchanged time bounds. Do not delete
+old jobs, seed migration completion or turn a failed startup into a skip. This does not establish
+latency under arbitrary production backlogs or make full-module reconciliation targeted per user.
