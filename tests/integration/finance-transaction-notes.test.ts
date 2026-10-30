@@ -93,6 +93,7 @@ import {
 } from "../../external-modules/finance/src/worker/handlers/transaction-notes.js";
 import type { WorkerPorts } from "../../external-modules/finance/src/worker/ports.js";
 import type { TransactionRecord } from "../../external-modules/finance/src/domain/records.js";
+import type { NoteTarget } from "../../external-modules/finance/src/domain/transaction-notes.js";
 const at = "2026-10-30T12:00:00Z";
 const run = (write: boolean, input: Record<string, unknown>, actorUserId: string = ids.userA) =>
   runner.withDataContext({ actorUserId }, (scope) =>
@@ -137,8 +138,8 @@ async function fresh(extra: Partial<TransactionRecord> = {}) {
   });
   return { transactionId: id, accountId, month: "2026-10" };
 }
-const read = (target: Awaited<ReturnType<typeof fresh>>) => owner((s) => s.notes!.read(target));
-const save = (target: Awaited<ReturnType<typeof fresh>>, rev: string, notes: string) =>
+const read = (target: NoteTarget) => owner((s) => s.notes!.read(target));
+const save = (target: NoteTarget, rev: string, notes: string) =>
   owner((s) => s.notes!.save(target, rev, notes, at));
 beforeAll(async () => {
   if (process.env.MOSS_FINANCE_NOTE_RLS_NEGATIVE === "1") {
