@@ -93,7 +93,25 @@ export async function exerciseReportDetails(
   }
   const edit = await context.newPage();
   try {
-    await edit.goto(`${base}/m/finance/transactions`);
+    const [loaded] = await Promise.all([
+      edit.waitForResponse((response) =>
+        response.url().includes("/assistant-tools/finance.transactions.query/invoke")
+      ),
+      edit.goto(`${base}/m/finance/transactions`)
+    ]);
+    if (loaded.status() === 429) {
+      const seconds = Number(await loaded.headerValue("retry-after"));
+      expect(Number.isFinite(seconds) && seconds >= 1 && seconds <= 60).toBe(true);
+      await edit.getByRole("button", { name: "Retry register", exact: true }).waitFor();
+      await edit.waitForTimeout(seconds * 1000 + 100);
+      const [retried] = await Promise.all([
+        edit.waitForResponse((response) =>
+          response.url().includes("/assistant-tools/finance.transactions.query/invoke")
+        ),
+        edit.getByRole("button", { name: "Retry register", exact: true }).click()
+      ]);
+      expect(retried.status()).toBe(200);
+    } else expect(loaded.status()).toBe(200);
     await edit
       .getByRole("checkbox", { name: "Select Synthetic manual market", exact: true })
       .filter({ visible: true })
@@ -113,6 +131,18 @@ export async function exerciseReportDetails(
     await edit
       .getByRole("dialog", { name: "Review selected transactions", exact: true })
       .waitFor({ state: "detached" });
+  } catch (error) {
+    if (artifacts)
+      await edit.screenshot({
+        path: join(resolve(artifacts), "finance-report-edit-debug.png"),
+        fullPage: true
+      });
+    throw new Error(
+      `Report competing register: ${(await edit.locator("body").innerText()).slice(-2500)}`,
+      {
+        cause: error
+      }
+    );
   } finally {
     await edit.close();
   }
