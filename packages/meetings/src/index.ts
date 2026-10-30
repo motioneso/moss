@@ -49,6 +49,7 @@ export * from "./recording-metadata.js";
 export * from "./manual-entry-service.js";
 
 export * from "./output-guidance.js";
+export * from "./output-chunks.js";
 
 export {
   MeetingDeletionService,

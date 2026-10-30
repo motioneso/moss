@@ -13,7 +13,7 @@ export const MEETING_STOP_SUMMARY_QUEUES: readonly QueueDefinition[] = [
     options: {
       retryLimit: 3,
       retryDelay: 60,
-      expireInSeconds: 180,
+      expireInSeconds: 660,
       deleteAfterSeconds: 3600,
       retentionSeconds: 1_209_600
     }
