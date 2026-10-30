@@ -107,6 +107,15 @@
 .meetings-history-row {
   border-bottom: 1px solid var(--border);
 }
+.meetings-history-title {
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+  text-align: left;
+}
+.meetings-history-title:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
 .meetings-history-date-source,
 .meetings-history-side {
   display: block;

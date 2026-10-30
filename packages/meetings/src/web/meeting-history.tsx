@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@moss/module-web-sdk";
-import { Button, Field, FormLabel, Select, Badge } from "@moss/ui";
+import { Button, Field, FormLabel, RowButton, Select, Badge } from "@moss/ui";
 import type { MeetingHistoryCursor } from "@moss/shared";
 import { getRecordingTypes, recordingKeys } from "./recording-client.js";
 import { isMeetingAccessDenied, PAGE_SIZE } from "./client.js";
@@ -145,9 +145,12 @@ export function MeetingHistory({
               {meetings.map((meeting) => (
                 <tr key={meeting.id} className="meetings-history-row">
                   <td>
-                    <Button variant="link" onClick={() => onOpen(meeting.id)}>
+                    <RowButton
+                      className="meetings-history-title"
+                      onClick={() => onOpen(meeting.id)}
+                    >
                       {meeting.title}
-                    </Button>
+                    </RowButton>
                   </td>
                   <td data-label="Date">
                     <span>{date(meeting.date.at)}</span>
