@@ -212,6 +212,22 @@ describe("OpenAI-compatible key test uses the normalized address", () => {
       expect(urls).toEqual(["http://proxy.test/v1/models"]);
     }
   );
+
+  it("tests a custom API root at that root, with no second version segment (#3559)", async () => {
+    const urls: string[] = [];
+    const fetch = (async (url: string | URL | Request) => {
+      urls.push(String(url));
+      return new Response(JSON.stringify({ data: [{ id: "org/model:tag@v2" }] }), { status: 200 });
+    }) as typeof globalThis.fetch;
+    await testProviderCredential({
+      providerKind: "openai-compatible",
+      authMethod: "api_key",
+      baseUrl: "https://example.invalid/v1beta/openai",
+      credential: { apiKey: "sk-test" },
+      fetch
+    });
+    expect(urls).toEqual(["https://example.invalid/v1beta/openai/models"]);
+  });
 });
 
 describe("AI provider validation and redirects", () => {

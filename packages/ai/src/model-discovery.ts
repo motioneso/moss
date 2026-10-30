@@ -9,6 +9,7 @@ import { CLOUDFLARE_DECISION_MODELS, decisionModelDialect } from "@moss/shared";
 import type { AiAuthMethod, AiProviderKind } from "@moss/db";
 import {
   ANTHROPIC_DEFAULT_BASE_URL,
+  openAiCompatibleApiRoot,
   PROVIDER_MODEL_ID_PATTERN,
   providerBaseUrl
 } from "./provider-base-url.js";
@@ -222,8 +223,8 @@ function doFetch(input: ModelDiscoveryInput, apiKey: string): Promise<Response> 
     case "openai-compatible":
     case "ollama":
     case "custom": {
-      const base = providerBaseUrl("openai-compatible", input.baseUrl);
-      return f(`${base}/v1/models`, { headers: { authorization: `Bearer ${apiKey}` }, signal });
+      const base = openAiCompatibleApiRoot(input.baseUrl);
+      return f(`${base}/models`, { headers: { authorization: `Bearer ${apiKey}` }, signal });
     }
   }
 }

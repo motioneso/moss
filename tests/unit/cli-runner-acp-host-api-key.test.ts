@@ -153,6 +153,19 @@ describe("AcpHost API-key launches", () => {
     });
   });
 
+  it("keeps a custom API root in the OpenCode provider entry (#3559)", async () => {
+    await inTempDir(async (dir) => {
+      const { host, requests } = makeHost(dir);
+      await host.spawn("chat:user-1:a", "proj", "opencode", "user-1", "chat", false, undefined, {
+        ...CREDENTIAL,
+        baseUrl: "https://example.invalid/v1beta/openai"
+      });
+      expect(requests[0]!.opencodeProvider?.entry?.baseUrl).toBe(
+        "https://example.invalid/v1beta/openai"
+      );
+    });
+  });
+
   it("removes the OpenCode entry on every CLI-login OpenCode spawn, chat or workshop", async () => {
     await inTempDir(async (dir) => {
       const { host, spawns, requests, agentHome } = makeHost(dir);
