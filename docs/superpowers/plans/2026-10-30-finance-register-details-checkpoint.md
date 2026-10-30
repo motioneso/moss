@@ -46,3 +46,19 @@ unrun when units fail.
 Disk pressure was recovered by removing 15 unattached anonymous volumes whose creation
 times matched completed synthetic Finance gate receipts; no global prune or active/dev
 database removal was performed. No credential or financial provider was contacted.
+
+## Responsive dialog correction
+
+Clean 33793f05 / ad2f321db785 complete receipt 141047-CRAlnJ passed all 169 backend
+and 20 installed flows. The restored manual-status flow passed, including all 24
+cleared/reconciled frames; dark 320px/light 1440px reconciled frames were inspected.
+The new details flow failed at its first phone transition: Dialog is deliberately
+inline in the shared library, so mounting it inside a desktop-only row hid it on
+phone width. This is a product regression, not a fixture/baseline failure.
+
+The register now owns the captured detail state and mounts one Dialog above both
+responsive layouts. Row buttons only capture/open it. No portal implementation or
+shared modal lifecycle is changed. Capture helpers clone the row and splits, and
+focused restored details/register suites passed all 100 in 13 files. The shared-note
+negative was repeated against the moved renderer (expected red, restored in finally);
+new clean installed acceptance and full verification must establish the final result.

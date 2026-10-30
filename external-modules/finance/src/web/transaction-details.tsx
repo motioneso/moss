@@ -4,7 +4,6 @@ import {
   RowIndex,
   RowIndexItem,
   Textarea,
-  useState,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import type { TransactionSplit } from "../domain/records";
@@ -27,18 +26,29 @@ export interface DetailTransaction {
   transferId?: string;
   splits?: TransactionSplit[];
 }
-export function TransactionDetails(props: {
+export interface TransactionDetailsInput {
   row: DetailTransaction;
   accountName: string;
   categoryName: string;
   categories: { id: string; name: string }[];
+}
+export function captureTransactionDetails(props: TransactionDetailsInput) {
+  return {
+    row: { ...props.row, splits: props.row.splits?.map((p) => ({ ...p })) },
+    account: props.accountName,
+    category: props.categoryName,
+    parts: (props.row.splits ?? []).map((p) => ({
+      name: props.categories.find((c) => c.id === p.categoryId)?.name ?? "Archived category",
+      amountCents: p.amountCents
+    }))
+  };
+}
+export type CapturedTransactionDetails = ReturnType<typeof captureTransactionDetails>;
+export function TransactionDetails(props: {
+  captured: CapturedTransactionDetails | null;
+  onClose: () => void;
 }): ReactNodeLike {
-  const [captured, setCaptured] = useState<{
-    row: DetailTransaction;
-    account: string;
-    category: string;
-    parts: { name: string; amountCents: number }[];
-  } | null>(null);
+  const { captured } = props;
   const row = captured?.row;
   const notes = row?.shared ? null : (row?.notes ?? "");
   const status = row?.pending
@@ -52,34 +62,15 @@ export function TransactionDetails(props: {
           : "Uncleared";
   return (
     <>
-      <Button
-        variant="link"
-        size="sm"
-        aria-label={`View transaction details for ${props.row.name}`}
-        onClick={() =>
-          setCaptured({
-            row: { ...props.row, splits: props.row.splits?.map((p) => ({ ...p })) },
-            account: props.accountName,
-            category: props.categoryName,
-            parts: (props.row.splits ?? []).map((p) => ({
-              name:
-                props.categories.find((c) => c.id === p.categoryId)?.name ?? "Archived category",
-              amountCents: p.amountCents
-            }))
-          })
-        }
-      >
-        {props.row.name}
-      </Button>
       {captured && row ? (
         <Dialog
           title="Transaction details"
           description={row.name}
           scrollBody
-          onClose={() => setCaptured(null)}
+          onClose={props.onClose}
           closeLabel="Close transaction details"
           footer={
-            <Button variant="secondary" onClick={() => setCaptured(null)}>
+            <Button variant="secondary" onClick={props.onClose}>
               Back to register
             </Button>
           }

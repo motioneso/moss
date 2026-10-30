@@ -1,4 +1,8 @@
-import { TransactionDetails } from "../transaction-details";
+import {
+  TransactionDetails,
+  captureTransactionDetails,
+  type CapturedTransactionDetails
+} from "../transaction-details";
 import { TransferCorrectionDialog } from "../transfer-correction-dialog";
 import { TransactionConfirm } from "../transaction-confirm";
 import { HistoryExportDialog } from "../history-export-dialog";
@@ -241,6 +245,7 @@ interface RowContext {
   onConfirm: (tx: Tx, categoryId: string, makeRule: boolean) => void;
   onChange: (tx: Tx, categoryId: string) => Promise<boolean>;
   onSplit: (tx: Tx) => void;
+  onDetails: (tx: Tx) => void;
   onTransfer?: (id: string) => void;
   supportsSplits: boolean;
   selected: ReadonlySet<string>;
@@ -355,12 +360,14 @@ function DayTable(props: { day: DayGroup; head: boolean; ctx: RowContext }): Rea
                   <div className="fnm-block fnm-block--tight">
                     <div className="fnm-inline">
                       <TransactionSelection tx={tx} ctx={ctx} />
-                      <TransactionDetails
-                        row={tx}
-                        accountName={ctx.accountName(tx)}
-                        categoryName={ctx.categoryName(tx)}
-                        categories={ctx.categories}
-                      />
+                      <Button
+                        variant="link"
+                        size="sm"
+                        aria-label={`View transaction details for ${tx.name}`}
+                        onClick={() => ctx.onDetails(tx)}
+                      >
+                        {tx.name}
+                      </Button>
                     </div>
                     <TransactionStatus tx={tx} />
                     {look && !tx.splits?.length ? (
@@ -403,12 +410,14 @@ function DayRows(props: { day: DayGroup; ctx: RowContext }): ReactNodeLike {
                 <span className="fnm-block fnm-block--tight">
                   <span className="fnm-inline">
                     <TransactionSelection tx={tx} ctx={ctx} />
-                    <TransactionDetails
-                      row={tx}
-                      accountName={ctx.accountName(tx)}
-                      categoryName={ctx.categoryName(tx)}
-                      categories={ctx.categories}
-                    />
+                    <Button
+                      variant="link"
+                      size="sm"
+                      aria-label={`View transaction details for ${tx.name}`}
+                      onClick={() => ctx.onDetails(tx)}
+                    >
+                      {tx.name}
+                    </Button>
                   </span>
                   <TransactionStatus tx={tx} />
                 </span>
@@ -447,6 +456,7 @@ function TransactionsBody(props: {
   onSelect?: (tx: Tx) => void;
 }): ReactNodeLike {
   const { result, filter, confirmed } = props;
+  const [details, setDetails] = useState<CapturedTransactionDetails | null>(null);
   const accounts = result.accounts ?? [];
   const categories = result.categories ?? [];
   const live = categories.filter((category) => !category.archived);
@@ -459,6 +469,15 @@ function TransactionsBody(props: {
       categories.find((category) => category.id === tx.categoryId)?.name ?? "Uncategorized",
     accountName: (tx) => accounts.find((account) => account.accountId === tx.accountId)?.name ?? "",
     confirmed,
+    onDetails: (tx) =>
+      setDetails(
+        captureTransactionDetails({
+          row: tx,
+          accountName: ctx.accountName(tx),
+          categoryName: ctx.categoryName(tx),
+          categories
+        })
+      ),
     onTransfer: props.onTransfer,
     onConfirm: props.onConfirm,
     onChange: props.onChange,
@@ -482,6 +501,7 @@ function TransactionsBody(props: {
   const days = groupByDay(rows);
   return (
     <div className="fnm-block">
+      <TransactionDetails captured={details} onClose={() => setDetails(null)} />
       <div className="fnm-desktop-only fnm-block">
         {days.map((day, index) => (
           <DayTable key={day.date} day={day} head={index === 0} ctx={ctx} />

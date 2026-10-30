@@ -2,9 +2,10 @@
 import "./helpers/install-module-runtime";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   TransactionDetails,
+  captureTransactionDetails,
   type DetailTransaction
 } from "../../external-modules/finance/src/web/transaction-details";
 const record: DetailTransaction = {
@@ -26,18 +27,17 @@ const props = (row: DetailTransaction = record) => ({
     { id: "refund", name: "Refund" }
   ]
 });
-const open = (r: ReactTestRenderer) =>
-  r.root
-    .findAllByType("button")
-    .find((b) => b.props["aria-label"] === "View transaction details for Synthetic market")!
-    .props.onClick();
 async function inspect(row: DetailTransaction, check: (r: ReactTestRenderer) => void) {
   let r!: ReactTestRenderer;
   try {
     await act(async () => {
-      r = create(createElement(TransactionDetails, props(row)));
+      r = create(
+        createElement(TransactionDetails, {
+          captured: captureTransactionDetails(props(row)),
+          onClose: vi.fn()
+        })
+      );
     });
-    await act(async () => open(r));
     check(r);
   } finally {
     if (r) await act(async () => r.unmount());
@@ -90,20 +90,19 @@ describe("captured transaction details", () => {
         { categoryId: "refund", amountCents: 100 }
       ]
     };
+    const captured = captureTransactionDetails(props(row));
+    const onClose = vi.fn();
     try {
       await act(async () => {
-        r = create(createElement(TransactionDetails, props(row)));
+        r = create(createElement(TransactionDetails, { captured, onClose }));
       });
-      await act(async () => open(r));
       row.splits[0]!.amountCents = 9999;
-      await act(async () =>
-        r.update(
-          createElement(TransactionDetails, {
-            ...props({ ...record, amountCents: 9999, notes: "Synthetic newer note" }),
-            accountName: "Synthetic renamed account"
-          })
-        )
-      );
+      row.notes = "Synthetic newer note";
+      const newer = captureTransactionDetails({
+        ...props(row),
+        accountName: "Synthetic renamed account"
+      });
+      await act(async () => r.update(createElement(TransactionDetails, { captured, onClose })));
       const shown = JSON.stringify(r.toJSON());
       expect(shown).toContain("Money in");
       expect(shown).toContain("$12.34");
@@ -117,7 +116,10 @@ describe("captured transaction details", () => {
           .find((b) => b.children.includes("Back to register"))!
           .props.onClick()
       );
-      await act(async () => open(r));
+      expect(onClose).toHaveBeenCalledExactlyOnceWith();
+      await act(async () =>
+        r.update(createElement(TransactionDetails, { captured: newer, onClose }))
+      );
       expect(r.root.findByType("textarea").props.value).toBe("Synthetic newer note");
     } finally {
       if (r) await act(async () => r.unmount());
