@@ -39,17 +39,20 @@ from the meetings module's public API. Chat does not query meetings tables (modu
 ### 2. Exempt from idle reaping
 
 - `ChatSessionManager.reapIdle` skips the drawer session of any user in the keep-warm set.
-- The persistent-pool sweep skips the same sessions. The sweep runs in the cli-runner, so the
-  api-side manager pushes the set to it, or the sweep reads it through the existing live-setting
-  path. The plan picks one after reading `idle-reap-timer.ts`.
+- The persistent-pool sweep (`PersistentRuntimePool.sweepIdle`) takes an optional exempt-keys
+  reader that the timer calls on every tick, like `readIdleReapMinutes`. In the cli-runner
+  topology the api pushes the current set over the existing RPC when it changes. The plan names the
+  message after reading `engine-host.ts`.
+- A recovery tick every 60 s re-ensures sessions for the set. It is the floor guarantee if either
+  exemption misses a case, so a lost session is back within a minute and never waits for a command.
 - When a user leaves the set, the next reaper tick treats the session as ordinary again.
 
 ### 3. Prestart
 
 - At API boot, once the cli-runner reconcile finishes, call `ensureSession` for every user in the
   keep-warm set. Failures log and retry on the next reaper tick. They never block boot.
-- After a session is lost (engine crash, cli-runner restart, provider change), the reaper tick
-  re-ensures sessions for the set, so recovery does not wait for the next command.
+- After a session is lost (engine crash, cli-runner restart, provider change), the 60 s recovery
+  tick restores it.
 - `ensureSession` already serializes per actor and surface, so a command racing a prestart joins the
   same launch.
 
