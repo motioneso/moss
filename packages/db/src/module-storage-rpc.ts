@@ -93,6 +93,14 @@ export function createModuleStorageRpc(
       }
       let result;
       try {
+        if (kind !== "select") {
+          // Separate statement: the authored mutation gets a fresh READ COMMITTED snapshot
+          // after earlier writes by this module/actor commit. RLS remains the data boundary.
+          await sql`SELECT pg_advisory_xact_lock(hashtextextended(
+            ${`moss:module-write:${moduleId}:`} || app.current_actor_user_id()::text, 0))`.execute(
+            scopedDb.db
+          );
+        }
         result = await scopedDb.db.executeQuery<T>(CompiledQuery.raw(queryText, [...params]));
       } catch (error) {
         throw redactedQueryError(error);

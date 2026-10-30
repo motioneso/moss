@@ -287,6 +287,90 @@ describe("createModuleStorageRpc", () => {
     expect(caught?.message).not.toContain(marker);
   });
 
+  it("keeps reads and other owners independent while an owner mutation is held", async () => {
+    const owner = randomUUID(),
+      other = randomUUID();
+    let entered!: () => void, release!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const first = dataContext.withDataContext({ actorUserId: owner }, async (scope) => {
+      await createModuleStorageRpc(scope, moduleId).query(
+        "INSERT INTO app.storage_rpc_fixture_items(owner_user_id,label) VALUES ($1,'held')",
+        [owner]
+      );
+      entered();
+      await held;
+    });
+    await started;
+    try {
+      await dataContext.withDataContext({ actorUserId: other }, async (scope) => {
+        const rpc = createModuleStorageRpc(scope, moduleId, { statementTimeoutMs: 200 });
+        await rpc.query(
+          "INSERT INTO app.storage_rpc_fixture_items(owner_user_id,label) VALUES ($1,'independent')",
+          [other]
+        );
+      });
+      await dataContext.withDataContext({ actorUserId: owner }, async (scope) => {
+        expect(
+          (
+            await createModuleStorageRpc(scope, moduleId, {
+              readOnly: true,
+              statementTimeoutMs: 200
+            }).query("SELECT label FROM app.storage_rpc_fixture_items")
+          ).rows
+        ).toEqual([]);
+      });
+    } finally {
+      release();
+      await first;
+    }
+  });
+  it("bounds mutation lock waits by statement timeout and releases the key on rollback", async () => {
+    const owner = randomUUID();
+    let entered!: () => void, release!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const first = dataContext.withDataContext({ actorUserId: owner }, async (scope) => {
+      await createModuleStorageRpc(scope, moduleId).query(
+        "INSERT INTO app.storage_rpc_fixture_items(owner_user_id,label) VALUES ($1,'held')",
+        [owner]
+      );
+      entered();
+      await held;
+    });
+    await started;
+    try {
+      await expect(
+        dataContext.withDataContext({ actorUserId: owner }, (scope) =>
+          createModuleStorageRpc(scope, moduleId, { statementTimeoutMs: 50 }).query(
+            "INSERT INTO app.storage_rpc_fixture_items(owner_user_id,label) VALUES ($1,'waiting')",
+            [owner]
+          )
+        )
+      ).rejects.toMatchObject({ code: "db_query_failed", sqlstate: "57014" });
+    } finally {
+      release();
+      await first;
+    }
+    await dataContext.withDataContext({ actorUserId: owner }, async (scope) => {
+      const rpc = createModuleStorageRpc(scope, moduleId);
+      await rpc.query(
+        "INSERT INTO app.storage_rpc_fixture_items(owner_user_id,label) VALUES ($1,'after rollback')",
+        [owner]
+      );
+      expect(
+        (await rpc.query("SELECT label FROM app.storage_rpc_fixture_items ORDER BY label")).rows
+      ).toEqual([{ label: "after rollback" }, { label: "held" }]);
+    });
+  });
   it("rejects multi-statement input at the classifier (simple-protocol guard)", async () => {
     const owner = randomUUID();
     await expect(
