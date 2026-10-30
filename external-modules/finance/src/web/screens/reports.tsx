@@ -4,11 +4,20 @@
 // screen NEVER writes. No chart library: category/payee shares are CSS-width
 // bars and the net-worth trend is one inline SVG polyline in currentColor,
 // so raw colors stay in tokens.css and theme switching costs nothing.
-import { Card, Select, useEffect, useState, type ReactNodeLike } from "@moss/module-web-sdk";
+import {
+  Button,
+  Masthead,
+  SectionHead,
+  Select,
+  useEffect,
+  useState,
+  type ReactNodeLike
+} from "@moss/module-web-sdk";
+import { ReportDetails, type ReportSelection } from "../report-details";
 import { fetchUserDirectory } from "../api";
 import { formatCents, monthLabel } from "../format";
 import { EmptyState, outcomeGate } from "../states";
-import { useToolQuery } from "../store";
+import { invalidateQueries, useToolQuery } from "../store";
 import type { DirectoryUser } from "../household";
 // Deep imports on purpose: the domain barrel re-exports keys.ts (node:crypto),
 // which the browser-platform web bundle cannot resolve. reports/net-worth are
@@ -52,6 +61,7 @@ interface NetWorthResult extends CurrencyResult {
 }
 
 interface BarRow {
+  key: string;
   label: string;
   cents: number;
 }
@@ -59,7 +69,7 @@ interface BarRow {
 /** Sort a byCategory/byPayee record into descending bar rows. */
 function toRows(record: Record<string, number>, label: (key: string) => string): BarRow[] {
   return Object.entries(record)
-    .map(([key, cents]) => ({ label: label(key), cents }))
+    .map(([key, cents]) => ({ key, label: label(key), cents }))
     .sort((a, b) => b.cents - a.cents);
 }
 
@@ -78,15 +88,26 @@ function trendPoints(points: NetWorthPoint[]): string {
     .join(" ");
 }
 
-function BarList(props: { rows: BarRow[]; currency: string }): ReactNodeLike {
+function BarList(props: {
+  rows: BarRow[];
+  currency: string;
+  onPick: (row: BarRow) => void;
+}): ReactNodeLike {
   // Widths are relative to the largest magnitude row; the `, 1` floor keeps
   // an all-zero month from dividing by zero.
   const max = Math.max(...props.rows.map((row) => Math.abs(row.cents)), 1);
   return (
     <div>
       {props.rows.map((row) => (
-        <div key={row.label} className="fnm-report-bar-row">
-          <span>{row.label}</span>
+        <div key={row.key} className="fnm-report-bar-row">
+          <Button
+            variant="link"
+            size="sm"
+            aria-label={`View ${row.label || "unnamed payee"} transactions`}
+            onClick={() => props.onPick(row)}
+          >
+            {row.label || "Unnamed payee"}
+          </Button>
           <div className="jds-progress jds-progress--current fnm-report-bar">
             <div
               className="jds-progress__fill"
@@ -103,56 +124,55 @@ function BarList(props: { rows: BarRow[]; currency: string }): ReactNodeLike {
 function NetWorthSection(props: { result: NetWorthResult }): ReactNodeLike {
   const { points, headlineCents, currency } = props.result;
   return (
-    <Card>
-      <section className="fnm-state" aria-label="Net worth">
-        <span className="jds-eyebrow">Net worth{currency ? ` · ${currency}` : ""}</span>
-        {headlineCents === null || !currency ? (
-          <EmptyState
-            title="No snapshots yet"
-            body="Net worth builds from daily balance snapshots, which appear after your first sync."
-          />
-        ) : (
-          <div className="fnm-stack">
-            <strong className="fnm-amount">{formatCents(headlineCents, currency)}</strong>
-            <p className="jds-caption">
-              Recorded account balances; earlier balances carry forward. Accounts without snapshots
-              are omitted.
-            </p>
-            {/* A polyline needs ≥2 points; a single snapshot day renders the
+    <section className="fnm-block fnm-block--tight" aria-label="Net worth">
+      <SectionHead number="01" title="Net worth" meta={currency ?? undefined} rule />
+      {headlineCents === null || !currency ? (
+        <EmptyState
+          title="No recorded balance history"
+          body="Connected accounts build this chart from saved balance snapshots. Manual ledger history is not yet included."
+        />
+      ) : (
+        <div className="fnm-stack">
+          <strong className="fnm-amount">{formatCents(headlineCents, currency)}</strong>
+          <p className="jds-caption">
+            Recorded account balances; earlier balances carry forward. Accounts without snapshots
+            are omitted, including manual ledger accounts.
+          </p>
+          {/* A polyline needs ≥2 points; a single snapshot day renders the
                 headline alone. */}
-            {points.length >= 2 ? (
-              <svg
-                viewBox="0 0 100 32"
-                preserveAspectRatio="none"
-                className="fnm-report-trend"
-                role="img"
-                aria-label="Net worth trend"
-              >
-                <polyline
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1"
-                  points={trendPoints(points)}
-                />
-              </svg>
-            ) : null}
-          </div>
-        )}
-      </section>
-    </Card>
+          {points.length >= 2 ? (
+            <svg
+              viewBox="0 0 100 32"
+              preserveAspectRatio="none"
+              className="fnm-report-trend"
+              role="img"
+              aria-label="Net worth trend"
+            >
+              <polyline
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1"
+                points={trendPoints(points)}
+              />
+            </svg>
+          ) : null}
+        </div>
+      )}
+    </section>
   );
 }
 
 function SpendingSection(props: {
   result: SpendingResult;
   directory: DirectoryUser[] | null;
+  onSelect: (selection: ReportSelection) => void;
 }): ReactNodeLike {
   const { window: windowMonths, own, shared, categories, currency } = props.result;
   if (!currency)
     return (
       <EmptyState
         title="No transactions yet"
-        body="Spending reports appear after your first sync brings in transactions."
+        body="Spending reports appear after manual entry, import or a connected account brings in transactions."
       />
     );
   const directory = props.directory;
@@ -175,10 +195,27 @@ function SpendingSection(props: {
     return (
       <EmptyState
         title="No transactions yet"
-        body="Spending reports appear after your first sync brings in transactions."
+        body="Spending reports appear after manual entry, import or a connected account brings in transactions."
       />
     );
   }
+  const select = (
+    group: ReportSelection["group"],
+    key: string | undefined,
+    label: string,
+    expectedCents: number,
+    month = latest.month
+  ) =>
+    props.onSelect({
+      group,
+      ...(key === undefined ? {} : { key }),
+      label,
+      expectedCents,
+      month,
+      currency,
+      months: windowMonths.length,
+      sharedOwnerIds: resolvable.map((entry) => entry.ownerUserId)
+    });
   const categoryLabel = (id: string): string =>
     id === UNCATEGORIZED_BUCKET
       ? "Uncategorized"
@@ -192,94 +229,150 @@ function SpendingSection(props: {
         <p className="jds-caption">Includes shared household accounts</p>
       ) : null}
       <div className="fnm-report-grid">
-        <Card>
-          <section className="fnm-state" aria-label="Spending by category">
-            <span className="jds-eyebrow">Spending by category — {monthLabel(latest.month)}</span>
-            {categoryRows.length > 0 ? (
-              <BarList rows={categoryRows} currency={currency} />
-            ) : (
-              <EmptyState title="Nothing this month" body="No spending recorded this month yet." />
-            )}
-          </section>
-        </Card>
-        <Card>
-          <section className="fnm-state" aria-label="Spending by payee">
-            <span className="jds-eyebrow">Spending by payee — {monthLabel(latest.month)}</span>
-            {payeeRows.length > 0 ? (
-              <div className="fnm-stack">
-                <BarList rows={payeeRows} currency={currency} />
-                {/* Visible caption IS the no-silent-caps disclosure. */}
-                {payeeRowsAll.length > PAYEE_CAP ? (
-                  <p className="jds-caption">Top {PAYEE_CAP} payees</p>
-                ) : null}
-              </div>
-            ) : (
-              <EmptyState title="Nothing this month" body="No spending recorded this month yet." />
-            )}
-          </section>
-        </Card>
-      </div>
-      <Card>
-        <section className="fnm-state" aria-label="Cash flow">
-          <span className="jds-eyebrow">Cash flow · {currency}</span>
-          <p className="jds-caption">
-            Includes pending transactions. Refunds reduce outflow; transfers are excluded.
-          </p>
-          <table className="fnm-table fnm-desktop-only">
-            <thead>
-              <tr>
-                <th>Month</th>
-                <th>Income</th>
-                <th>Outflow</th>
-                <th>Net</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...merged].reverse().map((entry) => (
-                <tr key={entry.month}>
-                  <td>{monthLabel(entry.month)}</td>
-                  <td className="fnm-amount">
-                    {formatCents(entry.cashFlow.incomeCents, currency)}
-                  </td>
-                  <td className="fnm-amount">
-                    {formatCents(entry.cashFlow.outflowCents, currency)}
-                  </td>
-                  <td className="fnm-amount">{formatCents(entry.cashFlow.netCents, currency)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="fnm-phone-only fnm-block">
-            {[...merged].reverse().map((entry) => (
-              <section
-                key={entry.month}
-                className="fnm-report-month"
-                aria-label={monthLabel(entry.month)}
-              >
-                <strong>{monthLabel(entry.month)}</strong>
-                <dl>
-                  <dt>Income</dt>
-                  <dd className="fnm-amount">
-                    {formatCents(entry.cashFlow.incomeCents, currency)}
-                  </dd>
-                  <dt>Outflow</dt>
-                  <dd className="fnm-amount">
-                    {formatCents(entry.cashFlow.outflowCents, currency)}
-                  </dd>
-                  <dt>Net</dt>
-                  <dd className="fnm-amount">{formatCents(entry.cashFlow.netCents, currency)}</dd>
-                </dl>
-              </section>
-            ))}
-          </div>
+        <section className="fnm-block fnm-block--tight" aria-label="Spending by category">
+          <SectionHead
+            number="02"
+            title="Spending by category"
+            meta={monthLabel(latest.month)}
+            rule
+          />
+          {categoryRows.length > 0 ? (
+            <BarList
+              rows={categoryRows}
+              currency={currency}
+              onPick={(row) => select("category", row.key, row.label, row.cents)}
+            />
+          ) : (
+            <EmptyState title="Nothing this month" body="No spending recorded this month yet." />
+          )}
         </section>
-      </Card>
+        <section className="fnm-block fnm-block--tight" aria-label="Spending by payee">
+          <SectionHead number="03" title="Spending by payee" meta={monthLabel(latest.month)} rule />
+          {payeeRows.length > 0 ? (
+            <div className="fnm-stack">
+              <BarList
+                rows={payeeRows}
+                currency={currency}
+                onPick={(row) => select("payee", row.key, row.label || "Unnamed payee", row.cents)}
+              />
+              {/* Visible caption IS the no-silent-caps disclosure. */}
+              {payeeRowsAll.length > PAYEE_CAP ? (
+                <p className="jds-caption">Top {PAYEE_CAP} payees</p>
+              ) : null}
+            </div>
+          ) : (
+            <EmptyState title="Nothing this month" body="No spending recorded this month yet." />
+          )}
+        </section>
+      </div>
+      <section className="fnm-block fnm-block--tight" aria-label="Cash flow">
+        <SectionHead number="04" title="Cash flow" meta={currency} rule />
+        <p className="jds-caption">
+          Includes pending transactions. Refunds reduce outflow; transfers are excluded.
+        </p>
+        <table className="jds-table fnm-table fnm-desktop-only">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th>Income</th>
+              <th>Outflow</th>
+              <th>Net</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...merged].reverse().map((entry) => (
+              <tr key={entry.month}>
+                <td>{monthLabel(entry.month)}</td>
+                <td className="fnm-amount">
+                  <Button
+                    variant="link"
+                    size="sm"
+                    aria-label={`View income for ${monthLabel(entry.month)}`}
+                    onClick={() =>
+                      select("income", undefined, "Income", entry.cashFlow.incomeCents, entry.month)
+                    }
+                  >
+                    {formatCents(entry.cashFlow.incomeCents, currency)}
+                  </Button>
+                </td>
+                <td className="fnm-amount">
+                  <Button
+                    variant="link"
+                    size="sm"
+                    aria-label={`View outflow for ${monthLabel(entry.month)}`}
+                    onClick={() =>
+                      select(
+                        "outflow",
+                        undefined,
+                        "Outflow",
+                        entry.cashFlow.outflowCents,
+                        entry.month
+                      )
+                    }
+                  >
+                    {formatCents(entry.cashFlow.outflowCents, currency)}
+                  </Button>
+                </td>
+                <td className="fnm-amount">{formatCents(entry.cashFlow.netCents, currency)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="fnm-phone-only fnm-block">
+          {[...merged].reverse().map((entry) => (
+            <section
+              key={entry.month}
+              className="fnm-report-month"
+              aria-label={monthLabel(entry.month)}
+            >
+              <strong>{monthLabel(entry.month)}</strong>
+              <dl>
+                <dt>Income</dt>
+                <dd className="fnm-amount">
+                  <Button
+                    variant="link"
+                    size="sm"
+                    aria-label={`View income for ${monthLabel(entry.month)}`}
+                    onClick={() =>
+                      select("income", undefined, "Income", entry.cashFlow.incomeCents, entry.month)
+                    }
+                  >
+                    {formatCents(entry.cashFlow.incomeCents, currency)}
+                  </Button>
+                </dd>
+                <dt>Outflow</dt>
+                <dd className="fnm-amount">
+                  <Button
+                    variant="link"
+                    size="sm"
+                    aria-label={`View outflow for ${monthLabel(entry.month)}`}
+                    onClick={() =>
+                      select(
+                        "outflow",
+                        undefined,
+                        "Outflow",
+                        entry.cashFlow.outflowCents,
+                        entry.month
+                      )
+                    }
+                  >
+                    {formatCents(entry.cashFlow.outflowCents, currency)}
+                  </Button>
+                </dd>
+                <dt>Net</dt>
+                <dd className="fnm-amount">{formatCents(entry.cashFlow.netCents, currency)}</dd>
+              </dl>
+            </section>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
 
 export function ReportsScreen(): ReactNodeLike {
   const [months, setMonths] = useState(6);
+  const [selection, setSelection] = useState<ReportSelection | null>(null);
   const [currency, setCurrency] = useState("");
   // Owner directory for the household merge; null = not loaded / failed, in
   // which case the merge drops every shared contribution (fail closed).
@@ -306,9 +399,14 @@ export function ReportsScreen(): ReactNodeLike {
   }, [spending, netWorth]);
   const chooseCurrency = currencies.length > 1 && currency === "";
   return (
-    <section className="fnm-stack" aria-label="Finance reports">
+    <section className="fnm-block" aria-label="Finance reports">
+      <Masthead
+        tone="field"
+        eyebrow="Reports"
+        title="Follow your money"
+        lede="See spending, cash flow and recorded net worth. Open a category, payee or cash-flow amount to inspect its transactions."
+      />
       <div className="fnm-row">
-        <h2>Reports</h2>
         <label className="fnm-catpick">
           <span className="jds-caption">Window</span>
           <Select
@@ -365,7 +463,14 @@ export function ReportsScreen(): ReactNodeLike {
           {outcomeGate(
             spending,
             (result) => (
-              <SpendingSection result={result} directory={directory} />
+              <SpendingSection
+                result={result}
+                directory={directory}
+                onSelect={(scope) => {
+                  invalidateQueries();
+                  setSelection(scope);
+                }}
+              />
             ),
             {
               loadingLabel: "Loading spending reports"
@@ -373,6 +478,9 @@ export function ReportsScreen(): ReactNodeLike {
           )}
         </>
       )}
+      {selection ? (
+        <ReportDetails selection={selection} onClose={() => setSelection(null)} />
+      ) : null}
     </section>
   );
 }

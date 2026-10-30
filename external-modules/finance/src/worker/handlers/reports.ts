@@ -1,37 +1,15 @@
+import { loadReportRows, readWindow } from "./report-rows.js";
 // external-modules/finance/src/worker/handlers/reports.ts
 //
 // FIN-05 (#1150): the two report tools (spec delta §"Manifest delta"). Both
 // are risk "read" — pure aggregation, no KV writes (the host rejects
 // mutation from read tools with forbidden_kv_mutation, which is exactly the
 // posture reports want). Windows come from ports.now(); never ambient time.
-import type { SnapshotChunk, TransactionChunk, TransactionRecord } from "../../domain/index.js";
-import {
-  aggregateSpending,
-  deriveNetWorth,
-  excludeTransfers,
-  monthWindow,
-  parseSharedKey,
-  toSharedTransaction
-} from "../../domain/index.js";
-import type { WorkerPorts } from "../ports.js";
+import type { SnapshotChunk, TransactionRecord } from "../../domain/index.js";
+import { aggregateSpending, deriveNetWorth, excludeTransfers } from "../../domain/index.js";
 import type { ToolFactory } from "../registry.js";
-import { InputError, readActiveUserIds, readInt, readString } from "../validate.js";
+import { InputError, readString } from "../validate.js";
 import { loadCategories } from "./feed.js";
-
-function readWindow(input: Record<string, unknown>, ports: WorkerPorts): string[] {
-  const months = readInt(input, "months", { min: 1, max: 24 }) ?? 6;
-  return monthWindow(ports.now(), months);
-}
-
-/** Window months plus ONE margin month before the window: pairs straddle
- *  month boundaries (out-leg Jan 31, in-leg Feb 1), so pairing must see the
- *  month preceding the window even though aggregation never reports it. */
-function loadMonths(window: string[]): Set<string> {
-  const [first = ""] = window;
-  const [year = 0, month = 1] = first.split("-").map(Number);
-  const margin = new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7);
-  return new Set([margin, ...window]);
-}
 
 function currencyScope(input: Record<string, unknown>, values: string[]) {
   const requested = readString(input, "currency");
@@ -46,42 +24,7 @@ function currencyScope(input: Record<string, unknown>, values: string[]) {
 }
 
 export const reportsSpendingHandler: ToolFactory = (ports) => async (input) => {
-  // Host-injected at the dispatch chokepoint (spread LAST) — never
-  // caller-controlled (#1149).
-  const actorUserId = readString(input, "actorUserId", { required: true });
-  const activeUserIds = readActiveUserIds(input);
-  const window = readWindow(input, ports);
-  const months = loadMonths(window);
-
-  // FIN-06c (#1166) Task 9: one store call per margin+window month.
-  const store = await ports.store();
-  const own: TransactionRecord[] = [];
-  for (const month of months) {
-    own.push(...(await store.listMonthTransactions(month)));
-  }
-
-  // Household rows grouped BY OWNER: pairing never crosses owners, and the
-  // wire shape stays per-owner so the web can run the FIN-04 fail-closed
-  // deleted-owner drop before merging (presentation merges, data doesn't).
-  const sharedByOwner = new Map<string, TransactionRecord[]>();
-  for (const key of await ports.mirror.list()) {
-    const parsed = parseSharedKey(key);
-    if (!parsed || !months.has(parsed.suffix)) continue;
-    if (parsed.ownerUserId === actorUserId) continue;
-    // Deleted/deactivated owners leave mirror residue; never surface it.
-    if (!activeUserIds.has(parsed.ownerUserId)) continue;
-    const chunk = (await ports.mirror.get(key)) as TransactionChunk | null;
-    if (!chunk || !Array.isArray(chunk.transactions)) continue;
-    let rows = sharedByOwner.get(parsed.ownerUserId);
-    if (!rows) {
-      rows = [];
-      sharedByOwner.set(parsed.ownerUserId, rows);
-    }
-    for (const record of chunk.transactions) {
-      // Re-apply the write-side allowlist on read (never trust mirror rows).
-      rows.push(toSharedTransaction(record));
-    }
-  }
+  const { window, own, sharedByOwner } = await loadReportRows(ports, input);
 
   const scope = currencyScope(
     input,

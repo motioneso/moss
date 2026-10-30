@@ -89,7 +89,7 @@
       {
         "id": "finance.reports",
         "label": "Reports",
-        "description": "Reports is a primary Finance tab. Spending, cash flow and own-account net worth are shown in a selected currency, with no FX conversion. Mixed-currency data requires a choice before totals appear. Pending transactions remain included in spending; transfers are excluded. Snapshot net worth carries earlier balances forward and omits accounts without recorded balances. Monetary overflow is rejected instead of showing rounded totals.",
+        "description": "Reports is a primary Finance tab. Spending, cash flow and own-account net worth are shown in a selected currency, with no FX conversion. Mixed-currency data requires a choice before totals appear. Pending transactions remain included in spending; transfers are excluded. Snapshot net worth carries earlier balances forward and omits accounts without recorded balances. Monetary overflow is rejected instead of showing rounded totals. Category/payee bars and monthly income/outflow open paginated signed transaction contributions, including split portions. Totals and full counts remain visible beyond the loaded page. Changed totals are disclosed; private notes are omitted. Periods use the owner local calendar.",
         "path": "/reports"
       },
       {
@@ -1305,6 +1305,61 @@
       },
       "executionPolicy": "confirm",
       "confirmWhenKeys": ["categoryId"]
+    },
+    {
+      "name": "finance.reports.transactions",
+      "permissionId": "finance.reports.transactions",
+      "actionLabel": "Read report transactions",
+      "description": "Read the exact signed transaction contributions behind a selected report category, payee, income or outflow period. Uses the same currency, pending and per-owner transfer policy. Returns a bounded page plus full count and total; omits notes.",
+      "risk": "read",
+      "handler": "reports.transactions",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "months": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 24
+          },
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "group": {
+            "type": "string",
+            "enum": ["category", "payee", "income", "outflow"]
+          },
+          "key": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "sharedOwnerIds": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "maxLength": 64
+            }
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          }
+        },
+        "required": ["month", "currency", "group"]
+      }
     }
   ],
   "assistantActionFamilies": [

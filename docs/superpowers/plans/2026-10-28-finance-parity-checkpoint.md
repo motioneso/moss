@@ -653,3 +653,49 @@ that checkout's dependencies using the existing task-local package store; no new
 The next authorized slice is exact Reports drill-through. Preserve current pending-entry semantics,
 per-owner transfer exclusion and currency separation; fix the report month to the owner's local
 calendar at UTC/month boundaries. Do not equate a clickable chart with a reconciled detail total.
+
+## Exact report transaction details
+
+The Reports screen now opens category/payee and monthly income/outflow details. A shared row loader
+keeps aggregation and detail currency, pending and owner-separated transfer policy aligned. Signed
+contributions expand splits once, show the full parent amount when useful, and flag invalidated
+splits. Details disclose the full total/count separately from their 50-row page (API maximum 200).
+Scope is captured when opened; refresh can show changed records alongside the original report
+amount. Phone/desktop use the shared scrolling dialog, authored section rules and a Park Pass
+masthead. Private notes are excluded even for owned records; shared contributors are explicitly
+selected from the report's resolved active owners and their existing mirrors, never private SQL.
+
+Reports now use the authenticated owner's local calendar at UTC month boundaries. Older read-only
+hosts without locale retain their previous UTC behavior; manual write timezone guards are unchanged.
+Net worth still uses snapshots; the screen explicitly discloses that manual ledger history is
+missing. Reconstructing manual net worth is the next high-value ledger/report gap, not something
+this clickable breakdown claims to have solved.
+
+Development observations before the final committed-snapshot run:
+
+- Focused Finance **60 files / 595 pass**, `finance-report-restored-unit.log`, rc 0. Pure and
+  scripted-port tests cover split/refund/income/pending parity, cross-month and cross-owner
+  transfers, separate currencies, raw payee keys, local-month boundaries, pagination, unsafe
+  public totals, active-owner selection and notes. Dialog tests cover captured scope, pagination
+  and retained error/reload behavior. Root test TypeScript passed (`finance-report-second-types.log`).
+- Active-owner negative control: removing only the new shared loader's active-owner check caused
+  **1 failure / 13 passes**, `finance-report-owner-negative.log`; a disabled owner's rows entered
+  the response. Restored before later green tests.
+- Field allowlist negative control: spreading the stored transaction into detail rows caused
+  **2 failures / 12 passes**, `finance-report-fields-negative.log`; synthetic private notes leaked.
+  Restored before later green tests. No removed guard remains.
+- First installed run (`023830-dZVa0j`, input `386353bd0316`) had **10 passes / 1 failure**. The
+  new report flow passed with actual installed SQL, worker, authenticated host, browser and
+  synthetic own/shared/pending/EUR records; API counts and split totals were preserved. The
+  final independent platform proof read reached HTTP 429. The test read helper now honors one
+  bounded Retry-After before retrying a read; rate limits and all write/confirmation handling
+  remain unchanged. A fresh run is required before calling the entire suite green.
+- Report dialog desktop/phone/light/dark/Sage images were inspected. Inspection prompted hiding
+  disabled pagination controls when one page contains all records, preserving more useful phone
+  body space. Empty/loading/error states retain scope and offer explicit reload. The CSV browser
+  flow moved unchanged into a small helper so the main suite remains under 1,000 lines.
+
+Final static and installed receipts will be added after the frozen run. No new whole-foundation or
+CI pass is claimed for this slice; the earlier frozen bulk foundation is still pending. The parity
+matrix remains Partial for Reports: saved views, arbitrary timeframes, further charts, full export,
+manual ledger valuations and investment holdings/performance are not completed here.

@@ -1,3 +1,4 @@
+import { reportsTransactionsHandler } from "./handlers/report-details.js";
 import { transactionsBulkCategoryHandler } from "./handlers/transaction-bulk.js";
 import { flexPreviewHandler, flexConfigureHandler, flexAssignHandler } from "./handlers/flex.js";
 import {
@@ -127,6 +128,7 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "share.apply": shareApplyHandler,
   // FIN-05 (#1150) Task 4: the read-only reports surface of manifest v0.4.0.
   "reports.spending": reportsSpendingHandler,
+  "reports.transactions": reportsTransactionsHandler,
   "reports.net-worth": reportsNetWorthHandler,
   // #3186: Finance Settings activity list and its undo.
   "activity.list": activityListHandler,
