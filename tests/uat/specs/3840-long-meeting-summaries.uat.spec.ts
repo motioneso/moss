@@ -142,7 +142,7 @@ test("Long and short recordings both get summaries on the Meeting screen (#3840)
     const notesId = await createMeeting(notesTitle, [
       "We decided to launch the Orchid pilot on Friday. Alex will prepare the checklist."
     ]);
-    const longNotes = Array.from({ length: 220 }, (_, index) => {
+    const longNotes = Array.from({ length: 320 }, (_, index) => {
       return (
         `Note ${index + 1}: the team decided to complete step ${index + 1} of the Orchid rollout this week. ` +
         `Alex will prepare checklist ${index + 1} and Priya will review the budget for step ${index + 1}. ` +
