@@ -1,3 +1,4 @@
+import { transferReviewHandler, transferReverseHandler } from "./handlers/transfer-corrections.js";
 import { targetFundHandler } from "./handlers/target-funding.js";
 import { billAdjustHandler, billAdjustResetHandler } from "./handlers/bill-adjustments.js";
 import {
@@ -92,6 +93,8 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "manual.context": manualContextHandler,
   "manual.transfer-context": transferContextHandler,
   "manual.transfer-create": transferCreateHandler,
+  "manual.transfer-review": transferReviewHandler,
+  "manual.transfer-reverse": transferReverseHandler,
   "manual.account-review": accountReviewHandler,
   "manual.account-update": accountUpdateHandler,
   "manual.account-create": manualAccountCreateHandler,

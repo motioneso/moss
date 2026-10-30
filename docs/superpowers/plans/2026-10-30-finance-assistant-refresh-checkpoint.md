@@ -76,3 +76,12 @@ a configured AI-provider conversation remains unrun. This does not establish hou
 or broadcast every native save to other tabs. Preserve the matrix's partial classifications.
 Next: an audited inverse linked manual transfer, retaining original history/reconciliation and
 existing currency/date/owner/confirmation contracts, then additional target/provider/report slices.
+
+## Subsequent complete regression
+
+The correction slice's final development `121146-YK8dO1`, input `7ede71517338`, passed every
+installed flow, including target-funding busy-read recovery, stale-budget explicit checking,
+reporting and the instrumented category-confirmation flow. Its complete backend `121148-bsvbuD`
+passed 150 cases. See the [correction checkpoint](2026-10-30-finance-transfer-corrections-checkpoint.md)
+for source boundaries, the clean refresh aggregate's missing browser prerequisite and the restored
+13 browser-harness cases. Do not describe the earlier failed aggregate itself as a pass.

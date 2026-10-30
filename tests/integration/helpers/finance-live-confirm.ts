@@ -164,8 +164,18 @@ export async function exerciseCategoryConfirmation(
     await one.press("Enter");
     await review.getByText("Synthetic category review C", { exact: true }).waitFor();
     expect(await review.getByText("Synthetic category review D", { exact: true }).count()).toBe(0);
+    const committed = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/modules/finance/tools/finance.transactions.confirm/invoke") &&
+        Boolean(response.request().postDataJSON()?.confirmationId)
+    );
     await review.getByRole("button", { name: "Confirm reviewed categories", exact: true }).click();
     await guard.getByRole("button", { name: "Confirm action", exact: true }).click();
+    const reply = await committed;
+    expect({ http: reply.status(), body: await reply.json() }).toMatchObject({
+      http: 200,
+      body: { invocation: { status: "succeeded", result: { status: "ok", confirmed: 1 } } }
+    });
     await review.waitFor({ state: "detached" });
     await page.reload();
     const rows = await saved();

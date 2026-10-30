@@ -1,3 +1,4 @@
+import { TransferCorrectionDialog } from "../transfer-correction-dialog";
 import { TransactionConfirm } from "../transaction-confirm";
 import { HistoryExportDialog } from "../history-export-dialog";
 // external-modules/finance/src/web/screens/transactions.tsx
@@ -236,6 +237,7 @@ interface RowContext {
   onConfirm: (tx: Tx, categoryId: string, makeRule: boolean) => void;
   onChange: (tx: Tx, categoryId: string) => Promise<boolean>;
   onSplit: (tx: Tx) => void;
+  onTransfer?: (id: string) => void;
   supportsSplits: boolean;
   selected: ReadonlySet<string>;
   selectionLocked: boolean;
@@ -254,7 +256,20 @@ function CategoryControls({
   return (
     <div className="fnm-category-controls">
       {tx.transferId ? (
-        <Badge>Linked transfer</Badge>
+        <>
+          <Badge>Linked transfer</Badge>
+          {!tx.shared && ctx.onTransfer ? (
+            <Button
+              variant="link"
+              size="sm"
+              aria-label={`Review transfer for ${ctx.accountName(tx)} on ${tx.date}`}
+              data-finance-transfer-id={tx.transferId}
+              onClick={() => ctx.onTransfer!(tx.transferId!)}
+            >
+              Review transfer
+            </Button>
+          ) : null}
+        </>
       ) : tx.splits?.length ? (
         <span>
           {tx.splits.length} categories ·{" "}
@@ -406,6 +421,7 @@ function TransactionsBody(props: {
   onConfirm: (tx: Tx, categoryId: string, makeRule: boolean) => void;
   onChange: (tx: Tx, categoryId: string) => Promise<boolean>;
   onSplit: (tx: Tx) => void;
+  onTransfer?: (id: string) => void;
   selected: ReadonlySet<string>;
   selectionLocked: boolean;
   onSelect?: (tx: Tx) => void;
@@ -423,6 +439,7 @@ function TransactionsBody(props: {
       categories.find((category) => category.id === tx.categoryId)?.name ?? "Uncategorized",
     accountName: (tx) => accounts.find((account) => account.accountId === tx.accountId)?.name ?? "",
     confirmed,
+    onTransfer: props.onTransfer,
     onConfirm: props.onConfirm,
     onChange: props.onChange,
     onSplit: props.onSplit,
@@ -499,6 +516,7 @@ export function TransactionsScreen(
     setSingleReview(null);
   };
   const [editing, setEditing] = useState<Tx | null>(null);
+  const [transferId, setTransferId] = useState<string | null>(null);
   const [selected, setSelected] = useState<ReadonlyMap<string, Tx>>(new Map());
   const [selectionLocked, setSelectionLocked] = useState(false);
   const [supportsBulk, setSupportsBulk] = useState(false);
@@ -841,6 +859,7 @@ export function TransactionsScreen(
             onConfirm={confirmOne}
             onChange={changeOne}
             onSplit={setEditing}
+            onTransfer={props.tools ? setTransferId : undefined}
             selected={new Set(selected.keys())}
             selectionLocked={selectionLocked}
             onSelect={result?.supportsBulk && props.tools ? toggleSelection : undefined}
@@ -885,6 +904,20 @@ export function TransactionsScreen(
         <HistoryExportDialog
           accounts={filterOptions.accounts}
           onClose={() => setExporting(false)}
+        />
+      ) : null}
+      {transferId && props.tools ? (
+        <TransferCorrectionDialog
+          key={transferId}
+          transferId={transferId}
+          tools={props.tools}
+          onClose={() => setTransferId(null)}
+          onReview={setTransferId}
+          onSaved={() => {
+            setTransferId(null);
+            invalidateQueries();
+            announce("Transfer correction recorded. Original history is kept.");
+          }}
         />
       ) : null}
       {editing ? (

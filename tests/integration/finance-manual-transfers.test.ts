@@ -27,10 +27,22 @@ let ownedTables: string[];
 let setupReady = false;
 const runtimeRole = moduleRuntimeRoleName("finance");
 const installRole = moduleInstallRoleName("finance");
+const correctionNegative = process.env.MOSS_FINANCE_CORRECTION_NEGATIVE;
 function store(scope: DataContextDb) {
   const rpc = createModuleStorageRpc(scope, "finance");
   const port: FinanceDb = {
-    query: async (text, params) => ({ rows: [...(await rpc.query(text, params)).rows] as never[] })
+    query: async (text, params) => {
+      if (
+        correctionNegative === "duplicate" &&
+        text.includes("INSERT INTO app.finance_transfer_corrections")
+      ) {
+        const guard =
+          "AND NOT EXISTS (SELECT 1 FROM app.finance_transfer_corrections c WHERE c.owner_user_id=r.owner_user_id AND c.original_transfer_id=r.id)";
+        expect(text).toContain(guard);
+        text = text.replace(guard, "");
+      }
+      return { rows: [...(await rpc.query(text, params)).rows] as never[] };
+    }
   };
   return sqlStore(port);
 }
@@ -127,7 +139,8 @@ async function input(
 }
 async function whileAccountChanges(
   change: Awaited<ReturnType<typeof input>>,
-  mutate: (s: ReturnType<typeof store>) => Promise<void>
+  mutate: (s: ReturnType<typeof store>) => Promise<void>,
+  record = (s: ReturnType<typeof store>) => s.transfers!.create(change)
 ) {
   let acquired!: () => void, advance!: () => void;
   const locked = new Promise<void>((resolve) => {
@@ -146,7 +159,7 @@ async function whileAccountChanges(
     await mutate(store(scope));
   });
   await locked;
-  const pending = owner((s) => s.transfers!.create(change));
+  const pending = owner(record);
   const observer = new Client({ connectionString: connectionStrings.bootstrap });
   await observer.connect();
   // pg_stat_activity truncates long statements; observe the initial CTE, not the later insert.
@@ -556,5 +569,261 @@ describe("linked manual transfers", () => {
         r.id.includes(change.operationId)
       )
     ).toBe(false);
+  });
+});
+
+let correctionFixtureNumber = 0;
+async function correctionFixture(card = false, fromBalance = 10000, toBalance = card ? 5000 : 0) {
+  const key = ++correctionFixtureNumber,
+    from = `correction:${key}:from`,
+    to = `correction:${key}:to`,
+    originalId = `99000000-0000-4000-8000-${String(key).padStart(12, "0")}`;
+  await account(from, "depository", fromBalance);
+  await account(to, card ? "credit" : "depository", toBalance);
+  const original = { ...(await input(originalId, from, to, 1234)), date: "2026-10-28" };
+  expect(await owner((s) => s.transfers!.create(original))).toBe("created");
+  return { from, to, originalId };
+}
+async function correctionInput(originalId: string, suffix = 1) {
+  const original = (await owner((s) => s.transferCorrections!.read(originalId)))!;
+  return {
+    ...(await input(
+      `99100000-0000-4000-8000-${String(correctionFixtureNumber * 10 + suffix).padStart(12, "0")}`,
+      original.toAccountId,
+      original.fromAccountId,
+      original.amountCents
+    )),
+    originalTransferId: originalId,
+    sourceRevision: original.sourceRevision,
+    date: "2026-10-29"
+  };
+}
+const reverse = (change: Awaited<ReturnType<typeof correctionInput>>) =>
+  owner((s) => s.transferCorrections!.reverse(change));
+const correctionRows = (id: string) =>
+  owner(async (s) =>
+    (await s.listMonthTransactions("2026-10")).filter((row) => row.transferId === id)
+  );
+describe("audited manual transfer corrections", () => {
+  it("appends one exact cash inverse, preserves the original and handles replay before eligibility", async () => {
+    const f = await correctionFixture(),
+      oldRows = await correctionRows(f.originalId),
+      change = await correctionInput(f.originalId);
+    expect(await reverse(change)).toBe("created");
+    expect((await snapshot(f.from))!.balanceCents).toBe(10000);
+    expect((await snapshot(f.to))!.balanceCents).toBe(0);
+    expect(await correctionRows(f.originalId)).toEqual(oldRows);
+    expect((await correctionRows(change.operationId)).map((r) => r.amountCents).sort()).toEqual([
+      -1234, 1234
+    ]);
+    expect(await owner((s) => s.transferCorrections!.read(f.originalId))).toMatchObject({
+      correctedBy: { transferId: change.operationId, date: change.date }
+    });
+    expect(await owner((s) => s.transferCorrections!.read(change.operationId))).toMatchObject({
+      correctsTransferId: f.originalId
+    });
+    const accounts = [await snapshot(f.from), await snapshot(f.to)];
+    expect(await reverse(change)).toBe("unchanged");
+    expect(await reverse({ ...change, digest: "f".repeat(64) })).toBe("conflict");
+    const duplicate = await correctionInput(f.originalId, 2);
+    if (correctionNegative === "duplicate") {
+      // Disposable fixture only: prove both the SQL guard and relational invariant matter.
+      const client = new Client({ connectionString: connectionStrings.bootstrap });
+      await client.connect();
+      try {
+        await client.query(
+          "ALTER TABLE app.finance_transfer_corrections DROP CONSTRAINT finance_transfer_corrections_pkey"
+        );
+        try {
+          expect(await reverse(duplicate)).toBe("changed");
+        } finally {
+          await client.query(
+            "DELETE FROM app.finance_transfer_corrections WHERE correction_transfer_id=$1::uuid",
+            [duplicate.operationId]
+          );
+          await client.query(
+            "ALTER TABLE app.finance_transfer_corrections ADD PRIMARY KEY(owner_user_id,original_transfer_id)"
+          );
+        }
+      } finally {
+        await client.end();
+      }
+    } else expect(await reverse(duplicate)).toBe("changed");
+    expect([await snapshot(f.from), await snapshot(f.to)]).toEqual(accounts);
+    expect(await correctionRows(change.operationId)).toHaveLength(2);
+    const activity = await owner((s) => s.listActivity("2026-10-01", "2026-11-01", 200));
+    expect(
+      activity.find(
+        (a) => a.kind === "transfer.reverse" && a.params.transferId === change.operationId
+      )?.params.originalTransferId
+    ).toBe(f.originalId);
+  });
+  it("restores card debt signs and retains both correction links in complete owned history", async () => {
+    const f = await correctionFixture(true),
+      change = await correctionInput(f.originalId);
+    expect((await snapshot(f.to))!.balanceCents).toBe(3766);
+    expect(await reverse(change)).toBe("created");
+    expect((await snapshot(f.from))!.balanceCents).toBe(10000);
+    expect((await snapshot(f.to))!.balanceCents).toBe(5000);
+    const exported = await owner((s) => s.historyExport!.read({ accountId: f.from }));
+    expect(exported.rows.find((r) => r.transferId === f.originalId)).toMatchObject({
+      correctedByTransferId: change.operationId
+    });
+    expect(exported.rows.find((r) => r.transferId === change.operationId)).toMatchObject({
+      correctsTransferId: f.originalId
+    });
+    const again = await correctionInput(change.operationId, 3);
+    expect(await reverse(again)).toBe("created");
+    expect((await snapshot(f.from))!.balanceCents).toBe(8766);
+    expect((await snapshot(f.to))!.balanceCents).toBe(3766);
+    expect(await owner((s) => s.transferCorrections!.read(change.operationId))).toMatchObject({
+      correctsTransferId: f.originalId,
+      correctedBy: { transferId: again.operationId }
+    });
+  });
+  it("refuses changed source, versions, amount, endpoints, currency and posting dates without partial records", async () => {
+    const f = await correctionFixture(),
+      change = await correctionInput(f.originalId),
+      before = [await snapshot(f.from), await snapshot(f.to)],
+      old = await correctionRows(f.originalId);
+    for (const patch of [
+      { sourceRevision: "0".repeat(32) },
+      { fromRevision: "0".repeat(32) },
+      { toRevision: "0".repeat(32) },
+      { amountCents: 1235 },
+      { amountCents: 0 },
+      { amountCents: Number.MAX_SAFE_INTEGER + 1 },
+      { fromAccountId: change.toAccountId, toAccountId: change.fromAccountId },
+      { isoCurrency: "EUR" },
+      { date: "2026-10-27" },
+      { date: "2026-10-31" }
+    ])
+      expect(await reverse({ ...change, ...patch })).toBe("changed");
+    expect([await snapshot(f.from), await snapshot(f.to)]).toEqual(before);
+    expect(await correctionRows(f.originalId)).toEqual(old);
+    expect(await correctionRows(change.operationId)).toEqual([]);
+    // Explicit malformed legacy leg fixture; public correction must not reinterpret it as valid.
+    await runner.withDataContext({ actorUserId: ids.userA }, (scope) =>
+      createModuleStorageRpc(scope, "finance").query(
+        "UPDATE app.finance_transactions SET amount_cents=amount_cents+CASE WHEN amount_cents>0 THEN 1 ELSE -1 END WHERE id=$1",
+        [old[0]!.id]
+      )
+    );
+    expect(await owner((s) => s.transferCorrections!.read(f.originalId))).toMatchObject({
+      intact: false
+    });
+    expect(await reverse(await correctionInput(f.originalId))).toBe("changed");
+    expect([await snapshot(f.from), await snapshot(f.to)]).toEqual(before);
+  });
+  it("serializes two distinct corrections from one captured review", async () => {
+    const f = await correctionFixture(),
+      a = await correctionInput(f.originalId),
+      b = await correctionInput(f.originalId, 2);
+    expect((await Promise.all([reverse(a), reverse(b)])).sort()).toEqual(["changed", "created"]);
+    expect((await snapshot(f.from))!.balanceCents).toBe(10000);
+    expect((await snapshot(f.to))!.balanceCents).toBe(0);
+    expect(
+      (await correctionRows(a.operationId)).length + (await correctionRows(b.operationId)).length
+    ).toBe(2);
+  });
+  it("preserves reconciled original periods and accepts only a later new correction date", async () => {
+    const f = await correctionFixture();
+    for (const accountId of [f.from, f.to]) {
+      const statement = (await owner((s) => s.reconciliation!.read(accountId, "2026-10-28")))!;
+      const row = (await correctionRows(f.originalId)).find((r) => r.accountId === accountId)!;
+      expect(
+        await owner((s) =>
+          s.reconciliation!.finish({
+            id: `${accountId}:statement`,
+            accountId,
+            statementDate: "2026-10-28",
+            balanceCents: accountId === f.from ? 10000 - 1234 : 1234,
+            isoCurrency: "USD",
+            expectedRevision: statement.revision,
+            selectedIds: [row.id],
+            digest: "c".repeat(64),
+            at
+          })
+        )
+      ).toBe("created");
+    }
+    const original = await correctionRows(f.originalId),
+      change = await correctionInput(f.originalId);
+    expect(original.every((r) => r.reconciledAt)).toBe(true);
+    expect(await reverse({ ...change, date: "2026-10-28" })).toBe("changed");
+    expect(await reverse(change)).toBe("created");
+    expect(await correctionRows(f.originalId)).toEqual(original);
+  });
+  it("rejects a correction after reconciliation and ledger close commit while it waits", async () => {
+    const f = await correctionFixture(false, 10000, -1234),
+      change = await correctionInput(f.originalId);
+    const leg = (await correctionRows(f.originalId)).find((r) => r.accountId === f.to)!;
+    expect(
+      await whileAccountChanges(
+        change,
+        async (s) => {
+          const statement = (await s.reconciliation!.read(f.to, today))!;
+          expect(
+            await s.reconciliation!.finish({
+              id: `${f.to}:statement`,
+              accountId: f.to,
+              statementDate: today,
+              balanceCents: 0,
+              isoCurrency: "USD",
+              expectedRevision: statement.revision,
+              selectedIds: [leg.id],
+              digest: "c".repeat(64),
+              at
+            })
+          ).toBe("created");
+          const saved = (await s.accountLifecycle!.review(f.to, today))!;
+          expect(saved.canClose).toBe(true);
+          expect(
+            await s.accountLifecycle!.update({
+              accountId: f.to,
+              expectedRevision: saved.revision,
+              operation: "close",
+              today,
+              at
+            })
+          ).toBe(true);
+        },
+        (s) => s.transferCorrections!.reverse(change)
+      )
+    ).toBe("changed");
+    expect(await correctionRows(change.operationId)).toEqual([]);
+    expect((await snapshot(f.to))!.archivedAt).not.toBeNull();
+  });
+  it("keeps original reviews and correction link ownership opaque to foreign users and admins", async () => {
+    const f = await correctionFixture(),
+      change = await correctionInput(f.originalId);
+    expect(await reverse(change)).toBe("created");
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    try {
+      if (correctionNegative === "rls")
+        await client.query(
+          "ALTER TABLE app.finance_transfer_corrections DISABLE ROW LEVEL SECURITY"
+        );
+      for (const actor of [ids.userB, ids.adminUser]) {
+        expect(await owner((s) => s.transferCorrections!.read(f.originalId), actor)).toBeNull();
+        expect(await owner((s) => s.transferCorrections!.reverse(change), actor)).toBe("changed");
+        const visible = await runner.withDataContext({ actorUserId: actor }, (scope) =>
+          createModuleStorageRpc(scope, "finance").query(
+            "SELECT correction_transfer_id FROM app.finance_transfer_corrections WHERE original_transfer_id=$1::uuid",
+            [f.originalId]
+          )
+        );
+        expect(visible.rows).toEqual([]);
+      }
+    } finally {
+      if (correctionNegative === "rls") {
+        await client.query(
+          "ALTER TABLE app.finance_transfer_corrections ENABLE ROW LEVEL SECURITY"
+        );
+        await client.query("ALTER TABLE app.finance_transfer_corrections FORCE ROW LEVEL SECURITY");
+      }
+      await client.end();
+    }
   });
 });

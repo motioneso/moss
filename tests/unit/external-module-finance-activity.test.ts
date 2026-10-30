@@ -97,6 +97,23 @@ describe("activity list", () => {
     ]);
   });
 
+  it.each([
+    ["transfer.create", "Recorded a linked manual transfer"],
+    ["transfer.reverse", "Corrected a manual transfer recording; original history kept"]
+  ])("describes %s without offering destructive history undo", async (kind, summary) => {
+    const { ports } = setup([
+      row({
+        kind,
+        params: { transferId: "synthetic-transfer" },
+        undo: { transferId: "synthetic-transfer" }
+      })
+    ]);
+    const out = (await activityListHandler(ports)({
+      from: "2026-07-11T12:00:00Z",
+      to: "2026-07-18T12:00:00Z"
+    })) as { activity: { summary: string; undoable: boolean }[] };
+    expect(out.activity).toMatchObject([{ summary, undoable: false }]);
+  });
   it("rejects a bad timestamp", async () => {
     const { ports } = setup([]);
     await expect(activityListHandler(ports)({ from: "nope", to: "2026-07-18" })).rejects.toThrow();

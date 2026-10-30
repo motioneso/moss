@@ -1,3 +1,4 @@
+import { configureFinanceProofFixture } from "./helpers/finance-live-negative-fixtures.js";
 import { exercisePlanning } from "./helpers/finance-live-planning.js";
 import { exerciseTargetFunding } from "./helpers/finance-live-target-funding.js";
 import { exerciseMerchantRules } from "./helpers/finance-live-rules.js";
@@ -153,6 +154,7 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
         await mkdir(installed, { recursive: true });
         await cp(join(buildDir, "jarvis.module.json"), join(installed, "jarvis.module.json"));
         await cp(join(buildDir, "dist"), join(installed, "dist"), { recursive: true });
+        await configureFinanceProofFixture(id!, installed);
       }
       const manifest = JSON.parse(
         await readFile("external-modules/finance/jarvis.module.json", "utf8")

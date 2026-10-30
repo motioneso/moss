@@ -142,6 +142,10 @@ async function describe(row: ActivityRecord, names: Names): Promise<string> {
       return "Added a manual account";
     case "transaction.create":
       return "Added a manual transaction";
+    case "transfer.create":
+      return "Recorded a linked manual transfer";
+    case "transfer.reverse":
+      return "Corrected a manual transfer recording; original history kept";
     case "account.reconcile":
       return "Reconciled a manual statement";
     case "transaction.import":

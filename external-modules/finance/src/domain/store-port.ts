@@ -1,3 +1,4 @@
+import type { TransferCorrectionStore } from "./transfer-corrections.js";
 import type { BillAdjustmentStore } from "./bill-adjustments.js";
 import type { MerchantRuleStore } from "./merchant-rules.js";
 import type { TransactionMetadataStore } from "./transaction-metadata.js";
@@ -68,6 +69,7 @@ export interface FinanceStore {
   readonly rules?: MerchantRuleStore;
   readonly metadata?: TransactionMetadataStore;
   readonly transfers?: ManualTransferStore;
+  readonly transferCorrections?: TransferCorrectionStore;
   readonly accountLifecycle?: AccountLifecycleStore;
   readonly historyExport?: HistoryExportStore;
   readonly supportsSplits: boolean;

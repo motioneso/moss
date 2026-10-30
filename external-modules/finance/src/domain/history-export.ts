@@ -11,6 +11,8 @@ export interface HistoryScope {
 export interface HistoryRow {
   id: string;
   transferId?: string;
+  correctsTransferId?: string;
+  correctedByTransferId?: string;
   accountId: string;
   accountName: string;
   date: string;
@@ -29,7 +31,7 @@ export interface HistoryExportStore {
 }
 export function ownedHistoryCsv(rows: readonly HistoryRow[]): string {
   const header =
-    "Date,Payee,Account,Account ID,Category,Category ID,Outflow,Inflow,Currency,Status,Cleared,Reconciled at,Transaction ID,Allocations,Allocation status,Transfer ID";
+    "Date,Payee,Account,Account ID,Category,Category ID,Outflow,Inflow,Currency,Status,Cleared,Reconciled at,Transaction ID,Allocations,Allocation status,Transfer ID,Corrects transfer ID,Corrected by transfer ID";
   return (
     [
       header,
@@ -64,7 +66,9 @@ export function ownedHistoryCsv(rows: readonly HistoryRow[]): string {
           csvText(
             row.splits.length ? (allocated === BigInt(cents) ? "Balanced" : "Unbalanced") : "None"
           ),
-          csvText(row.transferId ?? "")
+          csvText(row.transferId ?? ""),
+          csvText(row.correctsTransferId ?? ""),
+          csvText(row.correctedByTransferId ?? "")
         ].join(",");
       })
     ].join("\r\n") + "\r\n"

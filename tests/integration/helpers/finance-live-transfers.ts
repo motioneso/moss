@@ -1,3 +1,4 @@
+import { exerciseTransferCorrection } from "./finance-live-transfer-corrections.js";
 import { setModuleKvValue } from "@moss/settings";
 import { readyToAssignCents } from "../../../external-modules/finance/src/domain/ready-to-assign.js";
 import { NS } from "../../../external-modules/finance/src/domain/index.js";
@@ -195,6 +196,7 @@ export async function exerciseManualTransfers(
     await page.getByText("Linked transfer", { exact: true }).first().waitFor();
     expect(await page.getByRole("button", { name: /Split Manual transfer/ }).count()).toBe(0);
     expect(await page.getByLabel(/Category for Manual transfer/).count()).toBe(0);
+    await exerciseTransferCorrection(page, read, today, artifacts);
   } catch (error) {
     if (artifacts)
       await page.screenshot({

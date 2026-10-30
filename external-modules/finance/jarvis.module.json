@@ -59,7 +59,8 @@
       "app.finance_flex_policies",
       "app.finance_manual_transfers",
       "app.finance_merchant_rules",
-      "app.finance_bill_adjustments"
+      "app.finance_bill_adjustments",
+      "app.finance_transfer_corrections"
     ]
   },
   "settingsPath": "/settings",
@@ -74,7 +75,7 @@
       {
         "id": "finance.transactions",
         "label": "Transactions",
-        "description": "Filter by month, account, category, payee/notes, posting, direction, review or possible duplicates. Owned posted unsplit edits to non-transfer categories and loaded confirmation capture revisions, ask for host confirmation and await persistence. Stale batches save nothing; cancellation keeps review. Pending/KV and merchant-rule queues remain separate. Splits and linked transfers retain their protections. Loaded CSV reflects visible scope; owned history export captures cross-month dates/account/count, omits notes and mirrors, and refuses beyond 5,000 rows or 2 MiB. Loading, empty, error and busy states preserve filters. Shared records remain read only.",
+        "description": "Filter by month, account, category, payee/notes, posting, direction, review or possible duplicates. Owned posted unsplit edits to non-transfer categories and loaded confirmation capture revisions, ask for host confirmation and await persistence. Stale batches save nothing; cancellation keeps review. Pending/KV and merchant-rule queues remain separate. Splits and linked transfers retain their protections. Loaded CSV reflects visible scope; owned history export captures cross-month dates/account/count, omits notes and mirrors, and refuses beyond 5,000 rows or 2 MiB. Loading, empty, error and busy states preserve filters. Shared records remain read only. Owned linked manual transfers offer audited inverse correction after captured review and host confirmation; original entries and statements stay intact. Duplicate corrections refuse; uncertain saves require a fresh read.",
         "path": "/transactions"
       },
       {
@@ -163,7 +164,7 @@
       },
       {
         "id": "finance.register-export",
-        "description": "Export loaded rows downloads a CSV of exactly the currently loaded filtered transactions with separate outflow and inflow columns, currency and posting state. The loaded count and total matches make truncation visible. This is not a complete account backup."
+        "description": "Export loaded rows downloads a CSV of exactly the currently loaded filtered transactions with separate outflow and inflow columns, currency and posting state. The loaded count and total matches make truncation visible. This is not a complete account backup. Complete owned history retains original and inverse transfer correction identifiers."
       },
       {
         "id": "finance.transaction-splits",
@@ -171,7 +172,7 @@
       },
       {
         "id": "finance.manual-ledger",
-        "description": "Manual cash, checking, savings, credit, loan and asset accounts need no bank credentials. Opening balance/date and a fixed two-decimal currency establish the ledger; posted entries update exact balances atomically with replay-safe identities and Moss-timezone date checks. Manual accounts remain private. Forms await committed success; uncertain saves retain input for a records check. Reconcile a dated statement by selecting cleared entries and matching its exact balance. Finish requires zero difference and a current ledger revision; receipt, entry marks and activity commit together. Completed periods reject backdated postings, while outstanding entries can clear later. Reviews above 500 entries require an earlier cutoff and cannot finish a truncated list. Old hosts or unmigrated storage require an update. Same-currency linked manual cash/card transfers are recorded as atomic pairs. Provider reconciliation and automatic adjustments are unavailable."
+        "description": "Manual cash, checking, savings, cards, loans and assets need no credentials and stay private. Opening date/balance and a fixed two-decimal currency establish exact ledgers; posted entries commit atomically with replay identities and Moss-local date checks. Reconcile a statement with cleared entries, zero difference and current ledger revision; receipt, marks and activity commit together. Completed periods reject backdating; outstanding entries may clear later. More than 500 entries requires an earlier cutoff. Linked manual cash/card transfers use same-currency atomic pairs. Review an owned pair in Transactions to record one inverse correction: preserve original history, derive exact endpoints/amount/currency, recheck original/account versions and posting boundaries, confirm through the host. Closed accounts and duplicate corrections refuse. Uncertain saves keep inputs for a fresh read. Old hosts/storage need updating; provider reconciliation and automatic adjustments are unavailable."
       }
     ]
   },
@@ -1536,6 +1537,75 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false
+      }
+    },
+    {
+      "name": "finance.manual.transfer-review",
+      "permissionId": "finance.manual.transfer-review",
+      "description": "Review an owned linked manual transfer, its correction links and both current eligible manual ledgers. Includes captured original/leg and account versions. Closed or reconciled originals remain historical; no bank operation occurs.",
+      "risk": "read",
+      "handler": "manual.transfer-review",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "originalTransferId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": ["originalTransferId"]
+      }
+    },
+    {
+      "name": "finance.manual.transfer-reverse",
+      "permissionId": "finance.manual.transfer-reverse",
+      "actionLabel": "Correct a manual transfer recording",
+      "description": "Record one audited inverse pair for an owned manual transfer, preserving its original entries and statement history. Server derives exact amount, currency and inverse endpoints from the original; captured source/account versions, valid posting date and duplicate-correction guard must hold. Replay-safe identity. No money or bank instruction is sent.",
+      "risk": "write",
+      "handler": "manual.transfer-reverse",
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["originalTransferId", "date"],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "originalTransferId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceRevision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "fromRevision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "toRevision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "cleared": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "operationId",
+          "originalTransferId",
+          "sourceRevision",
+          "fromRevision",
+          "toRevision",
+          "date"
+        ]
       }
     },
     {
