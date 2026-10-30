@@ -156,10 +156,47 @@ export async function exerciseCardReserves(
     await page.getByRole("button", { name: "See payment activity", exact: true }).click();
     await page.getByText("Funded purchases this month", { exact: true }).waitFor();
     await capture("activity");
+    // Record the payment through Accounts and the real guarded transfer tool, not a store stub.
+    await page.goto(`${base}/m/finance/accounts`);
+    await page.getByRole("button", { name: "Record transfer", exact: true }).click();
+    const transfer = page.getByRole("dialog", { name: "Record a manual transfer", exact: true });
+    await transfer.getByLabel("From account", { exact: true }).selectOption("cash-proof");
+    await transfer.getByLabel("To account", { exact: true }).selectOption("card-proof");
+    await transfer.getByLabel("Transfer amount USD", { exact: true }).fill("100.00");
+    await transfer.getByRole("button", { name: "Review transfer", exact: true }).click();
+    await transfer
+      .getByText("Two linked entries will be saved together.", { exact: false })
+      .waitFor();
+    await transfer.getByRole("button", { name: "Record linked transfer", exact: true }).click();
+    await guard.waitFor();
+    expect(await status()).toMatchObject({
+      cardPayments: [{ availableCents: 15000, paymentsCents: 0 }]
+    });
+    if (artifacts)
+      await page.screenshot({
+        path: join(resolve(artifacts), "finance-card-payment-host-confirm.png"),
+        fullPage: false
+      });
+    await guard.getByRole("button", { name: "Confirm action", exact: true }).click();
+    await transfer.waitFor({ state: "detached" });
+    expect(await status()).toMatchObject({
+      readyToAssignCents: 80000,
+      cardPayments: [{ availableCents: 5000, owedCents: 45000, paymentsCents: 10000 }],
+      state: { categories: { groceries: { activityCents: 5000, availableCents: 5000 } } }
+    });
+    const records = (await read("finance.transactions.query", { month, ownOnly: true }))
+      .transactions as { transferId?: string; amountCents: number }[];
+    const linked = records.filter((r) => r.transferId);
+    expect(linked).toHaveLength(2);
+    expect(linked[0]!.transferId).toBe(linked[1]!.transferId);
+    expect(linked[0]!.amountCents + linked[1]!.amountCents).toBe(0);
+    await page.goto(`${base}/m/finance`);
+    await waitForAction(reviewButton);
+    await capture("payment");
     const fundDialog = page.getByRole("dialog", { name: "Review card-payment cash", exact: true });
     for (const [amount, ready, available] of [
-      ["200.00", 75000, 20000],
-      ["0.00", 95000, 0]
+      ["200.00", 65000, 20000],
+      ["0.00", 85000, 0]
     ] as const) {
       await waitForAction(reviewButton);
       await reviewButton.click();
@@ -204,7 +241,7 @@ export async function exerciseCardReserves(
     await guard.getByRole("button", { name: "Confirm action", exact: true }).click();
     await fundDialog.waitFor({ state: "detached" });
     expect(await status()).toMatchObject({
-      readyToAssignCents: 92500,
+      readyToAssignCents: 82500,
       cardPayments: [{ availableCents: 0 }],
       targetFundingOverspent: false
     });
