@@ -97,7 +97,7 @@ of it.
 
 A user describes their household once. Each Household member has a Meal pattern, restrictions,
 preferences, an optional calorie target and an optional link to a Moss account. The user then asks
-for a plan, a week by default or any number of days. Moss writes the Meal plan day by day, showing progress as each day fills in. Meals are
+for a plan, a week by default or any number of days up to 28. Moss writes the Meal plan day by day, showing progress as each day fills in. Meals are
 Shared meals by default, sized per eater, and a member can have a One-off meal. Every meal passes a
 Safety check against every eater's restrictions before the user sees it.
 
@@ -134,7 +134,7 @@ change the later phases.
 
 - Household members with Meal pattern, restrictions, preferences, optional calorie target and
   stored account link. Planning for just yourself needs no household setup.
-- On-demand Meal plan, seven days by default or any number of days the user names, generated day by day with visible progress and a small, tasteful
+- On-demand Meal plan, seven days by default or any number of days the user names up to 28, generated day by day with visible progress and a small, tasteful
   animation.
 - Safety check with automatic regeneration of failing meals.
 - Shared meals sized per eater, One-off meals, plain-text slots ("eating out", "leftovers").
@@ -222,7 +222,7 @@ so that project can use them.
 ### Generating a plan
 
 14. As a user, I want to ask for a plan starting on a date I choose, for seven days or any number
-    of days I name, so that it fits my week.
+    of days I name, so that it fits my week. (Up to 28 days.)
 15. As a user, I want to see each day fill in as it is written, so that I know it is working.
 16. As a user, I want a small animation while a day is being written, so that the wait feels alive
     without being noisy.
@@ -487,6 +487,10 @@ Log tables keep `owner_user_id` only. The log is personal and never moves into a
 - A plan run enqueues one job per day. Day jobs chain one after another so the no-repeat rule and
   pattern requests see earlier days. This keeps every job inside the module run limit of 500 AI
   calls and ten minutes.
+- Each meal is saved as it finishes, and a retried day picks up at the first unfinished meal, so a
+  job killed at the ceiling loses one meal, not a day. Every enqueue raises the day's generation
+  and uses it in the job key, and a job whose generation is stale writes nothing.
+- A plan has 1 to 28 days, which bounds the enqueue count under the hourly cap.
 - Job payloads carry plan and day ids only. Prompts are assembled inside the job from the database.
 - Each day job splits each eater's calorie target across their Meal pattern, asks
   `ctx.ai.generateStructured` for each meal against a recipe schema, runs the Safety check, scales
@@ -505,8 +509,9 @@ Log tables keep `owner_user_id` only. The log is personal and never moves into a
 - A quick swap ("15-minute meal tonight") is a single-meal job with a cook-time cap taken from the
   request, Pantry-first ingredient choice, and a result listing any missing ingredients. It is
   reachable from Chat and from a "Quick swap" action on the meal.
-- Each AI call names its task (`plan`, `swap`, `estimate`, `photo`) so per-task model bindings can
-  apply once the platform supports them; until then the tier hint carries the intent.
+- AI calls carry a tier hint only. A module's structured call rejects unknown keys, so a call cannot
+  name its task until #3716 lands. Recipe and Safety calls ask for the reasoning tier and nutrition
+  estimates ask for the economy tier.
 - The page polls plan and day status, matching the existing polling pattern.
 - Swap choices run as a job and the page polls for them.
 - AI errors from the structured call (`needs_config`, `provider_error`, `usage_limited`,

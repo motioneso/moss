@@ -190,7 +190,8 @@ async function writeDay(
   context: DayContext
 ): Promise<
   | { readonly kind: "done"; readonly failure: GenerationFailure | null }
-  | { readonly kind: "stale" | "stopped" }
+  | { readonly kind: "stale" }
+  | { readonly kind: "stopped" }
 > {
   const { deps, plan, day, generation } = context;
   let failure: GenerationFailure | null = null;

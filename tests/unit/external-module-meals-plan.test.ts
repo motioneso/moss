@@ -14,6 +14,8 @@ import {
   planDelete,
   planGet
 } from "../../external-modules/meals/src/plans/tools.js";
+import type { MealsStore } from "../../external-modules/meals/src/store/sql.js";
+import { createKitchenGetHandler } from "../../external-modules/meals/src/tools/household.js";
 import {
   AiError,
   ESTIMATE_800,
@@ -448,8 +450,15 @@ describe("AI errors", () => {
     const after = await planGet(setup.deps, { planId: plan.planId });
     expect(after?.days[0]).toMatchObject({ status: "failed", failureReason: kind });
     expect(after?.days[0]?.meals[0]).toMatchObject({ status: "failed", failureReason: kind });
-    await expect(setup.deps.kitchen()).resolves.toMatchObject({ kitchenId: expect.any(String) });
-    await expect(planGet(setup.deps, { date: "2026-11-02" })).resolves.not.toBeNull();
+    const kitchenGet = createKitchenGetHandler({
+      getOrCreateKitchen: setup.deps.kitchen
+    } as unknown as MealsStore);
+    await expect(kitchenGet({ input: {}, ai } as never)).resolves.toMatchObject({
+      kitchenId: expect.any(String)
+    });
+    await expect(planGet(setup.deps, { date: "2026-11-02" })).resolves.toMatchObject({
+      planId: plan.planId
+    });
   });
 
   it("fails the day when the Safety call errors", async () => {
@@ -550,7 +559,8 @@ describe("reading and deleting", () => {
     await expect(planGet(setup.deps, { date: "2026-11-04" })).resolves.toMatchObject({
       planId: plan.planId
     });
-    await expect(planGet(setup.deps, { date: "2026-11-05" })).resolves.toBeNull();
+    // The host refuses a tool result that is not an object, so "not found" is a refusal.
+    await expect(planGet(setup.deps, { date: "2026-11-05" })).rejects.toThrow(/no plan/i);
   });
 
   it("shows a written meal as a recipe", async () => {
@@ -568,10 +578,12 @@ describe("reading and deleting", () => {
   it("deletes a plan", async () => {
     const setup = fakeDeps(kitchenOf([you]), happyAi(1));
     const plan = await planCreate(setup.deps, createInput());
+    const [meal] = mealsOf(setup);
     await expect(planDelete(setup.deps, { planId: plan.planId })).resolves.toEqual({
       deleted: true
     });
-    await expect(planGet(setup.deps, { planId: plan.planId })).resolves.toBeNull();
+    await expect(planGet(setup.deps, { planId: plan.planId })).rejects.toThrow(/no plan/i);
+    await expect(mealGet(setup.deps, { mealId: meal!.mealId })).rejects.toThrow(/no meal/i);
     await drain(setup);
     expect(setup.ai.calls).toHaveLength(0);
   });

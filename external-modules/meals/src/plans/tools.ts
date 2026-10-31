@@ -129,15 +129,14 @@ export async function planCreate(deps: PlanDeps, input: Input): Promise<PlanView
   return loadView(deps, await requirePlan(deps, planId));
 }
 
-export async function planGet(deps: PlanDeps, input: Input): Promise<PlanView | null> {
+export async function planGet(deps: PlanDeps, input: Input): Promise<PlanView> {
   let planId = optionalString(input, "planId");
   if (planId === null) {
     if (input["date"] === undefined) throw new PlanInputError("Give a planId or a date");
     planId = await deps.store.findPlanByDate(requireDate(input, "date"));
-    if (planId === null) return null;
+    if (planId === null) throw new PlanInputError("No plan covers that date");
   }
-  const plan = await deps.store.getPlan(planId);
-  return plan === null ? null : loadView(deps, plan);
+  return loadView(deps, await requirePlan(deps, planId));
 }
 
 function findDay(days: readonly DayRow[], input: Input): DayRow {
@@ -181,9 +180,9 @@ export async function planDelete(
   return { deleted: true };
 }
 
-export async function mealGet(deps: PlanDeps, input: Input): Promise<RecipeView | null> {
+export async function mealGet(deps: PlanDeps, input: Input): Promise<RecipeView> {
   const meal = await deps.store.getMeal(requireString(input, "mealId", 64));
-  if (meal === null) return null;
+  if (meal === null) throw new PlanInputError("No meal with that id");
   const [recipes, kitchen] = await Promise.all([
     meal.recipeId ? deps.store.getRecipes([meal.recipeId]) : Promise.resolve([]),
     deps.kitchen()
