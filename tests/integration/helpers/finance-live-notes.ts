@@ -148,7 +148,10 @@ export async function exercisePrivateNotes(
     await field().focus();
     await page.keyboard.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
     expect(
-      await field().evaluate((el) => ({ start: el.selectionStart, end: el.selectionEnd }))
+      await field().evaluate((el) => ({
+        start: (el as HTMLTextAreaElement).selectionStart,
+        end: (el as HTMLTextAreaElement).selectionEnd
+      }))
     ).toEqual({ start: 0, end: expected.length });
     await page.keyboard.type("x");
     expect(await field().inputValue()).toBe(expected);

@@ -13,7 +13,9 @@ explicit reason and recovery action. Initial reads can close or return to detail
 A generation fence ignores late responses across close/reopen, including their finally handlers.
 Submitted saves retain close protection: canceling a read does not imply canceling a write.
 
-Current production/test source: 54c2adbbf1279ae08e312fe3b750d94771f2c9ff, committed and pushed.
+Last completed Finance source: 54c2adbbf1279ae08e312fe3b750d94771f2c9ff, committed and pushed.
+A subsequent type-only textarea annotation fixes the canonical helper error described below;
+final-source checks must be rerun before treating the latest branch as fully verified.
 Its two follow-up test commits correct hidden-dialog queries under the real host guard and honor
 register read backoff. The module app map includes the actual recovery behavior. No migration
 or financial calculation changed in these refinements; Finance retains 23 owned tables and 41
@@ -61,10 +63,13 @@ Earlier complete Finance at clean 6d9d4904 passed 237 tests in 20 files, all 24 
 fingerprint 1eab72b6205cd7e76c555eb38b7c40ce788a8f64a674e4ebb41277a6cb9e579a.
 It does not by itself verify the later approved UI changes.
 
-The final-source canonical aggregate is active in the frozen verification checkout at clean
-54c2adbb: /tmp/jarv1s-gate/moss_finance_transfers_verify-20261031-002241-iNuzM2.log.
-Its verdict is pending; do not substitute the previous source result below. Recover its existing
-wait session 89252 or use the official status command on that exact receipt. Do not duplicate it.
+Canonical aggregate at clean 54c2adbb stopped with rc=2 during integration-test types:
+/tmp/jarv1s-gate/moss_finance_transfers_verify-20261031-002241-iNuzM2.log.
+Earlier static stages passed. The new keyboard-selection assertion's generic Playwright element
+needed an HTMLTextAreaElement annotation for selectionStart/selectionEnd. This is a real added
+test-helper type regression, not a baseline-only result. The correction is type-only, preserving
+runtime behavior; final complete Finance and canonical aggregate are pending at this checkpoint.
+Unit/migration/UAT/integration chained stages were not reached; the initial fresh migration ran.
 
 Baseline reference: /tmp/jarv1s-gate/moss_finance_transfers_verify-20261030-143017-SaB79F.log.
 Strip ANSI; collect and trim complete FAIL lines; deduplicate; sort; join with newlines and one
@@ -77,9 +82,9 @@ regression produced 278 failures at a6a17c7b; 4475cb87 fixed it. Do not mislabel
 baseline-only. Known baseline failures include Computer IPC/ACL and Sports environment fixtures;
 no runtime guard, limit or test was weakened to clear them.
 
-Module types, integration-test types and scoped lint passed before d714b555. The two focused
-cache test files passed all three cases. Those plain development checks lack gate fingerprints
-and are supporting evidence, not aggregate approval.
+The two focused cache test files passed all three cases. Initial scoped type/lint commands
+are supporting development evidence only; the later canonical run exposed the added helper
+type error above. A completed command on earlier inputs is not final-source aggregate approval.
 
 ## Observed guard-removal controls and restored positives
 
