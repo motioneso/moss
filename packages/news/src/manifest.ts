@@ -32,10 +32,15 @@ import {
   connectNewsCredentialedSourceSchema,
   listNewsSourceCredentialsSchema,
   replaceNewsSourceCredentialSchema,
-  revokeNewsSourceCredentialSchema
+  revokeNewsSourceCredentialSchema,
+  heartbeatSourceReadInputSchema
 } from "@moss/shared";
 
-import { newsTopHeadlinesTodayExecute } from "./briefing-tool.js";
+import {
+  authorizeNewsHeartbeatRead,
+  newsHeartbeatHeadlinesExecute,
+  newsTopHeadlinesTodayExecute
+} from "./briefing-tool.js";
 import {
   newsAddExclusionExecute,
   newsAddTopicExecute,
@@ -364,6 +369,17 @@ export const newsModuleManifest = {
   ],
   assistantTools: [
     {
+      name: "news.heartbeatHeadlines",
+      description:
+        "Background heartbeat read. Lists the actor's top stories from the already published news snapshot, with a change revision. Never contacts a news source.",
+      permissionId: "news.view",
+      risk: "read",
+      content: "outside",
+      inputSchema: heartbeatSourceReadInputSchema,
+      authorizeBackgroundRead: authorizeNewsHeartbeatRead,
+      execute: newsHeartbeatHeadlinesExecute
+    },
+    {
       name: "news.topHeadlinesToday",
       description:
         "List the actor's top news headlines right now (one short 'Title — Source' line, max 5), composed from their enabled sources and topics. Read-only; briefing-oriented, not a full article browser.",
@@ -561,6 +577,19 @@ export const newsModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "news.heartbeat_source",
+      description:
+        "Saved news stories can appear in Moss check-ins. Check-ins read stored stories only and never fetch new ones.",
+      errors: [
+        {
+          code: "news_heartbeat_source_unavailable",
+          class: "transient",
+          description:
+            "News could not be read for a check-in. Settings > Alerts shows News as unavailable and the next check tries again."
+        }
+      ]
+    },
     {
       id: "news.filtered_front_page",
       description:

@@ -40,12 +40,16 @@ export interface HeldWatchdog {
 }
 
 /**
- * Starts the lifetime-free `hold` watchdog and accepts it only on one signal: a single 0x01 byte
- * on the channel this function created, within the time limit, from a child whose identity has not
- * changed. Every other outcome kills the child and refuses.
+ * Starts the lifetime-free `hold` watchdog and accepts it only on one signal: exactly one 0x01 byte
+ * on the channel this function created, followed by the child closing its end, within the time
+ * limit, from a child whose identity has not changed. Every other outcome kills the child and
+ * refuses.
  *
  * The channel is a socket pair. The child gets one end on descriptor 3 and this function keeps the
- * other, so the byte is trusted because only the child and this process hold the two ends.
+ * other, so the byte is trusted because only the child and this process hold the two ends. The end
+ * of file is what makes the message complete: a socket keeps byte order, so every byte the child
+ * wrote before closing arrives before the end, whatever order the event loop dispatches them in.
+ * A deadline alone cannot do that, because it decides while bytes may still be on their way.
  */
 export async function launchHold(options: LaunchOptions): Promise<HeldWatchdog> {
   const spawn = options.spawn ?? nodeSpawn;
@@ -94,9 +98,7 @@ export async function launchHold(options: LaunchOptions): Promise<HeldWatchdog> 
     // the forked launcher copy. A runtime that returned earlier would make this check meaningless.
     await assertRunningImage(pid, nodeKey, [options.nodePath, ...args]);
     await receiveSignal(child, channel, options.ackTimeoutMs ?? ACK_TIMEOUT_MS);
-    // Anything arriving after the signal, while the checks below run, refuses.
-    let extra = false;
-    channel.on("data", () => (extra = true));
+    // The acknowledgement ended at its end of file, so nothing more can arrive on this channel.
     const after = await readIdentity(pid);
     // An exec after spawn replaces the executable or the arguments, and this catches both.
     await assertRunningImage(pid, nodeKey, [options.nodePath, ...args]);
@@ -107,8 +109,6 @@ export async function launchHold(options: LaunchOptions): Promise<HeldWatchdog> 
       before.processGroupId !== pid
     )
       throw supervisorError();
-    if (extra) throw supervisorError();
-    channel.removeAllListeners("data");
     channel.destroy();
     return Object.freeze({ identity: before, kill });
   } catch {
@@ -117,26 +117,36 @@ export async function launchHold(options: LaunchOptions): Promise<HeldWatchdog> 
   }
 }
 
+/**
+ * Accepts exactly one acknowledgement: one 0x01 byte and then the child's end of file. The whole
+ * message is judged, so a second byte can never be hidden in an event that arrives after an
+ * earlier one was accepted. A deadline that resolves the message would decide while bytes may
+ * still be in flight, which is the race this replaces.
+ */
 function receiveSignal(child: ChildProcess, channel: Socket, timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
     let done = false;
-    let received = false;
+    let bytes = 0;
     const finish = (error?: Error): void => {
       if (done) return;
       done = true;
       clearTimeout(timer);
+      // Only the message listeners go: error and close stay attached, so a reset that lands
+      // after the decision is handled instead of becoming an unhandled event.
       channel.removeAllListeners("data");
+      channel.removeAllListeners("end");
       if (error) reject(error);
       else resolve();
     };
-    // A socket data event is not a message boundary. Observe the whole acknowledgement
-    // window so a second byte cannot be hidden in a later event after the first resolves.
-    const timer = setTimeout(() => finish(received ? undefined : supervisorError()), timeoutMs);
+    const timer = setTimeout(() => finish(supervisorError()), timeoutMs);
     channel.on("data", (chunk: Buffer) => {
-      if (received || chunk.length !== 1 || chunk[0] !== 1) finish(supervisorError());
-      else received = true;
+      bytes += chunk.length;
+      if (chunk.length !== 1 || chunk[0] !== 1 || bytes !== 1) finish(supervisorError());
     });
+    // Only the child closing its end completes the message, and only one byte completes it.
+    channel.on("end", () => finish(bytes === 1 ? undefined : supervisorError()));
     channel.on("error", () => finish(supervisorError()));
+    // A close without the end event still refuses: the message did not complete.
     channel.on("close", () => finish(supervisorError()));
     child.on("exit", () => finish(supervisorError()));
   });

@@ -1021,6 +1021,68 @@ export interface ChatMessagesTable {
   updated_at: TimestampColumn;
 }
 
+export interface HeartbeatSettingsTable {
+  owner_user_id: string;
+  enabled: boolean;
+  cadence_minutes: number;
+  sources: JsonColumn;
+  origin: "default" | "saved" | "legacy_off";
+  revision: ColumnType<number, number | undefined, number>;
+  next_due_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
+}
+
+export interface HeartbeatSourceCheckpointsTable {
+  owner_user_id: string;
+  source: string;
+  revision: string;
+  next_boundary_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  evaluated_at: ColumnType<Date, Date | string, Date | string>;
+}
+
+export interface HeartbeatOccurrencesTable {
+  id: string;
+  owner_user_id: string;
+  settings_revision: number;
+  started_at: ColumnType<Date, Date | string, Date | string>;
+  finished_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  outcome: "running" | "quiet" | "message" | "held_allowance" | "degraded" | "failed";
+  item_count: ColumnType<number, number | undefined, number>;
+  message_id: ColumnType<string | null, string | null | undefined, string | null>;
+  input_tokens: ColumnType<number | null, number | null | undefined, number | null>;
+  output_tokens: ColumnType<number | null, number | null | undefined, number | null>;
+  unavailable_sources: ColumnType<string[], string[] | undefined, string[]>;
+}
+
+export interface HeartbeatFindingsTable {
+  id: string;
+  owner_user_id: string;
+  source: string;
+  entity_key: string;
+  episode_key: string;
+  state: "selected" | "published" | "resolved" | "suppressed";
+  occurrence_id: string;
+  updated_at: ColumnType<Date, Date | string, Date | string>;
+}
+
+export interface HeartbeatMutesTable {
+  id: string;
+  owner_user_id: string;
+  scope: "item" | "topic";
+  source: ColumnType<string | null, string | null | undefined, string | null>;
+  entity_key: ColumnType<string | null, string | null | undefined, string | null>;
+  topic: ColumnType<string | null, string | null | undefined, string | null>;
+  label: string;
+  created_at: ColumnType<Date, Date | string | undefined, Date | string>;
+}
+
+export interface HeartbeatAllowanceChargesTable {
+  owner_user_id: string;
+  local_date: ColumnType<string, string, string>;
+  occurrence_id: string;
+  attempt: number;
+}
+
 export interface ChatUnreadMessagesTable {
   message_id: string;
   thread_id: string;
@@ -2143,6 +2205,12 @@ export interface MossDatabase {
   "app.chat_automatic_action_reservations": ChatAutomaticActionReservationsTable;
   "app.chat_messages": ChatMessagesTable;
   "app.chat_unread_messages": ChatUnreadMessagesTable;
+  "app.heartbeat_settings": HeartbeatSettingsTable;
+  "app.heartbeat_source_checkpoints": HeartbeatSourceCheckpointsTable;
+  "app.heartbeat_occurrences": HeartbeatOccurrencesTable;
+  "app.heartbeat_findings": HeartbeatFindingsTable;
+  "app.heartbeat_mutes": HeartbeatMutesTable;
+  "app.heartbeat_allowance_charges": HeartbeatAllowanceChargesTable;
   "app.chat_reminders": ChatRemindersTable;
   "app.chat_scheduled_reads": ChatScheduledReadsTable;
   "app.chat_responsibility_proposals": ChatResponsibilityProposalsTable;

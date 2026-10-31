@@ -93,6 +93,7 @@ export * from "./meeting-history-api.js";
 
 export * from "./meeting-capture-api.js";
 
+export * from "./heartbeat-api.js";
 export * from "./scheduled-tasks-api.js";
 export * from "./responsibility-agreement.js";
 export * from "./briefing-email-evidence.js";
@@ -133,3 +134,7 @@ export type {
 } from "./note-contribution-api.js";
 
 export * from "./recording-memory-api.js";
+
+export * from "./module-notice-api.js";
+export * from "./heartbeat-source-api.js";
+export { readChatHeartbeatOrigin } from "./chat-heartbeat-origin.js";

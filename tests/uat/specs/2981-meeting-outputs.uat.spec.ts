@@ -171,7 +171,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
     expect(createdResponse.status()).toBe(201);
     meetingId = (await createdResponse.json()).meeting.id as string;
     await page.reload();
-    await meetingRow(page, "Untitled meeting").click();
+    await meetingRow(page, "Untitled meeting").getByRole("button").click();
     await page.getByRole("button", { name: "Edit meeting title", exact: true }).click();
     await page.getByLabel("Meeting title", { exact: true }).fill(title);
     const renamed = page.waitForResponse(
@@ -642,9 +642,10 @@ test("reviewed summary versions create independent Tasks and private vault copie
       });
       expect(observation.promptBytes).toBeLessThanOrEqual(65536);
     }
-    // The minimal list shows the summary gist; receipt detail remains factual in its API.
+    // The home table shows no summary gist; receipt detail remains factual in its API.
     await page.getByRole("button", { name: "Meetings", exact: true }).click();
-    await expect(meetingRow(page, title)).toContainText(OUTPUT_FIXTURE_MANUAL);
+    await expect(meetingRow(page, title)).toBeVisible();
+    await expect(meetingRow(page, title)).not.toContainText(OUTPUT_FIXTURE_MANUAL);
     await expect(meetingRow(page, title)).not.toContainText("Indexed");
     const history = await page.request.post("/api/meetings/history/search", {
       data: { query: title, filter: "all", limit: 30 }

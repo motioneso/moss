@@ -173,6 +173,23 @@ Payloads are **metadata-only**: actor/resource IDs, job kind, idempotency key, s
 Fetch private content inside the worker through your repository (RLS-scoped) — never put it in
 the payload.
 
+### Lifecycle: disable, access loss, re-enable
+
+- When an admin disables an external module, the platform cancels every waiting job (state
+  `created` or `retry`) in the module's queues, whoever queued it (schedule, reconcile job,
+  manual run, or `ctx.jobs.enqueue`). Dead-letter queues are left alone.
+- A run already in progress finishes. The platform stops the module's worker first, which waits
+  for the run, and then sweeps again, so a run that fails after the disable does not leave a
+  retry behind. Its follow-on enqueues are refused.
+- When one user loses access (deactivated, deleted, or switched off for the module), that user's
+  waiting jobs are cancelled the same way and nobody else's are touched.
+- A package-drift auto-disable or a hash mismatch does not cancel anything.
+- Re-enable restores nothing. Schedules and reconcile jobs start again on their own. A cancelled
+  row keeps its job id, so its idempotency key stays used until the row ages out. Resume a
+  module-authored chain with a new key (for example one with a counter).
+- Learn what was lost from your own state. Your reconcile job runs on every re-enable and can
+  mark a half-finished plan stalled with a resume action. There is no lifecycle callback.
+
 ## 7. Data lifecycle: deletion and export
 
 Every new built-in module must declare `dataLifecycle` — this is how "delete my account" and "export my

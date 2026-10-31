@@ -1,3 +1,6 @@
+import { heartbeatSourceReadInputSchema } from "@moss/shared";
+
+import { authorizeCommitmentsHeartbeatRead, commitmentsHeartbeatOpenExecute } from "./heartbeat.js";
 import { commitmentPresentation, commitmentRoutePresentation } from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 import type { MossModuleManifest } from "@moss/module-sdk";
@@ -98,6 +101,19 @@ export const commitmentsModuleManifest: MossModuleManifest = {
   ],
   features: [
     {
+      id: "commitments.heartbeat_source",
+      description:
+        "Accepted commitments with a due date can appear in Moss check-ins (the Memory source). Check-ins read saved commitments only.",
+      errors: [
+        {
+          code: "commitments_heartbeat_source_unavailable",
+          class: "transient",
+          description:
+            "Memory could not be read for a check-in. Settings > Alerts shows Memory as unavailable and the next check tries again."
+        }
+      ]
+    },
+    {
       id: "commitments.chat_app_actions",
       description:
         "App actions read candidates, change their status or suppress them. Extraction remains unavailable through this path; candidate resolution currently returns unavailable rather than creating tasks or events."
@@ -123,6 +139,17 @@ export const commitmentsModuleManifest: MossModuleManifest = {
     }
   ],
   assistantTools: [
+    {
+      name: "commitments.heartbeatOpen",
+      description:
+        "Background heartbeat read. Lists the actor's accepted commitments that are due soon or recently overdue, with a change revision.",
+      permissionId: "commitments.view",
+      risk: "read",
+      content: "outside",
+      inputSchema: heartbeatSourceReadInputSchema,
+      authorizeBackgroundRead: authorizeCommitmentsHeartbeatRead,
+      execute: commitmentsHeartbeatOpenExecute
+    },
     {
       name: "commitments.list",
       description: "List commitment candidates extracted from your chats, notes, and email.",

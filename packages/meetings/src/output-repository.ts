@@ -295,13 +295,20 @@ export class MeetingOutputsRepository {
       .executeTakeFirst();
     return pending?.request_key ?? null;
   }
-  async reserve(db: DataContextDb, meetingId: string, requestKey: string, input: string) {
+  async reserve(
+    db: DataContextDb,
+    meetingId: string,
+    requestKey: string,
+    input: string,
+    expiresAt?: Date
+  ) {
     await db.db
       .insertInto("app.meeting_output_requests")
       .values({
         meeting_id: meetingId,
         request_key: requestKey,
         input_json: input,
+        ...(expiresAt ? { expires_at: expiresAt } : {}),
         ...projectMeetingRequestInput(input),
         result_json: null
       })

@@ -1,3 +1,4 @@
+import type { RecordingNoticeEnqueue } from "./recording-notice-jobs.js";
 import { isUuid, type DataContextRunner } from "@moss/db";
 import { scopedJobDatabase, sendJob, type PgBoss, type QueueDefinition } from "@moss/jobs";
 import { MeetingOutputService, type MeetingOutputGenerator } from "./output-service.js";
@@ -12,7 +13,7 @@ export const MEETING_STOP_SUMMARY_QUEUES: readonly QueueDefinition[] = [
     options: {
       retryLimit: 3,
       retryDelay: 60,
-      expireInSeconds: 180,
+      expireInSeconds: 660,
       deleteAfterSeconds: 3600,
       retentionSeconds: 1_209_600
     }
@@ -67,9 +68,16 @@ export function createManualMeetingSummaryEnqueue(boss: Pick<PgBoss, "send">) {
 export async function registerMeetingStopSummaryWorker(
   boss: PgBoss,
   dataContext: DataContextRunner,
-  generator: MeetingOutputGenerator
+  generator: MeetingOutputGenerator,
+  enqueueRecordingNotice?: RecordingNoticeEnqueue
 ): Promise<string[]> {
-  const service = new MeetingOutputService(dataContext, generator);
+  const service = new MeetingOutputService(
+    dataContext,
+    generator,
+    undefined,
+    undefined,
+    enqueueRecordingNotice
+  );
   const id = await boss.work<MeetingStopSummaryPayload>(
     MEETING_STOP_SUMMARY_QUEUE,
     { pollingIntervalSeconds: 2 },

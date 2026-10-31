@@ -180,13 +180,41 @@ describe("meeting history owner projection and indexed search", () => {
       .where("id", "in", meetingIds)
       .execute();
     const seen: string[] = [];
-    let before: { id: string; createdAt: string } | undefined;
+    let before: { id: string; dateAt: string } | undefined;
     do {
       const page = await search({ query: "sameinstantpagination", limit: 1, before });
       seen.push(...page.meetings.map((item) => item.id));
       before = page.nextCursor ?? undefined;
     } while (before);
     expect(seen).toEqual([...meetingIds].sort().reverse());
+  });
+  it("orders and pages by recorded date, and labels the added-date fallback", async () => {
+    const newer = await create("datedpagingmarker");
+    const older = await create("datedpagingmarker");
+    const undated = await create("datedpagingmarker");
+    for (const [meeting, recordedAt] of [
+      [newer, "2026-09-02T10:00:00.000Z"],
+      [older, "2026-09-01T10:00:00.000Z"]
+    ] as const)
+      await sql`INSERT INTO app.meeting_recording_metadata(meeting_id,owner_user_id,title_source,recorded_at)
+        VALUES(${meeting.id}::uuid,${ids.userA}::uuid,'user',${new Date(recordedAt)})`.execute(
+        bootstrap
+      );
+    const all = await search({ query: "datedpagingmarker", limit: 10 });
+    const dated = all.meetings.filter((item) => item.id !== undated.id);
+    expect(dated.map((item) => item.id)).toEqual([newer.id, older.id]);
+    expect(dated[0]?.date).toEqual({ at: "2026-09-02T10:00:00.000Z", source: "recorded" });
+    expect(all.meetings.find((item) => item.id === undated.id)?.date.source).toBe("added");
+    const seen: string[] = [];
+    let before: { id: string; dateAt: string } | undefined;
+    do {
+      const page = await search({ query: "datedpagingmarker", limit: 1, before });
+      seen.push(...page.meetings.map((item) => item.id));
+      before = page.nextCursor ?? undefined;
+    } while (before);
+    expect(new Set(seen).size).toBe(seen.length);
+    expect(seen).toContain(newer.id);
+    expect(seen.indexOf(newer.id)).toBeLessThan(seen.indexOf(older.id));
   });
   it("rolls back transcript and projection together, preserves safe-integer offsets, and cascades deletion", async () => {
     const meeting = await create("rollbackprojection");

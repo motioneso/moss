@@ -654,6 +654,12 @@ describe("MVP foundation schema catalog", () => {
         { version: "0339", name: "0339_memory_recording_lineage.sql" },
         { version: "0340", name: "0340_notes_recording_cleanup.sql" },
         { version: "0341", name: "0341_memory_recording_cleanup.sql" },
+        { version: "0342", name: "0342_chat_module_notices.sql" },
+        { version: "0343", name: "0343_chat_heartbeat.sql" },
+        { version: "0344", name: "0344_chat_heartbeat_unavailable_sources.sql" },
+        { version: "0345", name: "0345_chat_heartbeat_worker_publish.sql" },
+        { version: "0352", name: "0352_meeting_output_reservation_expiry.sql" },
+        { version: "0353", name: "0353_integration_classifier_scan.sql" },
         { version: "0354", name: "0354_module_page_audit_source.sql" }
       ]);
     } finally {

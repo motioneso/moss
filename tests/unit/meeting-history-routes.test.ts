@@ -49,7 +49,7 @@ describe("owner-authenticated history reads", () => {
     { query: "\0" },
     { query: 1 },
     { before: { id } },
-    { before: { id, createdAt: "2026-10-04T00:00:00.000Z", private: "private-validation-marker" } },
+    { before: { id, dateAt: "2026-10-04T00:00:00.000Z", private: "private-validation-marker" } },
     { "private-validation-marker": true }
   ])("rejects invalid schema without logging submitted names or values", async (payload) => {
     const { server, historyRepository, logs } = setup();

@@ -455,7 +455,9 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // loop above skips read tools before it ever reaches the switch).
     // #2809: +1 (briefings.rerun), granted_at_install. It queues one fresh run of the caller's
     // own briefing; earlier reports stay, so nothing is lost or sent anywhere.
-    expect(grantedAtInstall.length).toBe(44);
+    // Heartbeat slice 4: +1 (chat.heartbeatMute), granted_at_install. It only adds a mute on the
+    // caller's own check-ins, and Undo removes it.
+    expect(grantedAtInstall.length).toBe(45);
     // #3065: app.callAction is fail-closed at the static boundary; route policy is per call.
     expect(confirmAlways.length).toBe(11);
     expect(userPromotable.length).toBe(5);
@@ -483,7 +485,7 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // — 43 + 9 + 5 = 57 total. #2809 adds briefings.rerun (granted_at_install) — 44 + 9 + 5 = 58.
     // #2911 adds chat.deleteClassifierShadowRecords (confirm_always, destructive) — 44 + 10 + 5 = 59.
     // #3065 adds one fail-closed static generic transport declaration (60 total).
-    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(60);
+    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(61);
 
     expect(confirmAlways.sort()).toEqual([...PLANNED_CONFIRM_ALWAYS_TOOL_NAMES].sort());
     expect(userPromotable.sort()).toEqual(

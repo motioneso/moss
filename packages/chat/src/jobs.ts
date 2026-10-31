@@ -4,6 +4,19 @@ import {
   CHAT_SCHEDULED_READ_BOOKKEEPING_QUEUE_DEFINITION
 } from "./scheduled-reads/queue.js";
 import { CHAT_VOICE_REQUEST_QUEUE_DEFINITION } from "./voice-request-jobs.js";
+import type { HeartbeatGenerator } from "./heartbeat/generation.js";
+import {
+  CHAT_HEARTBEAT_NOTIFY_QUEUE_DEFINITION,
+  registerHeartbeatNotifyWorker
+} from "./heartbeat/notify.js";
+import {
+  CHAT_HEARTBEAT_BEAT_QUEUE_DEFINITION,
+  registerHeartbeatBeatWorker
+} from "./heartbeat/beat-job.js";
+import {
+  CHAT_HEARTBEAT_SWEEP_QUEUE_DEFINITION,
+  registerHeartbeatSweepWorker
+} from "./heartbeat/sweep.js";
 import {
   registerScheduledReadWorker,
   type ScheduledReadRunnerDeps
@@ -11,6 +24,7 @@ import {
 import { createHash } from "node:crypto";
 
 import type { FastifyBaseLogger } from "fastify";
+import type { Kysely } from "kysely";
 import type { PgBoss, WorkOptions } from "pg-boss";
 
 import {
@@ -20,7 +34,7 @@ import {
   parseAiApiKeyCredential
 } from "@moss/ai";
 import type { AiSecretCipher, GenerateChatInput, ProviderKind } from "@moss/ai";
-import type { DataContextDb, DataContextRunner, PreferencesPort } from "@moss/db";
+import type { DataContextDb, DataContextRunner, MossDatabase, PreferencesPort } from "@moss/db";
 import {
   createMemoryCandidateSignature,
   MemoryCandidatesRepository,
@@ -105,7 +119,10 @@ export const CHAT_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
   CHAT_DELIVER_REMINDER_QUEUE_DEFINITION,
   CHAT_SCHEDULED_READ_QUEUE_DEFINITION,
   CHAT_SCHEDULED_READ_BOOKKEEPING_QUEUE_DEFINITION,
-  CHAT_NOTIFY_REMINDER_QUEUE_DEFINITION
+  CHAT_NOTIFY_REMINDER_QUEUE_DEFINITION,
+  CHAT_HEARTBEAT_NOTIFY_QUEUE_DEFINITION,
+  CHAT_HEARTBEAT_SWEEP_QUEUE_DEFINITION,
+  CHAT_HEARTBEAT_BEAT_QUEUE_DEFINITION
 ];
 
 /**
@@ -493,6 +510,8 @@ export async function handleArchiveDayJob(
 export interface RegisterChatJobWorkersOptions {
   readonly scheduledReadGateway?: ScheduledReadRunnerDeps["gateway"];
   readonly scheduledReportGenerator?: ScheduledReadRunnerDeps["generateReport"];
+  /** Model call for check-ins. Without it beats record a quiet check and never message. */
+  readonly heartbeatGenerator?: HeartbeatGenerator;
   readonly reminderNotifications: NotificationsRepository;
   readonly embeddingProviderFactory: (scopedDb: DataContextDb) => Promise<EmbeddingProvider>;
   /**
@@ -509,6 +528,11 @@ export interface RegisterChatJobWorkersOptions {
    */
   readonly preferencesPort?: PreferencesPort;
   readonly workOptions?: WorkOptions;
+  /**
+   * Unscoped database handle for the heartbeat sweep, which lists due owner IDs across all
+   * owners. Without it the sweep does not start and no check-ins run.
+   */
+  readonly rootDb?: Kysely<MossDatabase>;
   /**
    * Structured logger for worker-path diagnostics (chat_extract_facts_failed).
    * Optional for back-compat; production injects a module-tagged child of the
@@ -646,8 +670,37 @@ export async function registerChatJobWorkers(
         )
       : null;
 
+  const heartbeatBeatWorkId = await registerHeartbeatBeatWorker(
+    boss,
+    dataContext,
+    {
+      preferences: preferencesPort,
+      gateway: options.scheduledReadGateway,
+      generate: options.heartbeatGenerator,
+      boss
+    },
+    options.workOptions
+  );
+  const heartbeatNotifyWorkId = await registerHeartbeatNotifyWorker(
+    boss,
+    dataContext,
+    options.reminderNotifications,
+    options.workOptions
+  );
+  if (!options.rootDb) {
+    options.logger?.warn(
+      "chat_heartbeat_sweep_not_started: no root database handle, so no check-ins will run"
+    );
+  }
+  const heartbeatSweepWorkId = options.rootDb
+    ? await registerHeartbeatSweepWorker(boss, options.rootDb)
+    : null;
+
   const workIds = [
     bookkeepingWorkId,
+    heartbeatBeatWorkId,
+    heartbeatNotifyWorkId,
+    ...(heartbeatSweepWorkId ? [heartbeatSweepWorkId] : []),
     ...(readWorkId ? [readWorkId] : []),
     embedWorkId,
     extractWorkId,

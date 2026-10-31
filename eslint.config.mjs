@@ -16,6 +16,7 @@ export default tseslint.config(
       "**/.turbo/**",
       "playwright-report/**",
       "test-results/**",
+      "docs/superpowers/specs/mockups/**",
       // Migration sidecars are frozen into applied checksums; never rewrite with --fix.
       "**/*.backfill.mjs",
       "Jarvis Design System/**",
@@ -25,6 +26,7 @@ export default tseslint.config(
       "docs/audits/**",
       // Frozen static design mockups: plain browser scripts, not app code.
       "docs/superpowers/mockups/**",
+      "docs/superpowers/specs/mockups/**",
       // #1326: unit-test fixtures mkdtemp() a ".tmp-*" directory directly in the repo
       // root (external-worker-runtime, external-module-invocation-budget,
       // module-sdk-worker) rather than os.tmpdir(); a concurrent lint run can otherwise
@@ -62,6 +64,19 @@ export default tseslint.config(
     },
     rules: {
       "@typescript-eslint/no-require-imports": "off"
+    }
+  },
+  {
+    // UAT host helpers are standalone CommonJS Node scripts.
+    files: ["scripts/uat-host/**/*.cjs"],
+    languageOptions: {
+      sourceType: "commonjs",
+      globals: { ...globals.node }
+    },
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+      "no-redeclare": ["error", { builtinGlobals: false }],
+      "@typescript-eslint/no-unused-vars": ["error", { args: "none" }]
     }
   },
   {

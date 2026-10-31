@@ -73,11 +73,13 @@
     "start:worker": "pnpm --filter @moss/worker start",
     "test:unit": "tsx scripts/test-unit.ts",
     "test:uat-seed": "vitest run tests/uat/seed",
+    "test:integration:3735": "tsx scripts/test-integration.ts tests/integration/module-job-sweep.test.ts",
     "test:integration:3777": "tsx scripts/test-integration.ts tests/integration/meeting-recording-type-config.test.ts tests/integration/module-data-lifecycle-cascade.test.ts tests/integration/meeting-account-export.test.ts tests/integration/meeting-capture.test.ts tests/integration/meeting-recording-identity.test.ts tests/integration/meeting-recording-imports.test.ts tests/integration/meeting-recording-uploads.test.ts tests/integration/meeting-minimal.test.ts tests/integration/meeting-outputs.test.ts",
     "test:integration:ring-hold": "tsx scripts/test-integration.ts tests/integration/meeting-recording-imports.test.ts tests/integration/meeting-recording-uploads.test.ts tests/integration/meeting-voice-recordings.test.ts",
     "test:integration:3601": "tsx scripts/test-integration.ts tests/integration/ai-voice-endpoint.test.ts tests/integration/ai-capability-routes.test.ts tests/integration/ai-transcription.test.ts",
     "test:recording-memory": "tsx scripts/test-integration.ts tests/integration/recording-memory tests/integration/recording-mutation-admission.test.ts tests/integration/managed-source-capture.test.ts tests/integration/memory-correction-sources.test.ts tests/integration/memory-version-retirement.test.ts tests/integration/memory-derivative-eligibility.test.ts tests/integration/memory-graph tests/integration/memory-forget-approval.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/module-data-lifecycle-cascade.test.ts",
     "test:integration": "tsx scripts/test-integration.ts",
+    "test:integration:heartbeat-source-reads": "tsx scripts/test-integration.ts tests/integration/heartbeat-source-reads.test.ts tests/integration/3151-scheduled-read.test.ts tests/integration/3142a-responsibility-agreement.test.ts",
     "test:integration:managed-source-lifecycle": "tsx scripts/test-integration.ts tests/integration/recording-note-contributions.test.ts tests/integration/managed-note-indexing.test.ts tests/integration/managed-note-worker-publication.test.ts tests/integration/managed-source-lifecycle.test.ts tests/integration/vault-managed-mutations.test.ts tests/integration/meeting-account-export.test.ts tests/integration/module-data-lifecycle-cascade.test.ts tests/integration/foundation-schema-catalog.test.ts",
     "test:integration:managed-notes": "tsx scripts/test-integration.ts tests/integration/managed-source-lifecycle.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/module-data-lifecycle-cascade.test.ts tests/integration/data-export.test.ts tests/integration/data-export-personal-records.test.ts tests/integration/audit-source-account-export.test.ts tests/integration/meeting-account-export.test.ts tests/integration/account-self-deletion.test.ts",
     "test:integration:managed-vault-lock": "tsx scripts/test-integration.ts tests/integration/vault-managed-mutations.test.ts",
@@ -165,6 +167,9 @@
     "test:spike:pgboss": "vitest run spikes/pg-boss-rls/test/pg-boss-rls.test.ts",
     "prepare": "git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git config core.hooksPath .githooks || true",
     "test:uat:2981-meetings": "tsx tests/uat/run-meetings-uat.ts",
+    "test:integration:heartbeat-settings": "tsx scripts/test-integration.ts tests/integration/chat-heartbeat-settings.test.ts",
+    "test:integration:heartbeat-beat": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/chat-heartbeat-beat.test.ts",
+    "test:uat:heartbeat": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts heartbeat-settings.uat.spec.ts",
     "test:uat:3274": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3274-meeting-new-side-chat.uat.spec.ts 3274-p1-helper-real.uat.spec.ts 1089-1090-chat-drawer-private.uat.spec.ts",
     "test:uat:2981-real-providers": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 1909-sports-public-source-completion.uat.spec.ts notes-default-retrieval.uat.spec.ts notes-path-recheck.uat.spec.ts workshop-chat-handover.uat.spec.ts",
     "test:uat:3125-real": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3125-main-chat-real.uat.spec.ts",
@@ -246,7 +251,8 @@
     "test:integration:finance-bill-entry": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-bill-entry.test.ts tests/integration/finance-bills.test.ts tests/integration/module-storage-rpc.test.ts",
     "test:integration:finance-bill-entry-negative": "pnpm build:app-map && MOSS_FINANCE_BILL_ENTRY_RLS_NEGATIVE=1 tsx scripts/test-integration.ts tests/integration/finance-bill-entry.test.ts",
     "test:integration:finance-bill-entry-live": "pnpm build:app-map && pnpm --filter @moss/web build && MOSS_FINANCE_LIVE=1 tsx scripts/test-integration.ts tests/integration/finance-page-live.test.ts --testNamePattern 'reviews and confirms the working currency|records a due bill expense'",
-    "test:integration:finance-bill-entry-confirm-negative": "pnpm build:app-map && pnpm --filter @moss/web build && MOSS_FINANCE_LIVE=1 MOSS_FINANCE_BILL_ENTRY_CONFIRM_NEGATIVE=1 tsx scripts/test-integration.ts tests/integration/finance-page-live.test.ts --testNamePattern 'reviews and confirms the working currency|records a due bill expense'"
+    "test:integration:finance-bill-entry-confirm-negative": "pnpm build:app-map && pnpm --filter @moss/web build && MOSS_FINANCE_LIVE=1 MOSS_FINANCE_BILL_ENTRY_CONFIRM_NEGATIVE=1 tsx scripts/test-integration.ts tests/integration/finance-page-live.test.ts --testNamePattern 'reviews and confirms the working currency|records a due bill expense'",
+    "test:recording-notices": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/recording-module-notices.test.ts tests/integration/chat-reminder-live-arrival.test.ts tests/integration/chat-origin-action-history.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/module-data-lifecycle-cascade.test.ts tests/integration/data-export.test.ts && vitest run tests/unit/chat-stream-record-identity.test.tsx tests/unit/chat-reminder-live-arrival.test.ts tests/unit/chat-background-message-routing.test.ts tests/unit/chat-action-hydration.test.tsx tests/unit/chat-drawer-main-and-live-turn-recovery.test.tsx tests/unit/chat-drawer-activity.test.tsx tests/unit/meeting-manifest.test.ts tests/unit/module-registry-meeting-summary-worker.test.ts"
   },
   "dependencies": {
     "@fastify/helmet": "^13",

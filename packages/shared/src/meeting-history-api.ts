@@ -1,6 +1,11 @@
 import { recordingTypeIdSchema } from "./meeting-recording-api.js";
-import type { MeetingRecordCursor } from "./meeting-record-api.js";
 import type { MeetingExportReceipt } from "./meeting-export-api.js";
+
+/** Pages by the effective history date (recorded time, else added time), not record creation. */
+export interface MeetingHistoryCursor {
+  readonly id: string;
+  readonly dateAt: string;
+}
 
 export type MeetingHistoryFilter =
   | "all"
@@ -13,16 +18,18 @@ export interface SearchMeetingHistoryInput {
   readonly query?: string;
   readonly filter?: MeetingHistoryFilter;
   readonly limit?: number;
-  readonly before?: MeetingRecordCursor;
+  readonly before?: MeetingHistoryCursor;
 }
 export interface MeetingHistoryPage {
   readonly meetings: readonly MeetingHistoryItem[];
-  readonly nextCursor: MeetingRecordCursor | null;
+  readonly nextCursor: MeetingHistoryCursor | null;
 }
 /** Meeting-owned receipts only. No native capture, current Task, or filesystem verification. */
 export interface MeetingHistoryItem {
   readonly id: string;
   readonly title: string;
+  /** Recorded time when known, else the added time; source says which. */
+  readonly date: { readonly at: string; readonly source: "recorded" | "added" };
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly recording?: {
@@ -75,10 +82,10 @@ export interface MeetingHistoryItem {
 const cursor = {
   type: "object",
   additionalProperties: false,
-  required: ["id", "createdAt"],
+  required: ["id", "dateAt"],
   properties: {
     id: { type: "string", format: "uuid" },
-    createdAt: { type: "string", format: "date-time" }
+    dateAt: { type: "string", format: "date-time" }
   }
 } as const;
 export const searchMeetingHistorySchema = {

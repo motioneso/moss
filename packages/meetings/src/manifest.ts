@@ -49,7 +49,8 @@ export const meetingsModuleManifest = {
       "sql/0326_meeting_import_summaries.sql",
       "sql/0328_meeting_voice_recordings.sql",
       "sql/0329_meeting_recording_uploads.sql",
-      "sql/0335_meeting_recording_identity.sql"
+      "sql/0335_meeting_recording_identity.sql",
+      "sql/0352_meeting_output_reservation_expiry.sql"
     ],
     migrationDirectories: ["packages/meetings/sql"],
     ownedTables: [
@@ -103,7 +104,7 @@ export const meetingsModuleManifest = {
       icon: "mic",
       order: 36,
       description:
-        "Add a pasted recording without a Mac; review summaries, types, personal/work labels and transcripts. Live recording needs a linked Mac and configured transcription.",
+        "Meetings home table with title, recorded or added date, length, attendees and type; search titles, notes and transcripts or add a pasted recording without a Mac. Live recording needs a linked Mac and configured transcription.",
       permissionId: "meetings.read"
     }
   ],
@@ -120,6 +121,7 @@ export const meetingsModuleManifest = {
     }
   ],
   jobs: [
+    { queueName: "meetings.recording-notice", metadataOnly: true },
     { queueName: "meetings.stop-summary", metadataOnly: true },
     { queueName: "meetings.recording-import", metadataOnly: true }
   ],

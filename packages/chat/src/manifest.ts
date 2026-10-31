@@ -1,3 +1,5 @@
+import { collectModuleNoticeExport } from "./module-notice-export.js";
+import { MODULE_NOTICE_FEATURE } from "./module-notice-feature.js";
 import { approvalFeatures } from "./approval-features.js";
 import { userDataVisualFeature } from "./visual/manifest.js";
 import { REMINDER_CONTROL_FEATURE, REMINDER_CONTROL_ROUTES } from "./reminders/manifest.js";
@@ -20,6 +22,14 @@ import {
 } from "@moss/shared";
 
 import { reminderFeatures } from "./reminders/features.js";
+import {
+  HEARTBEAT_FEATURE,
+  HEARTBEAT_MESSAGE_FEATURE,
+  HEARTBEAT_RATING_FEATURE,
+  HEARTBEAT_ROUTES,
+  HEARTBEAT_STOP_FEATURE
+} from "./heartbeat/manifest.js";
+import { chatHeartbeatMuteTool } from "./heartbeat/mute-command.js";
 import { chatListTodaysTurnsExecute } from "./tools.js";
 import { chatGetCurrentViewExecute, chatGetCurrentViewOutputSchema } from "./current-view-tool.js";
 import { chatGetCurrentTimeExecute, chatGetCurrentTimeOutputSchema } from "./current-time-tool.js";
@@ -101,13 +111,19 @@ export const chatModuleManifest = {
       "sql/0323_chat_unread_messages.sql",
       "sql/0324_chat_scheduled_read_attempts.sql",
       "sql/0327_chat_voice_requests.sql",
-      "sql/0333_chat_automatic_voice_inputs.sql"
+      "sql/0333_chat_automatic_voice_inputs.sql",
+      "sql/0342_chat_module_notices.sql",
+      "sql/0343_chat_heartbeat.sql",
+      "sql/0344_chat_heartbeat_unavailable_sources.sql",
+      "sql/0345_chat_heartbeat_worker_publish.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
       "app.chat_threads",
       "app.chat_messages",
       "app.chat_unread_messages",
+      "app.chat_module_notices",
+      "app.chat_module_notice_intents",
       "app.chat_user_memory_settings",
       "app.chat_skills",
       "app.chat_classifier_shadow_records",
@@ -120,7 +136,13 @@ export const chatModuleManifest = {
       "app.chat_scheduled_reads",
       "app.chat_reminder_quiet_allowances",
       "app.chat_reminder_quiet_proposals",
-      "app.chat_responsibility_proposals"
+      "app.chat_responsibility_proposals",
+      "app.heartbeat_settings",
+      "app.heartbeat_source_checkpoints",
+      "app.heartbeat_occurrences",
+      "app.heartbeat_findings",
+      "app.heartbeat_mutes",
+      "app.heartbeat_allowance_charges"
     ]
   },
   permissions: [
@@ -158,6 +180,7 @@ export const chatModuleManifest = {
   ],
   dataLifecycle: {
     exportSections: [
+      { key: "moduleNotices", displayName: "Module notices", collect: collectModuleNoticeExport },
       { key: "voiceRequests", displayName: "Voice requests", collect: collectVoiceRequestExport }
     ],
     deletion: {
@@ -167,6 +190,8 @@ export const chatModuleManifest = {
           "app.chat_threads",
           "app.chat_messages",
           "app.chat_unread_messages",
+          "app.chat_module_notices",
+          "app.chat_module_notice_intents",
           "app.chat_skills",
           "app.chat_classifier_shadow_records",
           "app.chat_conversation_provenance",
@@ -176,7 +201,13 @@ export const chatModuleManifest = {
           "app.chat_scheduled_reads",
           "app.chat_reminder_quiet_allowances",
           "app.chat_reminder_quiet_proposals",
-          "app.chat_responsibility_proposals"
+          "app.chat_responsibility_proposals",
+          "app.heartbeat_settings",
+          "app.heartbeat_source_checkpoints",
+          "app.heartbeat_occurrences",
+          "app.heartbeat_findings",
+          "app.heartbeat_mutes",
+          "app.heartbeat_allowance_charges"
         ].map((table) => ({ table, countPredicate: "owner_user_id = $1::uuid" })),
         { table: "app.chat_user_memory_settings", countPredicate: "user_id = $1::uuid" },
         {
@@ -192,6 +223,7 @@ export const chatModuleManifest = {
   },
   visualTemplates: [reminderSummaryTemplate],
   features: [
+    MODULE_NOTICE_FEATURE,
     {
       id: "chat.domain_read_resolution",
       description:
@@ -217,6 +249,10 @@ export const chatModuleManifest = {
       featureFlagId: "chat.module"
     },
     REMINDER_CONTROL_FEATURE,
+    HEARTBEAT_FEATURE,
+    HEARTBEAT_MESSAGE_FEATURE,
+    HEARTBEAT_STOP_FEATURE,
+    HEARTBEAT_RATING_FEATURE,
     {
       id: "chat.current_view_grounding",
       description:
@@ -549,6 +585,7 @@ export const chatModuleManifest = {
       permissionId: "chat.view"
     },
     ...REMINDER_CONTROL_ROUTES,
+    ...HEARTBEAT_ROUTES,
     {
       method: "GET",
       path: "/api/chat/quiet-hours-allowances",
@@ -851,6 +888,7 @@ export const chatModuleManifest = {
   assistantTools: [
     chatPresentTool,
     reminderSummaryTool,
+    chatHeartbeatMuteTool,
     {
       name: "chat.listTodaysTurns",
       description: "List today's non-incognito chat turns for the active actor.",

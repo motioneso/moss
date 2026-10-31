@@ -9,7 +9,7 @@ import type { InitializeResponse } from "@agentclientprotocol/sdk";
 
 import { getAcpProviderRow, type AcpProviderKind } from "./providers.js";
 
-export type AcpProfile = "chat" | "workshop" | "unattended";
+export type AcpProfile = "chat" | "workshop" | "unattended" | "no-tools";
 /** Pre-chat-first name; kept so history-era imports keep resolving. */
 export type AcpSurface = AcpProfile;
 
@@ -30,10 +30,19 @@ export class AcpCapabilityError extends Error {
  * marked unavailable with its reason until slice 2.
  */
 export function checkAcpProfile(profile: AcpProfile, kind: AcpProviderKind): void {
+  const row = getAcpProviderRow(kind);
+  if (profile === "no-tools") {
+    if (!row.noToolsReady) {
+      throw new AcpCapabilityError(
+        profile,
+        row.noToolsBlockReason ?? `the ${kind} provider is not ready for the no-tools profile.`
+      );
+    }
+    return;
+  }
   if (profile !== "chat") {
     throw new AcpCapabilityError(profile, `support for the ${profile} profile is not built yet.`);
   }
-  const row = getAcpProviderRow(kind);
   if (!row.chatReady) {
     throw new AcpCapabilityError(
       profile,
@@ -58,6 +67,7 @@ export function checkAgentCapabilities(profile: AcpProfile, response: Initialize
       `it speaks protocol version ${response.protocolVersion}, and this client is pinned to version 1.`
     );
   }
+  if (profile === "no-tools") return;
   if (caps.mcpCapabilities?.http !== true) {
     throw new AcpCapabilityError(
       profile,

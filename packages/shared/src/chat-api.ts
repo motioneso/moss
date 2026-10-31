@@ -1,6 +1,11 @@
+import {
+  chatModuleNoticeOriginSchema,
+  type ChatModuleNoticeOriginV1
+} from "./module-notice-api.js";
 import type { AiCapabilityRouteReason, AiConfiguredModelDto, AiModelCapability } from "./ai-api.js";
 import { visualReplySchema } from "./visual-chat-schema.js";
 import type { VisualReplyV1 } from "./visual-chat.js";
+import { chatHeartbeatOriginSchema, type ChatHeartbeatOriginV1 } from "./chat-heartbeat-origin.js";
 import type { SourceFreshnessV1 } from "./freshness-types.js";
 import type { MeetingChatCoverage } from "./meeting-chat-api.js";
 import type { WorkflowApprovalStatusDto } from "./workflows-api.js";
@@ -40,6 +45,8 @@ export interface ChatActivityEventDto {
   readonly durationMs?: number;
   readonly decidedBy?: "person" | "policy" | "timeout" | "cancelled";
   readonly reason?: string;
+  /** Kept only for tools whose inline card must survive a reload (the heartbeat mute pill). */
+  readonly result?: Record<string, unknown>;
 }
 
 export interface ChatThreadDto {
@@ -208,6 +215,7 @@ export interface ActionRequestDetails {
 }
 
 export interface TranscriptRecord {
+  readonly origin?: ChatTurnOriginV1;
   readonly visualState?: "preparing" | "clear";
   readonly visualReply?: VisualReplyV1;
   readonly visualFallbackText?: string;
@@ -361,7 +369,13 @@ export interface ChatReminderOriginV1 {
   readonly late?: boolean;
 }
 
-export type ChatTurnOriginV1 = ChatClassifierGateOriginV1 | ChatReminderOriginV1;
+export type { ChatHeartbeatOriginV1 };
+
+export type ChatTurnOriginV1 =
+  | ChatClassifierGateOriginV1
+  | ChatReminderOriginV1
+  | ChatModuleNoticeOriginV1
+  | ChatHeartbeatOriginV1;
 
 export type MemoryCorrectionReasonDto = "rejected" | "corrected";
 export type MemoryCorrectionSourceDto = "chat" | "pattern-reject";
@@ -599,7 +613,8 @@ const chatActivityEventSchema = {
     toolCallId: { type: "string" },
     durationMs: { type: "number" },
     decidedBy: { type: "string", enum: ["person", "policy", "timeout", "cancelled"] },
-    reason: { type: "string" }
+    reason: { type: "string" },
+    result: { type: "object", additionalProperties: true }
   }
 } as const;
 
@@ -651,6 +666,7 @@ const chatModelRouteSchema = {
  */
 const chatTurnOriginSchema = {
   anyOf: [
+    chatModuleNoticeOriginSchema,
     {
       type: "object",
       additionalProperties: false,
@@ -696,7 +712,8 @@ const chatTurnOriginSchema = {
         reminderState: { type: "string" },
         late: { type: "boolean" }
       }
-    }
+    },
+    chatHeartbeatOriginSchema
   ]
 } as const;
 

@@ -836,7 +836,7 @@ export class RpcAcpTunnel implements AcpTunnel {
     projectId: string,
     providerKind: AcpProviderKind,
     userId: string,
-    profile: "chat" | "workshop",
+    profile: "chat" | "workshop" | "no-tools",
     personaText?: string
   ) {
     const params: RpcAcpSpawnParams = {

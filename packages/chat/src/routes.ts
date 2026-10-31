@@ -1,3 +1,7 @@
+import {
+  registerModuleNoticeArrivalLifecycle,
+  type ModuleNoticeArrivalDependencies
+} from "./module-notice-arrival.js";
 import type { MemoryGraphRepository } from "@moss/memory";
 import { createScheduledReadResolver } from "./scheduled-reads/generation.js";
 import { registerActionNotificationLifecycle } from "./action-notification-lifecycle.js";
@@ -94,6 +98,7 @@ import { registerChatAttachmentRoutes } from "./attachments-routes.js";
 import { ChatAttachmentsService } from "./attachments-service.js";
 import { ChatRepository } from "./repository.js";
 import { registerScheduledTaskRoutes } from "./reminders/routes.js";
+import { registerHeartbeatRoutes } from "./heartbeat/settings-routes.js";
 import { registerChatUnreadRoutes } from "./unread-routes.js";
 import { registerVoiceRequestRuntime } from "./voice-request-runtime.js";
 import type { VoiceRequestService } from "./voice-request-service.js";
@@ -131,6 +136,7 @@ export {
 } from "./gateway-services.js";
 
 export interface ChatRoutesDependencies {
+  readonly moduleNoticeArrival?: ModuleNoticeArrivalDependencies;
   readonly meetingChat?: MeetingChatData;
   readonly rootDb: Kysely<MossDatabase>;
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
@@ -607,6 +613,11 @@ export function registerChatRoutes(
 
   registerVoiceRequestRuntime(server, dependencies, runtime);
 
+  if (dependencies.moduleNoticeArrival) {
+    const { manager } = runtime;
+    registerModuleNoticeArrivalLifecycle(server, { ...dependencies.moduleNoticeArrival, manager });
+  }
+
   registerReminderArrivalLifecycle(server, {
     connectionString: dependencies.reminderArrivalConnectionString,
     dataContext: dependencies.dataContext,
@@ -686,6 +697,11 @@ export function registerChatRoutes(
   });
 
   registerScheduledTaskRoutes(server, dependencies);
+  registerHeartbeatRoutes(server, {
+    resolveAccessContext: dependencies.resolveAccessContext,
+    dataContext: dependencies.dataContext,
+    preferences: dependencies.chatPreferences ?? new PreferencesRepository()
+  });
   registerChatUnreadRoutes(server, dependencies);
 
   registerChatSkillsRoutes(
@@ -707,6 +723,9 @@ export function registerChatRoutes(
         const threads = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
           repository.listThreads(scopedDb, surface)
         );
+        const hasMain = threads.some((thread) => thread.is_main && !thread.incognito);
+        if (surface === DEFAULT_CHAT_SURFACE && hasMain)
+          await dependencies.moduleNoticeArrival?.notices.recoverPending(accessContext);
         return { threads: threads.map(serializeThread) };
       } catch (error) {
         return handleRouteError(error, reply);
@@ -721,6 +740,8 @@ export function registerChatRoutes(
       try {
         const access = await dependencies.resolveAccessContext(request);
         const surface = readRouteSurface(request.query);
+        if (surface === DEFAULT_CHAT_SURFACE)
+          await dependencies.moduleNoticeArrival?.notices.recoverPending(access);
         const messages = await dependencies.dataContext.withDataContext(
           access,
           async (scopedDb) => {

@@ -1,3 +1,6 @@
+import { RecordingMetadataRepository } from "./recording-metadata.js";
+import { recordingSideReviewVersion } from "./recording-notice-source.js";
+import type { RecordingNoticeEnqueue } from "./recording-notice-jobs.js";
 import { MeetingStopSummaryRepository } from "./stop-summary-repository.js";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import type {
@@ -27,7 +30,8 @@ export class MeetingOutputService {
     private readonly dataContext: Pick<DataContextRunner, "withDataContext">,
     private readonly generator: MeetingOutputGenerator,
     private readonly repository = new MeetingOutputsRepository(),
-    private readonly stopSummaries = new MeetingStopSummaryRepository(undefined, repository)
+    private readonly stopSummaries = new MeetingStopSummaryRepository(undefined, repository),
+    private readonly enqueueRecordingNotice?: RecordingNoticeEnqueue
   ) {}
 
   async generate(
@@ -107,7 +111,15 @@ export class MeetingOutputService {
       });
     if (!inputs.personalNotes.trim() && !inputs.transcript?.segments.length)
       throw new MeetingOutputError("meeting_output_evidence_unavailable", 400);
-    await this.repository.reserve(db, meetingId, input.requestKey, encoded);
+    // A summary can take several model calls. The reservation must outlive the
+    // generation deadline below, or a finished run is discarded as interrupted.
+    await this.repository.reserve(
+      db,
+      meetingId,
+      input.requestKey,
+      encoded,
+      new Date(Date.now() + 660_000)
+    );
     return { inputs };
   }
 
@@ -135,7 +147,7 @@ export class MeetingOutputService {
     try {
       // Transport must honor this deadline. It must resolve live routing/credential state
       // itself and reject tool-capable transports; the service never retries or falls back.
-      const signal = AbortSignal.timeout(110000);
+      const signal = AbortSignal.timeout(600000);
       let rejectAbort: (() => void) | undefined;
       const aborted = new Promise<never>((_resolve, reject) => {
         rejectAbort = () => reject(new MeetingOutputError("meeting_output_timed_out"));
@@ -196,6 +208,16 @@ export class MeetingOutputService {
         });
         if (!stale && inputs.recording && validated.recording) {
           await this.repository.applyRecording(db, inputs, validated.recording, artifact.version);
+          if (validated.recording.confidence < 0.8 && this.enqueueRecordingNotice) {
+            const currentMetadata = await new RecordingMetadataRepository().get(db, meetingId);
+            if (!currentMetadata) throw new Error("Recording metadata unavailable");
+            await this.enqueueRecordingNotice(db, {
+              actorUserId: actor.actorUserId,
+              resourceId: meetingId,
+              sourceVersion: recordingSideReviewVersion(currentMetadata)!,
+              idempotencyKey: input.requestKey
+            });
+          }
         }
         const outcome = { status: "saved" as const, artifact, replayed: false };
         await this.repository.finish(db, meetingId, input.requestKey, outcome);

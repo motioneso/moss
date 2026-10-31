@@ -188,7 +188,7 @@ describe("minimal list uses direct navigation and retains denial boundaries", ()
     await flush();
     const row = renderer!.root
       .findAllByType("button")
-      .find((node) => String(node.props.className).includes("meetings-history-row"));
+      .find((node) => node.children.join("") === second.title);
     expect(row).toBeDefined();
     await act(async () => row!.props.onClick());
     expect(onOpen).toHaveBeenCalledWith(second.id);

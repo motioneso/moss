@@ -1,3 +1,5 @@
+import { registerRecordingNoticeWorker, RECORDING_NOTICE_QUEUES } from "@moss/meetings";
+import { createRecordingNoticeRuntime } from "./recording-notice-runtime.js";
 import {
   createManagedDeletionPreparation,
   createMeetingDeletionPort
@@ -7,9 +9,10 @@ import { installBuiltInVisualTemplates } from "@moss/shared";
 import { createRecordingImportRuntime } from "./recording-import-runtime.js";
 export { createRecordingImportWorkerRuntime } from "./recording-import-runtime.js";
 export { createVoiceRequestWorkerRuntime } from "./voice-request-worker-runtime.js";
-import { createScheduledReportGenerator } from "@moss/chat";
+import { createHeartbeatGenerator, createScheduledReportGenerator } from "@moss/chat";
 import { SessionTokenRegistry, ConfirmationRegistry } from "@moss/ai";
 import { createConstrainedCliReadinessProbe } from "./constrained-cli-readiness.js";
+import { createAcpNoToolsReadinessProbe } from "./acp-no-tools-readiness.js";
 export { createConstrainedCliReadinessProbe } from "./constrained-cli-readiness.js";
 import {
   createMeetingCaptureRuntime,
@@ -190,6 +193,7 @@ import {
   createChatFeedbackTargetVerifier,
   createCliStructuredAdapterFactory,
   createConstrainedCliStructuredAdapterFactory,
+  createAcpNoToolsStructuredAdapterFactoryForConnection,
   selectEngineFactory,
   createAcpOneShotEngineFactory,
   registerChatJobWorkers,
@@ -798,6 +802,14 @@ export interface BuiltInRouteDependencies {
     signal?: AbortSignal,
     providerKind?: AiProviderKind
   ) => Promise<ConstrainedCliReadiness>;
+  readonly createAcpCliStructuredAdapter?: ReturnType<
+    typeof createAcpNoToolsStructuredAdapterFactoryForConnection
+  >;
+  readonly probeAcpCli?: (
+    actorUserId: string,
+    signal?: AbortSignal,
+    providerKind?: AiProviderKind
+  ) => Promise<ConstrainedCliReadiness>;
   /**
    * Bounded, live onboarding probes (Phase 2). Built inside registerBuiltInApiRoutes (sync,
    * no boot-time probing) and forwarded to the settings module so it keeps no @moss/ai /
@@ -876,6 +888,8 @@ export interface BuiltInRouteDependencies {
 export interface BuiltInWorkerDependencies {
   readonly createConstrainedCliStructuredAdapter?: BuiltInRouteDependencies["createConstrainedCliStructuredAdapter"];
   readonly probeConstrainedCli?: BuiltInRouteDependencies["probeConstrainedCli"];
+  readonly createAcpCliStructuredAdapter?: BuiltInRouteDependencies["createAcpCliStructuredAdapter"];
+  readonly probeAcpCli?: BuiltInRouteDependencies["probeAcpCli"];
   readonly rootDb: Kysely<MossDatabase>;
   readonly dataContext: DataContextRunner;
   readonly focusSignals?: BuiltInRouteDependencies["focusSignals"];
@@ -917,7 +931,10 @@ export interface BuiltInWorkerDependencies {
 export function createWorkerMeetingSummaryCli(env: NodeJS.ProcessEnv = process.env): {
   readonly dependencies: Pick<
     BuiltInWorkerDependencies,
-    "createConstrainedCliStructuredAdapter" | "probeConstrainedCli"
+    | "createConstrainedCliStructuredAdapter"
+    | "probeConstrainedCli"
+    | "createAcpCliStructuredAdapter"
+    | "probeAcpCli"
   >;
   close(): void;
 } {
@@ -928,7 +945,11 @@ export function createWorkerMeetingSummaryCli(env: NodeJS.ProcessEnv = process.e
       createConstrainedCliStructuredAdapter: runtime
         ? createConstrainedCliStructuredAdapterFactory(runtime.factory)
         : undefined,
-      probeConstrainedCli: createConstrainedCliReadinessProbe(() => runtime?.connection)
+      probeConstrainedCli: createConstrainedCliReadinessProbe(() => runtime?.connection),
+      createAcpCliStructuredAdapter: runtime?.connection
+        ? createAcpNoToolsStructuredAdapterFactoryForConnection(() => runtime?.connection)
+        : undefined,
+      probeAcpCli: createAcpNoToolsReadinessProbe(() => runtime?.connection)
     },
     close: () => runtime?.connection?.close()
   };
@@ -2364,6 +2385,16 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     queueDefinitions: CHAT_QUEUE_DEFINITIONS,
     registerRoutes: (server, deps) =>
       registerChatRoutes(server, {
+        moduleNoticeArrival: {
+          connectionString: deps.appConnectionString,
+          notices: createRecordingNoticeRuntime({
+            dataContext: deps.dataContext,
+            isMeetingsAvailable: async (access) =>
+              (await deps.resolveActiveModules(access.actorUserId)).some(
+                (module) => module.id === "meetings"
+              )
+          }).notices
+        },
         meetingChat: createMeetingChatData(deps),
         memoryGraphRepository: new MemoryGraphRepository(
           createRecordingFactAuthority(deps.dataContext)
@@ -2436,6 +2467,10 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           dataContext: deps.dataContext,
           createCliStructuredAdapter: createCliStructuredAdapterFactory()
         }),
+        heartbeatGenerator: createHeartbeatGenerator({
+          dataContext: deps.dataContext,
+          createCliStructuredAdapter: createCliStructuredAdapterFactory()
+        }),
         scheduledReadGateway: new AssistantToolGateway({
           runner: deps.dataContext,
           repository: new AiRepository(),
@@ -2463,6 +2498,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         },
         createConstrainedCliStructuredAdapter: deps.createConstrainedCliStructuredAdapter,
         probeConstrainedCli: deps.probeConstrainedCli,
+        rootDb: deps.rootDb,
         logger: deps.logger ? createModuleLogger(deps.logger, "chat") : undefined
       })
   },
@@ -3030,6 +3066,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     sqlMigrationDirectories: [meetingsModuleSqlMigrationDirectory],
     queueDefinitions: [
       ...MEETING_STOP_SUMMARY_QUEUES,
+      ...RECORDING_NOTICE_QUEUES,
       ...MEETING_CAPTURE_MAINTENANCE_QUEUES,
       ...RECORDING_IMPORT_QUEUES
     ],
@@ -3064,6 +3101,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       const outputRuntime = createMeetingOutputRuntime(deps);
       registerMeetingOutputRoutes(server, {
         ...outputRuntime,
+        enqueueRecordingNotice: createRecordingNoticeRuntime({
+          dataContext: deps.dataContext,
+          isMeetingsAvailable: async (access) =>
+            (await deps.resolveActiveModules(access.actorUserId)).some(
+              (module) => module.id === "meetings"
+            )
+        }).enqueue(deps.boss),
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext
       });
@@ -3079,20 +3123,34 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         )
       });
     },
-    registerWorkers: (boss, deps) =>
-      registerMeetingStopSummaryWorker(
+    registerWorkers: async (boss, deps) => {
+      const resolveActiveModules = createActiveModulesResolver({
+        dataContext: deps.dataContext,
+        manifests: getBuiltInModuleManifests
+      });
+      const notices = createRecordingNoticeRuntime({
+        dataContext: deps.dataContext,
+        isMeetingsAvailable: async (access) =>
+          (await resolveActiveModules(access.actorUserId)).some(
+            (module) => module.id === "meetings"
+          )
+      });
+      const summaryWorkers = await registerMeetingStopSummaryWorker(
         boss,
         deps.dataContext,
         createMeetingOutputRuntime({
           dataContext: deps.dataContext,
           createConstrainedCliStructuredAdapter: deps.createConstrainedCliStructuredAdapter,
           probeConstrainedCli: deps.probeConstrainedCli,
-          resolveActiveModules: createActiveModulesResolver({
-            dataContext: deps.dataContext,
-            manifests: getBuiltInModuleManifests
-          })
-        }).generator
-      )
+          createAcpCliStructuredAdapter: deps.createAcpCliStructuredAdapter,
+          probeAcpCli: deps.probeAcpCli,
+          resolveActiveModules
+        }).generator,
+        notices.enqueue(boss)
+      );
+      const noticeWorkers = await registerRecordingNoticeWorker(boss, notices.publishSideReview);
+      return [...summaryWorkers, ...noticeWorkers];
+    }
   },
   {
     manifest: scratchpadModuleManifest,
@@ -3907,6 +3965,9 @@ export function registerBuiltInApiRoutes(
       structuredChatEngineFactory
     ),
     probeConstrainedCli: createConstrainedCliReadinessProbe(getRpcConnection),
+    createAcpCliStructuredAdapter:
+      createAcpNoToolsStructuredAdapterFactoryForConnection(getRpcConnection),
+    probeAcpCli: createAcpNoToolsReadinessProbe(getRpcConnection),
     personaPreview:
       dependencies.personaPreview ??
       createDefaultPersonaPreview(dependencies.dataContext, {

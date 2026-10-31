@@ -50,6 +50,8 @@ docs/superpowers/specs/finance-redesign/p6.phone.css
 # own built markup does not parse as standalone HTML. Formatting them would destroy the proof.
 docs/superpowers/specs/assets/2026-09-05-park-press-finish/screens/
 
+# Chat steering mockups: static pages, frozen for review.
+docs/superpowers/mockups/chat-steering/
 # Classifier gate mockups: static pages plus a copy of the real stylesheet and fonts, frozen for review.
 docs/superpowers/mockups/classifier-gate/
 # Connections redesign mockups: static pages, stylesheet and fonts, frozen for review.
@@ -84,3 +86,6 @@ docs/superpowers/specs/outlook-mail-mockup/moss-ui.css
 
 # Byte-identical copy of the reviewed stage 4 runner protocol (#3538)
 scripts/uat-campaign/PROTOCOL.md
+
+# Reviewed UAT host helpers stay byte-identical to their approved commits.
+scripts/uat-host/

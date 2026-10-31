@@ -118,5 +118,18 @@ export * from "./routes.js";
 export * from "./skills/repository.js";
 
 export { createConstrainedCliStructuredAdapterFactory } from "./live/constrained-structured-adapter.js";
+export {
+  createAcpNoToolsStructuredAdapterFactory,
+  createAcpNoToolsStructuredAdapterFactoryForConnection
+} from "./live/acp-structured-adapter.js";
 
+export { createHeartbeatGenerator } from "./heartbeat/generation.js";
 export { createScheduledReportGenerator } from "./scheduled-reads/report-generation.js";
+
+export {
+  ModuleNoticeService,
+  ModuleNoticeUnavailableError,
+  type ModuleNoticeDefinition,
+  type ModuleNoticeResult
+} from "./module-notices.js";
+export { registerModuleNoticeArrivalLifecycle } from "./module-notice-arrival.js";

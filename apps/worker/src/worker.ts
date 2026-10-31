@@ -23,6 +23,9 @@ import {
   handleUpgradeCheckJob,
   registerUpgradeNotifyWorker,
   assertModuleControlPayload,
+  cancelPendingModuleJobs,
+  listPendingModuleJobActors,
+  sendModuleControl,
   PLATFORM_MODULE_CONTROL_QUEUE,
   MODULE_BUILD_QUEUE,
   MODULE_BUILD_QUEUE_HEARTBEAT_SECONDS,
@@ -87,7 +90,10 @@ import {
 import { registerFocusJudgmentPurgeWorker } from "@moss/focus-judgment";
 import { ESPN_FETCH_HOSTS } from "@moss/sports";
 import { NEWS_FETCH_HOSTS } from "@moss/news";
-import { createIsModuleEnabled } from "./worker-module-gate.js";
+import { createIsModuleDisabledByAdmin, createIsModuleEnabled } from "./worker-module-gate.js";
+
+// Ten-minute job timeout plus a minute of margin.
+const MODULE_SWEEP_FOLLOW_UP_SECONDS = 11 * 60;
 import { createModuleBuildLiveAgent } from "./module-build-live-agent.js";
 import {
   createRunModuleBuildStepForJob,
@@ -510,6 +516,28 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     discoveries: externalModuleHolder.getDiscoveries,
     reservedQueueNames,
     isModuleEnabled: createIsModuleEnabled({ db: workerDb, getDiscoveryById }),
+    isModuleDisabledByAdmin: createIsModuleDisabledByAdmin({ db: workerDb }),
+    jobSweep: {
+      listPendingActors: (moduleId) => listPendingModuleJobActors(workerDb, moduleId),
+      cancel: ({ moduleId, actorUserId }) =>
+        cancelPendingModuleJobs(boss, workerDb, {
+          moduleId,
+          ...(actorUserId === undefined ? {} : { actorUserId }),
+          logger: workerLogger
+        }),
+      // The longest allowed invocation is ten minutes, so rows that were running at disable
+      // are settled (finished, or moved to retry) by the time this pass runs.
+      scheduleFollowUp: async (moduleId) => {
+        await sendModuleControl(
+          boss,
+          { moduleId, action: "reconcile" },
+          {
+            startAfter: MODULE_SWEEP_FOLLOW_UP_SECONDS,
+            singletonKey: `sweep-follow-up:${moduleId}`
+          }
+        );
+      }
+    },
     listActiveUserIds,
     resolveActorTimezone: (actorUserId) =>
       resolveActorTimezone(dataContext, {

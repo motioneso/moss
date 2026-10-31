@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest, ToolRequiresConfirmation } from "@moss/module-sdk";
+import { authorizeCalendarHeartbeatRead, calendarHeartbeatWindowExecute } from "./heartbeat.js";
 import { calendarMonitorProvider } from "./monitor-provider.js";
 import {
   DAY_PLAN_DENIED_CODE,
@@ -22,7 +23,8 @@ import {
   getCalendarEventResponseSchema,
   listCalendarEventsResponseSchema,
   updateCalendarBriefingSettingsRequestSchema,
-  deleteCalendarEventResponseSchema
+  deleteCalendarEventResponseSchema,
+  heartbeatSourceReadInputSchema
 } from "@moss/shared";
 
 import { requiresCalendarConfirmation } from "./confirmation-policy.js";
@@ -340,6 +342,17 @@ export const calendarModuleManifest = {
   ],
   assistantTools: [
     {
+      name: "calendar.heartbeatWindow",
+      description:
+        "Background heartbeat read. Lists the actor's cached calendar events in a short window with a change revision. Never contacts the calendar provider.",
+      permissionId: "calendar.view",
+      risk: "read",
+      content: "outside",
+      inputSchema: heartbeatSourceReadInputSchema,
+      authorizeBackgroundRead: authorizeCalendarHeartbeatRead,
+      execute: calendarHeartbeatWindowExecute
+    },
+    {
       name: "calendar.listVisibleEvents",
       description:
         "List the actor's upcoming calendar events, read live from each connected account with " +
@@ -553,6 +566,19 @@ export const calendarModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "calendar.heartbeat_source",
+      description:
+        "Calendar events starting in the next day can appear in Moss check-ins. Check-ins read saved calendar data only and skip Calendar when access is revoked.",
+      errors: [
+        {
+          code: "calendar_heartbeat_source_unavailable",
+          class: "transient",
+          description:
+            "Calendar could not be read for a check-in. Settings > Alerts shows Calendar as unavailable and the next check tries again."
+        }
+      ]
+    },
     {
       id: "calendar.preview_recovery",
       description:

@@ -22,6 +22,7 @@ import {
   type ClassifierSortResult,
   type ReviewedEntryInput
 } from "./classifier-settings.js";
+import { emptyScanMap, parseScanMap, type ClassifierScanMap } from "./classifier-scan.js";
 import type { DiscoveredTool } from "./openapi-convert.js";
 
 /**
@@ -54,6 +55,8 @@ export interface ConnectionRow {
   readonly classifierPreparation: ClassifierPreparationMap;
   /** Per-tool sorting results and send-without-asking choices (#2984). */
   readonly classifierSort: ClassifierSortMap;
+  /** Scanned actions and target lists (#3844). Nothing reads this to decide asking yet. */
+  readonly classifierScan: ClassifierScanMap;
   /** Tools the owner kept out of the classifier. They stay on for ordinary chat (#2984). */
   readonly classifierKeptOutTools: readonly string[];
   readonly discoveredTools: readonly DiscoveredTool[];
@@ -132,6 +135,7 @@ interface ConnectionSqlRow {
   classifier_enabled: boolean;
   classifier_preparation: unknown;
   classifier_sort: unknown;
+  classifier_scan: unknown;
   classifier_kept_out_tools: string[];
   discovered_tools: DiscoveredTool[];
   last_discovery_at: Date | null;
@@ -144,7 +148,7 @@ const SELECT_COLUMNS = `
   id, owner_user_id, name, kind, transport, url, credential_placement,
   (credential IS NOT NULL) AS has_credential, enabled, base_url, spec_pasted,
   enabled_groups, enabled_tools, muted_tools, unsuppressed_tools, classifier_enabled,
-  classifier_preparation, classifier_sort, classifier_kept_out_tools, discovered_tools,
+  classifier_preparation, classifier_sort, classifier_scan, classifier_kept_out_tools, discovered_tools,
   last_discovery_at, last_error, created_at, updated_at
 `;
 
@@ -555,6 +559,7 @@ export class IntegrationsRepository {
         row.classifier_preparation ?? emptyPreparationMap()
       ),
       classifierSort: parseSortMap(row.classifier_sort ?? emptySortMap()),
+      classifierScan: parseScanMap(row.classifier_scan ?? emptyScanMap()),
       classifierKeptOutTools: row.classifier_kept_out_tools ?? [],
       discoveredTools: row.discovered_tools,
       lastDiscoveryAt: row.last_discovery_at,

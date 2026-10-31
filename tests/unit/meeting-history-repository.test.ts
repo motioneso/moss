@@ -36,6 +36,39 @@ const row = {
   saved_count: 1
 };
 describe("meeting history repository", () => {
+  it("prefers the recorded date and labels the added-date fallback", () => {
+    const recorded = meetingHistoryItem({
+      ...row,
+      recorded_at: new Date("2026-09-01T10:00:00.000Z")
+    });
+    expect(recorded.date).toEqual({ at: "2026-09-01T10:00:00.000Z", source: "recorded" });
+    expect(meetingHistoryItem(row).date).toEqual({
+      at: row.created_at.toISOString(),
+      source: "added"
+    });
+  });
+  it("shows a validated import duration and never an untrusted one", () => {
+    const imported = meetingHistoryItem({
+      ...row,
+      import_metadata_json: JSON.stringify({ durationMs: 480000 })
+    });
+    expect(imported.capture.durationMs).toBe(480000);
+    for (const bad of [
+      "not json",
+      JSON.stringify({ durationMs: 7200001 }),
+      JSON.stringify({ durationMs: 1.5 })
+    ]) {
+      expect(
+        meetingHistoryItem({ ...row, import_metadata_json: bad }).capture.durationMs
+      ).toBeNull();
+    }
+    const captured = meetingHistoryItem({
+      ...row,
+      capture_duration_ms: 60000,
+      import_metadata_json: JSON.stringify({ durationMs: 480000 })
+    });
+    expect(captured.capture.durationMs).toBe(60000);
+  });
   it("keeps independent facts and emits metadata only", () => {
     const item = meetingHistoryItem(row);
     expect(item.capture).toEqual({ status: "unavailable", durationMs: null });
@@ -58,13 +91,14 @@ describe("meeting history repository", () => {
     });
     const result = await new MeetingHistoryRepository().search(scoped, {
       limit: 1,
-      before: { id, createdAt: row.created_at.toISOString() }
+      before: { id, dateAt: row.created_at.toISOString() }
     });
     expect(result.meetings).toHaveLength(1);
-    expect(result.nextCursor).toEqual({ id, createdAt: row.created_at.toISOString() });
+    expect(result.nextCursor).toEqual({ id, dateAt: row.created_at.toISOString() });
     expect(queries[0]?.sql).toContain("statement_timeout");
     const query = queries[1]!;
-    expect(query.sql).toContain("(r.created_at, r.id) <");
+    expect(query.sql).toContain("recorded_at");
+    expect(query.sql).toContain(", r.id) <");
     expect(query.sql).toContain("r.owner_user_id = app.current_actor_user_id()");
     expect(query.sql).not.toMatch(/input_json|artifact_json|result_json|receipt_json|::jsonb/);
   });
@@ -100,6 +134,14 @@ describe("meeting history repository", () => {
       new MeetingHistoryRepository().search(scoped, { query: "many words" })
     ).rejects.toThrow("Invalid meeting history query");
     expect(queries).toHaveLength(2);
+  });
+  it("rejects a malformed history cursor date", async () => {
+    const { scoped } = makeRecordingDb({ rows: [row] });
+    await expect(
+      new MeetingHistoryRepository().search(scoped, {
+        before: { id, dateAt: "not-a-date" }
+      })
+    ).rejects.toThrow("Invalid meeting history query");
   });
   it("bounds selected detail to an owner-visible identity", async () => {
     const { scoped, queries } = makeRecordingDb();

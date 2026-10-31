@@ -14,15 +14,21 @@ import {
 import type { AiProviderKind } from "@moss/shared";
 import {
   getMeetingOutputTemplate,
+  meetingOutputNoteCitationKeys,
   meetingRecordingOutputGuidance,
+  planMeetingOutputChunks,
   readMeetingCaptureCompleteness,
+  shiftMeetingOutputChunkEvidence,
+  splitMeetingOutputChunk,
   validateMeetingOutput,
   MeetingOutputValidationError,
+  type MeetingOutputChunk,
   type MeetingOutputValidationReasonCode,
   MeetingOutputError,
   type MeetingOutputGenerator,
   type MeetingTaskCreator
 } from "@moss/meetings";
+import type { MeetingOutputContent, MeetingOutputInputs } from "@moss/shared";
 import { TasksRepository } from "@moss/tasks";
 import type { MeetingOutputGenerationAvailability } from "@moss/shared";
 
@@ -142,12 +148,21 @@ export function createMeetingOutputRuntime(deps: {
   readonly dataContext: Pick<DataContextRunner, "withDataContext">;
   readonly resolveActiveModules: ActiveModulesResolver;
   readonly createConstrainedCliStructuredAdapter?: GenerateStructuredDeps["createCliStructuredAdapter"];
+  readonly createAcpCliStructuredAdapter?: GenerateStructuredDeps["createCliStructuredAdapter"];
   readonly probeConstrainedCli?: (
     actorUserId: string,
     signal?: AbortSignal,
     providerKind?: AiProviderKind
   ) => Promise<ConstrainedCliReadiness>;
+  readonly probeAcpCli?: (
+    actorUserId: string,
+    signal?: AbortSignal,
+    providerKind?: AiProviderKind
+  ) => Promise<ConstrainedCliReadiness>;
 }) {
+  const createCliAdapter =
+    deps.createAcpCliStructuredAdapter ?? deps.createConstrainedCliStructuredAdapter;
+  const probeCli = deps.createAcpCliStructuredAdapter ? deps.probeAcpCli : deps.probeConstrainedCli;
   const ai = new AiRepository();
   const tasks = new TasksRepository();
   const requireModules = async (actorUserId: string, includeTasks = false) => {
@@ -166,7 +181,7 @@ export function createMeetingOutputRuntime(deps: {
       model.status !== "active" ||
       model.provider_status !== "active" ||
       (model.provider_auth_method !== "api_key" && model.provider_auth_method !== "cli") ||
-      (model.provider_auth_method === "cli" && !deps.createConstrainedCliStructuredAdapter) ||
+      (model.provider_auth_method === "cli" && !createCliAdapter) ||
       model.provider_purpose !== "assistant" ||
       !model.capabilities.includes("summarization") ||
       !model.capabilities.includes("json")
@@ -223,7 +238,7 @@ export function createMeetingOutputRuntime(deps: {
       // Filesystem metadata only; no actor transaction remains open during the runner RPC.
       if (selected.cli)
         return (
-          (await deps.probeConstrainedCli?.(actor.actorUserId, undefined, selected.providerKind)) ??
+          (await probeCli?.(actor.actorUserId, undefined, selected.providerKind)) ??
           "model-unavailable"
         );
       return "available";
@@ -273,10 +288,11 @@ export function createMeetingOutputRuntime(deps: {
       if (!template) throw new MeetingOutputError("meeting_output_invalid_input", 400);
       // JSON escaping prevents source text from closing a markup delimiter. Text remains
       // untrusted data; neither prompt wording nor generated output authorizes any action.
-      const externalData = JSON.stringify(input.inputs).replace(
-        /[<>&]/g,
-        (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`
-      );
+      const escapeData = (value: unknown) =>
+        JSON.stringify(value).replace(
+          /[<>&]/g,
+          (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`
+        );
       const coverage = await deps.dataContext.withDataContext(actor, (db) =>
         readMeetingCaptureCompleteness(db, input.inputs.meetingId)
       );
@@ -284,15 +300,32 @@ export function createMeetingOutputRuntime(deps: {
         coverage.hasGaps || coverage.gapLimitReached
           ? "Capture has recorded gaps. Do not imply this evidence covers the whole meeting.\n"
           : "Capture completeness is not independently verified.\n";
-      const prompt =
-        `${coverageNotice}${meetingRecordingOutputGuidance(input.inputs, template)}\n` +
-        `externalData (escaped JSON):\n${externalData}`;
-      if (Buffer.byteLength(prompt, "utf8") > STRUCTURED_PROMPT_MAX_BYTES)
-        throw new MeetingOutputError("meeting_output_input_too_large", 400);
+      const promptFor = (piece: MeetingOutputInputs, previous?: MeetingOutputContent) =>
+        `${coverageNotice}${meetingRecordingOutputGuidance(piece, template)}\n` +
+        (previous
+          ? "Update previousSummary with this piece of evidence. Return one complete summary " +
+            "covering all evidence so far, not only this piece. Keep earlier decisions, actions, " +
+            "questions and warnings unless this piece changes them, and keep their evidence " +
+            "references unchanged.\n" +
+            `previousSummary (escaped JSON):\n${escapeData(previous)}\n`
+          : "") +
+        `externalData (escaped JSON):\n${escapeData(piece)}`;
+      const promptBytes = (piece: MeetingOutputInputs, previous?: MeetingOutputContent) =>
+        Buffer.byteLength(promptFor(piece, previous), "utf8");
+      // Pieces target half the cap. That leaves room for the running summary in
+      // later prompts and keeps each call well inside its own time limit.
+      const piecePromptTarget = Math.floor(STRUCTURED_PROMPT_MAX_BYTES / 2);
+      const chunks: MeetingOutputChunk[] =
+        promptBytes(input.inputs) <= STRUCTURED_PROMPT_MAX_BYTES
+          ? planMeetingOutputChunks(input.inputs, () => true)
+          : planMeetingOutputChunks(
+              input.inputs,
+              (candidate) => promptBytes(candidate) <= piecePromptTarget
+            );
       const selected = await deps.dataContext.withDataContext(actor, (db) => resolve(db));
       modelName = selected.model.provider_model_id;
       if (selected.model.provider_auth_method === "cli") {
-        const readiness = await deps.probeConstrainedCli?.(
+        const readiness = await probeCli?.(
           actor.actorUserId,
           input.signal,
           selected.model.provider_kind
@@ -304,64 +337,105 @@ export function createMeetingOutputRuntime(deps: {
               : "meeting_output_route_unavailable"
           );
       }
-      const run = await deps.dataContext.withDataContext(actor, (db) =>
-        prepareStructuredGeneration(
-          db,
-          {
-            service: "module.meetings",
-            explicitModel: selected.model,
-            schema: MEETING_OUTPUT_SCHEMA,
-            prompt,
-            signal: input.signal,
-            maxOutputTokens: 8192
-          },
-          {
-            repository: {
-              async selectProviderWithCredential(scopedDb, id) {
-                const current = await resolve(scopedDb, true);
-                if (
-                  id !== selected.model.provider_config_id ||
-                  current.fingerprint !== selected.fingerprint
-                )
-                  throw new MeetingOutputError("meeting_output_route_changed");
-                return current.provider;
-              }
+      const runOnce = async (prompt: string) => {
+        const run = await deps.dataContext.withDataContext(actor, (db) =>
+          prepareStructuredGeneration(
+            db,
+            {
+              service: "module.meetings",
+              explicitModel: selected.model,
+              schema: MEETING_OUTPUT_SCHEMA,
+              prompt,
+              signal: input.signal,
+              maxOutputTokens: 8192
             },
-            cipher: createAiSecretCipher(),
-            createCliStructuredAdapter: deps.createConstrainedCliStructuredAdapter
-          }
-        )
-      );
-      // The prepared transport closure does not retain or reuse a DataContext.
-      const result = await run();
-      if (input.signal.aborted) throw interruption(input.signal);
-      await requireModules(actor.actorUserId);
-      const current = await deps.dataContext.withDataContext(actor, (db) => resolve(db, true));
-      if (current.fingerprint !== selected.fingerprint)
-        throw new MeetingOutputError("meeting_output_route_changed");
-      if (!result.ok) {
-        if (result.error === "aborted") throw interruption(input.signal);
-        if (result.reason === "timeout") throw new MeetingOutputError("meeting_output_timed_out");
-        if (
-          result.reason === "unsupported_transport" &&
-          selected.model.provider_kind === "anthropic"
-        )
-          throw new MeetingOutputError("meeting_output_claude_subscription_unsupported");
-        if (result.reason === "unsupported_transport")
-          throw new MeetingOutputError("meeting_output_subscription_unsupported");
-        if (
-          result.reason === "json_parse" ||
-          result.reason === "schema_validation" ||
-          result.reason === "oversized_output"
-        )
-          throw rejected(result.reason);
-        throw new MeetingOutputError(
-          result.reason === "provider_failure"
-            ? "meeting_output_provider_failed"
-            : "meeting_output_generation_failed"
+            {
+              repository: {
+                async selectProviderWithCredential(scopedDb, id) {
+                  const current = await resolve(scopedDb, true);
+                  if (
+                    id !== selected.model.provider_config_id ||
+                    current.fingerprint !== selected.fingerprint
+                  )
+                    throw new MeetingOutputError("meeting_output_route_changed");
+                  return current.provider;
+                }
+              },
+              cipher: createAiSecretCipher(),
+              createCliStructuredAdapter: createCliAdapter
+            }
+          )
         );
+        // The prepared transport closure does not retain or reuse a DataContext.
+        const result = await run();
+        if (input.signal.aborted) throw interruption(input.signal);
+        await requireModules(actor.actorUserId);
+        const current = await deps.dataContext.withDataContext(actor, (db) => resolve(db, true));
+        if (current.fingerprint !== selected.fingerprint)
+          throw new MeetingOutputError("meeting_output_route_changed");
+        return result;
+      };
+      // One retry on a bad shape per piece: a second fresh call when the reply is not
+      // usable JSON, fails the schema, or fails evidence validation. Finished pieces
+      // are kept and never resent.
+      let content: MeetingOutputContent | undefined;
+      const queue = [...chunks];
+      for (let index = 0; index < queue.length; index += 1) {
+        let piece = queue[index]!;
+        let prompt = promptFor(piece.inputs, content);
+        while (Buffer.byteLength(prompt, "utf8") > STRUCTURED_PROMPT_MAX_BYTES) {
+          const split = splitMeetingOutputChunk(input.inputs, piece);
+          if (!split) throw new MeetingOutputError("meeting_output_input_too_large", 400);
+          queue.splice(index, 1, ...split);
+          piece = queue[index]!;
+          prompt = promptFor(piece.inputs, content);
+        }
+        let pieceContent: MeetingOutputContent | undefined;
+        for (let attempt = 0; attempt < 2 && !pieceContent; attempt += 1) {
+          const result = await runOnce(prompt);
+          if (!result.ok) {
+            if (result.error === "aborted") throw interruption(input.signal);
+            if (result.reason === "timeout")
+              throw new MeetingOutputError("meeting_output_timed_out");
+            if (
+              result.reason === "unsupported_transport" &&
+              selected.model.provider_kind === "anthropic"
+            )
+              throw new MeetingOutputError("meeting_output_claude_subscription_unsupported");
+            if (result.reason === "unsupported_transport")
+              throw new MeetingOutputError("meeting_output_subscription_unsupported");
+            if (
+              result.reason === "json_parse" ||
+              result.reason === "schema_validation" ||
+              result.reason === "oversized_output"
+            ) {
+              if (attempt === 0) continue;
+              throw rejected(result.reason);
+            }
+            throw new MeetingOutputError(
+              result.reason === "provider_failure"
+                ? "meeting_output_provider_failed"
+                : "meeting_output_generation_failed"
+            );
+          }
+          try {
+            pieceContent = validateMeetingOutput(
+              shiftMeetingOutputChunkEvidence(
+                result.object,
+                piece.notesStart,
+                content ? meetingOutputNoteCitationKeys(content) : new Set()
+              ),
+              piece.seenInputs
+            );
+          } catch (error) {
+            if (error instanceof MeetingOutputValidationError && attempt === 0) continue;
+            throw error;
+          }
+        }
+        if (!pieceContent) throw new MeetingOutputError("meeting_output_generation_failed");
+        content = pieceContent;
       }
-      const content = validateMeetingOutput(result.object, input.inputs);
+      if (!content) throw new MeetingOutputError("meeting_output_generation_failed");
       const latestCoverage = await deps.dataContext.withDataContext(actor, (db) =>
         readMeetingCaptureCompleteness(db, input.inputs.meetingId)
       );

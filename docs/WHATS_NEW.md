@@ -29,6 +29,36 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-30
+
+#### Changed
+
+- **A clearer Meetings list.** Your meetings now appear in a simple table that shows when each recording was made and how long it is, and you can still find one by words from its transcript. [PR #3851](https://github.com/motioneso/moss/pull/3851)
+
+### 2026-10-29
+
+#### Fixed
+
+- **Long recordings now get summaries.** Recordings of any length can now be summarised. Long transcripts are summarised piece by piece into the same single summary, instead of failing because the recording was too long. [PR #3841](https://github.com/motioneso/moss/pull/3841)
+- **Meeting summaries keep working after the AI tool updates.** Meeting summaries now use the same route as chat, so an update to the AI tool no longer stops summaries from being written. [PR #3837](https://github.com/motioneso/moss/pull/3837)
+- **Clearer times in Heartbeat messages.** Check-in messages now show times in your own timezone in a readable form instead of a raw timestamp. [PR #3830](https://github.com/motioneso/moss/pull/3830)
+
+#### Changed
+
+- **Disabling a module asks first.** Turning an add-on module off now asks you to confirm, and explains that background jobs waiting to run are cancelled, running ones can finish, and turning it back on does not bring cancelled jobs back. [PR #3831](https://github.com/motioneso/moss/pull/3831)
+
+#### Added
+
+- **Rate and stop Moss check-ins.** Moss check-ins now have thumbs up and down, you can tell Moss to stop mentioning a topic and undo it. [PR #3828](https://github.com/motioneso/moss/pull/3828)
+
+### 2026-10-28
+
+#### Added
+
+- **Moss check-ins in Main.** Moss can now post a short check-in in your Main chat when something in your tasks, calendar, memory, sports or news needs attention, and stays quiet when nothing changed. [PR #3824](https://github.com/motioneso/moss/pull/3824)
+- **Recording review messages in chat.** Moss now tells you in Main chat when it is unsure whether a recording is personal or work, with a link to review it. [PR #3815](https://github.com/motioneso/moss/pull/3815)
+- **Moss check-in settings.** You can now choose in Settings how often Moss checks in on your day and which of Calendar, Tasks, Memory, Sports and News it may look at. [PR #3820](https://github.com/motioneso/moss/pull/3820)
+
 ### 2026-10-27
 
 #### Added

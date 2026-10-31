@@ -9,6 +9,23 @@ export function normalizeMeetingSearchText(value: string): string {
   );
 }
 
+/** Import metadata is text written at ingest; only a bounded integer duration is trusted. */
+export function validatedImportDurationMs(metadataJson: string | null | undefined): number | null {
+  if (!metadataJson) return null;
+  try {
+    const value = JSON.parse(metadataJson) as { durationMs?: unknown };
+    const duration = value?.durationMs;
+    return typeof duration === "number" &&
+      Number.isInteger(duration) &&
+      duration >= 0 &&
+      duration <= 7_200_000
+      ? duration
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Bounded display text only; original generated evidence stays in artifact_json unchanged. */
 export function projectMeetingOverview(value: string): string {
   return [...normalizeMeetingSearchText(value).replace(/\0/g, "").replace(/\s+/gu, " ").trim()]

@@ -1,4 +1,9 @@
-import { DEFAULT_CHAT_SURFACE, readStoredVisual } from "@moss/shared";
+import {
+  DEFAULT_CHAT_SURFACE,
+  readChatHeartbeatOrigin,
+  readModuleNoticeOrigin,
+  readStoredVisual
+} from "@moss/shared";
 import type {
   ActionRequestDetails,
   ChatActivityEventDto,
@@ -136,10 +141,12 @@ export function useChatStream(
   const hydratedDrawerThread = useRef<string | undefined>(undefined);
   // An empty account can create Main during its first turn, before that turn can finish.
   const emptyDrawerOwner = useRef<string | undefined>(undefined);
-  // Private and module chats do not accept reminder arrivals.
+  // Private and module chats do not accept background arrivals.
   const hydratedSideThread = useRef(false);
   // Messages already hydrated at selection are not re-added by catch-up.
-  const knownDrawerReminders = useRef<Promise<ReadonlySet<string>>>(Promise.resolve(new Set()));
+  const knownDrawerBackgroundMessages = useRef<Promise<ReadonlySet<string>>>(
+    Promise.resolve(new Set())
+  );
   const streamScope = useRef({ surface, enabled });
   streamScope.current = { surface, enabled };
 
@@ -151,7 +158,7 @@ export function useChatStream(
       (streamScope.current.surface ?? DEFAULT_CHAT_SURFACE) === DEFAULT_CHAT_SURFACE;
     hydratedDrawerThread.current = onDrawer ? threadId : undefined;
     hydratedSideThread.current = !onDrawer;
-    knownDrawerReminders.current = onDrawer
+    knownDrawerBackgroundMessages.current = onDrawer
       ? readBackgroundMessageIds(threadId, streamScope.current.surface)
       : Promise.resolve(new Set());
     hydrationGeneration.current += 1;
@@ -178,7 +185,10 @@ export function useChatStream(
     const catchUpDrawer = () => {
       const threadId = hydratedDrawerThread.current;
       if (!threadId) return;
-      void Promise.all([knownDrawerReminders.current, listChatThreadMessages(threadId, surface)])
+      void Promise.all([
+        knownDrawerBackgroundMessages.current,
+        listChatThreadMessages(threadId, surface)
+      ])
         .then(([known, { messages }]) => {
           if (!isCurrent() || hydratedDrawerThread.current !== threadId) return;
           const missed = recordsFromMessages(messages).filter(
@@ -226,7 +236,7 @@ export function useChatStream(
               );
               if (!main || main.id !== record.actionThreadId) return;
               hydratedDrawerThread.current = main.id;
-              knownDrawerReminders.current = readBackgroundMessageIds(main.id, surface);
+              knownDrawerBackgroundMessages.current = readBackgroundMessageIds(main.id, surface);
               setRecords((current) =>
                 isCurrent() && hydratedDrawerThread.current === main.id
                   ? applyStreamRecord(current, record)
@@ -275,7 +285,7 @@ export function useChatStream(
     hydratedDrawerThread.current = undefined;
     emptyDrawerOwner.current = undefined;
     hydratedSideThread.current = false;
-    knownDrawerReminders.current = Promise.resolve(new Set());
+    knownDrawerBackgroundMessages.current = Promise.resolve(new Set());
     if (!surface || !enabled) return;
     let active = true;
     const generation = hydrationGeneration.current;
@@ -325,11 +335,11 @@ export function useChatStream(
           actions: []
         }));
         if (!active || generation !== hydrationGeneration.current) return;
+        if (isDrawer) hydratedDrawerThread.current = thread.id;
+        hydratedSideThread.current = !isDrawer;
         const { messages } = await listChatThreadMessages(thread.id, surface);
         if (!active || generation !== hydrationGeneration.current) return;
         const history = recordsFromMessages(messages);
-        if (isDrawer) hydratedDrawerThread.current = thread.id;
-        hydratedSideThread.current = !isDrawer;
         // #1253 — re-hydrate pending action request cards (only "pending" status; others already resolved)
         const pendingActions = actionsResult.actions.filter((a) => a.status === "pending");
         const actionRecords: TranscriptRecord[] = pendingActions.map((action) => {
@@ -466,11 +476,12 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
             {
               kind: message.status === "error" ? ("error" as const) : ("reply" as const),
               text: message.body,
+              ...(message.origin ? { origin: message.origin } : {}),
               scheduledReadSource: message.scheduledReadSource,
               messageId: message.id,
               createdAt: message.createdAt,
               turnId: message.turnId,
-              ...(isDeliveredReminder(message)
+              ...(isDeliveredBackgroundMessage(message)
                 ? { background: true as const, backgroundThreadId: message.threadId }
                 : {}),
               sourceFreshness: message.sourceFreshness,
@@ -488,8 +499,14 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
   });
 }
 
-function isDeliveredReminder(message: ChatMessageDto): boolean {
-  return message.origin?.kind === "reminder" && message.origin.event === "delivered";
+function isDeliveredBackgroundMessage(message: ChatMessageDto): boolean {
+  return (
+    (message.origin?.kind === "reminder" && message.origin.event === "delivered") ||
+    message.origin?.kind === "heartbeat" ||
+    (message.role === "assistant" &&
+      message.status === "stored" &&
+      readModuleNoticeOrigin(message.origin) !== undefined)
+  );
 }
 
 function activityRecord(activity: ChatActivityEventDto): TranscriptRecord {
@@ -507,7 +524,8 @@ function activityRecord(activity: ChatActivityEventDto): TranscriptRecord {
     ...(activity.outcome !== undefined ? { outcome: activity.outcome } : {}),
     ...(activity.durationMs !== undefined ? { durationMs: activity.durationMs } : {}),
     ...(activity.decidedBy !== undefined ? { decidedBy: activity.decidedBy } : {}),
-    ...(activity.reason !== undefined ? { reason: activity.reason } : {})
+    ...(activity.reason !== undefined ? { reason: activity.reason } : {}),
+    ...(activity.result !== undefined ? { result: activity.result } : {})
   };
 }
 
@@ -528,6 +546,11 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
     return {
       kind: parsed.kind,
       text: parsed.text,
+      ...(readModuleNoticeOrigin(parsed.origin)
+        ? { origin: readModuleNoticeOrigin(parsed.origin) }
+        : readChatHeartbeatOrigin(parsed.origin)
+          ? { origin: readChatHeartbeatOrigin(parsed.origin) }
+          : {}),
       visualState:
         parsed.kind === "status" &&
         (parsed.visualState === "preparing" || parsed.visualState === "clear")
