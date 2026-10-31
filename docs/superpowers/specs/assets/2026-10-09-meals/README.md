@@ -136,8 +136,9 @@ Screen behaviour only. Offline, data export, receipt text and opt-in Leftovers s
 - In `components-moss-today.css` the phone `.jds-masthead__aside { align-items: flex-start }`
   sits before the base `flex-end` rule, so the aside stays right-aligned on phone. The recipe
   masthead works around it with `mls-hero__actions`.
-- The shared form styles mute and shrink every bare `label`. A list row whose name and amount are
-  labels for its tick box has to reset that in `prototype.css`. A row-label primitive would fix it.
+- `:where(label)` in `apps/web/src/styles.css` (line 130) gives every label muted colour, a
+  0.84rem size, bold weight and grid display. A list row whose name and amount are labels for its
+  tick box has to reset that in `prototype.css`. A row-label primitive would fix it.
 - The field masthead caps its lede narrow, so a long eater list wraps mid-name on a wide screen.
 
 ## Chat
