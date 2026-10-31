@@ -168,7 +168,7 @@
       },
       {
         "id": "finance.transaction-splits",
-        "description": "Split or Edit split in a payee's details divides an owned posted transaction into up to 20 non-transfer allocations totaling the exact signed amount. Saving awaits persistence and checks amount, currency and split revision. Provider corrections retain allocations for repair; unbalanced splits count once as uncategorized. One part removes a split. Select up to 200 loaded owned posted unsplit rows for one reviewed category change. Host confirmation saves all or none using captured row revisions. Amounts, accounts, dates, notes and reconciliation stay unchanged; no rule is created. Cancel retains choices; changed or uncertain saves require checking records before a new review. Shared, pending and legacy-storage rows are excluded. Older hosts explain the update required. Neither action moves bank money."
+        "description": "Split or Edit split in a payee's details divides an owned posted transaction into up to 20 non-transfer allocations totaling the exact signed amount. Saving awaits persistence and checks amount, currency and split revision. Provider corrections retain allocations for repair; unbalanced splits count once as uncategorized. One part removes a split. Select up to 200 loaded owned posted unsplit rows for one reviewed category change. Review selected transactions saves all or none using captured row revisions. When Moss proposes the same change in chat, it asks first. Amounts, accounts, dates, notes and reconciliation stay unchanged; no rule is created. Cancel retains choices; changed or uncertain saves require checking records before a new review. Shared, pending and legacy-storage rows are excluded. Older hosts explain the update required. Neither action moves bank money."
       },
       {
         "id": "finance.manual-ledger",
@@ -1456,7 +1456,7 @@
         },
         "required": ["categoryId", "rows"]
       },
-      "executionPolicy": "auto"
+      "executionPolicy": "confirm"
     },
     {
       "name": "finance.reports.transactions",
@@ -1537,7 +1537,7 @@
       "risk": "write",
       "handler": "transactions.confirm",
       "actionFamilyId": "sorting",
-      "executionPolicy": "auto",
+      "executionPolicy": "confirm",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,

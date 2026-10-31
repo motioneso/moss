@@ -81,13 +81,13 @@ describe("finance manifest app map (#3177)", () => {
     expect(manifest.assistantTools.filter((t) => t.handler === "draft.build")).toEqual([]);
   });
 
-  it("applies category confirmation and bulk category changes without a host prompt", () => {
+  it("keeps the screen click prompt-free while chat asks for category changes", () => {
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
       assistantTools: { name: string }[];
     };
     for (const name of ["finance.transactions.confirm", "finance.transactions.bulk-category"]) {
       const tool = manifest.assistantTools.find((entry) => entry.name === name);
-      expect(tool).toMatchObject({ risk: "write", executionPolicy: "auto" });
+      expect(tool).toMatchObject({ risk: "write", executionPolicy: "confirm" });
       expect(tool).not.toHaveProperty("confirmWhenKeys");
     }
   });
