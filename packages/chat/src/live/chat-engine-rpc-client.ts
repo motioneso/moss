@@ -78,6 +78,7 @@ import {
   type RpcListProviderModelsParams,
   type RpcListProviderModelsResult,
   type RpcMethod,
+  type RpcSetKeepWarmKeysResult,
   type RpcOk,
   type PersistentRuntimeLaunchConfig,
   type RpcProbeProviderParams,
@@ -256,6 +257,7 @@ export class RpcConnection {
       case "isAlive":
       case "interrupt":
       case "kill":
+      case "setKeepWarmKeys": // #3854 — in-memory set swap
       case "purgeTranscripts": // #744 — bounded per-session verb, same class as kill
       case "listCliToolVersions": // #2689 — a few small file reads
       case "recordCliCheck": // #2689 slice 4 — one small file write
@@ -409,6 +411,11 @@ export class RpcConnection {
       false,
       options ?? (params.constrainedStructured ? { timeoutMs: 5_000 } : undefined)
     );
+  }
+
+  /** Tells the runner which session keys its warm-pool idle sweep must spare. */
+  setKeepWarmKeys(sessionKeys: readonly string[]): Promise<RpcSetKeepWarmKeysResult> {
+    return this.call<RpcSetKeepWarmKeysResult>("setKeepWarmKeys", undefined, { sessionKeys }, true);
   }
 
   /** Relays a rejection learned here to the runner's user-scoped cache. */

@@ -298,7 +298,20 @@ export interface ReminderTurnOptions extends HandledTurnOptions {
   readonly stopSignal?: AbortSignal;
 }
 
+/**
+ * Users whose main chat stays ready (hold-to-talk on). The composition root fills it from the
+ * owning module's public API, so chat never reads that module's tables.
+ */
+export interface KeepWarmPort {
+  userIds(): Promise<ReadonlySet<string>>;
+  resolveUserName(actorUserId: string): Promise<string>;
+  /** Tells the engine host that owns a warm pool which session keys to spare. Absent in-process. */
+  publishKeys?(sessionKeys: readonly string[]): Promise<void>;
+}
+
 export interface ChatSessionManagerDeps {
+  /** Spares these users' main sessions from idle reaping and restores them if lost. */
+  readonly keepWarm?: KeepWarmPort;
   /** Refuse known runtime outages before claiming a durable voice request. */
   readonly assertRuntimeReady?: () => void;
   readonly engineFactory: (

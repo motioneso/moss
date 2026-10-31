@@ -23,7 +23,7 @@
  */
 
 export interface SweepIdlePool {
-  sweepIdle(idleThresholdMs: number): Promise<void>;
+  sweepIdle(idleThresholdMs: number, exemptKeys?: ReadonlySet<string>): Promise<void>;
 }
 
 export interface IdleReapTimerDeps {
@@ -31,6 +31,8 @@ export interface IdleReapTimerDeps {
   readonly pool: SweepIdlePool;
   /** Live read of `chat.persistent_idle_reap_minutes` — called fresh on EVERY tick, never cached. */
   readonly readIdleReapMinutes: () => Promise<number>;
+  /** Session keys to spare, read fresh on EVERY tick. A failed read skips that sweep. */
+  readonly readExemptKeys?: () => Promise<ReadonlySet<string>>;
   /** Override the tick cadence (tests / explicit tuning). Defaults to
    *  `min(defaultIdleReapMinutes * 60_000 / 6, 5 * 60_000)`. */
   readonly intervalMs?: number;
@@ -65,7 +67,11 @@ export function startIdleReapTimer(deps: IdleReapTimerDeps): () => void {
     void (async () => {
       const minutes = await deps.readIdleReapMinutes();
       const idleThresholdMs = Math.max(0, minutes) * 60_000;
-      await deps.pool.sweepIdle(idleThresholdMs);
+      if (deps.readExemptKeys) {
+        await deps.pool.sweepIdle(idleThresholdMs, await deps.readExemptKeys());
+      } else {
+        await deps.pool.sweepIdle(idleThresholdMs);
+      }
     })()
       .catch((err: unknown) => deps.onError?.(err))
       .finally(() => {

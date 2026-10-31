@@ -193,6 +193,7 @@ export interface ChatRoutesDependencies {
    * Structured/module callers keep their separate late-bound factory until slice 2 moves them.
    */
   readonly engineSelection?: CreateChatSessionRuntimeDeps["engineSelection"];
+  readonly keepWarmUserIds?: CreateChatSessionRuntimeDeps["keepWarmUserIds"];
   /**
    * #342 (§3.4) — composition seam: after the runtime builds its ONE RPC connection (socket path), the
    * chat routes publish it back to `registerBuiltInApiRoutes` so a single socket serves both chat and
@@ -489,6 +490,7 @@ export function registerChatRoutes(
     conversationProvenance,
     rootDb: dependencies.rootDb,
     dataContext: dependencies.dataContext,
+    keepWarmUserIds: dependencies.keepWarmUserIds,
     engineFactory: dependencies.chatEngineFactory,
     // An explicitly injected engine factory wins for tests and embedders.
     engineSelection: dependencies.chatEngineFactory ? undefined : dependencies.engineSelection,
@@ -622,6 +624,10 @@ export function registerChatRoutes(
     connectionString: dependencies.reminderArrivalConnectionString,
     dataContext: dependencies.dataContext,
     manager: runtime.manager
+  });
+
+  server.addHook("onListen", async () => {
+    void runtime.prestartKeepWarm();
   });
 
   registerActionNotificationLifecycle(server, {

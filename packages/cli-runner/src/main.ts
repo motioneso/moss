@@ -425,7 +425,8 @@ export function createCliRunner(
     // isolation mode is default OFF; revisit if it's ever turned on alongside the pool).
     createRuntime: () => new ClaudePersistentRuntime({ io }),
     onReap: (sessionKey, reason) => hostRef.current?.notifySessionReaped(sessionKey, reason),
-    clock: { now: () => Date.now() }
+    clock: { now: () => Date.now() },
+    readExemptKeys: async () => (await hostRef.current?.keepWarm.read()) ?? new Set()
   });
 
   const host = new CliChatEngineHost({

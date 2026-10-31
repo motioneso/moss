@@ -6,14 +6,14 @@ Task: #3854. Follows `2026-10-29-ring-latency-phase1.md` (#3842). Server side on
 
 Phase 1 measured the server leg of a hold-to-talk command.
 
-| Stage | Seconds |
-| --- | --- |
-| Upload and queue pickup | under 0.2 |
-| Speech-to-text | 1.3 to 2.0 |
-| Cold session start, on top of the model turn | about 5 |
-| Model turn, warm | 3.0 to 4.5 |
-| Model turn, first with tools | about 19 |
-| Classifier, per tool question | 5 to 7, up to 4 questions |
+| Stage                                        | Seconds                   |
+| -------------------------------------------- | ------------------------- |
+| Upload and queue pickup                      | under 0.2                 |
+| Speech-to-text                               | 1.3 to 2.0                |
+| Cold session start, on top of the model turn | about 5                   |
+| Model turn, warm                             | 3.0 to 4.5                |
+| Model turn, first with tools                 | about 19                  |
+| Classifier, per tool question                | 5 to 7, up to 4 questions |
 
 A voice request runs in the owner's ordinary drawer session. That session is dropped after
 `DEFAULT_IDLE_MS` (30 min) of idleness, and on every API restart. `startIdleReaper` ticks every
@@ -71,12 +71,12 @@ under a fast model, and record both. Any Settings or app-map change follows the 
 
 ## Cost and risk
 
-| Item | Note |
-| --- | --- |
-| Idle memory | One CLI child per keep-warm user. Accepted. Single-user installs have one. |
-| Provider tokens | A warm session spends none until a turn runs. |
-| Stale child | A warm child can hold an expired sign-in. Recovery is the existing launch-failure path. |
-| Hold-to-talk off | The user leaves the set and the session reaps normally. |
+| Item             | Note                                                                                    |
+| ---------------- | --------------------------------------------------------------------------------------- |
+| Idle memory      | One CLI child per keep-warm user. Accepted. Single-user installs have one.              |
+| Provider tokens  | A warm session spends none until a turn runs.                                           |
+| Stale child      | A warm child can hold an expired sign-in. Recovery is the existing launch-failure path. |
+| Hold-to-talk off | The user leaves the set and the session reaps normally.                                 |
 
 ## Slices
 

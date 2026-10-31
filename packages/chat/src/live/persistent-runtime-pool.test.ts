@@ -188,6 +188,97 @@ describe("PersistentRuntimePool.release / sweepIdle", () => {
     expect(pool.size()).toBe(1);
   });
 
+  it("sweepIdle spares children whose key is exempt, and reaps them once it is not (#3854)", async () => {
+    const { runtime, reapMock } = fakeRuntime(idleHealth(0));
+    const pool = new PersistentRuntimePool({
+      cap: 1,
+      createRuntime: () => runtime,
+      clock: { now: () => 10_000 }
+    });
+
+    await pool.admit("warm", NOOP_OPTS);
+    await pool.sweepIdle(5_000, new Set(["warm"]));
+    expect(reapMock).not.toHaveBeenCalled();
+    expect(pool.size()).toBe(1);
+
+    await pool.sweepIdle(5_000, new Set());
+    expect(reapMock).toHaveBeenCalledWith("idle-timeout");
+    expect(pool.size()).toBe(0);
+  });
+
+  it("sweepIdle spares an exempt child even at a one-minute threshold (#3854)", async () => {
+    const { runtime, reapMock } = fakeRuntime(idleHealth(0));
+    const pool = new PersistentRuntimePool({
+      cap: 1,
+      createRuntime: () => runtime,
+      clock: { now: () => 3_600_000 }
+    });
+
+    await pool.admit("warm", NOOP_OPTS);
+    await pool.sweepIdle(60_000, new Set(["warm"]));
+    expect(reapMock).not.toHaveBeenCalled();
+    expect(pool.size()).toBe(1);
+  });
+
+  it("admit never lru-evicts an exempt child, and denies when it is the only idle one (#3854)", async () => {
+    const warm = fakeRuntime(idleHealth(0));
+    const other = fakeRuntime(idleHealth(5));
+    const runtimes = [warm, other];
+    const pool = new PersistentRuntimePool({
+      cap: 1,
+      createRuntime: () => runtimes.shift()!.runtime,
+      clock: { now: () => 10_000 },
+      readExemptKeys: async () => new Set(["warm"])
+    });
+
+    await pool.admit("warm", NOOP_OPTS);
+    const result = await pool.admit("other", NOOP_OPTS);
+
+    expect(result.kind).toBe("denied");
+    expect(warm.reapMock).not.toHaveBeenCalled();
+    expect(pool.size()).toBe(1);
+  });
+
+  it("admit lru-evicts a non-exempt idle child while sparing the exempt one (#3854)", async () => {
+    const warm = fakeRuntime(idleHealth(0));
+    const ordinary = fakeRuntime(idleHealth(5));
+    const fresh = fakeRuntime(idleHealth(9));
+    const runtimes = [warm, ordinary, fresh];
+    const pool = new PersistentRuntimePool({
+      cap: 2,
+      createRuntime: () => runtimes.shift()!.runtime,
+      clock: { now: () => 10_000 },
+      readExemptKeys: async () => new Set(["warm"])
+    });
+
+    await pool.admit("warm", NOOP_OPTS);
+    await pool.admit("ordinary", NOOP_OPTS);
+    const result = await pool.admit("fresh", NOOP_OPTS);
+
+    expect(result.kind).toBe("admitted");
+    expect(warm.reapMock).not.toHaveBeenCalled();
+    expect(ordinary.reapMock).toHaveBeenCalledWith("lru-evict");
+  });
+
+  it("admit denies instead of evicting when the exempt set cannot be read (#3854)", async () => {
+    const victim = fakeRuntime(idleHealth(0));
+    const runtimes = [victim];
+    const pool = new PersistentRuntimePool({
+      cap: 1,
+      createRuntime: () => runtimes.shift()!.runtime,
+      clock: { now: () => 10_000 },
+      readExemptKeys: async () => {
+        throw new Error("db down");
+      }
+    });
+
+    await pool.admit("a", NOOP_OPTS);
+    const result = await pool.admit("b", NOOP_OPTS);
+
+    expect(result.kind).toBe("denied");
+    expect(victim.reapMock).not.toHaveBeenCalled();
+  });
+
   // #1554 Decision 2, test case 1: the in-process topology wires `revokeMcpToken` straight into
   // the pool as `onReap` (no RPC hop — `runtime.ts`'s composition root, task #5). This is the
   // pool-level half of that contract: `onReap` must fire synchronously off a real idle reap, with

@@ -17,7 +17,7 @@ import {
 } from "@moss/ai";
 import type { AcpPermissionDecider } from "@moss/acp";
 import { resolveEffectiveTimezone } from "../locale-utils.js";
-import type { ChatSurface } from "./chat-surface.js";
+import { DEFAULT_CHAT_SURFACE, surfaceSessionKey, type ChatSurface } from "./chat-surface.js";
 import { composeMossPersona } from "./persona-guidance.js";
 import {
   resolveMossEnv,
@@ -152,6 +152,8 @@ export function createRealEngineFactory(
     readIdleReapMinutes?: () => Promise<number>;
     /** Override the pool idle-reap timer's tick cadence (tests / explicit tuning). */
     idleReapTimerIntervalMs?: number;
+    /** Session keys the pool idle sweep spares (#3854), read fresh on every tick. */
+    readExemptKeys?: () => Promise<ReadonlySet<string>>;
     /**
      * #1554 Decision 2 (in-process topology) — fires after the pool reaps a child
      * (idle-timeout | lru-evict). The composition root wires this to
@@ -178,7 +180,8 @@ export function createRealEngineFactory(
           cap: opts.persistentPoolCap,
           createRuntime: () => new ClaudePersistentRuntime({ io: createRealTmuxIo() }),
           onReap: opts.onPersistentReap,
-          clock: { now: () => Date.now() }
+          clock: { now: () => Date.now() },
+          readExemptKeys: opts.readExemptKeys
         })
       : undefined;
 
@@ -189,6 +192,7 @@ export function createRealEngineFactory(
     startIdleReapTimer({
       pool: persistentPool,
       readIdleReapMinutes: opts.readIdleReapMinutes,
+      readExemptKeys: opts.readExemptKeys,
       intervalMs: opts.idleReapTimerIntervalMs
     });
   }
@@ -597,6 +601,11 @@ export interface CreateChatSessionRuntimeDeps {
   readonly readIdleReapMinutes?: () => Promise<number>;
   /** Override the pool idle-reap timer's tick cadence (tests / explicit tuning). */
   readonly idleReapTimerIntervalMs?: number;
+  /**
+   * #3854 — users whose main chat stays ready (hold-to-talk on). Supplied by the composition root
+   * from the owning module's public API. Absent ⇒ no exemption and no keep-warm timer.
+   */
+  readonly keepWarmUserIds?: () => Promise<ReadonlySet<string>>;
 }
 
 export interface ChatSessionRuntime {
@@ -615,6 +624,8 @@ export interface ChatSessionRuntime {
    * {@link shutdown}).
    */
   readonly connection?: RpcConnection;
+  /** #3854 — boot-time keep-warm pass; the caller invokes it after the server listens. */
+  prestartKeepWarm(): Promise<void>;
   /**
    * #342 — tear down runtime-owned background resources: stop the idle reaper and close the RPC
    * connection. Idempotent. The composition root calls this on server shutdown. A no-op when neither
@@ -791,7 +802,18 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     classifierGate: deps.classifierGate,
     // #2907 (plan 3.5) — the shadow half of the classifier gate. Undefined when the composition
     // root does not wire it (tests/embedders, or no gateway).
-    classifierGateShadow: deps.classifierGateShadow
+    classifierGateShadow: deps.classifierGateShadow,
+    keepWarm: deps.keepWarmUserIds
+      ? {
+          userIds: deps.keepWarmUserIds,
+          resolveUserName: (actorUserId) => persistence.resolveUserName(actorUserId),
+          publishKeys: connection
+            ? async (sessionKeys) => {
+                await connection!.setKeepWarmKeys(sessionKeys);
+              }
+            : undefined
+        }
+      : undefined
   });
 
   if (connection) {
@@ -817,15 +839,40 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     stopPoolIdleReap = startIdleReapTimer({
       pool: deps.persistentPool,
       readIdleReapMinutes: deps.readIdleReapMinutes,
+      readExemptKeys: deps.keepWarmUserIds
+        ? async () => {
+            const users = await deps.keepWarmUserIds!();
+            return new Set([...users].map((id) => surfaceSessionKey(id, DEFAULT_CHAT_SURFACE)));
+          }
+        : undefined,
       intervalMs: deps.idleReapTimerIntervalMs
     });
   }
+
+  // #3854 — restore keep-warm sessions at boot and every minute after. The boot pass waits for the
+  // first connect so the cli-runner has reconciled; it never blocks startup.
+  let stopKeepWarm: (() => void) | undefined;
+  if (deps.keepWarmUserIds) {
+    stopKeepWarm = manager.startKeepWarm();
+  }
+
+  // Runs once the server is listening, so a refused boot never launches a child.
+  const prestartKeepWarm = async (): Promise<void> => {
+    if (!deps.keepWarmUserIds) return;
+    try {
+      await connection?.ensureConnected();
+      await manager.keepWarmTick();
+    } catch {
+      // The 60 s recovery tick retries.
+    }
+  };
 
   let shutDown = false;
   const shutdown = (): void => {
     if (shutDown) return;
     shutDown = true;
     stopReaper?.();
+    stopKeepWarm?.();
     stopPoolIdleReap?.();
     connection?.close();
   };
@@ -836,6 +883,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     checkProviderInitialization: (actorUserId, provider) =>
       checkProviderInitialization(engineFactory, actorUserId, provider),
     connection,
+    prestartKeepWarm,
     shutdown
   };
 }

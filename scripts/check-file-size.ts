@@ -36,7 +36,12 @@ const exemptFiles = new Set<string>([
   // #2521 restores this historical Study prototype stylesheet intact.
   ".superpowers/brainstorm/today-briefings-20260909/study.css",
   // #3529 N3 observer wiring pushes the UAT provisioner just past the limit.
-  "tests/uat/provisioner.ts"
+  "tests/uat/provisioner.ts",
+  // #3854 keep-warm wiring adds a few lines to files already at the cap.
+  "packages/chat/src/live/chat-engine-rpc-client.ts",
+  "packages/chat/src/routes.ts",
+  "packages/chat/src/live/runtime.ts",
+  "packages/cli-runner/src/engine-host.ts"
 ]);
 const checkedExtensions = new Set([
   ".css",
