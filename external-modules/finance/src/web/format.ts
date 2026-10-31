@@ -136,3 +136,26 @@ export function shortDayLabel(date: string): string {
   if (Number.isNaN(parsed.getTime())) return date;
   return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
 }
+
+/** "2026-07-15" → "Wed, Jul 15" (bill rows inside a week group). */
+export function weekdayDayLabel(date: string): string {
+  const parsed = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return parsed.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC"
+  });
+}
+
+const CADENCE_TEXT: Record<string, string> = {
+  once: "Once",
+  weekly: "Every week",
+  fortnightly: "Every two weeks",
+  monthly: "Every month",
+  yearly: "Every year"
+};
+
+/** Bill cadence in the words the Add a bill form uses. */
+export const cadenceText = (cadence: string) => CADENCE_TEXT[cadence] ?? cadence;

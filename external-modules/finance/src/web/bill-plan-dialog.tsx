@@ -1,7 +1,6 @@
 import {
   Button,
   Dialog,
-  Note,
   Select,
   useRef,
   useState,
@@ -9,25 +8,45 @@ import {
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import type { BillsView } from "./screens/upcoming";
-import { parseAmountToCents } from "./format";
+import { centsToAmountInput, parseAmountToCents } from "./format";
 import { isCalendarDate } from "../domain/values";
 import { invalidateQueries } from "./store";
+export interface BillPlanDraft {
+  name: string;
+  accountId: string;
+  categoryId: string | null;
+  amountCents: number;
+  anchorDate: string;
+  cadence: string;
+}
+
 export function BillPlanDialog(props: {
   data: BillsView;
   tools?: ExternalModuleToolsHandleV1;
+  /** Starting values, such as a suggested bill. Unknown accounts and categories start blank. */
+  initial?: BillPlanDraft;
   onClose: () => void;
 }): ReactNodeLike {
+  const initial = props.initial;
   const [id] = useState(() => crypto.randomUUID());
   const [review] = useState({
     expectedRevision: props.data.revision,
     expectedFingerprint: props.data.fingerprint
   });
-  const [name, setName] = useState("");
-  const [accountId, setAccount] = useState("");
-  const [categoryId, setCategory] = useState("");
-  const [amount, setAmount] = useState("");
-  const [anchorDate, setDate] = useState(props.data.today);
-  const [cadence, setCadence] = useState("monthly");
+  const [name, setName] = useState(initial?.name.slice(0, 160) ?? "");
+  const [accountId, setAccount] = useState(
+    initial && props.data.accounts.some((a) => a.accountId === initial.accountId)
+      ? initial.accountId
+      : ""
+  );
+  const [categoryId, setCategory] = useState(
+    initial?.categoryId && props.data.categories.some((c) => c.id === initial.categoryId)
+      ? initial.categoryId
+      : ""
+  );
+  const [amount, setAmount] = useState(initial ? centsToAmountInput(initial.amountCents) : "");
+  const [anchorDate, setDate] = useState(initial?.anchorDate ?? props.data.today);
+  const [cadence, setCadence] = useState(initial?.cadence ?? "monthly");
   const [busy, setBusy] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -97,9 +116,6 @@ export function BillPlanDialog(props: {
       }
     >
       <div className="fnm-block">
-        <Note variant="practical">
-          This creates a projection. No payment is made and no transaction is posted.
-        </Note>
         <label className="fnm-block fnm-block--tight">
           Bill name
           <input
@@ -186,10 +202,6 @@ export function BillPlanDialog(props: {
             <option value="yearly">Every year</option>
           </Select>
         </label>
-        <p className="jds-hint">
-          Month-end dates stay anchored: January 31 becomes February 28, then March 31. To change a
-          plan, stop its future dates and add a replacement.
-        </p>
         {message ? <p role="alert">{message}</p> : null}
       </div>
     </Dialog>

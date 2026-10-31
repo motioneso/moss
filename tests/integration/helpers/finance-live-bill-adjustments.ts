@@ -75,9 +75,7 @@ export async function exerciseBillAdjustments(
   await page.reload();
   await page.getByText(/^Nothing due in /).waitFor();
   await stepMonth(page, "next");
-  const changed = page
-    .locator(".jds-index__row")
-    .filter({ hasText: `one-off change from ${month}-01` });
+  const changed = page.locator(".jds-index__row").filter({ hasText: "one-off change from" });
   await changed.waitFor();
   expect((await bills(next)).occurrences).toEqual(
     expect.arrayContaining([

@@ -164,7 +164,14 @@ design-system class audit.
 - The month total sits in the section head: due, paid so far, still to pay.
 - A chip opens the same bill actions the list row has today. The list stays below the grid as
   the full record and the keyboard path.
-- Phone: no grid. The list grouped by week is the calendar.
+- List rows put status and amount on one line and the actions in one row, commonest first
+  (match, skip, record, change). A bill that is simply due on time carries no badge, so the
+  badges that remain (posted, skipped, past due, needs review) stand out.
+- Phone: no grid. The list grouped by week is the calendar. Rows drop their action buttons and
+  show Details, which opens the same panel a chip opens; three tall buttons per bill made a
+  month of bills several screens long.
+- The month totals may drop below the "Bills due" title on a phone rather than squeeze it
+  (shared `SectionHead wrap`).
 - Built from the shared month grid (`DayCell`, `.cal-month`) rather than a Finance copy.
 
 ### Suggestion rules
@@ -173,21 +180,23 @@ Input is the owner's own posted history for the last 400 days, in the budget cur
 Excluded: pending, income and transfer categories, inflows, shared rows, and transactions
 already matched to a bill.
 
-| Step      | Rule                                                                                                                              |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Payee     | Group by account and `normalizePayee(merchant ?? name)`. An empty key never matches                                               |
-| Amount    | Within a payee, split charges into amount bands. A charge joins a band within max(10% of the band median, $1.00)                  |
-| Gap       | Weekly 7 days ±1, fortnightly 14 ±2, monthly one calendar month ±3 days, yearly one calendar year ±7 days                         |
-| Run       | Walk back from the newest charge while every gap fits one cadence. Weekly, fortnightly and monthly need 3 charges; yearly needs 2 |
-| Current   | The next expected date must be no more than one gap's tolerance in the past                                                       |
-| Existing  | Drop it when an active plan on the same account shares its payee key, or has the same cadence and an amount within 25%            |
-| Dismissed | Drop it when a dismissal for the same account, payee key and cadence is within 25% of its amount                                  |
+| Step      | Rule                                                                                                                                                                                  |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Payee     | Group by account and `normalizePayee(merchant ?? name)`. An empty key never matches                                                                                                   |
+| Amount    | Within a payee, split charges into amount bands. A charge joins a band within max(10% of the band median, $1.00)                                                                      |
+| Gap       | Weekly 7 days ±1, fortnightly 14 ±2, monthly one calendar month ±3 days, yearly one calendar year ±7 days                                                                             |
+| Run       | Walk back from the newest charge while every gap fits one cadence. Weekly, fortnightly and monthly need 3 charges; yearly needs 2                                                     |
+| Current   | The next expected date must be no more than one gap's tolerance in the past                                                                                                           |
+| Existing  | Drop it when an active plan on the same account shares its payee key, or has the same cadence, an amount within 25% and a due date within the gap tolerance of the next expected date |
+| Dismissed | Drop it when a dismissal for the same account, payee key and cadence is within 25% of its amount                                                                                      |
 
 - The suggestion carries the display name (newest charge), the newest amount, the cadence, the
   next expected date, the account and the newest charge's category when it has one.
 - Ties within a payee: each band is tested on its own, so two subscriptions from one store at
   different prices become two suggestions.
-- Output is capped at 20, newest charge first.
+- Output is capped at 20, soonest next expected date first.
+- The due-date check on the Existing rule stops one planned bill from hiding a different charge of
+  similar size, such as a $13.99 plan on the 3rd hiding an $11.99 charge on the 11th.
 
 Near misses the tests must reject:
 

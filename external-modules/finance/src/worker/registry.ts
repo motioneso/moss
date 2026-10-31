@@ -24,6 +24,10 @@ import {
   billDecideHandler,
   billStopHandler
 } from "./handlers/bills.js";
+import {
+  billSuggestionDismissHandler,
+  billSuggestionsReadHandler
+} from "./handlers/bill-suggestions.js";
 // external-modules/finance/src/worker/registry.ts
 //
 // FIN-01 (#1146): the handler-key → factory registry, split out of index.ts
@@ -138,6 +142,8 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "target.set": targetSetHandler,
   "targets.fund": targetFundHandler,
   "bills.read": billsReadHandler,
+  "bills.suggestions": billSuggestionsReadHandler,
+  "bills.suggestion-dismiss": billSuggestionDismissHandler,
   "bill.entry-preview": billEntryPreviewHandler,
   "bill.entry-record": billEntryRecordHandler,
   billClearHandler,

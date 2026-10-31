@@ -63,7 +63,8 @@
       "app.finance_transfer_corrections",
       "app.finance_provider_handoffs",
       "app.finance_card_policies",
-      "app.finance_card_assignments"
+      "app.finance_card_assignments",
+      "app.finance_bill_suggestion_dismissals"
     ]
   },
   "settingsPath": "/settings",
@@ -108,7 +109,7 @@
       {
         "id": "finance.upcoming",
         "path": "/upcoming",
-        "description": "Upcoming plans, matches, skips and stops bills; month arrows step months. Without a budget currency it offers Open Budget. One-off changes/reset use captured review and host confirmation, keep cadence and actuals, and may cross years. Undo review before changing matched/skipped occurrences; reset later changes/reviews before stopping earlier. Match reviews posted rows within seven days of the month, nearest first, never auto-selected. No plans shows one Add a bill empty state; an empty month says so in one line. Record bill entry previews a past expense on an active manual account for a due occurrence, its balance/debt effect and same-amount duplicates within seven days. Confirmed recording atomically adds one expense and match; statement, date and revision guards apply. Duplicates block recording; use Accounts then Match for separate expenses. Cancel retains input; Check saved bills appears only after stale/uncertain writes. No bank instruction, future entry or automatic retry.",
+        "description": "Upcoming plans, matches, skips and stops bills, a month at a time. Without a budget currency it offers Open Budget. The head totals due, paid and to go; skipped bills count nowhere. Desktop shows a month calendar; its bill chips open a panel with the same actions; the list groups bills by week; on phones a row's Details opens that panel. Suggested bills lists repeating charges, weekly to yearly, in the budget currency that no active plan covers; Add as bill prefills the form, Dismiss hides one for good. With no plans, suggestions replace the Add a bill empty state. One-off changes/reset need host confirmation, keeping cadence and actuals. Undo review before changing matched/skipped bills. Match reviews posted rows within seven days, nearest first, never auto-selected. Record bill entry previews a past expense on an active manual account, its balance effect and blocking same-amount duplicates. Check saved bills shows only after stale/uncertain writes. No bank instruction or auto-retry.",
         "label": "Upcoming bills"
       }
     ],
@@ -1043,6 +1044,40 @@
         },
         "required": ["from", "to"]
       }
+    },
+    {
+      "name": "finance.bills.suggestions",
+      "permissionId": "finance.bills.suggestions",
+      "actionLabel": "Find likely bills",
+      "description": "Find likely recurring bills from the owner's own posted charges in the last 400 days, budget currency only. Each suggestion carries the account, payee key, cadence, amount, last and next dates. Plans and dismissed suggestions are left out. Nothing is saved.",
+      "risk": "read",
+      "handler": "bills.suggestions",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      }
+    },
+    {
+      "name": "finance.bills.suggestions.dismiss",
+      "permissionId": "finance.bills.suggestions.dismiss",
+      "actionLabel": "Dismiss a bill suggestion",
+      "description": "Hide one bill suggestion, keyed by account, payee key, cadence and amount from finance.bills.suggestions. Nothing is deleted; a price change of more than a quarter shows it again.",
+      "risk": "write",
+      "handler": "bills.suggestion-dismiss",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "accountId": { "type": "string" },
+          "payeeKey": { "type": "string", "maxLength": 160 },
+          "cadence": { "type": "string", "enum": ["weekly", "fortnightly", "monthly", "yearly"] },
+          "amountCents": { "type": "integer", "minimum": 1, "maximum": 100000000 }
+        },
+        "required": ["accountId", "payeeKey", "cadence", "amountCents"]
+      },
+      "executionPolicy": "auto",
+      "actionFamilyId": "drafting"
     },
     {
       "name": "finance.bill.create",

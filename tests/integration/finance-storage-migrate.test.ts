@@ -91,7 +91,8 @@ const ownedTables = [
   "app.finance_transfer_corrections",
   "app.finance_provider_handoffs",
   "app.finance_card_policies",
-  "app.finance_card_assignments"
+  "app.finance_card_assignments",
+  "app.finance_bill_suggestion_dismissals"
 ];
 
 const NOW_1 = "2026-07-18T12:00:00.000Z";

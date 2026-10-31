@@ -174,6 +174,8 @@ async function describe(row: ActivityRecord, names: Names): Promise<string> {
       return "Changed one projected bill date or amount";
     case "bill.adjust-reset":
       return "Reset a one-off bill change to its schedule";
+    case "bill.suggestion-dismiss":
+      return "Dismissed a bill suggestion";
     case "target.set":
       return `Changed the target for ${names.category(str(p.categoryId))}`;
     case "budget.configure":

@@ -520,7 +520,20 @@
       "dependencies": [],
       "exports": ["MonthChip"],
       "options": [],
-      "flags": [{ "prop": "block", "optional": true }]
+      "flags": [
+        { "prop": "block", "optional": true },
+        { "prop": "muted", "optional": true },
+        { "prop": "struck", "optional": true }
+      ]
+    },
+    {
+      "name": "month-grid",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/month-grid.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["MonthGrid"],
+      "options": [],
+      "flags": []
     },
     {
       "name": "nav-index",
@@ -644,7 +657,10 @@
           "default": "baseline"
         }
       ],
-      "flags": [{ "prop": "rule", "optional": true }]
+      "flags": [
+        { "prop": "rule", "optional": true },
+        { "prop": "wrap", "optional": true }
+      ]
     },
     {
       "name": "segmented",

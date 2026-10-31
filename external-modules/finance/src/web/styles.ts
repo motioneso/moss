@@ -116,6 +116,20 @@ export const MODULE_STYLES = `
 .fnm-peek h2 { margin: 0; }
 .fnm-move { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); align-items: end; gap: var(--space-3); }
 .fnm-move input, .fnm-move select { width: 100%; min-width: 0; }
+/* Upcoming: the month grid above the bill list, which groups by week. */
+.fnm-weeks { display: flex; flex-direction: column; gap: var(--space-5); margin-top: var(--space-3); }
+.fnm-week { display: flex; flex-direction: column; gap: var(--space-2); }
+.fnm-week > h3 { margin: 0; }
+/* Bill row meta: status and amount on one line, actions in at most two rows.
+   Stacked phone rows hand the actions to the detail panel. */
+.fnm-occ { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-3); max-width: 26rem; }
+.fnm-occ .fnm-occ__actions { justify-content: flex-end; }
+.fnm-occ .fnm-occ__open { display: none; }
+@media (max-width: 560px) {
+  .fnm-occ { flex-direction: row; flex-wrap: wrap; align-items: center; max-width: none; }
+  .fnm-occ .fnm-occ__actions { display: none; }
+  .fnm-occ .fnm-occ__open { display: inline-flex; }
+}
 @media (max-width: 720px) {
   .fnm-root { padding: 1rem 0.75rem 2rem; }
   .fnm-page { grid-template-columns: minmax(0, 1fr); gap: var(--space-7); }

@@ -12,6 +12,7 @@ import { transactionBulkSqlStore } from "./store-transaction-bulk-sql.js";
 import { TXN_COLUMNS, rowToTransaction, type TransactionRow } from "./store-transaction-rows.js";
 import { flexSqlStore } from "./store-flex-sql.js";
 import { billSqlStore } from "./store-bills-sql.js";
+import { billSuggestionSqlStore } from "./store-bill-suggestions-sql.js";
 // external-modules/finance/src/domain/store-sql.ts
 // FIN-06 (#1166, F6-D3): FinanceStore over module db.query (#1167). Every
 // statement here IS the contract — string-equality tested, since a drift
@@ -279,6 +280,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
     budgetPolicy: budgetSqlStore(db),
     targets: targetSqlStore(db),
     bills: billSqlStore(db),
+    billSuggestions: billSuggestionSqlStore(db),
     flex: flexSqlStore(db),
     cardReserves: cardReserveSqlStore(db),
     manual: manualSqlStore(db),

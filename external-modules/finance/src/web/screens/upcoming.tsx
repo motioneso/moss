@@ -4,6 +4,7 @@ import {
   Button,
   Dialog,
   EmptyState,
+  Eyebrow,
   Note,
   PeriodStepper,
   RowIndex,
@@ -17,13 +18,45 @@ import {
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import type { BillPlan } from "../../domain/bills";
-import { currentMonth, formatCents, monthLabel, shiftMonth } from "../format";
+import {
+  cadenceText,
+  currentMonth,
+  dayYearLabel,
+  formatCents,
+  monthLabel,
+  shiftMonth,
+  shortDayLabel,
+  weekdayDayLabel
+} from "../format";
 import { navigate } from "../router";
-import { invalidateQueries, publishToolRefresh, useToolQuery } from "../store";
-import { outcomeGate } from "../states";
+import {
+  invalidateQueries,
+  publishToolRefresh,
+  useToolQuery,
+  useToolQueryRefreshing
+} from "../store";
+import { LoadingState, outcomeGate } from "../states";
 import { BillAdjustmentDialog } from "../bill-adjustment-dialog";
-import { BillPlanDialog } from "../bill-plan-dialog";
+import { BillPlanDialog, type BillPlanDraft } from "../bill-plan-dialog";
 import { billMatchCandidates } from "../bill-match-candidates";
+import { BillCalendar, billWeeks, weekLabel } from "../bill-calendar";
+import {
+  accountName,
+  billTotals,
+  categoryName,
+  OccurrenceActions,
+  OccurrencePeek,
+  occurrenceDate,
+  occurrenceKey,
+  quietState,
+  stateLabel,
+  type OccurrenceHandlers
+} from "../bill-occurrence";
+import {
+  BillSuggestions,
+  type BillSuggestionsResult,
+  type BillSuggestionView
+} from "../bill-suggestions";
 export interface Occurrence {
   planId: string;
   name: string;
@@ -59,13 +92,21 @@ export interface BillsView extends Record<string, unknown> {
     amountCents: number;
   }[];
 }
+function totalsLine(view: BillsView): string | null {
+  if (!view.occurrences.length) return null;
+  const totals = billTotals(view.occurrences);
+  const money = (cents: number) => formatCents(cents, view.isoCurrency);
+  return `${money(totals.due)} due · ${money(totals.paid)} paid · ${money(totals.toGo)} to go`;
+}
+
 export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): ReactNodeLike {
   const [month, setMonth] = useState(currentMonth());
   const [adjusting, setAdjusting] = useState<{ occurrence: Occurrence; reset: boolean } | null>(
     null
   );
   const [recording, setRecording] = useState<Occurrence | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState<{ initial?: BillPlanDraft } | null>(null);
+  const [peekKey, setPeekKey] = useState<string | null>(null);
   const [selected, setSelected] = useState<Occurrence | null>(null);
   const [stopping, setStopping] = useState<BillPlan | null>(null);
   const [transactionId, setTransaction] = useState("");
@@ -83,11 +124,22 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
   const settled =
     query.status === "settled" && query.outcome.kind === "ok" ? query.outcome.result : null;
   const data = settled?.setupRequired ? null : settled;
+  const suggestionsQuery = useToolQuery<BillSuggestionsResult>("finance.bills.suggestions", {});
+  // A failed suggestions read only hides the section.
+  const suggestions =
+    suggestionsQuery.status === "settled" && suggestionsQuery.outcome.kind === "ok"
+      ? (suggestionsQuery.outcome.result.suggestions ?? [])
+      : [];
+  // Every bill write carries the review it was shown, so wait for the read that follows a write.
+  const refreshing = useToolQueryRefreshing("finance.bills.read", { from, to });
+  const suggestionsRefreshing = useToolQueryRefreshing("finance.bills.suggestions", {});
+  const peek = (peekKey && data?.occurrences.find((o) => occurrenceKey(o) === peekKey)) || null;
   const matchCandidates = data && selected ? billMatchCandidates(data.transactions, selected) : [];
   const canMatch = matchCandidates.some((row) => row.id === transactionId);
   useEffect(() => {
     setSelected(null);
     setStopping(null);
+    setPeekKey(null);
     setMessage(null);
   }, [month]);
   const write = async (tool: string, input: Record<string, string>) => {
@@ -137,6 +189,36 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
       setBusy(false);
     }
   };
+  const disabled = busy || blocked || refreshing || !props.tools;
+  const handlers: OccurrenceHandlers = {
+    disabled,
+    onAdjust: (occurrence, reset) => setAdjusting({ occurrence, reset }),
+    onRecord: setRecording,
+    onMatch: (o) => {
+      if (!data) return;
+      dialogReview.current = {
+        expectedRevision: data.revision,
+        expectedFingerprint: data.fingerprint
+      };
+      setMessage(null);
+      setSelected(o);
+      setTransaction("");
+    },
+    onSkip: (o) =>
+      void write("finance.bill.decide", { planId: o.planId, dueDate: o.dueDate, state: "skipped" }),
+    onUndo: (o) => void write("finance.bill.clear", { planId: o.planId, dueDate: o.dueDate })
+  };
+  const addSuggestion = (s: BillSuggestionView) =>
+    setAdding({
+      initial: {
+        name: s.name,
+        accountId: s.accountId,
+        categoryId: s.categoryId,
+        amountCents: s.amountCents,
+        anchorDate: s.nextDate,
+        cadence: s.cadence
+      }
+    });
   const actions = (
     <>
       {blocked ? (
@@ -144,11 +226,22 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
           Check saved bills
         </Button>
       ) : null}
-      <Button disabled={busy || blocked || !props.tools} onClick={() => setAdding(true)}>
+      <Button disabled={disabled} onClick={() => setAdding({})}>
         Add a bill
       </Button>
     </>
   );
+  const suggested = (view: BillsView, head?: ReactNodeLike) =>
+    suggestions.length ? (
+      <BillSuggestions
+        suggestions={suggestions}
+        isoCurrency={view.isoCurrency}
+        disabled={disabled || suggestionsRefreshing}
+        tools={props.tools}
+        onAdd={addSuggestion}
+        actions={head}
+      />
+    ) : null;
   // With no plans the month does not matter, so the empty page carries the actions.
   const noPlans = Boolean(data && !data.plans.length);
   return (
@@ -163,7 +256,8 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
             onNext={() => setMonth(shiftMonth(month, 1))}
             disabled={
               busy ||
-              adding ||
+              Boolean(adding) ||
+              Boolean(peek) ||
               Boolean(selected) ||
               Boolean(stopping) ||
               Boolean(adjusting) ||
@@ -184,157 +278,120 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
               actions={<Button onClick={() => navigate("/")}>Open Budget</Button>}
             />
           ) : !body.plans.length ? (
-            <EmptyState title="No bills yet" actions={actions} />
+            suggestionsQuery.status === "loading" ? (
+              <LoadingState label="Loading bills" />
+            ) : (
+              (suggested(body, <div className="fnm-chips">{actions}</div>) ?? (
+                <EmptyState title="No bills yet" actions={actions} />
+              ))
+            )
           ) : (
             <div className="fnm-block">
-              <SectionHead title="Bills due" rule />
-              {body.occurrences.length ? (
-                <RowIndex density="compact">
-                  {body.occurrences.map((o) => (
-                    <RowIndexItem
-                      key={`${o.planId}:${o.dueDate}`}
-                      title={o.name}
-                      excerpt={`${o.plannedDate ?? o.dueDate}${o.adjusted ? ` · one-off change from ${o.dueDate}` : ""} · ${body.accounts.find((a) => a.accountId === o.accountId)?.name ?? "Unavailable account"} · ${body.categories.find((c) => c.id === o.categoryId)?.name ?? "Archived category"}`}
-                      meta={
-                        <div className="fnm-block fnm-block--tight fnm-end">
-                          <strong>{formatCents(o.expectedCents, body.isoCurrency)} expected</strong>
-                          <Badge>
-                            {o.state === "projected"
-                              ? (o.plannedDate ?? o.dueDate) < body.today
-                                ? "Past due · projected"
-                                : "Projected"
-                              : o.state === "posted"
-                                ? `Posted ${formatCents(o.actualCents!, body.isoCurrency)}`
-                                : o.state === "skipped"
-                                  ? "Skipped"
-                                  : "Match needs review"}
-                          </Badge>
-                          {o.canAdjust ? (
-                            <div className="fnm-spread">
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                disabled={busy || blocked || !props.tools}
-                                onClick={() => setAdjusting({ occurrence: o, reset: false })}
-                              >
-                                Change this occurrence
-                              </Button>
-                              {o.adjusted ? (
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  disabled={busy || blocked || !props.tools}
-                                  onClick={() => setAdjusting({ occurrence: o, reset: true })}
-                                >
-                                  Reset one-off change
-                                </Button>
-                              ) : null}
-                            </div>
-                          ) : o.state !== "projected" ? (
-                            <p className="jds-hint">Undo review before changing this projection.</p>
-                          ) : null}
-                          {o.canRecordEntry ? (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              disabled={busy || blocked || !props.tools}
-                              onClick={() => setRecording(o)}
-                            >
-                              Record bill entry
-                            </Button>
-                          ) : null}
-                          <div className="fnm-spread">
-                            {o.state === "projected" ? (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  disabled={busy || blocked || !props.tools}
-                                  onClick={() => {
-                                    dialogReview.current = {
-                                      expectedRevision: body.revision,
-                                      expectedFingerprint: body.fingerprint
-                                    };
-                                    setMessage(null);
-                                    setSelected(o);
-                                    setTransaction("");
-                                  }}
-                                >
-                                  Match posted
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  disabled={busy || blocked || !props.tools}
-                                  onClick={() =>
-                                    void write("finance.bill.decide", {
-                                      planId: o.planId,
-                                      dueDate: o.dueDate,
-                                      state: "skipped"
-                                    })
-                                  }
-                                >
-                                  Skip occurrence
-                                </Button>
-                              </>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                disabled={busy || blocked || !props.tools}
-                                onClick={() =>
-                                  void write("finance.bill.clear", {
-                                    planId: o.planId,
-                                    dueDate: o.dueDate
-                                  })
+              <div className="fnm-block fnm-block--tight">
+                <SectionHead title="Bills due" meta={totalsLine(body)} rule wrap />
+                {body.occurrences.length ? (
+                  <>
+                    <BillCalendar
+                      month={month}
+                      view={body}
+                      onOpen={(o) => setPeekKey(occurrenceKey(o))}
+                    />
+                    <div className="fnm-weeks">
+                      {billWeeks(body.occurrences).map((week) => (
+                        <div className="fnm-week" key={week.start}>
+                          <Eyebrow as="h3">{weekLabel(week.start)}</Eyebrow>
+                          <RowIndex density="compact">
+                            {week.items.map((o) => (
+                              <RowIndexItem
+                                key={occurrenceKey(o)}
+                                title={o.name}
+                                excerpt={[
+                                  weekdayDayLabel(occurrenceDate(o)),
+                                  o.adjusted
+                                    ? `one-off change from ${shortDayLabel(o.dueDate)}`
+                                    : null,
+                                  accountName(body, o.accountId),
+                                  categoryName(body, o.categoryId)
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                                meta={
+                                  <div className="fnm-occ">
+                                    <div className="fnm-inline">
+                                      {quietState(o, body) ? null : (
+                                        <Badge>{stateLabel(o, body)}</Badge>
+                                      )}
+                                      <strong>
+                                        {formatCents(o.expectedCents, body.isoCurrency)} expected
+                                      </strong>
+                                    </div>
+                                    <OccurrenceActions occurrence={o} {...handlers} />
+                                    <span className="fnm-occ__open">
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        aria-label={`Details, ${o.name}`}
+                                        onClick={() => setPeekKey(occurrenceKey(o))}
+                                      >
+                                        Details
+                                      </Button>
+                                    </span>
+                                  </div>
                                 }
-                              >
-                                Undo review
-                              </Button>
-                            )}
-                          </div>
+                              />
+                            ))}
+                          </RowIndex>
                         </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="jds-hint" role="status">
+                    Nothing due in {monthLabel(month)}.
+                  </p>
+                )}
+              </div>
+              {suggested(body)}
+              <div className="fnm-block fnm-block--tight">
+                <SectionHead title="Your bill plans" rule />
+                <RowIndex density="compact">
+                  {body.plans.map((p) => (
+                    <RowIndexItem
+                      key={p.id}
+                      title={p.name}
+                      excerpt={[
+                        accountName(body, p.accountId),
+                        `${cadenceText(p.cadence)} from ${dayYearLabel(p.anchorDate, "short")}`,
+                        p.endDate ? `stops after ${dayYearLabel(p.endDate, "short")}` : null
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                      meta={
+                        p.endDate && p.endDate <= body.today ? (
+                          <Badge>Stopped</Badge>
+                        ) : (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={disabled}
+                            onClick={() => {
+                              dialogReview.current = {
+                                expectedRevision: body.revision,
+                                expectedFingerprint: body.fingerprint
+                              };
+                              setMessage(null);
+                              setStopping(p);
+                              setEndDate(body.today);
+                            }}
+                          >
+                            {p.endDate ? "Stop sooner" : "Stop future bills"}
+                          </Button>
+                        )
                       }
                     />
                   ))}
                 </RowIndex>
-              ) : (
-                <p className="jds-hint" role="status">
-                  Nothing due in {monthLabel(month)}.
-                </p>
-              )}
-              <SectionHead title="Your bill plans" rule />
-              <RowIndex density="compact">
-                {body.plans.map((p) => (
-                  <RowIndexItem
-                    key={p.id}
-                    title={p.name}
-                    excerpt={`${body.accounts.find((a) => a.accountId === p.accountId)?.name ?? "Account unavailable"} · ${p.cadence} from ${p.anchorDate}${p.endDate ? ` · stops after ${p.endDate}` : ""}`}
-                    meta={
-                      p.endDate && p.endDate <= body.today ? (
-                        <Badge>Stopped</Badge>
-                      ) : (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={busy || blocked || !props.tools}
-                          onClick={() => {
-                            dialogReview.current = {
-                              expectedRevision: body.revision,
-                              expectedFingerprint: body.fingerprint
-                            };
-                            setMessage(null);
-                            setStopping(p);
-                            setEndDate(body.today);
-                          }}
-                        >
-                          {p.endDate ? "Stop sooner" : "Stop future bills"}
-                        </Button>
-                      )
-                    }
-                  />
-                ))}
-              </RowIndex>
+              </div>
             </div>
           ),
         { loadingLabel: "Loading bills" }
@@ -358,8 +415,21 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
           onUncertain={() => setBlocked(true)}
         />
       ) : null}
+      {data && peek ? (
+        <OccurrencePeek
+          occurrence={peek}
+          view={data}
+          onClose={() => setPeekKey(null)}
+          {...handlers}
+        />
+      ) : null}
       {data && adding ? (
-        <BillPlanDialog data={data} tools={props.tools} onClose={() => setAdding(false)} />
+        <BillPlanDialog
+          data={data}
+          initial={adding.initial}
+          tools={props.tools}
+          onClose={() => setAdding(null)}
+        />
       ) : null}
       {data && selected ? (
         <Dialog

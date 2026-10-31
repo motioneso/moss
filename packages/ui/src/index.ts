@@ -84,6 +84,8 @@ export { Menu } from "./menu.js";
 export type { MenuItem, MenuProps } from "./menu.js";
 export { MonthChip } from "./month-chip.js";
 export type { MonthChipProps } from "./month-chip.js";
+export { MonthGrid } from "./month-grid.js";
+export type { MonthGridProps } from "./month-grid.js";
 export { NowLine } from "./now-line.js";
 export type { NowLineProps } from "./now-line.js";
 export { PeekCloseButton } from "./peek-close-button.js";

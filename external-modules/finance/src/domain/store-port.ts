@@ -14,6 +14,7 @@ import type { HistoryExportStore } from "./history-export.js";
 import type { TransactionBulkStore } from "./transaction-bulk.js";
 import type { FlexStore, FlexPolicy } from "./flex.js";
 import type { BillStore } from "./bills.js";
+import type { BillSuggestionStore } from "./bill-suggestions.js";
 import type { TargetStore } from "./targets.js";
 // external-modules/finance/src/domain/store-port.ts
 // FIN-06 (#1166, F6-D3): the storage port both impls satisfy. Vocabulary is
@@ -87,6 +88,7 @@ export interface FinanceStore {
   readonly bulk?: TransactionBulkStore;
   readonly targets?: TargetStore;
   readonly bills?: BillStore;
+  readonly billSuggestions?: BillSuggestionStore;
   readonly flex?: FlexStore;
   readonly cardReserves?: CardReserveStore;
   readonly budgetPolicy?: BudgetPolicyStore;

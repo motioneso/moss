@@ -195,6 +195,8 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.activity.list", "activity.list"],
         ["finance.target.set", "target.set"],
         ["finance.bills.read", "bills.read"],
+        ["finance.bills.suggestions", "bills.suggestions"],
+        ["finance.bills.suggestions.dismiss", "bills.suggestion-dismiss"],
         ["finance.bill.create", "bill.create"],
         ["finance.bill.decide", "bill.decide"],
         ["finance.bill.stop", "bill.stop"],
@@ -249,6 +251,11 @@ describe("finance manifest contract (#1146)", () => {
       confirmWhenKeys: ["transactionId", "accountId", "month", "writeRevision", "notes"]
     });
     expect(toolByName("finance.bill.entry-preview")).toMatchObject({ risk: "read" });
+    expect(toolByName("finance.bills.suggestions")).toMatchObject({ risk: "read" });
+    expect(toolByName("finance.bills.suggestions.dismiss")).toMatchObject({
+      risk: "write",
+      executionPolicy: "auto"
+    });
     expect(toolByName("finance.bill.entry-record")).toMatchObject({
       risk: "write",
       executionPolicy: "confirm",

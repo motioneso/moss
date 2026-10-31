@@ -176,6 +176,12 @@ _No enum or boolean props._
 ## month-chip
 
 - **block** (optional boolean flag)
+- **muted** (optional boolean flag)
+- **struck** (optional boolean flag)
+
+## month-grid
+
+_No enum or boolean props._
 
 ## nav-index
 
@@ -219,6 +225,7 @@ _No enum or boolean props._
 
 - **align** (optional, default `baseline`): `baseline`, `center`
 - **rule** (optional boolean flag)
+- **wrap** (optional boolean flag)
 
 ## segmented
 
