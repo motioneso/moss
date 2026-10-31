@@ -80,26 +80,6 @@ No open Outlook calendar decision. Ben approved the
 on 2026-10-21. Implementation and isolated-dev verification are authorized;
 source-quality checks remain required before imports are enabled (#3567).
 
-### Meals kill gate: five calls on the clickable prototype (#3317, #3880) — 2026-10-31
-
-Blocked: detailed planning and tickets for Meals phase 2. The plan
-(`docs/superpowers/plans/2026-10-25-meals-build.md` section 5) names Ben as the owner. The prototype
-is static HTML in PR #3880 at `docs/superpowers/specs/assets/2026-10-09-meals/index.html`, and the
-Meals build session serves it on a reserved dev port (link on its status board).
-
-1. Is the weekly plan worth having, or does it read as more work than a hand-written list?
-   Ben's call.
-2. Is the wait acceptable while days fill in one by one? Ben's call.
-3. Forks A and B: settled 2026-10-30 as A1 and B1. Nothing to decide.
-4. Model job 2, the AI pass of the Safety check. Recommendation: keep it. The term check runs first;
-   the AI pass can only add a failure, never clear one. A term list misses hidden allergens in
-   compound ingredients such as pesto or Worcestershire sauce. Cost: one extra model call per
-   recipe.
-5. Scope cut for phase 2. Recommendation: move receipt text and leftovers to phase 3. Keep the
-   Log rebuild in phase 2, because phase 2 removes Food and its log with it.
-
-Platform work that phase 2 needs keeps moving meanwhile (#3720, #3721, #3722).
-
 ### Vocci: every remaining item needs Ben (#3565, #3584) — 2026-10-24
 
 Checked at origin/main `cf6ade9c3`. Production runs edge `8786e0a3c` (healthy after the
