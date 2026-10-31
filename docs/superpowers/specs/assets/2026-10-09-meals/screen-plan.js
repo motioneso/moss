@@ -270,7 +270,7 @@
     const expiring = A.phase() >= 3 && r && r.ingredients.some((i) => i.name === "baby spinach" || i.name === "sour cream");
     const serves = meal.eaters.length;
     return h`
-      <article class="mls-meal${isNew ? " mls-meal--new" : ""}${meal.locked ? " mls-meal--locked" : ""}">
+      <article class="mls-meal${isNew ? " mls-meal--new" : ""}">
         ${
           r
             ? h`<a class="mls-meal__title" href="${A.hrefFor(`recipe/${meal.id}`)}">${r.title}</a>`
