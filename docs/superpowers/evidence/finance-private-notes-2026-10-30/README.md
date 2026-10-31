@@ -44,3 +44,6 @@ This is source-token analysis of six selected role/ground pairs across five name
 light/dark modes. All selected pairs meet their stated floors. It is not rendered-pixel or full
 WCAG certification: disabled opacity, textures, arbitrary custom palettes and all interactive
 states are outside that calculation. Current shared token/focus tests are also in the aggregate.
+
+The approved follow-ups now have [separate corrected-state originals and regression results](../finance-private-notes-2026-10-31/README.md).
+This folder remains the unaltered earlier-source baseline; broader review remains open.

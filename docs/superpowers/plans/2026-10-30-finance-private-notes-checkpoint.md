@@ -1,100 +1,154 @@
-# Private transaction notes: continuation checkpoint
+# Private transaction notes: verified continuation checkpoint
 
-2026-10-30. Branch task/finance-parity-20261028. Paths are relative to ~/Jarv1s.
-Commit/push authorized; no merge, deployment, production data or PR publication.
+2026-10-31 UTC. Branch task/finance-parity-20261028. Paths are relative to ~/Jarv1s.
+Commits and pushes are authorized; no merge, deployment, production data or PR publication.
+Main conversation owns further priorities and strict design approval. No new feature was started.
 
-## Current capability and acceptance boundary
+## Capability and current source
 
-Spec a9c3c4fa precedes implementation 6eda0f62. Production follow-ups 14e45a3f and d660d466
-preserve oversized drafts and distinguish reading/saving. Native helper c14ead37 honors
-rendered read backoff with an explicit saved-state read, never a write retry.
+Spec a9c3c4fa preceded implementation 6eda0f62. Production 6d9d4904 fixed refresh across
+cached months and keeps transaction details mounted when a note edit removes its filtered row.
+Approved UX fix d714b555 makes blocked drafts read only, focusable and selectable, with an
+explicit reason and recovery action. Initial reads can close or return to details without waiting.
+A generation fence ignores late responses across close/reopen, including their finally handlers.
+Submitted saves retain close protection: canceling a read does not imply canceling a write.
 
-Transaction details now offers an owned private-note editor on current SQL storage and the
-host bridge. One exact account/id/month read captures the current note and row version. A
-separate SQL compare-and-set updates only notes and adds metadata-only activity in the same
-statement. It does not reuse category confirmation, alter financial fields, create rules or
-change splits, links or reconciliation. Empty strings preserve explicit clear intent. Fresh
-unchanged notes are a no-op; an old captured version conflicts, including after a completed save.
-No migration was added or changed.
+Current production/test source: 54c2adbbf1279ae08e312fe3b750d94771f2c9ff, committed and pushed.
+Its two follow-up test commits correct hidden-dialog queries under the real host guard and honor
+register read backoff. The module app map includes the actual recovery behavior. No migration
+or financial calculation changed in these refinements; Finance retains 23 owned tables and 41
+additive migrations.
 
-The existing shared Dialog stays mounted while its title/body/footer switch to editing, keeping
-its original focus-return target and shared modal lifecycle. Cancellation keeps the draft.
-Conflicts/uncertain responses block writes until Check saved note succeeds. The retained draft
-and currently saved note are then both available for an intentional overwrite. Read 429 waits
-are honored; no automatic write retry is introduced. Text is not trimmed or shortened, including
-oversized ASCII or Unicode drafts. Save rejects more than 4,000 UTF-8 bytes, NUL and malformed
-surrogates. Shared rows and old host/storage versions remain read only with an upgrade hint.
+One exact account/id/month read captures the saved note and opaque row version. A dedicated
+note-only SQL compare-and-set changes notes and metadata-only activity atomically. It preserves
+amount, category, posting, review, splits, links, account balances and reconciliation. Empty
+strings preserve explicit clear intent through same-ID sync and linked pending-to-posted handoff.
+Whitespace is preserved; over 4,000 UTF-8 bytes, NUL and malformed Unicode are rejected without
+shortening the draft. Pending, posted, split, transfer and reconciled owned SQL notes are supported.
+KV compatibility and household rows remain read only. No automatic write retry is introduced.
 
-**Native UI acceptance is pending. Do not call this slice verified or universal editing parity.**
-The installed test covers initial loading, oversize preservation, host cancellation, save/reload,
-clear, a real intervening SQL write, conflict and explicit recovery, plus light/dark desktop/phone
-screenshots and focus/overflow/footer assertions. It has not yet run at this checkpoint.
+Check saved note retains the draft beside current saved text. If the draft already committed
+before response loss, recovery says so and disables redundant Save. All dependent reads are
+invalidated, including other cached months; authoritative completed reads fence older requests.
+A filtered-out row keeps its editor and returns focus to search. The shared Dialog owns modal
+isolation, keyboard containment, scrolling and focus restoration.
 
-## Evidence so far
+## Verification receipts
 
-All thirteen focused SQL/handler tests passed at clean 6eda0f62, receipt 224509-Dup6ss:
-/tmp/jarv1s-gate/moss_finance-20261030-224509-Dup6ss.log.
-Fingerprint af9ba5b0f5167db64820149ec8e1b0b08801a1ceeae2bad06793bbc883ae4fca;
-Node 24.19.0, pnpm 10.6.2, disposable PostgreSQL 17.11. Tests include exact Unicode/clear
-preservation, no-op/stale/concurrent writes, wrong/missing targets, byte/invalid-text limits,
-activity redaction, unchanged split/review fields, a reconciled linked transfer with unchanged
-account/statement state, same-ID provider refresh and actual synthetic-feed pending-to-posted
-convergence. Later UI/test-helper commits do not replace that exact clean-backend receipt.
+All gates use scripts/run-gate.sh and an owned disposable pgvector PostgreSQL 17.11 server.
+Toolchain: Node 24.19.0 and pnpm 10.6.2. Synthetic financial/auth fixtures only. Real installed
+UI, host approval, API, worker and SQL/RLS paths are exercised. Provider and credential ports
+are inert synthetic stand-ins; real bank/provider HTTP and CI e2e remain unrun.
 
-Removing RLS only from the disposable fixture's transactions table produced the intended four
-foreign/admin read/write failures (nine passed), receipt 224428-I83wZc at the same clean commit
-and fingerprint. Foreign/admin reads returned private note facts; writes returned saved instead
-of stale with the actual revision. Restoring the normal setup passed all thirteen above. Runtime
-RLS source was never weakened. Both gate containers were removed by the runner.
+Complete Finance passed **237 tests in 20 files, including all 24 installed-browser flows**,
+at clean 54c2adbb, receipt /tmp/jarv1s-gate/moss_finance-20261031-001414-MBYx3C.log.
+Fingerprint 57884b3d293dd80e72171a7d1744c20134c817f7dfb9525c9c824860d5aedb62.
+Tests ran 00:14:49–00:22:22 UTC; duration 452.98 seconds. The runner removed its container.
+A real budget.status 429/3-second read backoff was honored; no pattern rejection occurred.
 
-The first development SQL run passed nine and failed the handoff case because its fixture had
-not created the required provider item. The existing FK was retained and the fixture corrected.
-An expanded thirteen-case development run then passed (224219-aVOLwt). Initial type/lint errors
-were a copied unused import, literal actor inference and the read-result generic constraint;
-those were corrected. Focused lint, module types and sixteen manifest unit cases subsequently
-passed. Full root typecheck also passed; these plain development logs lack gate fingerprints
-and do not substitute for the pending clean aggregate.
+The four-flow installed recovery/regression run passed at clean 54c2adbb:
+/tmp/jarv1s-gate/moss_finance-20261031-001150-KUDeIF.log.
+It covers a held real initial read, close and restored opener focus, a newer independent SQL
+note, reopen, and delivery of the old response during a newer host-confirmed write. Close
+protection survives; Escape cancels the host action without mutation and retains the new draft.
+Blocked drafts remain enabled/read only, keyboard-select all text, and reject typed replacement.
+Edit keyboard focus stays contained. Light/dark/sage desktop and phone captures assert overflow,
+fixed actions and visible recovery/comparison text. The run honored a real note-read 429/6-second
+backoff. Four passed and twenty were intentionally excluded, not a complete Finance verdict.
 
-The new note tools are direct read/confirmed-write handlers, with no new queue declaration.
-The host page route passes inputs directly and persists summarizeAssistantToolInput's key/count
-summary, not values. The note activity statement contains IDs and notesChanged, not text or Undo.
-Existing shared projection and loaded/owned CSV implementations use explicit allowlists; the
-automatic categorization batch contains only id/payee/amount/date. These are scoped source traces,
-not a claim that notes never reach the owner's assistant. A broader privacy/runtime assertion
-must retain its existing negative-control and installed-path evidence.
+Earlier complete Finance at clean 6d9d4904 passed 237 tests in 20 files, all 24 installed flows:
+/tmp/jarv1s-gate/moss_finance-20261030-233452-WE53Bh.log,
+fingerprint 1eab72b6205cd7e76c555eb38b7c40ce788a8f64a674e4ebb41277a6cb9e579a.
+It does not by itself verify the later approved UI changes.
 
-## Gates in flight and next exact action
+The final-source canonical aggregate is active in the frozen verification checkout at clean
+54c2adbb: /tmp/jarv1s-gate/moss_finance_transfers_verify-20261031-002241-iNuzM2.log.
+Its verdict is pending; do not substitute the previous source result below. Recover its existing
+wait session 89252 or use the official status command on that exact receipt. Do not duplicate it.
 
-The bill-entry aggregate correction is still running in the frozen verification checkout at
-clean 4475cb87: /tmp/jarv1s-gate/moss_finance_transfers_verify-20261030-223645-1HZuKL.log.
-Static checks passed and units are active. Its predecessor had the known 277 baseline failures
-plus the now-fixed manifest-list regression. Normalize ANSI and compare complete FAIL identity
-sets to 143017-SaB79F before classifying the outcome. The baseline's sorted newline-joined set
-SHA-256 is dd40a5d54c5f4a990654eb4039f9055a3ecad8a99ada3088d76336ede12a0ba9.
+Baseline reference: /tmp/jarv1s-gate/moss_finance_transfers_verify-20261030-143017-SaB79F.log.
+Strip ANSI; collect and trim complete FAIL lines; deduplicate; sort; join with newlines and one
+final newline. The 277-identity set SHA-256 is
+`dd40a5d54c5f4a990654eb4039f9055a3ecad8a99ada3088d76336ede12a0ba9`.
+The completed aggregate at clean 6d9d4904, receipt 234309-xxsWfo, passed all static checks and
+reported 277 failed, 19,782 passed and three skipped (21 failed/1,641 passed files). It matched
+that full baseline set with no additions or removals. A previous bill-entry manifest-list
+regression produced 278 failures at a6a17c7b; 4475cb87 fixed it. Do not mislabel that earlier run
+baseline-only. Known baseline failures include Computer IPC/ACL and Sports environment fixtures;
+no runtime guard, limit or test was weakened to clear them.
 
-Repository static checks for notes are also running; do not overlap native acceptance with
-these CPU-heavy checks or the full unit stage. The worker's fail-closed pattern validation has
-a tight existing budget; never increase it for a test pass. Recover existing wait sessions or
-use run-gate.sh status --log on the exact log; do not infer liveness with process searches.
+Module types, integration-test types and scoped lint passed before d714b555. The two focused
+cache test files passed all three cases. Those plain development checks lack gate fingerprints
+and are supporting evidence, not aggregate approval.
 
-After the current checks finish:
+## Observed guard-removal controls and restored positives
 
-1. Record aggregate verdict and exact baseline delta, fix task regressions, preserve/push result.
-2. Through scripts/run-gate.sh, run test:integration:finance-notes-live with installed Chromium
-   and synthetic chat/XDG/artifact directories. Diagnose actual UI errors and inspect originals.
-3. Run test:integration:finance-notes-confirm-negative. The disposable manifest becomes valid
-   trusted-auto and removes confirmation; storage equality must fail after a completed write,
-   not from timeout/discovery failure. Restore normal installed acceptance afterward.
-4. Run test:integration:finance-complete and the latest-source canonical verify:foundation.
-   Keep each tested checkout's inputs frozen. Record unrun chained stages after any failure.
-5. Archive selected original screenshots in repository evidence, update this checkpoint/matrix
-   from actual results and verify pushed HEAD plus a clean worktree. CI e2e/provider HTTP remain
-   separate unless actually exercised.
+- Owner isolation: clean 6eda0f62 receipt 224428-I83wZc removed RLS only in the disposable
+  fixture and produced four foreign/admin read/write failures, nine passes. Restored receipt
+  224509-Dup6ss passed all thirteen. Both fingerprints were
+  af9ba5b0f5167db64820149ec8e1b0b08801a1ceeae2bad06793bbc883ae4fca.
+- Mandatory confirmation: clean a9936648 receipt 230030-fDjiN2 installed a valid disposable
+  auto/drafting manifest. The note and version changed before approval: one failed, one passed,
+  twenty-two skipped. Production policy never changed. Later complete native runs restore approval.
+- Metadata-only activity: receipt 231330-8YEXAL ran 589bcf53 plus one temporary dirty SQL-writer
+  file adding actual note text to activity JSON. Fingerprint
+  7dffab415886b1c8582c618e6005cf6f64ebbd6381412aec44996c3fabea55dc;
+  one failed and twelve passed because synthetic note content reached activity params. Exact source
+  was restored before clean 8292b50c receipt 231452-KJ3Sti passed thirteen, fingerprint
+  a4b1cc2619781c1911881d1fbbd2f5b788e98ad06a016871aa99cf6c811a9622.
+  Full Finance subsequently includes the restored storage/handler cases.
 
-No real credentials, accounts or bank instructions are needed. Native tests create synthetic
-manual accounts; provider tests use only inert provider/credential ports with real SQL paths.
-Broader merchant/date editing, bulk notes, attachments and tags remain missing. This slice does
-not change other Partial classifications in the [parity matrix](../specs/2026-10-28-finance-parity.md).
+These are scoped, observed properties, not a claim that private notes never reach an owner's
+assistant or global data export. The note route persists a key/count input summary; activity
+contains IDs and notesChanged, without note text or Undo. Household projections and Finance
+CSV exports use explicit allowlists and omit notes. Automatic categorization inputs omit them.
+
+## Failures diagnosed during implementation
+
+Native focus failure 225618-Te87bV exposed a hidden desktop opener after responsive changes;
+07975352 resolves the visible row through shared returnFocusRef. Restored 225824-GwnOE8 passed.
+Full 230227-qjeelw at 589bcf53 passed 235 and failed two: the harness had not acknowledged the
+host uncertainty notice, and completed bill refresh discarded the successful direct read.
+Full 231612-Xo9U1x at 8292b50c passed 236 and failed one: another cached month retained stale
+financial review data. Actual red cache tests preceded fixes; 6d9d4904 restored 237/237.
+
+New UX development receipt 000618-5JNYXJ at d714b555 passed three selected flows and failed
+one because the host correctly hides the underlying dialog from role queries. The assertion
+now inspects its unique close button directly. Receipt 000857-plKrwu at 9805ea7b also passed
+three and failed one: a real register 429 was followed by a blind opener click. The helper now
+waits the displayed bounded interval and explicitly retries the read. It never retries writes
+or increases rate/pattern limits. Restored selected receipt 001150-KUDeIF passed all four.
+
+## UI evidence and strict review boundary
+
+[Twelve inspected original screenshots and exact state descriptions](../evidence/finance-private-notes-2026-10-31/README.md)
+record the approved fixes at clean 54c2adbb. They are byte-for-byte originals from the passing
+four-flow receipt; complete Finance subsequently passed on that same source. The earlier
+[baseline originals](../evidence/finance-private-notes-2026-10-30/README.md) preserve before-fix
+provenance and broader bill/budget/accounts/reports review states.
+
+These scoped corrections do not close the overall design review. Main conversation still owns
+hierarchy, density, typography, colors/contrast, mobile scrolling, empty/error/recovery states,
+confirmation clarity and keyboard approval across the whole product. Existing phone budget
+length/category density and crowded heading transitions remain review items, not silently fixed
+or declared acceptable. Source-token contrast analysis is scoped to named role/ground pairs;
+it excludes disabled opacity, textures, arbitrary custom palettes and full interactive states.
+
+## Next priorities for main conversation
+
+1. Finish strict product-wide desktop/phone design review using original screenshots and actual
+   interactions; choose any further scoped changes before calling this work closed.
+2. Reviewed non-transfer manual-entry correction and merchant/date edits, preserving statement,
+   card, bill and split links. Current inverse transfers are a narrower correction capability.
+3. Future/whole-series recurring occurrence management and early entry; calendar and detection
+   remain gaps. Recording a due manual expense does not establish provider Bill Sync.
+4. Compound/ordered/retroactive rules, bulk notes, tags and attachments.
+5. Provider reconciliation/import and large histories require separately authorized provider
+   acceptance; household access remains read-only mirrors, and holdings/performance are missing.
+
+All broad Partial classifications remain in the [evidence-linked parity matrix](../specs/2026-10-28-finance-parity.md).
+No new feature should start before main selects the next slice. The original checkout is preserved.
 
 Release note draft: Added — Edit private transaction notes. Save or clear a note from transaction
-details with confirmation, while preserving transaction amounts, categories and reconciliation.
+details with confirmation, keeping amounts and reconciliation unchanged and preserving copyable
+drafts when a save needs checking.

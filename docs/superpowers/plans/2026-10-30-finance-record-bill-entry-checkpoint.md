@@ -86,9 +86,13 @@ across 22 failed/1,639 passed files. Comparing normalized FAIL identities with r
 143017-SaB79F found the same 277 baseline failures plus one Finance regression: the manifest
 contract's exact tool list omitted the new bill-entry pair. No baseline identity disappeared.
 Commit 4475cb87 adds both names and explicit read/write/mandatory-confirmation assertions;
-all sixteen focused manifest tests then passed. A fresh aggregate is running at frozen clean
-4475cb87 (receipt 223645-1HZuKL); its final verdict is still pending. Do not call the first run
-baseline-only. Later chained migration/UAT/integration stages did not run after its unit failure
+all sixteen focused manifest tests then passed. Restored aggregate 223645-1HZuKL at clean
+4475cb87 finished with the same 277 baseline identities, 19,778 passes and three skipped
+(21 failed/1,640 passed files). No Finance failure was added or baseline identity removed.
+Do not call the first run baseline-only. Complete Finance subsequently passed 237 cases and
+all 24 native flows at clean 54c2adbb, receipt 20261031-001414-MBYx3C; see the
+[latest note/recovery checkpoint](2026-10-30-finance-private-notes-checkpoint.md) for exact
+source, current aggregate result and strict design boundary. Later chained migration/UAT/integration stages did not run after its unit failure
 (the wrapper's initial fresh-database migration did run). CI e2e and live bank/provider acceptance
 remain unrun. Later evidence/docs commits do not constitute another production-code gate.
 
@@ -100,13 +104,14 @@ gaps. Recording an expense is not recording a card/loan payment; the existing su
 transfer workflow has its own endpoint limits. Custom name/category changes and notes are not
 part of this convenience form. See the [evidence-linked matrix](../specs/2026-10-28-finance-parity.md).
 
-Next independent capability: captured private transaction-note editing without changing money,
-classification, posting/statement state, splits or links. Audit the existing metadata and sync
-handoff paths first. Explicit empty notes must preserve clear intent through provider updates;
-notes stay owner-only and out of household mirrors, exports, automatic categorization inputs,
-activity params/Undo and job payloads. Existing metadata category writes must not be reused in a
-way that confirms categories or drops splits. Design/spec and real RLS/stale/clear/sync tests
-precede a native editor. Do not claim global note privacy from UI hiding alone.
+Private transaction-note editing is now implemented separately from this convenience form.
+The [note checkpoint](2026-10-30-finance-private-notes-checkpoint.md) records exact-version
+confirmed writes, copyable recovery drafts, clear/sync and reconciled-transfer preservation,
+actual owner/approval/activity guard-removal failures and restored installed acceptance.
+Notes remain omitted from household mirrors and Finance CSV exports; this is not a global
+owner-data-export or assistant privacy claim. General merchant/date/money correction, bulk
+notes, tags and attachments remain gaps. Main conversation selects the next slice after strict
+UI review; do not start another capability from this older checkpoint.
 
 ## Synthetic manual check and continuation commands
 

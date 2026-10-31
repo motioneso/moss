@@ -20,7 +20,8 @@ Partial in the parity matrix. Provider HTTP acceptance remains a distinct integr
 ## Interaction and Park Press layout
 
 Keep the current shared scrolling Transaction details Dialog and its captured financial facts.
-Edit private note opens a separate shared Dialog after closing the details surface. Read the
+Edit private note switches the existing shared Dialog title, body and footer while retaining
+its modal lifecycle and original focus-return target. Read the
 current note/version before enabling Save. Show account/date/payee context and concise privacy
 copy. A labeled shared Textarea preserves the full valid saved note. Bound input to 4,000 UTF-8
 bytes; reject PostgreSQL-incompatible NUL and malformed surrogate sequences without truncation.
