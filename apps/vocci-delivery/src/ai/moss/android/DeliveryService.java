@@ -29,6 +29,8 @@ public final class DeliveryService extends Service {
     private int fastRetries, admitRetries;
     private final RecordingReminder reminder = RecordingReminder.SHARED;
     private int latestStartId;
+    private Map<String, Integer> telemetryInventory;
+    private long telemetryAt;
     interface RetryVoice { JSONObject retry(String statusId) throws Exception; }
     private static final class OwnerMismatch extends Exception { }
     static boolean recordingCommand(String action) { return "inspect-ring".equals(action) || "exclude-recording".equals(action); }
@@ -103,6 +105,7 @@ public final class DeliveryService extends Service {
             while (!stopping && !Thread.currentThread().isInterrupted()) {
                 try {
                     keepOpen = false;
+                    RingTiming.clock("cycle_start");
                     wake.acquire(4 * 60 * 60 * 1000L);
                     consumeCommands(client, config);
                     if (!new DeliveryPreferences(this).enabled()) break;
@@ -118,6 +121,7 @@ public final class DeliveryService extends Service {
                         retrieve(config, client);
                         reconnectAttempts = 0;
                         deliver(client);
+                        readStatus(config);
                         keepOpen = voice.active() && active != null && !stopping;
                     } else report("storage_capacity");
                 } catch (OwnerMismatch error) { report("owner_mismatch"); break;
@@ -129,6 +133,7 @@ public final class DeliveryService extends Service {
                 catch (Exception error) {
                     if (stopping || Thread.currentThread().isInterrupted()) break;
                     String message = error.getMessage();
+                    RingTiming.mark("cycle_failed at " + (error.getStackTrace().length > 0 ? error.getStackTrace()[0].getClassName().replace("ai.moss.android.", "") + "." + error.getStackTrace()[0].getMethodName() + ":" + error.getStackTrace()[0].getLineNumber() : "") + " " + (SAFE_FAILURES.contains(message) ? message : error.getClass().getSimpleName()) + (error.getCause() != null && error.getCause().getMessage() != null && error.getCause().getMessage().matches("[a-z_]{1,32}") ? " cause " + error.getCause().getMessage() : ""));
                     store.state.put("lastFailure", SAFE_FAILURES.contains(message) ? message : error.getClass().getSimpleName());
                     reconnectAttempts = RetryPolicy.connectionFailure(reconnectAttempts);
                     report("retry_pending");
@@ -146,7 +151,8 @@ public final class DeliveryService extends Service {
                     } catch (java.io.IOException lost) { active.close(); active = null; lostLinkWait = 3000; }
                 }
                 if (lostLinkWait > 0) { synchronized (signal) { if (commands.isEmpty() && !stopping) signal.wait(lostLinkWait); } continue; }
-                synchronized (signal) { if (commands.isEmpty() && !stopping) signal.wait(RetryPolicy.connectionDelayMs(reconnectAttempts)); }
+                long delay = voice.active() ? RetryPolicy.holdFailureDelayMs(reconnectAttempts) : RetryPolicy.connectionDelayMs(reconnectAttempts);
+                synchronized (signal) { if (commands.isEmpty() && !stopping) signal.wait(delay); }
             }
         } catch (InterruptedException error) { Thread.currentThread().interrupt();
         } catch (Exception error) {
@@ -166,6 +172,7 @@ public final class DeliveryService extends Service {
         if (active == null) active = new RingConnection(this, config);
         try {
             Map<String, Integer> inventory = active.inventory();
+            RingTiming.mark("listing_done");
             long inventoryAt = System.currentTimeMillis();
             store.recordings.inventory(inventory, inventoryAt);
             voice.inventory(inventory, client);
@@ -196,6 +203,7 @@ public final class DeliveryService extends Service {
                 byte[] sidecar;
                 try { sidecar = active.retrieve(sidecarName, sidecarSize); }
                 catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
+                RingTiming.mark("sidecar_fetched");
                 if (!store.admitSidecar(id, sidecar, settled)) { if (voice.intent(id) != null && admitRetries++ < 3) fastRetries = Math.max(fastRetries, 3); continue; }
                 consumeCommands(client, config);
                 if (store.excluded(id)) continue;
@@ -211,27 +219,37 @@ public final class DeliveryService extends Service {
                     }
                 }
                 catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
+                RingTiming.mark("audio_fetched");
                 store.retrieved(id, sidecar);
                 if (voice.intent(id) != null) { fastRetries = 0; admitRetries = 0; }
             }
             previousInventory.clear(); previousInventory.putAll(inventory);
-            if (!stopping) {
-                active.readTelemetry();
-                try {
-                    long age = System.currentTimeMillis() - active.telemetry.recordingAt;
-                    boolean recent = active.telemetry.recordingAt > 0 && age >= 0 && age < 60000;
-                    boolean allowed = new DeliveryPreferences(this).recordingReminder() && getSystemService(NotificationManager.class).areNotificationsEnabled();
-                    if (reminder.observe(allowed && recent, active.telemetry.recording,
-                        active.telemetry.recordingSource, SystemClock.elapsedRealtime())) remindRecording();
-                    else if (!reminder.tracking()) getSystemService(NotificationManager.class).cancel(3551);
-                } catch (Exception unavailable) { /* A phone reminder cannot fail recording delivery. */ }
-                int recordings = 0;
-                for (String name : inventory.keySet()) if (name.endsWith(".opus")) recordings++;
-                try { HardwareStatus.publish(this, config, active.telemetry, inventoryAt, recordings); }
-                catch (Exception unavailable) { /* Optional status storage never blocks completed audio delivery. */ }
-            }
+            telemetryInventory = inventory; telemetryAt = inventoryAt;
         } catch (Exception error) { active.close(); active = null; throw error; }
         report(store.canDiscover() ? "waiting_for_completed_recordings" : "storage_capacity");
+    }
+    // Ring status reads run after delivery so they never delay a fresh recording.
+    private void readStatus(JSONObject config) throws InterruptedException {
+        Map<String, Integer> inventory = telemetryInventory;
+        long inventoryAt = telemetryAt;
+        telemetryInventory = null;
+        if (inventory == null || active == null || stopping) return;
+        try {
+            active.readTelemetry();
+            try {
+                long age = System.currentTimeMillis() - active.telemetry.recordingAt;
+                boolean recent = active.telemetry.recordingAt > 0 && age >= 0 && age < 60000;
+                boolean allowed = new DeliveryPreferences(this).recordingReminder() && getSystemService(NotificationManager.class).areNotificationsEnabled();
+                if (reminder.observe(allowed && recent, active.telemetry.recording,
+                    active.telemetry.recordingSource, SystemClock.elapsedRealtime())) remindRecording();
+                else if (!reminder.tracking()) getSystemService(NotificationManager.class).cancel(3551);
+            } catch (Exception unavailable) { /* A phone reminder cannot fail recording delivery. */ }
+            int recordings = 0;
+            for (String name : inventory.keySet()) if (name.endsWith(".opus")) recordings++;
+            try { HardwareStatus.publish(this, config, active.telemetry, inventoryAt, recordings); }
+            catch (Exception unavailable) { /* Optional status storage never blocks completed audio delivery. */ }
+        } catch (InterruptedException interrupted) { throw interrupted;
+        } catch (Exception error) { if (active != null) { active.close(); active = null; } }
     }
     private void remindRecording() {
         NotificationManager manager = getSystemService(NotificationManager.class);
@@ -261,6 +279,7 @@ public final class DeliveryService extends Service {
                 if (stage.equals("retrieved")) { store.freeze(id); stage = "ready"; }
                 store.checkDelivery(id);
                 store.beginAttempt(id);
+                RingTiming.mark("upload_start");
                 if (stage.equals("voice-status")) {
                     store.chatStatus(id, client.chat(entry.getJSONObject("status").getString("voiceRequestId")));
                 } else {
@@ -268,6 +287,7 @@ public final class DeliveryService extends Service {
                     JSONObject status = stage.equals("accepted") ? (voice ? client.pollVoice(entry.getJSONObject("status").getString("id")) : client.poll(entry.getJSONObject("status").getString("id"))) :
                         (store.file(id, "upload.json").exists() ? ResumableUpload.deliver(client, store, id) :
                           (voice ? client.acceptVoice(PrivateFiles.read(store.file(id, "bundle.json"), 8 * 1024 * 1024)) : client.accept(PrivateFiles.read(store.file(id, "bundle.json"), 8 * 1024 * 1024))));
+                    RingTiming.mark("upload_done");
                     store.accepted(id, status);
                 }
             } catch (DeliveryStore.Excluded excluded) {

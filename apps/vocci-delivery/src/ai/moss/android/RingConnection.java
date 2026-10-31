@@ -22,6 +22,7 @@ final class RingConnection implements AutoCloseable {
     private BluetoothGatt gatt;
     private volatile boolean overflow, closed;
     private String stage = "connect";
+    private final LinkSpeed speed = new LinkSpeed(priority -> { BluetoothGatt g = gatt; return g != null && g.requestConnectionPriority(priority); });
     private final BluetoothGattCallback callback = new BluetoothGattCallback() {
         private void add(String kind, int status, byte[] bytes) {
             if (!closed && !events.offer(new Event(kind, status, bytes))) overflow = true;
@@ -44,13 +45,17 @@ final class RingConnection implements AutoCloseable {
             BluetoothManager manager = context.getSystemService(BluetoothManager.class);
             if (manager == null || manager.getAdapter() == null || !manager.getAdapter().isEnabled()) throw new IOException("bluetooth_unavailable");
             BluetoothDevice device = manager.getAdapter().getRemoteDevice(config.getString("address"));
+            RingTiming.mark("connect_start");
             gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE);
             if (gatt == null) throw new IOException("connection_unavailable");
-            await("connected"); stage = "mtu";
+            await("connected"); RingTiming.mark("link_up");
+            // Short connection intervals speed up the sign-in and the first delivery; waiting switches back.
+            speed.fast();
+            stage = "mtu";
             if (!gatt.requestMtu(247)) throw new IOException("mtu");
             await("mtu"); stage = "services";
             if (!gatt.discoverServices()) throw new IOException("services");
-            await("services"); stage = "subscribe";
+            await("services"); RingTiming.mark("services_done"); stage = "subscribe";
             for (String id : new String[]{RingAuth.AUTH_UUID, RingProtocol.UART, RingProtocol.FILE}) {
                 BluetoothGattCharacteristic c = characteristic(id);
                 BluetoothGattDescriptor d = c.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"));
@@ -73,6 +78,7 @@ final class RingConnection implements AutoCloseable {
             stage = "start_app";
             byte[] success = response(RingAuth.AUTH_UUID, 0x82);
             if (success.length != 1 || success[0] != 3) throw new IOException("auth_rejected");
+            RingTiming.mark("connect_done");
         } catch (InterruptedException error) { close(); throw error; }
         catch (Exception error) { close(); throw new IOException("ring_" + stage, error); }
     }
@@ -116,9 +122,21 @@ final class RingConnection implements AutoCloseable {
     }
     private final HoldWatcher watcher = new HoldWatcher();
     private volatile boolean released;
+    private void release() {
+        released = true;
+        RingTiming.begin();
+        RingTiming.clock("press_end_heard");
+    }
+    private volatile String announced = "";
+    /** Name the ring last announced in a recording-state message, kept only to compare with the listing. */
+    String announced() { return announced; }
     private void note(int command, byte[] payload) {
+        if (command == RingTelemetry.RECORDING && payload.length > 2 && (payload[1] & 255) <= payload.length - 2) {
+            announced = new String(payload, 2, payload[1] & 255, java.nio.charset.StandardCharsets.UTF_8);
+            RingTiming.mark("announce state" + (payload[0] & 255) + " namelen" + announced.length());
+        }
         telemetry.accept(command, payload, System.currentTimeMillis());
-        if (watcher.accept(command, payload)) released = true;
+        if (watcher.accept(command, payload)) release();
     }
     private final ArrayDeque<byte[]> responses = new ArrayDeque<>();
     private byte[] response(String id, int opcode) throws Exception {
@@ -159,28 +177,39 @@ final class RingConnection implements AutoCloseable {
      * about once a second while connected).
      */
     boolean listen(long ms, java.util.function.BooleanSupplier interrupted) throws Exception {
+        boolean firstHeard = false;
         long now = System.nanoTime(), end = now + TimeUnit.MILLISECONDS.toNanos(ms), lastSeen = now;
         while (System.nanoTime() < end && !interrupted.getAsBoolean()) {
-            if (released) { released = false; return true; }
+            speed.waiting();
+            if (watcher.quiet(System.currentTimeMillis())) release();
+            if (released) return pressed();
             if (closed || overflow) throw new IOException("connection_closed");
-            Event e = pending.isEmpty() ? events.poll(500, TimeUnit.MILLISECONDS) : pending.remove();
+            Event e = pending.isEmpty() ? events.poll(100, TimeUnit.MILLISECONDS) : pending.remove();
             if (e == null) {
                 if (System.nanoTime() - lastSeen > TimeUnit.SECONDS.toNanos(10)) throw new IOException("link_silent");
                 continue;
             }
             if (e.kind.equals("disconnected") || e.status != 0) throw new IOException("gatt_timeout_or_error");
             lastSeen = System.nanoTime();
+            if (!firstHeard) { firstHeard = true; RingTiming.clock("first_event_heard"); }
             if (e.kind.equals(RingProtocol.UART)) uart.accept(e.bytes, this::note);
-            if (released) { released = false; return true; }
+            if (released) return pressed();
         }
         return false;
+    }
+    private boolean pressed() {
+        released = false;
+        speed.fast();
+        return true;
     }
     Map<String, Integer> inventory() throws Exception {
         stage = "inventory";
         Map<String, Integer> files = new LinkedHashMap<>();
         write(RingProtocol.WRITE, RingAuth.frame(0x11, new byte[0]));
+        RingTiming.mark("listing_requested");
         for (int n = 0; n < 1024; n++) {
             byte[] payload = response(RingProtocol.UART, 0x11);
+            if (n < 3 || n % 40 == 39) RingTiming.mark("listing_entry_" + (n + 1) + "_len" + payload.length);
             if (RingProtocol.inventoryComplete(payload)) return files;
             RingProtocol.Entry entry = RingProtocol.Entry.parse(payload);
             if (entry == null) continue; // Unsupported or empty files cannot poison an otherwise valid inventory.

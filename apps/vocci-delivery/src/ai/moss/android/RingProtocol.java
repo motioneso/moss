@@ -62,7 +62,7 @@ final class RingProtocol {
     }
     static final class Transfer {
         final String name;
-        final int expected;
+        private int expected;
         private boolean started, ended;
         private final OutputStream data;
         private int received;
@@ -72,12 +72,27 @@ final class RingProtocol {
                 throw new IllegalArgumentException("transfer limit");
             this.name = name; this.expected = expected; this.data = java.util.Objects.requireNonNull(data);
         }
+        /** A transfer whose size is learned from the ring's start message. */
+        Transfer(String name, OutputStream data) {
+            if (!validName(name)) throw new IllegalArgumentException("transfer limit");
+            this.name = name; this.expected = -1; this.data = java.util.Objects.requireNonNull(data);
+        }
+        /** The announced size, or -1 before a learning transfer has started. */
+        int size() { return expected; }
         void control(byte[] payload) {
             if (Arrays.equals(payload, new byte[]{2})) {
                 if (!started || ended || received != expected) throw new IllegalArgumentException("incomplete");
                 ended = true; return;
             }
             int n = name.length();
+            if (expected == -1 && !started && payload.length == n + 6) {
+                long size = Integer.toUnsignedLong(ByteBuffer.wrap(payload, n + 2, 4).order(ByteOrder.LITTLE_ENDIAN).getInt());
+                if (size < 1 || size > (name.endsWith(".opus") ? PACKET_LIMIT : SIDECAR_LIMIT)) throw new IllegalArgumentException("transfer limit");
+                int announced = (int) size;
+                if (payload[0] != 1 || (payload[1] & 255) != n || !name.equals(new String(payload, 2, n, StandardCharsets.UTF_8)))
+                    throw new IllegalArgumentException("transfer start");
+                expected = announced; started = true; return;
+            }
             if (started || payload.length != n + 6 || payload[0] != 1 || (payload[1] & 255) != n ||
                 !name.equals(new String(payload, 2, n, StandardCharsets.UTF_8)) ||
                 ByteBuffer.wrap(payload, n + 2, 4).order(ByteOrder.LITTLE_ENDIAN).getInt() != expected)
