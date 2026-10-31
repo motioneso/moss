@@ -93,10 +93,10 @@ describe("Finance review empty state scope", () => {
   it("describes an unsearched review view without conflating it with an unsynced month", async () => {
     financeRead();
     const renderer = await mount(createElement(TransactionsScreen));
-    expect(text(renderer)).toContain("Transactions appear after the first sync.");
+    expect(text(renderer)).toContain("Add or import transactions in Accounts.");
     await selectReview(renderer);
     expectReviewEmpty(renderer);
-    expect(text(renderer)).not.toContain("Transactions appear after the first sync.");
+    expect(text(renderer)).not.toContain("Add or import transactions in Accounts.");
   });
 
   it("keeps its claim scoped when search and month filters narrow the view", async () => {

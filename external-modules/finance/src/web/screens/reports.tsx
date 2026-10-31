@@ -511,49 +511,51 @@ export function ReportsScreen(): ReactNodeLike {
     !spending.outcome.result.currency;
   return (
     <section className="fnm-block" aria-label="Finance reports">
-      <div className="fnm-spread">
-        <div className="fnm-chips">
-          <Select
-            aria-label="Report period"
-            value={months}
-            onChange={(event: { target: { value: string } }) =>
-              setMonths(Number(event.target.value))
-            }
-          >
-            {WINDOW_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                Last {option} months
-              </option>
-            ))}
-          </Select>
-          {currencies.length > 1 || (currency && !currencies.includes(currency)) ? (
+      {nothingYet ? null : (
+        <div className="fnm-spread">
+          <div className="fnm-chips">
             <Select
-              aria-label="Report currency"
-              value={currency}
-              onChange={(event: { target: { value: string } }) => setCurrency(event.target.value)}
+              aria-label="Report period"
+              value={months}
+              onChange={(event: { target: { value: string } }) =>
+                setMonths(Number(event.target.value))
+              }
             >
-              <option value="" disabled>
-                Choose currency
-              </option>
-              {[...new Set([...currencies, ...(currency ? [currency] : [])])].map((code) => (
-                <option key={code} value={code}>
-                  {code}
+              {WINDOW_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  Last {option} months
                 </option>
               ))}
             </Select>
-          ) : null}
+            {currencies.length > 1 || (currency && !currencies.includes(currency)) ? (
+              <Select
+                aria-label="Report currency"
+                value={currency}
+                onChange={(event: { target: { value: string } }) => setCurrency(event.target.value)}
+              >
+                <option value="" disabled>
+                  Choose currency
+                </option>
+                {[...new Set([...currencies, ...(currency ? [currency] : [])])].map((code) => (
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
+                ))}
+              </Select>
+            ) : null}
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              invalidateToolQueries("finance.reports.spending");
+              invalidateToolQueries("finance.reports.net-worth");
+            }}
+          >
+            Refresh
+          </Button>
         </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => {
-            invalidateToolQueries("finance.reports.spending");
-            invalidateToolQueries("finance.reports.net-worth");
-          }}
-        >
-          Refresh
-        </Button>
-      </div>
+      )}
       {chooseCurrency ? (
         <EmptyState
           title="Choose a currency"

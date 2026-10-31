@@ -160,7 +160,12 @@ function TransactionsBody(props: {
     if (props.searching) {
       return <EmptyState title="No matches" body="No transaction in this month matches." />;
     }
-    return <EmptyState title="Nothing yet" body="Transactions appear after the first sync." />;
+    return (
+      <EmptyState
+        title="No transactions this month"
+        body="Add or import transactions in Accounts."
+      />
+    );
   }
   return (
     <>

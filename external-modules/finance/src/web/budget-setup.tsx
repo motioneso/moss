@@ -62,14 +62,7 @@ export function BudgetSetup(props: {
   };
   return (
     <section className="fnm-block fnm-budget-setup" aria-label="Budget currency setup">
-      <SectionHead title="Give your budget a currency" rule />
-      <Note variant="practical">
-        One budget, one currency. Checking, savings, cash and credit cards in this currency fund
-        your plan. Other currencies and tracking accounts stay visible in Accounts and Reports.
-      </Note>
-      <p className="jds-hint">
-        Your choice stays fixed. Moss does not convert balances or change transaction amounts.
-      </p>
+      <p className="jds-hint">You can't change the budget currency later.</p>
       {props.accountCurrencies.length > 0 ? (
         <p>Account currencies: {props.accountCurrencies.join(", ")}</p>
       ) : (
