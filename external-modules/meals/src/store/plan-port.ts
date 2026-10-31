@@ -139,7 +139,10 @@ export interface PlanStore {
    * Ready meals are never touched. Returns the new generation, or null for a missing day.
    */
   bumpDay(dayId: string): Promise<number | null>;
-  /** Sets a pending or failed day to writing when the generation matches. */
+  /**
+   * Sets a pending or failed day to writing when the generation matches and no other day in the
+   * plan is writing, so a plan writes one day at a time.
+   */
   claimDay(dayId: string, generation: number): Promise<boolean>;
   /** Sets the day's final status when the generation still matches. */
   finishDay(

@@ -1,8 +1,8 @@
 // external-modules/meals/src/worker/registry.ts
 //
 // The one handler-key to handler map for tools and queues. Keys match the manifest's
-// assistantTools[].handler and worker.queues[].handler. The store is built per call from ctx.db, which exists only inside a
-// call's context.
+// assistantTools[].handler and worker.queues[].handler. The store is built per call from
+// ctx.db, which exists only inside a call's context.
 import { randomUUID } from "node:crypto";
 
 import type { ModuleWorkerContext } from "@moss/module-sdk/worker";

@@ -188,6 +188,47 @@ describe("saving each meal as it finishes", () => {
   });
 });
 
+describe("one day at a time", () => {
+  it("joins a retry to the running chain instead of writing two days at once", async () => {
+    const ai = new ScriptedAi()
+      .script("recipe", new AiError("provider_error"))
+      .always("recipe", recipeAnswer())
+      .always("safety", safetyPass(1))
+      .always("estimate", ESTIMATE_800);
+    const setup = fakeDeps(kitchenOf([you]), ai);
+    const plan = await planCreate(setup.deps, createInput({ days: 3 }));
+    const [first, second, third] = plan.days.map((day) => day.dayId);
+
+    await runPlanDay(setup.deps, setup.jobs.take()!);
+    expect(setup.store.days.get(first!)?.status).toBe("failed");
+
+    // Day 2's job has started: its day is claimed and writing.
+    const secondJob = setup.jobs.take()!;
+    expect(await setup.store.claimDay(second!, secondJob["generation"] as number)).toBe(true);
+
+    await planControl(setup.deps, { planId: plan.planId, action: "retry_day", dayId: first });
+    await runPlanDay(setup.deps, setup.jobs.take()!);
+    expect(setup.store.days.get(first!)?.status).toBe("pending");
+    expect(setup.jobs.calls).toHaveLength(0);
+
+    const order: string[] = [];
+    const run = async (params: Readonly<Record<string, unknown>>) => {
+      order.push(params["dayId"] as string);
+      await runPlanDay(setup.deps, params);
+    };
+    await run(secondJob);
+    for (let next = setup.jobs.take(); next !== undefined; next = setup.jobs.take()) {
+      await run(next);
+    }
+    expect(order).toEqual([second, first, third]);
+    expect([...setup.store.days.values()].map((day) => day.status)).toEqual([
+      "ready",
+      "ready",
+      "ready"
+    ]);
+  });
+});
+
 describe("generation", () => {
   it("writes nothing from a job whose generation is stale", async () => {
     const setup = fakeDeps(kitchenOf([you]), happyAi(1));

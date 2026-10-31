@@ -177,8 +177,12 @@ function parseIngredient(raw: unknown, index: number): IngredientDraft {
     `${at}.`
   );
   const quantity = record["quantity"];
-  if (quantity !== null && (typeof quantity !== "number" || !(quantity > 0) || quantity > 1e6)) {
-    fail(`${at}.quantity must be a positive number or null`);
+  // The column keeps three decimals, so anything under 0.001 would store as 0.
+  if (
+    quantity !== null &&
+    (typeof quantity !== "number" || !(quantity >= 0.001) || quantity > 1e6)
+  ) {
+    fail(`${at}.quantity must be at least 0.001, or null`);
   }
   const unit = record["unit"] === null ? null : boundedString(record["unit"], `${at}.unit`, 24);
   const section = record["section"];

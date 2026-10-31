@@ -152,6 +152,10 @@ export class FakePlanStore implements PlanStore {
   async claimDay(dayId: string, generation: number) {
     const day = this.days.get(dayId);
     if (!day || day.generation !== generation || day.status === "ready") return false;
+    const busy = [...this.days.values()].some(
+      (other) => other.planId === day.planId && other.dayId !== dayId && other.status === "writing"
+    );
+    if (busy) return false;
     day.status = "writing";
     return true;
   }

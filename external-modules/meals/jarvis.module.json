@@ -1455,7 +1455,7 @@
     {
       "name": "meals.plan.control",
       "permissionId": "meals.plan.control",
-      "description": "Stop a plan that is being written, resume a stopped or paused plan where it left off, or retry one day that failed. A retry keeps the day's finished meals and rewrites only the rest. Name the day by dayId or date.",
+      "description": "Stop a plan that is being written, resume a stopped or paused plan where it left off, or retry one day that failed. A retry keeps the day's finished meals and rewrites only the rest. Name the day by dayId or date. Retrying a day on a stopped plan resumes the whole plan, so later unwritten days are written too. A retry asked for while another day is being written waits its turn.",
       "risk": "write",
       "actionFamilyId": "meal_planning",
       "executionPolicy": "auto",

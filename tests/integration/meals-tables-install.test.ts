@@ -401,6 +401,25 @@ describe("meals plan tables (S2 #3886)", () => {
     });
   });
 
+  it("claims one day per plan at a time, unless the writing day outlived the job ceiling", async () => {
+    const seeded = await seedPlan(ids.userA, 6000, "plan-one-at-a-time");
+    const [first, second] = seeded.days.map((day) => day.dayId);
+    await asActor(ids.userA, async (_kitchens, client) => {
+      const plans = sqlPlanStore(client);
+      const genFirst = (await plans.bumpDay(first!))!;
+      const genSecond = (await plans.bumpDay(second!))!;
+      expect(await plans.claimDay(first!, genFirst)).toBe(true);
+      expect(await plans.claimDay(second!, genSecond)).toBe(false);
+      expect(await plans.claimDay(first!, genFirst)).toBe(true);
+
+      await client.query(
+        "UPDATE app.meals_plan_days SET updated_at = now() - interval '12 minutes' WHERE day_id = $1",
+        [first]
+      );
+      expect(await plans.claimDay(second!, genSecond)).toBe(true);
+    });
+  });
+
   it("marks a meal failed with its verdicts, and a bump sets it back to pending", async () => {
     const seeded = await seedPlan(ids.userA, 4000, "plan-fail");
     const dayId = seeded.days[1]!.dayId;
@@ -437,6 +456,16 @@ describe("meals plan tables (S2 #3886)", () => {
       await plans.setPlanState(seeded.planId, "stopped", null);
       expect(await plans.deletePlan(seeded.planId)).toBe(false);
     });
+    const countsForA = () =>
+      asActor(ids.userA, async (_store, client) => {
+        const counts: Record<string, number> = {};
+        for (const table of ownedTables) {
+          const { rows } = await client.query(`SELECT count(*)::int AS n FROM ${table}`);
+          counts[table] = rows[0].n;
+        }
+        return counts;
+      });
+    const before = await countsForA();
     await asActor(ids.userB, async (_store, client) => {
       for (const table of ownedTables) {
         const visible = await client.query(
@@ -444,8 +473,19 @@ describe("meals plan tables (S2 #3886)", () => {
           [ids.userA]
         );
         expect(visible.rows[0].n, table).toBe(0);
+        const updated = await client.query(
+          `UPDATE ${table} SET updated_at = now() WHERE owner_user_id = $1 RETURNING 1`,
+          [ids.userA]
+        );
+        expect(updated.rows, table).toHaveLength(0);
+        const deleted = await client.query(
+          `DELETE FROM ${table} WHERE owner_user_id = $1 RETURNING 1`,
+          [ids.userA]
+        );
+        expect(deleted.rows, table).toHaveLength(0);
       }
     });
+    expect(await countsForA()).toEqual(before);
     await asPlanActor(ids.userA, async (plans) => {
       expect(await plans.getPlan(seeded.planId)).toMatchObject({ state: "active" });
       expect(await plans.deletePlan(seeded.planId)).toBe(true);

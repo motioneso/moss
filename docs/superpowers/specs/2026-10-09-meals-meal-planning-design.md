@@ -491,7 +491,7 @@ Log tables keep `owner_user_id` only. The log is personal and never moves into a
   job killed at the ceiling loses one meal, not a day. Every enqueue raises the day's generation
   and uses it in the job key, and a job whose generation is stale writes nothing.
 - A plan has 1 to 28 days, which bounds the enqueue count under the hourly cap.
-- Job payloads carry plan and day ids only. Prompts are assembled inside the job from the database.
+- Job payloads carry the plan id, the day id and the day's generation only. Prompts are assembled inside the job from the database.
 - Each day job splits each eater's calorie target across their Meal pattern, asks
   `ctx.ai.generateStructured` for each meal against a recipe schema, runs the Safety check, scales
   portions per eater, computes calorie fit with the existing estimator, then writes the day and

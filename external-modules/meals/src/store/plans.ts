@@ -22,6 +22,12 @@ import type { MealsDb } from "./sql.js";
 
 const NAME_KEY_LENGTH = 80;
 
+/**
+ * A day claim waits while another day in the plan is writing. A writing day older than the
+ * queue's ten-minute ceiling plus a minute is a killed job, so it no longer blocks.
+ */
+const WRITING_LEASE_SECONDS = 660;
+
 const PLAN_COLUMNS =
   'plan_id AS "planId", kitchen_id AS "kitchenId", start_date::text AS "startDate", ' +
   'day_count AS "dayCount", pantry_mode AS "pantryMode", request_text AS "requestText", ' +
@@ -139,6 +145,8 @@ export function sqlPlanStore(db: MealsDb): PlanStore {
       );
     },
 
+    // Recipes outlive the plan. Planned meals point at them without a cascade, so a later
+    // favourite keeps its recipe.
     async deletePlan(planId) {
       const { rows } = await db.query(
         "DELETE FROM app.meals_plans WHERE plan_id = $1 RETURNING plan_id",
@@ -177,8 +185,12 @@ export function sqlPlanStore(db: MealsDb): PlanStore {
 
     async claimDay(dayId, generation) {
       const { rows } = await db.query(
-        "UPDATE app.meals_plan_days SET status = 'writing', updated_at = now() " +
-          "WHERE day_id = $1 AND generation = $2 AND status <> 'ready' RETURNING day_id",
+        "UPDATE app.meals_plan_days d SET status = 'writing', updated_at = now() " +
+          "WHERE d.day_id = $1 AND d.generation = $2 AND d.status <> 'ready' " +
+          "AND NOT EXISTS (SELECT 1 FROM app.meals_plan_days o WHERE o.plan_id = d.plan_id " +
+          "AND o.day_id <> d.day_id AND o.status = 'writing' " +
+          `AND o.updated_at > now() - interval '${WRITING_LEASE_SECONDS} seconds') ` +
+          "RETURNING d.day_id",
         [dayId, generation]
       );
       return rows.length > 0;

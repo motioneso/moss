@@ -67,6 +67,11 @@ describe("parseRecipe", () => {
     expect(() => parseRecipe(rawRecipe({ ingredients }), NO_LIMIT)).toThrow();
   });
 
+  it("rejects a quantity too small for the table's three decimals", () => {
+    const ingredients = [{ ...(rawRecipe().ingredients as object[])[0], quantity: 0.0004 }];
+    expect(() => parseRecipe(rawRecipe({ ingredients }), NO_LIMIT)).toThrow(/quantity/);
+  });
+
   it("rejects values outside the table limits", () => {
     expect(() => parseRecipe(rawRecipe({ title: "x".repeat(121) }), NO_LIMIT)).toThrow();
     expect(() => parseRecipe(rawRecipe({ steps: [] }), NO_LIMIT)).toThrow();

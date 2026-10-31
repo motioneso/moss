@@ -254,9 +254,7 @@ export async function runPlanDay(
   const current = await deps.store.getPlan(planId);
   if (current?.state !== "active") return { status: "written", day: result };
   const days = await deps.store.listDays(planId);
-  const next = days.find(
-    (candidate) => candidate.date > day.date && candidate.status === "pending"
-  );
+  const next = days.find((candidate) => candidate.status === "pending");
   if (next !== undefined) await enqueueDay(deps, planId, next.dayId);
   return { status: "written", day: result };
 }
