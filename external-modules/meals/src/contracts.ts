@@ -1,6 +1,7 @@
 // external-modules/meals/src/contracts.ts
 //
-// Views shared by the worker and the page (#3317 plan section 6.5).
+// Views shared by the worker and the page. Every read tool's outputSchema in jarvis.module.json
+// must cover every field here, because the page sees only declared fields.
 
 export type PantryMode = "ignore" | "prefer" | "only";
 export type UnitsSystem = "us" | "metric";

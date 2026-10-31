@@ -1,0 +1,713 @@
+{
+  "schemaVersion": 1,
+  "id": "meals",
+  "name": "Meals",
+  "version": "0.1.0",
+  "publisher": "Moss Project",
+  "lifecycle": "optional",
+  "compatibility": {
+    "jarv1s": ">=0.1.0"
+  },
+  "description": "Plan the week's meals for your household, then shop and cook from the plan.",
+  "storage": [
+    {
+      "namespace": "meals.settings",
+      "scopes": ["user"]
+    }
+  ],
+  "database": {
+    "ownedTables": [
+      "app.meals_kitchens",
+      "app.meals_household_members",
+      "app.meals_meal_slot_rules"
+    ]
+  },
+  "runtime": {
+    "workerEntrypoint": "dist/worker.js",
+    "workerContractVersion": 1
+  },
+  "web": {
+    "entrypoint": "dist/web/index.js",
+    "contractVersion": 2
+  },
+  "navigation": [
+    {
+      "id": "meals",
+      "label": "Meals",
+      "path": "/",
+      "icon": "utensils"
+    }
+  ],
+  "settingsPath": "/settings",
+  "appMap": {
+    "screens": [
+      {
+        "id": "meals.plan",
+        "label": "Meals",
+        "description": "The Meals page, with tabs for Plan, Shopping list, Pantry, Household and Log. Plan, Shopping list, Pantry and Log show an empty state until plans can be written.",
+        "path": "/"
+      },
+      {
+        "id": "meals.household",
+        "label": "Household",
+        "description": "Who eats, each person's meals of the day, Never serve list, preferences and optional calorie target.",
+        "path": "/household"
+      },
+      {
+        "id": "meals.settings",
+        "label": "Meals settings",
+        "description": "Units (US or metric) and the default Pantry mode.",
+        "path": "/settings"
+      }
+    ],
+    "features": [
+      {
+        "id": "meals.chat-household",
+        "description": "Add or change household members through Moss."
+      }
+    ]
+  },
+  "assistantActionFamilies": [
+    {
+      "id": "meal_planning",
+      "label": "Meal planning",
+      "description": "Plan meals, manage the household, list, Pantry and cooking.",
+      "defaultTier": "ask_each_time",
+      "allowedTiers": ["ask_each_time", "trusted_auto", "always_confirm"]
+    }
+  ],
+  "assistantTools": [
+    {
+      "name": "meals.kitchen.get",
+      "permissionId": "meals.kitchen.get",
+      "description": "Read the Meals kitchen: units, default Pantry mode, every household member with their meals of the day, Never serve list, preferences and targets, and the Shared or Solo rule for each meal. Creates the kitchen and a self member named You on first use.",
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["kitchenId", "unitsSystem", "defaultPantryMode", "members", "slotRules"],
+        "properties": {
+          "kitchenId": {
+            "type": "string"
+          },
+          "unitsSystem": {
+            "type": "string"
+          },
+          "defaultPantryMode": {
+            "type": "string"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "memberId",
+                "name",
+                "isSelf",
+                "linkedAccountEmail",
+                "calorieTarget",
+                "macroTargets",
+                "mealPattern",
+                "restrictions",
+                "preferences",
+                "favouriteRecipeIds"
+              ],
+              "properties": {
+                "memberId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "isSelf": {
+                  "type": "boolean"
+                },
+                "linkedAccountEmail": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "calorieTarget": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "macroTargets": {
+                  "type": "object",
+                  "required": ["proteinG", "carbG", "fatG"],
+                  "properties": {
+                    "proteinG": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "carbG": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "fatG": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "mealPattern": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "restrictions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "preferences": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "favouriteRecipeIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "slotRules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["slotName", "soloWeekdays", "usualTime"],
+              "properties": {
+                "slotName": {
+                  "type": "string"
+                },
+                "soloWeekdays": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  }
+                },
+                "usualTime": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "handler": "kitchen.get"
+    },
+    {
+      "name": "meals.kitchen.save",
+      "permissionId": "meals.kitchen.save",
+      "description": "Change kitchen settings: units, the default Pantry mode for new plans, and Shared or Solo rules per meal. Each slot rule given replaces the stored rule for that meal name; other rules stay.",
+      "risk": "write",
+      "actionFamilyId": "meal_planning",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "handler": "kitchen.save",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "unitsSystem": {
+            "type": "string",
+            "enum": ["us", "metric"]
+          },
+          "defaultPantryMode": {
+            "type": "string",
+            "enum": ["ignore", "prefer", "only"],
+            "description": "ignore: plan without the Pantry. prefer: use what is on hand where it fits. only: plan only from what is on hand."
+          },
+          "slotRules": {
+            "type": "array",
+            "maxItems": 6,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["slotName"],
+              "properties": {
+                "slotName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40,
+                  "description": "Meal of the day, for example dinner."
+                },
+                "soloWeekdays": {
+                  "type": "array",
+                  "maxItems": 7,
+                  "items": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 7
+                  },
+                  "description": "ISO weekdays (1 = Monday, 7 = Sunday) when each person eats this meal on their own. Empty means shared every day."
+                },
+                "usualTime": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Usual time as HH:MM, or null."
+                }
+              }
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["kitchenId", "unitsSystem", "defaultPantryMode", "members", "slotRules"],
+        "properties": {
+          "kitchenId": {
+            "type": "string"
+          },
+          "unitsSystem": {
+            "type": "string"
+          },
+          "defaultPantryMode": {
+            "type": "string"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "memberId",
+                "name",
+                "isSelf",
+                "linkedAccountEmail",
+                "calorieTarget",
+                "macroTargets",
+                "mealPattern",
+                "restrictions",
+                "preferences",
+                "favouriteRecipeIds"
+              ],
+              "properties": {
+                "memberId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "isSelf": {
+                  "type": "boolean"
+                },
+                "linkedAccountEmail": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "calorieTarget": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "macroTargets": {
+                  "type": "object",
+                  "required": ["proteinG", "carbG", "fatG"],
+                  "properties": {
+                    "proteinG": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "carbG": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "fatG": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "mealPattern": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "restrictions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "preferences": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "favouriteRecipeIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "slotRules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["slotName", "soloWeekdays", "usualTime"],
+              "properties": {
+                "slotName": {
+                  "type": "string"
+                },
+                "soloWeekdays": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  }
+                },
+                "usualTime": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.household.save",
+      "permissionId": "meals.household.save",
+      "description": "Add or change a household member. Leave memberId out to add someone (name required). Restrictions are strict Never serve items; preferences are soft likes and dislikes. Null clears an optional field.",
+      "risk": "write",
+      "actionFamilyId": "meal_planning",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "handler": "household.save",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "memberId": {
+            "type": "string",
+            "description": "Member to change. Leave out to add a new member."
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "linkedAccountEmail": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 320
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Their Moss account email, if they have one."
+          },
+          "calorieTarget": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 800,
+                "maximum": 6000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Daily calories."
+          },
+          "proteinTargetG": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 600
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "carbTargetG": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fatTargetG": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 400
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mealPattern": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 6,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "description": "Meals of the day this person eats. Defaults to breakfast, lunch and dinner."
+          },
+          "restrictions": {
+            "type": "array",
+            "maxItems": 40,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "description": "Never serve: allergies, diets and foods this person must not be served, for example peanuts or vegetarian."
+          },
+          "preferences": {
+            "type": "array",
+            "maxItems": 40,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "description": "Soft likes and dislikes."
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "memberId",
+          "name",
+          "isSelf",
+          "linkedAccountEmail",
+          "calorieTarget",
+          "macroTargets",
+          "mealPattern",
+          "restrictions",
+          "preferences",
+          "favouriteRecipeIds"
+        ],
+        "properties": {
+          "memberId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "isSelf": {
+            "type": "boolean"
+          },
+          "linkedAccountEmail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "calorieTarget": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "macroTargets": {
+            "type": "object",
+            "required": ["proteinG", "carbG", "fatG"],
+            "properties": {
+              "proteinG": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "carbG": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fatG": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "mealPattern": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "restrictions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "preferences": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "favouriteRecipeIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.household.remove",
+      "permissionId": "meals.household.remove",
+      "description": "Remove a household member. The self member cannot be removed.",
+      "risk": "destructive",
+      "actionFamilyId": "meal_planning",
+      "handler": "household.remove",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["memberId"],
+        "properties": {
+          "memberId": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["removed"],
+        "properties": {
+          "removed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "selfOperationGrant": "confirm_always"
+    }
+  ]
+}
