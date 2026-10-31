@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Finance budgeting, bills and reports.** Finance now lets you give every dollar a job from the keyboard, move money between categories, set savings targets, track upcoming bills, split and bulk-categorize transactions, reconcile against statements, import and export CSV files, see upcoming bills on a calendar with suggestions drawn from repeating charges, and see net worth, cash flow and spending in charts. [PR #3874](https://github.com/motioneso/moss/pull/3874)
 
+#### Fixed
+
+- **Confirming changes on module pages works with a fast clock.** Confirming a removal on a module's page now works even when your device's clock runs fast. [PR #3911](https://github.com/motioneso/moss/pull/3911)
+
 ### 2026-10-30
 
 #### Changed
