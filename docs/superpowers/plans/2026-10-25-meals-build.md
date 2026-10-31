@@ -74,7 +74,18 @@ The spec gets a follow-up edit for these once Ben rules on §2.
 
 ## 2. Design forks, ranked
 
-Both forks gate phase 2, not phase 1. Ben rules on them before phase 2 tickets are written.
+Both forks gate phase 2, not phase 1. Ben delegated both to the Meals build on 2026-10-30.
+
+**Settled 2026-10-30: A1 and B1.**
+
+- A1, because it is the only option where a plan started from chat finishes with the tab closed,
+  and it costs nothing while no plan is being written. The enqueue spec is drafted
+  (`docs/superpowers/specs/2026-10-25-module-job-enqueue-design.md`, #3715). A2 stays the fallback
+  only if that spec is rejected.
+- B1, because ticking a list line, locking a meal and marking Bought are page actions done many
+  times a minute, and an approval prompt on each one makes the page unusable in a shop. The page
+  write spec is drafted (`docs/superpowers/specs/2026-10-25-module-page-write-tools-design.md`,
+  #1699).
 
 ### Fork A: how a plan gets written day by day
 
@@ -215,8 +226,10 @@ crowding, per the spacing-and-fonts ruling.
 Workshop prototype allows, because the suite's web server roots at `apps/web` and cannot reach
 `docs/` (`playwright.config.ts:19-24`). It visits
 every route at both widths, asserts zero console errors and a non-empty main region, and saves a
-screenshot per route. It would fail on a broken route, a missing fake-data reference or an unstyled
-screen with no content.
+screenshot per route when `MEALS_PROTOTYPE_SHOTS` is set. Screenshots are opt-in because full-page
+captures of every route at both widths took minutes on a loaded box, and the test also runs inside
+CI's ten-minute browser step. It would fail on a broken route, a missing fake-data reference or an
+unstyled screen with no content.
 
 ### Phase 1 verification
 
@@ -228,15 +241,23 @@ sort -u -o /tmp/meals-used.txt /tmp/meals-used-raw.txt; echo "EXIT=$?"          
 grep -rhoE "\.jds-[a-zA-Z0-9_-]+" apps/web/src/styles packages/ui/src/styles > /tmp/meals-def-raw.txt; echo "EXIT=$?"  # expect EXIT=0
 sed 's/^\.//' /tmp/meals-def-raw.txt > /tmp/meals-def-strip.txt; echo "EXIT=$?"                          # expect EXIT=0
 sort -u -o /tmp/meals-def.txt /tmp/meals-def-strip.txt; echo "EXIT=$?"                                     # expect EXIT=0
-comm -23 /tmp/meals-used.txt /tmp/meals-def.txt > /tmp/meals-invented.txt; test ! -s /tmp/meals-invented.txt; echo "EXIT=$?"  # expect EXIT=0
-pnpm exec prettier --check .prettierignore docs/superpowers/plans > /tmp/meals-fmt.log 2>&1; echo "EXIT=$?"  # expect EXIT=0
+comm -23 /tmp/meals-used.txt /tmp/meals-def.txt > /tmp/meals-candidates.txt; echo "EXIT=$?"                  # expect EXIT=0
+grep -v -e '-$' -e '^jds-masthead$' /tmp/meals-candidates.txt > /tmp/meals-invented.txt; test ! -s /tmp/meals-invented.txt; echo "EXIT=$?"  # expect EXIT=0
+pnpm exec prettier --check docs/superpowers/plans tests/e2e/meals-prototype-clickthrough.spec.ts > /tmp/meals-fmt.log 2>&1; echo "EXIT=$?"  # expect EXIT=0
+pnpm exec eslint docs/superpowers/specs/assets/2026-10-09-meals tests/e2e/meals-prototype-clickthrough.spec.ts > /tmp/meals-lint.log 2>&1; echo "EXIT=$?"  # expect EXIT=0
 pnpm exec playwright test tests/e2e/meals-prototype-clickthrough.spec.ts > /tmp/meals-e2e.log 2>&1; echo "EXIT=$?"  # expect EXIT=0
 ```
 
 The invented-class lines are the `design-system` skill's audit, aimed at the prototype, because
 `pnpm check:ui-classes` scans only `.tsx` under `apps/web/src`, `packages` and `external-modules`
-(`scripts/check-ui-classes.ts:57`, `:133`). A non-empty `/tmp/meals-invented.txt` is a defect.
-Confirm the Playwright log shows a non-zero test count before believing green.
+(`scripts/check-ui-classes.ts:57`, `:133`). A non-empty `/tmp/meals-invented.txt` is a defect. The filter drops the skill's documented
+exceptions: prefixes such as `jds-btn--` that the helpers complete at runtime, and the bare
+`jds-masthead` hook the shared component also sets. The click-through test closes the runtime gap
+by checking every class on each rendered page against the stylesheets.
+Prettier cannot parse `.prettierignore` itself, so the format line checks the files it governs. The
+prototype folder is ignored, which keeps hand-aligned markup intact. ESLint does lint the folder,
+so the prototype scripts must pass it. Confirm the Playwright log shows a non-zero test count before
+believing green.
 
 ### Phase 1 done means
 
@@ -255,7 +276,7 @@ Ben judges these on the prototype:
    by hand, stop. The line ends here, and Food stays as it is.
 2. **Is the wait acceptable?** Real days take minutes each. If watching days fill in feels broken
    rather than alive, Fork A is moot and the design needs a background-only flow first.
-3. **Fork A and Fork B rulings.**
+3. **Fork A and Fork B rulings.** Settled 2026-10-30 as A1 and B1 (section 2).
 4. **Model job 2.** Keep the AI Safety pass or go deterministic only.
 5. **Scope cut.** Which phase 2 items move later once the screens show their real weight.
 
