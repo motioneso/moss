@@ -22,7 +22,8 @@ const FAILURE_TEXT: Record<GenerationFailure, string> = {
   usage_limited: "The AI service hit its usage limit.",
   validation_failed: "Moss got an answer it could not use.",
   aborted: "The run was interrupted.",
-  safety_cap: "No option was safe for everyone who eats.",
+  safety_cap:
+    "Every option had something from an eater's Never serve list. Double check before you cook anything.",
   timeout: "It took too long to write.",
   stopped: "Writing stopped before this day."
 };
@@ -87,22 +88,30 @@ function Fit(props: { meal: PlannedMealView }): ReactNodeLike | null {
   );
 }
 
+const DOUBLE_CHECK = "Always double check.";
+
 function Safety(props: { meal: PlannedMealView }): ReactNodeLike | null {
   const failed = props.meal.eaters.filter((eater) => eater.safety === "fail");
   const reasons = props.meal.eaters.flatMap((eater) =>
     eater.safetyReason ? [`${eater.name}: ${eater.safetyReason}`] : []
   );
-  if (failed.length === 0 && props.meal.checkLabelCount === 0) return null;
+  const checked = props.meal.eaters.some((eater) => eater.safety === "pass");
+  if (failed.length === 0 && !checked && props.meal.checkLabelCount === 0) return null;
   const lead =
     failed.length > 0
-      ? `Not safe for ${failed.map((eater) => eater.name).join(" and ")}.`
+      ? `Found something from the Never serve list for ${failed.map((eater) => eater.name).join(" and ")}.`
+      : "Nothing from the Never serve list was found outright.";
+  const label =
+    props.meal.checkLabelCount === 0
+      ? ""
       : props.meal.checkLabelCount === 1
-        ? "Check the label on 1 ingredient."
-        : `Check the label on ${props.meal.checkLabelCount} ingredients.`;
+        ? " Check the label on 1 ingredient."
+        : ` Check the label on ${props.meal.checkLabelCount} ingredients.`;
   return (
     <p className="mls-safety jds-caption">
       {lead}
       {reasons.length > 0 ? ` ${reasons.join(". ")}` : ""}
+      {label} {DOUBLE_CHECK}
     </p>
   );
 }

@@ -992,7 +992,9 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
 ### S2. Plan writing engine, through chat
 
 - Goal: "plan next week" in chat writes a plan day by day, with Safety, the brand note, calorie fit
-  and no repeats. Stop, Resume and Retry day work. AI errors fail only the day.
+  and no repeats. Stop, Resume and Retry day work. AI errors fail only the day. Every allergy check
+  result, pass or fail, says only that nothing listed was found outright (or what was found) and
+  reminds the user to double check. No Meals text says "safe" or promises a guarantee.
 - Needs: #3722 merged.
 - Files:
   - `sql/0005` onward (6.8 S2)
@@ -1029,6 +1031,9 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
   - Safety: a peanut ingredient fails a no-peanut eater without a model call. A model fail on a
     rule pass marks the eater failed. A model pass on a rule fail stays failed. The cap is reached
     at three attempts.
+  - Every allergy check result carries the double-check reminder, a pass as well as a fail. A pass
+    renders "Nothing from the Never serve list was found outright" with "Always double check", and
+    no Meals text contains the word "safe". It fails if a pass renders without the reminder.
   - The brand rule adds `check_label`, and the model flag is never cleared.
   - Each of the five AI error kinds fails the day, and `meals.kitchen.get` still works.
   - Timeout is not stalling. The platform test holds a fake host call for longer than the stall
@@ -1038,8 +1043,10 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
 - App map:
   - Feature `meals.chat-plan`: "Ask Moss to plan any number of days up to 28. Days are written one by
     one. Stop, resume, or retry one day."
-  - Feature `meals.safety`: "Every meal is checked against each eater's Never serve list. Packaged
-    or branded ingredients carry a check-the-label note."
+  - Feature `meals.safety`: "Every meal is checked against each eater's Never serve list. The
+    check only says nothing listed was found outright, never that a meal is safe, and every result,
+    pass or fail, reminds you to double check. Packaged or branded ingredients carry a
+    check-the-label note."
 - Live proof, which is the Q4 probe (kill gate G-S2):
   - On the real-model test copy, ask "plan 7 days for me and Sam".
   - Log timing per meal and per day from job records.
@@ -1102,6 +1109,11 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
   - The list keeps a phone screen awake while the List area is visible, through the browser's
     screen wake lock. It does nothing where the browser does not offer it, which includes plain
     http pages.
+  - Built as shipped: the unique line key index adds `AND bought_at IS NULL`, so a bought line
+    never blocks the same item on the next list. `meals_shopping_lists.plan_id` references
+    `meals_plans` with `ON DELETE SET NULL (plan_id)`. The tables carry `created_at` and
+    `updated_at`. Bought writes Pantry rows now (source `bought`), and Pantry subtraction waits
+    for S5 behind the `coveredNameKeys` seam.
 - Tests that fail first:
   - U1, rebuild after a plan change:
     - ticked lines stay ticked

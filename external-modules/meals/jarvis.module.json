@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "meals",
   "name": "Meals",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": {
@@ -25,7 +25,11 @@
       "app.meals_recipes",
       "app.meals_recipe_ingredients",
       "app.meals_planned_meals",
-      "app.meals_planned_meal_eaters"
+      "app.meals_planned_meal_eaters",
+      "app.meals_shopping_lists",
+      "app.meals_shopping_list_items",
+      "app.meals_pantry_items",
+      "app.meals_undo_actions"
     ]
   },
   "runtime": {
@@ -77,8 +81,14 @@
       {
         "id": "meals.plan",
         "label": "Meals",
-        "description": "The Meals page, with tabs for Plan, Shopping list, Pantry, Household and Log. Plan shows the meal plan day by day as Moss writes it, with tonight's dinner on top, and an empty state until a plan exists. Shopping list, Pantry and Log show an empty state until they are built.",
+        "description": "The Meals page, with tabs for Plan, Shopping list, Pantry, Household and Log. Plan shows the meal plan day by day as Moss writes it, with tonight's dinner on top, and an empty state until a plan exists. Pantry and Log show an empty state until they are built.",
         "path": "/"
+      },
+      {
+        "id": "meals.list",
+        "label": "Shopping list",
+        "description": "The shopping list by store section, with amounts to buy, where each line came from, a You have this group, and Bought.",
+        "path": "/list"
       },
       {
         "id": "meals.recipe",
@@ -110,7 +120,11 @@
       },
       {
         "id": "meals.safety",
-        "description": "Every meal is checked against each eater's Never serve list. Packaged or branded ingredients carry a check-the-label note."
+        "description": "Every meal is checked against each eater's Never serve list. The check only says nothing listed was found outright, never that a meal is safe, and every result, pass or fail, reminds you to double check. Packaged or branded ingredients carry a check-the-label note."
+      },
+      {
+        "id": "meals.chat-list",
+        "description": "Add to the list, I bought everything, and undo through Moss."
       }
     ]
   },
@@ -2593,6 +2607,871 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.list.get",
+      "permissionId": "meals.list.get",
+      "description": "Read the shopping list. Lines are grouped by store section and carry the amount the recipes need, the amount to buy, the meals each line is for, whether it is ticked, and whether it is already bought. A line marked notInPlan is ticked but no longer needed by the plan. Returns an empty list before one is built.",
+      "actionLabel": "Read your shopping list",
+      "risk": "read",
+      "actionFamilyId": "meal_planning",
+      "handler": "list.get",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["listId", "planId", "pantryMode", "lines"],
+        "properties": {
+          "listId": {
+            "type": "string"
+          },
+          "planId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pantryMode": {
+            "type": "string"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "lineId",
+                "name",
+                "quantity",
+                "unit",
+                "purchase",
+                "section",
+                "manual",
+                "coveredByPantry",
+                "notInPlan",
+                "convertedFrom",
+                "sources",
+                "checkedAt",
+                "boughtAt"
+              ],
+              "properties": {
+                "lineId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "unit": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "purchase": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "required": ["quantity", "unit"],
+                      "properties": {
+                        "quantity": {
+                          "type": "number"
+                        },
+                        "unit": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "section": {
+                  "type": "string"
+                },
+                "manual": {
+                  "type": "boolean"
+                },
+                "coveredByPantry": {
+                  "type": "boolean"
+                },
+                "notInPlan": {
+                  "type": "boolean"
+                },
+                "convertedFrom": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "sources": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["mealId", "label"],
+                    "properties": {
+                      "mealId": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "checkedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "boughtAt": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.list.build",
+      "permissionId": "meals.list.build",
+      "description": "Build the shopping list from a meal plan, or rebuild it after the plan changed. The same ingredient across meals becomes one line, and amounts round up to what the shop sells. Lines you ticked stay ticked, lines you added stay, and a ticked line the plan no longer needs stays, marked not in the plan.",
+      "actionLabel": "Build your shopping list from the plan",
+      "risk": "write",
+      "actionFamilyId": "meal_planning",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "handler": "list.build",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["planId"],
+        "properties": {
+          "planId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["listId", "planId", "pantryMode", "lines"],
+        "properties": {
+          "listId": {
+            "type": "string"
+          },
+          "planId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pantryMode": {
+            "type": "string"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "lineId",
+                "name",
+                "quantity",
+                "unit",
+                "purchase",
+                "section",
+                "manual",
+                "coveredByPantry",
+                "notInPlan",
+                "convertedFrom",
+                "sources",
+                "checkedAt",
+                "boughtAt"
+              ],
+              "properties": {
+                "lineId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "unit": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "purchase": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "required": ["quantity", "unit"],
+                      "properties": {
+                        "quantity": {
+                          "type": "number"
+                        },
+                        "unit": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "section": {
+                  "type": "string"
+                },
+                "manual": {
+                  "type": "boolean"
+                },
+                "coveredByPantry": {
+                  "type": "boolean"
+                },
+                "notInPlan": {
+                  "type": "boolean"
+                },
+                "convertedFrom": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "sources": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["mealId", "label"],
+                    "properties": {
+                      "mealId": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "checkedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "boughtAt": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.list.edit",
+      "permissionId": "meals.list.edit",
+      "description": "Add, change, remove, tick or untick shopping lines. add needs a name and takes an optional quantity, unit and store section. update changes a line by lineId, and on a line built from the plan the quantity is the amount to buy. remove returns an undo token. tick and untick take lineId, or lineIds to do several at once.",
+      "actionLabel": "Edit your shopping list",
+      "risk": "write",
+      "actionFamilyId": "meal_planning",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "handler": "list.edit",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action"],
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": ["add", "update", "remove", "tick", "untick"]
+          },
+          "lineId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "lineIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "minLength": 36,
+              "maxLength": 36
+            }
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 24
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section": {
+            "type": "string",
+            "enum": [
+              "produce",
+              "meat_fish",
+              "dairy_eggs",
+              "bakery",
+              "frozen",
+              "pantry",
+              "spices",
+              "drinks",
+              "household",
+              "other"
+            ]
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["list", "undo"],
+        "properties": {
+          "list": {
+            "type": "object",
+            "required": ["listId", "planId", "pantryMode", "lines"],
+            "properties": {
+              "listId": {
+                "type": "string"
+              },
+              "planId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "pantryMode": {
+                "type": "string"
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "lineId",
+                    "name",
+                    "quantity",
+                    "unit",
+                    "purchase",
+                    "section",
+                    "manual",
+                    "coveredByPantry",
+                    "notInPlan",
+                    "convertedFrom",
+                    "sources",
+                    "checkedAt",
+                    "boughtAt"
+                  ],
+                  "properties": {
+                    "lineId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "quantity": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "unit": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "purchase": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": ["quantity", "unit"],
+                          "properties": {
+                            "quantity": {
+                              "type": "number"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "section": {
+                      "type": "string"
+                    },
+                    "manual": {
+                      "type": "boolean"
+                    },
+                    "coveredByPantry": {
+                      "type": "boolean"
+                    },
+                    "notInPlan": {
+                      "type": "boolean"
+                    },
+                    "convertedFrom": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["mealId", "label"],
+                        "properties": {
+                          "mealId": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "checkedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "boughtAt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "undo": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": ["actionId", "kind", "count"],
+                "properties": {
+                  "actionId": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "count": {
+                    "type": "number"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.list.bought",
+      "permissionId": "meals.list.bought",
+      "description": "Mark shopping lines as bought and add them to the Pantry. Without lines it takes every ticked line. Give a line a quantity and unit when you bought a different amount than the list said. Returns an undo token that reverses it.",
+      "actionLabel": "Mark shopping as bought",
+      "risk": "write",
+      "actionFamilyId": "meal_planning",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "handler": "list.bought",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["lineId"],
+              "properties": {
+                "lineId": {
+                  "type": "string",
+                  "minLength": 36,
+                  "maxLength": 36
+                },
+                "quantity": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "unit": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 24
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["list", "pantryAdded", "undo"],
+        "properties": {
+          "list": {
+            "type": "object",
+            "required": ["listId", "planId", "pantryMode", "lines"],
+            "properties": {
+              "listId": {
+                "type": "string"
+              },
+              "planId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "pantryMode": {
+                "type": "string"
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "lineId",
+                    "name",
+                    "quantity",
+                    "unit",
+                    "purchase",
+                    "section",
+                    "manual",
+                    "coveredByPantry",
+                    "notInPlan",
+                    "convertedFrom",
+                    "sources",
+                    "checkedAt",
+                    "boughtAt"
+                  ],
+                  "properties": {
+                    "lineId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "quantity": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "unit": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "purchase": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": ["quantity", "unit"],
+                          "properties": {
+                            "quantity": {
+                              "type": "number"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "section": {
+                      "type": "string"
+                    },
+                    "manual": {
+                      "type": "boolean"
+                    },
+                    "coveredByPantry": {
+                      "type": "boolean"
+                    },
+                    "notInPlan": {
+                      "type": "boolean"
+                    },
+                    "convertedFrom": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["mealId", "label"],
+                        "properties": {
+                          "mealId": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "checkedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "boughtAt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "pantryAdded": {
+            "type": "number"
+          },
+          "undo": {
+            "type": "object",
+            "required": ["actionId", "kind", "count"],
+            "properties": {
+              "actionId": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "count": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.list.clear",
+      "permissionId": "meals.list.clear",
+      "description": "Remove every line from the shopping list, including lines you added. This cannot be undone.",
+      "actionLabel": "Clear your shopping list",
+      "risk": "destructive",
+      "actionFamilyId": "meal_planning",
+      "selfOperationGrant": "confirm_always",
+      "handler": "list.clear",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["listId"],
+        "properties": {
+          "listId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["cleared"],
+        "properties": {
+          "cleared": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.undo",
+      "permissionId": "meals.undo",
+      "description": "Undo the shopping list change an undo token names. A removed line comes back, and a Bought is reversed. A Pantry amount that was edited after Bought is left alone and counted as skipped.",
+      "actionLabel": "Undo a shopping list change",
+      "risk": "write",
+      "actionFamilyId": "meal_planning",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "handler": "undo",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["actionId"],
+        "properties": {
+          "actionId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["restored", "skipped"],
+        "properties": {
+          "restored": {
+            "type": "number"
+          },
+          "skipped": {
+            "type": "number"
           }
         }
       }

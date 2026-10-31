@@ -1,13 +1,15 @@
 // external-modules/meals/src/web/root.tsx
 //
 // The Meals page: five area tabs and a settings route behind the header cog. Areas whose tools
-// arrive in later slices show an empty state.
+// arrive in later slices (Pantry, Log) show an empty state.
 import { EmptyState, Segmented, type ReactNodeLike } from "@moss/module-web-sdk";
 
 import { useKitchen } from "./kitchen";
+import { useShoppingList } from "./list";
 import { usePlan } from "./plan";
 import { navigate, useModulePath } from "./router";
 import { HouseholdScreen } from "./screens/household";
+import { ListScreen } from "./screens/list";
 import { PlanScreen } from "./screens/plan";
 import { RecipeScreen } from "./screens/recipe";
 import { SettingsScreen } from "./screens/settings";
@@ -19,7 +21,7 @@ type Area = "plan" | "list" | "pantry" | "household" | "log";
 
 const AREAS: ReadonlyArray<{ value: Area; label: string; path: string; empty: string }> = [
   { value: "plan", label: "Plan", path: "/", empty: "Plan your first week" },
-  { value: "list", label: "Shopping list", path: "/list", empty: "Nothing to buy" },
+  { value: "list", label: "Shopping list", path: "/list", empty: "" },
   { value: "pantry", label: "Pantry", path: "/pantry", empty: "The Pantry is empty" },
   { value: "household", label: "Household", path: "/household", empty: "" },
   { value: "log", label: "Log", path: "/log", empty: "Nothing logged" }
@@ -34,6 +36,24 @@ function PlanArea(props: {
     <PlanScreen
       state={state}
       reload={reload}
+      writes={props.writes}
+      hostActions={props.hostActions}
+    />
+  );
+}
+
+function ListArea(props: {
+  writes: ReturnType<typeof bindWrites>;
+  hostActions: HostActions;
+}): ReactNodeLike {
+  const { state, reload, apply } = useShoppingList();
+  const { state: planState } = usePlan();
+  return (
+    <ListScreen
+      state={state}
+      reload={reload}
+      apply={apply}
+      plan={planState.kind === "ready" ? planState.plan : null}
       writes={props.writes}
       hostActions={props.hostActions}
     />
@@ -72,6 +92,8 @@ export function Root(props: Readonly<Record<string, unknown>>): ReactNodeLike {
         <HouseholdScreen state={state} reload={reload} writes={writes} hostActions={hostActions} />
       ) : (area ?? AREAS[0]!).value === "plan" ? (
         <PlanArea writes={writes} hostActions={hostActions} />
+      ) : area?.value === "list" ? (
+        <ListArea writes={writes} hostActions={hostActions} />
       ) : (
         <EmptyState title={(area ?? AREAS[0]!).empty} />
       )}

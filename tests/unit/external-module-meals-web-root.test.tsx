@@ -50,6 +50,8 @@ beforeEach(() => {
   mockReadTool.mockImplementation(async (name: string) => {
     if (name === "meals.kitchen.get") return KITCHEN;
     if (name === "meals.plan.current") return { plan: null };
+    if (name === "meals.list.get")
+      return { listId: "l1", planId: null, pantryMode: "prefer", lines: [] };
     throw new Error(`unexpected tool ${name}`);
   });
 });
@@ -105,7 +107,6 @@ describe("Meals page shell", () => {
 
   it("gives each unbuilt area the prototype's empty-state title and no action", async () => {
     const titles: Array<[string, string]> = [
-      ["/m/meals/list", "Nothing to buy"],
       ["/m/meals/pantry", "The Pantry is empty"],
       ["/m/meals/log", "Nothing logged"]
     ];
@@ -115,6 +116,13 @@ describe("Meals page shell", () => {
       expect(text(renderer)).toContain(title);
       expect(empty.findAll((node) => node.type === "button")).toEqual([]);
     }
+  });
+
+  it("shows Nothing to buy on the empty list, with Ask Moss and no write control", async () => {
+    const renderer = await render("/m/meals/list");
+    expect(text(renderer)).toContain("Nothing to buy");
+    expect(text(renderer)).toContain("Ask Moss");
+    expect(writeControls(renderer)).toEqual([]);
   });
 
   it("numbers the household section heads like the prototype", async () => {
