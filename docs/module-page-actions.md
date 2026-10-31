@@ -24,6 +24,8 @@ async function save(
       return { message: "Check your entries before saving.", code: outcome.moduleCode };
     case "invalid_input":
       return { message: "Check the required fields." };
+    case "saved":
+      return { message: "Saved. Refresh to see the change." };
     case "failed":
       return { message: "Refresh and check whether the change saved before trying again." };
   }
@@ -39,11 +41,13 @@ The host snapshots JSON input when invoked and owns the shared confirmation dial
 page writes follow the tool's confirmation hook; destructive and outbound tools always confirm.
 Cancel and Escape do not resubmit the operation. One operation can be pending per mounted module;
 disable conflicting controls until the promise resolves. Navigation or an actor change abandons
-the pending UI. The server also checks owner, input digest, expiry and single use.
+the pending UI. The server also checks owner, input digest, expiry and single use. Only the
+server's clock decides expiry.
 
-The handle does not automatically retry a failed transport. A worker may have committed before
-the response failed. Use stable operation identities and replay-safe domain writes where a user
-may retry. Keep the same identity and original fields until the result can be checked. Confirming
+`saved` means the write ran but its result was too large to return. Refresh to show it and never
+retry it. The handle does not automatically retry a failed transport. A worker may have committed
+before the response failed. Use stable operation identities and replay-safe domain writes where a
+user may retry. Keep the same identity and original fields until the result can be checked. Confirming
 is a single retry of the original validated input with the host-issued confirmation ID, not a
 second independent user operation.
 

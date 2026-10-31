@@ -126,13 +126,12 @@ describe("module page host bridge (explicit HTTP stand-ins)", () => {
     }
   );
 
-  it("does not open a confirmation for invalid or already expired metadata", async () => {
+  it("does not open a confirmation for invalid metadata", async () => {
     for (const overrides of [
       { id: "not-an-id" },
       { actionLabel: "x".repeat(241) },
       { risk: "read" },
-      { expiresAt: "not-a-date" },
-      { expiresAt: "2000-01-01T00:00:00Z" }
+      { expiresAt: "not-a-date" }
     ]) {
       const request = vi
         .fn<typeof fetch>()
@@ -145,6 +144,50 @@ describe("module page host bridge (explicit HTTP stand-ins)", () => {
         1
       );
     }
+  });
+
+  it("leaves expiry to the server when this device's clock runs ahead", async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(pending())
+      .mockResolvedValueOnce(success());
+    const c = controller(request);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 10 * 60_000);
+    const outcome = c.handle.invoke("finance.delete", { id: "synthetic" });
+    await vi.waitFor(() => expect(c.getSnapshot()?.kind).toBe("confirmation"));
+    c.decide(true);
+    expect(await outcome).toMatchObject({ status: "succeeded" });
+    expect(payload(request, 1)).toEqual({ input: { id: "synthetic" }, confirmationId: id });
+  });
+
+  it("reports a saved write whose result was too large as saved, not uncertain", async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ code: "result_too_large", saved: true }), { status: 413 })
+      );
+    const c = controller(request);
+    expect(await c.handle.invoke("finance.save", {})).toEqual({ status: "saved" });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(c.getSnapshot()).toEqual({
+      kind: "notice",
+      message: "The change was saved. Refresh this page to see it."
+    });
+  });
+
+  it("says a too-large read changed nothing", async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ code: "result_too_large", saved: false }), { status: 413 })
+      );
+    const c = controller(request);
+    expect(await c.handle.invoke("finance.read", {})).toEqual({ status: "failed" });
+    expect(c.getSnapshot()).toEqual({
+      kind: "notice",
+      message: "This result is too large to show. Nothing was changed."
+    });
   });
 
   it("does not loop if the confirmed request expires or asks again", async () => {
