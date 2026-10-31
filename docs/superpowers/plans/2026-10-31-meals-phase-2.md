@@ -1,16 +1,14 @@
 # Build plan: Meals phase 2, core planning (#3317)
 
-| Key            | Value                                                                                       |
-| -------------- | ------------------------------------------------------------------------------------------- |
-| Spec           | `docs/superpowers/specs/2026-10-09-meals-meal-planning-design.md` (Final, 2026-10-25)       |
-| Agreed screens | Phase 1 prototype, PR #3880, `docs/superpowers/specs/assets/2026-10-09-meals/`              |
-| Phase 1 plan   | `docs/superpowers/plans/2026-10-25-meals-build.md` (not edited here)                        |
-| Rulings        | Kill gate rulings of 2026-10-31 (PR #3882) and the owner rulings in section 5               |
-| Issue          | #3317, one `task` issue per slice (section 7)                                               |
-| Platform deps  | Job enqueue #3722 (PR #3884); page writes #1699, slices #3723 and #3724                     |
-| Bar to beat    | `~/moss-research/meals/2026-10-31-competitor-study.md` and `2026-10-30-competitor-notes.md` |
+| Key            | Value                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------- |
+| Spec           | `docs/superpowers/specs/2026-10-09-meals-meal-planning-design.md` (Final, 2026-10-25) |
+| Agreed screens | Phase 1 prototype, PR #3880, `docs/superpowers/specs/assets/2026-10-09-meals/`        |
+| Phase 1 plan   | `docs/superpowers/plans/2026-10-25-meals-build.md` (not edited here)                  |
+| Rulings        | Kill gate rulings of 2026-10-31 (PR #3882) and the owner rulings in section 5         |
+| Issue          | #3317, one `task` issue per slice (section 7)                                         |
+| Platform deps  | Job enqueue #3722 (PR #3884); page writes #1699, slices #3723 and #3724               |
 
-The research files live outside the repo on purpose. Slices cite them by file name and section.
 This plan says only what Meals does.
 
 ## 0. Gates
@@ -133,7 +131,7 @@ follow-up on #1694, not a phase 2 slice.
 
 | Option                                                                          | For                                                                                                                   | Against                                                                                       |
 | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| **G1. One job per day, chained, saving each meal as it finishes (recommended)** | Matches the spec and the owner's Stop ruling. Seven enqueues for a week. A retry resumes at the first unfinished meal | A big day (6 meals, 2 solo eaters) runs long. Measured 3.5 min per day in phase 1 research    |
+| **G1. One job per day, chained, saving each meal as it finishes (recommended)** | Matches the spec and the owner's Stop ruling. Seven enqueues for a week. A retry resumes at the first unfinished meal | A big day (6 meals, 2 solo eaters) runs long. Measured 3.5 min per day in phase 1             |
 | G2. One job per meal, chained                                                   | Each job is short                                                                                                     | A 14-day plan with 6 slots is 84 enqueues against the hourly cap of 120. A queue hop per meal |
 
 G1 wins because resume-on-retry removes its only real weakness. The S2 kill gate checks the long-day
@@ -227,7 +225,7 @@ deterministic brand rule can add a flag but never clear one.
 | K1  | The AI Safety pass stays                                                                                                                                                                         | Ruling 2026-10-31                                     | S2              |
 | K2  | Receipt text and opt-in Leftovers move to phase 3                                                                                                                                                | Ruling 2026-10-31                                     | C7              |
 | K3  | The Log rebuild stays in phase 2                                                                                                                                                                 | Ruling 2026-10-31                                     | S6              |
-| U1  | Plan edits never reset the list. It is rebuilt from the plan, and ticks and manual lines carry over by line identity. A ticked line whose amount changed keeps its tick and shows the new amount | This was the main failure of a closed rival           | S4              |
+| U1  | Plan edits never reset the list. It is rebuilt from the plan, and ticks and manual lines carry over by line identity. A ticked line whose amount changed keeps its tick and shows the new amount | Households expect ticks to survive a re-plan          | S4              |
 | U2  | One-step Undo on Mark cooked and on Bought, reversing only that action. Full Pantry history stays in phase 3                                                                                     | A phone mis-tap otherwise means retyping Pantry items | S4, S10         |
 | U3  | Generation has Stop and a retry for one failed day. Stop is a plan flag that the remaining day jobs check before they run                                                                        | No platform cancel is needed                          | S2              |
 | U4  | The list keeps the screen awake while shopping. No offline support in phase 2                                                                                                                    | A sleeping phone in a shop                            | S4              |
@@ -946,7 +944,7 @@ Definition of done, every UI slice (Ben, 2026-10-31):
   11px. Text contrast at least 4.5:1 on every surface.
 - Settings only through the header cog. No explanatory or reassuring lines on screens.
 - The live proof includes this visual pass on the dev instance.
-- Each UI slice names the study section it must beat. The slice's "Meals does" list is the bar.
+- Each UI slice has a "Meals does" list, which is the bar for that slice.
 
 App map, every slice: module-owned entries in the manifest's `appMap`, in the same PR.
 
@@ -985,7 +983,7 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
   - Feature `meals.chat-household`: "Add or change household members through Moss."
 - Live proof: in chat, "add Sam, vegetarian, no peanuts, 1800 calories". Household shows Sam after
   the refresh. Do the visual pass on Household and Settings.
-- Bar to beat: study section 6 and section 8. Meals does:
+- Meals does:
   - A household of one with no setup.
   - Targets on the person.
   - "Never serve" kept distinct from preferences.
@@ -1077,7 +1075,7 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
 - App map: screens `meals.plan` (path `/`), `meals.recipe` (`/recipe/:mealId`), `meals.day` (`/plan/day/:date`).
 - Live proof: watch a 7-day plan fill in on the page, leave mid-run, return, and the page shows
   where it was. Do the visual pass.
-- Bar to beat: study sections 1, 2 and 3. Meals does:
+- Meals does:
   - Each day as a row of eaters, Solo and Shared visible.
   - Days that fill in one by one with Safety already attached.
   - A plain failure line per day.
@@ -1133,7 +1131,7 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
   - "I bought everything", then "undo that".
   - On a phone, on the dev instance's https address, the screen stays awake on List.
   - Do the visual pass.
-- Bar to beat: study section 4. Meals does:
+- Meals does:
   - Plan edits that change only the lines that changed.
   - Ticks that never lose a line.
   - Why each line is there.
@@ -1168,7 +1166,7 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
   `meals.pantry-modes`.
 - Live proof: add Pantry items in chat, plan 2 days with "use what I have", and the list shows
   them under "You have this". Do the visual pass.
-- Bar to beat: study section 5. Meals does:
+- Meals does:
   - The mode shown at the top of the list.
   - Staples kept apart from stock.
   - Quantities optional.
@@ -1197,7 +1195,7 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
   Moss estimates calories and macros.").
 - Live proof: log two meals in chat, correct one, and check totals against the target. Do the
   visual pass.
-- Bar to beat: study section 7. Meals does:
+- Meals does:
   - "Ate something else" as one free entry.
   - Calm totals against a target range.
   - No barcode library.
@@ -1221,7 +1219,7 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
 - Live proof: lock two meals, regenerate the week, both survive; request swaps and choose one.
   Tick list lines, regenerate one day, and confirm the ticks survive and only changed lines show
   a new amount. Do the visual pass.
-- Bar to beat: study section 1. Meals does:
+- Meals does:
   - Lock per meal with a count before regenerate.
   - Recently had dishes avoided by default.
 
@@ -1241,7 +1239,7 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
 - App map: feature `meals.arrange`; screens for move, eaters and text.
 - Live proof: move a dinner, make a lunch "eating out", set a 20-minute limit on Wednesday, and
   regenerate Wednesday. Do the visual pass.
-- Bar to beat: study sections 1 and 6. Meals does:
+- Meals does:
   - Move to... on a phone.
   - Servings that follow the eaters.
 
@@ -1260,7 +1258,7 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
 - App map: features `meals.replan` and `meals.quick-swap`.
 - Live proof: on a mid-week day, "re-plan the rest of the week" and "15-minute dinner tonight".
   Do the visual pass.
-- Bar to beat: study section 2. Meals does:
+- Meals does:
   - Keep the days already written.
   - Show what a quick swap still needs.
 
@@ -1287,7 +1285,7 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
 - App map: features `meals.cooking`, `meals.ratings`, `meals.favourites`.
 - Live proof: in chat, "I cooked tonight's dinner", accept the log offer, "undo that", rate it,
   and favourite it for Sam. Do the visual pass.
-- Bar to beat: study section 3. Meals does:
+- Meals does:
   - One servings stepper with reset.
   - Mark cooked showing what it took, with Undo.
 
