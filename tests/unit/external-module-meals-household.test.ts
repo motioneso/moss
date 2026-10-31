@@ -192,7 +192,7 @@ describe("meals.kitchen.get", () => {
     expect(kitchen.members).toEqual([expect.objectContaining({ name: "You", isSelf: true })]);
   });
 
-  it("creates one Kitchen with one self member on first use, and no second on a repeat", async () => {
+  it("shows one self member on first use, with the same ids on a repeat", async () => {
     const store = fakeStore();
     const get = createKitchenGetHandler(store);
 
