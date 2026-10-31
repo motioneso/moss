@@ -47,6 +47,7 @@ import { trapFocus } from "../shell/command-palette";
 import { RecordRow } from "./message-row";
 import { isNoActiveChatModelError } from "../onboarding/chat-availability";
 import {
+  countUserText,
   mergeFallbacks,
   reconcileFallbacks,
   recordsFromMessages,
@@ -155,8 +156,7 @@ export function ChatDrawer(props: ChatDrawerProps) {
     if (
       !props.meetingContext &&
       pendingUser !== null &&
-      props.records.filter((r) => r.kind === "user" && r.text === pendingUser.text).length >
-        pendingUser.priorMatches
+      countUserText(props.records, pendingUser.text) > pendingUser.priorMatches
     ) {
       setPendingUser(null);
     }
@@ -295,13 +295,8 @@ export function ChatDrawer(props: ChatDrawerProps) {
       setIsSending(true);
       // Binding a different live thread empties the live log, so nothing earlier can match.
       const clearsLiveLog = initiatingThreadId !== null && liveThreadId !== initiatingThreadId;
-      setPendingUser({
-        text: trimmed,
-        attachments,
-        priorMatches: clearsLiveLog
-          ? 0
-          : props.records.filter((r) => r.kind === "user" && r.text === trimmed).length
-      });
+      const priorMatches = clearsLiveLog ? 0 : countUserText(props.records, trimmed);
+      setPendingUser({ text: trimmed, attachments, priorMatches });
       const initiatingSurface = props.surface;
       const generation = generationRef.current;
       if (clearsLiveLog) {
