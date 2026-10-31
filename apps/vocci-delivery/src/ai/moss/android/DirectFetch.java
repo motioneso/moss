@@ -1,6 +1,9 @@
 package ai.moss.android;
 
-/** Decides whether a hold-to-talk recording fetched by its announced name may skip the ring file listing. */
+/**
+ * Decides whether a hold-to-talk recording fetched by its announced name may skip the ring file listing.
+ * Not wired into the delivery service yet; every recording still goes through the listing.
+ */
 final class DirectFetch {
     /** The ring cuts files at 5 MiB; a file this large may have tails the direct path cannot see. */
     static final int TAIL_CUT = 5 * 1024 * 1024;

@@ -35,8 +35,14 @@ public final class DirectFetchTest {
         byte[] gap = {0, 1, 1, 2, 1, 1};
         check(!DirectFetch.accept(name, gap.length, true, gap));
         // A file at the ring's 5 MiB cut may have unseen tails, so it never goes direct.
+        // The buffer parses cleanly, so the size cut is the only reason it is refused.
         byte[] cut = new byte[DirectFetch.TAIL_CUT];
-        for (int n = 0; n + 2 < cut.length; n += 3) { cut[n] = (byte) (n / 3); cut[n + 1] = 1; cut[n + 2] = 1; }
+        for (int at = 0, seq = 0; at < cut.length; seq++) {
+            int size = Math.min(255, cut.length - at - 2);
+            cut[at] = (byte) seq; cut[at + 1] = (byte) size;
+            at += size + 2;
+        }
+        check(RingProtocol.packetCount(cut) > 0);
         check(!DirectFetch.accept(name, cut.length, true, cut));
         // A transfer that learns its size takes it from the start message and still refuses a short file.
         ByteArrayOutputStream sink = new ByteArrayOutputStream();
@@ -48,8 +54,9 @@ public final class DirectFetchTest {
         catch (IllegalArgumentException expected) { check(!learning.ended()); }
         learning.append(new byte[]{3}); learning.control(new byte[]{2});
         check(learning.ended() && Arrays.equals(sink.toByteArray(), new byte[]{1, 2, 3}));
-        // A wrong name, a zero size and an oversized start are refused.
-        for (byte[] bad : new byte[][]{start("amsg_1700000000_other.opus", 3), start(name, 0), start(name, RingProtocol.PACKET_LIMIT + 1)}) {
+        // A wrong name of the same length, a zero size and an oversized start are refused.
+        check("amsg_1700000000_mona.opus".length() == name.length());
+        for (byte[] bad : new byte[][]{start("amsg_1700000000_mona.opus", 3), start(name, 0), start(name, RingProtocol.PACKET_LIMIT + 1)}) {
             RingProtocol.Transfer refused = new RingProtocol.Transfer(name, new ByteArrayOutputStream());
             try { refused.control(bad); throw new AssertionError("bad start accepted"); }
             catch (IllegalArgumentException expected) { check(refused.size() == -1); }
