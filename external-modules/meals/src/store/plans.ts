@@ -1,0 +1,356 @@
+// external-modules/meals/src/store/plans.ts
+//
+// The SQL PlanStore. RLS scopes every query to the acting owner, so owners appear only through
+// app.current_actor_user_id() on insert.
+//
+// ctx.db has no transactions. Writes that must not race compare a generation in their WHERE
+// clause, and a write that spans tables is one statement of data-modifying WITH clauses, which
+// Postgres applies together or not at all and runs whether or not the final SELECT reads them.
+// Foreign keys between sibling clauses hold because they are checked at the end of the statement.
+import type { GenerationFailure, WriteStatus } from "../contracts.js";
+import { titleKey } from "../domain/repeats.js";
+import type {
+  DayRow,
+  MealEaterRow,
+  MealRow,
+  PlanRow,
+  PlanState,
+  PlanStore,
+  RecipeRow
+} from "./plan-port.js";
+import type { MealsDb } from "./sql.js";
+
+const NAME_KEY_LENGTH = 80;
+
+/**
+ * A day claim waits while another day in the plan is writing. A writing day older than the
+ * queue's ten-minute ceiling plus a minute is a killed job, so it no longer blocks.
+ */
+const WRITING_LEASE_SECONDS = 660;
+
+const PLAN_COLUMNS =
+  'plan_id AS "planId", kitchen_id AS "kitchenId", start_date::text AS "startDate", ' +
+  'day_count AS "dayCount", pantry_mode AS "pantryMode", request_text AS "requestText", ' +
+  'allow_repeats AS "allowRepeats", state, paused_reason AS "pausedReason"';
+
+const DAY_COLUMNS =
+  'day_id AS "dayId", plan_id AS "planId", day_date::text AS date, status, ' +
+  'failure_reason AS "failureReason", cook_time_limit_minutes AS "cookTimeLimitMinutes", ' +
+  "generation";
+
+/** Meal columns on alias m, with its eaters folded in as JSON. */
+const MEAL_COLUMNS =
+  'm.meal_id AS "mealId", m.day_id AS "dayId", m.slot_name AS "slotName", ' +
+  'm.slot_position AS "slotPosition", m.kind, m.sharing, m.status, ' +
+  'm.failure_reason AS "failureReason", m.locked, m.one_off_for AS "oneOffFor", ' +
+  'm.favourite_of AS "favouriteOf", m.servings_override::float8 AS "servingsOverride", ' +
+  'm.recipe_id AS "recipeId", m.plain_text AS "plainText", ' +
+  "to_json(m.cooked_at) #>> '{}' AS \"cookedAt\", m.attempts, m.generation, " +
+  "coalesce((SELECT jsonb_agg(jsonb_build_object(" +
+  "'memberId', e.member_id, 'portion', e.portion::float8, 'estimatedKcal', e.estimated_kcal, " +
+  "'safety', e.safety, 'safetyReason', e.safety_reason) ORDER BY e.created_at, e.member_id) " +
+  "FROM app.meals_planned_meal_eaters e WHERE e.meal_id = m.meal_id), '[]'::jsonb) AS eaters";
+
+function nameKey(name: string): string {
+  return titleKey(name).slice(0, NAME_KEY_LENGTH).trim() || "item";
+}
+
+export function sqlPlanStore(db: MealsDb): PlanStore {
+  async function one<T>(text: string, params: readonly unknown[]): Promise<T | null> {
+    const { rows } = await db.query<T>(text, params);
+    return rows[0] ?? null;
+  }
+
+  return {
+    async createPlan(input) {
+      const days = input.days.map((day) => ({ day_id: day.dayId, day_date: day.date }));
+      const meals = input.meals.map((meal) => ({
+        meal_id: meal.mealId,
+        day_id: meal.dayId,
+        slot_name: meal.slotName,
+        slot_position: meal.slotPosition,
+        sharing: meal.sharing
+      }));
+      const eaters = input.meals.flatMap((meal) =>
+        meal.eaterIds.map((memberId) => ({ meal_id: meal.mealId, member_id: memberId }))
+      );
+      const row = await one<{ planId: string | null }>(
+        "WITH p AS (INSERT INTO app.meals_plans (owner_user_id, kitchen_id, plan_id, start_date, " +
+          "day_count, pantry_mode, request_text, allow_repeats, idempotency_key) " +
+          "VALUES (app.current_actor_user_id(), $1, $2, $3::date, $4, $5, $6, $7, $8) " +
+          "ON CONFLICT (owner_user_id, idempotency_key) DO NOTHING RETURNING plan_id), " +
+          "d AS (INSERT INTO app.meals_plan_days (owner_user_id, kitchen_id, plan_id, day_id, " +
+          "day_date, generation) SELECT app.current_actor_user_id(), $1, p.plan_id, x.day_id, " +
+          "x.day_date, 0 FROM p, jsonb_to_recordset($9::jsonb) AS x(day_id uuid, day_date date) " +
+          "RETURNING 1), " +
+          "m AS (INSERT INTO app.meals_planned_meals (owner_user_id, kitchen_id, day_id, meal_id, " +
+          "slot_name, slot_position, kind, sharing, generation) " +
+          "SELECT app.current_actor_user_id(), $1, x.day_id, x.meal_id, x.slot_name, " +
+          "x.slot_position, 'recipe', x.sharing, 0 FROM p, jsonb_to_recordset($10::jsonb) " +
+          "AS x(meal_id uuid, day_id uuid, slot_name text, slot_position smallint, sharing text) " +
+          "RETURNING 1), " +
+          "e AS (INSERT INTO app.meals_planned_meal_eaters (owner_user_id, kitchen_id, meal_id, " +
+          "member_id) SELECT app.current_actor_user_id(), $1, x.meal_id, x.member_id FROM p, " +
+          "jsonb_to_recordset($11::jsonb) AS x(meal_id uuid, member_id uuid) RETURNING 1) " +
+          'SELECT (SELECT plan_id FROM p) AS "planId"',
+        [
+          input.kitchenId,
+          input.planId,
+          input.startDate,
+          input.dayCount,
+          input.pantryMode,
+          input.requestText,
+          input.allowRepeats,
+          input.idempotencyKey,
+          JSON.stringify(days),
+          JSON.stringify(meals),
+          JSON.stringify(eaters)
+        ]
+      );
+      if (row?.planId) return { created: true, planId: row.planId };
+      const existing = await this.findPlanByKey(input.idempotencyKey);
+      if (existing === null) throw new Error("plan not visible after insert");
+      return { created: false, planId: existing };
+    },
+
+    async findPlanByKey(idempotencyKey) {
+      const row = await one<{ planId: string }>(
+        'SELECT plan_id AS "planId" FROM app.meals_plans WHERE idempotency_key = $1',
+        [idempotencyKey]
+      );
+      return row?.planId ?? null;
+    },
+
+    getPlan(planId) {
+      return one<PlanRow>(`SELECT ${PLAN_COLUMNS} FROM app.meals_plans WHERE plan_id = $1`, [
+        planId
+      ]);
+    },
+
+    async findPlanByDate(date) {
+      const row = await one<{ planId: string }>(
+        'SELECT d.plan_id AS "planId" FROM app.meals_plan_days d ' +
+          "JOIN app.meals_plans p ON p.plan_id = d.plan_id " +
+          "WHERE d.day_date = $1::date ORDER BY p.created_at DESC, p.plan_id LIMIT 1",
+        [date]
+      );
+      return row?.planId ?? null;
+    },
+
+    async setPlanState(planId, state: PlanState, pausedReason) {
+      await db.query(
+        "UPDATE app.meals_plans SET state = $2, paused_reason = $3, updated_at = now() " +
+          "WHERE plan_id = $1",
+        [planId, state, pausedReason]
+      );
+    },
+
+    // Recipes outlive the plan. Planned meals point at them without a cascade, so a later
+    // favourite keeps its recipe.
+    async deletePlan(planId) {
+      const { rows } = await db.query(
+        "DELETE FROM app.meals_plans WHERE plan_id = $1 RETURNING plan_id",
+        [planId]
+      );
+      return rows.length > 0;
+    },
+
+    async listDays(planId) {
+      const { rows } = await db.query<DayRow>(
+        `SELECT ${DAY_COLUMNS} FROM app.meals_plan_days WHERE plan_id = $1 ORDER BY day_date`,
+        [planId]
+      );
+      return rows;
+    },
+
+    getDay(dayId) {
+      return one<DayRow>(`SELECT ${DAY_COLUMNS} FROM app.meals_plan_days WHERE day_id = $1`, [
+        dayId
+      ]);
+    },
+
+    async bumpDay(dayId) {
+      const row = await one<{ generation: number }>(
+        "WITH d AS (UPDATE app.meals_plan_days SET generation = generation + 1, " +
+          "status = 'pending', failure_reason = NULL, updated_at = now() " +
+          "WHERE day_id = $1 RETURNING generation), " +
+          "m AS (UPDATE app.meals_planned_meals SET status = 'pending', failure_reason = NULL, " +
+          "updated_at = now() WHERE day_id = $1 AND status IN ('failed', 'writing') " +
+          "AND EXISTS (SELECT 1 FROM d) RETURNING 1) " +
+          "SELECT generation FROM d",
+        [dayId]
+      );
+      return row?.generation ?? null;
+    },
+
+    async claimDay(dayId, generation) {
+      const { rows } = await db.query(
+        "UPDATE app.meals_plan_days d SET status = 'writing', updated_at = now() " +
+          "WHERE d.day_id = $1 AND d.generation = $2 AND d.status <> 'ready' " +
+          "AND NOT EXISTS (SELECT 1 FROM app.meals_plan_days o WHERE o.plan_id = d.plan_id " +
+          "AND o.day_id <> d.day_id AND o.status = 'writing' " +
+          `AND o.updated_at > now() - interval '${WRITING_LEASE_SECONDS} seconds') ` +
+          "RETURNING d.day_id",
+        [dayId, generation]
+      );
+      return rows.length > 0;
+    },
+
+    async finishDay(dayId, generation, status: WriteStatus, failureReason) {
+      const { rows } = await db.query(
+        "UPDATE app.meals_plan_days SET status = $3, failure_reason = $4, updated_at = now() " +
+          "WHERE day_id = $1 AND generation = $2 RETURNING day_id",
+        [dayId, generation, status, failureReason]
+      );
+      return rows.length > 0;
+    },
+
+    async listMeals(planId) {
+      const { rows } = await db.query<MealRow>(
+        `SELECT ${MEAL_COLUMNS} FROM app.meals_planned_meals m ` +
+          "JOIN app.meals_plan_days d ON d.day_id = m.day_id WHERE d.plan_id = $1 " +
+          "ORDER BY d.day_date, m.slot_position",
+        [planId]
+      );
+      return rows;
+    },
+
+    async listDayMeals(dayId) {
+      const { rows } = await db.query<MealRow>(
+        `SELECT ${MEAL_COLUMNS} FROM app.meals_planned_meals m WHERE m.day_id = $1 ` +
+          "ORDER BY m.slot_position",
+        [dayId]
+      );
+      return rows;
+    },
+
+    getMeal(mealId) {
+      return one<MealRow & { planId: string; date: string }>(
+        `SELECT ${MEAL_COLUMNS}, d.plan_id AS "planId", d.day_date::text AS date ` +
+          "FROM app.meals_planned_meals m JOIN app.meals_plan_days d ON d.day_id = m.day_id " +
+          "WHERE m.meal_id = $1",
+        [mealId]
+      );
+    },
+
+    async claimMeal(mealId, dayId, generation) {
+      const { rows } = await db.query(
+        "UPDATE app.meals_planned_meals m SET status = 'writing', generation = $3, " +
+          "failure_reason = NULL, updated_at = now() " +
+          "FROM app.meals_plan_days d JOIN app.meals_plans p ON p.plan_id = d.plan_id " +
+          "WHERE m.meal_id = $1 AND m.day_id = $2 AND d.day_id = m.day_id " +
+          "AND d.generation = $3 AND p.state = 'active' AND m.status <> 'ready' AND NOT m.locked " +
+          "RETURNING m.meal_id",
+        [mealId, dayId, generation]
+      );
+      return rows.length > 0;
+    },
+
+    async saveMealReady(input) {
+      const { recipe } = input;
+      const ingredients = recipe.ingredients.map((line, position) => ({
+        position,
+        original_text: line.originalText,
+        name: line.name,
+        name_key: nameKey(line.name),
+        quantity: line.quantity,
+        unit: line.unit,
+        store_section: line.section,
+        check_label: line.checkLabel
+      }));
+      const eaters = input.eaters.map((eater) => ({
+        member_id: eater.memberId,
+        portion: eater.portion,
+        estimated_kcal: eater.estimatedKcal,
+        safety: eater.safety,
+        safety_reason: eater.safetyReason
+      }));
+      const row = await one<{ saved: boolean }>(
+        "WITH m AS (UPDATE app.meals_planned_meals SET status = 'ready', failure_reason = NULL, " +
+          "recipe_id = $3, attempts = $4, updated_at = now() " +
+          "WHERE meal_id = $1 AND generation = $2 AND status = 'writing' RETURNING meal_id), " +
+          "r AS (INSERT INTO app.meals_recipes (owner_user_id, kitchen_id, recipe_id, title, " +
+          "title_key, steps, cook_minutes, base_servings, kcal_per_serving, source) " +
+          "SELECT app.current_actor_user_id(), $5, $3, $6, $7, $8::jsonb, $9, $10, $11, " +
+          "'generated' FROM m RETURNING 1), " +
+          "i AS (INSERT INTO app.meals_recipe_ingredients (owner_user_id, kitchen_id, recipe_id, " +
+          "position, original_text, name, name_key, quantity, unit, store_section, check_label) " +
+          "SELECT app.current_actor_user_id(), $5, $3, x.position, x.original_text, x.name, " +
+          "x.name_key, x.quantity, x.unit, x.store_section, x.check_label FROM m, " +
+          "jsonb_to_recordset($12::jsonb) AS x(position smallint, original_text text, name text, " +
+          "name_key text, quantity numeric, unit text, store_section text, check_label boolean) " +
+          "RETURNING 1), " +
+          "e AS (UPDATE app.meals_planned_meal_eaters t SET portion = x.portion, " +
+          "estimated_kcal = x.estimated_kcal, safety = x.safety, safety_reason = x.safety_reason, " +
+          "updated_at = now() FROM m, jsonb_to_recordset($13::jsonb) AS x(member_id uuid, " +
+          "portion numeric, estimated_kcal integer, safety text, safety_reason text) " +
+          "WHERE t.meal_id = m.meal_id AND t.member_id = x.member_id RETURNING 1) " +
+          "SELECT EXISTS (SELECT 1 FROM m) AS saved",
+        [
+          input.mealId,
+          input.generation,
+          recipe.recipeId,
+          input.attempts,
+          input.kitchenId,
+          recipe.title,
+          recipe.titleKey,
+          JSON.stringify(recipe.steps),
+          recipe.cookMinutes,
+          recipe.baseServings,
+          recipe.kcalPerServing,
+          JSON.stringify(ingredients),
+          JSON.stringify(eaters)
+        ]
+      );
+      return row?.saved === true;
+    },
+
+    async failMeal(mealId, generation, failureReason: GenerationFailure, attempts, eaters) {
+      const verdicts = (eaters ?? []).map((eater: MealEaterRow) => ({
+        member_id: eater.memberId,
+        safety: eater.safety,
+        safety_reason: eater.safetyReason
+      }));
+      const row = await one<{ failed: boolean }>(
+        "WITH m AS (UPDATE app.meals_planned_meals SET status = 'failed', failure_reason = $3, " +
+          "attempts = $4, updated_at = now() " +
+          "WHERE meal_id = $1 AND generation = $2 AND status = 'writing' RETURNING meal_id), " +
+          "e AS (UPDATE app.meals_planned_meal_eaters t SET safety = x.safety, " +
+          "safety_reason = x.safety_reason, updated_at = now() FROM m, " +
+          "jsonb_to_recordset($5::jsonb) AS x(member_id uuid, safety text, safety_reason text) " +
+          "WHERE t.meal_id = m.meal_id AND t.member_id = x.member_id RETURNING 1) " +
+          "SELECT EXISTS (SELECT 1 FROM m) AS failed",
+        [mealId, generation, failureReason, attempts, JSON.stringify(verdicts)]
+      );
+      return row?.failed === true;
+    },
+
+    async getRecipes(recipeIds) {
+      if (recipeIds.length === 0) return [];
+      const { rows } = await db.query<RecipeRow>(
+        'SELECT r.recipe_id AS "recipeId", r.title, r.title_key AS "titleKey", r.steps, ' +
+          'r.cook_minutes AS "cookMinutes", r.base_servings::float8 AS "baseServings", ' +
+          'r.kcal_per_serving AS "kcalPerServing", ' +
+          "coalesce((SELECT jsonb_agg(jsonb_build_object('originalText', i.original_text, " +
+          "'name', i.name, 'quantity', i.quantity::float8, 'unit', i.unit, " +
+          "'section', i.store_section, 'checkLabel', i.check_label) ORDER BY i.position) " +
+          "FROM app.meals_recipe_ingredients i WHERE i.recipe_id = r.recipe_id), '[]'::jsonb) " +
+          "AS ingredients FROM app.meals_recipes r WHERE r.recipe_id = ANY($1::uuid[])",
+        [[...recipeIds]]
+      );
+      return rows;
+    },
+
+    async recentTitles(kitchenId, from, to) {
+      const { rows } = await db.query<{ title: string; titleKey: string }>(
+        'SELECT r.title, r.title_key AS "titleKey" FROM app.meals_planned_meals m ' +
+          "JOIN app.meals_plan_days d ON d.day_id = m.day_id " +
+          "JOIN app.meals_recipes r ON r.recipe_id = m.recipe_id " +
+          "WHERE m.kitchen_id = $1 AND m.status = 'ready' " +
+          "AND d.day_date BETWEEN $2::date AND $3::date ORDER BY d.day_date, m.slot_position",
+        [kitchenId, from, to]
+      );
+      return rows;
+    }
+  };
+}

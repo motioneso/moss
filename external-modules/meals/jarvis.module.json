@@ -19,12 +19,45 @@
     "ownedTables": [
       "app.meals_kitchens",
       "app.meals_household_members",
-      "app.meals_meal_slot_rules"
+      "app.meals_meal_slot_rules",
+      "app.meals_plans",
+      "app.meals_plan_days",
+      "app.meals_recipes",
+      "app.meals_recipe_ingredients",
+      "app.meals_planned_meals",
+      "app.meals_planned_meal_eaters"
     ]
   },
   "runtime": {
     "workerEntrypoint": "dist/worker.js",
     "workerContractVersion": 1
+  },
+  "worker": {
+    "queues": [
+      {
+        "name": "meals.plan-day",
+        "handler": "plan.day",
+        "retryLimit": 1,
+        "allowModuleEnqueue": true,
+        "timeoutMs": 600000,
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "planId": {
+              "type": "uuid"
+            },
+            "dayId": {
+              "type": "uuid"
+            },
+            "generation": {
+              "type": "integer",
+              "min": 1,
+              "max": 100000
+            }
+          }
+        }
+      }
+    ]
   },
   "web": {
     "entrypoint": "dist/web/index.js",
@@ -64,6 +97,14 @@
       {
         "id": "meals.chat-household",
         "description": "Add or change household members through Moss."
+      },
+      {
+        "id": "meals.chat-plan",
+        "description": "Ask Moss to plan any number of days up to 28. Days are written one by one. Stop, resume, or retry one day."
+      },
+      {
+        "id": "meals.safety",
+        "description": "Every meal is checked against each eater's Never serve list. Packaged or branded ingredients carry a check-the-label note."
       }
     ]
   },
@@ -708,6 +749,1485 @@
         }
       },
       "selfOperationGrant": "confirm_always"
+    },
+    {
+      "name": "meals.plan.create",
+      "permissionId": "meals.plan.create",
+      "description": "Start a meal plan of 1 to 28 days from a start date. Moss writes the days one at a time in the background, checking every meal against each eater's Never serve list and calorie target, and returns the plan at once with its days pending. Call meals.plan.get to follow progress. Reusing an idempotency key returns the plan that key already made.",
+      "risk": "write",
+      "actionFamilyId": "meal_planning",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "handler": "plan.create",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["startDate", "days", "idempotencyKey"],
+        "properties": {
+          "startDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "First day of the plan, YYYY-MM-DD, in the user's own calendar."
+          },
+          "days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 28
+          },
+          "pantryMode": {
+            "type": "string",
+            "enum": ["ignore", "prefer", "only"],
+            "description": "Leave out to use the kitchen default."
+          },
+          "requestText": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "What the user asked for, in their words, for example quick dinners and more fish."
+          },
+          "allowRepeats": {
+            "type": "boolean",
+            "description": "True lets a dish from the last seven days come back."
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "A fresh value per request, so a retried call does not start a second plan."
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "planId",
+          "startDate",
+          "dayCount",
+          "pantryMode",
+          "state",
+          "pausedReason",
+          "progress",
+          "days"
+        ],
+        "properties": {
+          "planId": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "dayCount": {
+            "type": "integer"
+          },
+          "pantryMode": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "pausedReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "progress": {
+            "type": "object",
+            "required": ["ready", "total"],
+            "properties": {
+              "ready": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              }
+            }
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "dayId",
+                "date",
+                "status",
+                "failureReason",
+                "cookTimeLimitMinutes",
+                "meals",
+                "dayFit"
+              ],
+              "properties": {
+                "dayId": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "failureReason": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "cookTimeLimitMinutes": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "meals": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "mealId",
+                      "slotName",
+                      "kind",
+                      "sharing",
+                      "status",
+                      "failureReason",
+                      "locked",
+                      "oneOffFor",
+                      "favouriteOf",
+                      "title",
+                      "plainText",
+                      "cookMinutes",
+                      "servings",
+                      "eaters",
+                      "checkLabelCount",
+                      "cookedAt"
+                    ],
+                    "properties": {
+                      "mealId": {
+                        "type": "string"
+                      },
+                      "slotName": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string"
+                      },
+                      "sharing": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "failureReason": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "locked": {
+                        "type": "boolean"
+                      },
+                      "oneOffFor": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "favouriteOf": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "title": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "plainText": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "cookMinutes": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "servings": {
+                        "type": "number"
+                      },
+                      "eaters": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "memberId",
+                            "name",
+                            "portion",
+                            "safety",
+                            "safetyReason",
+                            "fit"
+                          ],
+                          "properties": {
+                            "memberId": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "portion": {
+                              "type": "number"
+                            },
+                            "safety": {
+                              "type": "string"
+                            },
+                            "safetyReason": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "fit": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "required": [
+                                    "targetKcal",
+                                    "estimatedKcal",
+                                    "band",
+                                    "differenceKcal"
+                                  ],
+                                  "properties": {
+                                    "targetKcal": {
+                                      "type": "integer"
+                                    },
+                                    "estimatedKcal": {
+                                      "type": "integer"
+                                    },
+                                    "band": {
+                                      "type": "string"
+                                    },
+                                    "differenceKcal": {
+                                      "type": "integer"
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "checkLabelCount": {
+                        "type": "integer"
+                      },
+                      "cookedAt": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                "dayFit": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["memberId", "fit"],
+                    "properties": {
+                      "memberId": {
+                        "type": "string"
+                      },
+                      "fit": {
+                        "type": "object",
+                        "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                        "properties": {
+                          "targetKcal": {
+                            "type": "integer"
+                          },
+                          "estimatedKcal": {
+                            "type": "integer"
+                          },
+                          "band": {
+                            "type": "string"
+                          },
+                          "differenceKcal": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.plan.get",
+      "permissionId": "meals.plan.get",
+      "description": "Read a meal plan by its id, or the newest plan that covers a date: each day's status, its meals, who eats them, Safety results and calorie fit.",
+      "risk": "read",
+      "handler": "plan.get",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "planId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Find the newest plan that includes this day."
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "planId",
+          "startDate",
+          "dayCount",
+          "pantryMode",
+          "state",
+          "pausedReason",
+          "progress",
+          "days"
+        ],
+        "properties": {
+          "planId": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "dayCount": {
+            "type": "integer"
+          },
+          "pantryMode": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "pausedReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "progress": {
+            "type": "object",
+            "required": ["ready", "total"],
+            "properties": {
+              "ready": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              }
+            }
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "dayId",
+                "date",
+                "status",
+                "failureReason",
+                "cookTimeLimitMinutes",
+                "meals",
+                "dayFit"
+              ],
+              "properties": {
+                "dayId": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "failureReason": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "cookTimeLimitMinutes": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "meals": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "mealId",
+                      "slotName",
+                      "kind",
+                      "sharing",
+                      "status",
+                      "failureReason",
+                      "locked",
+                      "oneOffFor",
+                      "favouriteOf",
+                      "title",
+                      "plainText",
+                      "cookMinutes",
+                      "servings",
+                      "eaters",
+                      "checkLabelCount",
+                      "cookedAt"
+                    ],
+                    "properties": {
+                      "mealId": {
+                        "type": "string"
+                      },
+                      "slotName": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string"
+                      },
+                      "sharing": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "failureReason": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "locked": {
+                        "type": "boolean"
+                      },
+                      "oneOffFor": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "favouriteOf": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "title": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "plainText": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "cookMinutes": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "servings": {
+                        "type": "number"
+                      },
+                      "eaters": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "memberId",
+                            "name",
+                            "portion",
+                            "safety",
+                            "safetyReason",
+                            "fit"
+                          ],
+                          "properties": {
+                            "memberId": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "portion": {
+                              "type": "number"
+                            },
+                            "safety": {
+                              "type": "string"
+                            },
+                            "safetyReason": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "fit": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "required": [
+                                    "targetKcal",
+                                    "estimatedKcal",
+                                    "band",
+                                    "differenceKcal"
+                                  ],
+                                  "properties": {
+                                    "targetKcal": {
+                                      "type": "integer"
+                                    },
+                                    "estimatedKcal": {
+                                      "type": "integer"
+                                    },
+                                    "band": {
+                                      "type": "string"
+                                    },
+                                    "differenceKcal": {
+                                      "type": "integer"
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "checkLabelCount": {
+                        "type": "integer"
+                      },
+                      "cookedAt": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                "dayFit": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["memberId", "fit"],
+                    "properties": {
+                      "memberId": {
+                        "type": "string"
+                      },
+                      "fit": {
+                        "type": "object",
+                        "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                        "properties": {
+                          "targetKcal": {
+                            "type": "integer"
+                          },
+                          "estimatedKcal": {
+                            "type": "integer"
+                          },
+                          "band": {
+                            "type": "string"
+                          },
+                          "differenceKcal": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.plan.control",
+      "permissionId": "meals.plan.control",
+      "description": "Stop a plan that is being written, resume a stopped or paused plan where it left off, or retry one day that failed. A retry keeps the day's finished meals and rewrites only the rest. Name the day by dayId or date. Retrying a day on a stopped plan resumes the whole plan, so later unwritten days are written too. A retry asked for while another day is being written waits its turn.",
+      "risk": "write",
+      "actionFamilyId": "meal_planning",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "handler": "plan.control",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["planId", "action"],
+        "properties": {
+          "planId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "action": {
+            "type": "string",
+            "enum": ["stop", "resume", "retry_day"]
+          },
+          "dayId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "planId",
+          "startDate",
+          "dayCount",
+          "pantryMode",
+          "state",
+          "pausedReason",
+          "progress",
+          "days"
+        ],
+        "properties": {
+          "planId": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "dayCount": {
+            "type": "integer"
+          },
+          "pantryMode": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "pausedReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "progress": {
+            "type": "object",
+            "required": ["ready", "total"],
+            "properties": {
+              "ready": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              }
+            }
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "dayId",
+                "date",
+                "status",
+                "failureReason",
+                "cookTimeLimitMinutes",
+                "meals",
+                "dayFit"
+              ],
+              "properties": {
+                "dayId": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "failureReason": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "cookTimeLimitMinutes": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "meals": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "mealId",
+                      "slotName",
+                      "kind",
+                      "sharing",
+                      "status",
+                      "failureReason",
+                      "locked",
+                      "oneOffFor",
+                      "favouriteOf",
+                      "title",
+                      "plainText",
+                      "cookMinutes",
+                      "servings",
+                      "eaters",
+                      "checkLabelCount",
+                      "cookedAt"
+                    ],
+                    "properties": {
+                      "mealId": {
+                        "type": "string"
+                      },
+                      "slotName": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string"
+                      },
+                      "sharing": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "failureReason": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "locked": {
+                        "type": "boolean"
+                      },
+                      "oneOffFor": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "favouriteOf": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "title": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "plainText": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "cookMinutes": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "servings": {
+                        "type": "number"
+                      },
+                      "eaters": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "memberId",
+                            "name",
+                            "portion",
+                            "safety",
+                            "safetyReason",
+                            "fit"
+                          ],
+                          "properties": {
+                            "memberId": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "portion": {
+                              "type": "number"
+                            },
+                            "safety": {
+                              "type": "string"
+                            },
+                            "safetyReason": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "fit": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "required": [
+                                    "targetKcal",
+                                    "estimatedKcal",
+                                    "band",
+                                    "differenceKcal"
+                                  ],
+                                  "properties": {
+                                    "targetKcal": {
+                                      "type": "integer"
+                                    },
+                                    "estimatedKcal": {
+                                      "type": "integer"
+                                    },
+                                    "band": {
+                                      "type": "string"
+                                    },
+                                    "differenceKcal": {
+                                      "type": "integer"
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "checkLabelCount": {
+                        "type": "integer"
+                      },
+                      "cookedAt": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                "dayFit": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["memberId", "fit"],
+                    "properties": {
+                      "memberId": {
+                        "type": "string"
+                      },
+                      "fit": {
+                        "type": "object",
+                        "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                        "properties": {
+                          "targetKcal": {
+                            "type": "integer"
+                          },
+                          "estimatedKcal": {
+                            "type": "integer"
+                          },
+                          "band": {
+                            "type": "string"
+                          },
+                          "differenceKcal": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.plan.delete",
+      "permissionId": "meals.plan.delete",
+      "description": "Delete a meal plan with all its days and meals.",
+      "risk": "destructive",
+      "actionFamilyId": "meal_planning",
+      "handler": "plan.delete",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["planId"],
+        "properties": {
+          "planId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["deleted"],
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "selfOperationGrant": "confirm_always"
+    },
+    {
+      "name": "meals.meal.get",
+      "permissionId": "meals.meal.get",
+      "description": "Read one planned meal as a recipe: steps, ingredients scaled to the servings, check-the-label notes, and each eater's portion, Safety result and calorie fit.",
+      "risk": "read",
+      "handler": "meal.get",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["mealId"],
+        "properties": {
+          "mealId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "meal",
+          "recipeId",
+          "baseServings",
+          "servingsOverride",
+          "steps",
+          "ingredients",
+          "swapChoices"
+        ],
+        "properties": {
+          "meal": {
+            "type": "object",
+            "required": [
+              "mealId",
+              "slotName",
+              "kind",
+              "sharing",
+              "status",
+              "failureReason",
+              "locked",
+              "oneOffFor",
+              "favouriteOf",
+              "title",
+              "plainText",
+              "cookMinutes",
+              "servings",
+              "eaters",
+              "checkLabelCount",
+              "cookedAt"
+            ],
+            "properties": {
+              "mealId": {
+                "type": "string"
+              },
+              "slotName": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "sharing": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "failureReason": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "locked": {
+                "type": "boolean"
+              },
+              "oneOffFor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "favouriteOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "title": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "plainText": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "cookMinutes": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "servings": {
+                "type": "number"
+              },
+              "eaters": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["memberId", "name", "portion", "safety", "safetyReason", "fit"],
+                  "properties": {
+                    "memberId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "portion": {
+                      "type": "number"
+                    },
+                    "safety": {
+                      "type": "string"
+                    },
+                    "safetyReason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "fit": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                          "properties": {
+                            "targetKcal": {
+                              "type": "integer"
+                            },
+                            "estimatedKcal": {
+                              "type": "integer"
+                            },
+                            "band": {
+                              "type": "string"
+                            },
+                            "differenceKcal": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "checkLabelCount": {
+                "type": "integer"
+              },
+              "cookedAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "recipeId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "baseServings": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "servingsOverride": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "originalText",
+                "name",
+                "quantity",
+                "unit",
+                "display",
+                "section",
+                "checkLabel",
+                "missing"
+              ],
+              "properties": {
+                "originalText": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "unit": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "display": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "section": {
+                  "type": "string"
+                },
+                "checkLabel": {
+                  "type": "boolean"
+                },
+                "missing": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "swapChoices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["choiceId", "status", "title", "cookMinutes", "eaters"],
+              "properties": {
+                "choiceId": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "title": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "cookMinutes": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "eaters": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["memberId", "name", "portion", "safety", "safetyReason", "fit"],
+                    "properties": {
+                      "memberId": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "portion": {
+                        "type": "number"
+                      },
+                      "safety": {
+                        "type": "string"
+                      },
+                      "safetyReason": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fit": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                            "properties": {
+                              "targetKcal": {
+                                "type": "integer"
+                              },
+                              "estimatedKcal": {
+                                "type": "integer"
+                              },
+                              "band": {
+                                "type": "string"
+                              },
+                              "differenceKcal": {
+                                "type": "integer"
+                              }
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }

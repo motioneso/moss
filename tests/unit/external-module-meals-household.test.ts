@@ -350,11 +350,8 @@ describe("meals.kitchen.save", () => {
 
 describe("worker registry", () => {
   it("serves every S1 handler key", () => {
-    expect(Object.keys(HANDLERS).sort()).toEqual([
-      "household.remove",
-      "household.save",
-      "kitchen.get",
-      "kitchen.save"
-    ]);
+    expect(Object.keys(HANDLERS)).toEqual(
+      expect.arrayContaining(["household.remove", "household.save", "kitchen.get", "kitchen.save"])
+    );
   });
 });
