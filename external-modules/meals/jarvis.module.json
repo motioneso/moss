@@ -80,7 +80,7 @@
     {
       "name": "meals.kitchen.get",
       "permissionId": "meals.kitchen.get",
-      "description": "Read the Meals kitchen: units, default Pantry mode, every household member with their meals of the day, Never serve list, preferences and targets, and the Shared or Solo rule for each meal. Creates the kitchen and a self member named You on first use.",
+      "description": "Read the Meals kitchen: units, default Pantry mode, every household member with their meals of the day, Never serve list, preferences and targets, and the Shared or Solo rule for each meal. A new account shows one member named You and the default settings.",
       "risk": "read",
       "inputSchema": {
         "type": "object",
