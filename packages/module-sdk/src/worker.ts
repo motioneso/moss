@@ -53,6 +53,14 @@ export interface ModuleNotifyPort {
   }): Promise<void>;
 }
 
+/**
+ * Outcome of a module-authored job enqueue. The host never returns the job id or a count.
+ */
+export type ModuleJobEnqueueResult =
+  | { readonly status: "enqueued" }
+  | { readonly status: "duplicate" }
+  | { readonly status: "limited"; readonly limit: "invocation" | "pending" | "hourly" };
+
 export interface ModuleWorkerContext {
   readonly input: Record<string, unknown>;
   /**

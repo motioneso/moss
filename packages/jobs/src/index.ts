@@ -1,6 +1,7 @@
 export * from "./pg-boss.js";
 export * from "./queue-wakeup.js";
 export * from "./module-jobs.js";
+export * from "./module-job-enqueue.js";
 export * from "./module-build-jobs.js";
 export * from "./upgrade-check.js";
 export * from "./upgrade-notify.js";
