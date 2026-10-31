@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { Children, type ReactNode } from "react";
 
 export interface EmptyStateProps {
   readonly icon?: ReactNode;
@@ -13,7 +13,9 @@ export function EmptyState({ icon, title, description, children }: EmptyStatePro
       {icon ? <span className="jds-empty__mark">{icon}</span> : null}
       <div className="jds-empty__title">{title}</div>
       {description ? <div className="jds-empty__sub">{description}</div> : null}
-      {children ? <div className="jds-empty__actions">{children}</div> : null}
+      {Children.toArray(children).length > 0 ? (
+        <div className="jds-empty__actions">{children}</div>
+      ) : null}
     </div>
   );
 }

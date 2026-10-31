@@ -28,4 +28,12 @@ describe("EmptyState action slot", () => {
   it("renders no slot without children", () => {
     expect(render().querySelector(".jds-empty__actions")).toBeNull();
   });
+
+  it("renders no slot for an empty array", () => {
+    expect(render([]).querySelector(".jds-empty__actions")).toBeNull();
+  });
+
+  it("renders no slot when every child is false or null", () => {
+    expect(render([false, null]).querySelector(".jds-empty__actions")).toBeNull();
+  });
 });
