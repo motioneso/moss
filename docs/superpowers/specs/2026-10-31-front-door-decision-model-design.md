@@ -1,6 +1,6 @@
 # Front door: the decision model answers simple messages first
 
-- **Status:** draft for Ben's review, 2026-10-31. No task issue yet; one is opened on approval.
+- **Status:** approved by Ben, 2026-10-31 ("let's just turn it on and fix as we go"). A task issue is opened before the build starts.
 - **Builds on:** classifier gate for chat (`2026-10-01-classifier-gate-for-chat.md`, #2864, amended
   by #2984), decision model presets (`2026-10-05-decision-model-presets-design.md`, #3057), tool-call
   discipline (`2026-09-01-integration-tool-call-discipline.md`, #2175), Moss acts through its own app
@@ -34,14 +34,15 @@ not add a second one.
    belongs to the person alone. Nobody else, including an admin, can see or change it.
 
 **What stays the same.** Deleting things and sending things outside Moss still hand over to the
-thinking model, which asks first. The two-week trial with a kill gate stays, and you make the call
-from real numbers. A new decision model that can write text must give the same answer twice before
-it acts.
+thinking model, which asks first. A new decision model that can write text must give the same answer
+twice before it acts. There is no trial period and no pass mark. The front door is turned on and
+fixed as problems appear, and activity history shows how it is doing.
 
 **The first build also widens what it can handle.** The October trial showed it never offered the
 Home Assistant lights. Slice 1 fixes that, with lock, door and garage targets kept out of the list.
 
-**Still open.** Two questions in section 14.
+**Nothing is open.** You also said a connected decision model that can write text may pick tools
+with free-text values, under the same two-matching-answers rule.
 
 ## 2. Ground truth from the current tree
 
@@ -161,7 +162,7 @@ decision model has one job, which is to pick the area, tool and argument values 
 (and typed values if it is text-capable). It never writes text the user sees. Its prompt guidance
 stays under 150 words.
 
-Model-written replies are not part of slices 1 to 4. They stay a possible later option (R4). If
+Model-written replies are not part of slices 1 to 3. They stay a possible later option. If
 built, they would need a boundary check that rejects any wording that drops or adds a value from the
 tool result, and fixed replies would remain the fallback.
 
@@ -202,36 +203,25 @@ that:
   message and no more. A hosted decision model also receives each eligible message, and the
   settings row already says so.
 
-## 9. Cost and latency targets, and the kill gate
+## 9. Monitoring
 
-Targets are for handled turns, measured from message accepted to reply stored, on real turns.
+There is no trial, no kill gate and no pass mark (Ben, 2026-10-31). The front door is turned on and
+fixed as problems appear. Monitoring is the ordinary activity history.
 
-| Measure                                                                   | Target                                                                                           |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Handled turn, median, fast pick-only model                                | at most 1.5 s                                                                                    |
-| Handled turn, 90th percentile                                             | at most 3 s                                                                                      |
-| Added delay on an escalated turn                                          | median at most 0.5 s, 90th percentile at most 1.5 s                                              |
-| Wrong action rate (handled, then the user undoes it or says it was wrong) | zero on write, outbound and destructive; at most 2 percent on read                               |
-| Escalation share                                                          | reported only, no target; it measures reach                                                      |
-| Cost per handled turn                                                     | below one tenth of the same turn on the thinking model, from the usage the activity lines record |
-
-**Kill gate, end of slice 3.** The front door runs for at least two weeks on real traffic from the
-instance, first Watch only, then On. It continues past slice 3 only if all of these hold.
-
-1. Added delay on escalated turns meets its target.
-2. At least 15 percent of real turns are handled, otherwise the added delay is not repaid.
-3. The cost target is met on handled turns.
-4. Zero wrong actions in write, outbound or destructive, checked by reading the record in full.
-5. The median handled turn is at least three times faster than the median thinking-model turn.
-
-Ben makes the call from a report Moss produces from the record (percentages, medians, counts, and a
-list of every handled write). If it fails, rollout steps R1 to R4 are not started and the gate
-keeps its present behavior. The 15 percent and three-times figures are my starting numbers
-and are open question 2.
+- Every handled turn writes one activity-history line with the deciding model, the tool and the time
+  taken (section 10).
+- Every message, handled or escalated, writes a decision record with the verdict, confidence, lead
+  and reason code (section 4, rule 4), so Moss can read how the decision model is doing and tune it.
+- The cooling-off rule (section 7) is the only automatic stop. A sick decision model switches the
+  front door off for 30 seconds at a time, and chat keeps working.
+- Rough expectations, not conditions. A handled turn should take about a second or two, an escalated
+  turn should add under half a second, and a write, outbound or destructive action should never be
+  handled wrongly. If real turns look worse, that is a bug to fix, and the admin can set the gate
+  back to Watch only or Off at any time.
 
 ## 10. What the user sees
 
-This uses screens that exist. Anything new is listed as TO BE AGREED and is not designed here.
+This uses screens that exist. Any new screen would be TO BE AGREED with Ben first and is not designed here.
 
 **Existing, edited.**
 
@@ -253,11 +243,13 @@ When it is off, the gate makes no decision-model call for that account and write
 record, the same as a private chat. Account deletion removes it. This keeps the "no admin
 private-data bypass" invariant intact.
 
-**TO BE AGREED with Ben (not designed here).**
+**Screen items.**
 
-- Where the per-account switch sits on the user's settings page, and its wording.
-- A short "how is the decision model doing" view of handled share, speed and misses. Moss can state
-  this from the record in chat today, so a screen is optional.
+- The per-account switch follows the existing Settings conventions. It is a normal toggle on the
+  user's own settings page, reached the usual way, with plain wording in the style of "Let the fast
+  model handle simple requests". It is shown to Ben in the build PR and does not block the build.
+- A "how is the decision model doing" screen is not part of this spec. Moss can state the numbers
+  from the record in chat today. A screen would be TO BE AGREED with Ben first.
 
 ## 11. App map entries to update
 
@@ -311,43 +303,41 @@ card appears. No screenshots and no rewritten network responses. Any test stand-
 third-party service is disclosed on the PR. The decision model follows the standing rule for test
 models (subscription-backed or the cheapest available).
 
-**Measurement run.** A script reads the record and activity lines and produces the section 9
-numbers for the kill gate. It runs unpiped with its exit code checked.
+**Monitoring check.** A script reads the record and activity lines and prints handled share, median
+times and every handled write. It is for the admin and Moss to read, not a gate. It runs unpiped
+with its exit code checked.
 
 ## 13. Slice breakdown
 
 Slices are session-sized and share a worktree and PR where they touch the same files. The first
 rollout is Main chat only.
 
-| Slice | Content                                                                                                                                        | Ends with                                          |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| 1     | Reach: candidate-list argument preparation, "filled or deliberately blank", lock/door/garage filter, report that ignores tool-list loading     | Tests 3 and 4; the gate offers lights in a dry run |
-| 2     | Record and visibility: handled-turn activity line naming the model and time, verdict and reason in the decision record, the measurement script | Test 10; the section 9 numbers can be produced     |
-| 3     | The per-account off switch: setting, check in the gate, app map, privacy tests                                                                 | Tests 11 and 12                                    |
-| 4     | Run Watch only, then On, in Main chat for two weeks on real traffic                                                                            | Kill gate review by Ben                            |
+| Slice | Content                                                                                                                                       | Ends with                                          |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| 1     | Reach: candidate-list argument preparation, "filled or deliberately blank", lock/door/garage filter, report that ignores tool-list loading    | Tests 3 and 4; the gate offers lights in a dry run |
+| 2     | Record and visibility: handled-turn activity line naming the model and time, verdict and reason in the decision record, the monitoring script | Test 10; the monitoring script prints its numbers  |
+| 3     | The per-account off switch: setting, check in the gate, app map, privacy tests                                                                | Tests 11 and 12                                    |
 
-Rollout after the kill gate passes. Each step is planned in detail only after the one before it
-is judged.
+Slice 3 ends with the admin setting the gate to On in Main chat, after the live proof in section 12.
+There is no trial between slices.
 
-| Step | Target                                                          | What it needs                                                                                                                                                                                                                                                                                     |
-| ---- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R1   | Other chat surfaces (side drawer, voice)                        | The same gate, a per-surface check that each surface hands the turn over the same way, and the same activity line                                                                                                                                                                                 |
-| R2   | News sorting                                                    | Not a chat turn, so it cannot use the chat entry point. It reuses the decision model, the confidence bars, the escalate-on-doubt rule and the activity line. It needs a declared set of choices per item (for example which topic, or keep or hide), its own record and its own kill-gate numbers |
-| R3   | Sports sorting                                                  | The same needs as news sorting, with its own choices (for example which league or team a story belongs to). It shares the news step's code and differs in the choice lists                                                                                                                        |
-| R4   | Optional model-written replies for text-capable decision models | A separate decision from Ben, a boundary check against the real tool result, and fixed replies kept as the fallback. Built only if the numbers show fixed replies are a problem                                                                                                                   |
+Rollout steps follow directly after slice 3. Each is planned in detail when the one before it ships.
+
+| Step | Target                                   | What it needs                                                                                                                                                                                                                                                          |
+| ---- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1   | Other chat surfaces (side drawer, voice) | The same gate, a per-surface check that each surface hands the turn over the same way, and the same activity line                                                                                                                                                      |
+| R2   | News sorting                             | Not a chat turn, so it cannot use the chat entry point. It reuses the decision model, the confidence bars, the escalate-on-doubt rule and the activity line. It needs a declared set of choices per item (for example which topic, or keep or hide) and its own record |
+| R3   | Sports sorting                           | The same needs as news sorting, with its own choices (for example which league or team a story belongs to). It shares the news step's code and differs in the choice lists                                                                                             |
+
+Model-written replies stay a possible later option and are not a step. If built, they would need a
+boundary check against the real tool result, with fixed replies kept as the fallback.
 
 R2 and R3 are not chat. The shared piece is the question-and-bars engine, not the chat lifecycle.
 Their details belong in their own specs.
 
 ## 14. Open questions for Ben
 
-Ben's answers of 2026-10-31 are in section 15. Two points are still open.
-
-1. **A text-capable decision model.** If a user connects one, may it pick tools with free-text
-   values? The 2026-10-11 ruling excluded a second extraction model, not the user's own capable
-   model. I lean yes, under the two-matching-answers rule in section 5.
-2. **Kill-gate numbers.** Are 15 percent handled, three times faster, and one tenth of the cost the
-   right bars? They are my starting guesses and stay as defaults until Ben changes them.
+None. Ben answered the last two on 2026-10-31 (section 15).
 
 ## 15. Rulings ledger
 
@@ -369,5 +359,9 @@ Facts and decisions carried in, so nobody re-derives them.
 - 2026-10-31 (Ben): the admin turns the front door on. Any user may turn it off for their own
   account only.
 - 2026-10-31 (defaults, Ben did not object): destructive and outbound actions still decline to the
-  thinking model, the kill gate stays, and a new text-capable decision model needs two matching
-  answers.
+  thinking model, and a new text-capable decision model needs two matching answers.
+- 2026-10-31 (Ben): a text-capable decision model may pick tools with free-text values, under the
+  two-matching-answers rule.
+- 2026-10-31 (Ben): no trial. Turn it on and fix as we go. The two-week trial, the kill gate and the
+  pass-mark numbers are removed. Activity history, with model name and time taken, is ordinary
+  monitoring with no stop condition.
