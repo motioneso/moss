@@ -51,18 +51,23 @@ describe("capture route credential boundaries", () => {
       expect(limits.get("/api/meetings/capture/status")?.max).toBe(600);
       expect(limits.get("/api/meetings/capture/audio")?.max).toBe(120);
       expect(limits.size).toBe(11);
-      for (const limiter of limits.values())
-        expect(
+      const keys = new Set<string>();
+      for (const [url, limiter] of limits) {
+        const peer = { ip: "192.0.2.10", method: "POST", routeOptions: { url } };
+        const first = limiter.keyGenerator({
+          ...peer,
+          headers: { authorization: "Bearer one" }
+        } as unknown as FastifyRequest);
+        expect(first).toBe(
           limiter.keyGenerator({
-            ip: "192.0.2.10",
-            headers: { authorization: "Bearer one" }
-          } as FastifyRequest)
-        ).toBe(
-          limiter.keyGenerator({
-            ip: "192.0.2.10",
+            ...peer,
             headers: { authorization: "Bearer two", cookie: "rotated" }
-          } as FastifyRequest)
+          } as unknown as FastifyRequest)
         );
+        keys.add(first);
+      }
+      // Each route keeps its own counter for the same address.
+      expect(keys.size).toBe(limits.size);
     } finally {
       await server.close();
     }
