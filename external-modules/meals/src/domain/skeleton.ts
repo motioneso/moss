@@ -49,7 +49,7 @@ export function isoWeekday(date: string): number {
 
 export function planSkeleton(
   kitchen: KitchenView,
-  input: { startDate: string; days: number }
+  input: { startDate: string; days: number; mealTypes?: readonly string[] }
 ): readonly SkeletonDay[] {
   if (!Number.isInteger(input.days) || input.days < 1 || input.days > MAX_PLAN_DAYS) {
     throw new RangeError(`days must be 1 to ${MAX_PLAN_DAYS}`);
@@ -60,6 +60,12 @@ export function planSkeleton(
   const slots: string[] = [];
   for (const member of kitchen.members) {
     for (const slot of member.mealPattern) if (!slots.includes(slot)) slots.push(slot);
+  }
+  const wanted = input.mealTypes?.map((name) => name.trim().toLowerCase());
+  if (wanted !== undefined) {
+    for (let index = slots.length - 1; index >= 0; index -= 1) {
+      if (!wanted.includes(slots[index]!.toLowerCase())) slots.splice(index, 1);
+    }
   }
   const soloDays = new Map(kitchen.slotRules.map((rule) => [rule.slotName, rule.soloWeekdays]));
 

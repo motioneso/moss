@@ -4,6 +4,48 @@ import type { MemberView, SlotRuleView } from "../contracts";
 const SLOT_ORDER = ["breakfast", "lunch", "dinner"];
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const WEEKDAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday"
+];
+
+/** Today in the browser's own calendar, as YYYY-MM-DD. */
+export function todayIso(now: Date = new Date()): string {
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function parts(iso: string): { year: number; month: number; day: number; weekday: number } {
+  const [year, month, day] = iso.split("-").map(Number) as [number, number, number];
+  return { year, month, day, weekday: new Date(Date.UTC(year, month - 1, day)).getUTCDay() };
+}
+
+export const weekdayName = (iso: string) => WEEKDAY_NAMES[parts(iso).weekday]!;
+
+/** "Monday, Nov 2" */
+export function dayTitle(iso: string): string {
+  const { month, day } = parts(iso);
+  return `${weekdayName(iso)}, ${MONTHS[month - 1]} ${day}`;
+}
+
+/** "Nov 2 to 8", or "Nov 28 to Dec 4" across a month. One day reads "Nov 2". */
+export function dateRange(first: string, last: string): string {
+  const a = parts(first);
+  const b = parts(last);
+  const start = `${MONTHS[a.month - 1]} ${a.day}`;
+  if (first === last) return start;
+  return a.month === b.month
+    ? `${start} to ${b.day}`
+    : `${start} to ${MONTHS[b.month - 1]} ${b.day}`;
+}
+
 export const titleCase = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
 
 export function joinTitled(words: readonly string[]): string {
