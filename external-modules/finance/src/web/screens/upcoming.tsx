@@ -5,6 +5,7 @@ import {
   Dialog,
   EmptyState,
   Eyebrow,
+  Menu,
   Note,
   PeriodStepper,
   RowIndex,
@@ -28,6 +29,7 @@ import {
   shortDayLabel,
   weekdayDayLabel
 } from "../format";
+import { MoreIcon } from "../icons";
 import { navigate } from "../router";
 import {
   invalidateQueries,
@@ -97,6 +99,30 @@ function totalsLine(view: BillsView): string | null {
   const totals = billTotals(view.occurrences);
   const money = (cents: number) => formatCents(cents, view.isoCurrency);
   return `${money(totals.due)} due · ${money(totals.paid)} paid · ${money(totals.toGo)} to go`;
+}
+
+const planStopped = (plan: BillPlan, today: string) =>
+  Boolean(plan.endDate && plan.endDate <= today);
+
+function PlanActions(props: {
+  plan: BillPlan;
+  disabled: boolean;
+  onStop: () => void;
+}): ReactNodeLike {
+  const { name, endDate } = props.plan;
+  return (
+    <Menu
+      triggerVariant="icon"
+      triggerIcon={<MoreIcon />}
+      triggerLabel={`Actions for ${name}`}
+      items={[
+        endDate
+          ? { id: "stop", label: "Stop sooner", ariaLabel: `Stop ${name} sooner` }
+          : { id: "stop", label: "Stop future bills", ariaLabel: `Stop future bills for ${name}` }
+      ].map((item) => ({ ...item, disabled: props.disabled }))}
+      onSelect={props.onStop}
+    />
+  );
 }
 
 export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): ReactNodeLike {
@@ -354,42 +380,53 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
               {suggested(body)}
               <div className="fnm-block fnm-block--tight">
                 <SectionHead title="Your bill plans" rule />
-                <RowIndex density="compact">
-                  {body.plans.map((p) => (
-                    <RowIndexItem
-                      key={p.id}
-                      title={p.name}
-                      excerpt={[
-                        accountName(body, p.accountId),
-                        `${cadenceText(p.cadence)} from ${dayYearLabel(p.anchorDate, "short")}`,
-                        p.endDate ? `stops after ${dayYearLabel(p.endDate, "short")}` : null
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                      meta={
-                        p.endDate && p.endDate <= body.today ? (
-                          <Badge>Stopped</Badge>
-                        ) : (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={disabled}
-                            onClick={() => {
-                              dialogReview.current = {
-                                expectedRevision: body.revision,
-                                expectedFingerprint: body.fingerprint
-                              };
-                              setMessage(null);
-                              setStopping(p);
-                              setEndDate(body.today);
-                            }}
-                          >
-                            {p.endDate ? "Stop sooner" : "Stop future bills"}
-                          </Button>
-                        )
-                      }
-                    />
-                  ))}
+                <RowIndex density="compact" narrowMeta="beside">
+                  {[...body.plans]
+                    .sort(
+                      (a, b) =>
+                        Number(planStopped(a, body.today)) - Number(planStopped(b, body.today))
+                    )
+                    .map((p) => {
+                      const stopped = planStopped(p, body.today);
+                      const amount = formatCents(p.amountCents, p.isoCurrency);
+                      return (
+                        <RowIndexItem
+                          key={p.id}
+                          title={p.name}
+                          excerpt={[
+                            accountName(body, p.accountId),
+                            `${cadenceText(p.cadence)} from ${dayYearLabel(p.anchorDate, "short")}`,
+                            p.endDate
+                              ? `${stopped ? "stopped" : "stops"} after ${dayYearLabel(p.endDate, "short")}`
+                              : null
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                          meta={
+                            stopped ? (
+                              <span className="fnm-amount">{amount}</span>
+                            ) : (
+                              <>
+                                <strong className="fnm-amount">{amount}</strong>
+                                <PlanActions
+                                  plan={p}
+                                  disabled={disabled}
+                                  onStop={() => {
+                                    dialogReview.current = {
+                                      expectedRevision: body.revision,
+                                      expectedFingerprint: body.fingerprint
+                                    };
+                                    setMessage(null);
+                                    setStopping(p);
+                                    setEndDate(body.today);
+                                  }}
+                                />
+                              </>
+                            )
+                          }
+                        />
+                      );
+                    })}
                 </RowIndex>
               </div>
             </div>
@@ -535,9 +572,8 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
         >
           <div className="fnm-block">
             <p>
-              Keep occurrences through this date. Later projections disappear; posted transactions
-              and reviewed history remain. Undo later bill reviews and reset later one-off changes
-              before choosing an earlier stop date.
+              Bills after this date come off the calendar. Paid and reviewed bills stay. To stop
+              before a bill you reviewed or changed, undo that first.
             </p>
             {message ? (
               <p role="alert">

@@ -116,8 +116,8 @@ design-system class audit.
 - Groups run Cash, Investments, Credit cards, Loans, Other, so assets read before debts. Cash
   holds checking, savings and cash on hand, the same rule ready to assign uses. Each group head
   shows its total per currency.
-- The masthead reads Net worth, with the currency added only when there are several. Its lede
-  gives assets and the debts owed in the same currency.
+- The masthead reads Net worth, with the currency added only when there are several. Assets and
+  debts sit beside the title as two labelled figures in the same currency.
 - One table per group with the same columns (name, balance, actions), so balances align down
   the page. The group head labels its table, so there is no header row.
 - A row's name opens Transactions filtered to that account, through the register's existing
@@ -225,6 +225,22 @@ Near misses the tests must reject:
 - Suggestions sit in one section under the calendar, only when there is at least one. Each row:
   name, cadence and amount, last charged date, Add as bill, Dismiss.
 - No section with nothing to say, no explanatory line.
+
+## Polish after slice 5
+
+- Accounts band: assets and debts moved from a lede line to labelled figures in the aside
+  (`MastheadFigures`, new in `@moss/ui`), so the parts of the total read at a glance. On phones
+  they drop under the title at a smaller size. A change-since-last-month figure was dropped:
+  history starts at each account's first balance, so a newly added account would read as growth.
+- Reports on phones: each spending list shows its top five rows, then Show all. Twelve payee bars
+  ran past two phone screens. Desktop keeps every row because the two lists sit side by side.
+- Bill plans: each row shows its expected amount, and the stop action moved into a row menu, as
+  on Accounts. On phones the amount and menu stay beside the name (`RowIndex narrowMeta`, new)
+  instead of a full-width button under every plan. Stopped plans go last and say "stopped after"
+  in their line rather than a badge, because badges mark states that need attention. Plans
+  cannot be edited or restarted; that needs a new tool.
+- The stop dialog's three sentences became two, without "projections".
+- An empty spending list says "No spending this month" once instead of twice.
 
 ## Acceptance
 

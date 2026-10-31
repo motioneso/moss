@@ -62,7 +62,6 @@ describe("finance manifest app map (#3177)", () => {
       expect.arrayContaining([
         "finance.settings-freedom",
         "finance.settings-limit",
-        "finance.settings-actions",
         "finance.settings-bank-keys",
         "finance.settings-activity"
       ])

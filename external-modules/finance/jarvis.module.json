@@ -97,7 +97,7 @@
       {
         "id": "finance.reports",
         "label": "Reports",
-        "description": "Reports is a primary tab with currency-separated spending, cash flow and own-account net worth. The period picker sits top left; a currency picker appears for multi-currency activity; no FX conversion. Cash flow charts monthly income and outflow columns with a net dot and period totals; hover, tap or arrow keys read a month, and Monthly numbers opens the table. Net worth is a dated line with the same readout. Manual net worth replays opening balances and posted entries through the owner local date; connected accounts carry snapshots forward; no market values are estimated. Sources, coverage and missing balances are disclosed. Category/payee bars and monthly income/outflow open exact signed contributions, including splits, with count, total and changed-record notes. Pending spending is included, refunds reduce outflow and transfers are excluded per owner. Private notes are omitted; Refresh updates totals; unsafe amounts are rejected. Busy detail reads show the wait; retry is explicit.",
+        "description": "Reports is a primary tab with currency-separated spending, cash flow and own-account net worth. The period picker sits top left; a currency picker appears for multi-currency activity; no FX conversion. Cash flow charts monthly income and outflow with a net dot and period totals; hover, tap or arrow keys read a month; Monthly numbers opens the table. Net worth is a dated line, read the same way. Manual net worth replays opening balances and posted entries to the owner's local date; connected accounts carry snapshots forward; no market values are estimated. Sources, coverage and missing balances are disclosed. Category/payee bars (five on phones until Show all) and monthly income/outflow open exact signed contributions, including splits, with count, total and changed-record notes. Pending spending counts; refunds reduce outflow; own transfers are excluded. Private notes are omitted; Refresh updates totals; unsafe amounts are rejected. Busy detail reads show the wait; retry is explicit.",
         "path": "/reports"
       },
       {
@@ -148,11 +148,7 @@
       },
       {
         "id": "finance.settings-limit",
-        "description": "On Finance settings, Maximum per budget move sets the dollar limit (a whole number from 0 to 100000, default 100). Moss asks for approval before any move or assigned total above it, at every step. It saves when you press Enter or click away; a bad or failed entry goes back to the saved amount with an error. Until policy and limit reads succeed, controls are unavailable. Retry reloads failed settings without writing; a failed refresh keeps the last confirmed values."
-      },
-      {
-        "id": "finance.settings-actions",
-        "description": "On Finance settings, Customize lists one switch per action Moss can take (sort purchases from merchants you have seen, move money between categories, sort purchases from new merchants, make merchant rules, add, rename or archive categories). On lets Moss do it alone, off makes Moss ask first. Connect a bank and Share an account show Always asks and cannot be switched. Reviewed native merchant-rule management always asks, independently of these assistant preferences."
+        "description": "On Finance settings, Maximum per budget move sets the dollar limit (a whole number from 0 to 100000, default 100). Moss asks for approval before any move or assigned total above it, at every step. It saves when you press Enter or click away; a bad or failed entry goes back to the saved amount with an error. Until policy and limit reads succeed, controls are unavailable. Retry reloads failed settings without writing; a failed refresh keeps the last confirmed values. Customize lists one switch per action Moss can take (sort purchases from merchants you have seen, move money between categories, sort purchases from new merchants, make merchant rules, add, rename or archive categories). On lets Moss do it alone, off makes Moss ask first. Connect a bank and Share an account show Always asks and cannot be switched. Reviewed native merchant-rule management always asks, independently of these assistant preferences."
       },
       {
         "id": "finance.settings-bank-keys",
@@ -177,6 +173,10 @@
       {
         "id": "finance.manual-ledger",
         "description": "Manual cash, checking, savings, cards, loans and assets need no credentials and stay private. Opening date/balance and a fixed two-decimal currency establish exact ledgers; posted entries commit atomically with replay identities and Moss-local date checks. Reconcile a statement with cleared entries, zero difference and current ledger revision; receipt, marks and activity commit together. Completed periods reject backdating; outstanding entries may clear later. More than 500 entries requires an earlier cutoff. Linked manual cash/card transfers use same-currency atomic pairs. Review an owned pair in Transactions to record one inverse correction: preserve original history, derive exact endpoints/amount/currency, recheck original/account versions and posting boundaries, confirm through the host. Closed accounts and duplicate corrections refuse. Uncertain saves keep inputs for a fresh read. Old hosts/storage need updating; provider reconciliation and automatic adjustments are unavailable."
+      },
+      {
+        "id": "finance.bill-plans",
+        "description": "On Upcoming, Your bill plans lists each plan with its account, how often it repeats, its first date and its expected amount. An active plan's row menu, the three dots, offers Stop future bills, or Stop sooner when an end date is already set. Either opens a dialog for the last planned date, inclusive; saving needs the current bills review. Bills after that date leave the calendar; paid and reviewed bills stay. To stop before a reviewed or changed bill, undo that review or one-off change first. Stopped plans sit last with the date they stopped and no menu. Plans cannot be edited or restarted; add a new bill instead."
       }
     ]
   },

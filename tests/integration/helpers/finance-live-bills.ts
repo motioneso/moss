@@ -186,12 +186,17 @@ export async function exerciseBills(
         });
     }
   }
-  await page.getByRole("button", { name: "Stop future bills", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Actions for Synthetic market plan", exact: true })
+    .click();
+  await page
+    .getByRole("menuitem", { name: "Stop future bills for Synthetic market plan", exact: true })
+    .click();
   const stop = page.getByRole("dialog", { name: "Stop future bills", exact: true });
   await stop.getByLabel("Last planned date", { exact: true }).fill(`${month}-01`);
   await stop.getByRole("button", { name: "Save last planned date", exact: true }).click();
   await stop.waitFor({ state: "detached" });
-  await page.getByText("Stopped", { exact: true }).waitFor();
+  await page.getByText(/ · stopped after /).waitFor();
   expect(
     (await read("finance.bills.read", { from: `${month}-01`, to: `${month}-28` })).occurrences
   ).toEqual(expect.arrayContaining([expect.objectContaining({ state: "skipped" })]));

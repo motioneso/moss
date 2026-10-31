@@ -67,10 +67,12 @@ export { InfoTip } from "./info-tip.js";
 export type { InfoTipProps } from "./info-tip.js";
 export { LegendSwatch } from "./legend-swatch.js";
 export type { LegendSwatchProps, LegendSwatchTone } from "./legend-swatch.js";
-export { Masthead, MastheadClock, MastheadDateline } from "./masthead.js";
+export { Masthead, MastheadClock, MastheadDateline, MastheadFigures } from "./masthead.js";
 export type {
   MastheadClockProps,
   MastheadDatelineProps,
+  MastheadFigureItem,
+  MastheadFiguresProps,
   MastheadProps,
   MastheadTone
 } from "./masthead.js";

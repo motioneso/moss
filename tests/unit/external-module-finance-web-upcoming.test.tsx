@@ -222,6 +222,51 @@ describe("Upcoming bills", () => {
     expect(panel.textContent).toContain("Projected");
   });
 
+  it("lists each plan with its amount and puts stopped plans last without actions", async () => {
+    results["finance.bills.read"] = {
+      ...bills(true),
+      plans: [
+        { ...plan("gym", "Gym"), amountCents: 4_000, endDate: "2026-10-31" },
+        { ...plan("rent", "Rent"), amountCents: 185_000 },
+        { ...plan("power", "Power"), amountCents: 9_000, endDate: "2027-03-05" }
+      ]
+    };
+    await mount();
+    const head = [...document.querySelectorAll(".jds-section-head__title")].find(
+      (node) => node.textContent === "Your bill plans"
+    )!;
+    const rows = [...head.closest(".fnm-block")!.querySelectorAll(".jds-index__row")];
+    const cell = (row: Element, part: string) =>
+      row.querySelector(`.jds-index__${part}`)?.textContent;
+    expect(rows.map((row) => cell(row, "title"))).toEqual(["Rent", "Power", "Gym"]);
+    expect(rows.map((row) => row.querySelector(".fnm-amount")?.textContent)).toEqual([
+      "$1,850.00",
+      "$90.00",
+      "$40.00"
+    ]);
+    expect(cell(rows[1]!, "excerpt")).toContain("· stops after Mar 5, 2027");
+    expect(cell(rows[2]!, "excerpt")).toContain("· stopped after Oct 31, 2026");
+    expect(rows[2]!.querySelector("button")).toBeNull();
+  });
+
+  it("stops a plan from its row menu", async () => {
+    const tools = await mount();
+    await click(button("Actions for Rent"));
+    await click(button("Stop future bills for Rent"));
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(dialog.querySelector(".jds-dialog__title")?.textContent).toBe("Stop future bills");
+    expect(dialog.querySelector<HTMLInputElement>('[aria-label="Last planned date"]')!.value).toBe(
+      "2026-11-10"
+    );
+    await click(button("Save last planned date", dialog));
+    expect(tools.invoke).toHaveBeenCalledWith("finance.bill.stop", {
+      id: "rent",
+      endDate: "2026-11-10",
+      expectedRevision: review.revision,
+      expectedFingerprint: review.fingerprint
+    });
+  });
+
   it("dismisses a suggestion with its key fields and no question", async () => {
     const tools = await mount();
     const section = document.querySelector('section[aria-label="Suggested bills"]')!;

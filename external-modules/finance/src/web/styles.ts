@@ -49,6 +49,12 @@ export const MODULE_STYLES = `
 .fnm-report-bar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-1) 0; }
 .fnm-report-bar-row > :first-child { min-width: 0; overflow-wrap: anywhere; text-align: left; }
 .fnm-report-bar-row > span:last-child { grid-column: 2; grid-row: 1; }
+/* Phones show the top rows of a spending list; Show all opens the rest. */
+.fnm-report-more { display: none; }
+@media (max-width: 720px) {
+  .fnm-report-bars:not(.is-open) > .fnm-report-bar-row--fold { display: none; }
+  .fnm-report-more { display: block; margin-block-start: var(--space-3); }
+}
 .fnm-report-month { display: grid; gap: var(--space-2); }
 .fnm-report-month dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); margin: 0; }
 .fnm-report-month dd { margin: 0; }

@@ -86,35 +86,62 @@ function toRows(record: Record<string, number>, label: (key: string) => string):
     .sort((a, b) => b.cents - a.cents);
 }
 
+/** Rows past this many fold away on phones behind Show all. */
+const PHONE_ROWS = 5;
+
 function BarList(props: {
+  id: string;
   rows: BarRow[];
   currency: string;
   onPick: (row: BarRow) => void;
 }): ReactNodeLike {
+  const [open, setOpen] = useState(false);
   // Widths are relative to the largest magnitude row; the `, 1` floor keeps
   // an all-zero month from dividing by zero.
   const max = Math.max(...props.rows.map((row) => Math.abs(row.cents)), 1);
   return (
     <div>
-      {props.rows.map((row) => (
-        <div key={row.key} className="fnm-report-bar-row">
-          <Button
-            variant="link"
-            size="sm"
-            aria-label={`View ${row.label || "unnamed payee"} transactions`}
-            onClick={() => props.onPick(row)}
+      <div id={props.id} className={open ? "fnm-report-bars is-open" : "fnm-report-bars"}>
+        {props.rows.map((row, index) => (
+          <div
+            key={row.key}
+            className={
+              index < PHONE_ROWS
+                ? "fnm-report-bar-row"
+                : "fnm-report-bar-row fnm-report-bar-row--fold"
+            }
           >
-            {row.label || "Unnamed payee"}
-          </Button>
-          <div className="jds-progress jds-progress--current fnm-report-bar">
-            <div
-              className="jds-progress__fill"
-              style={{ width: `${Math.round((Math.abs(row.cents) / max) * 100)}%` }}
-            />
+            <Button
+              variant="link"
+              size="sm"
+              aria-label={`View ${row.label || "unnamed payee"} transactions`}
+              onClick={() => props.onPick(row)}
+            >
+              {row.label || "Unnamed payee"}
+            </Button>
+            <div className="jds-progress jds-progress--current fnm-report-bar">
+              <div
+                className="jds-progress__fill"
+                style={{ width: `${Math.round((Math.abs(row.cents) / max) * 100)}%` }}
+              />
+            </div>
+            <span className="fnm-amount">{formatCents(row.cents, props.currency)}</span>
           </div>
-          <span className="fnm-amount">{formatCents(row.cents, props.currency)}</span>
-        </div>
-      ))}
+        ))}
+      </div>
+      {props.rows.length > PHONE_ROWS ? (
+        <span className="fnm-report-more">
+          <DisclosureToggle
+            expanded={open}
+            controls={props.id}
+            className="fnm-disclosure-head"
+            onClick={() => setOpen(!open)}
+          >
+            {open ? `Show top ${PHONE_ROWS}` : `Show all ${props.rows.length}`}
+            <span className="fnm-disclosure-marker" aria-hidden="true" />
+          </DisclosureToggle>
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -248,12 +275,13 @@ function SpendingSection(props: {
           <SectionHead title="Spending by category" meta={monthLabel(latest.month)} rule />
           {categoryRows.length > 0 ? (
             <BarList
+              id="fnm-report-categories"
               rows={categoryRows}
               currency={currency}
               onPick={(row) => select("category", row.key, row.label, row.cents)}
             />
           ) : (
-            <EmptyState title="Nothing this month" body="No spending recorded this month yet." />
+            <EmptyState title="No spending this month" />
           )}
         </section>
         <section className="fnm-block fnm-block--tight" aria-label="Spending by payee">
@@ -261,6 +289,7 @@ function SpendingSection(props: {
           {payeeRows.length > 0 ? (
             <div className="fnm-stack">
               <BarList
+                id="fnm-report-payees"
                 rows={payeeRows}
                 currency={currency}
                 onPick={(row) => select("payee", row.key, row.label || "Unnamed payee", row.cents)}
@@ -271,7 +300,7 @@ function SpendingSection(props: {
               ) : null}
             </div>
           ) : (
-            <EmptyState title="Nothing this month" body="No spending recorded this month yet." />
+            <EmptyState title="No spending this month" />
           )}
         </section>
       </div>

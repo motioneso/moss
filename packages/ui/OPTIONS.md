@@ -220,6 +220,7 @@ _No enum or boolean props._
 
 - **variant** (optional): `default`, `facts`
 - **density** (optional): `default`, `compact`
+- **narrowMeta** (optional): `below`, `beside`
 
 ## section-head
 

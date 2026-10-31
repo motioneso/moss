@@ -137,4 +137,52 @@ describe("Reports screen charts", () => {
     await act(async () => plot(worth).focus());
     expect(spoken(worth)).toBe("October 31, 2026, Net worth $1,100.00");
   });
+
+  it("marks category rows past the top five to fold on phones behind Show all", async () => {
+    const original = results["finance.reports.spending"];
+    const byCategory = Object.fromEntries(
+      ["Rent", "Food", "Fuel", "Gifts", "Books", "Games", "Music"].map((name, index) => [
+        name,
+        7_000 - index * 1_000
+      ])
+    );
+    results["finance.reports.spending"] = {
+      ...currency,
+      window: periods,
+      own: [
+        month("2026-08", 0, 0),
+        month("2026-09", 0, 0),
+        { ...month("2026-10", 0, 28_000), byCategory }
+      ],
+      shared: [],
+      categories: []
+    };
+    try {
+      await mount();
+      const list = region("Spending by category");
+      const rows = [...list.querySelectorAll(".fnm-report-bar-row")];
+      expect(rows.map((row) => row.classList.contains("fnm-report-bar-row--fold"))).toEqual([
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        true
+      ]);
+      const more = list.querySelector<HTMLButtonElement>(
+        'button[aria-controls="fnm-report-categories"]'
+      )!;
+      expect(more.textContent).toBe("Show all 7");
+      expect(more.getAttribute("aria-expanded")).toBe("false");
+      await act(async () => more.click());
+      expect(more.textContent).toBe("Show top 5");
+      expect(list.querySelector("#fnm-report-categories")!.classList.contains("is-open")).toBe(
+        true
+      );
+      expect(region("Spending by payee").querySelector("[aria-controls]")).toBeNull();
+    } finally {
+      results["finance.reports.spending"] = original;
+    }
+  });
 });

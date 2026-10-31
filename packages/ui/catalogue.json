@@ -477,7 +477,7 @@
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/masthead.tsx", "type": "registry:ui" }],
       "dependencies": [],
-      "exports": ["Masthead", "MastheadClock", "MastheadDateline"],
+      "exports": ["Masthead", "MastheadClock", "MastheadDateline", "MastheadFigures"],
       "options": [
         {
           "prop": "tone",
@@ -636,6 +636,13 @@
           "prop": "density",
           "kind": "enum",
           "values": ["default", "compact"],
+          "optional": true,
+          "default": null
+        },
+        {
+          "prop": "narrowMeta",
+          "kind": "enum",
+          "values": ["below", "beside"],
           "optional": true,
           "default": null
         }

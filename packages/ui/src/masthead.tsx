@@ -58,6 +58,31 @@ export function MastheadDateline(props: MastheadDatelineProps) {
   return <div className="jds-masthead__dateline">{props.children}</div>;
 }
 
+export interface MastheadFigureItem {
+  readonly label: ReactNode;
+  readonly value: ReactNode;
+}
+
+export interface MastheadFiguresProps {
+  /* Accessible name of the list, such as "Assets and debts". */
+  readonly label: string;
+  readonly items: readonly MastheadFigureItem[];
+}
+
+/* Labelled figures for a masthead aside, such as the parts of the total in the title. */
+export function MastheadFigures(props: MastheadFiguresProps) {
+  return (
+    <dl className="jds-masthead__figures" aria-label={props.label}>
+      {props.items.map((item, index) => (
+        <div key={index} className="jds-masthead__figure">
+          <dt className="jds-masthead__figure-label">{item.label}</dt>
+          <dd className="jds-masthead__figure-value">{item.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 export interface MastheadClockProps {
   readonly time: ReactNode;
   readonly pm?: boolean;

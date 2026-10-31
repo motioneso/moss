@@ -13,6 +13,7 @@ import {
   Indicator,
   DisclosureToggle,
   Masthead,
+  MastheadFigures,
   Menu,
   RowIndex,
   RowIndexItem,
@@ -22,6 +23,7 @@ import {
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import { formatCents } from "../format";
+import { MoreIcon } from "../icons";
 import {
   buildAccountsView,
   type AccountGroup,
@@ -60,16 +62,6 @@ function BankStatus(props: {
         </Button>
       ) : null}
     </span>
-  );
-}
-
-function MoreIcon(): ReactNodeLike {
-  return (
-    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <circle cx="5" cy="12" r="1.75" />
-      <circle cx="12" cy="12" r="1.75" />
-      <circle cx="19" cy="12" r="1.75" />
-    </svg>
   );
 }
 
@@ -242,10 +234,16 @@ function AccountsBody(props: {
               tone="field"
               eyebrow={multiCurrency ? `Net worth · ${currency}` : "Net worth"}
               title={amountOrUnavailable(netWorthCents, currency)}
-              lede={
-                sides
-                  ? `Assets ${amountOrUnavailable(sides.assetsCents, currency)} · Debts ${amountOrUnavailable(sides.debtsCents, currency)}`
-                  : undefined
+              aside={
+                sides ? (
+                  <MastheadFigures
+                    label={multiCurrency ? `Assets and debts, ${currency}` : "Assets and debts"}
+                    items={[
+                      { label: "Assets", value: amountOrUnavailable(sides.assetsCents, currency) },
+                      { label: "Debts", value: amountOrUnavailable(sides.debtsCents, currency) }
+                    ]}
+                  />
+                ) : undefined
               }
             />
           );

@@ -137,7 +137,11 @@ describe("Accounts screen (#3177)", () => {
     expect(text).toContain('"Net worth"');
     expect(text).not.toContain("Net worth · USD");
     expect(text).toContain("$400.00");
-    expect(text).toContain("Assets $520.00 · Debts $120.00");
+    const figures = renderer.root.findByProps({ "aria-label": "Assets and debts" });
+    const cells = (type: "dt" | "dd") =>
+      figures.findAllByType(type).map((node) => node.children.join(""));
+    expect(cells("dt")).toEqual(["Assets", "Debts"]);
+    expect(cells("dd")).toEqual(["$520.00", "$120.00"]);
     expect(text).toContain("Credit cards");
     expect(text).toContain("Sandbox First Bank · Synced just now");
     expect(text).toContain("Manual");
