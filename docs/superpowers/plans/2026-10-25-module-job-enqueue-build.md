@@ -188,3 +188,36 @@ work, list every pending Ben question, push, report the PR to coordinator w1:p1E
   `scripts/run-gate.sh start --gate test:integration:3720`.
 - Mutation result: with the pending check removed, 5 of 10 tests failed (7, 9, 10, 13 and the
   sendModuleJob count test). With the check restored, all 10 passed.
+
+### Slice 3 delivered (#3721)
+
+- SDK: `ModuleJobsPort` and `ctx.jobs.enqueue`, bound to the RPC method `jobs.enqueue`. Only
+  queue, jobKind, idempotencyKey and optional params go on the wire. The result type is slice 2's
+  `ModuleJobEnqueueResult`.
+- RPC host (`worker-rpc-host.ts`): optional injected `enqueueJob` port and the spec's checks in
+  order: read risk (`forbidden_enqueue_mutation`), no port (`invalid_rpc`), exact keys and
+  formats (`invalid_rpc`), own opted-in queue read from the handler's own manifest
+  (`undeclared_queue`), per-invocation cap of 5 counted after the queue check
+  (`limited: invocation`, port not called), then the port. `inactive` throws `module_inactive`,
+  `invalid_params` throws `invalid_job_params`, any other port error becomes a generic
+  `invalid_rpc` with no key or params text. Every `limited` result logs one warning with module,
+  queue, job kind and limit name only.
+- Constants beside the AI cap: `JOB_ENQUEUE_CALLS_PER_INVOCATION_CAP` (5) and
+  `MODULE_ENQUEUE_LIMITS` (`{ pending: 10, hourly: 120 }`, slice 2's type) so slice 4 passes the
+  same numbers to the primitive. No env var.
+- Decision: the port result gains a third host-internal value, `invalid_params`. Step 7 runs
+  inside the port and the primitive throws a plain Error for a bad payload. Without a distinct
+  result the host would mislabel a database failure as bad params, or the registry package would
+  have to recognise a jobs error class. Slice 4's composition root runs `assertModuleJobPayload`
+  before the primitive and returns `invalid_params` on failure, which keeps the spec's order.
+- No composition-root wiring. Every production construction site has no port, so a real call
+  gets `invalid_rpc` until slice 4 (#3722).
+- Version bumps: the registry check named Finance 0.6.12 and Food 0.3.12 (Job Search was not
+  named). Bumped to 0.6.13 and 0.3.13; the Finance version assertion in
+  `tests/unit/park-press-integration.design.test.ts` follows. The check passes locally after.
+- Tests: `tests/unit/external-module-jobs-enqueue-port.test.ts` (12) and one serialization test in
+  `tests/unit/module-sdk-worker.test.ts`. The port test builds its port on the real
+  `assertModuleJobPayload`.
+- Mutation results (each protection removed, test run, then restored and green):
+  risk gate removed, 1 failed; exact-keys check removed, 1 failed; own-queue check removed,
+  2 failed; counter increment removed, 1 failed; inactive mapping removed, 1 failed.

@@ -98,14 +98,14 @@ export function outcomeNote(outcome: ActionAuditLogEntryDto["outcome"]): string 
 
 export function sourceLabel(source: Entry["sourceSurface"]): string {
   switch (source) {
-    case "module_page":
-      return "Module page";
     case "proactive":
       return "On its own";
     case "scheduled":
       return "Scheduled";
     case "unknown":
       return "Unknown source";
+    case "module_page":
+      return "Module page";
     default:
       return "Chat";
   }
