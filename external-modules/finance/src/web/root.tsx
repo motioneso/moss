@@ -70,10 +70,21 @@ export function Root(props: {
   useEffect(() => {
     if (path === "/budget") navigate("/");
   }, [path]);
+  // On a phone the tab bar scrolls sideways; keep the open tab in view.
+  const tabs = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const bar = tabs.current;
+    const active = bar?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!bar || !active) return;
+    const barBox = bar.getBoundingClientRect();
+    const box = active.getBoundingClientRect();
+    if (box.right > barBox.right) bar.scrollLeft += box.right - barBox.right;
+    else if (box.left < barBox.left) bar.scrollLeft -= barBox.left - box.left;
+  }, [path]);
   return (
     <div className="fnm-root">
       <LiveRegion />
-      <div className="fnm-tabs">
+      <div className="fnm-tabs" ref={tabs}>
         <Segmented
           ariaLabel="Finance views"
           value={tabFor(path) as Tab}

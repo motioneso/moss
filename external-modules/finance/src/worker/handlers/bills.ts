@@ -26,6 +26,8 @@ export const billsReadHandler: ToolFactory = (ports) => async (input) => {
   // Validate even if there are no plans, and cap output before collecting private records.
   const matchWindow = billMatchWindow(from, to);
   const store = await ports.store();
+  if (store.budgetPolicy && !(await store.budgetPolicy.get()))
+    return { status: "ok", setupRequired: true };
   const policy = await requireBudgetPolicy(store);
   if (!store.bills)
     throw new InputError("storage_upgrade_required", "Update Finance before using bills");

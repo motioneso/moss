@@ -3,34 +3,38 @@
 // states shared by the feed (job-search precedent: every route funnels its
 // query snapshot through one gate so the states stay consistent). Text-only —
 // no icons, no animation, so prefers-reduced-motion needs no special casing.
-import { Card, type ReactNodeLike } from "@moss/module-web-sdk";
+import {
+  Card,
+  EmptyState as SharedEmptyState,
+  useEffect,
+  useState,
+  type ReactNodeLike
+} from "@moss/module-web-sdk";
 import type { QuerySnapshot } from "./store";
 
+// A quick read shows nothing; a slow one shows one quiet status line.
 export function LoadingState(props: { label: string }): ReactNodeLike {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setShown(true), 300);
+    return () => clearTimeout(timer);
+  }, []);
   return (
-    <Card sunken role="status">
-      <div className="fnm-state">
-        <span className="jds-eyebrow">Loading</span>
-        <p>{props.label}…</p>
-      </div>
-    </Card>
+    <p className="jds-hint" role="status">
+      {shown ? `${props.label}…` : ""}
+    </p>
   );
 }
 
 export function EmptyState(props: {
   title: string;
-  body: string;
+  body?: string;
   action?: ReactNodeLike;
 }): ReactNodeLike {
   return (
-    <Card sunken>
-      <div className="fnm-state">
-        <span className="jds-eyebrow">Nothing here yet</span>
-        <h2>{props.title}</h2>
-        <p>{props.body}</p>
-        {props.action ?? null}
-      </div>
-    </Card>
+    <SharedEmptyState title={props.title} description={props.body}>
+      {props.action ?? null}
+    </SharedEmptyState>
   );
 }
 

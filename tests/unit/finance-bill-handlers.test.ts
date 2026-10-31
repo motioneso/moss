@@ -113,6 +113,16 @@ describe("reviewed bill handler validation", () => {
       billsReadHandler(f.ports)({ from: "2026-01-01", to: "2028-01-01" })
     ).rejects.toThrow();
   });
+
+  it("reads as setup required, not an error, before a budget currency is chosen", async () => {
+    const f = fixture();
+    f.store.budgetPolicy.get = async () => null as never;
+    const plans = vi.spyOn(f.bills, "plans");
+    await expect(
+      billsReadHandler(f.ports)({ from: "2026-02-01", to: "2026-02-28" })
+    ).resolves.toEqual({ status: "ok", setupRequired: true });
+    expect(plans).not.toHaveBeenCalled();
+  });
 });
 
 describe("bill match candidates across month boundaries", () => {

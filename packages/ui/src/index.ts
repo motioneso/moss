@@ -56,6 +56,8 @@ export { RowButton } from "./row-button.js";
 export type { RowButtonProps } from "./row-button.js";
 export { DisclosureToggle } from "./disclosure-toggle.js";
 export type { DisclosureToggleProps } from "./disclosure-toggle.js";
+export { PeriodStepper } from "./period-stepper.js";
+export type { PeriodStepperProps } from "./period-stepper.js";
 export type { IconButtonProps, IconButtonSize, IconButtonVariant } from "./icon-button.js";
 export { Indicator } from "./indicator.js";
 export type { IndicatorProps, IndicatorStatus } from "./indicator.js";

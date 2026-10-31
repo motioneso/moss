@@ -6,9 +6,9 @@
 // host's jds-* primitives and document styles, so the tokens.css raw-color
 // rule and theme switching are untouched by this module.
 export const MODULE_STYLES = `
-.fnm-root { max-width: 72rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+.fnm-root { max-width: 76.25rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
 .fnm-stack { display: flex; flex-direction: column; gap: 1rem; }
-.fnm-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.fnm-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .fnm-state { display: flex; flex-direction: column; gap: 0.5rem; }
 .fnm-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .fnm-table { width: 100%; border-collapse: collapse; }
@@ -63,13 +63,14 @@ export const MODULE_STYLES = `
 .fnm-disclosure-head { display: inline-flex; align-items: center; gap: var(--space-2); }
 .fnm-disclosure-marker { flex: 0 0 auto; width: 0.5rem; height: 0.5rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-0.15rem) rotate(45deg); transition: transform 120ms ease; }
 .fnm-disclosure-head[aria-expanded="true"] .fnm-disclosure-marker { transform: translateY(0.1rem) rotate(-135deg); }
-.fnm-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 @media (max-width: 720px) {
   .fnm-bank-meta { display: none; }
   .fnm-bank-status { display: block; }
 }
 /* #3173 Budget: layout only. Desktop shows the table and rail, phone the row list. */
-.fnm-tabs { margin-bottom: var(--space-5); overflow-x: auto; }
+.fnm-tabs { margin-bottom: var(--space-5); overflow-x: auto; scrollbar-width: none; }
+.fnm-tabs::-webkit-scrollbar { display: none; }
+.fnm-tabs .jds-segmented__opt { flex: 0 0 auto; white-space: nowrap; }
 .fnm-hero { margin-bottom: var(--space-6); }
 .fnm-pad { padding: 0; }
 .fnm-page { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: var(--space-8); }
@@ -80,7 +81,6 @@ export const MODULE_STYLES = `
 .fnm-inline { display: inline-flex; align-items: center; gap: var(--space-2); }
 .fnm-rail { display: flex; flex-direction: column; gap: var(--space-6); }
 .fnm-stat-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
-.fnm-month-step { display: flex; align-items: center; gap: var(--space-3); }
 .fnm-fixed { table-layout: fixed; width: 100%; }
 .fnm-col-name { width: 34%; }
 .fnm-cell-stack { display: flex; flex-direction: column; gap: var(--space-2); min-width: 9rem; }
@@ -98,7 +98,6 @@ export const MODULE_STYLES = `
 .fnm-register-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); align-items: end; gap: var(--space-4); }
 .fnm-register-filters > label { min-width: 0; }
 .fnm-register-filters select { width: 100%; }
-.fnm-tabs .jds-segmented { flex-wrap: wrap; }
 .fnm-fixed td { overflow-wrap: anywhere; }
 .fnm-category-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .fnm-category-controls > span { flex: 1; min-width: 0; }

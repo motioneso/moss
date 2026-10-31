@@ -22,6 +22,7 @@ import {
   Indicator,
   Masthead,
   Note,
+  PeriodStepper,
   RowIndex,
   RowIndexItem,
   SectionHead,
@@ -473,28 +474,13 @@ function Hero(props: {
               : money(props.readyCents, props.currency!)
         }
         aside={
-          <div className="fnm-month-step">
-            <Button
-              variant="field"
-              size="sm"
-              aria-label={monthLabel(shiftMonth(props.month, -1))}
-              onClick={() => props.onMonth(-1)}
-            >
-              ←
-            </Button>
-            <span>
-              {monthLabel(props.month)}
-              {props.currency ? ` · ${props.currency}` : ""}
-            </span>
-            <Button
-              variant="field"
-              size="sm"
-              aria-label={monthLabel(shiftMonth(props.month, 1))}
-              onClick={() => props.onMonth(1)}
-            >
-              →
-            </Button>
-          </div>
+          <PeriodStepper
+            label={monthLabel(props.month)}
+            previousLabel={monthLabel(shiftMonth(props.month, -1))}
+            nextLabel={monthLabel(shiftMonth(props.month, 1))}
+            onPrevious={() => props.onMonth(-1)}
+            onNext={() => props.onMonth(1)}
+          />
         }
       />
     </div>
@@ -517,17 +503,14 @@ function BudgetBody(props: { result: BudgetStatusResult } & AssignProps): ReactN
   const needsLook = result.needsLookCount ?? 0;
   return (
     <div className="fnm-page">
-      <main className="fnm-block">
+      <section className="fnm-block" aria-label="Categories">
         {result.readyUnavailable === "missing_history" ? (
           <Note variant="practical">
-            Ready to assign is unavailable because a budget account has no recorded balance for this
-            period. Today's balance is not used for past months.
+            A budget account has no recorded balance for this month, so Ready to assign is
+            unavailable.
           </Note>
         ) : result.readyUnavailable === "future_month" ? (
-          <Note variant="practical">
-            This is a future plan. Its assigned amounts reserve today's cash; ready to assign is
-            shown in the current month.
-          </Note>
+          <Note variant="practical">Ready to assign shows in the current month.</Note>
         ) : null}
         {(result.futureReservedCents ?? 0) > 0 ? (
           <Note variant="practical">
@@ -535,17 +518,18 @@ function BudgetBody(props: { result: BudgetStatusResult } & AssignProps): ReactN
             assignments.
           </Note>
         ) : null}
-        <p className="jds-hint">
-          {result.isoCurrency} budget · Posted entries only
-          {result.pendingCount ? ` · ${result.pendingCount} pending entries excluded` : ""}
-          {result.excludedAccountCount
-            ? ` · ${result.excludedAccountCount} other-currency or tracking accounts excluded`
-            : ""}
-          . Positive category balances carry forward.
-          {result.cardPayments?.length
-            ? " Card debt remains in account balances; Ready uses each enrolled card's payment reserve instead of subtracting its full debt."
-            : ""}
-        </p>
+        {result.pendingCount || result.excludedAccountCount ? (
+          <p className="jds-hint">
+            {[
+              result.pendingCount ? `${result.pendingCount} pending not counted yet` : null,
+              result.excludedAccountCount
+                ? `${result.excludedAccountCount} tracking or other-currency accounts left out`
+                : null
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        ) : null}
         <div className="fnm-phone-only">
           <NeedsYou needsLook={needsLook} overspent={overspent} />
         </div>
@@ -562,7 +546,7 @@ function BudgetBody(props: { result: BudgetStatusResult } & AssignProps): ReactN
         <div className="fnm-phone-only">
           <CollapsedBalances accounts={accounts} currency={result.isoCurrency!} />
         </div>
-      </main>
+      </section>
       <aside className="fnm-rail fnm-desktop-only">
         <NeedsYou needsLook={needsLook} overspent={overspent} />
         <RailBlock eyebrow="Accounts" title="Balances">
@@ -741,19 +725,18 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
         }}
       />
       <div className="fnm-pad">
-        {!result?.setupRequired ? (
-          <div className="fnm-spread">
-            <p className="jds-hint">
-              Edit Assigned, then press Enter or Save. Totals reflect saved amounts.
-            </p>
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={busy || checking || cooldown.cooling}
-              onClick={refresh}
-            >
-              {checking ? "Refreshing…" : "Check saved records"}
-            </Button>
+        {!result?.setupRequired && (uncertain || staleDrafts || checking || hasDrafts) ? (
+          <div className="fnm-chips">
+            {uncertain || staleDrafts || checking ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={busy || checking || cooldown.cooling}
+                onClick={refresh}
+              >
+                {checking ? "Refreshing…" : "Check saved records"}
+              </Button>
+            ) : null}
             {hasDrafts ? (
               <Button
                 variant="link"

@@ -18,6 +18,7 @@ import {
   Badge,
   Checkbox,
   Button,
+  PeriodStepper,
   RowIndex,
   RowIndexItem,
   SectionHead,
@@ -775,23 +776,13 @@ export function TransactionsScreen(
           ) : null}
         </div>
         <div className="fnm-chips">
-          <Button
-            variant="field"
-            size="sm"
-            aria-label={monthLabel(shiftMonth(month, -1))}
-            onClick={() => setMonth(shiftMonth(month, -1))}
-          >
-            ←
-          </Button>
-          <span>{monthLabel(month)}</span>
-          <Button
-            variant="field"
-            size="sm"
-            aria-label={monthLabel(shiftMonth(month, 1))}
-            onClick={() => setMonth(shiftMonth(month, 1))}
-          >
-            →
-          </Button>
+          <PeriodStepper
+            label={monthLabel(month)}
+            previousLabel={monthLabel(shiftMonth(month, -1))}
+            nextLabel={monthLabel(shiftMonth(month, 1))}
+            onPrevious={() => setMonth(shiftMonth(month, -1))}
+            onNext={() => setMonth(shiftMonth(month, 1))}
+          />
           <input
             className="jds-input fnm-search"
             placeholder="Search payees or notes"

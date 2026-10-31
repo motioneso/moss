@@ -8,7 +8,6 @@ import type { NetWorthCoverage } from "../../domain/net-worth-ledger";
 // so raw colors stay in tokens.css and theme switching costs nothing.
 import {
   Button,
-  Masthead,
   Note,
   SectionHead,
   Select,
@@ -132,7 +131,7 @@ function NetWorthSection(props: { result: NetWorthResult }): ReactNodeLike {
   if (props.result.unavailableReason)
     return (
       <section className="fnm-block fnm-block--tight" aria-label="Net worth">
-        <SectionHead number="01" title="Net worth needs review" rule />
+        <SectionHead title="Net worth needs review" rule />
         <Note variant="practical">
           {props.result.unavailableReason === "unsafe_money"
             ? "This balance history cannot be totaled without losing precision. Review its amounts, then refresh Reports."
@@ -142,7 +141,7 @@ function NetWorthSection(props: { result: NetWorthResult }): ReactNodeLike {
     );
   return (
     <section className="fnm-block fnm-block--tight" aria-label="Net worth">
-      <SectionHead number="01" title="Net worth" meta={currency ?? undefined} rule />
+      <SectionHead title="Net worth" meta={currency ?? undefined} rule />
       {headlineCents === null || !currency ? (
         <EmptyState
           title="No recorded balance history"
@@ -260,12 +259,7 @@ function SpendingSection(props: {
       ) : null}
       <div className="fnm-report-grid">
         <section className="fnm-block fnm-block--tight" aria-label="Spending by category">
-          <SectionHead
-            number="02"
-            title="Spending by category"
-            meta={monthLabel(latest.month)}
-            rule
-          />
+          <SectionHead title="Spending by category" meta={monthLabel(latest.month)} rule />
           {categoryRows.length > 0 ? (
             <BarList
               rows={categoryRows}
@@ -277,7 +271,7 @@ function SpendingSection(props: {
           )}
         </section>
         <section className="fnm-block fnm-block--tight" aria-label="Spending by payee">
-          <SectionHead number="03" title="Spending by payee" meta={monthLabel(latest.month)} rule />
+          <SectionHead title="Spending by payee" meta={monthLabel(latest.month)} rule />
           {payeeRows.length > 0 ? (
             <div className="fnm-stack">
               <BarList
@@ -296,7 +290,7 @@ function SpendingSection(props: {
         </section>
       </div>
       <section className="fnm-block fnm-block--tight" aria-label="Cash flow">
-        <SectionHead number="04" title="Cash flow" meta={currency} rule />
+        <SectionHead title="Cash flow" meta={currency} rule />
         <p className="jds-caption">
           Includes pending transactions. Refunds reduce outflow; transfers are excluded.
         </p>
@@ -430,15 +424,8 @@ export function ReportsScreen(): ReactNodeLike {
   const chooseCurrency = currencies.length > 1 && currency === "";
   return (
     <section className="fnm-block" aria-label="Finance reports">
-      <Masthead
-        tone="field"
-        eyebrow="Reports"
-        title="Follow your money"
-        lede="See spending, cash flow and recorded net worth. Open a category, payee or cash-flow amount to inspect its transactions."
-      />
-      <div className="fnm-row">
-        <label className="fnm-catpick">
-          <span className="jds-caption">Window</span>
+      <div className="fnm-spread">
+        <div className="fnm-chips">
           <Select
             aria-label="Report period"
             value={months}
@@ -452,43 +439,38 @@ export function ReportsScreen(): ReactNodeLike {
               </option>
             ))}
           </Select>
-        </label>
-        <label className="fnm-catpick">
-          <span className="jds-caption">Currency</span>
-          <Select
-            aria-label="Report currency"
-            value={currency || (currencies.length === 1 ? currencies[0] : "")}
-            onChange={(event: { target: { value: string } }) => setCurrency(event.target.value)}
-          >
-            <option value="" disabled>
-              {currencies.length ? "Choose currency" : "No balances yet"}
-            </option>
-            {[...new Set([...currencies, ...(currency ? [currency] : [])])].map((code) => (
-              <option key={code} value={code}>
-                {code}
+          {currencies.length > 1 || (currency && !currencies.includes(currency)) ? (
+            <Select
+              aria-label="Report currency"
+              value={currency}
+              onChange={(event: { target: { value: string } }) => setCurrency(event.target.value)}
+            >
+              <option value="" disabled>
+                Choose currency
               </option>
-            ))}
-          </Select>
-        </label>
-      </div>
-      <div>
+              {[...new Set([...currencies, ...(currency ? [currency] : [])])].map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </Select>
+          ) : null}
+        </div>
         <Button
           variant="secondary"
+          size="sm"
           onClick={() => {
             invalidateToolQueries("finance.reports.spending");
             invalidateToolQueries("finance.reports.net-worth");
           }}
         >
-          Refresh reports
+          Refresh
         </Button>
       </div>
-      <p className="jds-caption">
-        Each currency is shown separately. No exchange-rate conversion is applied.
-      </p>
       {chooseCurrency ? (
         <EmptyState
           title="Choose a currency"
-          body="Your accounts use more than one currency. Choose one above to see its balances and spending."
+          body="Each currency reports on its own, with no conversion."
         />
       ) : (
         <>

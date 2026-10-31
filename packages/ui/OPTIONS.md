@@ -190,6 +190,10 @@ _No enum or boolean props._
 - **modal** (optional boolean flag)
 - **dismissOnEscape** (optional boolean flag)
 
+## period-stepper
+
+- **disabled** (optional boolean flag)
+
 ## radio-card-group
 
 - **disabled** (optional boolean flag)

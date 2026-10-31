@@ -24,6 +24,29 @@
   cursor: pointer;
 }
 
+/* Period stepper: arrows either side of the period on show. */
+.jds-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.jds-stepper__label {
+  min-width: 8.5rem;
+  text-align: center;
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.jds-masthead--field .jds-stepper .jds-iconbtn {
+  --iconbtn-color: var(--masthead-fg);
+  --iconbtn-hover-color: var(--masthead-fg);
+  --iconbtn-hover-bg: color-mix(in srgb, var(--masthead-fg) 14%, transparent);
+  border-color: color-mix(in srgb, var(--masthead-fg) 32%, transparent);
+}
+.jds-masthead--field .jds-stepper .jds-iconbtn:active {
+  background: color-mix(in srgb, var(--masthead-fg) 22%, transparent);
+}
+
 /* Phone tap area: a short control grows an invisible 44px hit zone centred on itself, so the
    look and the layout stay put. Controls already 44px or taller get no extra reach. */
 @media (max-width: 640px) {

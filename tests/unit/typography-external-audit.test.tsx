@@ -109,7 +109,7 @@ describe("Finance review empty state scope", () => {
       });
       renderer.root
         .findAllByType("button")
-        .find((node) => collect(node) === "←")!
+        .find((node) => node.props["aria-label"] === "September 2026")!
         .props.onClick();
     });
     await act(async () => {

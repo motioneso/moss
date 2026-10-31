@@ -553,6 +553,15 @@
       ]
     },
     {
+      "name": "period-stepper",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/period-stepper.tsx", "type": "registry:ui" }],
+      "dependencies": ["lucide-react"],
+      "exports": ["PeriodStepper"],
+      "options": [],
+      "flags": [{ "prop": "disabled", "optional": true }]
+    },
+    {
       "name": "radio-card-group",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/radio-card-group.tsx", "type": "registry:ui" }],

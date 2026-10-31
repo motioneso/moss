@@ -3,8 +3,9 @@ import {
   Badge,
   Button,
   Dialog,
-  Masthead,
+  EmptyState,
   Note,
+  PeriodStepper,
   RowIndex,
   RowIndexItem,
   SectionHead,
@@ -16,7 +17,8 @@ import {
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import type { BillPlan } from "../../domain/bills";
-import { currentMonth, formatCents } from "../format";
+import { currentMonth, formatCents, monthLabel, shiftMonth } from "../format";
+import { navigate } from "../router";
 import { invalidateQueries, publishToolRefresh, useToolQuery } from "../store";
 import { outcomeGate } from "../states";
 import { BillAdjustmentDialog } from "../bill-adjustment-dialog";
@@ -38,6 +40,7 @@ export interface Occurrence {
   transactionId: string | null;
 }
 export interface BillsView extends Record<string, unknown> {
+  setupRequired?: boolean;
   today: string;
   matchFrom?: string;
   matchTo?: string;
@@ -77,8 +80,9 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
   const from = `${month}-01`;
   const to = `${month}-${new Date(Number(month.slice(0, 4)), Number(month.slice(5)), 0).getDate()}`;
   const query = useToolQuery<BillsView>("finance.bills.read", { from, to });
-  const data =
+  const settled =
     query.status === "settled" && query.outcome.kind === "ok" ? query.outcome.result : null;
+  const data = settled?.setupRequired ? null : settled;
   const matchCandidates = data && selected ? billMatchCandidates(data.transactions, selected) : [];
   const canMatch = matchCandidates.some((row) => row.id === transactionId);
   useEffect(() => {
@@ -135,213 +139,201 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
   };
   return (
     <section className="fnm-block" aria-label="Upcoming bills">
-      <Masthead
-        tone="field"
-        eyebrow="Upcoming"
-        title="Know what's coming"
-        lede="Plan bills, review what posted, and keep your next month in view."
-      />
       <div className="fnm-spread">
-        <label className="fnm-block fnm-block--tight">
-          Month
-          <input
-            className="jds-input"
-            aria-label="Bill month"
-            type="month"
-            value={month}
-            disabled={
-              busy ||
-              adding ||
-              Boolean(selected) ||
-              Boolean(stopping) ||
-              Boolean(adjusting) ||
-              Boolean(recording)
-            }
-            onChange={(e: { currentTarget: { value: string } }) => {
-              if (/^\d{4}-(0[1-9]|1[0-2])$/.test(e.currentTarget.value))
-                setMonth(e.currentTarget.value);
-            }}
-          />
-        </label>
-        <div className="fnm-spread">
-          <Button
-            variant="secondary"
-            disabled={!data || busy || blocked || !props.tools}
-            onClick={() => setAdding(true)}
-          >
-            Add a bill
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={busy || !props.tools}
-            onClick={() => void refresh()}
-          >
-            Check saved bills
-          </Button>
-        </div>
+        <PeriodStepper
+          label={monthLabel(month)}
+          previousLabel={monthLabel(shiftMonth(month, -1))}
+          nextLabel={monthLabel(shiftMonth(month, 1))}
+          onPrevious={() => setMonth(shiftMonth(month, -1))}
+          onNext={() => setMonth(shiftMonth(month, 1))}
+          disabled={
+            busy ||
+            adding ||
+            Boolean(selected) ||
+            Boolean(stopping) ||
+            Boolean(adjusting) ||
+            Boolean(recording)
+          }
+        />
+        {data ? (
+          <div className="fnm-chips">
+            {blocked ? (
+              <Button
+                variant="secondary"
+                disabled={busy || !props.tools}
+                onClick={() => void refresh()}
+              >
+                Check saved bills
+              </Button>
+            ) : null}
+            <Button disabled={busy || blocked || !props.tools} onClick={() => setAdding(true)}>
+              Add a bill
+            </Button>
+          </div>
+        ) : null}
       </div>
-      <Note variant="practical">
-        Plans are projections. Match posted links an existing expense; Record bill entry adds an
-        already-occurred manual expense after review and confirmation. Moss never sends a bank
-        payment.
-      </Note>
       {message ? <p role="status">{message}</p> : null}
       {outcomeGate(
         query,
-        (body) => (
-          <div className="fnm-block">
-            <SectionHead title="This month's bills" rule />
-            {body.occurrences.length ? (
-              <RowIndex density="compact">
-                {body.occurrences.map((o) => (
-                  <RowIndexItem
-                    key={`${o.planId}:${o.dueDate}`}
-                    title={o.name}
-                    excerpt={`${o.plannedDate ?? o.dueDate}${o.adjusted ? ` · one-off change from ${o.dueDate}` : ""} · ${body.accounts.find((a) => a.accountId === o.accountId)?.name ?? "Unavailable account"} · ${body.categories.find((c) => c.id === o.categoryId)?.name ?? "Archived category"}`}
-                    meta={
-                      <div className="fnm-block fnm-block--tight fnm-end">
-                        <strong>{formatCents(o.expectedCents, body.isoCurrency)} expected</strong>
-                        <Badge>
-                          {o.state === "projected"
-                            ? (o.plannedDate ?? o.dueDate) < body.today
-                              ? "Past due · projected"
-                              : "Projected"
-                            : o.state === "posted"
-                              ? `Posted ${formatCents(o.actualCents!, body.isoCurrency)}`
-                              : o.state === "skipped"
-                                ? "Skipped"
-                                : "Match needs review"}
-                        </Badge>
-                        {o.canAdjust ? (
-                          <div className="fnm-spread">
+        (body) =>
+          body.setupRequired ? (
+            <EmptyState title="Choose a budget currency">
+              <Button onClick={() => navigate("/")}>Open Budget</Button>
+            </EmptyState>
+          ) : (
+            <div className="fnm-block">
+              <SectionHead title="This month's bills" rule />
+              {body.occurrences.length ? (
+                <RowIndex density="compact">
+                  {body.occurrences.map((o) => (
+                    <RowIndexItem
+                      key={`${o.planId}:${o.dueDate}`}
+                      title={o.name}
+                      excerpt={`${o.plannedDate ?? o.dueDate}${o.adjusted ? ` · one-off change from ${o.dueDate}` : ""} · ${body.accounts.find((a) => a.accountId === o.accountId)?.name ?? "Unavailable account"} · ${body.categories.find((c) => c.id === o.categoryId)?.name ?? "Archived category"}`}
+                      meta={
+                        <div className="fnm-block fnm-block--tight fnm-end">
+                          <strong>{formatCents(o.expectedCents, body.isoCurrency)} expected</strong>
+                          <Badge>
+                            {o.state === "projected"
+                              ? (o.plannedDate ?? o.dueDate) < body.today
+                                ? "Past due · projected"
+                                : "Projected"
+                              : o.state === "posted"
+                                ? `Posted ${formatCents(o.actualCents!, body.isoCurrency)}`
+                                : o.state === "skipped"
+                                  ? "Skipped"
+                                  : "Match needs review"}
+                          </Badge>
+                          {o.canAdjust ? (
+                            <div className="fnm-spread">
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                disabled={busy || blocked || !props.tools}
+                                onClick={() => setAdjusting({ occurrence: o, reset: false })}
+                              >
+                                Change this occurrence
+                              </Button>
+                              {o.adjusted ? (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  disabled={busy || blocked || !props.tools}
+                                  onClick={() => setAdjusting({ occurrence: o, reset: true })}
+                                >
+                                  Reset one-off change
+                                </Button>
+                              ) : null}
+                            </div>
+                          ) : o.state !== "projected" ? (
+                            <p className="jds-hint">Undo review before changing this projection.</p>
+                          ) : null}
+                          {o.canRecordEntry ? (
                             <Button
                               size="sm"
                               variant="secondary"
                               disabled={busy || blocked || !props.tools}
-                              onClick={() => setAdjusting({ occurrence: o, reset: false })}
+                              onClick={() => setRecording(o)}
                             >
-                              Change this occurrence
+                              Record bill entry
                             </Button>
-                            {o.adjusted ? (
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                disabled={busy || blocked || !props.tools}
-                                onClick={() => setAdjusting({ occurrence: o, reset: true })}
-                              >
-                                Reset one-off change
-                              </Button>
-                            ) : null}
-                          </div>
-                        ) : o.state !== "projected" ? (
-                          <p className="jds-hint">Undo review before changing this projection.</p>
-                        ) : null}
-                        {o.canRecordEntry ? (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            disabled={busy || blocked || !props.tools}
-                            onClick={() => setRecording(o)}
-                          >
-                            Record bill entry
-                          </Button>
-                        ) : null}
-                        <div className="fnm-spread">
-                          {o.state === "projected" ? (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                disabled={busy || blocked || !props.tools}
-                                onClick={() => {
-                                  dialogReview.current = {
-                                    expectedRevision: body.revision,
-                                    expectedFingerprint: body.fingerprint
-                                  };
-                                  setMessage(null);
-                                  setSelected(o);
-                                  setTransaction("");
-                                }}
-                              >
-                                Match posted
-                              </Button>
+                          ) : null}
+                          <div className="fnm-spread">
+                            {o.state === "projected" ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  disabled={busy || blocked || !props.tools}
+                                  onClick={() => {
+                                    dialogReview.current = {
+                                      expectedRevision: body.revision,
+                                      expectedFingerprint: body.fingerprint
+                                    };
+                                    setMessage(null);
+                                    setSelected(o);
+                                    setTransaction("");
+                                  }}
+                                >
+                                  Match posted
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  disabled={busy || blocked || !props.tools}
+                                  onClick={() =>
+                                    void write("finance.bill.decide", {
+                                      planId: o.planId,
+                                      dueDate: o.dueDate,
+                                      state: "skipped"
+                                    })
+                                  }
+                                >
+                                  Skip occurrence
+                                </Button>
+                              </>
+                            ) : (
                               <Button
                                 size="sm"
                                 variant="secondary"
                                 disabled={busy || blocked || !props.tools}
                                 onClick={() =>
-                                  void write("finance.bill.decide", {
+                                  void write("finance.bill.clear", {
                                     planId: o.planId,
-                                    dueDate: o.dueDate,
-                                    state: "skipped"
+                                    dueDate: o.dueDate
                                   })
                                 }
                               >
-                                Skip occurrence
+                                Undo review
                               </Button>
-                            </>
+                            )}
+                          </div>
+                        </div>
+                      }
+                    />
+                  ))}
+                </RowIndex>
+              ) : (
+                <EmptyState title="No bills this month" />
+              )}
+              {body.plans.length ? (
+                <>
+                  <SectionHead title="Your bill plans" rule />
+                  <RowIndex density="compact">
+                    {body.plans.map((p) => (
+                      <RowIndexItem
+                        key={p.id}
+                        title={p.name}
+                        excerpt={`${body.accounts.find((a) => a.accountId === p.accountId)?.name ?? "Account unavailable"} · ${p.cadence} from ${p.anchorDate}${p.endDate ? ` · stops after ${p.endDate}` : ""}`}
+                        meta={
+                          p.endDate && p.endDate <= body.today ? (
+                            <Badge>Stopped</Badge>
                           ) : (
                             <Button
-                              size="sm"
                               variant="secondary"
+                              size="sm"
                               disabled={busy || blocked || !props.tools}
-                              onClick={() =>
-                                void write("finance.bill.clear", {
-                                  planId: o.planId,
-                                  dueDate: o.dueDate
-                                })
-                              }
+                              onClick={() => {
+                                dialogReview.current = {
+                                  expectedRevision: body.revision,
+                                  expectedFingerprint: body.fingerprint
+                                };
+                                setMessage(null);
+                                setStopping(p);
+                                setEndDate(body.today);
+                              }}
                             >
-                              Undo review
+                              {p.endDate ? "Stop sooner" : "Stop future bills"}
                             </Button>
-                          )}
-                        </div>
-                      </div>
-                    }
-                  />
-                ))}
-              </RowIndex>
-            ) : (
-              <p>No bills planned for this month. Add a bill to see its upcoming dates here.</p>
-            )}
-            <SectionHead title="Your bill plans" rule />
-            {body.plans.length ? (
-              <RowIndex density="compact">
-                {body.plans.map((p) => (
-                  <RowIndexItem
-                    key={p.id}
-                    title={p.name}
-                    excerpt={`${body.accounts.find((a) => a.accountId === p.accountId)?.name ?? "Account unavailable"} · ${p.cadence} from ${p.anchorDate}${p.endDate ? ` · stops after ${p.endDate}` : ""}`}
-                    meta={
-                      p.endDate && p.endDate <= body.today ? (
-                        <Badge>Stopped</Badge>
-                      ) : (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={busy || blocked || !props.tools}
-                          onClick={() => {
-                            dialogReview.current = {
-                              expectedRevision: body.revision,
-                              expectedFingerprint: body.fingerprint
-                            };
-                            setMessage(null);
-                            setStopping(p);
-                            setEndDate(body.today);
-                          }}
-                        >
-                          {p.endDate ? "Stop sooner" : "Stop future bills"}
-                        </Button>
-                      )
-                    }
-                  />
-                ))}
-              </RowIndex>
-            ) : (
-              <p>No saved plans yet.</p>
-            )}
-          </div>
-        ),
+                          )
+                        }
+                      />
+                    ))}
+                  </RowIndex>
+                </>
+              ) : null}
+            </div>
+          ),
         { loadingLabel: "Loading bills" }
       )}
       {data && recording ? (
