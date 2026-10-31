@@ -1,4 +1,4 @@
-import { Children, type ReactNode } from "react";
+import { type ReactNode } from "react";
 
 export interface EmptyStateProps {
   readonly icon?: ReactNode;
@@ -9,13 +9,22 @@ export interface EmptyStateProps {
   readonly children?: ReactNode;
 }
 
+/* True when the node would render something, mirroring what React skips. */
+function hasContent(node: ReactNode): boolean {
+  if (node === null || node === undefined || typeof node === "boolean" || node === "") {
+    return false;
+  }
+  if (Array.isArray(node)) return node.some(hasContent);
+  return true;
+}
+
 export function EmptyState({ icon, title, description, actions, children }: EmptyStateProps) {
   return (
     <div className="jds-empty">
       {icon ? <span className="jds-empty__mark">{icon}</span> : null}
       <div className="jds-empty__title">{title}</div>
       {description ? <div className="jds-empty__sub">{description}</div> : null}
-      {Children.toArray([actions, children]).length > 0 ? (
+      {hasContent(actions) || hasContent(children) ? (
         <div className="jds-empty__actions">
           {actions}
           {children}
