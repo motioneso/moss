@@ -354,7 +354,6 @@
     if (failed)
       return h`<section class="${cls}">${head}${recovery({
         title: `Moss could not finish ${A.weekday(day.date)}`,
-        msg: "The rest of the week is kept.",
         actions: btn("Retry", { size: "sm", icon: "refresh-cw", action: "plan-retry-day", data: { date: day.date }, disabled: aiOff() })
       })}</section>`;
 
@@ -449,7 +448,7 @@
     recovery({
       role: "status",
       title: "Moss can't write meals right now",
-      msg: "The AI provider is not answering. Planning, swaps and receipt reading are paused.",
+      msg: "The AI provider is not answering. Planning and swaps are paused.",
       actions: h`${btn("Try again", { size: "sm", icon: "refresh-cw", action: "plan-ai-retry" })}${btn("AI settings", { size: "sm", variant: "quiet", href: A.hrefFor("settings") })}`
     });
 

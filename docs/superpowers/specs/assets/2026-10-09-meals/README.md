@@ -31,7 +31,8 @@ The floating panel, labelled as review tooling, is not product UI.
    by one, stop it, retry a failed day, re-plan, swap or regenerate a meal, step between weeks.
 2. Recipe. Open any meal. Change servings and units, mark it cooked with the Pantry preview, rate
    it.
-3. Shopping list. Tick lines, add one by hand, edit amounts, mark the trip bought, paste a receipt.
+3. Shopping list. Tick lines and undo a tick, add one by hand, edit amounts, mark the trip bought.
+   Phase 3 adds checking a receipt against the list.
 4. Pantry. Find an item, add or edit one, remove it and undo. Phase 3 adds storage grouping,
    use-by badges, restock, fridge photo and history with undo.
 5. Household. First-run setup, member editor, who eats together, Favourites. Phase 4 adds what
@@ -68,8 +69,8 @@ they run past 4,000 lines and one file would not be reviewable.
 - Servings start at the scaled amount and step in halves.
 - Bought shows ticked lines first, then the rest, each with an editable amount.
 - Receipt and fridge photo readings are reviewed before the Pantry changes.
-- Pantry find filters in place. An item with no amount reads "Some". Leftovers group first.
-- Shared or Solo is edited inline, with its own route. A meal one person eats shows "Only Ben"
+- Pantry find filters in place. An item with no amount reads "Some". Phase 3 adds a Leftovers group, listed first.
+- Shared or Solo is edited inline, with its own route. A meal one person eats shows "Only Rowan"
   with no control, because the choice means nothing for one eater.
 - Restrictions are labelled "Never serve".
 - Removals use an undo toast, not a confirm dialog. Leaving a Kitchen is the one confirm, because

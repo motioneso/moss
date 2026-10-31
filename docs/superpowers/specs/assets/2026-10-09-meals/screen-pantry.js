@@ -24,6 +24,9 @@
   const aiOff = () => A.reviewState() === "ai-off";
   const later = () => A.phase() >= 3;
 
+  // Saved leftovers are phase 3, so earlier phases hide the Leftovers group.
+  const shown = () => (later() ? S.data.pantry : S.data.pantry.filter((p) => p.section !== "Leftovers"));
+
   const SECTION_ORDER = ["Leftovers", "Produce", "Meat and fish", "Dairy and eggs", "Bakery", "Pantry", "Frozen", "Other"];
   const STORAGE_ORDER = ["Fridge", "Freezer", "Cupboard", "Counter"];
   const RESTOCK_EVERY = ["Weekly", "Every 2 weeks", "Every 4 weeks"];
@@ -110,7 +113,7 @@
   };
 
   const groups = () => {
-    const items = S.data.pantry;
+    const items = shown();
     if (later() && S.pantryGroup === "storage") {
       const leftovers = items.filter((p) => p.section === "Leftovers");
       return [
@@ -124,7 +127,7 @@
   // ---------- Page ----------
 
   const pantryBar = () => {
-    const count = S.data.pantry.length;
+    const count = shown().length;
     return h`
       <div class="mls-planbar">
         <div class="mls-find">
@@ -209,7 +212,7 @@
           actions: btn("Try again", { size: "sm", icon: "refresh-cw", href: A.hrefFor("pantry", { state: "ready" }) })
         })
       );
-    if (state === "empty" || !S.data.pantry.length)
+    if (state === "empty" || !shown().length)
       return A.page(
         "pantry",
         empty({
@@ -218,7 +221,7 @@
           action: h`
             ${btn("Add item", { variant: "primary", icon: "plus", href: A.hrefFor("pantry/add") })}
             ${later() ? btn("Photograph the fridge", { icon: "camera", href: A.hrefFor("pantry/photo"), disabled: aiOff() }) : ""}
-            ${btn("Paste a receipt", { icon: "receipt", href: A.hrefFor("list/receipt"), disabled: aiOff() })}`
+            ${later() ? btn("Paste a receipt", { icon: "receipt", href: A.hrefFor("list/receipt"), disabled: aiOff() }) : ""}`
         })
       );
 
@@ -366,7 +369,6 @@
               : h`<div class="mls-dropzone">
                   ${A.icon("refrigerator", 28)}
                   ${btn("Choose a photo", { variant: "primary", icon: "camera", action: "pantry-photo-read", disabled: aiOff() })}
-                  ${caption("One shelf at a time reads best.")}
                 </div>`
           }
         </div>`,

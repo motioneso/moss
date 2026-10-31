@@ -134,7 +134,7 @@
               ["Fat", `${g.fat} g`]
             ].map(([k, v]) => h`<div class="mls-row mls-row--between"><dt class="jds-caption">${k}</dt><dd class="mls-num">${v}</dd></div>`)}
           </dl>
-          ${btn("Change targets", { variant: "link", size: "sm", href: A.hrefFor("household/member/m-ben") })}
+          ${btn("Change targets", { variant: "link", size: "sm", href: A.hrefFor("household/member/m-rowan") })}
         </section>
       </aside>`;
   };

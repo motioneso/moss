@@ -9,13 +9,13 @@
   const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const COMMON_MEALS = ["Breakfast", "Lunch", "Dinner", "Snack"];
 
-  S.setup = { mode: "household", names: ["Ben", "Maya"] };
+  S.setup = { mode: "household", names: ["Rowan", "Maya"] };
   S.ruleOpen = null;
   S.memberDraft = null;
   S.memberUndo = null;
   S.learned = structuredClone(F.later.learned);
   S.importReading = false;
-  S.importFor = ["m-ben"];
+  S.importFor = ["m-rowan"];
   S.kitchen = { ...F.later.kitchen, joined: false, copy: ["pi1", "pi2", "pi6"] };
   S.inviteStep = "ask";
 
@@ -134,7 +134,7 @@
                 )}
                 ${
                   r.rule === "solo"
-                    ? h`<div class="mls-stack mls-stack--tiny">
+                    ? h`<div class="mls-stack mls-stack--snug">
                         ${eyebrow("Solo on")}
                         <div class="mls-chips" role="group" aria-label="Solo days">
                           ${WEEKDAYS.map((d) => chip(d, r.soloDays.includes(d), { action: "hh-rule-day", data: { slot: r.slot, day: d } }))}
@@ -458,7 +458,7 @@
     if (S.inviteStep === "copy") {
       const mine = S.data.pantry.filter((p) => p.section !== "Leftovers");
       return dialog({
-        title: "Join Ben's Kitchen",
+        title: "Join Rowan's Kitchen",
         desc: "Your own Kitchen is put away. Pick what to bring.",
         wide: true,
         body: h`
@@ -477,7 +477,7 @@
       });
     }
     return dialog({
-      title: "Ben invited you to share their Kitchen",
+      title: "Rowan invited you to share their Kitchen",
       desc: "Plans, the Pantry and the Shopping list become shared.",
       foot: h`${btn("Decline", { action: "hh-invite-decline" })}${btn("Accept", { variant: "primary", action: "hh-invite-accept" })}`
     });
@@ -485,7 +485,7 @@
 
   const leaveDialog = () =>
     dialog({
-      title: "Leave Ben's Kitchen?",
+      title: "Leave Rowan's Kitchen?",
       desc: "Your own Kitchen comes back as you left it.",
       foot: h`${btn("Cancel", { action: "close-dialog" })}${btn("Leave", { variant: "danger", icon: "log-out", action: "hh-leave" })}`
     });
@@ -595,7 +595,7 @@
         return;
       }
       S.data.members = names.map((name, i) => ({
-        id: i === 0 ? "m-ben" : `m-${Date.now()}-${i}`,
+        id: i === 0 ? "m-rowan" : `m-${Date.now()}-${i}`,
         name,
         isSelf: i === 0,
         pattern: ["Breakfast", "Lunch", "Dinner"],
@@ -734,7 +734,7 @@
     },
     "hh-invite-join": () => {
       S.kitchen.joined = true;
-      A.toast("You joined Ben's Kitchen.", { icon: "users" });
+      A.toast("You joined Rowan's Kitchen.", { icon: "users" });
       A.go("household");
     },
     "hh-leave": () => {

@@ -7,8 +7,8 @@
 
   const members = [
     {
-      id: "m-ben",
-      name: "Ben",
+      id: "m-rowan",
+      name: "Rowan",
       isSelf: true,
       pattern: ["Breakfast", "Lunch", "Dinner"],
       restrictions: ["Shellfish"],
@@ -380,8 +380,8 @@
   const textMeal = (id, slot, text, eaters) =>
     Object.assign(meal(id, slot, null, eaters), { kind: "text", text });
 
-  const BOTH = ["m-ben", "m-maya"];
-  const BEN = ["m-ben"];
+  const BOTH = ["m-rowan", "m-maya"];
+  const ROWAN = ["m-rowan"];
   const MAYA = ["m-maya"];
 
   const days = [
@@ -390,15 +390,15 @@
       cookLimit: null,
       lunchOverride: null,
       meals: [
-        meal("p1", "Breakfast", "r-oats", BEN, { cooked: true, fit: fit([["m-ben", 420, 440]]) }),
-        meal("p2", "Lunch", "r-burrito", BEN, { cooked: true, fit: fit([["m-ben", 640, 660]]) }),
+        meal("p1", "Breakfast", "r-oats", ROWAN, { cooked: true, fit: fit([["m-rowan", 420, 440]]) }),
+        meal("p2", "Lunch", "r-burrito", ROWAN, { cooked: true, fit: fit([["m-rowan", 640, 660]]) }),
         meal("p3", "Lunch", "r-halloumi", MAYA, { cooked: true, fit: fit([["m-maya", 560, 630]]) }),
         meal("p4", "Dinner", "r-traybake", BOTH, {
           locked: true,
           cooked: true,
           favouriteOf: "m-maya",
           fit: fit([
-            ["m-ben", 860, 880],
+            ["m-rowan", 860, 880],
             ["m-maya", 690, 720]
           ])
         }),
@@ -410,14 +410,14 @@
       cookLimit: null,
       lunchOverride: null,
       meals: [
-        meal("p6", "Breakfast", "r-oats", BEN, { cooked: true, fit: fit([["m-ben", 420, 440]]) }),
-        meal("p7", "Lunch", "r-burrito", BEN, { cooked: true, fit: fit([["m-ben", 640, 660]]) }),
+        meal("p6", "Breakfast", "r-oats", ROWAN, { cooked: true, fit: fit([["m-rowan", 420, 440]]) }),
+        meal("p7", "Lunch", "r-burrito", ROWAN, { cooked: true, fit: fit([["m-rowan", 640, 660]]) }),
         meal("p8", "Lunch", "r-halloumi", MAYA, { cooked: true, fit: fit([["m-maya", 560, 630]]) }),
         meal("p9", "Dinner", "r-tacos", BOTH, {
           cooked: true,
-          favouriteOf: "m-ben",
+          favouriteOf: "m-rowan",
           fit: fit([
-            ["m-ben", 910, 880],
+            ["m-rowan", 910, 880],
             ["m-maya", 640, 720]
           ])
         }),
@@ -429,12 +429,12 @@
       cookLimit: null,
       lunchOverride: null,
       meals: [
-        meal("p11", "Breakfast", "r-oats", BEN, { cooked: true, fit: fit([["m-ben", 420, 440]]) }),
-        meal("p12", "Lunch", "r-burrito", BEN, { fit: fit([["m-ben", 640, 660]]) }),
+        meal("p11", "Breakfast", "r-oats", ROWAN, { cooked: true, fit: fit([["m-rowan", 420, 440]]) }),
+        meal("p12", "Lunch", "r-burrito", ROWAN, { fit: fit([["m-rowan", 640, 660]]) }),
         meal("p13", "Lunch", "r-farro", MAYA, { fit: fit([["m-maya", 540, 630]]) }),
         meal("p14", "Dinner", "r-salmon", BOTH, {
           fit: fit([
-            ["m-ben", 820, 880],
+            ["m-rowan", 820, 880],
             ["m-maya", 610, 720]
           ])
         }),
@@ -446,12 +446,12 @@
       cookLimit: 30,
       lunchOverride: null,
       meals: [
-        meal("p16", "Breakfast", "r-oats", BEN, { fit: fit([["m-ben", 420, 440]]) }),
-        meal("p17", "Lunch", "r-soup", BEN, { fit: fit([["m-ben", 620, 660]]) }),
+        meal("p16", "Breakfast", "r-oats", ROWAN, { fit: fit([["m-rowan", 420, 440]]) }),
+        meal("p17", "Lunch", "r-soup", ROWAN, { fit: fit([["m-rowan", 620, 660]]) }),
         meal("p18", "Lunch", "r-farro", MAYA, { fit: fit([["m-maya", 540, 630]]) }),
         meal("p19", "Dinner", "r-stroganoff", BOTH, {
           fit: fit([
-            ["m-ben", 840, 880],
+            ["m-rowan", 840, 880],
             ["m-maya", 620, 720]
           ])
         }),
@@ -463,8 +463,8 @@
       cookLimit: null,
       lunchOverride: null,
       meals: [
-        meal("p21", "Breakfast", "r-oats", BEN, { fit: fit([["m-ben", 420, 440]]) }),
-        meal("p22", "Lunch", "r-soup", BEN, { fit: fit([["m-ben", 620, 660]]) }),
+        meal("p21", "Breakfast", "r-oats", ROWAN, { fit: fit([["m-rowan", 420, 440]]) }),
+        meal("p22", "Lunch", "r-soup", ROWAN, { fit: fit([["m-rowan", 620, 660]]) }),
         meal("p23", "Lunch", "r-halloumi", MAYA, { fit: fit([["m-maya", 560, 630]]) }),
         textMeal("p24", "Dinner", "Eating out", BOTH),
         meal("p25", "Post-gym", "r-yoghurt", MAYA, { fit: fit([["m-maya", 310, 450]]) })
@@ -475,16 +475,16 @@
       cookLimit: null,
       lunchOverride: "shared",
       meals: [
-        meal("p26", "Breakfast", "r-huevos", BEN, { fit: fit([["m-ben", 560, 440]]) }),
+        meal("p26", "Breakfast", "r-huevos", ROWAN, { fit: fit([["m-rowan", 560, 440]]) }),
         meal("p27", "Lunch", "r-flatbread", BOTH, {
           fit: fit([
-            ["m-ben", 700, 660],
+            ["m-rowan", 700, 660],
             ["m-maya", 600, 630]
           ])
         }),
         meal("p28", "Dinner", "r-curry", BOTH, {
           fit: fit([
-            ["m-ben", 780, 880],
+            ["m-rowan", 780, 880],
             ["m-maya", 580, 720]
           ])
         }),
@@ -496,14 +496,14 @@
       cookLimit: null,
       lunchOverride: "shared",
       meals: [
-        meal("p30", "Breakfast", "r-pancakes", BEN, {
-          favouriteOf: "m-ben",
-          fit: fit([["m-ben", 610, 440]])
+        meal("p30", "Breakfast", "r-pancakes", ROWAN, {
+          favouriteOf: "m-rowan",
+          fit: fit([["m-rowan", 610, 440]])
         }),
         textMeal("p31", "Lunch", "Leftovers", BOTH),
         meal("p32", "Dinner", "r-roast", BOTH, {
           fit: fit([
-            ["m-ben", 880, 880],
+            ["m-rowan", 880, 880],
             ["m-maya", 700, 720]
           ])
         }),
@@ -534,7 +534,7 @@
     { id: "pi2", name: "Rolled oats", qty: null, unit: "", section: "Pantry", source: "manual", updated: "last week" },
     { id: "pi3", name: "Eggs", qty: 9, unit: "", section: "Dairy and eggs", source: "bought", updated: "2 days ago" },
     { id: "pi4", name: "Milk", qty: 0.5, unit: "gal", section: "Dairy and eggs", source: "bought", updated: "2 days ago" },
-    { id: "pi5", name: "Black beans", qty: 3, unit: "can", section: "Pantry", source: "receipt", updated: "Sunday" },
+    { id: "pi5", name: "Black beans", qty: 3, unit: "can", section: "Pantry", source: "bought", updated: "Sunday" },
     { id: "pi6", name: "Olive oil", qty: null, unit: "", section: "Pantry", source: "manual", updated: "last week" },
     { id: "pi7", name: "Garlic", qty: 1, unit: "head", section: "Produce", source: "bought", updated: "2 days ago" },
     { id: "pi8", name: "Onions", qty: 2, unit: "", section: "Produce", source: "bought", updated: "2 days ago" },
@@ -631,7 +631,7 @@ SUBTOTAL            22.50`;
   ];
 
   const favourites = {
-    "m-ben": ["r-tacos", "r-pancakes"],
+    "m-rowan": ["r-tacos", "r-pancakes"],
     "m-maya": ["r-traybake", "r-farro"]
   };
 
@@ -664,7 +664,7 @@ SUBTOTAL            22.50`;
       { name: "Greek yoghurt", every: "Weekly" }
     ],
     learned: {
-      "m-ben": [
+      "m-rowan": [
         "Rates Mexican dinners highly (4.6 stars over 9 meals).",
         "Skips breakfasts that take more than 10 minutes on weekdays.",
         "Rated two fish curries 2 stars. Moss now avoids coconut fish curries."
@@ -676,7 +676,7 @@ SUBTOTAL            22.50`;
       ]
     },
     budget: { weekly: 140, estimate: 126 },
-    kitchen: { owner: "Ben", members: ["Ben", "Maya"], invitePending: "maya@example.com" }
+    kitchen: { owner: "Rowan", members: ["Rowan", "Maya"], invitePending: "maya@example.com" }
   };
 
   const data = {
@@ -701,7 +701,7 @@ SUBTOTAL            22.50`;
 
   // The "long text" review state stretches every name, line and note and inflates the numbers,
   // so wrapping and truncation show on every screen. It applies at load, so switching it reloads.
-  const LONG_NAMES = { "m-ben": "Benedict Alexander", "m-maya": "Maya-Josephine Okonkwo-Whitfield" };
+  const LONG_NAMES = { "m-rowan": "Rowan Alexander-Fitzgerald", "m-maya": "Maya-Josephine Okonkwo-Whitfield" };
   const TAILS = [
     " with charred spring onions, smoked chilli butter and toasted seeds",
     " with slow-roasted garlic, preserved lemon and a crisp herb crumb",
@@ -772,7 +772,7 @@ SUBTOTAL            22.50`;
     for (const r of d.later.restock) r.name += " (the big bag from the roaster on the corner)";
     d.later.budget = { weekly: 12400, estimate: 11850 };
     d.later.kitchen = {
-      owner: LONG_NAMES["m-ben"],
+      owner: LONG_NAMES["m-rowan"],
       members: Object.values(LONG_NAMES),
       invitePending: "maya-josephine.okonkwo-whitfield@university-hospital.example.org"
     };

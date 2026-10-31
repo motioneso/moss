@@ -185,13 +185,17 @@
     const budget = F.later.budget;
     return h`
       <aside class="mls-rail">
-        <section class="mls-stack mls-stack--tight">
-          ${eyebrow("Shopped without the list")}
-          <div class="mls-stack mls-stack--tight">
-            ${btn("Paste a receipt", { icon: "receipt", href: A.hrefFor("list/receipt"), disabled: aiOff(), block: true })}
-            <span class="mls-row">${btn("Photograph a receipt", { icon: "camera", disabled: true, size: "sm" })}${badge("Coming later", "neutral")}</span>
-          </div>
-        </section>
+        ${
+          A.phase() >= 3
+            ? h`<section class="mls-stack mls-stack--tight">
+                ${eyebrow("Shopped without the list")}
+                <div class="mls-stack mls-stack--tight">
+                  ${btn("Paste a receipt", { icon: "receipt", href: A.hrefFor("list/receipt"), disabled: aiOff(), block: true })}
+                  <span class="mls-row">${btn("Photograph a receipt", { icon: "camera", disabled: true, size: "sm" })}${badge("Coming later", "neutral")}</span>
+                </div>
+              </section>`
+            : ""
+        }
         <section class="mls-stack mls-stack--tight">
           ${eyebrow("Staples on the list")}
           ${
@@ -233,7 +237,7 @@
         empty({
           icon: "shopping-basket",
           title: "Nothing to buy",
-          action: h`${btn("Add item", { variant: "primary", icon: "plus", href: A.hrefFor("list/add") })}${btn("Paste a receipt", { icon: "receipt", href: A.hrefFor("list/receipt"), disabled: aiOff() })}`
+          action: h`${btn("Add item", { variant: "primary", icon: "plus", href: A.hrefFor("list/add") })}${A.phase() >= 3 ? btn("Paste a receipt", { icon: "receipt", href: A.hrefFor("list/receipt"), disabled: aiOff() }) : ""}`
         })
       );
 
@@ -389,11 +393,12 @@
     dialog: receiptDialog,
     sample: "list/receipt",
     label: "Shopping list: paste a receipt",
+    phase: 3,
     enter: () => {
       S.receiptReading = false;
     }
   });
-  A.route("list/receipt/review", { page: base, dialog: receiptReviewDialog, sample: "list/receipt/review", label: "Shopping list: check a receipt" });
+  A.route("list/receipt/review", { page: base, dialog: receiptReviewDialog, sample: "list/receipt/review", label: "Shopping list: check a receipt", phase: 3 });
 
   // ---------- Actions ----------
 

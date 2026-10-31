@@ -314,10 +314,14 @@
                 : caption("Nothing in this recipe is in the Pantry.")
             }
           </div>
-          <div class="mls-stack mls-stack--tight">
-            ${toggle("Save leftovers to the Pantry", Boolean(left), { action: "rc-leftovers" })}
-            ${left ? h`<span class="mls-row">${stepper(left, { label: "Leftover portions", unit: "portions", action: "rc-leftovers-step", data: { meal: meal.id }, min: 1 })}${caption(left > 1 ? "portions" : "portion")}</span>` : ""}
-          </div>
+          ${
+            A.phase() >= 3
+              ? h`<div class="mls-stack mls-stack--tight">
+                  ${toggle("Save leftovers to the Pantry", Boolean(left), { action: "rc-leftovers" })}
+                  ${left ? h`<span class="mls-row">${stepper(left, { label: "Leftover portions", unit: "portions", action: "rc-leftovers-step", data: { meal: meal.id }, min: 1 })}${caption(left > 1 ? "portions" : "portion")}</span>` : ""}
+                </div>`
+              : ""
+          }
           ${
             myFit
               ? check(`Log my portion, ${A.kcal(myFit.kcal)}`, S.logPortion, { action: "rc-log" })
@@ -433,7 +437,7 @@
         if (row.after != null) row.item.qty = Math.round(row.after * 100) / 100;
         row.item.updated = "just now";
       });
-      const left = S.leftovers[meal.id];
+      const left = A.phase() >= 3 ? S.leftovers[meal.id] : 0;
       if (left)
         S.data.pantry.push({ id: `pi-left-${meal.id}`, name: r.title, qty: left, unit: left > 1 ? "portions" : "portion", section: "Leftovers", source: "leftover", updated: "just now" });
       meal.cooked = true;

@@ -165,3 +165,34 @@ for (const width of WIDTHS) {
     });
   }
 }
+
+// The one-step undo and the generation controls are behaviour, not layout, so they are clicked.
+test("Meals prototype tick undo, Stop and Retry work", async ({ page }) => {
+  test.setTimeout(60_000);
+  const problems: string[] = [];
+  page.on("pageerror", (e) => problems.push(e.message));
+
+  await page.goto(`${PROTOTYPE}#/list`);
+  const tick = page.locator("li.mls-line:not(.mls-line--done) input[type=checkbox]").first();
+  const id = await tick.getAttribute("id");
+
+  // The whole row ticks, so the name is clicked rather than the hidden box.
+  await page.locator(`label.mls-line__body[for="${id}"]`).click();
+  await expect(page.locator(`#${id}`)).toBeChecked();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(`#${id}`)).not.toBeChecked();
+
+  // The plan redraws as each day writes, so the button never settles for a pointer click.
+  await page.goto(`${PROTOTYPE}#/plan/writing`);
+  await page.getByRole("button", { name: "Stop" }).dispatchEvent("click");
+  await expect(page.getByText("Stopped. Finished days are kept.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Stop" })).toHaveCount(0);
+
+  await page.goto(`${PROTOTYPE}#/plan/failed`);
+  const retryDay = page.locator('[data-action="plan-retry-day"]');
+  await expect(retryDay).toHaveCount(1);
+  await retryDay.click();
+  await expect(retryDay).toHaveCount(0);
+
+  expect(problems).toEqual([]);
+});
