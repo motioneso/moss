@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { sql } from "kysely";
 import { assertDataContextDb, isUuid, type DataContextDb } from "@moss/db";
+import type { ActionAuditInputSummary } from "@moss/shared";
 
 export interface CreateModulePageConfirmationInput {
   readonly moduleId: string;
@@ -80,4 +81,47 @@ export async function consumeModulePageConfirmation(
     .returning("id")
     .executeTakeFirst();
   return row !== undefined;
+}
+
+export interface RecordModulePageActivityInput {
+  readonly moduleId: string;
+  readonly toolName: string;
+  readonly actionFamilyId: string | null;
+  readonly actionKind: "write" | "outbound" | "destructive";
+  /** auto: ran on the click; confirmed: ran after the host dialog. */
+  readonly approvalMode: "auto" | "confirmed";
+  readonly outcome: "success" | "failed";
+  readonly errorClass: string | null;
+  /** Key names only, never values. */
+  readonly inputSummary: ActionAuditInputSummary;
+  readonly durationMs: number;
+  readonly requestId: string | null;
+}
+
+/** Record one executed page write on the activity log. The owner is the transaction actor. */
+export async function recordModulePageActivity(
+  scopedDb: DataContextDb,
+  input: RecordModulePageActivityInput
+): Promise<void> {
+  assertDataContextDb(scopedDb);
+  await scopedDb.db
+    .insertInto("app.moss_action_audit_log")
+    .values({
+      id: randomUUID(),
+      owner_user_id: sql<string>`app.current_actor_user_id()`,
+      tool_module_id: input.moduleId,
+      tool_name: input.toolName,
+      action_family_id: input.actionFamilyId,
+      action_kind: input.actionKind,
+      approval_mode: input.approvalMode,
+      outcome: input.outcome,
+      error_class: input.errorClass,
+      request_id: input.requestId,
+      chat_session_id: null,
+      turn_id: null,
+      source_surface: "module_page",
+      input_summary: input.inputSummary,
+      duration_ms: input.durationMs
+    })
+    .execute();
 }

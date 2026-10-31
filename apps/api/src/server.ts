@@ -100,6 +100,7 @@ import {
   reconcileExternalModuleUserJobs,
   registerExternalModuleJobRoutes
 } from "./external-module-jobs.js";
+import { registerModuleToolInvokeRoute } from "./external-module-tool-invoke.js";
 import {
   createActiveExternalModulesResolverForApi,
   createInstalledExternalModulesResolverForApi,
@@ -527,6 +528,8 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
           requestId: `external-tools:${randomUUID()}`
         })
     );
+
+    registerModuleToolInvokeRoute(server, { auth: authRuntime, resolveActiveModules, dataContext });
 
     // The integrations family key loads per request from env or the master key
     // store (#2312) — never eagerly here, so a missing key degrades the tools

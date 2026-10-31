@@ -60,6 +60,8 @@ export const CHAT_BLOCKED_PATH_RULES: readonly ChatBlockedPathRule[] = [
   { pattern: /^\/api\/mcp(\/|$)/, category: "self_authority" },
   { pattern: /^\/internal(\/|$)/, category: "self_authority" },
   { pattern: /^\/api\/ai\/assistant-tools\/[^/]+\/invoke$/, category: "self_authority" },
+  // #3723: a person's click on a module page. Moss runs module tools through its own gateway.
+  { pattern: /^\/api\/modules\/[^/]+\/tools\/[^/]+\/invoke$/, category: "self_authority" },
   {
     pattern: /^\/api\/(ai\/assistant-actions|chat\/action-requests)\/[^/]+\/resolve$/,
     category: "self_authority"

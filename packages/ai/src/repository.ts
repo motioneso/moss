@@ -253,7 +253,7 @@ export interface InsertAuditLogInput {
   readonly chatSessionId: string | null;
   /** #2956: the chat turn that ran this tool. Set by chat turns only. */
   readonly turnId?: string;
-  readonly sourceSurface: "chat" | "proactive" | "scheduled" | "unknown";
+  readonly sourceSurface: "chat" | "proactive" | "scheduled" | "unknown" | "module_page";
   readonly inputSummary: ActionAuditInputSummary | null;
   readonly durationMs: number | null;
 }
