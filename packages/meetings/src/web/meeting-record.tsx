@@ -61,12 +61,15 @@ export function MeetingRecord({
             ? "This meeting is unavailable"
             : "Couldn’t load this meeting"
         }
-      >
-        <Button onClick={() => void record.refetch()}>Try again</Button>
-        <Button variant="link" onClick={onBack}>
-          Meetings
-        </Button>
-      </EmptyState>
+        actions={
+          <>
+            <Button onClick={() => void record.refetch()}>Try again</Button>
+            <Button variant="link" onClick={onBack}>
+              Meetings
+            </Button>
+          </>
+        }
+      />
     );
   if (!record.data) return null;
   return (

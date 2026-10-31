@@ -63,7 +63,7 @@ export function ProjectError({
     </div>
   ) : (
     <div role="alert">
-      <EmptyState title={title}>{action}</EmptyState>
+      <EmptyState title={title} actions={action} />
     </div>
   );
 }
@@ -114,17 +114,18 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
         <EmptyState
           title="No projects yet."
           description="Start with an idea. Your project and its conversation will be saved here."
-        >
-          <ButtonLink
-            href="/workshop/new"
-            aria-disabled={!canMutate}
-            onClick={(event) => {
-              if (!canMutate) event.preventDefault();
-            }}
-          >
-            Start a project
-          </ButtonLink>
-        </EmptyState>
+          actions={
+            <ButtonLink
+              href="/workshop/new"
+              aria-disabled={!canMutate}
+              onClick={(event) => {
+                if (!canMutate) event.preventDefault();
+              }}
+            >
+              Start a project
+            </ButtonLink>
+          }
+        />
       ) : null}
       {projects.length > 0 ? (
         <RowIndex>
