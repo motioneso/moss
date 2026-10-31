@@ -34,7 +34,10 @@ import type {
 import type { ExternalModuleQueueDeclaration } from "@moss/module-sdk";
 import type { CreateNotificationInput } from "@moss/notifications";
 
-import { createVerifiedExternalModuleInvoker } from "./external-module-invoke.js";
+import {
+  createVerifiedExternalModuleInvoker,
+  type VerifiedExternalModuleInvokerDeps
+} from "./external-module-invoke.js";
 
 // ---------------------------------------------------------------------------
 // #1306 Task 22: a host-only, opt-in fetch bypass for UAT/e2e runs.
@@ -174,6 +177,8 @@ export interface ExternalModuleJobHandlerDeps {
   // existing test callers keep compiling, and an unwired resolver simply means the module
   // gets no answer rather than a wrong one.
   readonly resolveLocalTimezone?: (actorUserId: string) => Promise<string | null>;
+  // ctx.jobs.enqueue (#3722): passed straight through to the shared trust gate.
+  readonly createEnqueuePort?: VerifiedExternalModuleInvokerDeps["createEnqueuePort"];
 }
 
 export function createExternalModuleJobHandler(
@@ -192,6 +197,7 @@ export function createExternalModuleJobHandler(
     readAttachmentText: deps.readAttachmentText,
     logger: deps.logger,
     resolveLocalTimezone: deps.resolveLocalTimezone,
+    createEnqueuePort: deps.createEnqueuePort,
     ...resolveE2eFetchOverride()
   });
   return async (job) => {
