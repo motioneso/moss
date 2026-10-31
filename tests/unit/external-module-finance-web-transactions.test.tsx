@@ -174,9 +174,10 @@ describe("Transactions screen (#3176)", () => {
     const out = text(await render());
     expect(out).toContain("Needs a look (3)");
     expect(out).toContain("Confirm all 3");
-    expect(out).toContain("Predicted");
-    expect(out).toContain("Review needed");
-    expect(out).toContain("Always for this merchant");
+    expect(out).not.toContain("Predicted");
+    expect(out).not.toContain("Review needed");
+    expect(out).not.toContain("Always for this merchant");
+    expect(out).toContain("Change");
     expect(out).toContain("+$4,000.00");
     expect(out).toContain("Checking");
   });
@@ -357,6 +358,10 @@ describe("Transactions screen (#3176)", () => {
           node.type === "input" &&
           node.props["aria-label"] === "Always use this category for Payee a"
       );
+    expect(switches()).toHaveLength(0);
+    await act(async () => {
+      button(renderer, "Change").props.onClick();
+    });
     expect(switches()[0]!.props.checked).toBe(false);
     await act(async () => {
       button(renderer, "Confirm").props.onClick();
@@ -366,6 +371,9 @@ describe("Transactions screen (#3176)", () => {
     fakeFetch({ ...base, transactions: rows, needsLookCount: 2 });
     __resetStoreForTests();
     const second = await render();
+    await act(async () => {
+      button(second, "Change").props.onClick();
+    });
     await act(async () => {
       second.root
         .findAll(

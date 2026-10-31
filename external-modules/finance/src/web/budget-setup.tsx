@@ -11,7 +11,6 @@ import {
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import { invalidateQueries } from "./store";
-import { navigate } from "./router";
 
 /** Exact whole cents of any size in the browser's own digits, grouping and decimal mark. */
 export function recordedAmount(cents: string, locale?: string): string {
@@ -72,11 +71,7 @@ export function BudgetSetup(props: {
       <p className="jds-hint">You can't change the budget currency later.</p>
       {props.accountCurrencies.length > 0 ? (
         <p>Account currencies: {props.accountCurrencies.join(", ")}</p>
-      ) : (
-        <Button variant="secondary" onClick={() => navigate("/accounts")}>
-          Add an account
-        </Button>
-      )}
+      ) : null}
       <label className="fnm-block fnm-block--tight">
         Budget currency
         <Select
@@ -154,7 +149,7 @@ export function BudgetSetup(props: {
           }
           onClick={() => void save()}
         >
-          {busy ? "Saving…" : "Review currency choice"}
+          {busy ? "Saving…" : "Set currency"}
         </Button>
         <Button variant="secondary" disabled={busy} onClick={invalidateQueries}>
           Refresh

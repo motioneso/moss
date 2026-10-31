@@ -178,7 +178,7 @@ export async function exerciseFirstBudget(
 ) {
   await page.goto(`${base}/m/finance`);
   await page.getByLabel("Budget currency", { exact: true }).selectOption("USD");
-  await page.getByRole("button", { name: "Review currency choice", exact: true }).click();
+  await page.getByRole("button", { name: "Set currency", exact: true }).click();
   const confirm = page.getByRole("dialog", { name: "Confirm Finance action", exact: true });
   await confirm.getByRole("button", { name: "Confirm action", exact: true }).click();
   await page

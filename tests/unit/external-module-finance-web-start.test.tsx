@@ -30,9 +30,9 @@ describe("Getting started (#3178)", () => {
       isAdmin: false
     });
     const out = text(renderer);
-    expect(out).toContain("1. Connect a bank");
-    expect(out).toContain("2. Moss sorts your spending");
-    expect(out).toContain("3. Build your budget together");
+    expect(out).toContain("Connect a bank");
+    expect(out).toContain("Moss sorts your spending");
+    expect(out).toContain("Build your budget together");
     const button = renderer.root.findAllByType("button")[0]!;
     expect(JSON.stringify(button.props.children)).toContain("Connect a bank");
     act(() => button.props.onClick());
@@ -51,7 +51,7 @@ describe("Getting started (#3178)", () => {
     const { renderer } = render({ keysConfigured: false, hasBank: false, isAdmin: false });
     expect(text(renderer)).toContain("Waiting on your admin");
     expect(renderer.root.findAllByType("a").map((a) => a.props.href)).toEqual([
-      "/m/finance/accounts"
+      "/m/finance/accounts?add=account"
     ]);
     expect(text(renderer)).toContain("No bank keys are needed.");
     expect(renderer.root.findAllByType("button")).toHaveLength(0);
