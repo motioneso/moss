@@ -82,6 +82,37 @@ describe("NotesContextRetriever", () => {
     }
   });
 
+  it("holds no database transaction while the notes search runs", async () => {
+    let open = 0;
+    const trackingContext: Pick<DataContextRunner, "withDataContext"> = {
+      withDataContext: async (_ctx, cb) => {
+        open += 1;
+        try {
+          return await cb({} as never);
+        } finally {
+          open -= 1;
+        }
+      }
+    };
+    let openDuringSearch = -1;
+    const notesRecall = {
+      recall: vi.fn().mockImplementation(async () => {
+        openDuringSearch = open;
+        return { snippets: [] };
+      })
+    };
+    const retriever = new NotesContextRetriever({
+      dataContext: trackingContext,
+      notesRecall,
+      settingsRepo: settingsRepo(true)
+    });
+
+    await retriever.retrieveWithItems(BASE_INPUT);
+
+    expect(notesRecall.recall).toHaveBeenCalledOnce();
+    expect(openDuringSearch).toBe(0);
+  });
+
   it("returns an empty result when the port throws", async () => {
     const notesRecall = { recall: vi.fn().mockRejectedValue(new Error("boom")) };
     const retriever = new NotesContextRetriever({

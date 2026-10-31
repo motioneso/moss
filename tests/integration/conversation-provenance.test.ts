@@ -121,8 +121,13 @@ function sqlNotesRetriever() {
   return new NotesContextRetriever({
     dataContext: runner,
     notesRecall: {
-      recall: async (db, _owner, query, options) => ({
-        snippets: (await retriever.retrieve(db, query, options.limit, "notes")).map((chunk) => ({
+      recall: async (dataContext, owner, query, options) => ({
+        snippets: (
+          await dataContext.withDataContext(
+            { actorUserId: owner, requestId: "test:notes-recall" },
+            (db) => retriever.retrieve(db, query, options.limit, "notes")
+          )
+        ).map((chunk) => ({
           sourcePath: chunk.sourcePath,
           updatedAt: chunk.updatedAt,
           score: chunk.similarity,

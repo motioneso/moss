@@ -15,7 +15,21 @@ export class MemoryRetriever {
     limit: number = 10,
     sourceKind: string = "vault"
   ): Promise<RetrievedChunk[]> {
-    const queryEmbedding = await this.embeddingProvider.embedQuery(query);
+    const queryEmbedding = await this.embedQuery(query);
+    return this.searchByEmbedding(scopedDb, queryEmbedding, limit, sourceKind);
+  }
+
+  /** Embeds without a database handle, so callers can embed outside any transaction. */
+  embedQuery(query: string): Promise<number[]> {
+    return this.embeddingProvider.embedQuery(query);
+  }
+
+  searchByEmbedding(
+    scopedDb: DataContextDb,
+    queryEmbedding: number[],
+    limit: number = 10,
+    sourceKind: string = "vault"
+  ): Promise<RetrievedChunk[]> {
     return this.repository.vectorSearch(scopedDb, queryEmbedding, limit, sourceKind);
   }
 

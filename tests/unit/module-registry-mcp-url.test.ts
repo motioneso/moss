@@ -88,7 +88,7 @@ describe("module-registry chat MCP URL wiring", () => {
     const chatRegistration = getBuiltInModuleRegistrations().find(
       (registration) => registration.manifest.id === "chat"
     );
-    const passiveMemoryRecall = { recall: vi.fn() };
+    const passiveMemoryRecall = { recallWithDataContext: vi.fn() };
 
     chatRegistration?.registerRoutes?.({} as never, {
       boss: {} as never,

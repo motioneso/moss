@@ -1,4 +1,4 @@
-import { assertDataContextDb, type DataContextDb } from "@moss/db";
+import { assertDataContextDb, type DataContextRunner } from "@moss/db";
 import { RuntimeConfigResolver } from "@moss/settings";
 import {
   createEmbeddingProvider,
@@ -20,8 +20,12 @@ export interface NotesRecallSnippet {
 }
 
 export interface NotesRecallPort {
+  /**
+   * Opens its own short transactions. The query embedding runs between them, so no
+   * connection or row lock is held while the embedding provider is slow.
+   */
   recall(
-    scopedDb: DataContextDb,
+    dataContext: Pick<DataContextRunner, "withDataContext">,
     ownerUserId: string,
     query: string,
     options: { readonly limit?: number }
@@ -34,8 +38,7 @@ function embeddingConfigCacheKey(config: EmbeddingProviderConfig): string {
   return `${config.kind}:${config.modelId ?? ""}`;
 }
 
-async function getRetriever(scopedDb: DataContextDb): Promise<MemoryRetriever> {
-  const config = await getEmbeddingProviderConfig(new RuntimeConfigResolver(scopedDb));
+function getRetriever(config: EmbeddingProviderConfig): MemoryRetriever {
   const key = embeddingConfigCacheKey(config);
   if (retrieverCache?.key !== key) {
     retrieverCache = {
@@ -53,15 +56,23 @@ async function getRetriever(scopedDb: DataContextDb): Promise<MemoryRetriever> {
 
 export function createNotesRecallPort(): NotesRecallPort {
   return {
-    async recall(scopedDb, _ownerUserId, query, options) {
-      assertDataContextDb(scopedDb);
+    async recall(dataContext, ownerUserId, query, options) {
       const parsedLimit = Number(options.limit);
       const limit = Number.isFinite(parsedLimit)
         ? Math.min(Math.max(Math.trunc(parsedLimit), 1), MAX_LIMIT)
         : DEFAULT_LIMIT;
+      const ctx = { actorUserId: ownerUserId, requestId: "notes:recall" };
 
-      const retriever = await getRetriever(scopedDb);
-      const chunks = await retriever.retrieve(scopedDb, query, limit, NOTES_SOURCE_KIND);
+      const config = await dataContext.withDataContext(ctx, (scopedDb) => {
+        assertDataContextDb(scopedDb);
+        return getEmbeddingProviderConfig(new RuntimeConfigResolver(scopedDb));
+      });
+      const retriever = getRetriever(config);
+      const queryEmbedding = await retriever.embedQuery(query);
+      const chunks = await dataContext.withDataContext(ctx, (scopedDb) => {
+        assertDataContextDb(scopedDb);
+        return retriever.searchByEmbedding(scopedDb, queryEmbedding, limit, NOTES_SOURCE_KIND);
+      });
       return {
         snippets: chunks.map((c) => ({
           sourcePath: c.sourcePath,

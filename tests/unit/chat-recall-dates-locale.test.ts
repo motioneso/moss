@@ -89,7 +89,7 @@ describe("dates the AI reads for recalled context", () => {
       settingsRepo,
       localePreferences: localePreferences(),
       graphRecall: {
-        recall: async () => ({
+        recallWithDataContext: async () => ({
           items: [
             {
               kind: "fact" as const,

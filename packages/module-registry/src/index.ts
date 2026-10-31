@@ -3992,9 +3992,17 @@ export function registerBuiltInApiRoutes(
         }
       : undefined,
     passiveMemoryRecall: {
-      async recall(scopedDb, ownerUserId, query, options) {
-        const provider = await createRuntimeEmbeddingProvider(scopedDb);
-        return new GraphMemoryRecallService(provider).recall(scopedDb, ownerUserId, query, options);
+      async recallWithDataContext(dataContext, ownerUserId, query, options) {
+        const provider = await dataContext.withDataContext(
+          { actorUserId: ownerUserId, requestId: "chat:passive-memory-provider" },
+          (scopedDb) => createRuntimeEmbeddingProvider(scopedDb)
+        );
+        return new GraphMemoryRecallService(provider).recallWithDataContext(
+          dataContext,
+          ownerUserId,
+          query,
+          options
+        );
       }
     },
     notesRecall: createNotesRecallPort(),
