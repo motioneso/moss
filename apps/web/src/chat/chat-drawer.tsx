@@ -141,6 +141,8 @@ export function ChatDrawer(props: ChatDrawerProps) {
   const [pendingUser, setPendingUser] = useState<{
     readonly text: string;
     readonly attachments?: readonly ChatAttachmentDto[];
+    // Saved messages with the same words when the send began; only a newer one is this send.
+    readonly priorMatches: number;
   } | null>(null);
   const [fallbackRecords, setFallbackRecords] = useState<readonly TranscriptRecord[]>([]);
   useEffect(() => {
@@ -153,7 +155,8 @@ export function ChatDrawer(props: ChatDrawerProps) {
     if (
       !props.meetingContext &&
       pendingUser !== null &&
-      props.records.some((r) => r.kind === "user" && r.text === pendingUser.text)
+      props.records.filter((r) => r.kind === "user" && r.text === pendingUser.text).length >
+        pendingUser.priorMatches
     ) {
       setPendingUser(null);
     }
@@ -290,7 +293,11 @@ export function ChatDrawer(props: ChatDrawerProps) {
       setSendError(null);
       setNeedsProvider(false);
       setIsSending(true);
-      setPendingUser({ text: trimmed, attachments });
+      setPendingUser({
+        text: trimmed,
+        attachments,
+        priorMatches: props.records.filter((r) => r.kind === "user" && r.text === trimmed).length
+      });
       const initiatingSurface = props.surface;
       const generation = generationRef.current;
       if (initiatingThreadId !== null && liveThreadId !== initiatingThreadId) {
