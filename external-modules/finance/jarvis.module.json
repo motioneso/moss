@@ -108,7 +108,7 @@
       {
         "id": "finance.upcoming",
         "path": "/upcoming",
-        "description": "Upcoming plans, matches, skips and stops bills; month arrows step months. Without a budget currency it offers Open Budget, not an error. One-off changes/reset use captured review and host confirmation, keep cadence and actuals, and may cross years. Undo review before changing matched/skipped occurrences; reset later changes/reviews before stopping earlier. Match reviews posted rows within seven days of the month, nearest first, never auto-selected. The plan list shows only when plans exist. Record bill entry previews a past expense on an active manual account for a due occurrence, exact balance/debt effects and same-amount duplicates within seven days. Confirmed recording atomically adds one expense and match; statement, date and revision guards apply. Duplicates block recording; use Accounts then Match for separate expenses. Cancel retains input; Check saved bills appears only after stale/uncertain writes. No bank instruction, future entry or automatic retry.",
+        "description": "Upcoming plans, matches, skips and stops bills; month arrows step months. Without a budget currency it offers Open Budget. One-off changes/reset use captured review and host confirmation, keep cadence and actuals, and may cross years. Undo review before changing matched/skipped occurrences; reset later changes/reviews before stopping earlier. Match reviews posted rows within seven days of the month, nearest first, never auto-selected. No plans shows one Add a bill empty state; an empty month says so in one line. Record bill entry previews a past expense on an active manual account for a due occurrence, its balance/debt effect and same-amount duplicates within seven days. Confirmed recording atomically adds one expense and match; statement, date and revision guards apply. Duplicates block recording; use Accounts then Match for separate expenses. Cancel retains input; Check saved bills appears only after stale/uncertain writes. No bank instruction, future entry or automatic retry.",
         "label": "Upcoming bills"
       }
     ],
@@ -120,6 +120,10 @@
       {
         "id": "finance.budget-typing",
         "description": "Envelope and optional pooled flexible budgeting with signed rollover, targets and captured confirmed changes. Card payments offers reviewed per-manual-card cash reserves from this month; existing cards default to full-debt accounting. Funded spending and refunds move category cash; explicit manual transfer pairs consume payment cash. Unfunded debt never creates Ready. Negative payment cash blocks automatic target funding. Closed cards retain visible cash for release. Historical modes stay unchanged; provider-card reserves and disabling enrollment are not supported. No bank payment is sent. Stale or uncertain saves require checking saved records."
+      },
+      {
+        "id": "finance.budget-keyboard-detail",
+        "description": "On Budget, Enter in an Assigned field saves the typed amount and moves to the next category; Shift+Enter moves up and Escape reverts. An amount typed while another save is running waits and is sent once that save shows, unless the read shows a change from elsewhere, which asks to check saved records. Clicking a category name opens its details: this month's assigned, spent and available, its target, and quick amounts (fund target, assigned or spent last month, 3-month average spent) that fill the Assigned field for review. Move money there moves cash between this category and Ready to assign or another category, and covers overspending from Ready to assign by default. Move money waits while typed amounts are unsaved."
       },
       {
         "id": "finance.getting-started",
@@ -162,12 +166,8 @@
         "description": "Amounts use safe integer hundredths and decimal provider rounding. Invalid calendar months are rejected. Transfer inference requires the same currency. A batch of budget assignments validates every category and amount before one SQL commit; a rejected batch changes nothing. SQL chat and queued category edits use captured revisions and one metadata-only batch with activity. Stale, split, linked, foreign or unavailable-category rows refuse without partial edits. Explicit notes stay off activity and job payloads. Same-ID provider-window updates preserve current user categories and notes; changed money requests review. Different-ID pending replacement and concurrent sync pages need separate acceptance. Category Undo restores metadata, reversal activity and the undone mark atomically. Queue acceptance is not proof of persistence; merchant-rule and category writes remain separate."
       },
       {
-        "id": "finance.register-filters",
-        "description": "Transactions can be filtered by account, category, pending or posted status, money in or out, uncategorized rows and possible duplicates. Possible duplicates match account, currency, amount, date and payee; they are suggestions and are never deleted automatically. Phone filters expand on request and show their active count."
-      },
-      {
-        "id": "finance.register-export",
-        "description": "Export loaded rows downloads a CSV of exactly the currently loaded filtered transactions with separate outflow and inflow columns, currency and posting state. The loaded count and total matches make truncation visible. This is not a complete account backup. Complete owned history retains original and inverse transfer correction identifiers."
+        "id": "finance.register-filters-export",
+        "description": "Transactions can be filtered by account, category, pending or posted status, money in or out, uncategorized rows and possible duplicates. Possible duplicates match account, currency, amount, date and payee; they are suggestions and are never deleted automatically. Phone filters expand on request and show their active count. Export loaded rows downloads a CSV of exactly the currently loaded filtered transactions with separate outflow and inflow columns, currency and posting state. The loaded count and total matches make truncation visible. This is not a complete account backup. Complete owned history retains original and inverse transfer correction identifiers."
       },
       {
         "id": "finance.transaction-splits",

@@ -17,7 +17,7 @@ export async function exerciseBills(
   let previousBefore = await read("finance.transactions.query", { month: previousMonth });
   const transactionsBefore = await read("finance.transactions.query", { month });
   await page.goto(`${base}/m/finance/upcoming`);
-  await page.getByRole("heading", { name: "Know what's coming", exact: true }).waitFor();
+  await page.getByText("No bills yet", { exact: true }).waitFor();
   await page.getByRole("button", { name: "Add a bill", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Add a bill", exact: true });
   await dialog.getByLabel("Bill name", { exact: true }).fill("Synthetic market plan");

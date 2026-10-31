@@ -292,6 +292,10 @@ Import from `@moss/ui`. Full option list in `packages/ui/OPTIONS.md`.
   A replacement dialog keeps its newly established focus instead of being overwritten by cleanup.
 - `PeekPanel` is explicitly nonmodal by default. `modal={true}` requires `onClose`, owns the
   `.cal-peek-scrim` and uses the same lifecycle. Give it `aria-label` or `aria-labelledby`.
+  The peek frame (`.cal-peek`, `.cal-peek-scrim`, `.cal-peek__head`, `.cal-peek__x`) is shared
+  CSS in `@moss/ui`, so module peeks render the same frame as Calendar. `PeekCloseButton` draws
+  the shared close cross and is labelled "Close details" unless the caller passes children or
+  an `aria-label`.
 - Responsive hosts may use `useDialogLifecycle({ref, enabled, modal, onClose, initialFocusRef,
 returnFocusRef, dismissOnEscape, backdropRef})`; attach its returned onKeyDown to the focusable
   surface. A backdrop exception must be an aria-hidden, noninteractive scrim, not a content wrapper.
@@ -312,7 +316,8 @@ returnFocusRef, dismissOnEscape, backdropRef})`; attach its returned onKeyDown t
 - Don't render a section that has nothing useful to say (no "No plan yet" panels).
 - Inline, inside a section: one quiet sentence, `role="status"`. Today uses `.cmd-empty` and
   `.agenda-clear` ("Gathering your morning briefing...").
-- Whole page or panel: `<EmptyState>` (`.jds-empty`) with title, optional description and action.
+- Whole page or panel: `<EmptyState>` (`.jds-empty`) with title, optional description, and buttons
+  passed as `actions` (centred, 8px apart, 20px under the text).
 - No fake counts, no generic placeholder cards, no spinners in the middle of a page.
 - Copy is sentence case and reads like the product talking, not documentation. Don't repeat the
   section name already on screen.

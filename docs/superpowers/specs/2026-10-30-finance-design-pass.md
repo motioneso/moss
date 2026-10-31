@@ -31,7 +31,7 @@ with four months of synthetic history.
 | Assigned field keyboard: Enter saves and moves down, Shift+Enter moves up, Escape reverts                                               | YNAB-speed budgeting without a mouse. Saving keeps the typed-amount path, which never asks                   |
 | A category row opens a detail panel: activity this month, target, quick amounts, Move money                                             | YNAB's inspector pattern keeps the table dense while the detail stays one click away                         |
 | Quick amounts fill the Assigned field; the user still presses Enter                                                                     | No new write path. A typed amount already saves through the reviewed assign queue                            |
-| Move money uses the existing `finance.budget.move` tool behind the host confirmation                                                    | The tool exists with no screen. Moves are writes Moss can also make, so they keep the shared confirmation    |
+| Move money uses the existing `finance.budget.move` tool, with the freedom-limit confirmation Assigned already has                       | The tool exists with no screen. Moves are writes Moss can also make, so they keep the shared confirmation    |
 | Transactions: one toolbar (month, search, Filters). Filters open in a disclosure; active filters show as removable chips                | Six always-open selects cost a screen of height for a rare action                                            |
 | Transactions: dense rows (date, payee, category, account, amount). Review controls appear only on rows that need a look                 | Rows that need nothing should read as a ledger                                                               |
 | Selection bar appears only when rows are selected, pinned to the bottom of the list                                                     | An empty bulk bar is noise                                                                                   |
@@ -42,6 +42,7 @@ with four months of synthetic history.
 | Loading shows nothing for 300ms, then one quiet status line. Empty pages use the shared `EmptyState`                                    | Design-system rule: no placeholder cards. Fast reads should not flash a loading box                          |
 | Reports shows the currency picker only when accounts use more than one currency                                                         | A one-option picker is noise                                                                                 |
 | Finance renders a `section`, never a second `main`                                                                                      | One main landmark per page                                                                                   |
+| Upcoming with no bill plans is one `EmptyState` holding Add a bill; a month with nothing due is one quiet line                          | With no plans the month stepper and section heads have nothing to say                                        |
 
 ## Slices
 
@@ -55,6 +56,32 @@ with four months of synthetic history.
 
 Each slice ships with its app-map facts, screenshots at 1440 and 320 in light and dark, and the
 design-system class audit.
+
+## Slice 2 build notes
+
+- Saves run one at a time through the existing assign and flex-assign tools. Fields stay editable
+  while a save is in flight. Enter on another row queues that row; the queue drains once the
+  fresh budget read lands, using that read's assigned total as `previousCents`.
+- Own-write rebase: each assign bumps the budget revision by exactly one. When the read after a
+  save shows `revision === savedFrom + 1`, the same categories, the saved row at its new amount
+  with unchanged spending, and every other row's assigned, spent and available unchanged, typed
+  drafts on other rows stay valid and move to the new review. Anything else marks them stale and
+  drops the queue. The server still checks `previousCents`, so a missed outside change is
+  rejected, never overwritten.
+- Move money waits while typed amounts are unsaved, a save is running or saved records need a
+  check. A move would change the review the drafts were typed against.
+- Quick amounts leave out zero and the amount already assigned. The three-month average needs
+  all three earlier months to read cleanly in the same currency.
+- Phone rows are a two-column table: name, spending and bar on the left; the Assigned field and
+  what is left on the right. The row whose panel is open carries the table's open-row edge.
+- Finance already declares the platform's 16 app-map features. The two Transactions toolbar
+  entries (filters, export) merge into one to make room for keyboard budgeting and the detail
+  panel.
+- Quick amounts come from reads that already exist: the target's need this month, last month's
+  assigned and spent, and the three-month average spent. An amount that cannot be worked out is
+  left out, never shown as zero.
+- The detail panel is the shared `PeekPanel`, so focus return and modal isolation stay in the
+  shared component.
 
 ## Acceptance
 

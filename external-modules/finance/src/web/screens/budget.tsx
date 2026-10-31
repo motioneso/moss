@@ -1,9 +1,3 @@
-import { CardPayments, type CardPaymentView } from "../card-payments";
-import type { TargetFundingLine } from "../../domain/target-funding";
-import { FLEX_POOL } from "../../domain/flex";
-import { FlexBudgetPanel, type FlexBudgetView } from "../flex-budget";
-import { BudgetTargets } from "../budget-targets";
-import type { TargetProgress } from "../../domain/targets";
 // external-modules/finance/src/web/screens/budget.tsx
 //
 // #3173: the Park Press Budget screen. One read, finance.budget.status, returns the
@@ -15,7 +9,6 @@ import type { TargetProgress } from "../../domain/targets";
 //
 // Desktop and phone layouts both render; module CSS shows one and hides the other.
 import {
-  Badge,
   Button,
   DisclosureToggle,
   Eyebrow,
@@ -33,312 +26,70 @@ import {
   type ExternalModuleToolsHandleV1,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
-import { useReadCooldown } from "../read-cooldown";
+import { FLEX_POOL } from "../../domain/flex";
 import { BudgetSetup } from "../budget-setup";
-import { currentMonth, formatCents, monthLabel, parseAmountToCents, shiftMonth } from "../format";
+import type { BudgetAccount, BudgetStatusResult } from "../budget-status";
+import {
+  buildGroups,
+  GroupRows,
+  GroupTable,
+  money,
+  type AssignProps,
+  type Layout,
+  type Line
+} from "../budget-table";
+import { BudgetTargets } from "../budget-targets";
+import { CardPayments } from "../card-payments";
+import { CategoryDetail } from "../category-detail";
+import { FlexBudgetPanel } from "../flex-budget";
+import { currentMonth, monthLabel, parseAmountToCents, shiftMonth } from "../format";
+import { useReadCooldown } from "../read-cooldown";
 import { navigate } from "../router";
 import { announce, outcomeGate } from "../states";
 import { invalidateQueries, useToolQuery } from "../store";
 
-interface BudgetCategory {
+type Figures = Record<string, readonly [assigned: number, spent: number, available: number]>;
+
+function figuresOf(result: BudgetStatusResult): Figures {
+  const figures: Figures = {};
+  for (const group of buildGroups(result))
+    for (const line of group.lines) figures[line.id] = [line.assigned, line.spent, line.available];
+  return figures;
+}
+
+/** A saved assignment waiting for the read that shows it. */
+interface Landing {
+  /** The revision the save was checked against. */
+  from: number;
+  review: string;
   id: string;
-  name: string;
-  archived?: boolean;
-  tableGroup: string;
-}
-
-interface CategoryState {
-  assignedCents: number;
-  activityCents: number;
-  availableCents: number;
-}
-
-interface BudgetAccount {
-  accountId: string;
-  name: string;
-  balanceCents: number | null;
-  isoCurrency: string;
-  asOf: string | null;
-  stale: boolean;
-}
-
-interface BudgetStatusResult extends Record<string, unknown> {
-  month: string;
-  cardPayments?: CardPaymentView[];
-  cardChoices?: { accountId: string; name: string }[];
-  cardStorageReady?: boolean;
-  cardLedgerReviewRequired?: boolean;
-  targets?: TargetProgress[];
-  targetFunding?: TargetFundingLine[];
-  targetFundingOverspent?: boolean;
-  flex?: FlexBudgetView["flex"];
-  flexChoices?: FlexBudgetView["flexChoices"];
-  flexDetail?: FlexBudgetView["flexDetail"];
-  currentMonth?: string;
-  revision?: number;
-  fingerprint?: string;
-  isoCurrency?: string | null;
-  setupRequired?: boolean;
-  storageReady?: boolean;
-  legacyMonthCount?: number;
-  legacyDraft?: boolean;
-  legacyMonths?: { month: string; totalCents: string }[];
-  currencies?: string[];
-  accountCurrencies?: string[];
-  readyUnavailable?: string | null;
-  pendingCount?: number;
-  excludedAccountCount?: number;
-  futureReservedCents?: number;
-  state?: { categories: Record<string, CategoryState> };
-  categories?: BudgetCategory[];
-  accounts?: BudgetAccount[];
-  hasBank?: boolean;
-  hasBudget?: boolean;
-  readyToAssignCents?: number | null;
-  needsLookCount?: number;
-}
-
-const money = (cents: number, currency: string): string => formatCents(cents, currency);
-
-// Display order. Income and Transfers are not envelopes.
-const GROUPS = ["Flexible", "Fixed", "Non-monthly", "Bills", "Everyday", "Fun", "Savings"] as const;
-const NOT_ENVELOPES: ReadonlySet<string> = new Set(["income", "transfers"]);
-const ZERO: CategoryState = { assignedCents: 0, activityCents: 0, availableCents: 0 };
-
-interface Line {
-  currency: string;
-  id: string;
-  name: string;
-  assigned: number;
-  spent: number;
-  available: number;
-  carried: number | null;
-  archived: boolean;
-}
-
-interface Group {
-  name: string;
-  lines: Line[];
-}
-
-function buildGroups(result: BudgetStatusResult): Group[] {
-  const states = result.state?.categories ?? {};
-  const categories = (result.categories ?? []).filter(
-    (category) =>
-      !NOT_ENVELOPES.has(category.id) &&
-      (!category.archived ||
-        Object.values(states[category.id] ?? ZERO).some((cents) => cents !== 0))
-  );
-  return GROUPS.map((name) => ({
-    name,
-    lines: categories
-      .filter((category) => category.tableGroup === name)
-      .map((category): Line => {
-        const row = states[category.id] ?? ZERO;
-        const carry =
-          BigInt(row.availableCents) - BigInt(row.assignedCents) + BigInt(row.activityCents);
-        return {
-          id: category.id,
-          currency: result.isoCurrency ?? "",
-          name: category.name,
-          assigned: row.assignedCents,
-          spent: row.activityCents,
-          available: row.availableCents,
-          // available = carried + assigned - spent
-          carried: carry > BigInt(Number.MAX_SAFE_INTEGER) ? null : Number(carry < 0n ? 0n : carry),
-          archived: category.archived === true
-        };
-      })
-  })).filter((group) => group.lines.length > 0);
-}
-
-function Meter(props: { line: Line }): ReactNodeLike {
-  const { assigned, spent, available } = props.line;
-  const used = assigned <= 0 ? (spent > 0 ? 1 : 0) : Math.min(1, spent / assigned);
-  return (
-    <div
-      className={`jds-progress${available < 0 ? " jds-progress--amber" : ""}`}
-      aria-hidden="true"
-    >
-      <div className="jds-progress__fill" style={{ width: `${Math.round(used * 100)}%` }} />
-    </div>
-  );
-}
-
-function AvailableCell(props: {
   cents: number;
-  currency: string;
-  labelled?: boolean;
-}): ReactNodeLike {
-  if (props.cents < 0) return <Badge tone="red">{money(-props.cents, props.currency)} over</Badge>;
-  return (
-    <strong>
-      {money(props.cents, props.currency)}
-      {props.labelled ? " left" : ""}
-    </strong>
-  );
+  figures: Figures;
 }
 
-function CarriedBadge(props: { cents: number | null; currency: string }): ReactNodeLike {
-  if (props.cents === null) return <Badge>Carry unavailable</Badge>;
-  if (props.cents <= 0) return null;
-  return (
-    <div>
-      <Badge>{money(props.cents, props.currency)} carried over</Badge>
-    </div>
-  );
+/**
+ * True when the fresh read differs from the one the save was checked against by that save alone.
+ * Every budget write adds exactly one to the revision, so one step means no other write landed.
+ * Unchanged spending rules out a transaction change in between.
+ */
+function onlyOwnSave(landing: Landing, fresh: BudgetStatusResult): boolean {
+  if (fresh.revision !== landing.from + 1) return false;
+  const after = figuresOf(fresh);
+  const ids = Object.keys(after);
+  if (ids.length !== Object.keys(landing.figures).length) return false;
+  return ids.every((id) => {
+    const was = landing.figures[id];
+    const now = after[id]!;
+    if (!was) return false;
+    if (id === landing.id) return now[0] === landing.cents && now[1] === was[1];
+    return now[0] === was[0] && now[1] === was[1] && now[2] === was[2];
+  });
 }
 
-interface AssignProps {
-  errors: Record<string, string>;
-  drafts: Record<string, string>;
-  disabled: boolean;
-  onDraft: (id: string, value: string | null) => void;
-  onAssign: (line: Line, cents: number) => void;
-  onBadAmount: (line: Line) => void;
-}
-/** Typed input stays separate from committed totals until the host reports persistence. */
-function AssignCell(props: { line: Line } & AssignProps): ReactNodeLike {
-  const { line } = props;
-  const draft = props.drafts[line.id];
-  const finish = () => {
-    if (draft === undefined || props.disabled || line.archived) return;
-    const cents = parseAmountToCents(draft);
-    if (cents === null) props.onBadAmount(line);
-    else if (cents !== line.assigned) props.onAssign(line, cents);
-    else props.onDraft(line.id, null);
-  };
-  const error = props.errors[line.id];
-  return (
-    <div className="fnm-assign">
-      <input
-        className="jds-input jds-input--sm fnm-assign__input"
-        aria-label={`Assigned to ${line.name}`}
-        aria-invalid={error ? "true" : undefined}
-        inputMode="decimal"
-        disabled={props.disabled || line.archived}
-        value={draft ?? money(line.assigned, line.currency)}
-        onFocus={(event: { currentTarget: { select: () => void } }) => {
-          event.currentTarget.select();
-        }}
-        onBlur={() => {
-          if (draft !== undefined && parseAmountToCents(draft) === line.assigned)
-            props.onDraft(line.id, null);
-        }}
-        onChange={(event: { currentTarget: { value: string } }) =>
-          props.onDraft(line.id, event.currentTarget.value)
-        }
-        onKeyDown={(event: { key: string; preventDefault: () => void }) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            finish();
-          }
-          if (event.key === "Escape") props.onDraft(line.id, null);
-        }}
-      />
-      {draft !== undefined && parseAmountToCents(draft) !== line.assigned ? (
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={props.disabled}
-          onClick={finish}
-          aria-label={`Save assignment to ${line.name}`}
-        >
-          Save
-        </Button>
-      ) : null}
-      {line.archived ? <Badge>Archived · history</Badge> : null}
-      {error ? (
-        <p role="alert" className="jds-hint fnm-field-error">
-          {error}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-function groupAssigned(group: Group): string {
-  const cents = group.lines.reduce((sum, line) => sum + BigInt(line.assigned), 0n);
-  return cents > BigInt(Number.MAX_SAFE_INTEGER) || cents < BigInt(Number.MIN_SAFE_INTEGER)
-    ? "Unavailable"
-    : money(Number(cents), group.lines[0]!.currency);
-}
-
-function GroupTable(props: { group: Group; head: boolean } & AssignProps): ReactNodeLike {
-  const { group } = props;
-  return (
-    <section className="fnm-block fnm-block--tight">
-      <SectionHead title={group.name} meta={`${groupAssigned(group)} assigned`} rule />
-      <table className="jds-table fnm-fixed">
-        <colgroup>
-          <col className="fnm-col-name" />
-          <col />
-          <col />
-          <col />
-        </colgroup>
-        {props.head ? (
-          <thead>
-            <tr>
-              <th>Category</th>
-              <th className="jds-table__num">Assigned</th>
-              <th className="jds-table__num">Spent</th>
-              <th className="jds-table__num">Available</th>
-            </tr>
-          </thead>
-        ) : null}
-        <tbody>
-          {group.lines.map((line) => (
-            <tr key={line.id} data-overspent={line.available < 0 ? "true" : undefined}>
-              <td>
-                <div className="fnm-block fnm-block--tight">
-                  <span>{line.name}</span>
-                  <CarriedBadge currency={line.currency} cents={line.carried} />
-                </div>
-              </td>
-              <td className="jds-table__num">
-                <AssignCell line={line} {...props} />
-              </td>
-              <td className="jds-table__num">
-                <div className="fnm-cell-stack">
-                  <span>{money(line.spent, line.currency)}</span>
-                  <div className="fnm-cell-meter">
-                    <Meter line={line} />
-                  </div>
-                </div>
-              </td>
-              <td className="jds-table__num">
-                <AvailableCell currency={line.currency} cents={line.available} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
-  );
-}
-
-function GroupRows(props: { group: Group } & AssignProps): ReactNodeLike {
-  return (
-    <section className="fnm-block fnm-block--tight">
-      <SectionHead title={props.group.name} rule />
-      <RowIndex density="compact">
-        {props.group.lines.map((line) => (
-          <RowIndexItem
-            key={line.id}
-            title={line.name}
-            excerpt={
-              <div className="fnm-block fnm-block--tight">
-                <CarriedBadge currency={line.currency} cents={line.carried} />
-                <span>{money(line.spent, line.currency)} spent of</span>
-                <AssignCell line={line} {...props} />
-                <Meter line={line} />
-              </div>
-            }
-            meta={<AvailableCell currency={line.currency} cents={line.available} labelled />}
-          />
-        ))}
-      </RowIndex>
-    </section>
-  );
+/** The Assigned field for a line in one layout, found by data attribute so any id is safe. */
+function assignField(layout: Layout, id: string): HTMLElement | null {
+  const fields = document.querySelectorAll<HTMLInputElement>(`input[data-fnm-assign="${layout}"]`);
+  return [...fields].find((field) => field.dataset.fnmLine === id) ?? null;
 }
 
 function asOfLabel(iso: string | null): string {
@@ -503,7 +254,7 @@ function BudgetBody(props: { result: BudgetStatusResult } & AssignProps): ReactN
   const needsLook = result.needsLookCount ?? 0;
   return (
     <div className="fnm-page">
-      <section className="fnm-block" aria-label="Categories">
+      <section className="fnm-block" aria-label="Categories" data-fnm-lines>
         {result.readyUnavailable === "missing_history" ? (
           <Note variant="practical">
             A budget account has no recorded balance for this month, so Ready to assign is
@@ -539,7 +290,7 @@ function BudgetBody(props: { result: BudgetStatusResult } & AssignProps): ReactN
               <GroupTable group={group} head={index === 0} {...props} />
             </div>
             <div className="fnm-phone-only">
-              <GroupRows group={group} {...props} />
+              <GroupRows group={group} head={index === 0} {...props} />
             </div>
           </div>
         ))}
@@ -567,11 +318,18 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
   const cooldown = useReadCooldown();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
   const [uncertain, setUncertain] = useState(false);
   const [checking, setChecking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [detail, setDetail] = useState<{ id: string; layout: Layout } | null>(null);
   const localMonthChosen = useRef(false);
   const saving = useRef(false);
+  // Lines whose Enter or Save arrived during another save. Each saves once the read shows the
+  // save before it, and only when that read holds no change from elsewhere.
+  const queue = useRef<string[]>([]);
+  const landing = useRef<Landing | null>(null);
+  const returnTo = useRef<HTMLElement | null>(null);
   const generation = useRef(0);
   const status = useToolQuery<BudgetStatusResult>("finance.budget.status", { month });
   const result =
@@ -600,6 +358,32 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
       status.outcome.retryAfterSeconds
     )
       cooldown.wait(status.outcome.retryAfterSeconds);
+    const saved = landing.current;
+    if (saved && status.status === "settled") {
+      landing.current = null;
+      saving.current = false;
+      const own = result !== null && review !== null && onlyOwnSave(saved, result);
+      // Typed amounts were reviewed against the figures this screen just changed itself.
+      if (own)
+        setDraftState((old) =>
+          Object.keys(old.amounts).length && old.review === saved.review ? { ...old, review } : old
+        );
+      const next = own ? nextQueued(result) : null;
+      if (next) startSave(next.line, next.cents, result!);
+      else {
+        queue.current = [];
+        setBusy(false);
+        setSavingId(null);
+      }
+    }
+    if (
+      detail &&
+      result &&
+      !buildGroups(result).some((group) =>
+        group.lines.some((line) => line.id === detail.id && !line.archived)
+      )
+    )
+      setDetail(null);
     if (checking && status !== checkingFrom.current && status.status === "settled") {
       setChecking(false);
       if (result && review) {
@@ -640,20 +424,24 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
   };
   const onBadAmount = (line: Line) =>
     setErrors((old) => ({ ...old, [line.id]: "Enter an amount like 250 or 250.50." }));
-  const onAssign = (line: Line, cents: number) => {
-    if (
-      !props.tools ||
-      !result?.fingerprint ||
-      result.revision === undefined ||
-      saving.current ||
-      checking ||
-      uncertain ||
-      staleDrafts
-    )
-      return;
+  const nextQueued = (fresh: BudgetStatusResult): { line: Line; cents: number } | null => {
+    const lines = buildGroups(fresh).flatMap((group) => group.lines);
+    while (queue.current.length) {
+      const id = queue.current.shift()!;
+      const line = lines.find((candidate) => candidate.id === id && !candidate.archived);
+      const draft = drafts[id];
+      const cents = draft === undefined ? null : parseAmountToCents(draft);
+      if (line && cents !== null && cents !== line.assigned) return { line, cents };
+    }
+    return null;
+  };
+  // The save stays open until the read that shows it lands, so the next save checks against it.
+  const startSave = (line: Line, cents: number, base: BudgetStatusResult) => {
     const epoch = generation.current;
+    let landed = false;
     saving.current = true;
     setBusy(true);
+    setSavingId(line.id);
     setMessage(null);
     void (async () => {
       try {
@@ -664,14 +452,22 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
             ...(line.id === FLEX_POOL ? {} : { categoryId: line.id }),
             amountCents: cents,
             previousCents: line.assigned,
-            expectedRevision: result.revision!,
-            expectedFingerprint: result.fingerprint!
+            expectedRevision: base.revision!,
+            expectedFingerprint: base.fingerprint!
           }
         );
         if (generation.current !== epoch) return;
         if (outcome.status === "succeeded" && outcome.result.status === "ok") {
           onDraft(line.id, null);
           announce("Assignment saved.");
+          landing.current = {
+            from: base.revision!,
+            review: JSON.stringify([month, base.revision, base.fingerprint]),
+            id: line.id,
+            cents,
+            figures: figuresOf(base)
+          };
+          landed = true;
           invalidateQueries();
         } else if (outcome.status === "cancelled") {
           setErrors((old) => ({ ...old, [line.id]: "Cancelled. Your typed amount is kept." }));
@@ -695,16 +491,74 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
           setMessage("The save could not be confirmed. Check saved records before trying again.");
         }
       } finally {
-        saving.current = false;
-        if (generation.current === epoch) setBusy(false);
+        if (!landed) {
+          queue.current = [];
+          saving.current = false;
+          if (generation.current === epoch) {
+            setBusy(false);
+            setSavingId(null);
+          }
+        }
       }
     })();
+  };
+  const onAssign = (line: Line, cents: number) => {
+    if (
+      !props.tools ||
+      !result?.fingerprint ||
+      result.revision === undefined ||
+      checking ||
+      uncertain ||
+      staleDrafts
+    )
+      return;
+    if (saving.current) {
+      if (!queue.current.includes(line.id)) queue.current.push(line.id);
+      return;
+    }
+    startSave(line, cents, result);
   };
   const refresh = () => {
     if (saving.current || checking || cooldown.cooling) return;
     checkingFrom.current = status;
     setChecking(true);
     invalidateQueries();
+  };
+  const assignLocked = checking || uncertain || staleDrafts || !props.tools;
+  const categoryDetail = (body: BudgetStatusResult): ReactNodeLike => {
+    if (!detail) return null;
+    const lines = buildGroups(body)
+      .flatMap((group) => group.lines)
+      .filter((line) => !line.archived);
+    const line = lines.find((candidate) => candidate.id === detail.id);
+    if (!line) return null;
+    return (
+      <CategoryDetail
+        key={line.id}
+        line={line}
+        month={month}
+        result={body}
+        others={lines.filter((other) => other.id !== line.id)}
+        fillLocked={assignLocked || savingId === line.id}
+        locked={busy || checking || uncertain || hasDrafts}
+        lockedReason={
+          uncertain
+            ? "Check saved records first."
+            : hasDrafts
+              ? "Save or clear typed amounts first."
+              : null
+        }
+        tools={props.tools}
+        returnFocusRef={returnTo}
+        onQuickAmount={(cents) => {
+          onDraft(line.id, money(cents, line.currency));
+          returnTo.current = assignField(detail.layout, line.id) ?? returnTo.current;
+          setDetail(null);
+        }}
+        onUncertain={() => setUncertain(true)}
+        onClose={() => setDetail(null)}
+      />
+    );
   };
   return (
     <section aria-label="Budget">
@@ -721,6 +575,7 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
           }
           localMonthChosen.current = true;
           setErrors({});
+          setDetail(null);
           setMonth(shiftMonth(month, delta));
         }}
       />
@@ -790,6 +645,21 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
               />
             ) : (
               <div className="fnm-block">
+                <BudgetBody
+                  result={body}
+                  drafts={drafts}
+                  disabled={assignLocked}
+                  savingId={savingId}
+                  openId={detail?.id ?? null}
+                  errors={errors}
+                  onDraft={onDraft}
+                  onAssign={onAssign}
+                  onBadAmount={onBadAmount}
+                  onOpen={(line, layout, opener) => {
+                    returnTo.current = opener;
+                    setDetail({ id: line.id, layout });
+                  }}
+                />
                 {body.fingerprint && body.revision !== undefined && body.isoCurrency ? (
                   <BudgetTargets
                     month={month}
@@ -843,15 +713,7 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
                     }}
                   />
                 ) : null}
-                <BudgetBody
-                  result={body}
-                  drafts={drafts}
-                  disabled={busy || checking || uncertain || staleDrafts || !props.tools}
-                  errors={errors}
-                  onDraft={onDraft}
-                  onAssign={onAssign}
-                  onBadAmount={onBadAmount}
-                />
+                {categoryDetail(body)}
               </div>
             ),
           { loadingLabel: "Loading budget" }

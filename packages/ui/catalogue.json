@@ -535,7 +535,7 @@
       "name": "peek-close-button",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/peek-close-button.tsx", "type": "registry:ui" }],
-      "dependencies": [],
+      "dependencies": ["lucide-react"],
       "exports": ["PeekCloseButton"],
       "options": [],
       "flags": []

@@ -392,14 +392,44 @@
 
 /* ===== detail peek (right flyout) ===== */
 
+/* PeekPanel and PeekCloseButton are shared, so their frame lives here for every surface. */
+
 .cal-peek-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
   background: transparent;
 }
 
 .cal-peek {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 384px;
+  max-width: calc(100vw - 40px);
+  z-index: 111;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 22px 26px;
+  overflow-y: auto;
   background: var(--surface);
   border-left: 1px solid var(--border);
   box-shadow: var(--shadow-xl);
+  animation: cal-peek-in 0.24s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cal-peek {
+    animation: none;
+  }
+}
+
+.cal-peek__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
 }
 
 @keyframes cal-peek-in {
@@ -424,6 +454,12 @@
 }
 
 .cal-peek__x {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
   border-radius: 8px;
   border: 0;
   background: transparent;

@@ -70,16 +70,26 @@ export function Root(props: {
   useEffect(() => {
     if (path === "/budget") navigate("/");
   }, [path]);
-  // On a phone the tab bar scrolls sideways; keep the open tab in view.
+  // On a phone the tab bar scrolls sideways; keep the open tab in view. The module stylesheet
+  // and fonts can land after the first paint, so this reruns whenever the tabs change size.
   const tabs = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const bar = tabs.current;
-    const active = bar?.querySelector<HTMLElement>('[aria-pressed="true"]');
-    if (!bar || !active) return;
-    const barBox = bar.getBoundingClientRect();
-    const box = active.getBoundingClientRect();
-    if (box.right > barBox.right) bar.scrollLeft += box.right - barBox.right;
-    else if (box.left < barBox.left) bar.scrollLeft -= barBox.left - box.left;
+    if (!bar) return;
+    const reveal = () => {
+      const active = bar.querySelector<HTMLElement>('[aria-pressed="true"]');
+      if (!active) return;
+      const barBox = bar.getBoundingClientRect();
+      const box = active.getBoundingClientRect();
+      if (box.right > barBox.right) bar.scrollLeft += box.right - barBox.right;
+      else if (box.left < barBox.left) bar.scrollLeft -= barBox.left - box.left;
+    };
+    reveal();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(reveal);
+    observer.observe(bar);
+    if (bar.firstElementChild) observer.observe(bar.firstElementChild);
+    return () => observer.disconnect();
   }, [path]);
   return (
     <div className="fnm-root">

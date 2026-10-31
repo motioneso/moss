@@ -31,11 +31,7 @@ export function EmptyState(props: {
   body?: string;
   action?: ReactNodeLike;
 }): ReactNodeLike {
-  return (
-    <SharedEmptyState title={props.title} description={props.body}>
-      {props.action ?? null}
-    </SharedEmptyState>
-  );
+  return <SharedEmptyState title={props.title} description={props.body} actions={props.action} />;
 }
 
 export function ErrorState(props: { message: string; action?: ReactNodeLike }): ReactNodeLike {

@@ -336,48 +336,46 @@ describe("Budget screen reviewed saves", () => {
     expect(box(renderer).props.disabled).toBe(true);
     expect(invoke).toHaveBeenCalledOnce();
   });
-  it("requires reviewing other typed categories after one assignment changes the saved budget", async () => {
+  const dining = (renderer: ReactTestRenderer) =>
+    renderer.root.findAll(
+      (n) => n.type === "input" && n.props["aria-label"] === "Assigned to Dining & coffee"
+    )[0]!;
+  const enter = (renderer: ReactTestRenderer, input: typeof box) =>
+    act(async () => input(renderer).props.onKeyDown({ key: "Enter", preventDefault() {} }));
+  // The read after saving Groceries at $700: one revision on, nothing else moved.
+  const afterOwnSave = (over: Record<string, unknown> = {}) => {
+    const base = status();
+    return status({
+      revision: 8,
+      fingerprint: "b".repeat(32),
+      state: {
+        categories: {
+          ...base.state.categories,
+          groceries: { assignedCents: 70000, activityCents: 41827, availableCents: 28173 }
+        }
+      },
+      ...over
+    });
+  };
+  it("keeps other typed categories ready after this screen's own assignment lands", async () => {
     let stored = status();
     fakeFetch(() => ({
       status: 200,
       body: { invocation: { status: "succeeded", result: stored } }
     }));
     const invoke = vi.fn(async (): Promise<ModuleToolOutcome> => {
-      if (invoke.mock.calls.length === 1) {
-        stored = status({
-          revision: 8,
-          fingerprint: "b".repeat(32),
-          state: {
-            categories: {
-              ...stored.state.categories,
-              groceries: { assignedCents: 70000, activityCents: 41827, availableCents: 28173 }
-            }
-          }
-        });
-        return { status: "succeeded", result: { status: "ok" } };
-      }
-      return { status: "cancelled" };
+      if (invoke.mock.calls.length === 1) stored = afterOwnSave();
+      return { status: "succeeded", result: { status: "ok" } };
     });
     const renderer = await render({ invoke });
-    const dining = () =>
-      renderer.root.findAll(
-        (n) => n.type === "input" && n.props["aria-label"] === "Assigned to Dining & coffee"
-      )[0]!;
     await act(async () => box(renderer).props.onChange({ currentTarget: { value: "700" } }));
-    await act(async () => dining().props.onChange({ currentTarget: { value: "300" } }));
-    await act(async () => box(renderer).props.onKeyDown({ key: "Enter", preventDefault() {} }));
+    await act(async () => dining(renderer).props.onChange({ currentTarget: { value: "300" } }));
+    await enter(renderer, box);
     expect(box(renderer).props.value).toBe("$700.00");
-    expect(dining().props.value).toBe("300");
-    expect(dining().props.disabled).toBe(true);
-    await act(async () => dining().props.onKeyDown({ key: "Enter", preventDefault() {} }));
-    expect(invoke).toHaveBeenCalledOnce();
-    await act(async () =>
-      renderer.root
-        .findAllByType("button")
-        .find((b) => b.children.includes("Check saved records"))!
-        .props.onClick()
-    );
-    await act(async () => dining().props.onKeyDown({ key: "Enter", preventDefault() {} }));
+    expect(dining(renderer).props.value).toBe("300");
+    expect(dining(renderer).props.disabled).toBe(false);
+    expect(text(renderer)).not.toContain("Saved budget changed");
+    await enter(renderer, dining);
     expect(invoke).toHaveBeenCalledTimes(2);
     expect(invoke).toHaveBeenLastCalledWith(
       "finance.budget.assign",
@@ -389,6 +387,105 @@ describe("Budget screen reviewed saves", () => {
         expectedFingerprint: "b".repeat(32)
       })
     );
+  });
+  it.each([
+    ["another write", { revision: 9 }],
+    [
+      "new spending",
+      {
+        state: {
+          categories: {
+            ...status().state.categories,
+            groceries: { assignedCents: 70000, activityCents: 41827, availableCents: 28173 },
+            dining: { assignedCents: 22000, activityCents: 25650, availableCents: -3650 }
+          }
+        }
+      }
+    ]
+  ])(
+    "requires review of other typed categories when the read after a save also shows %s",
+    async (_label, over) => {
+      let stored = status();
+      fakeFetch(() => ({
+        status: 200,
+        body: { invocation: { status: "succeeded", result: stored } }
+      }));
+      const invoke = vi.fn(async (): Promise<ModuleToolOutcome> => {
+        if (invoke.mock.calls.length === 1) stored = afterOwnSave(over);
+        return { status: "succeeded", result: { status: "ok" } };
+      });
+      const renderer = await render({ invoke });
+      await act(async () => box(renderer).props.onChange({ currentTarget: { value: "700" } }));
+      await act(async () => dining(renderer).props.onChange({ currentTarget: { value: "300" } }));
+      await enter(renderer, box);
+      expect(dining(renderer).props.value).toBe("300");
+      expect(dining(renderer).props.disabled).toBe(true);
+      expect(text(renderer)).toContain("Saved budget changed");
+      await enter(renderer, dining);
+      expect(invoke).toHaveBeenCalledOnce();
+      await act(async () =>
+        renderer.root
+          .findAllByType("button")
+          .find((b) => b.children.includes("Check saved records"))!
+          .props.onClick()
+      );
+      await enter(renderer, dining);
+      expect(invoke).toHaveBeenCalledTimes(2);
+      expect(invoke).toHaveBeenLastCalledWith(
+        "finance.budget.assign",
+        expect.objectContaining({ categoryId: "dining", expectedRevision: stored.revision })
+      );
+    }
+  );
+  it("queues an amount entered during a save and sends it once that save shows", async () => {
+    let stored = status();
+    fakeFetch(() => ({
+      status: 200,
+      body: { invocation: { status: "succeeded", result: stored } }
+    }));
+    const pending: ((outcome: ModuleToolOutcome) => void)[] = [];
+    const invoke = vi.fn(() => new Promise<ModuleToolOutcome>((resolve) => pending.push(resolve)));
+    const renderer = await render({ invoke });
+    await type(renderer, "700");
+    expect(box(renderer).props.disabled).toBe(true);
+    expect(dining(renderer).props.disabled).toBe(false);
+    await act(async () => dining(renderer).props.onChange({ currentTarget: { value: "300" } }));
+    await enter(renderer, dining);
+    expect(invoke).toHaveBeenCalledOnce();
+    stored = afterOwnSave();
+    await act(async () => pending[0]!({ status: "succeeded", result: { status: "ok" } }));
+    expect(invoke).toHaveBeenCalledTimes(2);
+    expect(invoke).toHaveBeenLastCalledWith(
+      "finance.budget.assign",
+      expect.objectContaining({
+        categoryId: "dining",
+        previousCents: 22000,
+        amountCents: 30000,
+        expectedRevision: 8,
+        expectedFingerprint: "b".repeat(32)
+      })
+    );
+    expect(dining(renderer).props.disabled).toBe(true);
+    expect(box(renderer).props.disabled).toBe(false);
+  });
+  it("drops the queue when the read after a save shows a change from elsewhere", async () => {
+    let stored = status();
+    fakeFetch(() => ({
+      status: 200,
+      body: { invocation: { status: "succeeded", result: stored } }
+    }));
+    const pending: ((outcome: ModuleToolOutcome) => void)[] = [];
+    const invoke = vi.fn(() => new Promise<ModuleToolOutcome>((resolve) => pending.push(resolve)));
+    const renderer = await render({ invoke });
+    await type(renderer, "700");
+    await act(async () => dining(renderer).props.onChange({ currentTarget: { value: "300" } }));
+    await enter(renderer, dining);
+    stored = afterOwnSave({ revision: 9 });
+    await act(async () => pending[0]!({ status: "succeeded", result: { status: "ok" } }));
+    expect(invoke).toHaveBeenCalledOnce();
+    expect(dining(renderer).props.value).toBe("300");
+    expect(dining(renderer).props.disabled).toBe(true);
+    expect(text(renderer)).toContain("Saved budget changed");
   });
   it("honors a read cooldown and requires another explicit check after a busy response", async () => {
     vi.useFakeTimers();

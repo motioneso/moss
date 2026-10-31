@@ -14,6 +14,8 @@ export async function exerciseBillAdjustments(
   const bills = (m: string) => read("finance.bills.read", range(m));
   const accounts = await read("finance.accounts.list", {});
   const next = shiftMonth(month, 1);
+  const stepMonth = (target: Page, direction: "previous" | "next") =>
+    target.locator(".jds-stepper button")[direction === "next" ? "last" : "first"]().click();
   const inspect = async (target: ReturnType<typeof page.getByRole>, name: string) => {
     for (const theme of ["light", "dark", "sage"]) {
       await page.evaluate((theme) => {
@@ -71,12 +73,8 @@ export async function exerciseBillAdjustments(
   await review.waitFor({ state: "detached" });
   expect((await bills(month)).occurrences).toEqual([]);
   await page.reload();
-  await page
-    .getByText("No bills planned for this month. Add a bill to see its upcoming dates here.", {
-      exact: true
-    })
-    .waitFor();
-  await page.getByLabel("Bill month", { exact: true }).fill(next);
+  await page.getByText(/^Nothing due in /).waitFor();
+  await stepMonth(page, "next");
   const changed = page
     .locator(".jds-index__row")
     .filter({ hasText: `one-off change from ${month}-01` });
@@ -103,7 +101,7 @@ export async function exerciseBillAdjustments(
   const other = await page.context().newPage();
   try {
     await other.goto(`${base}/m/finance/upcoming`);
-    await other.getByLabel("Bill month", { exact: true }).fill(next);
+    await stepMonth(other, "next");
     await other.getByRole("button", { name: "Reset one-off change", exact: true }).click();
     await other
       .getByRole("dialog", { name: "Reset one-off bill change", exact: true })
@@ -130,7 +128,7 @@ export async function exerciseBillAdjustments(
   await page
     .getByText("Saved bills refreshed. Review the current records before saving.", { exact: true })
     .waitFor();
-  await page.getByLabel("Bill month", { exact: true }).fill(month);
+  await stepMonth(page, "previous");
   await page.getByRole("button", { name: "Change this occurrence", exact: true }).click();
   await edit.getByLabel("Occurrence expected amount", { exact: true }).fill("81.99");
   await edit.getByRole("button", { name: "Review bill change", exact: true }).click();

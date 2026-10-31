@@ -88,6 +88,8 @@ export const MODULE_STYLES = `
 .fnm-assign { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-2); }
 .fnm-field-error { width: 100%; max-width: 24rem; white-space: normal; text-align: start; }
 .fnm-assign__input { width: 100%; max-width: 9rem; text-align: right; }
+.fnm-col-assign { width: 9rem; }
+.fnm-cell-end { align-items: flex-end; }
 .fnm-phone-only { display: none; }
 /* #3176 Transactions: layout only. */
 .fnm-spread { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
@@ -105,6 +107,11 @@ export const MODULE_STYLES = `
 .fnm-category-controls select { width: 100%; }
 .fnm-split-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; align-items: end; gap: var(--space-3); }
 .fnm-split-row input, .fnm-split-row select { width: 100%; min-width: 0; }
+/* Category detail panel: layout only. */
+.fnm-peek { display: flex; flex-direction: column; gap: var(--space-6); margin-top: var(--space-3); }
+.fnm-peek h2 { margin: 0; }
+.fnm-move { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); align-items: end; gap: var(--space-3); }
+.fnm-move input, .fnm-move select { width: 100%; min-width: 0; }
 @media (max-width: 720px) {
   .fnm-root { padding: 1rem 0.75rem 2rem; }
   .fnm-page { grid-template-columns: minmax(0, 1fr); gap: var(--space-7); }
@@ -113,5 +120,6 @@ export const MODULE_STYLES = `
   .fnm-chips { max-width: 100%; }
   .fnm-register-filters[data-expanded="false"] { display: none; }
   .fnm-split-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .fnm-move { grid-template-columns: minmax(0, 1fr); }
 }
 `;

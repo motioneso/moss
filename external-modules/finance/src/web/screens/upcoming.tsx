@@ -137,52 +137,57 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
       setBusy(false);
     }
   };
+  const actions = (
+    <>
+      {blocked ? (
+        <Button variant="secondary" disabled={busy || !props.tools} onClick={() => void refresh()}>
+          Check saved bills
+        </Button>
+      ) : null}
+      <Button disabled={busy || blocked || !props.tools} onClick={() => setAdding(true)}>
+        Add a bill
+      </Button>
+    </>
+  );
+  // With no plans the month does not matter, so the empty page carries the actions.
+  const noPlans = Boolean(data && !data.plans.length);
   return (
     <section className="fnm-block" aria-label="Upcoming bills">
-      <div className="fnm-spread">
-        <PeriodStepper
-          label={monthLabel(month)}
-          previousLabel={monthLabel(shiftMonth(month, -1))}
-          nextLabel={monthLabel(shiftMonth(month, 1))}
-          onPrevious={() => setMonth(shiftMonth(month, -1))}
-          onNext={() => setMonth(shiftMonth(month, 1))}
-          disabled={
-            busy ||
-            adding ||
-            Boolean(selected) ||
-            Boolean(stopping) ||
-            Boolean(adjusting) ||
-            Boolean(recording)
-          }
-        />
-        {data ? (
-          <div className="fnm-chips">
-            {blocked ? (
-              <Button
-                variant="secondary"
-                disabled={busy || !props.tools}
-                onClick={() => void refresh()}
-              >
-                Check saved bills
-              </Button>
-            ) : null}
-            <Button disabled={busy || blocked || !props.tools} onClick={() => setAdding(true)}>
-              Add a bill
-            </Button>
-          </div>
-        ) : null}
-      </div>
+      {noPlans ? null : (
+        <div className="fnm-spread">
+          <PeriodStepper
+            label={monthLabel(month)}
+            previousLabel={monthLabel(shiftMonth(month, -1))}
+            nextLabel={monthLabel(shiftMonth(month, 1))}
+            onPrevious={() => setMonth(shiftMonth(month, -1))}
+            onNext={() => setMonth(shiftMonth(month, 1))}
+            disabled={
+              busy ||
+              adding ||
+              Boolean(selected) ||
+              Boolean(stopping) ||
+              Boolean(adjusting) ||
+              Boolean(recording)
+            }
+          />
+          {data ? <div className="fnm-chips">{actions}</div> : null}
+        </div>
+      )}
+
       {message ? <p role="status">{message}</p> : null}
       {outcomeGate(
         query,
         (body) =>
           body.setupRequired ? (
-            <EmptyState title="Choose a budget currency">
-              <Button onClick={() => navigate("/")}>Open Budget</Button>
-            </EmptyState>
+            <EmptyState
+              title="Choose a budget currency"
+              actions={<Button onClick={() => navigate("/")}>Open Budget</Button>}
+            />
+          ) : !body.plans.length ? (
+            <EmptyState title="No bills yet" actions={actions} />
           ) : (
             <div className="fnm-block">
-              <SectionHead title="This month's bills" rule />
+              <SectionHead title="Bills due" rule />
               {body.occurrences.length ? (
                 <RowIndex density="compact">
                   {body.occurrences.map((o) => (
@@ -294,44 +299,42 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
                   ))}
                 </RowIndex>
               ) : (
-                <EmptyState title="No bills this month" />
+                <p className="jds-hint" role="status">
+                  Nothing due in {monthLabel(month)}.
+                </p>
               )}
-              {body.plans.length ? (
-                <>
-                  <SectionHead title="Your bill plans" rule />
-                  <RowIndex density="compact">
-                    {body.plans.map((p) => (
-                      <RowIndexItem
-                        key={p.id}
-                        title={p.name}
-                        excerpt={`${body.accounts.find((a) => a.accountId === p.accountId)?.name ?? "Account unavailable"} · ${p.cadence} from ${p.anchorDate}${p.endDate ? ` · stops after ${p.endDate}` : ""}`}
-                        meta={
-                          p.endDate && p.endDate <= body.today ? (
-                            <Badge>Stopped</Badge>
-                          ) : (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              disabled={busy || blocked || !props.tools}
-                              onClick={() => {
-                                dialogReview.current = {
-                                  expectedRevision: body.revision,
-                                  expectedFingerprint: body.fingerprint
-                                };
-                                setMessage(null);
-                                setStopping(p);
-                                setEndDate(body.today);
-                              }}
-                            >
-                              {p.endDate ? "Stop sooner" : "Stop future bills"}
-                            </Button>
-                          )
-                        }
-                      />
-                    ))}
-                  </RowIndex>
-                </>
-              ) : null}
+              <SectionHead title="Your bill plans" rule />
+              <RowIndex density="compact">
+                {body.plans.map((p) => (
+                  <RowIndexItem
+                    key={p.id}
+                    title={p.name}
+                    excerpt={`${body.accounts.find((a) => a.accountId === p.accountId)?.name ?? "Account unavailable"} · ${p.cadence} from ${p.anchorDate}${p.endDate ? ` · stops after ${p.endDate}` : ""}`}
+                    meta={
+                      p.endDate && p.endDate <= body.today ? (
+                        <Badge>Stopped</Badge>
+                      ) : (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={busy || blocked || !props.tools}
+                          onClick={() => {
+                            dialogReview.current = {
+                              expectedRevision: body.revision,
+                              expectedFingerprint: body.fingerprint
+                            };
+                            setMessage(null);
+                            setStopping(p);
+                            setEndDate(body.today);
+                          }}
+                        >
+                          {p.endDate ? "Stop sooner" : "Stop future bills"}
+                        </Button>
+                      )
+                    }
+                  />
+                ))}
+              </RowIndex>
             </div>
           ),
         { loadingLabel: "Loading bills" }
