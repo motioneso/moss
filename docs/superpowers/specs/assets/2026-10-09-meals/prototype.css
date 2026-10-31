@@ -595,6 +595,15 @@
   overflow-wrap: anywhere;
 }
 
+/* A before-and-after amount reads as one line, so it keeps its full width. */
+.mls-line__amount.mls-line__amount--change {
+  max-width: none;
+}
+
+.mls-line__amount.mls-line__amount--change .mls-num {
+  white-space: nowrap;
+}
+
 /* A long amount wraps inside its column rather than running over the name. */
 .mls-line__amount .mls-num {
   white-space: normal;
@@ -879,7 +888,7 @@ label.mls-line__amount {
     margin-top: calc((1lh - 20px) / 2);
   }
 
-  .mls-line__amount {
+  .mls-line__amount:not(.mls-line__amount--change) {
     max-width: 5.5rem;
   }
 

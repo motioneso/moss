@@ -46,7 +46,7 @@
   const amountText = (item) => {
     if (item.qty == null) return "";
     const unit = item.qty !== 1 && PLURALS[item.unit] ? PLURALS[item.unit] : item.unit;
-    return `${fmtQty(item.qty)}${unit ? ` ${unit}` : ""}`;
+    return A.keepUnit(`${fmtQty(item.qty)}${unit ? ` ${unit}` : ""}`);
   };
 
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

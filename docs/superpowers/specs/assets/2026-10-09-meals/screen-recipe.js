@@ -39,9 +39,9 @@
   };
 
   const metric = (value, unit) => {
-    if (value >= 1000) return `${(value / 1000).toFixed(1).replace(/\.0$/, "")} ${unit === "g" ? "kg" : "l"}`;
+    if (value >= 1000) return A.keepUnit(`${(value / 1000).toFixed(1).replace(/\.0$/, "")} ${unit === "g" ? "kg" : "l"}`);
     const step = value < 20 ? 1 : value < 100 ? 5 : 10;
-    return `${Math.round(value / step) * step} ${unit}`;
+    return A.keepUnit(`${Math.round(value / step) * step} ${unit}`);
   };
 
   const amount = (ing, factor) => {
@@ -52,7 +52,7 @@
       return metric(q * k, u);
     }
     const unit = ing.unit && q > 1 && PLURAL.includes(ing.unit) ? `${ing.unit}s` : ing.unit;
-    return `${usNum(q)}${unit ? ` ${unit}` : ""}`;
+    return A.keepUnit(`${usNum(q)}${unit ? ` ${unit}` : ""}`);
   };
 
   const sentence = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -113,7 +113,7 @@
   const qtyText = (qty, unit) => {
     if (qty === 0) return "None left";
     const plural = unit && qty > 1 && PLURAL.includes(unit) ? `${unit}s` : unit;
-    return `${usNum(qty)}${plural ? ` ${plural}` : ""}`;
+    return A.keepUnit(`${usNum(qty)}${plural ? ` ${plural}` : ""}`);
   };
 
   // ---------- Recipe page ----------
@@ -126,7 +126,7 @@
       <li class="mls-ing">
         <span class="mls-ing__amount">${S.asWritten ? "" : amount(ing, factor)}</span>
         <span class="mls-ing__body">
-          ${S.asWritten ? h`<span>${ing.text}</span>` : h`<span>${using ? h`<s>${sentence(ing.name)}</s> ${sentence(using)}` : sentence(ing.name)}</span>`}
+          ${S.asWritten ? h`<span>${A.keepUnit(ing.text)}</span>` : h`<span>${using ? h`<s>${sentence(ing.name)}</s> ${sentence(using)}` : sentence(ing.name)}</span>`}
           ${
             item || ing.checkLabel || sub
               ? h`<span class="mls-row">
@@ -218,7 +218,7 @@
           compact: true,
           eyebrow: isTonight ? `Tonight · ${meal.slot}` : `${A.fmtDay(day.date)} · ${meal.slot}`,
           title: r.title,
-          lede: `${r.minutes} min · For ${A.names(meal.eaters)} · ${A.kcal(r.kcal)} a serving`,
+          lede: `${r.minutes}\u00a0min · For ${A.names(meal.eaters)} · ${A.kcal(r.kcal)} a serving`,
           aside: h`<div class="mls-hero__actions">${actions}</div>`
         })}
         <div class="mls-row">
@@ -300,7 +300,7 @@
                         <li class="mls-line">
                           <span>${icon("package", 16)}</span>
                           <span class="mls-line__body"><span class="mls-line__name">${row.item.name}</span></span>
-                          <span class="mls-line__amount">
+                          <span class="mls-line__amount${row.after == null ? "" : " mls-line__amount--change"}">
                             ${
                               row.after == null
                                 ? caption(row.note)

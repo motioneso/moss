@@ -62,11 +62,11 @@
     return h`
       <div class="mls-stack mls-stack--tiny">
         ${eyebrow(label)}
-        <span class="mls-num mls-num--lg">${value.toLocaleString("en-US")}${unit ? h`<span class="jds-caption"> ${unit}</span>` : ""}</span>
+        <span class="mls-num mls-num--lg">${value.toLocaleString("en-US")}${unit ? h`<span class="jds-caption">\u00a0${unit}</span>` : ""}</span>
         <div class="jds-progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="${label} against target">
           <div class="jds-progress__fill" style="width: ${pct}%"></div>
         </div>
-        ${caption(`of ${target.toLocaleString("en-US")}${unit ? ` ${unit}` : ""}`)}
+        ${caption(`of ${target.toLocaleString("en-US")}${unit ? `\u00a0${unit}` : ""}`)}
       </div>`;
   };
 
@@ -97,7 +97,7 @@
         ${statusView(e)}
       </span>
       <span class="mls-line__amount">
-        ${e.kcal == null ? caption("No estimate yet") : h`<span class="mls-num">${A.kcal(e.kcal)}</span>${caption(`${e.protein} g protein · ${e.carbs} g carbs · ${e.fat} g fat`)}`}
+        ${e.kcal == null ? caption("No estimate yet") : h`<span class="mls-num">${A.kcal(e.kcal)}</span>${caption(`${e.protein}\u00a0g protein · ${e.carbs}\u00a0g carbs · ${e.fat}\u00a0g fat`)}`}
       </span>
       <span class="mls-line__tools">${iconBtn("pencil", `Correct ${e.text}`, { href: A.hrefFor(`log/edit/${e.id}`), disabled: e.status === "estimating" })}</span>
     </li>`;
@@ -129,9 +129,9 @@
           <dl class="mls-list mls-stack mls-stack--tiny">
             ${[
               ["Calories", A.kcal(g.calories)],
-              ["Protein", `${g.protein} g`],
-              ["Carbs", `${g.carbs} g`],
-              ["Fat", `${g.fat} g`]
+              ["Protein", `${g.protein}\u00a0g`],
+              ["Carbs", `${g.carbs}\u00a0g`],
+              ["Fat", `${g.fat}\u00a0g`]
             ].map(([k, v]) => h`<div class="mls-row mls-row--between"><dt class="jds-caption">${k}</dt><dd class="mls-num">${v}</dd></div>`)}
           </dl>
           ${btn("Change targets", { variant: "link", size: "sm", href: A.hrefFor("household/member/m-rowan") })}

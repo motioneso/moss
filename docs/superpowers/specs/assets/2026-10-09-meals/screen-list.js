@@ -71,8 +71,8 @@
           ${tags.length ? h`<span class="mls-row">${tags}</span>` : ""}
         </label>
         <label class="mls-line__amount" for="${tick}">
-          <span class="mls-num">${l.buy}</span>
-          ${l.was ? caption(`Was ${l.was}`) : l.need && l.need !== l.buy ? caption(`Needs ${l.need}`) : ""}
+          <span class="mls-num">${A.keepUnit(l.buy)}</span>
+          ${l.was ? caption(A.keepUnit(`Was ${l.was}`)) : l.need && l.need !== l.buy ? caption(A.keepUnit(`Needs ${l.need}`)) : ""}
         </label>
         <span class="mls-line__tools">
           ${iconBtn("pencil", `Edit ${l.name}`, { href: A.hrefFor(`list/edit/${l.id}`) })}
@@ -114,7 +114,7 @@
     return [...seen.values()];
   };
 
-  const pantryAmount = (p) => (p.qty == null ? "Some" : `${Math.round(p.qty * 100) / 100}${p.unit ? ` ${p.unit}` : ""}`);
+  const pantryAmount = (p) => (p.qty == null ? "Some" : A.keepUnit(`${Math.round(p.qty * 100) / 100}${p.unit ? ` ${p.unit}` : ""}`));
 
   const haveView = () => {
     const rows = haveLines();
@@ -200,7 +200,7 @@
           ${eyebrow("Staples on the list")}
           ${
             missing.length
-              ? h`<ul class="mls-list mls-stack mls-stack--tiny" role="list">${missing.map((s) => h`<li class="jds-caption">${s.name}${s.target ? `, ${s.target}` : ""}</li>`)}</ul>`
+              ? h`<ul class="mls-list mls-stack mls-stack--tiny" role="list">${missing.map((s) => h`<li class="jds-caption">${s.name}${s.target ? `, ${A.keepUnit(s.target)}` : ""}</li>`)}</ul>`
               : caption("Every Staple is in the Pantry.")
           }
           ${btn("Edit Staples", { variant: "link", size: "sm", href: A.hrefFor("pantry/staples") })}
@@ -289,7 +289,7 @@
         <div class="mls-form">
           ${field("Item", input({ id: "le-name", value: l.name }), { id: "le-name" })}
           <div class="mls-form-grid">
-            ${field("Amount to buy", input({ id: "le-amount", value: l.buy }), { id: "le-amount", hint: l.need && l.need !== l.buy ? `Recipes need ${l.need}` : "" })}
+            ${field("Amount to buy", input({ id: "le-amount", value: l.buy }), { id: "le-amount", hint: l.need && l.need !== l.buy ? A.keepUnit(`Recipes need ${l.need}`) : "" })}
             ${field("Section", select(sectionOptions(), l.section, { id: "le-section" }), { id: "le-section" })}
           </div>
         </div>`,

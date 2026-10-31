@@ -292,7 +292,7 @@
         <div class="mls-meal__foot">
           <span class="mls-meal__meta jds-caption">
             ${meal.fit.length ? "" : h`<span>${A.names(meal.eaters)}</span>`}
-            ${r ? h`<span class="mls-fit__item">${icon("users", 12)}Serves ${serves}</span><span class="mls-fit__item">${icon("clock", 12)}${r.minutes} min</span>` : ""}
+            ${r ? h`<span class="mls-fit__item">${icon("users", 12)}Serves ${serves}</span><span class="mls-fit__item">${icon("clock", 12)}${r.minutes}\u00a0min</span>` : ""}
           </span>
           ${tools}
         </div>
@@ -316,7 +316,7 @@
         .filter((t) => t.total > 0)
         .map(
           (t) =>
-            h`<span class="mls-fit__item jds-caption"><strong>${t.member.name}</strong> <span class="mls-num">${t.total.toLocaleString("en-US")} of ${t.target.toLocaleString("en-US")} kcal</span>${t.total > t.target ? badge(`${t.total - t.target} over`, "amber") : ""}</span>`
+            h`<span class="mls-fit__item jds-caption"><strong>${t.member.name}</strong> <span class="mls-num">${t.total.toLocaleString("en-US")} of ${t.target.toLocaleString("en-US")}\u00a0kcal</span>${t.total > t.target ? badge(`${t.total - t.target} over`, "amber") : ""}</span>`
         )}
     </div>`;
 
@@ -343,7 +343,7 @@
       <div class="mls-day__head">
         ${sectionHead({ number, title: A.fmtDay(day.date), meta, as: "h3" })}
         <div class="mls-day__tools">
-          ${day.cookLimit ? badge(`${day.cookLimit} min limit`, "steel", { icon: "timer" }) : ""}
+          ${day.cookLimit ? badge(`${day.cookLimit}\u00a0min limit`, "steel", { icon: "timer" }) : ""}
           ${day.lunchOverride === "shared" ? badge("Lunch together", "steel", { icon: "users" }) : ""}
           ${!queued && !failed && !stopped ? dayMenu(day) : ""}
         </div>
@@ -609,7 +609,7 @@
         <span class="jds-empty__mark">${icon("utensils", 16)}</span>
         <div class="mls-line__body">
           <span class="mls-line__name">${r.title}</span>
-          <span class="jds-caption">${r.minutes} min · ${fit.map((f) => `${A.member(f.memberId).name} ${f.kcal} kcal`).join(" · ")}</span>
+          <span class="jds-caption">${r.minutes}\u00a0min · ${fit.map((f) => `${A.member(f.memberId).name} ${f.kcal}\u00a0kcal`).join(" · ")}</span>
           ${
             o.showBuy
               ? h`<span class="jds-caption">${buy.length ? `To buy: ${buy.map((i) => i.name).join(", ")}` : "Nothing to buy"}</span>`
@@ -648,7 +648,7 @@
       body: h`
         <div class="mls-stack">
           ${segmented(
-            [15, 20, 30].map((n) => ({ value: String(n), label: `${n} min` })),
+            [15, 20, 30].map((n) => ({ value: String(n), label: `${n}\u00a0min` })),
             String(S.quickLimit),
             { label: "Time limit", action: "plan-quick-limit" }
           )}
@@ -772,7 +772,7 @@
                   const r = A.recipe(id);
                   return h`<div class="mls-line">
                     <span class="jds-empty__mark">${icon("heart", 16)}</span>
-                    <div class="mls-line__body"><span class="mls-line__name">${r.title}</span><span class="jds-caption">${r.minutes} min</span></div>
+                    <div class="mls-line__body"><span class="mls-line__name">${r.title}</span><span class="jds-caption">${r.minutes}\u00a0min</span></div>
                     <span></span>
                     ${btn("Place", { size: "sm", action: "plan-favourite-place", data: { date, slot, recipe: id, member: m.id } })}
                   </div>`;

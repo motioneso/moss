@@ -309,7 +309,7 @@
     return d.toISOString().slice(0, 10);
   };
   const isPast = (iso) => iso < F.TODAY;
-  const kcal = (n) => `${n.toLocaleString("en-US")} kcal`;
+  const kcal = (n) => `${n.toLocaleString("en-US")}\u00a0kcal`;
 
   // Pantry item matching an ingredient name, loosely, or null.
   const onHand = (name) => {
@@ -751,9 +751,13 @@
     toast("Chat runs the same Meals actions. It is outside this prototype.", { icon: "message-square", tone: "drift" })
   );
 
+  // A number never wraps away from the unit or word after it: "3 lb", "2 × 1 lb", "1½ cups".
+  const keepUnit = (text) => String(text).replace(/(\d[\d.,/¼½¾⅓⅔⅛⅜⅝⅞]*) (?=\S)/g, "$1\u00a0");
+
   // ---------- Public surface for screen files ----------
 
   window.MEALS_APP = {
+    keepUnit,
     F,
     S,
     h,
