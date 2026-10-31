@@ -199,6 +199,29 @@ describe("module page tool route: direct runs", () => {
       localTimezone: "Pacific/Auckland"
     });
   });
+
+  it("reads the time zone as the signed-in person", async () => {
+    readActorLocale.mockClear();
+    await build({
+      dataContext: {
+        withDataContext: async (access, work) => work({ actor: access.actorUserId } as never)
+      }
+    });
+    await call("meals", "meals.tickLine", { input: { lineId: "l1" } });
+
+    expect(readActorLocale).toHaveBeenCalledTimes(1);
+    expect(readActorLocale.mock.calls[0]![0]).toEqual({ actor: USER });
+  });
+
+  it("stops the call when the saved locale cannot be read", async () => {
+    await build();
+    readActorLocale.mockRejectedValueOnce(new Error("locale read failed"));
+    const response = await call("meals", "meals.tickLine", { input: { lineId: "l1" } });
+
+    expect(response.statusCode).toBe(500);
+    expect(execute).not.toHaveBeenCalled();
+    expect(recordActivity).not.toHaveBeenCalled();
+  });
 });
 
 describe("module page tool route: confirmation", () => {
