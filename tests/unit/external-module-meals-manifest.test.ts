@@ -189,8 +189,8 @@ describe("meals manifest", () => {
     const member = tool("meals.household.save").inputSchema as Schema & {
       properties: Record<"restrictions" | "preferences", { items: { maxLength: number } }>;
     };
-    expect(member.properties.restrictions!.items.maxLength).toBe(80);
-    expect(member.properties.preferences!.items.maxLength).toBe(120);
+    expect(member.properties.restrictions.items.maxLength).toBe(80);
+    expect(member.properties.preferences.items.maxLength).toBe(120);
   });
 
   it("registers every manifest handler and nothing more", () => {
