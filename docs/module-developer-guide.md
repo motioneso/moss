@@ -526,11 +526,74 @@ reading host files. Stdout carries the JSON-RPC protocol; do not write applicati
   still apply; a port's presence does not mean every call will succeed.
 - Resolved `ctx.preferences`, `ctx.localTimezone`, and `ctx.deadlineAt`. Use the user's timezone
   for calendar-day behavior. Handle an unset integer preference as unset, not zero.
+- Follow-up jobs on your own queues through `ctx.jobs.enqueue` (see 13.2.1).
 
 Enforcement is in `packages/module-registry/src/external/worker-rpc-host.ts` and
 `packages/db/src/module-storage-rpc.ts`. Read-only invocations cannot mutate KV/credentials or post
 notifications. Respect deadlines; declared queue timeouts cannot exceed `MAX_INVOCATION_MS`.
 Keep queue payloads metadata-only and make retryable/scheduled work safe to repeat.
+
+### 13.2.1 Starting a job from a handler: `ctx.jobs.enqueue`
+
+A handler can start a job on one of its own queues. This is how a long task runs as a chain of
+steps, where each step enqueues the next as its last action.
+
+```ts
+const result = await ctx.jobs.enqueue({
+  queue: "meals.generate", // full declared name
+  jobKind: "day", // /^[a-z][a-z0-9_.-]{0,63}$/
+  idempotencyKey: `plan:${planId}:day:${day}`, // /^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$/
+  params: { planId, day } // optional, must match the queue's paramsSchema
+});
+// result.status: "enqueued" | "duplicate" | "limited"
+```
+
+**Opt in per queue.** Set `allowModuleEnqueue: true` on each queue you want to target. The queue
+must declare a `paramsSchema`, and that schema may not contain a `string` field. Allowed field
+types are `uuid`, `identifier`, `timestamp`, `boolean`, `null`, `integer`, `number`, `enum`, and
+arrays of those. The point is to keep private text out of job payloads, so pass an id and read
+the content back from your own storage when the job runs.
+
+**Who the job runs as.** The new job runs as the same person as the handler that enqueued it. You
+cannot choose another actor, and an `actorUserId` or `moduleId` key in the call is refused. You
+can only target queues your own manifest declares with the opt-in.
+
+**Who can call it.** Write-risk tool calls and queue jobs. Read-risk tools, candidate hooks and
+briefing contributions are refused.
+
+**Idempotency key.** The key names one logical step. Calling again with the same key, from a
+retried handler for example, returns `duplicate` and starts nothing, so a retry never makes a
+second job. Keys are per person, so two people can use the same key. The key is hashed into the
+job id and is never stored, logged or put in the payload. The earlier job blocks its key while its
+row exists: up to 14 days if it never started, and 7 days after it finishes. A failed or
+cancelled job still blocks its key. To run a step again, use a new key, for example one with a
+regeneration counter (`plan:${planId}:day:${day}:r2`).
+
+**Limits.** All three are enforced by the host and none is configurable.
+
+| Result                | Meaning                                                                          |
+| --------------------- | -------------------------------------------------------------------------------- |
+| `limited: invocation` | You already made 5 enqueue calls in this one handler run.                        |
+| `limited: pending`    | This person already has 10 jobs waiting or running on your queues.               |
+| `limited: hourly`     | This person's jobs on your queues reached 120 in the last hour, from any source. |
+
+A repeated call is checked for `duplicate` before the limits, so a retried handler at the cap
+still sees `duplicate`. On `limited`, record where the chain stopped and offer the person a way to
+resume, using a new key. The host logs the limit but never your params.
+
+**Errors.** Contract problems reject the call. An unknown or non-opted-in queue, a bad call shape,
+params that fail the schema, and a module that is switched off for this person are all
+rejections. Handle `limited` and `duplicate` as normal outcomes, not errors.
+
+**Rebuild against the new SDK.** `ctx.jobs` is part of the worker bundle that
+`defineModuleWorker` produces, so a module must be rebuilt to get it. A rebuilt module on an
+older host gets a generic RPC error from `jobs.enqueue`, because the host does not know the
+method. Raise the module's `compatibility.jarv1s` floor if you depend on it.
+
+**Upgrades.** A pending job keeps the payload it was enqueued with and is checked against the
+queue's current `paramsSchema` when it runs. Keep a self-enqueued queue's schema backward
+compatible across releases. If an upgrade removes the queue or breaks the schema, chains in
+flight fail with a params message and need a resume.
 
 **Enforcement limit:** `external/worker-runtime.ts` launches a Node subprocess with a restricted
 environment and host RPC checks. That launcher does not establish an OS filesystem/network sandbox.
