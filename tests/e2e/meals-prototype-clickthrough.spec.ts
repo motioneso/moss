@@ -16,7 +16,7 @@ const SHOTS = process.env.MEALS_PROTOTYPE_SHOTS
   : null;
 const WIDTHS = [1440, 390] as const;
 const AREAS = ["plan", "recipe", "list", "pantry", "household", "log", "settings"];
-const STATES = ["empty", "loading", "error", "ai-off"];
+const STATES = ["empty", "loading", "error", "ai-off", "long"];
 
 // A recipe page needs a recipe id, so recipe routes are checked through their samples only.
 const STATE_AREAS = AREAS.filter((area) => area !== "recipe");
@@ -48,6 +48,7 @@ function definedClasses(): Set<string> {
 interface Visit {
   readonly name: string;
   readonly hash: string;
+  readonly long?: boolean;
 }
 
 interface ReviewRoute {
@@ -73,19 +74,27 @@ const areaOf = (route: ReviewRoute) => route.path.split("/")[0]!;
 function visitsFor(routes: readonly ReviewRoute[], area: string): Visit[] {
   const query = (params: Record<string, string | number>) =>
     `?${new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]))}`;
-  const samples = routes
-    .filter((r) => areaOf(r) === area)
-    .map((r) => ({
-      name: r.phase > 2 ? `${r.path}@phase${r.phase}` : r.path,
-      hash: `#/${r.path}${r.phase > 2 ? query({ phase: r.phase }) : ""}`
-    }));
-  if (!STATE_AREAS.includes(area)) return samples;
+  const own = routes.filter((r) => areaOf(r) === area);
+  const samples = own.map((r) => ({
+    name: r.phase > 2 ? `${r.path}@phase${r.phase}` : r.path,
+    hash: `#/${r.path}${r.phase > 2 ? query({ phase: r.phase }) : ""}`
+  }));
+
+  // Long names, lines and numbers on every route, so wrapping is checked everywhere.
+  const long = own.map((r) => ({
+    name: `${r.path}@long`,
+    hash: `#/${r.path}${query(r.phase > 2 ? { state: "long", phase: r.phase } : { state: "long" })}`,
+    long: true
+  }));
+  if (!STATE_AREAS.includes(area)) return [...samples, ...long];
   const states = STATES.map((state) => ({
     name: `${area}@${state}`,
-    hash: `#/${area}${query({ state })}`
+    hash: `#/${area}${query({ state })}`,
+    long: state === "long"
   }));
   return [
     ...samples,
+    ...long,
     ...states,
     { name: `${area}@phase5`, hash: `#/${area}${query({ phase: 5 })}` }
   ];
@@ -135,6 +144,12 @@ for (const width of WIDTHS) {
             used.filter((c) => !defined.has(c)),
             `${visit.name}: classes with no style`
           ).toEqual([]);
+          if (visit.long) {
+            const sideways = await page.evaluate(
+              () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+            );
+            expect(sideways, `${visit.name}: page scrolls sideways`).toBeLessThanOrEqual(1);
+          }
           if (SHOTS) {
             await page.screenshot({
               path: path.join(SHOTS, `${visit.name.replace(/[^a-z0-9@-]+/gi, "_")}-${width}.png`),

@@ -114,7 +114,7 @@
       <aside class="mls-rail">
         <section class="mls-stack mls-stack--tight">
           ${eyebrow("This week")}
-          <ul class="mls-list mls-stack mls-stack--tiny" role="list">
+          <ul class="mls-list mls-stack mls-stack--tight" role="list">
             ${WEEK.map((d) => {
               const kcal = totals(entriesFor(d.date)).kcal;
               return h`<li class="mls-row mls-row--between">
