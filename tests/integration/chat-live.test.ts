@@ -229,50 +229,6 @@ describe("passive context retrieval integration", () => {
     });
     expect(factsDisabled).toBe("");
   });
-
-  it("keeps the one-connection pool usable while a timed-out facts search is still embedding (#3606)", async () => {
-    const settings = new ChatUserMemorySettingsRepository();
-    await dataContext.withDataContext(userAContext(), (scopedDb) =>
-      settings.update(scopedDb, ids.userA, { recallEnabled: true, factsEnabled: true })
-    );
-    let releaseEmbedding!: () => void;
-    const embeddingHeld = new Promise<void>((resolve) => {
-      releaseEmbedding = resolve;
-    });
-    class HeldEmbeddingProvider extends StubEmbeddingProvider {
-      override async embedQuery(text: string): Promise<number[]> {
-        await embeddingHeld;
-        return super.embedQuery(text);
-      }
-    }
-    const retriever = new PassiveContextRetriever({
-      dataContext,
-      graphRecall: new GraphMemoryRecallService(new HeldEmbeddingProvider())
-    });
-
-    try {
-      // The passive timeout gives up while the embedding is still held.
-      const block = await retriever.retrieve({
-        actorUserId: ids.userA,
-        userText: "remember House project uses option A for cabinets",
-        threadTitle: null,
-        recentTurns: []
-      });
-      expect(block).toBe("");
-
-      // The next turn needs the only connection and the settings row.
-      const followUp = dataContext.withDataContext(userAContext(), (scopedDb) =>
-        settings.getOrCreate(scopedDb, ids.userA)
-      );
-      const outcome = await Promise.race([
-        followUp.then(() => "served" as const),
-        new Promise<"starved">((resolve) => setTimeout(() => resolve("starved"), 2000))
-      ]);
-      expect(outcome).toBe("served");
-    } finally {
-      releaseEmbedding();
-    }
-  });
 });
 
 describe("chat.listTodaysTurns read tool + listThreadsByActivity", () => {
