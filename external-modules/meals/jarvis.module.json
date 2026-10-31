@@ -77,8 +77,14 @@
       {
         "id": "meals.plan",
         "label": "Meals",
-        "description": "The Meals page, with tabs for Plan, Shopping list, Pantry, Household and Log. Plan, Shopping list, Pantry and Log show an empty state until plans can be written.",
+        "description": "The Meals page, with tabs for Plan, Shopping list, Pantry, Household and Log. Plan shows the meal plan day by day as Moss writes it, with tonight's dinner on top, and an empty state until a plan exists. Shopping list, Pantry and Log show an empty state until they are built.",
         "path": "/"
+      },
+      {
+        "id": "meals.recipe",
+        "label": "Recipe",
+        "description": "One planned meal as a recipe, with who eats it, the ingredients beside the original line, and the method. Opened from a meal on the Plan tab.",
+        "path": "/recipe"
       },
       {
         "id": "meals.household",
@@ -122,6 +128,7 @@
       "name": "meals.kitchen.get",
       "permissionId": "meals.kitchen.get",
       "description": "Read the Meals kitchen: units, default Pantry mode, every household member with their meals of the day, Never serve list, preferences and targets, and the Shared or Solo rule for each meal. A new account shows one member named You and the default settings.",
+      "actionLabel": "Read your kitchen setup",
       "risk": "read",
       "inputSchema": {
         "type": "object",
@@ -286,6 +293,7 @@
       "name": "meals.kitchen.save",
       "permissionId": "meals.kitchen.save",
       "description": "Change kitchen settings: units, the default Pantry mode for new plans, and Shared or Solo rules per meal. Each slot rule given replaces the stored rule for that meal name; other rules stay.",
+      "actionLabel": "Change your kitchen settings",
       "risk": "write",
       "actionFamilyId": "meal_planning",
       "executionPolicy": "auto",
@@ -502,6 +510,7 @@
       "name": "meals.household.save",
       "permissionId": "meals.household.save",
       "description": "Add or change a household member. Leave memberId out to add someone (name required). Restrictions are strict Never serve items; preferences are soft likes and dislikes. Null clears an optional field.",
+      "actionLabel": "Save a household member",
       "risk": "write",
       "actionFamilyId": "meal_planning",
       "executionPolicy": "auto",
@@ -726,6 +735,7 @@
       "name": "meals.household.remove",
       "permissionId": "meals.household.remove",
       "description": "Remove a household member. The self member cannot be removed.",
+      "actionLabel": "Remove a household member",
       "risk": "destructive",
       "actionFamilyId": "meal_planning",
       "handler": "household.remove",
@@ -753,7 +763,8 @@
     {
       "name": "meals.plan.create",
       "permissionId": "meals.plan.create",
-      "description": "Start a meal plan of 1 to 28 days from a start date. Moss writes the days one at a time in the background, checking every meal against each eater's Never serve list and calorie target, and returns the plan at once with its days pending. Call meals.plan.get to follow progress. Reusing an idempotency key returns the plan that key already made.",
+      "description": "Start a meal plan of 1 to 28 days from a start date. Moss writes the days one at a time in the background, checking every meal against each eater's Never serve list and calorie target, and returns the plan at once with its days pending. Call meals.plan.get to follow progress. Reusing an idempotency key returns the plan that key already made. When the user names only some meals, such as dinners, pass mealTypes with just those. Planning every meal then would be wrong.",
+      "actionLabel": "Plan your meals",
       "risk": "write",
       "actionFamilyId": "meal_planning",
       "executionPolicy": "auto",
@@ -783,6 +794,17 @@
             "type": "string",
             "maxLength": 1000,
             "description": "What the user asked for, in their words, for example quick dinners and more fish."
+          },
+          "mealTypes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "description": "Which meals to plan, for example [\"dinner\"] when the user asks only for dinners. Leave out to plan every meal the household eats."
           },
           "allowRepeats": {
             "type": "boolean",
@@ -1117,6 +1139,7 @@
       "name": "meals.plan.get",
       "permissionId": "meals.plan.get",
       "description": "Read a meal plan by its id, or the newest plan that covers a date: each day's status, its meals, who eats them, Safety results and calorie fit.",
+      "actionLabel": "Read a meal plan",
       "risk": "read",
       "handler": "plan.get",
       "inputSchema": {
@@ -1453,9 +1476,352 @@
       }
     },
     {
+      "name": "meals.plan.current",
+      "permissionId": "meals.plan.current",
+      "description": "Read the meal plan the Plan tab shows for a date: the plan that covers it, else the next one to start, else the newest. Returns plan null when nothing is planned. Same fields as meals.plan.get.",
+      "actionLabel": "Read this week's meal plan",
+      "risk": "read",
+      "handler": "plan.current",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["date"],
+        "properties": {
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Today in the user's own calendar, YYYY-MM-DD."
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["plan"],
+        "properties": {
+          "plan": {
+            "type": ["object", "null"],
+            "required": [
+              "planId",
+              "startDate",
+              "dayCount",
+              "pantryMode",
+              "state",
+              "pausedReason",
+              "progress",
+              "days"
+            ],
+            "properties": {
+              "planId": {
+                "type": "string"
+              },
+              "startDate": {
+                "type": "string"
+              },
+              "dayCount": {
+                "type": "integer"
+              },
+              "pantryMode": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "pausedReason": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "progress": {
+                "type": "object",
+                "required": ["ready", "total"],
+                "properties": {
+                  "ready": {
+                    "type": "integer"
+                  },
+                  "total": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "days": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "dayId",
+                    "date",
+                    "status",
+                    "failureReason",
+                    "cookTimeLimitMinutes",
+                    "meals",
+                    "dayFit"
+                  ],
+                  "properties": {
+                    "dayId": {
+                      "type": "string"
+                    },
+                    "date": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "failureReason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cookTimeLimitMinutes": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "meals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "mealId",
+                          "slotName",
+                          "kind",
+                          "sharing",
+                          "status",
+                          "failureReason",
+                          "locked",
+                          "oneOffFor",
+                          "favouriteOf",
+                          "title",
+                          "plainText",
+                          "cookMinutes",
+                          "servings",
+                          "eaters",
+                          "checkLabelCount",
+                          "cookedAt"
+                        ],
+                        "properties": {
+                          "mealId": {
+                            "type": "string"
+                          },
+                          "slotName": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "sharing": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "failureReason": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "locked": {
+                            "type": "boolean"
+                          },
+                          "oneOffFor": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "favouriteOf": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "title": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "plainText": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "cookMinutes": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "servings": {
+                            "type": "number"
+                          },
+                          "eaters": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "memberId",
+                                "name",
+                                "portion",
+                                "safety",
+                                "safetyReason",
+                                "fit"
+                              ],
+                              "properties": {
+                                "memberId": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "portion": {
+                                  "type": "number"
+                                },
+                                "safety": {
+                                  "type": "string"
+                                },
+                                "safetyReason": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "fit": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "required": [
+                                        "targetKcal",
+                                        "estimatedKcal",
+                                        "band",
+                                        "differenceKcal"
+                                      ],
+                                      "properties": {
+                                        "targetKcal": {
+                                          "type": "integer"
+                                        },
+                                        "estimatedKcal": {
+                                          "type": "integer"
+                                        },
+                                        "band": {
+                                          "type": "string"
+                                        },
+                                        "differenceKcal": {
+                                          "type": "integer"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          "checkLabelCount": {
+                            "type": "integer"
+                          },
+                          "cookedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "dayFit": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["memberId", "fit"],
+                        "properties": {
+                          "memberId": {
+                            "type": "string"
+                          },
+                          "fit": {
+                            "type": "object",
+                            "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                            "properties": {
+                              "targetKcal": {
+                                "type": "integer"
+                              },
+                              "estimatedKcal": {
+                                "type": "integer"
+                              },
+                              "band": {
+                                "type": "string"
+                              },
+                              "differenceKcal": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "name": "meals.plan.control",
       "permissionId": "meals.plan.control",
       "description": "Stop a plan that is being written, resume a stopped or paused plan where it left off, or retry one day that failed. A retry keeps the day's finished meals and rewrites only the rest. Name the day by dayId or date. Retrying a day on a stopped plan resumes the whole plan, so later unwritten days are written too. A retry asked for while another day is being written waits its turn.",
+      "actionLabel": "Stop, resume or retry a meal plan",
       "risk": "write",
       "actionFamilyId": "meal_planning",
       "executionPolicy": "auto",
@@ -1807,6 +2173,7 @@
       "name": "meals.plan.delete",
       "permissionId": "meals.plan.delete",
       "description": "Delete a meal plan with all its days and meals.",
+      "actionLabel": "Delete a meal plan",
       "risk": "destructive",
       "actionFamilyId": "meal_planning",
       "handler": "plan.delete",
@@ -1837,6 +2204,7 @@
       "name": "meals.meal.get",
       "permissionId": "meals.meal.get",
       "description": "Read one planned meal as a recipe: steps, ingredients scaled to the servings, check-the-label notes, and each eater's portion, Safety result and calorie fit.",
+      "actionLabel": "Read a recipe",
       "risk": "read",
       "handler": "meal.get",
       "inputSchema": {

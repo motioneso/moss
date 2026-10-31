@@ -102,6 +102,25 @@ export class FakePlanStore implements PlanStore {
     return days.at(-1)?.planId ?? null;
   }
 
+  async findCurrentPlan(date: string) {
+    const ranked = [...this.plans.values()].map((plan) => {
+      const days = [...this.days.values()]
+        .filter((day) => day.planId === plan.planId)
+        .map((day) => day.date);
+      const covers = days.includes(date);
+      const upcoming = !covers && days.length > 0 && days.every((day) => day > date);
+      return { plan, covers, upcoming, start: days.slice().sort()[0] ?? "" };
+    });
+    const pick = (list: typeof ranked) => list.at(-1)?.plan.planId ?? null;
+    const covering = ranked.filter((entry) => entry.covers);
+    if (covering.length > 0) return pick(covering);
+    const upcoming = ranked
+      .filter((entry) => entry.upcoming)
+      .sort((a, b) => a.start.localeCompare(b.start));
+    if (upcoming.length > 0) return upcoming[0]!.plan.planId;
+    return pick(ranked);
+  }
+
   async setPlanState(
     planId: string,
     state: PlanRow["state"],

@@ -24,6 +24,40 @@ export const MODULE_STYLES = `
 .mls-table { display: flex; flex-direction: column; gap: var(--space-2); }
 .mls-table li { display: flex; justify-content: space-between; gap: var(--space-3); overflow-wrap: anywhere; }
 .mls-table li > :last-child { flex-shrink: 0; }
+.mls-num { font-variant-numeric: tabular-nums; }
+.mls-planbar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--space-3) var(--space-5); padding-bottom: var(--space-3);
+  border-bottom: var(--border-w) solid var(--border);
+}
+.mls-progress { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); min-width: 0; }
+.mls-progress .jds-progress { width: 8rem; }
+.mls-week { display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; }
+.mls-day { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.mls-day__totals { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); }
+.mls-slots {
+  display: grid; gap: var(--space-5);
+  grid-template-columns: repeat(var(--mls-slot-count, 1), minmax(0, 1fr));
+}
+.mls-slot { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.mls-slot__label { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+.mls-meal { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.mls-meal + .mls-meal { padding-top: var(--space-3); border-top: var(--border-w) dashed var(--border); }
+.mls-meal__title { font-weight: 600; overflow-wrap: anywhere; }
+.mls-meal__text { margin: 0; overflow-wrap: anywhere; }
+.mls-meal__meta { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); margin: 0; }
+.mls-safety { margin: 0; overflow-wrap: anywhere; }
+.mls-fit { display: grid; grid-template-columns: auto minmax(3rem, 1fr) auto; gap: var(--space-1) var(--space-3); align-items: center; }
+.mls-fit__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 8rem; }
+.mls-back { align-self: flex-start; }
+.mls-ingredients, .mls-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.mls-ingredient { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--space-3); }
+.mls-ingredient__name { display: flex; flex-direction: column; gap: var(--space-1); overflow-wrap: anywhere; }
+.mls-step { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr); gap: var(--space-3); overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .mls-slots { grid-template-columns: minmax(0, 1fr); }
+  .mls-ingredient { grid-template-columns: 4.5rem minmax(0, 1fr); }
+}
 @media (max-width: 1080px) {
   .mls-grid { grid-template-columns: minmax(0, 1fr); }
   .mls-rail { padding-left: 0; border-left: 0; padding-top: var(--space-5); border-top: var(--border-w) solid var(--border); }
