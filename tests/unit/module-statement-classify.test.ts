@@ -1,3 +1,4 @@
+import { inspectModuleStatement } from "../../packages/db/src/module-statement-classify.js";
 import { describe, expect, it } from "vitest";
 import { classifyModuleStatement, ModuleQueryError } from "@moss/db";
 
@@ -75,6 +76,16 @@ describe("classifyModuleStatement", () => {
     expect(classifyError("SELECT 'set_config'").code).toBe("forbidden_statement");
   });
 
+  it("rejects advisory lock functions anywhere (another module's write lock key)", () => {
+    for (const statement of [
+      "SELECT pg_advisory_xact_lock(hashtextextended('moss:module-write:finance:u', 0))",
+      "SELECT pg_catalog.PG_ADVISORY_LOCK(1)",
+      'SELECT "pg_try_advisory_xact_lock"(1)',
+      "WITH l AS (SELECT pg_advisory_lock_shared(1)) SELECT * FROM l"
+    ])
+      expect(classifyError(statement).code).toBe("forbidden_statement");
+  });
+
   it("rejects unicode-escape and escape-string literals (skipper desync)", () => {
     expect(classifyError("SELECT U&'\\0064elete'").code).toBe("forbidden_statement");
     expect(classifyError('SELECT U&"x" FROM app.t').code).toBe("forbidden_statement");
@@ -112,4 +123,39 @@ describe("classifyModuleStatement", () => {
     expect(error.message).toContain("forbidden_statement");
     expect(error.sqlstate).toBeUndefined();
   });
+});
+
+describe("module locking-read classification", () => {
+  it.each([
+    "FOR UPDATE",
+    "for no key update",
+    "FOR SHARE",
+    "FOR KEY SHARE",
+    "FOR /* comment */ UPDATE",
+    "FOR /* outer /* inner */ continued */ UPDATE",
+    "FOR NO -- comment\n KEY UPDATE"
+  ])("orders %s with mutations", (clause) => {
+    expect(inspectModuleStatement(`SELECT id FROM app.t ${clause}`)).toEqual({
+      kind: "select",
+      locksRows: true
+    });
+  });
+  it.each([
+    "SELECT 'FOR UPDATE'",
+    'SELECT "FOR", "UPDATE" FROM app.t',
+    "SELECT id FROM app.t /* FOR SHARE */",
+    "SELECT id FROM app.t -- FOR KEY SHARE"
+  ])("keeps an ordinary read independent: %s", (query) => {
+    expect(inspectModuleStatement(query)).toEqual({ kind: "select", locksRows: false });
+  });
+});
+
+it("does not treat nested-comment words as a row-lock clause or a second statement", () => {
+  expect(inspectModuleStatement("SELECT 1 /* outer /* FOR UPDATE */ continued */")).toEqual({
+    kind: "select",
+    locksRows: false
+  });
+  expect(classifyError("SELECT 1; /* outer /* inner */ continued */ DELETE FROM app.t").code).toBe(
+    "forbidden_statement"
+  );
 });

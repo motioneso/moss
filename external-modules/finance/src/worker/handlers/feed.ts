@@ -1,3 +1,4 @@
+import { checkMerchantRule, setCanonicalMerchantRule } from "../merchant-rules.js";
 // external-modules/finance/src/worker/handlers/feed.ts
 //
 // FIN-02 (#1147) Task 10: the feed surface. transactions.query is the web
@@ -25,17 +26,25 @@ import {
   parseSharedKey,
   toSharedTransaction
 } from "../../domain/index.js";
+import { isCalendarMonth } from "../../domain/values.js";
+import { duplicateCandidates } from "../../domain/duplicates.js";
+import { splitsBalance } from "../../domain/splits.js";
 import type { WorkerPorts } from "../ports.js";
 import type { ToolFactory } from "../registry.js";
-import { InputError, readActiveUserIds, readBool, readInt, readString } from "../validate.js";
+import {
+  InputError,
+  readActiveUserIds,
+  readBool,
+  readEnum,
+  readInt,
+  readString
+} from "../validate.js";
 import { accountsListHandler } from "./accounts.js";
-
-const MONTH = /^\d{4}-\d{2}$/;
 
 function readMonth(input: Record<string, unknown>, ports: WorkerPorts): string {
   const month = readString(input, "month");
   if (month === undefined) return ports.now().toISOString().slice(0, 7);
-  if (!MONTH.test(month)) throw new InputError("month must be YYYY-MM");
+  if (!isCalendarMonth(month)) throw new InputError("month must be a valid YYYY-MM");
   return month;
 }
 
@@ -45,6 +54,8 @@ function readMonth(input: Record<string, unknown>, ports: WorkerPorts): string {
  * defaults. Keeping reads side-effect free also keeps query safe to retry.
  */
 export async function loadCategories(ports: WorkerPorts): Promise<Category[]> {
+  const canonical = await (await ports.store()).budgetPolicy?.categories();
+  if (canonical) return canonical;
   const stored = (await ports.kv.get(NS.categories, "taxonomy")) as {
     categories: Category[];
   } | null;
@@ -53,7 +64,12 @@ export async function loadCategories(ports: WorkerPorts): Promise<Category[]> {
 
 // A feed row: own rows are plain records; rows merged from the household
 // mirror carry their owner's id and a shared marker for the web layer.
-type FeedRow = TransactionRecord & { ownerUserId?: string; shared?: true };
+type FeedRow = TransactionRecord & {
+  ownerUserId?: string;
+  shared?: true;
+  possibleDuplicate?: true;
+  writeRevision?: string;
+};
 
 /** Most rows one transactions.query call returns; the screen asks for more in steps of 200. */
 const MAX_QUERY_LIMIT = 2000;
@@ -65,17 +81,34 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
   const month = readMonth(input, ports);
   const activeUserIds = readActiveUserIds(input);
   const accountId = readString(input, "accountId");
+  const transactionId = readString(input, "transactionId");
   const categoryId = readString(input, "categoryId");
   const search = readString(input, "search")?.toLowerCase();
+  const ownOnly = readBool(input, "ownOnly") ?? false;
   const pendingOnly = readBool(input, "pendingOnly") ?? false;
   const needsLookOnly = readBool(input, "needsLookOnly") ?? false;
+  const uncategorizedOnly = readBool(input, "uncategorizedOnly") ?? false;
+  const duplicatesOnly = readBool(input, "duplicatesOnly") ?? false;
+  const postingState = readEnum(input, "postingState", ["pending", "posted"] as const);
+  const direction = readEnum(input, "direction", ["inflow", "outflow"] as const);
+  const ledgerState = readEnum(input, "ledgerState", [
+    "uncleared",
+    "cleared",
+    "reconciled"
+  ] as const);
   const limit = readInt(input, "limit", { min: 1, max: MAX_QUERY_LIMIT }) ?? 50;
 
   // FIN-06c (#1166) Task 9: one store call for the requested month, across
   // every account — store.listMonthTransactions already returns the pinned
   // date-desc/id-asc order, so accountId (when given) is just a filter.
   const store = await ports.store();
-  const monthTransactions = await store.listMonthTransactions(month);
+  const stored = store.bulk
+    ? await store.bulk.monthRows(month)
+    : await store.listMonthTransactions(month);
+  const duplicates = duplicateCandidates(stored);
+  const monthTransactions: FeedRow[] = stored.map((row) =>
+    duplicates.has(row.id) ? { ...row, possibleDuplicate: true } : row
+  );
   let transactions: FeedRow[] = accountId
     ? monthTransactions.filter((record) => record.accountId === accountId)
     : [...monthTransactions];
@@ -83,7 +116,7 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
   // filters below, so category/search/pending treat shared rows exactly like
   // own rows. Own-prefix mirror chunks are skipped (own records above are
   // authoritative); this read stays pure — no mirror writes, no GC-on-read.
-  for (const key of await ports.mirror.list()) {
+  for (const key of ownOnly ? [] : await ports.mirror.list()) {
     const parsed = parseSharedKey(key);
     if (!parsed || parsed.suffix !== month) continue;
     if (parsed.ownerUserId === actorUserId) continue;
@@ -103,19 +136,45 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
     }
   }
   if (categoryId !== undefined) {
-    transactions = transactions.filter((record) => record.categoryId === categoryId);
+    transactions = transactions.filter(
+      (record) =>
+        record.categoryId === categoryId ||
+        record.splits?.some((part) => part.categoryId === categoryId)
+    );
   }
+  if (transactionId !== undefined)
+    transactions = transactions.filter((record) => record.id === transactionId);
   if (search !== undefined) {
     transactions = transactions.filter(
       (record) =>
         record.name.toLowerCase().includes(search) ||
-        (record.merchant ?? "").toLowerCase().includes(search)
+        (record.merchant ?? "").toLowerCase().includes(search) ||
+        (record.notes ?? "").toLowerCase().includes(search)
     );
   }
   if (pendingOnly) transactions = transactions.filter((record) => record.pending);
+  if (postingState)
+    transactions = transactions.filter((record) => record.pending === (postingState === "pending"));
+  if (direction)
+    transactions = transactions.filter((record) =>
+      direction === "inflow" ? record.amountCents < 0 : record.amountCents > 0
+    );
+  if (ledgerState)
+    transactions = transactions.filter((record) => {
+      if (record.shared || record.source !== "manual" || record.pending) return false;
+      if (ledgerState === "reconciled") return Boolean(record.reconciledAt);
+      return !record.reconciledAt && Boolean(record.cleared) === (ledgerState === "cleared");
+    });
+  if (uncategorizedOnly)
+    transactions = transactions.filter(
+      (record) => record.categoryId === null && !splitsBalance(record)
+    );
+  if (duplicatesOnly) transactions = transactions.filter((record) => record.possibleDuplicate);
   // Household rows are read-only here, so only the viewer's own rows can need a look.
   const needsLook = (record: FeedRow): boolean =>
-    record.shared !== true && record.reviewState === "needs_look";
+    record.shared !== true &&
+    (record.reviewState === "needs_look" ||
+      Boolean(record.splits?.length && !splitsBalance(record)));
   const needsLookCount = transactions.filter(needsLook).length;
   if (needsLookOnly) transactions = transactions.filter(needsLook);
   // Chunks are date-desc/id-asc internally; re-sort after the cross-account
@@ -135,8 +194,14 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
     transactions,
     totalCount,
     needsLookCount,
+    supportsSplits: store.supportsSplits,
+    supportsBulk: Boolean(store.bulk),
+    supportsConfirm: Boolean(store.bulk?.confirm),
+    supportsNotes: Boolean(store.notes),
     categories: await loadCategories(ports),
-    accounts: (accounts.accounts as unknown[] | undefined) ?? []
+    accounts: ((accounts.accounts as { shared?: boolean }[] | undefined) ?? []).filter(
+      (a) => !ownOnly || a.shared !== true
+    )
   };
 };
 
@@ -144,7 +209,7 @@ type ApplyIds = { transactionId: string; accountId: string; month: string; categ
 
 function readApplyIds(input: Record<string, unknown>): ApplyIds {
   const month = readString(input, "month", { required: true });
-  if (!MONTH.test(month)) throw new InputError("month must be YYYY-MM");
+  if (!isCalendarMonth(month)) throw new InputError("month must be a valid YYYY-MM");
   return {
     transactionId: readString(input, "transactionId", { required: true }),
     accountId: readString(input, "accountId", { required: true }),
@@ -179,13 +244,15 @@ async function applyCategory(
   if (!liveCategoryIds.has(ids.categoryId)) {
     throw new InputError("invalid_category", "categoryId is not a live category");
   }
-  // FIN-06c (#1166) Task 9: locate the record via the chunk read, but write
-  // it back through store.putTransaction — the store re-derives the same
-  // (accountId, month) chunk from the record itself, so there's no chunk to
-  // hand back and re-set anymore.
+  // Read the captured revision with the record; SQL writes update metadata only.
   const chunkKey = `${ids.accountId}:${ids.month}`;
   if (!chunks.has(chunkKey)) {
-    chunks.set(chunkKey, await store.getTransactionChunk(ids.accountId, ids.month));
+    chunks.set(
+      chunkKey,
+      store.metadata
+        ? await store.metadata.rows(ids.accountId, ids.month)
+        : await store.getTransactionChunk(ids.accountId, ids.month)
+    );
   }
   const chunk = chunks.get(chunkKey);
   const record = chunk?.find((entry) => entry.id === ids.transactionId);
@@ -193,12 +260,47 @@ async function applyCategory(
     // Names the condition only — ids from a queue payload are still inputs.
     throw new InputError("not_found", "no transaction matches the given ids");
   }
+  if (record.transferId)
+    throw new InputError("linked_transfer", "A linked transfer cannot become category spending");
   const previousCategoryId = record.categoryId;
+  if (record.splits?.length)
+    throw new InputError("split_transaction", "Edit the transaction's split categories instead");
   record.categoryId = ids.categoryId;
   record.categorizedBy = "user";
   // Choosing a category is the user's confirmation, whatever Moss guessed.
   record.reviewState = "confirmed";
   return { record, previousCategoryId };
+}
+
+/** SQL rejects a stale batch without rewriting any financial fields. */
+async function saveMetadata(
+  ports: WorkerPorts,
+  store: FinanceStore,
+  records: TransactionRecord[],
+  actor: "user" | "moss",
+  explicitNotes = false
+): Promise<boolean> {
+  if (!store.metadata) return false;
+  const rows = records.map((record) => {
+    if (!record.writeRevision || !record.categoryId)
+      throw new InputError(
+        "stale_transaction",
+        "Read current transactions before changing categories"
+      );
+    return {
+      id: record.id,
+      writeRevision: record.writeRevision,
+      categoryId: record.categoryId,
+      ...(explicitNotes ? { notes: record.notes ?? "" } : {})
+    };
+  });
+  if (!(await store.metadata.apply(rows, actor, ports.now().toISOString())))
+    throw new InputError(
+      "stale_transaction",
+      "Transactions or categories changed. Read saved records before trying again"
+    );
+  for (const record of records) delete record.writeRevision;
+  return true;
 }
 
 /** Logs a category change; ids only, and undo restores the earlier category. */
@@ -263,8 +365,10 @@ function categorizeTool(mode: "seen" | "new"): ToolFactory {
       );
     }
     if (notes !== undefined) record.notes = notes;
-    await store.putTransaction(record);
-    await logCategorize(store, "moss", ids, previousCategoryId);
+    if (!(await saveMetadata(ports, store, [record], "moss", notes !== undefined))) {
+      await store.putTransaction(record);
+      await logCategorize(store, "moss", ids, previousCategoryId);
+    }
     return {
       status: "ok",
       transaction: record,
@@ -297,8 +401,10 @@ export const categorizeApplyHandler: ToolFactory = (ports) => async (input) => {
   const ids = readApplyIds(params as Record<string, unknown>);
   const store = await ports.store();
   const { record, previousCategoryId } = await applyCategory(ports, store, ids);
-  await store.putTransaction(record);
-  await logCategorize(store, "user", ids, previousCategoryId);
+  if (!(await saveMetadata(ports, store, [record], "user"))) {
+    await store.putTransaction(record);
+    await logCategorize(store, "user", ids, previousCategoryId);
+  }
   return { status: "ok", transaction: record };
 };
 
@@ -319,7 +425,8 @@ function readIdList(params: Record<string, unknown>, key: string): string[] {
  * Queue path for the Transactions screen: confirm or change the category of one
  * or many rows. The lists line up by position. Every row is checked before any
  * is written, so a bad id leaves the whole batch untouched. A merchant rule is
- * made only for a single row and only when asked.
+ * made only for a single row and only when asked, and it is checked before
+ * anything is saved, so a refused rule leaves the category as it was.
  */
 export const reviewApplyHandler: ToolFactory = (ports) => async (input) => {
   const jobKind = readString(input, "jobKind", { required: true });
@@ -353,7 +460,7 @@ export const reviewApplyHandler: ToolFactory = (ports) => async (input) => {
     [];
   for (let index = 0; index < transactionIds.length; index += 1) {
     const month = months[index]!;
-    if (!MONTH.test(month)) throw new InputError("month must be YYYY-MM");
+    if (!isCalendarMonth(month)) throw new InputError("month must be a valid YYYY-MM");
     const ids: ApplyIds = {
       transactionId: transactionIds[index]!,
       accountId: accountIds[index]!,
@@ -363,7 +470,15 @@ export const reviewApplyHandler: ToolFactory = (ports) => async (input) => {
     const { record, previousCategoryId } = await applyCategory(ports, store, ids, context);
     applied.push({ record, ids, previousCategoryId });
   }
-  for (const { record, ids, previousCategoryId } of applied) {
+  if (createRule && normalizePayee(applied[0]!.record.name) !== "")
+    await checkMerchantRule(ports, store.rules, applied[0]!.record.name);
+  const savedMetadata = await saveMetadata(
+    ports,
+    store,
+    applied.map(({ record }) => record),
+    "user"
+  );
+  for (const { record, ids, previousCategoryId } of savedMetadata ? [] : applied) {
     await store.putTransaction(record);
     if (previousCategoryId === ids.categoryId) {
       await store.appendActivity({
@@ -382,7 +497,15 @@ export const reviewApplyHandler: ToolFactory = (ports) => async (input) => {
   }
   if (createRule) {
     const payeeKey = normalizePayee(applied[0]!.record.name);
-    if (payeeKey !== "") {
+    if (payeeKey !== "" && store.rules) {
+      await setCanonicalMerchantRule(
+        ports,
+        store,
+        applied[0]!.record.name,
+        categoryIds[0]!,
+        "user"
+      );
+    } else if (payeeKey !== "") {
       const hash = contentHash(payeeKey);
       // One rule per merchant: write the current key format, drop the old bare-hash key.
       await ports.kv.set(NS.rules, ruleKey(payeeKey), {

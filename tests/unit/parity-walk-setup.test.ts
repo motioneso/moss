@@ -47,7 +47,9 @@ async function overlapOf(page: Page, selector: string) {
 describe("parity scroll picks the ancestor that actually scrolls", () => {
   let browser: Browser;
   beforeAll(async () => {
-    browser = await chromium.launch();
+    browser = await chromium.launch(
+      process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}
+    );
   }, 60_000);
   afterAll(async () => {
     await browser?.close();
@@ -97,7 +99,9 @@ function orderEntryFor(width: number): MockupEntry {
 describe("entry setup sizes the viewport before navigating", () => {
   let browser: Browser;
   beforeAll(async () => {
-    browser = await chromium.launch();
+    browser = await chromium.launch(
+      process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}
+    );
   }, 60_000);
   afterAll(async () => {
     await browser?.close();

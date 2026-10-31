@@ -52,6 +52,10 @@ import type { WorkerPorts } from "../../external-modules/finance/src/worker/port
 import { MIGRATED_MARKER_KEY } from "../../external-modules/finance/src/worker/store.js";
 import { storageMigrateHandler } from "../../external-modules/finance/src/worker/handlers/migrate.js";
 import {
+  reportsSpendingHandler,
+  reportsNetWorthHandler
+} from "../../external-modules/finance/src/worker/handlers/reports.js";
+import {
   connectionStrings,
   dropModuleRolesAtTeardown,
   grantModuleMembershipAtSetup,
@@ -73,7 +77,22 @@ const ownedTables = [
   "app.finance_categories",
   "app.finance_activity",
   "app.finance_budget_drafts",
-  "app.finance_budget_draft_lines"
+  "app.finance_budget_draft_lines",
+  "app.finance_reconciliations",
+  "app.finance_imports",
+  "app.finance_budget_policy",
+  "app.finance_targets",
+  "app.finance_bill_plans",
+  "app.finance_bill_occurrences",
+  "app.finance_flex_policies",
+  "app.finance_manual_transfers",
+  "app.finance_merchant_rules",
+  "app.finance_bill_adjustments",
+  "app.finance_transfer_corrections",
+  "app.finance_provider_handoffs",
+  "app.finance_card_policies",
+  "app.finance_card_assignments",
+  "app.finance_bill_suggestion_dismissals"
 ];
 
 const NOW_1 = "2026-07-18T12:00:00.000Z";
@@ -338,7 +357,7 @@ async function seedOwnerAData(): Promise<void> {
     itemKey(ITEM_2.itemId),
     ITEM_2 as unknown as Record<string, unknown>
   );
-  // Survivor — never read or copied by storage-migrate.
+  // Legacy rule survives in KV and is also copied into canonical rule state.
   await kv.set(NS.connections, cursorKey("item-1"), { cursor: "opaque-cursor-value" });
 
   await kv.set(NS.accounts, ACCOUNT_1.accountId, ACCOUNT_1 as unknown as Record<string, unknown>);
@@ -364,7 +383,7 @@ async function seedOwnerAData(): Promise<void> {
     computedAt: "2026-07-01T00:00:00.000Z"
   });
 
-  // Survivor — never read or copied by storage-migrate.
+  // Legacy rule survives in KV and is also copied into canonical rule state.
   await kv.set(NS.rules, "trader-joes", {
     payeeKey: "trader joes",
     categoryId: "groceries",
@@ -528,5 +547,152 @@ describe("finance.storage-migrate integration (FIN-06b #1166)", () => {
     await assertSqlCountsMatchSeed(ids.userA); // unchanged — not doubled
     expect(await kvFor(ids.userA).get(NS.meta, MIGRATED_MARKER_KEY)).toEqual({ migratedAt: NOW_2 });
     await assertMigratedKvGoneSurvivorsRemain(ids.userA);
+  });
+});
+
+describe("Finance split storage through the module RPC", () => {
+  const withStore = <T>(
+    actorUserId: string,
+    work: (store: ReturnType<typeof sqlStore>) => Promise<T>
+  ) =>
+    appDataContext.withDataContext(
+      { actorUserId, requestId: "synthetic-finance-split" },
+      (scoped) => work(sqlStore(dbFor(scoped)))
+    );
+
+  it("keeps stored currencies separate in spending and snapshot reports", async () => {
+    await withStore(ids.userA, async (store) => {
+      const accountId = "synthetic-eur-account";
+      await store.putAccount({ ...ACCOUNT_1, accountId, isoCurrency: "EUR" });
+      await store.putTransaction({
+        ...TXN_JUNE_1,
+        id: "synthetic-eur-report",
+        accountId,
+        isoCurrency: "EUR",
+        amountCents: 4321
+      });
+      await store.putSnapshotChunk(accountId, "2026-06", { "2026-06-15": 654321 });
+      const ports = {
+        store: async () => store,
+        kv: { get: async () => null },
+        mirror: { list: async () => [] },
+        now: () => new Date("2026-06-20T12:00:00Z")
+      } as unknown as WorkerPorts;
+      const input = { actorUserId: ids.userA, months: 1 };
+      expect(await reportsSpendingHandler(ports)(input)).toMatchObject({
+        currencySelectionRequired: true,
+        own: []
+      });
+      expect(await reportsSpendingHandler(ports)({ ...input, currency: "EUR" })).toMatchObject({
+        currency: "EUR",
+        own: [{ cashFlow: { outflowCents: 4321 } }]
+      });
+      expect(await reportsNetWorthHandler(ports)(input)).toMatchObject({
+        headlineCents: null,
+        currencySelectionRequired: true
+      });
+      expect(await reportsNetWorthHandler(ports)({ ...input, currency: "EUR" })).toMatchObject({
+        headlineCents: 654321
+      });
+    });
+  });
+
+  it("commits one allocation and activity, rejects a stale edit, and retains allocations on sync", async () => {
+    const original = {
+      ...TXN_JUNE_1,
+      id: "synthetic-split",
+      amountCents: 1001,
+      categoryId: "groceries"
+    };
+    await withStore(ids.userA, (store) => store.putTransaction(original));
+    const change = {
+      transactionId: original.id,
+      accountId: original.accountId,
+      month: "2026-06",
+      expectedAmountCents: 1001,
+      expectedCurrency: "USD",
+      expectedRevision: 0,
+      splits: [
+        { categoryId: "groceries", amountCents: 700 },
+        { categoryId: "dining", amountCents: 301 }
+      ]
+    };
+    expect(
+      await withStore(ids.userA, (store) =>
+        store.setTransactionSplits({ ...change, expectedCurrency: "EUR" })
+      )
+    ).toBe(false);
+    expect(await withStore(ids.userA, (store) => store.setTransactionSplits(change))).toBe(true);
+    expect(await withStore(ids.userA, (store) => store.setTransactionSplits(change))).toBe(false);
+    expect(
+      await withStore(ids.userB, (store) =>
+        store.setTransactionSplits({ ...change, expectedRevision: 1 })
+      )
+    ).toBe(false);
+    await withStore(ids.userA, async (store) => {
+      const saved = (await store.getTransactionChunk(original.accountId, "2026-06"))!.find(
+        (r) => r.id === original.id
+      )!;
+      expect(saved).toMatchObject({
+        splits: change.splits,
+        splitRevision: 1,
+        categoryId: null,
+        amountCents: 1001
+      });
+      expect(
+        (await store.listActivity("2000-01-01", "2100-01-01", 200)).filter(
+          (a) => a.params.transactionId === original.id
+        )
+      ).toHaveLength(1);
+      // A sync read before the user's edit and now returns a corrected bank total.
+      await store.putTransaction({ ...original, amountCents: 1200 });
+      const corrected = (await store.getTransactionChunk(original.accountId, "2026-06"))!.find(
+        (r) => r.id === original.id
+      )!;
+      expect(corrected).toMatchObject({
+        splits: change.splits,
+        splitRevision: 1,
+        categoryId: null,
+        amountCents: 1200,
+        reviewState: "needs_look"
+      });
+    });
+  });
+
+  it("two simultaneous editors cannot both commit the same revision", async () => {
+    const original = { ...TXN_JUNE_1, id: "synthetic-race", amountCents: 1000 };
+    await withStore(ids.userA, (store) => store.putTransaction(original));
+    const change = {
+      transactionId: original.id,
+      accountId: original.accountId,
+      month: "2026-06",
+      expectedAmountCents: 1000,
+      expectedCurrency: "USD",
+      expectedRevision: 0,
+      splits: [
+        { categoryId: "groceries", amountCents: 700 },
+        { categoryId: "dining", amountCents: 300 }
+      ]
+    };
+    const outcomes = await Promise.all([
+      withStore(ids.userA, (store) => store.setTransactionSplits(change)),
+      withStore(ids.userA, (store) =>
+        store.setTransactionSplits({
+          ...change,
+          splits: [
+            { categoryId: "groceries", amountCents: 500 },
+            { categoryId: "dining", amountCents: 500 }
+          ]
+        })
+      )
+    ]);
+    expect(outcomes.sort()).toEqual([false, true]);
+    await withStore(ids.userA, async (store) => {
+      expect(
+        (await store.listActivity("2000-01-01", "2100-01-01", 200)).filter(
+          (a) => a.params.transactionId === original.id
+        )
+      ).toHaveLength(1);
+    });
   });
 });

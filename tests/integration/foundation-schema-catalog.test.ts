@@ -659,7 +659,8 @@ describe("MVP foundation schema catalog", () => {
         { version: "0344", name: "0344_chat_heartbeat_unavailable_sources.sql" },
         { version: "0345", name: "0345_chat_heartbeat_worker_publish.sql" },
         { version: "0352", name: "0352_meeting_output_reservation_expiry.sql" },
-        { version: "0353", name: "0353_integration_classifier_scan.sql" }
+        { version: "0353", name: "0353_integration_classifier_scan.sql" },
+        { version: "0356", name: "0356_module_page_activity_surface.sql" }
       ]);
     } finally {
       await client.end();

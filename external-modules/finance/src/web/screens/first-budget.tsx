@@ -2,13 +2,11 @@
 //
 // #3180: the first-budget draft on Getting started. The numbers all come from the stored
 // draft (finance.budget.draft.get); this screen only lays them out. Matches mockup
-// 05-first-budget. A plan amount is typed in place and saved through finance.draft-set; chat
-// changes land in the same record, so the screen re-reads it every few seconds while open.
-// The header total is summed from the lines shown, typed-but-unconfirmed amounts included.
+// 05-first-budget. A plan amount is typed in place and saved through guarded host tools; chat
+// changes land in the same record. The header total contains committed plan amounts only.
 //
-// After the first sync the screen asks the worker to build the draft (finance.draft-build),
-// then re-reads until it appears. "Start this budget" is the only way to start a budget: it
-// queues finance.draft-start and re-reads until the draft is marked started, then opens Budget.
+// After the first sync the screen awaits a stored draft. Starting requires the guarded
+// host confirmation and opens Budget only after the atomic start succeeds.
 import {
   Badge,
   Button,
@@ -21,17 +19,18 @@ import {
   useEffect,
   useRef,
   useState,
+  type ExternalModuleToolsHandleV1,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
-import { runWrite } from "../api";
-import { confirmedPlans, PENDING_GIVE_UP_MS, showPending, type PendingPlans } from "../draft-edit";
-import { centsToAmountInput, formatCents, monthLabel, parseAmountToCents } from "../format";
+import { amountFieldText } from "../budget-table";
+import { formatCents, monthLabel, parseAmountToCents } from "../format";
 import { navigate } from "../router";
 import { announce, LoadingState, outcomeGate } from "../states";
 import { invalidateQueries, useToolQuery } from "../store";
 import type { HostActions } from "../root";
 
 export interface DraftLineView {
+  isoCurrency?: string;
   categoryKey: string;
   categoryName: string;
   basisMonthlyCents: number;
@@ -42,6 +41,7 @@ export interface DraftLineView {
 }
 
 export interface DraftBody {
+  isoCurrency?: string;
   id: string;
   status: "open" | "started" | "discarded";
   basisFrom: string;
@@ -53,13 +53,19 @@ export interface DraftBody {
 }
 
 export interface DraftResult extends Record<string, unknown> {
+  revision?: number;
+  fingerprint?: string;
+  setupRequired?: boolean;
   hasSynced?: boolean;
   hasBudget?: boolean;
   draft?: DraftBody | null;
 }
 
-const CURRENCY = "USD";
-const money = (cents: number): string => formatCents(cents, CURRENCY);
+const money = (cents: number, currency?: string): string =>
+  currency ? formatCents(cents, currency) : "Unavailable";
+
+const fieldAmount = (cents: number, currency?: string): string =>
+  currency ? amountFieldText(cents, currency) : "Unavailable";
 
 /** "2026-07-01" to "2026-09-30" reads as "July to September" (or one month). */
 export function basisLabel(basisFrom: string, basisTo: string): string {
@@ -75,31 +81,32 @@ export function isShortHistory(basisFrom: string, basisTo: string): boolean {
 
 function unplannedLede(draft: DraftBody): string {
   const span = `Planned from ${basisLabel(draft.basisFrom, draft.basisTo)}.`;
-  const income = money(draft.monthlyIncomeCents);
+  const income = money(draft.monthlyIncomeCents, draft.isoCurrency);
   if (draft.unplannedCents < 0) {
-    return `${span} The plan is ${money(-draft.unplannedCents)} over your ${income} monthly income.`;
+    return `${span} The plan is ${money(-draft.unplannedCents, draft.isoCurrency)} over your ${income} monthly income.`;
   }
-  return `${span} ${money(draft.unplannedCents)} of your ${income} monthly income is still unplanned.`;
+  return `${span} ${money(draft.unplannedCents, draft.isoCurrency)} of your ${income} monthly income is still unplanned.`;
 }
 
 interface EditProps {
   errors: Record<string, string>;
+  drafts: Record<string, string>;
+  disabled: boolean;
+  onDraft: (id: string, value: string | null) => void;
   onSave: (line: DraftLineView, cents: number) => void;
   onBadAmount: (line: DraftLineView) => void;
 }
-
-/** The typing box for a line's plan amount. Saves on Enter or blur. */
 function PlanCell(props: { line: DraftLineView } & EditProps): ReactNodeLike {
-  const { line, errors } = props;
-  const [typed, setTyped] = useState<string | null>(null);
-  const finish = (): void => {
-    if (typed === null) return;
+  const { line } = props;
+  const typed = props.drafts[line.categoryKey];
+  const finish = () => {
+    if (typed === undefined || props.disabled) return;
     const cents = parseAmountToCents(typed);
-    setTyped(null);
     if (cents === null || cents < 0) props.onBadAmount(line);
     else if (cents !== line.planCents || line.dropped) props.onSave(line, cents);
+    else props.onDraft(line.categoryKey, null);
   };
-  const error = errors[line.categoryKey];
+  const error = props.errors[line.categoryKey];
   return (
     <div className="fnm-assign">
       <input
@@ -107,22 +114,43 @@ function PlanCell(props: { line: DraftLineView } & EditProps): ReactNodeLike {
         aria-label={`Plan for ${line.categoryName}`}
         aria-invalid={error ? "true" : undefined}
         inputMode="decimal"
-        value={typed ?? (line.dropped ? "" : money(line.planCents))}
+        disabled={props.disabled}
+        value={typed ?? (line.dropped ? "" : fieldAmount(line.planCents, line.isoCurrency))}
         placeholder={line.dropped ? "Not in budget" : undefined}
         onFocus={(event: { currentTarget: { select: () => void } }) => {
-          setTyped(line.dropped ? "" : centsToAmountInput(line.planCents));
           event.currentTarget.select();
         }}
+        onBlur={() => {
+          if (typed !== undefined && !line.dropped && parseAmountToCents(typed) === line.planCents)
+            props.onDraft(line.categoryKey, null);
+        }}
         onChange={(event: { currentTarget: { value: string } }) =>
-          setTyped(event.currentTarget.value)
+          props.onDraft(line.categoryKey, event.currentTarget.value)
         }
-        onBlur={finish}
-        onKeyDown={(event: { key: string; currentTarget: { blur: () => void } }) => {
-          if (event.key === "Enter") event.currentTarget.blur();
-          if (event.key === "Escape") setTyped(null);
+        onKeyDown={(event: { key: string; preventDefault: () => void }) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            finish();
+          }
+          if (event.key === "Escape") props.onDraft(line.categoryKey, null);
         }}
       />
-      {error ? <Indicator status="error" label={error} /> : null}
+      {typed !== undefined && (parseAmountToCents(typed) !== line.planCents || line.dropped) ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={props.disabled}
+          aria-label={`Save plan for ${line.categoryName}`}
+          onClick={finish}
+        >
+          Save
+        </Button>
+      ) : null}
+      {error ? (
+        <p role="alert" className="jds-hint fnm-field-error">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -133,8 +161,8 @@ function ChatChange(props: { line: DraftLineView }): ReactNodeLike {
     <div>
       <Badge tone="forest">
         {props.line.dropped
-          ? "Dropped in chat"
-          : `Changed in chat, was ${money(props.line.proposedCents)}`}
+          ? "Removed from the plan"
+          : `Adjusted, was ${money(props.line.proposedCents, props.line.isoCurrency)}`}
       </Badge>
     </div>
   );
@@ -170,14 +198,11 @@ function DraftTable(
                   <ChatChange line={line} />
                 </div>
               </td>
-              <td className="jds-table__num jds-hint">{money(line.basisMonthlyCents)}</td>
+              <td className="jds-table__num jds-hint">
+                {money(line.basisMonthlyCents, line.isoCurrency)}
+              </td>
               <td className="jds-table__num">
-                <PlanCell
-                  line={line}
-                  errors={props.errors}
-                  onSave={props.onSave}
-                  onBadAmount={props.onBadAmount}
-                />
+                <PlanCell line={line} {...props} />
               </td>
             </tr>
           ))}
@@ -199,17 +224,10 @@ function DraftRows(props: { group: DraftBody["groups"][number] } & EditProps): R
             excerpt={
               <div className="fnm-block fnm-block--tight">
                 <ChatChange line={line} />
-                <span>Average {money(line.basisMonthlyCents)}</span>
+                <span>Average {money(line.basisMonthlyCents, line.isoCurrency)}</span>
               </div>
             }
-            meta={
-              <PlanCell
-                line={line}
-                errors={props.errors}
-                onSave={props.onSave}
-                onBadAmount={props.onBadAmount}
-              />
-            }
+            meta={<PlanCell line={line} {...props} />}
           />
         ))}
       </RowIndex>
@@ -217,7 +235,7 @@ function DraftRows(props: { group: DraftBody["groups"][number] } & EditProps): R
   );
 }
 
-export interface FirstBudgetViewProps {
+export interface FirstBudgetViewProps extends EditProps {
   draft: DraftBody;
   hostActions: HostActions;
   starting: boolean;
@@ -235,11 +253,11 @@ export function FirstBudgetView(props: FirstBudgetViewProps): ReactNodeLike {
       <Masthead
         tone="field"
         eyebrow="Your first budget"
-        title={`${money(draft.totalCents)} a month`}
+        title={`${money(draft.totalCents, draft.isoCurrency)} a month`}
         lede={unplannedLede(draft)}
         aside={
           <div className="fnm-block fnm-block--tight">
-            <Button variant="field" onClick={props.onStart} disabled={props.starting}>
+            <Button variant="field" onClick={props.onStart} disabled={props.disabled}>
               {props.starting ? "Starting your budget" : "Start this budget"}
             </Button>
             {props.startError ? <Indicator status="error" label={props.startError} /> : null}
@@ -267,31 +285,16 @@ export function FirstBudgetView(props: FirstBudgetViewProps): ReactNodeLike {
       {draft.groups.map((group, index) => (
         <div key={group.name}>
           <div className="fnm-desktop-only">
-            <DraftTable
-              group={group}
-              head={index === 0}
-              errors={props.errors}
-              onSave={props.onSave}
-              onBadAmount={props.onBadAmount}
-            />
+            <DraftTable group={group} head={index === 0} {...props} />
           </div>
           <div className="fnm-phone-only">
-            <DraftRows
-              group={group}
-              errors={props.errors}
-              onSave={props.onSave}
-              onBadAmount={props.onBadAmount}
-            />
+            <DraftRows group={group} {...props} />
           </div>
         </div>
       ))}
     </div>
   );
 }
-
-const POLL_MS = 3000;
-/** While a draft is open the screen re-reads it this often, which also shows chat changes. */
-const MAX_POLLS = 10;
 
 /**
  * Reads the draft and drives it: builds one after the first sync, shows an open
@@ -300,200 +303,230 @@ const MAX_POLLS = 10;
  */
 export function FirstBudget(props: {
   hostActions: HostActions;
+  tools?: ExternalModuleToolsHandleV1;
   fallback: ReactNodeLike;
 }): ReactNodeLike {
   const query = useToolQuery<DraftResult>("finance.budget.draft.get");
   const result =
     query.status === "settled" && query.outcome.kind === "ok" ? query.outcome.result : null;
   const draft = result?.draft ?? null;
-  const needsBuild = result !== null && result.hasSynced === true && !result.hasBudget && !draft;
-
-  const [polls, setPolls] = useState(0);
-  const [tick, setTick] = useState(0);
-  const [pending, setPending] = useState<PendingPlans>({});
+  const needsBuild =
+    result !== null &&
+    !result.setupRequired &&
+    result.hasSynced === true &&
+    !result.hasBudget &&
+    !draft;
+  const [buildError, setBuildError] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const sentAt = useRef<Record<string, number>>({});
-  const [startSent, setStartSent] = useState(false);
-  const [startError, setStartError] = useState<string | null>(null);
-  const buildSent = useRef(false);
-  // Start was clicked and is held until every typed amount has been saved.
-  const [startWanted, setStartWanted] = useState(false);
-
-  const sendBuild = (): void => {
-    buildSent.current = true;
-    void runWrite("finance.draft-build", "finance.draft-build").then((outcome) => {
-      if (outcome.kind !== "queued") {
-        setPolls(MAX_POLLS);
-        announce("Couldn't start building your draft.");
-      }
-    });
-  };
-
-  // Ask for a draft once the first sync is in and none exists yet.
+  const [busy, setBusy] = useState(false);
+  const [uncertain, setUncertain] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const building = useRef(false);
+  const saving = useRef(false);
+  const live = useRef(true);
   useEffect(() => {
-    if (!needsBuild || buildSent.current) return;
-    sendBuild();
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
+  const sendBuild = () => {
+    if (!props.tools) return;
+    building.current = true;
+    setBuildError(null);
+    void props.tools
+      .invoke("finance.budget.draft.build", {})
+      .then((outcome) => {
+        if (!live.current) return;
+        if (outcome.status === "succeeded" && outcome.result.status === "ok") {
+          if (outcome.result.reason === "no-history")
+            setBuildError("There is not enough usable history to build a draft yet.");
+          invalidateQueries();
+        } else
+          setBuildError(
+            "The draft build could not be confirmed. Check the saved draft before trying again."
+          );
+      })
+      .catch(() => {
+        if (live.current)
+          setBuildError(
+            "The draft build could not be confirmed. Check the saved draft before trying again."
+          );
+      });
+  };
+  useEffect(() => {
+    if (needsBuild && props.tools && !building.current) sendBuild();
   }, [needsBuild]);
-
-  // Re-read while waiting on the build or on a start that was sent.
-  const startWaiting = startSent && draft?.status === "open";
-  const waiting = (needsBuild && polls < MAX_POLLS) || (startWaiting && polls < MAX_POLLS);
-  const watching = draft?.status === "open";
-  useEffect(() => {
-    if (!waiting && !watching) return;
-    const timer = setTimeout(() => {
-      if (waiting) setPolls((count) => count + 1);
-      setTick((count) => count + 1);
-      invalidateQueries();
-    }, POLL_MS);
-    return () => clearTimeout(timer);
-  }, [waiting, watching, polls, tick]);
-
-  // A start the worker never finished stops waiting and offers a retry.
-  useEffect(() => {
-    if (!startWaiting || polls < MAX_POLLS) return;
-    setStartSent(false);
-    setStartError("Your budget did not start. Try again.");
-    announce("Your budget did not start.");
-  }, [startWaiting, polls]);
-
-  // After each re-read: drop typed amounts the record now shows, and put back any the
-  // worker never confirmed.
-  useEffect(() => {
-    if (!draft || Object.keys(pending).length === 0) return;
-    const confirmed = new Set(confirmedPlans(pending, draft));
-    const now = Date.now();
-    const expired = Object.keys(pending).filter(
-      (key) => !confirmed.has(key) && now - (sentAt.current[key] ?? now) > PENDING_GIVE_UP_MS
-    );
-    if (confirmed.size === 0 && expired.length === 0) return;
-    setPending((previous) => {
-      const next = { ...previous };
-      for (const key of [...confirmed, ...expired]) delete next[key];
-      return next;
-    });
-    if (expired.length > 0) {
-      setErrors((previous) => {
-        const next = { ...previous };
-        for (const key of expired)
-          next[key] = "Couldn't confirm the save. Put back to the old amount.";
-        return next;
-      });
-      announce("Couldn't confirm the save.");
-    }
-  }, [query]);
-
-  const onSave = (line: DraftLineView, cents: number): void => {
-    if (!draft) return;
-    setErrors((previous) => {
-      const next = { ...previous };
-      delete next[line.categoryKey];
-      return next;
-    });
-    setPending((previous) => ({ ...previous, [line.categoryKey]: cents }));
-    sentAt.current[line.categoryKey] = Date.now();
-    // Metadata-only params: ids and cents.
-    void runWrite("finance.draft-set", "finance.draft-set", {
-      draftId: draft.id,
-      categoryKey: line.categoryKey,
-      amountCents: cents
-    }).then((outcome) => {
-      if (outcome.kind === "queued") return;
-      setPending((previous) => {
-        const next = { ...previous };
-        delete next[line.categoryKey];
-        return next;
-      });
-      setErrors((previous) => ({
-        ...previous,
-        [line.categoryKey]: "Couldn't save. Put back to the old amount."
-      }));
-      announce("Couldn't save.");
-    });
-  };
-
-  const onBadAmount = (line: DraftLineView): void => {
-    setErrors((previous) => ({
-      ...previous,
-      [line.categoryKey]: "Enter an amount like 250 or 250.50."
-    }));
-  };
-
-  // A started draft, or any budget, means Getting started is done.
   const done = result !== null && (result.hasBudget === true || draft?.status === "started");
   useEffect(() => {
     if (done) navigate("/");
-  }, [done]);
-
-  const sendStart = (draftId: string): void => {
-    setStartError(null);
-    setStartSent(true);
-    setPolls(0);
-    void runWrite("finance.draft-start", "finance.draft-start", { draftId }).then((outcome) => {
-      if (outcome.kind !== "queued") {
-        setStartSent(false);
-        setStartError("Couldn't start your budget. Try again.");
-        announce("Couldn't start your budget.");
-      }
+    if (checking && result) {
+      setChecking(false);
+      setUncertain(false);
+      setMessage("Saved draft refreshed. Review your typed amounts before saving.");
+    }
+  }, [query]);
+  const onDraft = (id: string, value: string | null) => {
+    setDrafts((old) => {
+      const next = { ...old };
+      if (value === null) delete next[id];
+      else next[id] = value;
+      return next;
+    });
+    setErrors((old) => {
+      const next = { ...old };
+      delete next[id];
+      return next;
     });
   };
-
-  const onStart = (): void => {
-    if (!draft) return;
-    setStartError(null);
-    setStartWanted(true);
+  const write = async (
+    tool: string,
+    input: Record<string, string | number>,
+    categoryKey?: string
+  ) => {
+    if (
+      !props.tools ||
+      !result?.fingerprint ||
+      result.revision === undefined ||
+      saving.current ||
+      uncertain
+    )
+      return;
+    saving.current = true;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const outcome = await props.tools.invoke(tool, {
+        ...input,
+        expectedRevision: result.revision,
+        expectedFingerprint: result.fingerprint
+      });
+      if (!live.current) return;
+      if (outcome.status === "succeeded" && outcome.result.status === "ok") {
+        if (categoryKey) onDraft(categoryKey, null);
+        announce(categoryKey ? "Draft amount saved." : "Budget started.");
+        invalidateQueries();
+        if (!categoryKey) navigate("/");
+      } else if (outcome.status === "cancelled")
+        setMessage("Cancelled. Your draft and typed amounts are kept.");
+      else if (outcome.status === "rejected" || outcome.status === "invalid_input") {
+        setMessage("Not saved. Refresh and review the draft again. Your typed amounts are kept.");
+        invalidateQueries();
+      } else {
+        setUncertain(true);
+        setMessage("The save could not be confirmed. Check the saved draft before trying again.");
+      }
+    } catch {
+      if (live.current) {
+        setUncertain(true);
+        setMessage("The save could not be confirmed. Check the saved draft before trying again.");
+      }
+    } finally {
+      saving.current = false;
+      if (live.current) setBusy(false);
+    }
   };
-
-  // Start waits for typed amounts to be saved, so the budget starts with what is on screen.
-  useEffect(() => {
-    if (!startWanted || !draft || Object.keys(pending).length > 0) return;
-    setStartWanted(false);
-    if (Object.keys(errors).length > 0) {
-      setStartError("Fix the amounts that didn't save, then start.");
+  const onSave = (line: DraftLineView, cents: number) => {
+    if (draft)
+      void write(
+        "finance.budget.draft.update",
+        { draftId: draft.id, categoryKey: line.categoryKey, amountCents: cents },
+        line.categoryKey
+      );
+  };
+  const onStart = () => {
+    if (!draft) return;
+    const lines = draft.groups.flatMap((group) => group.lines);
+    if (
+      Object.entries(drafts).some(
+        ([key, value]) =>
+          parseAmountToCents(value) !== lines.find((line) => line.categoryKey === key)?.planCents
+      )
+    ) {
+      setMessage("Save your typed amounts before starting this budget.");
       return;
     }
-    sendStart(draft.id);
-  }, [startWanted, pending, draft?.id]);
-
-  const retryBuild = (): void => {
-    setPolls(0);
-    sendBuild();
-    invalidateQueries();
+    void write("finance.budget.draft.start", { draftId: draft.id });
   };
-
-  return outcomeGate(
-    query,
-    (body) => {
-      if (done) return <LoadingState label="Opening your budget" />;
-      if (body.draft?.status === "open") {
-        return (
-          <FirstBudgetView
-            draft={showPending<DraftLineView, DraftBody>(body.draft, pending)}
-            errors={errors}
-            onSave={onSave}
-            onBadAmount={onBadAmount}
-            hostActions={props.hostActions}
-            starting={startSent || startWanted}
-            startError={startError}
-            onStart={onStart}
-          />
-        );
-      }
-      if (body.hasSynced !== true) return <>{props.fallback}</>;
-      if (polls >= MAX_POLLS) {
-        return (
-          <div className="fnm-block fnm-block--tight">
-            <Indicator status="error" label="Your draft could not be built." />
-            <div>
-              <Button variant="secondary" onClick={retryBuild}>
-                Try again
-              </Button>
-            </div>
-          </div>
-        );
-      }
-      return <Indicator status="idle" label="Building your first budget" />;
-    },
-    { loadingLabel: "Loading" }
+  return (
+    <div className="fnm-block">
+      {message ? <p role="status">{message}</p> : null}
+      {draft ? (
+        <div className="fnm-inline">
+          <p className="jds-hint">
+            Totals show saved amounts. Press Enter or Save after editing a plan.
+          </p>
+          <Button
+            variant="secondary"
+            disabled={busy || checking}
+            onClick={() => {
+              setChecking(true);
+              invalidateQueries();
+            }}
+          >
+            {checking ? "Refreshing…" : "Check saved draft"}
+          </Button>
+        </div>
+      ) : null}
+      {!props.tools && draft ? (
+        <Note variant="practical">Update Moss to save and start a reviewed budget.</Note>
+      ) : null}
+      {outcomeGate(
+        query,
+        (body) => {
+          if (body.setupRequired)
+            return (
+              <div className="fnm-block">
+                <Note variant="practical">
+                  Choose your budget currency before building a plan from your history.
+                </Note>
+                <Button onClick={() => navigate("/")}>Choose budget currency</Button>
+              </div>
+            );
+          if (done) return <LoadingState label="Opening your budget" />;
+          if (body.draft?.status === "open")
+            return (
+              <FirstBudgetView
+                draft={body.draft}
+                drafts={drafts}
+                disabled={busy || uncertain || !props.tools}
+                onDraft={onDraft}
+                errors={errors}
+                onSave={onSave}
+                onBadAmount={(line) =>
+                  setErrors((old) => ({
+                    ...old,
+                    [line.categoryKey]: "Enter an amount like 250 or 250.50."
+                  }))
+                }
+                hostActions={props.hostActions}
+                starting={busy}
+                startError={null}
+                onStart={onStart}
+              />
+            );
+          if (body.hasSynced !== true) return <>{props.fallback}</>;
+          if (buildError || !props.tools)
+            return (
+              <div className="fnm-block">
+                <Note variant="practical">
+                  {buildError ?? "Update Moss to build a reviewed draft."} You can also assign
+                  amounts directly on Budget.
+                </Note>
+                <div className="fnm-inline">
+                  <Button onClick={() => navigate("/")}>Open Budget</Button>
+                  <Button variant="secondary" disabled={!props.tools} onClick={sendBuild}>
+                    Try again
+                  </Button>
+                </div>
+              </div>
+            );
+          return <Indicator status="idle" label="Building your first budget" />;
+        },
+        { loadingLabel: "Loading" }
+      )}
+    </div>
   );
 }

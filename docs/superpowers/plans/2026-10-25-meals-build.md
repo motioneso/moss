@@ -126,7 +126,7 @@ Binding for every phase.
   3. Turn free text into structured items. Receipt text uses it, and the reused estimator already
      does it for the log.
 
-  Ben decides at the kill gate whether job 2 stays or the Safety check goes deterministic only.
+  Job 2 stays (section 5, ruling 4).
 
 - Everything else is TypeScript over records. That includes aggregation, Pantry subtraction,
   Purchase amounts, calorie fit, no-repeat, locking and the check-the-label flag.
@@ -282,6 +282,26 @@ Ben judges these on the prototype:
 
 Phase 2 is planned in detail only after these five are answered.
 
+### Rulings, 2026-10-31
+
+Ben asked for Meals to be built overnight and put the Meals build in charge of the remaining
+calls. Ruling 1 is Ben's. Rulings 2 to 5 are the Meals build session's, made under that
+delegation, and Ben can overrule any of them. He reviews the prototype (#3880) in the morning and
+can still cut scope then, so every phase 2 slice must ship and be revertable on its own.
+
+1. **Worth having: yes, build it.** Ben's ruling.
+2. **The wait: accepted.** Under A1 each day is its own background job, so a plan started from
+   chat or the page finishes with the tab closed. The page only shows each day as it lands. That is
+   the background-only flow this question asked for, so the design does not change.
+3. **Forks A and B:** A1 and B1, settled 2026-10-30 (section 2).
+4. **Model job 2: kept.** The term check (`deterministicSafety` in the phase 2 plan, #3898) runs
+   first, and the AI pass can only add a failure, never clear one. A term list misses allergens
+   hidden in compound ingredients such as pesto or Worcestershire sauce. The cost is one extra
+   model call per recipe.
+5. **Scope cut: receipt text and opt-in Leftovers move to phase 3.** Both are additions with no
+   current users. A plain-text "leftovers" slot stays in phase 2, because it is only slot text.
+   The Log rebuild stays in phase 2, because phase 2 removes Food and Food's log goes with it.
+
 ---
 
 ## 6. Phase 2 and beyond, named only
@@ -296,7 +316,7 @@ are as follows:
   `tierHint: "reasoning"`.
 - Plan editing tools: lock, regenerate, swap, move, re-plan, quick swap.
 - Shopping list aggregation and Bought.
-- Pantry, Staples and receipt text.
+- Pantry and Staples. Receipt text and opt-in Leftovers move to phase 3 (section 5, ruling 5).
 - Cooking, Rating, Favourites and the log rebuild on the reused estimator.
 - Page wiring, app map entries and the settings cog.
 - Tests at the spec's three seams, and a live run on a dev instance.

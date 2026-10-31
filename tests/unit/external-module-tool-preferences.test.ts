@@ -15,7 +15,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ModuleRegistryModule from "@moss/module-registry";
 import type * as ModuleRegistryNodeModule from "@moss/module-registry/node";
 
-const resolveModulePreferences = vi.fn(async () => ({ aiEstimates: false, calorieTarget: 2200 }));
+const resolveModulePreferences = vi.fn(async (..._args: unknown[]) => ({
+  aiEstimates: false,
+  calorieTarget: 2200
+}));
 
 vi.mock("@moss/module-registry", async (importOriginal) => {
   const actual = await importOriginal<typeof ModuleRegistryModule>();
@@ -100,12 +103,14 @@ describe("assistant-tool invocations carry the actor's module preferences", () =
 
     const execute = getManifests()[0]?.assistantTools?.[0]?.execute;
     expect(execute).toBeDefined();
-    await execute!({} as never, { localDate: "2026-08-20" }, {
+    const scope = {} as never;
+    await execute!(scope, { localDate: "2026-08-20" }, {
       actorUserId: "user-1",
       requestId: "req-1"
     } as never);
 
     expect(resolveModulePreferences).toHaveBeenCalledTimes(1);
+    expect(resolveModulePreferences.mock.calls[0]?.[3]).toBe(scope);
     const options = invoke.mock.calls[0]?.[4] as { preferences?: unknown } | undefined;
     expect(options?.preferences).toEqual({ aiEstimates: false, calorieTarget: 2200 });
   });

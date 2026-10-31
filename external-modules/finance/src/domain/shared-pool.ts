@@ -54,6 +54,7 @@ export function toSharedTransaction(transaction: TransactionRecord): Transaction
   // a field added to TransactionRecord later must be shared on purpose.
   return {
     id: transaction.id,
+    ...(transaction.transferId ? { transferId: transaction.transferId } : {}),
     accountId: transaction.accountId,
     date: transaction.date,
     amountCents: transaction.amountCents,
@@ -64,7 +65,15 @@ export function toSharedTransaction(transaction: TransactionRecord): Transaction
     categoryId: transaction.categoryId,
     pending: transaction.pending,
     pendingTransactionId: transaction.pendingTransactionId,
-    categorizedBy: transaction.categorizedBy
+    categorizedBy: transaction.categorizedBy,
+    ...(transaction.splits?.length
+      ? {
+          splits: transaction.splits.map((split) => ({
+            categoryId: split.categoryId,
+            amountCents: split.amountCents
+          }))
+        }
+      : {})
   };
 }
 

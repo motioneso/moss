@@ -66,6 +66,20 @@
   max-height: calc(100dvh - var(--space-8));
   overflow-y: auto;
 }
+.jds-dialog--scroll-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.jds-dialog--scroll-body > .jds-dialog__head,
+.jds-dialog--scroll-body > .jds-dialog__foot {
+  flex-shrink: 0;
+}
+.jds-dialog--scroll-body > .jds-dialog__body {
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: var(--space-3);
+}
 .jds-dialog__head {
   padding: var(--space-5) var(--space-6) var(--space-3);
 }

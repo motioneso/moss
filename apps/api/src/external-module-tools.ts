@@ -1,6 +1,7 @@
+import type { Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
 
-import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
+import type { AccessContext, DataContextDb, DataContextRunner, MossDatabase } from "@moss/db";
 import { ChatAttachmentsService } from "@moss/chat";
 import { createPushQueuePort } from "@moss/jobs";
 import type { ModuleAssistantToolRisk, MossModuleManifest, ToolResult } from "@moss/module-sdk";
@@ -15,6 +16,7 @@ import {
 import {
   createExternalModuleRpcHandler,
   createExternalToolManifests,
+  createModuleEnqueuePort,
   ExternalModuleWorkerRuntime,
   withExternalDescriptorApproval,
   type ExternalCandidateInvoker,
@@ -32,6 +34,10 @@ export function createExternalModuleTools(input: {
   readonly appDataContext: DataContextRunner;
   readonly settingsRepository: SettingsRepository;
   readonly boss?: PgBoss;
+  // ctx.jobs.enqueue (#3722): both are needed to wire the port. The root handle is for the
+  // pgboss tables (no RLS); the check is the same active-module resolver the routes use.
+  readonly rootDb?: Kysely<MossDatabase>;
+  readonly isModuleActive?: (access: AccessContext, moduleId: string) => Promise<boolean>;
   readonly logger: { warn(data: Record<string, unknown>, message?: string): void };
   // ctx.ai bridge (#932, spec D6): injected from server.ts so module-registry never
   // imports @moss/ai. The queued-jobs path has its own equivalent bridge — see
@@ -107,6 +113,21 @@ export function createExternalModuleTools(input: {
           notifications.create(scopedDb, notifyInput)
         );
       },
+      // ctx.jobs.enqueue (#3722): the actor is the authenticated tool caller bound above.
+      ...(input.boss && input.rootDb && input.isModuleActive
+        ? {
+            enqueueJob: createModuleEnqueuePort({
+              boss: input.boss,
+              rootDb: input.rootDb,
+              module: {
+                id: module.id,
+                manifestHash: module.manifestHash,
+                queueNames: (module.manifest.worker?.queues ?? []).map((queue) => queue.name)
+              },
+              isLiveForActor: (liveAccess) => input.isModuleActive!(liveAccess, module.id)
+            })
+          }
+        : {}),
       // Bind the module id here so the rpc host stays module-agnostic; the host
       // still enforces risk gating, the composition guard, and the call cap.
       ...(input.ai ? { ai: (db, req) => input.ai!(db, module.id, req) } : {})
@@ -138,7 +159,8 @@ export function createExternalModuleTools(input: {
     const preferences = await resolveModulePreferences(
       input.appDataContext,
       { actorUserId: context.actorUserId, requestId: context.requestId },
-      { id: module.id, preferences: module.manifest.preferences ?? [] }
+      { id: module.id, preferences: module.manifest.preferences ?? [] },
+      scopedDb
     );
     // FIN-04 (#1149, spec delta "Host change 2"): hand the worker the
     // host-resolved actor identity in tool input, matching the queue job
@@ -256,6 +278,14 @@ export function createInstalledExternalModulesResolverForApi(input: {
       module.status !== "draft" || module.ownerUserId === accessContext.actorUserId;
     return modules.filter((module) => module.active && visibleToActor(module));
   };
+}
+
+/** True when the module is in the actor's active set. Shared by the manual-run route and ctx.jobs.enqueue. */
+export function isExternalModuleActiveFor(
+  getActiveExternalModules: (access: AccessContext) => Promise<readonly { readonly id: string }[]>
+): (access: AccessContext, moduleId: string) => Promise<boolean> {
+  return async (access, moduleId) =>
+    (await getActiveExternalModules(access)).some((module) => module.id === moduleId);
 }
 
 export function createExternalActiveModulesResolver(

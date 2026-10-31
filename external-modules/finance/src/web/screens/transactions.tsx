@@ -2,53 +2,62 @@
 //
 // #3176: the Park Press Transactions screen. One read, finance.transactions.query,
 // returns the month's rows, the categories, the accounts and the Needs a look count.
-// Every write is a single finance.review-apply job: one row (optionally making a merchant
-// rule) or Confirm all (the visible Needs a look rows, no rules).
+// Legacy pending/KV/rule reviews use finance.review-apply jobs. Captured confirmation and bulk
+// categorization and split edits await reviewed host-tool persistence.
 //
-// Desktop and phone layouts both render; module CSS shows one and hides the other.
+// One toolbar holds the view, the month, search, Filters and Export. The ledger renders a table
+// and a phone row list; module CSS shows one and hides the other.
 import {
-  Badge,
   Button,
-  RowIndex,
-  RowIndexItem,
-  SectionHead,
+  Menu,
+  PeriodStepper,
   Segmented,
-  Select,
-  Switch,
   useEffect,
   useRef,
   useState,
+  type ExternalModuleToolsHandleV1,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import { runWrite, type RunOutcome } from "../api";
 import { chunkReviewRows } from "../assign";
-import { currentMonth, dayLabel, formatCents, monthLabel, shiftMonth } from "../format";
+import { currentMonth, monthLabel, shiftMonth } from "../format";
 import { announce, EmptyState, outcomeGate } from "../states";
-import { invalidateQueries, useToolQuery } from "../store";
-
-interface TxCategory {
-  id: string;
-  name: string;
-  archived?: boolean;
-}
-
-interface TxAccount {
-  accountId: string;
-  name: string;
-  mask?: string | null;
-}
-
-interface Tx {
-  id: string;
-  accountId: string;
-  date: string;
-  amountCents: number;
-  isoCurrency: string;
-  name: string;
-  categoryId: string | null;
-  reviewState?: "confirmed" | "needs_look";
-  shared?: boolean;
-}
+import { invalidateQueries, invalidateToolQueries, useToolQuery } from "../store";
+import { downloadTransactionsCsv, transactionsCsv, initialRegisterScope } from "../register";
+import {
+  activeFilterCount,
+  EMPTY_FILTERS,
+  filterInput,
+  REGISTER_FILTERS_ID,
+  RegisterFilterChips,
+  RegisterFilterPanel
+} from "../register-filters";
+import { SplitEditor } from "../split-editor";
+import {
+  TransactionDetails,
+  captureTransactionDetails,
+  type CapturedTransactionDetails
+} from "../transaction-details";
+import { TransferCorrectionDialog } from "../transfer-correction-dialog";
+import { TransactionConfirm } from "../transaction-confirm";
+import { HistoryExportDialog } from "../history-export-dialog";
+import {
+  TransactionBulkBar,
+  BulkCategoryDialog,
+  BULK_LIMIT,
+  bulkEligible
+} from "../transaction-bulk";
+import {
+  detailsKey,
+  isLook,
+  LedgerRows,
+  LedgerTable,
+  rowFocusTarget,
+  type RowContext,
+  type Tx,
+  type TxAccount,
+  type TxCategory
+} from "../transaction-rows";
 
 interface TxResult extends Record<string, unknown> {
   month: string;
@@ -57,6 +66,10 @@ interface TxResult extends Record<string, unknown> {
   accounts?: TxAccount[];
   needsLookCount?: number;
   totalCount?: number;
+  supportsSplits?: boolean;
+  supportsBulk?: boolean;
+  supportsConfirm?: boolean;
+  supportsNotes?: boolean;
 }
 
 type Filter = "all" | "look";
@@ -65,8 +78,6 @@ const REFETCH_DELAY_MS = 2000;
 const SEARCH_DELAY_MS = 300;
 const PAGE_SIZE = 200;
 const MAX_PAGES = 10;
-
-const isLook = (tx: Tx): boolean => tx.shared !== true && tx.reviewState === "needs_look";
 
 /** True when the job was queued; false when the request failed and nothing will happen. */
 function afterRun(outcome: RunOutcome, queuedMessage: string, onQueued: () => void): boolean {
@@ -88,230 +99,21 @@ function afterRun(outcome: RunOutcome, queuedMessage: string, onQueued: () => vo
   return false;
 }
 
-function Amount(props: { tx: Tx }): ReactNodeLike {
-  const { tx } = props;
-  // Money in is stored negative.
-  if (tx.amountCents < 0) return <strong>+{formatCents(-tx.amountCents, tx.isoCurrency)}</strong>;
-  return <span>{formatCents(tx.amountCents, tx.isoCurrency)}</span>;
-}
-
-// The category picker, Confirm button and merchant switch for one Needs a look row.
-function LookControls(props: {
-  tx: Tx;
-  categories: TxCategory[];
-  onConfirm: (tx: Tx, categoryId: string, makeRule: boolean) => void;
-}): ReactNodeLike {
-  const { tx } = props;
-  const [categoryId, setCategoryId] = useState(tx.categoryId ?? "");
-  const [makeRule, setMakeRule] = useState(false);
-  return (
-    <div className="fnm-block fnm-block--tight">
-      <div className="fnm-inline">
-        <Select
-          aria-label={`Category for ${tx.name}`}
-          value={categoryId}
-          onChange={(event: { target: { value: string } }) => setCategoryId(event.target.value)}
-        >
-          <option value="" disabled>
-            Choose a category
-          </option>
-          {props.categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </Select>
-        <Button
-          size="sm"
-          disabled={categoryId === ""}
-          onClick={() => props.onConfirm(tx, categoryId, makeRule)}
-        >
-          Confirm
-        </Button>
-      </div>
-      <Switch
-        ariaLabel={`Always use this category for ${tx.name}`}
-        label="Always for this merchant"
-        checked={makeRule}
-        onChange={setMakeRule}
-      />
-    </div>
-  );
-}
-
-// The category picker for a row that is already confirmed. Picking another category saves it.
-function ChangeCategory(props: {
-  tx: Tx;
-  categories: TxCategory[];
-  onChange: (tx: Tx, categoryId: string) => Promise<boolean>;
-}): ReactNodeLike {
-  const { tx } = props;
-  const [categoryId, setCategoryId] = useState(tx.categoryId ?? "");
-  return (
-    <Select
-      aria-label={`Category for ${tx.name}`}
-      value={categoryId}
-      onChange={(event: { target: { value: string } }) => {
-        const next = event.target.value;
-        const before = categoryId;
-        setCategoryId(next);
-        // A save that never ran puts the old category back on screen.
-        void props.onChange(tx, next).then((saved) => {
-          if (!saved) setCategoryId(before);
-        });
-      }}
-    >
-      <option value="" disabled>
-        Uncategorized
-      </option>
-      {props.categories.map((category) => (
-        <option key={category.id} value={category.id}>
-          {category.name}
-        </option>
-      ))}
-    </Select>
-  );
-}
-
-interface DayGroup {
-  date: string;
-  rows: Tx[];
-}
-
-function groupByDay(rows: Tx[]): DayGroup[] {
-  const groups: DayGroup[] = [];
-  for (const tx of rows) {
-    const last = groups.at(-1);
-    if (last && last.date === tx.date) last.rows.push(tx);
-    else groups.push({ date: tx.date, rows: [tx] });
-  }
-  return groups;
-}
-
-interface RowContext {
-  categories: TxCategory[];
-  categoryName: (tx: Tx) => string;
-  accountName: (tx: Tx) => string;
-  confirmed: ReadonlySet<string>;
-  onConfirm: (tx: Tx, categoryId: string, makeRule: boolean) => void;
-  onChange: (tx: Tx, categoryId: string) => Promise<boolean>;
-}
-
-function DayTable(props: { day: DayGroup; head: boolean; ctx: RowContext }): ReactNodeLike {
-  const { day, ctx } = props;
-  return (
-    <section className="fnm-block fnm-block--tight">
-      <SectionHead title={dayLabel(day.date)} rule />
-      <table className="jds-table fnm-fixed">
-        <colgroup>
-          <col className="fnm-col-payee" />
-          <col className="fnm-col-category" />
-          <col />
-          <col className="fnm-col-amount" />
-        </colgroup>
-        {props.head ? (
-          <thead>
-            <tr>
-              <th>Payee</th>
-              <th>Category</th>
-              <th>Account</th>
-              <th className="jds-table__num">Amount</th>
-            </tr>
-          </thead>
-        ) : null}
-        <tbody>
-          {day.rows.map((tx) => {
-            const look = isLook(tx) && !ctx.confirmed.has(tx.id);
-            return (
-              <tr key={tx.id}>
-                <td>
-                  <div className="fnm-block fnm-block--tight">
-                    <span>{tx.name}</span>
-                    {look ? (
-                      <div>
-                        <Badge tone="amber">Predicted</Badge>
-                      </div>
-                    ) : null}
-                  </div>
-                </td>
-                <td>
-                  {look ? (
-                    <LookControls tx={tx} categories={ctx.categories} onConfirm={ctx.onConfirm} />
-                  ) : tx.shared === true ? (
-                    ctx.categoryName(tx)
-                  ) : (
-                    <ChangeCategory
-                      key={`${tx.id}:${tx.categoryId}`}
-                      tx={tx}
-                      categories={ctx.categories}
-                      onChange={ctx.onChange}
-                    />
-                  )}
-                </td>
-                <td>{ctx.accountName(tx)}</td>
-                <td className="jds-table__num">
-                  <Amount tx={tx} />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </section>
-  );
-}
-
-function DayRows(props: { day: DayGroup; ctx: RowContext }): ReactNodeLike {
-  const { day, ctx } = props;
-  return (
-    <section className="fnm-block fnm-block--tight">
-      <SectionHead title={dayLabel(day.date)} rule />
-      <RowIndex density="compact">
-        {day.rows.map((tx) => {
-          const look = isLook(tx) && !ctx.confirmed.has(tx.id);
-          return (
-            <RowIndexItem
-              key={tx.id}
-              title={tx.name}
-              excerpt={
-                look ? (
-                  <div className="fnm-block fnm-block--tight">
-                    <div className="fnm-spread">
-                      <Badge tone="amber">Predicted</Badge>
-                      <Amount tx={tx} />
-                    </div>
-                    <LookControls tx={tx} categories={ctx.categories} onConfirm={ctx.onConfirm} />
-                  </div>
-                ) : tx.shared === true ? (
-                  `${ctx.categoryName(tx)} · ${ctx.accountName(tx)}`
-                ) : (
-                  <div className="fnm-block fnm-block--tight">
-                    <ChangeCategory
-                      key={`${tx.id}:${tx.categoryId}`}
-                      tx={tx}
-                      categories={ctx.categories}
-                      onChange={ctx.onChange}
-                    />
-                    <span>{ctx.accountName(tx)}</span>
-                  </div>
-                )
-              }
-              meta={look ? null : <Amount tx={tx} />}
-            />
-          );
-        })}
-      </RowIndex>
-    </section>
-  );
-}
+const splitEligible = (tx: Tx): boolean => !tx.transferId && !tx.shared && !tx.pending;
 
 function TransactionsBody(props: {
+  onDetails: (tx: Tx, details: CapturedTransactionDetails) => void;
   result: TxResult;
   filter: Filter;
   searching: boolean;
   confirmed: ReadonlySet<string>;
   onConfirm: (tx: Tx, categoryId: string, makeRule: boolean) => void;
   onChange: (tx: Tx, categoryId: string) => Promise<boolean>;
+  onTransfer?: (id: string) => void;
+  selected: ReadonlySet<string>;
+  selectionLocked: boolean;
+  onSelect?: (tx: Tx) => void;
+  onSelectRows?: (rows: Tx[], checked: boolean) => void;
 }): ReactNodeLike {
   const { result, filter, confirmed } = props;
   const accounts = result.accounts ?? [];
@@ -320,14 +122,36 @@ function TransactionsBody(props: {
   const all = result.transactions ?? [];
   // Rows already confirmed here drop out of the Needs a look filter at once.
   const rows = filter === "look" ? all.filter((tx) => !confirmed.has(tx.id)) : all;
+  const editable = rows.filter(bulkEligible);
   const ctx: RowContext = {
     categories: live,
     categoryName: (tx) =>
       categories.find((category) => category.id === tx.categoryId)?.name ?? "Uncategorized",
     accountName: (tx) => accounts.find((account) => account.accountId === tx.accountId)?.name ?? "",
     confirmed,
+    onDetails: (tx) =>
+      props.onDetails(
+        tx,
+        captureTransactionDetails({
+          row: tx,
+          accountName: ctx.accountName(tx),
+          categoryName: ctx.categoryName(tx),
+          categories
+        })
+      ),
+    onTransfer: props.onTransfer,
     onConfirm: props.onConfirm,
-    onChange: props.onChange
+    onChange: props.onChange,
+    selected: props.selected,
+    selectionLocked: props.selectionLocked,
+    onSelect: props.onSelect,
+    selectAll: props.onSelectRows
+      ? {
+          checked: editable.length > 0 && editable.every((tx) => props.selected.has(tx.id)),
+          disabled: props.selectionLocked || editable.length === 0,
+          onChange: (checked) => props.onSelectRows!(editable, checked)
+        }
+      : undefined
   };
   if (rows.length === 0) {
     if (filter === "look") {
@@ -338,36 +162,129 @@ function TransactionsBody(props: {
     if (props.searching) {
       return <EmptyState title="No matches" body="No transaction in this month matches." />;
     }
-    return <EmptyState title="Nothing yet" body="Transactions appear after the first sync." />;
+    return (
+      <EmptyState
+        title="No transactions this month"
+        body="Add or import transactions in Accounts."
+      />
+    );
   }
-  const days = groupByDay(rows);
   return (
-    <div className="fnm-block">
-      <div className="fnm-desktop-only fnm-block">
-        {days.map((day, index) => (
-          <DayTable key={day.date} day={day} head={index === 0} ctx={ctx} />
-        ))}
+    <>
+      <div className="fnm-desktop-only">
+        <LedgerTable rows={rows} ctx={ctx} />
       </div>
-      <div className="fnm-phone-only fnm-block">
-        {days.map((day) => (
-          <DayRows key={day.date} day={day} ctx={ctx} />
-        ))}
+      <div className="fnm-phone-only">
+        <LedgerRows rows={rows} ctx={ctx} />
       </div>
-    </div>
+    </>
   );
 }
 
-export function TransactionsScreen(): ReactNodeLike {
-  const [month, setMonth] = useState(currentMonth);
+export function TransactionsScreen(
+  props: { tools?: ExternalModuleToolsHandleV1 } = {}
+): ReactNodeLike {
+  const [initial] = useState(() =>
+    initialRegisterScope(typeof window === "undefined" ? "" : window.location.search)
+  );
+  const [ownOnly, setOwnOnly] = useState(initial.ownOnly);
+  const [month, setMonth] = useState(() => initial.month ?? currentMonth());
+  const [exporting, setExporting] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState(() => ({
+    ...EMPTY_FILTERS,
+    ...(initial.accountId ? { accountId: initial.accountId } : {})
+  }));
+  const [singleReview, setSingleReview] = useState<{
+    tx: Tx;
+    categoryId: string;
+    categoryName: string;
+    previousCategory: string;
+    confirmOnly: boolean;
+  } | null>(null);
+  const singlePending = useRef<((saved: boolean) => void) | null>(null);
+  const [singleUncertain, setSingleUncertain] = useState(false);
+  const [checkingSingle, setCheckingSingle] = useState(false);
+  const singleReadSnapshot = useRef<unknown>(null);
+  useEffect(
+    () => () => {
+      singlePending.current?.(false);
+      singlePending.current = null;
+    },
+    []
+  );
+  const finishSingle = (saved: boolean): void => {
+    singlePending.current?.(saved);
+    singlePending.current = null;
+    setSingleReview(null);
+  };
+  const [details, setDetails] = useState<CapturedTransactionDetails | null>(null);
+  const [detailsTx, setDetailsTx] = useState<Tx | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersButton = useRef<HTMLButtonElement | null>(null);
+  const focusFilters = () => filtersButton.current?.focus();
+  const [editing, setEditing] = useState<Tx | null>(null);
+  const [transferId, setTransferId] = useState<string | null>(null);
+  // The review returns focus to the row it was opened from, even after following a link inside it.
+  const transferOrigin = useRef<string | null>(null);
+  const [transferReturnFocus] = useState(() => ({
+    get current(): HTMLElement | null {
+      return rowFocusTarget("data-finance-transfer-id", transferOrigin.current ?? "");
+    }
+  }));
+  const openTransfer = (id: string) => {
+    transferOrigin.current = id;
+    setTransferId(id);
+  };
+  // The split editor opens as the details view closes, so it has no live control to return to.
+  const splitOrigin = useRef<Tx | null>(null);
+  useEffect(() => {
+    if (editing) {
+      splitOrigin.current = editing;
+      return;
+    }
+    const row = splitOrigin.current;
+    splitOrigin.current = null;
+    if (row) rowFocusTarget("data-finance-details", detailsKey(row))?.focus();
+  }, [editing]);
+  const [selected, setSelected] = useState<ReadonlyMap<string, Tx>>(new Map());
+  const [selectionLocked, setSelectionLocked] = useState(false);
+  const [supportsBulk, setSupportsBulk] = useState(false);
+  const [supportsConfirm, setSupportsConfirm] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const toggleSelection = (tx: Tx): void => {
+    if (selectionLocked || !bulkEligible(tx)) return;
+    setSelected((previous) => {
+      const next = new Map(previous);
+      if (next.has(tx.id)) next.delete(tx.id);
+      else if (next.size < BULK_LIMIT) next.set(tx.id, { ...tx });
+      return next;
+    });
+  };
+  const selectRows = (rows: readonly Tx[], checked: boolean): void => {
+    if (selectionLocked) return;
+    setSelected((previous) => {
+      const next = new Map(previous);
+      for (const tx of rows) {
+        if (!checked) next.delete(tx.id);
+        else if (bulkEligible(tx) && !next.has(tx.id) && next.size < BULK_LIMIT)
+          next.set(tx.id, { ...tx });
+      }
+      return next;
+    });
+  };
+  const [filterOptions, setFilterOptions] = useState<{
+    accounts: TxAccount[];
+    categories: TxCategory[];
+  }>({ accounts: [], categories: [] });
   // Rows confirmed here, hidden from Needs a look until the refetch catches up.
   const [confirmed, setConfirmed] = useState<ReadonlySet<string>>(new Set());
   // How many pages of PAGE_SIZE rows to load; Show more adds one.
   const [pages, setPages] = useState(1);
 
-  useEffect(() => setPages(1), [month, filter, search]);
+  useEffect(() => setPages(1), [month, filter, search, filters]);
 
   useEffect(() => {
     const timer = setTimeout(() => setSearch(draft.trim()), SEARCH_DELAY_MS);
@@ -377,11 +294,27 @@ export function TransactionsScreen(): ReactNodeLike {
   const query = useToolQuery<TxResult>("finance.transactions.query", {
     month,
     limit: PAGE_SIZE * pages,
+    ...filterInput(filters),
+    ...(ownOnly ? { ownOnly: true } : {}),
     ...(search ? { search } : {}),
     ...(filter === "look" ? { needsLookOnly: true } : {})
   });
   const result =
     query.status === "settled" && query.outcome.kind === "ok" ? query.outcome.result : null;
+  useEffect(() => setRetrying(false), [query]);
+  useEffect(() => {
+    if (checkingSingle && query !== singleReadSnapshot.current && query.status === "settled") {
+      setCheckingSingle(false);
+      if (result !== null) setSingleUncertain(false);
+    }
+  }, [query]);
+  useEffect(() => {
+    if (result) {
+      setFilterOptions({ accounts: result.accounts ?? [], categories: result.categories ?? [] });
+      setSupportsBulk(result.supportsBulk === true);
+      setSupportsConfirm(result.supportsConfirm === true);
+    }
+  }, [result]);
 
   // Ids whose server answer should replace the optimistic mark once the next read lands.
   const releaseOnRead = useRef<string[]>([]);
@@ -432,21 +365,49 @@ export function TransactionsScreen(): ReactNodeLike {
     ).then((all) => all.every(Boolean));
   };
 
+  const reviewSingle = (tx: Tx, categoryId: string, confirmOnly: boolean): Promise<boolean> => {
+    if (singlePending.current || singleUncertain) return Promise.resolve(false);
+    return new Promise<boolean>((resolve) => {
+      singlePending.current = resolve;
+      setSingleReview({
+        tx: { ...tx },
+        confirmOnly,
+        categoryId,
+        categoryName: filterOptions.categories.find((c) => c.id === categoryId)?.name ?? categoryId,
+        previousCategory:
+          filterOptions.categories.find((c) => c.id === tx.categoryId)?.name ?? "Uncategorized"
+      });
+    });
+  };
+
   const confirmOne = (tx: Tx, categoryId: string, makeRule: boolean): void => {
+    const unchanged = tx.categoryId === categoryId;
+    if (
+      !makeRule &&
+      props.tools &&
+      bulkEligible(tx) &&
+      categoryId !== "transfers" &&
+      (unchanged ? supportsConfirm : supportsBulk)
+    ) {
+      void reviewSingle(tx, categoryId, unchanged);
+      return;
+    }
     void send([tx], [categoryId], makeRule, "Confirmed.");
   };
 
-  // Changing an already-confirmed row only rewrites its category; it is never hidden.
-  const changeOne = (tx: Tx, categoryId: string): Promise<boolean> =>
-    send([tx], [categoryId], false, "Category changed.").then((saved) => {
-      // The row was never in Needs a look here, so take off the optimistic mark right away.
+  const changeOne = (tx: Tx, categoryId: string): Promise<boolean> => {
+    if (supportsBulk && props.tools && bulkEligible(tx) && categoryId !== "transfers") {
+      return reviewSingle(tx, categoryId, false);
+    }
+    return send([tx], [categoryId], false, "Category changed.").then((saved) => {
       release([tx.id]);
       return saved;
     });
+  };
 
   // Exactly the Needs a look rows on screen: the filter, the search and the month decide them.
   const visibleLook = (result?.transactions ?? []).filter(
-    (tx) => isLook(tx) && tx.categoryId !== null && !confirmed.has(tx.id)
+    (tx) => isLook(tx) && tx.categoryId !== null && !tx.splits?.length && !confirmed.has(tx.id)
   );
   const confirmAll = (): void => {
     void send(
@@ -463,74 +424,268 @@ export function TransactionsScreen(): ReactNodeLike {
   ).length;
   const lookCount = Math.max(0, (result?.needsLookCount ?? 0) - stillCounted);
 
+  // No count until the register loads, so a failed load never claims zero.
+  const lookLabel = result ? `Needs a look (${lookCount})` : "Needs a look";
+
+  const loaded = result?.transactions?.length ?? 0;
+  const total = result?.totalCount ?? loaded;
+  const activeFilters = activeFilterCount(filters);
+  const canSplit =
+    detailsTx !== null && result?.supportsSplits === true && splitEligible(detailsTx);
+
   return (
-    <section aria-label="Transactions" className="fnm-block">
+    <section aria-label="Transactions" className="fnm-block fnm-block--tight">
       <div className="fnm-spread">
-        <div className="fnm-inline">
+        <div className="fnm-chips">
           <Segmented
             ariaLabel="Filter transactions"
             value={filter}
             onChange={(value: Filter) => setFilter(value)}
             options={[
               { value: "all", label: "All" },
-              { value: "look", label: `Needs a look (${lookCount})` }
+              { value: "look", label: lookLabel }
             ]}
           />
-          {visibleLook.length > 0 ? (
+          {supportsConfirm ? (
+            <TransactionConfirm
+              rows={visibleLook.filter(bulkEligible)}
+              categories={filterOptions.categories}
+              tools={props.tools}
+              readVersion={result}
+              readSnapshot={query}
+              readFailed={query.status === "settled" && query.outcome.kind !== "ok"}
+              onReload={() => invalidateToolQueries("finance.transactions.query")}
+              onSaved={(ids) => {
+                setConfirmed((previous) => new Set([...previous, ...ids]));
+                releaseOnRead.current = [...releaseOnRead.current, ...ids];
+                readArmed.current = true;
+                invalidateQueries();
+              }}
+            />
+          ) : visibleLook.length > 0 ? (
             <Button variant="secondary" onClick={confirmAll}>
               Confirm all {visibleLook.length}
             </Button>
           ) : null}
         </div>
-        <div className="fnm-inline">
-          <Button
-            variant="field"
-            size="sm"
-            aria-label={monthLabel(shiftMonth(month, -1))}
-            onClick={() => setMonth(shiftMonth(month, -1))}
-          >
-            ←
-          </Button>
-          <span>{monthLabel(month)}</span>
-          <Button
-            variant="field"
-            size="sm"
-            aria-label={monthLabel(shiftMonth(month, 1))}
-            onClick={() => setMonth(shiftMonth(month, 1))}
-          >
-            →
-          </Button>
+        <div className="fnm-chips">
+          <PeriodStepper
+            label={monthLabel(month)}
+            previousLabel={monthLabel(shiftMonth(month, -1))}
+            nextLabel={monthLabel(shiftMonth(month, 1))}
+            onPrevious={() => setMonth(shiftMonth(month, -1))}
+            onNext={() => setMonth(shiftMonth(month, 1))}
+          />
           <input
             className="jds-input fnm-search"
-            placeholder="Search payees"
-            aria-label="Search payees"
+            type="search"
+            placeholder="Search payees or notes"
+            aria-label="Search payees or notes"
             value={draft}
             onChange={(event: { target: { value: string } }) => setDraft(event.target.value)}
           />
+          <Button
+            ref={filtersButton}
+            variant="secondary"
+            active={filtersOpen}
+            aria-expanded={filtersOpen}
+            aria-controls={filtersOpen ? REGISTER_FILTERS_ID : undefined}
+            onClick={() => setFiltersOpen(!filtersOpen)}
+          >
+            {activeFilters ? `Filters · ${activeFilters}` : "Filters"}
+          </Button>
+          <Menu
+            triggerVariant="button"
+            triggerContent="Export"
+            triggerLabel="Export transactions"
+            items={[
+              { id: "loaded", label: "Loaded rows", disabled: !loaded },
+              { id: "history", label: "Full history…" }
+            ]}
+            onSelect={(id: string) => {
+              if (id === "history") {
+                setExporting(true);
+                return;
+              }
+              if (!result?.transactions?.length) return;
+              downloadTransactionsCsv(
+                transactionsCsv(
+                  result.transactions,
+                  (tx) =>
+                    result.accounts?.find((a) => a.accountId === tx.accountId)?.name ??
+                    tx.accountId,
+                  (tx) =>
+                    result.categories?.find((c) => c.id === tx.categoryId)?.name ?? "Uncategorized"
+                ),
+                month
+              );
+              announce("Exported the loaded rows.");
+            }}
+          />
         </div>
       </div>
+      {filtersOpen ? (
+        <RegisterFilterPanel
+          value={filters}
+          onChange={setFilters}
+          accounts={filterOptions.accounts}
+          categories={filterOptions.categories}
+          returnFocus={focusFilters}
+        />
+      ) : null}
+      <RegisterFilterChips
+        value={filtersOpen ? EMPTY_FILTERS : filters}
+        onChange={setFilters}
+        accounts={filterOptions.accounts}
+        categories={filterOptions.categories}
+        ownOnly={ownOnly}
+        onIncludeShared={() => setOwnOnly(false)}
+        returnFocus={focusFilters}
+      />
+      {singleUncertain ? (
+        <div className="fnm-chips" role="status">
+          <p>Check saved records before reviewing another category change.</p>
+          <Button
+            variant="secondary"
+            disabled={checkingSingle}
+            onClick={() => {
+              singleReadSnapshot.current = query;
+              setCheckingSingle(true);
+              invalidateQueries();
+            }}
+          >
+            {checkingSingle ? "Checking saved records…" : "Check saved records"}
+          </Button>
+        </div>
+      ) : null}
+      {singleReview ? (
+        <BulkCategoryDialog
+          rows={[singleReview.tx]}
+          category={{ id: singleReview.categoryId, name: singleReview.categoryName }}
+          previousCategory={singleReview.previousCategory}
+          confirmOnly={singleReview.confirmOnly}
+          tools={props.tools}
+          onClose={() => finishSingle(false)}
+          onSaved={() => finishSingle(true)}
+          onUncertain={() => setSingleUncertain(true)}
+        />
+      ) : null}
+      <TransactionDetails
+        captured={details}
+        onClose={() => {
+          setDetails(null);
+          setDetailsTx(null);
+        }}
+        tools={props.tools}
+        supportsNotes={result?.supportsNotes}
+        onSplit={
+          canSplit
+            ? () => {
+                setEditing(detailsTx);
+                setDetails(null);
+                setDetailsTx(null);
+              }
+            : undefined
+        }
+      />
       {outcomeGate(
         query,
         (data) => (
           <TransactionsBody
+            onDetails={(tx, captured) => {
+              setDetailsTx({ ...tx });
+              setDetails(captured);
+            }}
             result={data}
             filter={filter}
-            searching={search !== ""}
+            searching={search !== "" || activeFilters > 0}
             confirmed={confirmed}
             onConfirm={confirmOne}
             onChange={changeOne}
+            onTransfer={props.tools ? openTransfer : undefined}
+            selected={new Set(selected.keys())}
+            selectionLocked={selectionLocked}
+            onSelect={result?.supportsBulk && props.tools ? toggleSelection : undefined}
+            onSelectRows={result?.supportsBulk && props.tools ? selectRows : undefined}
           />
         ),
-        { loadingLabel: "Loading transactions" }
+        {
+          loadingLabel: "Loading transactions",
+          errorMessage:
+            "We couldn't load your transactions. Your filters are kept; check your connection or try again.",
+          errorAction: (
+            <Button
+              variant="secondary"
+              disabled={retrying}
+              onClick={() => {
+                setRetrying(true);
+                invalidateToolQueries("finance.transactions.query");
+              }}
+            >
+              {retrying ? "Retrying register…" : "Retry register"}
+            </Button>
+          )
+        }
       )}
-      {result !== null &&
-      (result.totalCount ?? 0) > (result.transactions ?? []).length &&
-      pages < MAX_PAGES ? (
-        <div>
-          <Button variant="secondary" onClick={() => setPages(pages + 1)}>
-            Show more
-          </Button>
+      {result ? (
+        <div className={loaded < total ? "fnm-chips" : "fnm-visually-hidden"}>
+          <span role="status">
+            {pages >= MAX_PAGES && loaded < total
+              ? `Showing the first ${loaded.toLocaleString("en-US")}. Narrow the filters to see the rest.`
+              : `${loaded.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} transactions`}
+          </span>
+          {loaded < total && pages < MAX_PAGES ? (
+            <Button variant="secondary" onClick={() => setPages(pages + 1)}>
+              Show more
+            </Button>
+          ) : null}
         </div>
+      ) : null}
+      {supportsBulk && props.tools ? (
+        <TransactionBulkBar
+          selected={[...selected.values()]}
+          loaded={result?.transactions ?? []}
+          categories={result?.categories ?? filterOptions.categories}
+          tools={props.tools}
+          onClear={() => setSelected(new Map())}
+          onSaved={() => setSelected(new Map())}
+          onLockChange={setSelectionLocked}
+          onLoaded={() => selectRows(result?.transactions ?? [], true)}
+        />
+      ) : null}
+      {exporting ? (
+        <HistoryExportDialog
+          accounts={filterOptions.accounts}
+          onClose={() => setExporting(false)}
+        />
+      ) : null}
+      {transferId && props.tools ? (
+        <TransferCorrectionDialog
+          key={transferId}
+          transferId={transferId}
+          tools={props.tools}
+          returnFocusRef={transferReturnFocus}
+          onClose={() => setTransferId(null)}
+          onReview={setTransferId}
+          onSaved={() => {
+            setTransferId(null);
+            invalidateQueries();
+            announce("Transfer correction recorded. Original history is kept.");
+          }}
+        />
+      ) : null}
+      {editing ? (
+        <SplitEditor
+          transaction={editing}
+          tools={props.tools}
+          categories={filterOptions.categories}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            invalidateQueries();
+            announce("Split saved.");
+          }}
+        />
       ) : null}
     </section>
   );

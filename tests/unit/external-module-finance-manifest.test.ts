@@ -62,25 +62,61 @@ describe("finance manifest app map (#3177)", () => {
       expect.arrayContaining([
         "finance.settings-freedom",
         "finance.settings-limit",
-        "finance.settings-actions",
         "finance.settings-bank-keys",
         "finance.settings-activity"
       ])
     );
   });
 
-  it("declares the history-built first budget and no assistant tool that starts one (#3180)", () => {
+  it("declares a history-built draft and requires confirmation to start it", () => {
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
       appMap: { features: { id: string }[] };
       assistantTools: { name: string; handler?: string }[];
     };
     expect(manifest.appMap.features.map((f) => f.id)).toContain("finance.first-budget");
     expect(manifest.assistantTools.map((t) => t.name)).toContain("finance.budget.draft.get");
-    expect(manifest.assistantTools.filter((t) => t.handler === "draft.start")).toEqual([]);
+    expect(
+      manifest.assistantTools.find((t) => t.name === "finance.budget.draft.start")
+    ).toMatchObject({ executionPolicy: "confirm", confirmWhenKeys: ["draftId"] });
     expect(manifest.assistantTools.filter((t) => t.handler === "draft.build")).toEqual([]);
   });
 
-  it("lets chat adjust the draft through the drafting family, never start it (#3181)", () => {
+  it("requires the host guard for captured category confirmation", () => {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      assistantTools: { name: string }[];
+    };
+    expect(
+      manifest.assistantTools.find((tool) => tool.name === "finance.transactions.confirm")
+    ).toMatchObject({ risk: "write", executionPolicy: "confirm", confirmWhenKeys: ["rows"] });
+  });
+
+  it("requires the host guard for manual account metadata changes", () => {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      assistantTools: { name: string }[];
+    };
+    expect(
+      manifest.assistantTools.find((t) => t.name === "finance.manual.account-update")
+    ).toMatchObject({
+      risk: "write",
+      executionPolicy: "confirm",
+      confirmWhenKeys: ["accountId", "operation"]
+    });
+  });
+
+  it("always confirms exact linked transfer endpoints and amount", () => {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      assistantTools: { name: string }[];
+    };
+    expect(
+      manifest.assistantTools.find((t) => t.name === "finance.manual.transfer-create")
+    ).toMatchObject({
+      risk: "write",
+      executionPolicy: "confirm",
+      confirmWhenKeys: ["fromAccountId", "toAccountId", "amountCents"]
+    });
+  });
+
+  it("lets chat adjust a draft through the drafting family", () => {
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
       assistantTools: { name: string; handler?: string; risk: string; actionFamilyId?: string }[];
       assistantActionFamilies: { id: string }[];
@@ -124,16 +160,27 @@ describe("finance manifest contract (#1146)", () => {
     expect((result.manifest.assistantTools ?? []).map((tool) => [tool.name, tool.handler])).toEqual(
       [
         ["finance.accounts.list", "accounts.list"],
+        ["finance.manual.context", "manual.context"],
+        ["finance.manual.account-create", "manual.account-create"],
+        ["finance.manual.entry-create", "manual.entry-create"],
+        ["finance.reconciliation.read", "reconciliation.read"],
+        ["finance.reconciliation.finish", "reconciliation.finish"],
+        ["finance.import.preview", "import.preview"],
+        ["finance.import.apply", "import.apply"],
         ["finance.setup.status", "setup.status"],
         ["finance.connect.start", "connect.start"],
         ["finance.connect.poll", "connect.poll"],
         ["finance.sync.run-now", "sync.run"],
         ["finance.transactions.query", "transactions.query"],
+        ["finance.transaction.split", "transaction.split"],
         ["finance.transaction.categorize", "transaction.categorize"],
         ["finance.transaction.categorize-new", "transaction.categorize-new"],
+        ["finance.budget.configure", "budget.configure"],
         ["finance.budget.status", "budget.status"],
+        ["finance.budget.draft.build", "budget.draft.build"],
         ["finance.budget.draft.get", "budget.draft.get"],
         ["finance.budget.draft.update", "budget.draft.update"],
+        ["finance.budget.draft.start", "budget.draft.start"],
         ["finance.budget.assign", "budget.assign"],
         ["finance.budget.move", "budget.move"],
         ["finance.rule.set", "rule.set"],
@@ -144,7 +191,41 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.reports.spending", "reports.spending"],
         ["finance.reports.net-worth", "reports.net-worth"],
         // #3186: the Settings activity list.
-        ["finance.activity.list", "activity.list"]
+        ["finance.activity.list", "activity.list"],
+        ["finance.target.set", "target.set"],
+        ["finance.target.remove", "target.remove"],
+        ["finance.bills.read", "bills.read"],
+        ["finance.bills.suggestions", "bills.suggestions"],
+        ["finance.bills.suggestions.dismiss", "bills.suggestion-dismiss"],
+        ["finance.bill.create", "bill.create"],
+        ["finance.bill.decide", "bill.decide"],
+        ["finance.bill.stop", "bill.stop"],
+        ["finance.bill.clear", "bill.clear"],
+        ["finance.bill.adjust", "bill.adjust"],
+        ["finance.bill.adjust-reset", "bill.adjust-reset"],
+        ["finance.flex.preview", "flex.preview"],
+        ["finance.flex.configure", "flex.configure"],
+        ["finance.flex.assign", "flex.assign"],
+        ["finance.transactions.bulk-category", "transactions.bulk-category"],
+        ["finance.reports.transactions", "reports.transactions"],
+        ["finance.transactions.export", "transactions.export"],
+        ["finance.transactions.confirm", "transactions.confirm"],
+        ["finance.manual.account-review", "manual.account-review"],
+        ["finance.manual.account-update", "manual.account-update"],
+        ["finance.manual.transfer-context", "manual.transfer-context"],
+        ["finance.manual.transfer-review", "manual.transfer-review"],
+        ["finance.manual.transfer-reverse", "manual.transfer-reverse"],
+        ["finance.manual.transfer-create", "manual.transfer-create"],
+        ["finance.rules.list", "rules.list"],
+        ["finance.rules.preview", "rules.preview"],
+        ["finance.rules.update", "rules.update"],
+        ["finance.targets.fund", "targets.fund"],
+        ["finance.card-reserve.preview", "card-reserve.preview"],
+        ["finance.card-reserve.save", "card-reserve.save"],
+        ["finance.bill.entry-preview", "bill.entry-preview"],
+        ["finance.bill.entry-record", "bill.entry-record"],
+        ["finance.transaction.note-read", "transaction.note-read"],
+        ["finance.transaction.note-save", "transaction.note-save"]
       ]
     );
     for (const tool of result.manifest.assistantTools ?? []) {
@@ -164,6 +245,27 @@ describe("finance manifest contract (#1146)", () => {
     // #3175: chat sorts a merchant under the family matching its history.
     const tools = result.manifest.assistantTools ?? [];
     const toolByName = (name: string) => tools.find((tool) => tool.name === name)!;
+    expect(toolByName("finance.transaction.note-save")).toMatchObject({
+      risk: "write",
+      executionPolicy: "confirm",
+      confirmWhenKeys: ["transactionId", "accountId", "month", "writeRevision", "notes"]
+    });
+    // Removing a target is a delete, so the page and chat both ask first and it can never auto-run.
+    expect(toolByName("finance.target.remove")).toMatchObject({ risk: "destructive" });
+    expect(toolByName("finance.target.remove").executionPolicy).toBeUndefined();
+    expect(toolByName("finance.target.remove").actionFamilyId).toBeUndefined();
+    expect(JSON.stringify(toolByName("finance.target.set").inputSchema)).not.toContain("removed");
+    expect(toolByName("finance.bill.entry-preview")).toMatchObject({ risk: "read" });
+    expect(toolByName("finance.bills.suggestions")).toMatchObject({ risk: "read" });
+    expect(toolByName("finance.bills.suggestions.dismiss")).toMatchObject({
+      risk: "write",
+      executionPolicy: "auto"
+    });
+    expect(toolByName("finance.bill.entry-record")).toMatchObject({
+      risk: "write",
+      executionPolicy: "confirm",
+      confirmWhenKeys: ["name", "accountId", "date", "amountCents", "isoCurrency", "cleared"]
+    });
     expect(toolByName("finance.transaction.categorize")).toMatchObject({
       actionFamilyId: "sorting",
       executionPolicy: "auto"
@@ -188,6 +290,18 @@ describe("finance manifest contract (#1146)", () => {
       confirmAbove: { inputKey: "amountCents", preferenceKey: "freedomLimitDollars", scale: 100 }
     });
     expect(toolByName("finance.budget.move").confirmAbove?.baseKey).toBeUndefined();
+    for (const name of ["finance.bill.adjust", "finance.bill.adjust-reset"]) {
+      expect(toolByName(name)).toMatchObject({
+        risk: "write",
+        executionPolicy: "confirm",
+        confirmWhenKeys: ["planId", "dueDate"]
+      });
+    }
+    expect(toolByName("finance.targets.fund")).toMatchObject({
+      executionPolicy: "confirm",
+      confirmWhenKeys: ["categoryIds"],
+      risk: "write"
+    });
     expect(toolByName("finance.rule.set").actionFamilyId).toBe("rules");
     expect(toolByName("finance.category.upsert").actionFamilyId).toBe("categories");
     expect(toolByName("finance.category.archive").actionFamilyId).toBe("categories");
@@ -326,6 +440,14 @@ describe("finance manifest contract (#1146)", () => {
         paramsSchema: {
           type: "object",
           fields: {
+            expectedRevision: { type: "integer", min: 0, max: 9007199254740991 },
+            expectedFingerprint: { type: "identifier" },
+            previousCents: { type: "integer", min: -100000000, max: 100000000 },
+            previousAmountsCents: {
+              type: "array",
+              maxItems: 20,
+              items: { type: "integer", min: -100000000, max: 100000000 }
+            },
             month: { type: "identifier" },
             categoryId: { type: "identifier" },
             // The bounded-integer param type (module-params.ts) is what makes
@@ -379,7 +501,14 @@ describe("finance manifest contract (#1146)", () => {
         handler: "draft.start",
         retryLimit: 1,
         allowManualRun: true,
-        paramsSchema: { type: "object", fields: { draftId: { type: "uuid" } } }
+        paramsSchema: {
+          type: "object",
+          fields: {
+            draftId: { type: "uuid" },
+            expectedRevision: { type: "integer", min: 0, max: 9007199254740991 },
+            expectedFingerprint: { type: "identifier" }
+          }
+        }
       },
       {
         // #3181: a plan amount typed on the draft screen.
@@ -390,6 +519,8 @@ describe("finance manifest contract (#1146)", () => {
         paramsSchema: {
           type: "object",
           fields: {
+            expectedRevision: { type: "integer", min: 0, max: 9007199254740991 },
+            expectedFingerprint: { type: "identifier" },
             draftId: { type: "uuid" },
             categoryKey: { type: "identifier" },
             amountCents: { type: "integer", min: 0, max: 100000000 }
@@ -422,6 +553,29 @@ describe("finance manifest contract (#1146)", () => {
         retryLimit: 1,
         allowManualRun: true,
         paramsSchema: { type: "object", fields: { activityId: { type: "uuid" } } }
+      },
+      {
+        name: "finance.split-apply",
+        handler: "split.apply",
+        retryLimit: 1,
+        allowManualRun: true,
+        paramsSchema: {
+          type: "object",
+          fields: {
+            transactionId: { type: "identifier" },
+            accountId: { type: "identifier" },
+            month: { type: "identifier" },
+            expectedAmountCents: { type: "integer", min: -2000000000, max: 2000000000 },
+            expectedCurrency: { type: "identifier" },
+            expectedRevision: { type: "integer", min: 0, max: 2147483646 },
+            categoryIds: { type: "array", maxItems: 20, items: { type: "identifier" } },
+            amountsCents: {
+              type: "array",
+              maxItems: 20,
+              items: { type: "integer", min: -100000000, max: 100000000 }
+            }
+          }
+        }
       }
     ]);
     expect(result.manifest.worker?.schedules).toEqual([
@@ -476,7 +630,14 @@ describe("finance manifest contract (#1146)", () => {
       "search",
       "pendingOnly",
       "needsLookOnly",
-      "limit"
+      "limit",
+      "postingState",
+      "ledgerState",
+      "direction",
+      "uncategorizedOnly",
+      "duplicatesOnly",
+      "transactionId",
+      "ownOnly"
     ]);
     expect(querySchema.required).toBeUndefined();
     const categorize = tools.find((tool) => tool.name === "finance.transaction.categorize")!;
@@ -500,8 +661,7 @@ describe("finance manifest contract (#1146)", () => {
       "amountCents"
     ]);
 
-    // FIN-05 (#1150): both report tools take ONLY an optional bounded months
-    // count (default 6 handler-side) — no free text can reach a report call.
+    // Reports accept a bounded period and an explicit currency, never arbitrary prose.
     for (const name of ["finance.reports.spending", "finance.reports.net-worth"]) {
       const tool = tools.find((entry) => entry.name === name)!;
       const schema = tool.inputSchema as {
@@ -509,7 +669,7 @@ describe("finance manifest contract (#1146)", () => {
         additionalProperties?: unknown;
         required?: unknown;
       };
-      expect(Object.keys(schema.properties), name).toEqual(["months"]);
+      expect(Object.keys(schema.properties), name).toEqual(["months", "currency"]);
       expect(schema.additionalProperties, name).toBe(false);
       expect(schema.required, name).toBeUndefined();
       expect(schema.properties.months, name).toEqual({
@@ -517,6 +677,7 @@ describe("finance manifest contract (#1146)", () => {
         minimum: 1,
         maximum: 24
       });
+      expect(schema.properties.currency, name).toEqual({ type: "string", pattern: "^[A-Z]{3}$" });
     }
   });
 

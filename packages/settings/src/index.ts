@@ -87,3 +87,5 @@ export {
   readQuietHoursAuthority,
   resolveAlertsQuietPolicy
 } from "./quiet-hours-authority.js";
+
+export * from "./actor-locale.js";

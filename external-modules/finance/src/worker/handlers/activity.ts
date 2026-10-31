@@ -1,3 +1,6 @@
+import { copyLegacyMerchantRules } from "../merchant-rules.js";
+import { assertCategoryFunding } from "./flex-guards.js";
+import { FLEX_POOL } from "../../domain/flex.js";
 // external-modules/finance/src/worker/handlers/activity.ts
 //
 // #3186: the activity trail on Finance Settings.
@@ -18,6 +21,8 @@ import type { ToolFactory } from "../registry.js";
 import type { WorkerPorts } from "../ports.js";
 import { InputError, readInt, readString } from "../validate.js";
 import { READY_TO_ASSIGN } from "./budget.js";
+import { budgetContext, staleBudget } from "./budget-context.js";
+import { today } from "./manual-ledger.js";
 import { loadCategories } from "./feed.js";
 
 const QUEUE_UNDO = "finance.activity-undo";
@@ -54,10 +59,15 @@ type Params = ActivityRecord["params"];
 const str = (value: unknown): string | null => (typeof value === "string" ? value : null);
 const num = (value: unknown): number | null => (typeof value === "number" ? value : null);
 
-function money(cents: number): string {
-  const abs = Math.abs(cents);
-  const text = `$${Math.floor(abs / 100).toLocaleString("en-US")}.${String(abs % 100).padStart(2, "0")}`;
-  return cents < 0 ? `-${text}` : text;
+function money(cents: number, currency: string | null): string {
+  const formatter = new Intl.NumberFormat(
+    "en-US",
+    currency
+      ? { style: "currency", currency }
+      : { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+  );
+  const format = formatter.format as (value: string | number) => string;
+  return format(`${cents}E-2`) + (currency ? "" : " (currency not set)");
 }
 
 function monthLabel(month: string | null): string {
@@ -71,6 +81,7 @@ function titleCase(text: string): string {
 }
 
 interface Names {
+  currency: string | null;
   category(id: string | null): string;
   merchantForRule(ruleId: string | null): Promise<string>;
   transaction(params: Params): Promise<TransactionRecord | null>;
@@ -80,6 +91,12 @@ async function readRule(
   ports: WorkerPorts,
   ruleId: string
 ): Promise<{ key: string; value: { categoryId?: string; payeeKey?: string } } | null> {
+  const canonical = (await (await ports.store()).rules?.all())?.find((r) => r.id === ruleId);
+  if (canonical)
+    return {
+      key: ruleId,
+      value: { categoryId: canonical.categoryId, payeeKey: canonical.payeeKey }
+    };
   for (const key of [`rule:${ruleId}`, ruleId]) {
     const value = (await ports.kv.get(NS.rules, key)) as {
       categoryId?: string;
@@ -95,7 +112,13 @@ async function namesFor(ports: WorkerPorts, store: FinanceStore): Promise<Names>
   const byId = new Map(categories.map((category) => [category.id, category.name]));
   const chunks = new Map<string, TransactionRecord[] | null>();
   return {
-    category: (id) => (id === null ? "no category" : (byId.get(id) ?? "a category")),
+    currency: (await store.budgetPolicy?.get())?.isoCurrency ?? null,
+    category: (id) =>
+      id === FLEX_POOL
+        ? "Flexible spending"
+        : id === null
+          ? "no category"
+          : (byId.get(id) ?? "a category"),
     merchantForRule: async (ruleId) => {
       const rule = ruleId === null ? null : await readRule(ports, ruleId);
       return rule?.value.payeeKey ? titleCase(rule.value.payeeKey) : "a merchant";
@@ -115,25 +138,74 @@ async function namesFor(ports: WorkerPorts, store: FinanceStore): Promise<Names>
 async function describe(row: ActivityRecord, names: Names): Promise<string> {
   const p = row.params;
   switch (row.kind) {
+    case "account.create":
+      return "Added a manual account";
+    case "transaction.create":
+      return "Added a manual transaction";
+    case "transfer.create":
+      return "Recorded a linked manual transfer";
+    case "transfer.reverse":
+      return "Corrected a manual transfer recording; original history kept";
+    case "account.reconcile":
+      return "Reconciled a manual statement";
+    case "transaction.import":
+      return `Imported ${num(p.entryCount) ?? 0} manual transaction${p.entryCount === 1 ? "" : "s"}`;
+    case "card.enroll":
+      return "Set up a card-payment reserve; no payment sent";
+    case "card.cash-set":
+      return "Changed cash reserved for a card payment";
+    case "flex.mode":
+      return "Changed the budget planning mode";
+    case "flex.assign":
+      return "Changed the flexible pool assignment";
+    case "bill.record-entry":
+      return "Recorded an expense and matched its bill";
+    case "transaction.note":
+      return "Changed a private transaction note";
+    case "bill.create":
+      return "Added a bill plan";
+    case "bill.stop":
+      return "Stopped future bill projections";
+    case "bill.decide":
+      return "Reviewed a bill occurrence";
+    case "bill.clear":
+      return "Undid a bill occurrence review";
+    case "bill.adjust":
+      return "Changed one projected bill date or amount";
+    case "bill.adjust-reset":
+      return "Reset a one-off bill change to its schedule";
+    case "bill.suggestion-dismiss":
+      return "Dismissed a bill suggestion";
+    case "target.set":
+      return `Changed the target for ${names.category(str(p.categoryId))}`;
+    case "budget.configure":
+      return `Chose ${str(p.isoCurrency) ?? "a"} budget currency`;
     case "budget.assign":
-      return `Set ${names.category(str(p.categoryId))} to ${money(num(p.amountCents) ?? 0)} for ${monthLabel(str(p.month))}`;
+      return `Set ${names.category(str(p.categoryId))} to ${money(num(p.amountCents) ?? 0, names.currency)} for ${monthLabel(str(p.month))}`;
+    case "flex.move":
     case "budget.move": {
       const from = str(p.fromCategoryId);
       const fromName = from === READY_TO_ASSIGN ? READY_LABEL : names.category(from);
-      return `Moved ${money(num(p.amountCents) ?? 0)} from ${fromName} to ${names.category(str(p.toCategoryId))}`;
+      return `Moved ${money(num(p.amountCents) ?? 0, names.currency)} from ${fromName} to ${names.category(str(p.toCategoryId))}`;
     }
     case "transaction.categorize":
     case "transaction.confirm": {
       const tx = await names.transaction(p);
-      const what = tx ? `${tx.name}, ${money(tx.amountCents)}` : "a purchase";
+      const what = tx ? `${tx.name}, ${money(tx.amountCents, tx.isoCurrency)}` : "a purchase";
       const category = names.category(str(p.categoryId));
       if (row.kind === "transaction.confirm") return `Confirmed ${what} as ${category}`;
       return p.previousCategoryId === null || p.previousCategoryId === undefined
         ? `Sorted ${what} into ${category}`
         : `Changed ${what} to ${category}`;
     }
+    case "transaction.split":
+      return (num(p.parts) ?? 0) === 1
+        ? "Returned a transaction to one category"
+        : `Split a transaction between ${num(p.parts) ?? 0} categories`;
     case "merchant-rule.set":
-      return `Made a rule: ${await names.merchantForRule(str(p.ruleId))} goes to ${names.category(str(p.categoryId))}`;
+      return p.enabled === 0
+        ? `Disabled merchant rule: ${await names.merchantForRule(str(p.ruleId))}`
+        : `Made a rule: ${await names.merchantForRule(str(p.ruleId))} goes to ${names.category(str(p.categoryId))}`;
     case "category.add":
       return `Added the category ${names.category(str(p.categoryId))}`;
     case "category.edit":
@@ -312,36 +384,37 @@ async function undoRule(ports: WorkerPorts, row: ActivityRecord): Promise<Activi
   return reversal;
 }
 
-async function saveCategories(ports: WorkerPorts, categories: Category[]): Promise<void> {
-  await ports.kv.set(NS.categories, "taxonomy", { categories });
-}
-
 async function undoCategory(
   ports: WorkerPorts,
   store: FinanceStore,
   row: ActivityRecord
-): Promise<ActivityInput> {
+): Promise<{ category: Category; reversal: ActivityInput }> {
   const categoryId = str(row.params.categoryId);
   if (categoryId === null) throw new InputError("not_undoable", "this row has no usable undo data");
+  await assertCategoryFunding(store, today(ports).slice(0, 7), [categoryId]);
   const all = await loadCategories(ports);
   const current = all.find((entry) => entry.id === categoryId);
   if (!current) throw new InputError("not_found", "the category is no longer on record");
   if (row.kind === "category.add") {
     if (current.archived) throw CHANGED();
-    const month = ports.now().toISOString().slice(0, 7);
+    const month = today(ports).slice(0, 7);
     if ((await currentAssignment(store, month, categoryId)) !== 0) throw CHANGED();
-    await saveCategories(
-      ports,
-      all.map((entry) => (entry.id === categoryId ? { ...entry, archived: true } : entry))
-    );
-    return { actor: "user", kind: "category.archive", params: { categoryId } };
+    const context = await budgetContext(ports, store, month);
+    if (!context.setupRequired && (context.state.categories[categoryId]?.availableCents ?? 0) !== 0)
+      throw CHANGED();
+    for (const future of (await store.listAssignmentMonths()).filter((m) => m > month)) {
+      if ((await currentAssignment(store, future, categoryId)) !== 0) throw CHANGED();
+    }
+    return {
+      category: { ...current, archived: true },
+      reversal: { actor: "user", kind: "category.archive", params: { categoryId } }
+    };
   }
   if (!current.archived) throw CHANGED();
-  await saveCategories(
-    ports,
-    all.map((entry) => (entry.id === categoryId ? { ...entry, archived: false } : entry))
-  );
-  return { actor: "user", kind: "category.add", params: { categoryId } };
+  return {
+    category: { ...current, archived: false },
+    reversal: { actor: "user", kind: "category.add", params: { categoryId } }
+  };
 }
 
 /** Queue handler. Reverses one activity row, or throws when the data moved on since. */
@@ -349,6 +422,7 @@ export const activityUndoHandler: ToolFactory = (ports) => async (input) => {
   const params = readEnvelopeParams(input);
   const activityId = readString(params, "activityId", { required: true });
   const store = await ports.store();
+  const expected = await store.budgetPolicy?.get();
   const row = await store.getActivity(activityId);
   if (row === null) throw new InputError("not_found", "no activity row matches the given id");
   if (row.undoneAt !== null) return { status: "ok", undone: true, alreadyUndone: true };
@@ -358,22 +432,70 @@ export const activityUndoHandler: ToolFactory = (ports) => async (input) => {
 
   const at = ports.now().toISOString();
   if (row.kind === "budget.assign" || row.kind === "budget.move") {
+    if (!expected?.taxonomyReady)
+      throw new InputError("budget_currency_required", "Choose your budget currency first");
     // Totals, the reversal row and the undone mark land together, and a second undo of the
     // same row writes nothing.
     const plan =
       row.kind === "budget.assign"
         ? await planUndoAssign(store, row)
         : await planUndoMove(store, row);
+    await assertCategoryFunding(
+      store,
+      plan.month,
+      plan.assignments.map((a) => a.categoryId)
+    );
     const applied = await store.commitBudgetChange({
+      expected,
       month: plan.month,
       assignments: plan.assignments,
       activity: [plan.reversal],
       markUndone: { activityId, at }
     });
-    if (!applied) return { status: "ok", undone: true, alreadyUndone: true };
+    if (!applied) {
+      if ((await store.getActivity(activityId))?.undoneAt)
+        return { status: "ok", undone: true, alreadyUndone: true };
+      throw staleBudget();
+    }
     return { status: "ok", undone: true };
   }
 
+  if (row.kind === "category.add" || row.kind === "category.archive") {
+    if (!expected?.taxonomyReady)
+      throw new InputError("budget_currency_required", "Choose your budget currency first");
+    const plan = await undoCategory(ports, store, row);
+    if (
+      !(await store.commitBudgetChange({
+        expected,
+        month: today(ports).slice(0, 7),
+        assignments: [],
+        categories: [plan.category],
+        activity: [plan.reversal],
+        markUndone: { activityId, at }
+      }))
+    )
+      throw staleBudget();
+    return { status: "ok", undone: true };
+  }
+  if (row.kind === "transaction.categorize" && store.metadata) {
+    const accountId = str(row.params.accountId),
+      month = str(row.params.month);
+    if (!accountId || !month)
+      throw new InputError("not_undoable", "this row has no usable undo data");
+    const current = (await store.metadata.rows(accountId, month)).find(
+      (r) => r.id === row.params.transactionId
+    );
+    if (!current || !(await store.metadata.undo(activityId, current.writeRevision, at)))
+      throw CHANGED();
+    return { status: "ok", undone: true };
+  }
+  if (row.kind === "merchant-rule.set" && store.rules) {
+    await copyLegacyMerchantRules(ports, store.rules);
+    const current = (await store.rules.all()).find((r) => r.id === row.params.ruleId);
+    if (!current || !(await store.rules.undo(activityId, current.writeRevision, at)))
+      throw CHANGED();
+    return { status: "ok", undone: true };
+  }
   let reversal: ActivityInput;
   switch (row.kind) {
     case "transaction.categorize":
@@ -383,7 +505,7 @@ export const activityUndoHandler: ToolFactory = (ports) => async (input) => {
       reversal = await undoRule(ports, row);
       break;
     default:
-      reversal = await undoCategory(ports, store, row);
+      throw new InputError("not_undoable", "this action cannot be undone");
   }
   await store.appendActivity(reversal);
   await store.markActivityUndone(activityId, at);

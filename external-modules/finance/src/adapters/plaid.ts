@@ -8,6 +8,7 @@
 // substring in url/headers. Headers carry content-type only.
 import type { FinanceFetch, FinanceFetchRequest, PlaidEnv } from "./types.js";
 import { FinanceFetchError } from "./types.js";
+import { decimalToCents } from "../domain/values.js";
 
 // Plaid's lookup only finds a bank in the countries named, so name every supported one.
 const INSTITUTION_COUNTRIES = [
@@ -128,7 +129,7 @@ function mapAccount(raw: Json): PlaidAccount {
     subtype: (raw.subtype as string | null) ?? null,
     mask: (raw.mask as string | null) ?? null,
     // Dollars → cents once, at this edge (accounts have no reducer).
-    balanceCents: Math.round(Number(balances.current ?? 0) * 100),
+    balanceCents: decimalToCents(Number(balances.current ?? 0)),
     isoCurrency: (balances.iso_currency_code as string | null) ?? "USD"
   };
 }

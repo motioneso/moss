@@ -26,6 +26,25 @@ function account(over: Partial<AccountRecord> & { accountId: string }): AccountR
 const WINDOW = ["2026-06", "2026-07"];
 
 describe("deriveNetWorth", () => {
+  it("refuses mixed-currency and overflowing net-worth sums", () => {
+    expect(() =>
+      deriveNetWorth(
+        [account({ accountId: "usd" }), account({ accountId: "eur", isoCurrency: "EUR" })],
+        {},
+        WINDOW
+      )
+    ).toThrow(/currency/);
+    expect(() =>
+      deriveNetWorth(
+        [account({ accountId: "a" }), account({ accountId: "b" })],
+        {
+          "a:2026-07": { days: { "2026-07-02": Number.MAX_SAFE_INTEGER } },
+          "b:2026-07": { days: { "2026-07-02": 1 } }
+        },
+        WINDOW
+      )
+    ).toThrow(/safe integer/);
+  });
   it("carries the last balance forward across snapshot gaps", () => {
     const series = deriveNetWorth(
       [account({ accountId: "a" }), account({ accountId: "b" })],

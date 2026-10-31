@@ -67,6 +67,7 @@
 
 :root,
 .jds-theme-scope {
+  color-scheme: light;
   /* ============ COLOR — primitives ============ */
   /* User themes may override aesthetic variables only: paper/surface/ink/line/accent.
      Semantic red/amber/steel stay locked so error/caution/info meaning remains stable. */
@@ -432,6 +433,7 @@
 /* ------------------------------------------------------------------------- */
 [data-color-mode="dark"],
 [data-theme="dark"] {
+  color-scheme: dark;
   --paper: #1c1a16;
   --surface: #232019;
   --surface-2: #2a271f;
