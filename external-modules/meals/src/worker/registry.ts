@@ -28,7 +28,8 @@ function planDeps(ctx: ModuleWorkerContext): PlanDeps {
   const kitchens = storeFrom(ctx);
   return {
     store: sqlPlanStore(ctx.db),
-    kitchen: () => kitchens.getOrCreateKitchen(),
+    kitchen: () => kitchens.readKitchen(),
+    ensureKitchen: () => kitchens.getOrCreateKitchen(),
     ai: ctx.ai,
     jobs: ctx.jobs,
     newId: randomUUID

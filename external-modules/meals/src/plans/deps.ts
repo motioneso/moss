@@ -20,8 +20,11 @@ export interface PlanJobs {
 
 export interface PlanDeps {
   readonly store: PlanStore;
-  /** The kitchen, created with a self member on first use. */
+  /** The kitchen, read without writing. Read tools may only run SELECT. */
   readonly kitchen: () => Promise<KitchenView>;
+
+  /** The kitchen, with its row and self member stored. Only plan.create calls it. */
+  readonly ensureKitchen: () => Promise<KitchenView>;
   readonly ai: MealsAi;
   readonly jobs: PlanJobs;
   readonly newId: () => string;

@@ -66,6 +66,20 @@ function mealsOf(setup: Setup) {
   });
 }
 
+describe("Kitchen reads", () => {
+  it("writes the Kitchen only from plan.create, so the read tools stay read-only", async () => {
+    const setup = fakeDeps(kitchenOf([you, sam]), happyAi());
+    const plan = await planCreate(setup.deps, createInput());
+    expect(setup.kitchenWrites()).toBe(1);
+
+    await drain(setup);
+    await planGet(setup.deps, { planId: plan.planId });
+    await planGet(setup.deps, { date: "2026-11-02" });
+    await mealGet(setup.deps, { mealId: mealsOf(setup)[0]!.mealId });
+    expect(setup.kitchenWrites()).toBe(1);
+  });
+});
+
 describe("chaining days", () => {
   it("writes a 3-day plan one day at a time, in date order", async () => {
     const setup = fakeDeps(kitchenOf([you, sam]), happyAi());
@@ -451,7 +465,7 @@ describe("AI errors", () => {
     expect(after?.days[0]).toMatchObject({ status: "failed", failureReason: kind });
     expect(after?.days[0]?.meals[0]).toMatchObject({ status: "failed", failureReason: kind });
     const kitchenGet = createKitchenGetHandler({
-      getOrCreateKitchen: setup.deps.kitchen
+      readKitchen: setup.deps.kitchen
     } as unknown as MealsStore);
     await expect(kitchenGet({ input: {}, ai } as never)).resolves.toMatchObject({
       kitchenId: expect.any(String)

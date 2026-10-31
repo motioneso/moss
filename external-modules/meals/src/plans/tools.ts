@@ -99,7 +99,7 @@ export async function planCreate(deps: PlanDeps, input: Input): Promise<PlanView
   const existing = await deps.store.findPlanByKey(idempotencyKey);
   if (existing !== null) return loadView(deps, await requirePlan(deps, existing));
 
-  const kitchen = await deps.kitchen();
+  const kitchen = await deps.ensureKitchen();
   const skeleton = planSkeleton(kitchen, { startDate, days: dayCount });
   const days = skeleton.map((day) => ({ dayId: deps.newId(), date: day.date }));
   const meals = skeleton.flatMap((day, index) =>

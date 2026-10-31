@@ -436,12 +436,17 @@ export function sequentialIds(): () => string {
 export function fakeDeps(kitchen: KitchenView, ai = new ScriptedAi()) {
   const store = new FakePlanStore();
   const jobs = new RecordingJobs();
+  let writes = 0;
   const deps: PlanDeps = {
     store,
     kitchen: async () => kitchen,
+    ensureKitchen: async () => {
+      writes += 1;
+      return kitchen;
+    },
     ai,
     jobs,
     newId: sequentialIds()
   };
-  return { deps, store, jobs, ai };
+  return { deps, store, jobs, ai, kitchenWrites: () => writes };
 }
