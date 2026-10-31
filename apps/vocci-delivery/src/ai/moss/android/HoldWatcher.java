@@ -16,7 +16,13 @@ final class HoldWatcher {
 
     /** Returns true once, when the press ends. */
     boolean accept(int command, byte[] payload, long nowMs) {
-        if (command == STREAM) { streamed++; lastStream = nowMs; return false; }
+        if (command == STREAM) {
+
+            // A gap longer than the quiet window starts a new stream, so spaced-out stray messages never add up to a hold.
+            streamed = streamed > 0 && nowMs - lastStream > QUIET_MS ? 1 : streamed + 1;
+            lastStream = nowMs;
+            return false;
+        }
         if (command != RingTelemetry.RECORDING) return false;
         String state;
         try { state = RingTelemetry.recording(payload); } catch (IllegalArgumentException invalid) { return false; }

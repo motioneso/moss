@@ -38,5 +38,12 @@ public final class HoldWatcherTest {
         for (int n = 0; n < 6; n++) once.accept(0x26, new byte[4], n * 120L);
         check(once.quiet(2000));
         check(!once.accept(0x13, state(16), 3000));
+        // Stray messages spread out over time are not a held button: a gap restarts the count.
+        HoldWatcher stray = new HoldWatcher();
+        for (int n = 0; n < 5; n++) check(!stray.accept(0x26, new byte[4], n * 10_000L));
+        check(!stray.quiet(4 * 10_000L + 1000));
+        // A real stream after stray messages still ends a press.
+        for (int n = 0; n < 5; n++) check(!stray.accept(0x26, new byte[4], 60_000 + n * 120L));
+        check(stray.quiet(60_000 + 4 * 120L + 450));
     }
 }
