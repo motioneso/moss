@@ -36,6 +36,24 @@ describe("apiKeyRejectionProbe", () => {
     expect(init.redirect).toBe("error");
   });
 
+  it("probes a custom address that carries its own /v1, so a refused key is still flagged (#3559)", async () => {
+    // The provider answers 401 only at its real path; anything else is a 404, which must not be
+    // mistaken for "no verdict". A probe that strips the /v1 lands on the 404 and reports false.
+    const urls: string[] = [];
+    const fetcher = vi.fn(async (url: string | URL | Request) => {
+      urls.push(String(url));
+      return new Response("{}", { status: String(url).endsWith("/api/v1/models") ? 401 : 404 });
+    });
+    await expect(
+      apiKeyRejectionProbe(
+        "openai-compatible",
+        { ...credential, baseUrl: "https://openrouter.ai/api/v1" },
+        fetcher
+      )()
+    ).resolves.toBe(true);
+    expect(urls).toEqual(["https://openrouter.ai/api/v1/models"]);
+  });
+
   it("never asks for a provider kind that has no API-key chat", async () => {
     const fetcher = fetchAnswering(401);
     await expect(apiKeyRejectionProbe("google", credential, fetcher)()).resolves.toBe(false);
