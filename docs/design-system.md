@@ -332,6 +332,8 @@ returnFocusRef, dismissOnEscape, backdropRef})`; attach its returned onKeyDown t
   `.agenda-clear` ("Gathering your morning briefing...").
 - Whole page or panel: `<EmptyState>` (`.jds-empty`) with title, optional description, and buttons
   passed as `actions` (centred, 8px apart, 20px under the text).
+  Buttons passed as children land in the same slot, after any `actions`; new code should pass
+  `actions`.
 - No fake counts, no generic placeholder cards, no spinners in the middle of a page.
 - Copy is sentence case and reads like the product talking, not documentation. Don't repeat the
   section name already on screen.

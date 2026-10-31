@@ -28,12 +28,6 @@
   margin: 0;
 }
 
-/* The authored empty state has no spacing of its own between the description and a slotted
-   action, so the call to action supplies it here rather than in the shared primitive. */
-.workshop-empty-action {
-  margin-top: var(--space-5);
-}
-
 .workshop-project-more {
   display: flex;
   justify-content: center;
