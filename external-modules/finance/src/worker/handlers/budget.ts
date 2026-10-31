@@ -1,310 +1,267 @@
-// external-modules/finance/src/worker/handlers/budget.ts
-//
-// FIN-03 (#1148) Task 3: the envelope-budget handlers over the pure
-// derivation in domain/envelope.ts (spec delta §"Worker delta"). Cut over to
-// FinanceStore and the `state:{YYYY-MM}` cache retired by FIN-06c (#1166)
-// Task 10 (F6-D1): that cache was a KV-read-amplification workaround — a SQL
-// month read is one indexed query, so status now always derives fresh from
-// loadDerivationInput and never persists.
-//
-// Storage contract: `ledger:{YYYY-MM}` (assignment SOURCE OF TRUTH; assign
-// SETS a total per category, never increments, keeping the budget-apply
-// queue replay-safe at retryLimit 1) lives behind `store.listAssignmentMonths`
-// / `store.getLedger` / `store.setAssignment`.
-//
-// Two write paths, one apply: the assistant tool (budget.assign) and the
-// web queue twin (finance.budget-apply) both converge on applyAssignment.
-// The queue handler receives the HOST job envelope {actorUserId, jobKind,
-// idempotencyKey, params} — command fields ride in params, never flat
-// (the a6023cb7 regression from FIN-02).
-
+import { targetFundingLines, hasTargetFundingOverspending } from "../../domain/target-funding.js";
+import { FLEX_POOL } from "../../domain/flex.js";
+import { assertCategoryFunding, storedFlexTotal } from "./flex-guards.js";
+import { today } from "./manual-ledger.js";
+import { targetProgress } from "../../domain/targets.js";
 import {
-  deriveBudgetMonths,
-  effectiveTransferIds,
-  type BudgetLedger,
-  type BudgetMonthState,
-  type FinanceStore,
-  readyToAssignCents,
-  signedBalanceCents,
+  isCalendarMonth,
+  safeCents,
   tableGroupFor,
-  type TransactionRecord
+  type BudgetReview
 } from "../../domain/index.js";
 import type { ToolFactory } from "../registry.js";
 import type { WorkerPorts } from "../ports.js";
 import { InputError, readInt, readString } from "../validate.js";
 import { loadCategories } from "./feed.js";
+import {
+  budgetContext,
+  readBudgetReview,
+  requireBudgetPolicy,
+  requireSameReview,
+  staleBudget
+} from "./budget-context.js";
 
-const MONTH = /^[0-9]{4}-[0-9]{2}$/;
-// Mirrors the manifest bound on finance.budget-apply's amountCents param —
-// ±$1M in cents. The manifest gate runs host-side; this re-check covers the
-// tool path, which never crosses the queue params schema.
 const AMOUNT_BOUND = 100_000_000;
-
-/** Most categories one budget-apply job may carry (keeps params under the host size cap). */
 export const MAX_BATCH = 20;
-
+export const READY_TO_ASSIGN = "ready_to_assign";
 function readMonth(input: Record<string, unknown>): string {
   const month = readString(input, "month", { required: true });
-  if (!MONTH.test(month)) {
-    throw new InputError("month must be YYYY-MM");
-  }
+  if (!isCalendarMonth(month)) throw new InputError("month must be YYYY-MM");
   return month;
 }
-
-/**
- * Load the full derivation input: every assignment ledger plus every
- * transaction chunk, grouped by the chunk key's month suffix
- * (`{accountId}:{YYYY-MM}` — the reducer files each txn under its date's
- * month, so the key month IS the txn month).
- */
-async function loadDerivationInput(store: FinanceStore): Promise<{
-  ledgers: Record<string, BudgetLedger>;
-  transactionsByMonth: Record<string, TransactionRecord[]>;
-  /** Rows by month, before transfer rows are dropped. */
-  allRowsByMonth: Record<string, TransactionRecord[]>;
-  assignmentMonthCount: number;
-}> {
-  const ledgers: Record<string, BudgetLedger> = {};
-  const assignmentMonths = await store.listAssignmentMonths();
-  for (const month of assignmentMonths) {
-    const ledger = await store.getLedger(month);
-    if (ledger) ledgers[month] = ledger;
-  }
-
-  const transactionsByMonth: Record<string, TransactionRecord[]> = {};
-  for (const month of await store.listTransactionMonths()) {
-    const records = await store.listMonthTransactions(month);
-    if (records.length) transactionsByMonth[month] = records;
-  }
-  // FIN-05 (#1150): drop the effective transfer set (auto-paired rows ∪
-  // transfers-categorized) BEFORE derivation. Pairing needs the full
-  // cross-month set, so it runs over the flattened months here, not per
-  // month. deriveBudgetMonths keeps its own transfers/null skip as defense
-  // in depth — this filter only ever removes MORE rows (paired legs whose
-  // category is not "transfers", e.g. a transfer-in miscategorized as
-  // income inflating TBB).
-  const allRowsByMonth = { ...transactionsByMonth };
-  const excluded = effectiveTransferIds(Object.values(transactionsByMonth).flat());
-  for (const month of Object.keys(transactionsByMonth)) {
-    transactionsByMonth[month] = transactionsByMonth[month]!.filter((txn) => !excluded.has(txn.id));
-  }
-  return {
-    ledgers,
-    transactionsByMonth,
-    allRowsByMonth,
-    assignmentMonthCount: assignmentMonths.length
-  };
+const amount = (input: Record<string, unknown>, key: string) =>
+  readInt(input, key, { required: true, min: -AMOUNT_BOUND, max: AMOUNT_BOUND });
+async function liveCategories(ports: WorkerPorts) {
+  return new Set(
+    (await loadCategories(ports))
+      .filter((c) => !c.archived && c.id !== "income" && c.id !== "transfers")
+      .map((c) => c.id)
+  );
 }
-
-async function computeMonthState(
-  ports: WorkerPorts,
-  store: FinanceStore,
-  month: string
-): Promise<{
-  state: BudgetMonthState;
-  monthRows: TransactionRecord[];
-  assignmentMonthCount: number;
-}> {
-  const { allRowsByMonth, assignmentMonthCount, ...input } = await loadDerivationInput(store);
-  // Inject the requested month into the derivation union when it has no data
-  // of its own: the derivation then rolls carry/TBB forward into it (or
-  // yields the all-zero state when there is no data at all).
-  if (!input.ledgers[month] && !input.transactionsByMonth[month]) {
-    input.ledgers[month] = { assignments: {} };
-  }
-  const core = deriveBudgetMonths(input)[month]!;
-  return {
-    state: { computedAt: ports.now().toISOString(), ...core },
-    monthRows: allRowsByMonth[month] ?? [],
-    assignmentMonthCount
-  };
-}
-
-export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
+const budgetStatusRead: ToolFactory = (ports) => async (input) => {
   const month = readMonth(input);
   const store = await ports.store();
-  const { state, monthRows, assignmentMonthCount } = await computeMonthState(ports, store, month);
-  const accounts = await store.listAccounts();
-  const itemStatus = new Map<string, string>();
-  for (const account of accounts) {
-    if (!itemStatus.has(account.itemId)) {
-      itemStatus.set(account.itemId, (await store.getItem(account.itemId))?.status ?? "error");
-    }
-  }
-  // The same rows the Transactions screen counts under Needs a look.
-  const needsLookCount = monthRows.filter((txn) => txn.reviewState === "needs_look").length;
-  // Taxonomy rides along so the web budget screen renders names and group
-  // order from a single call (same shape transactions.query ships).
-  const categories = (await loadCategories(ports)).map((category) => ({
+  const context = await budgetContext(ports, store, month);
+  const allCategories = await loadCategories(ports);
+  let categories: {
+    id: string;
+    name: string;
+    group: string;
+    archived: boolean;
+    tableGroup: string;
+  }[] = allCategories.map((category) => ({
     ...category,
     tableGroup: tableGroupFor(category.group)
   }));
+  if (!context.setupRequired && context.flex?.active) {
+    const flex = context.flex;
+    categories = categories
+      .filter((c) => !flex.flexIds.includes(c.id))
+      .map((c) => ({
+        ...c,
+        tableGroup: flex.nonMonthlyIds.includes(c.id) ? "Non-monthly" : "Fixed"
+      }));
+    categories.push({
+      id: FLEX_POOL,
+      name: "Flexible spending",
+      group: "everyday",
+      archived: false,
+      tableGroup: "Flexible"
+    });
+  }
+  const flexDetail = !context.setupRequired
+    ? context.flexDetail.map((row) => ({
+        ...row,
+        name: allCategories.find((c) => c.id === row.id)?.name ?? row.id
+      }))
+    : [];
+  const targets = context.setupRequired
+    ? []
+    : ((await store.targets?.forMonth(month)) ?? []).map((target) =>
+        targetProgress(
+          target,
+          context.state.categories[target.categoryId],
+          month,
+          month < today(ports).slice(0, 7)
+            ? `${month}-${new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate()}`
+            : month > today(ports).slice(0, 7)
+              ? `${month}-01`
+              : today(ports)
+        )
+      );
+  if (!context.setupRequired) requireSameReview(context, await requireBudgetPolicy(store));
   return {
     month,
-    state,
+    ...context,
     categories,
-    hasBank: accounts.length > 0,
-    hasBudget: assignmentMonthCount > 0,
-    readyToAssignCents: readyToAssignCents(accounts, state.categories),
-    needsLookCount,
-    accounts: accounts.map((account) => ({
-      accountId: account.accountId,
-      name: account.name,
-      balanceCents: signedBalanceCents(account),
-      asOf: account.updatedAt,
-      stale: itemStatus.get(account.itemId) !== "connected"
-    }))
+    targets,
+    targetFundingOverspent:
+      !context.setupRequired &&
+      (hasTargetFundingOverspending(context.state.categories) ||
+        context.cardPayments.some((c) => c.availableCents < 0)),
+    targetFunding: context.setupRequired
+      ? []
+      : targetFundingLines(
+          targets,
+          context.state.categories,
+          allCategories,
+          context.flex?.active ? context.flex.flexIds : []
+        ),
+    flexDetail,
+    flexChoices: allCategories
+      .filter((c) => !c.archived && c.id !== "income" && c.id !== "transfers")
+      .map((c) => ({ id: c.id, name: c.name, group: c.group }))
   };
 };
 
-/**
- * Shared write path: validate, SET the assigned category's total, and log it.
- * The activity row carries ids and cents only; undo restores the old total.
- */
-async function applyAssignment(
+async function applyAssignments(
   ports: WorkerPorts,
-  args: { month: string; categoryId: string; amountCents: number },
-  actor: "user" | "moss",
-  liveIds?: ReadonlySet<string>
-): Promise<Record<string, unknown>> {
-  const live =
-    liveIds ??
-    new Set(
-      (await loadCategories(ports)).filter((entry) => !entry.archived).map((entry) => entry.id)
-    );
-  if (!live.has(args.categoryId)) {
-    throw new InputError("invalid_category", "categoryId is not a live category");
-  }
-
+  month: string,
+  assignments: { categoryId: string; amountCents: number; previousCents: number }[],
+  expected: BudgetReview,
+  actor: "user" | "moss"
+) {
   const store = await ports.store();
-  const previousCents = (await store.getLedger(args.month))?.assignments[args.categoryId] ?? 0;
-  await store.setAssignment(args.month, args.categoryId, args.amountCents);
-
-  // The total and its activity row are two writes. When a run dies between them, the retry
-  // finds the total already set, so it also checks the newest row logged for this category.
-  const logged = await store.lastLoggedAssignment(args.month, args.categoryId);
-  const changed = previousCents !== args.amountCents;
-  const missingRow = !changed && logged !== null && logged !== args.amountCents;
-  if (changed || missingRow) {
-    const baseline = changed ? previousCents : (logged as number);
-    await store.appendActivity({
-      actor,
-      kind: "budget.assign",
-      params: {
-        month: args.month,
-        categoryId: args.categoryId,
-        amountCents: args.amountCents,
-        previousCents: baseline
-      },
-      undo: { month: args.month, categoryId: args.categoryId, amountCents: baseline }
-    });
+  requireSameReview(expected, await requireBudgetPolicy(store));
+  const live = await liveCategories(ports);
+  const ledger = (await store.getLedger(month))?.assignments ?? {};
+  await assertCategoryFunding(
+    store,
+    month,
+    assignments.map((a) => a.categoryId)
+  );
+  for (const a of assignments) {
+    if (!live.has(a.categoryId))
+      throw new InputError("invalid_category", "categoryId is not a live category");
+    if ((ledger[a.categoryId] ?? 0) !== a.previousCents)
+      throw new InputError(
+        "stale_previous",
+        "previousCents does not match the stored total; read finance.budget.status again"
+      );
   }
-
-  return { status: "ok", ...args };
+  const applied = await store.commitBudgetChange({
+    expected,
+    month,
+    assignments,
+    activity: assignments
+      .filter((a) => a.amountCents !== a.previousCents)
+      .map((a) => ({
+        actor,
+        kind: "budget.assign",
+        params: { month, ...a },
+        undo: { month, categoryId: a.categoryId, amountCents: a.previousCents }
+      }))
+  });
+  if (!applied) throw staleBudget();
+  return { status: "ok", applied: assignments.length };
 }
-
 export const budgetAssignHandler: ToolFactory = (ports) => async (input) => {
   const month = readMonth(input);
   const categoryId = readString(input, "categoryId", { required: true });
-  const amountCents = readInt(input, "amountCents", {
-    required: true,
-    min: -AMOUNT_BOUND,
-    max: AMOUNT_BOUND
-  });
-  // The gateway's dollar limit measures the jump from previousCents, so a stale or
-  // invented base would hide a large change. Reject anything that differs from the stored total.
-  const previousCents = readInt(input, "previousCents", {
-    required: true,
-    min: -AMOUNT_BOUND,
-    max: AMOUNT_BOUND
-  });
-  const store = await ports.store();
-  const stored = (await store.getLedger(month))?.assignments[categoryId] ?? 0;
-  if (stored !== previousCents) {
-    throw new InputError(
-      "stale_previous",
-      "previousCents does not match the stored total; read finance.budget.status again"
-    );
-  }
-  const result = await applyAssignment(ports, { month, categoryId, amountCents }, "moss");
+  const amountCents = amount(input, "amountCents");
+  const previousCents = amount(input, "previousCents");
+  const result = await applyAssignments(
+    ports,
+    month,
+    [{ categoryId, amountCents, previousCents }],
+    readBudgetReview(input),
+    "moss"
+  );
   return {
-    ...result,
+    status: result.status,
+    month,
+    categoryId,
+    amountCents,
     before: { assignedCents: previousCents },
     after: { assignedCents: amountCents }
   };
 };
 
-/** Source id that draws from unassigned money instead of a category. */
-export const READY_TO_ASSIGN = "ready_to_assign";
-
-/**
- * Moves money between two categories for one month, or from unassigned money into one.
- * The source must hold the amount (its available balance, or the ready-to-assign figure).
- */
 export const budgetMoveHandler: ToolFactory = (ports) => async (input) => {
   const month = readMonth(input);
   const fromCategoryId = readString(input, "fromCategoryId", { required: true });
   const toCategoryId = readString(input, "toCategoryId", { required: true });
   const amountCents = readInt(input, "amountCents", { required: true, min: 1, max: AMOUNT_BOUND });
-  if (toCategoryId === READY_TO_ASSIGN) {
+  if (toCategoryId === READY_TO_ASSIGN)
     throw new InputError("invalid_category", "toCategoryId must be a category");
-  }
-  if (fromCategoryId === toCategoryId) {
+  if (fromCategoryId === toCategoryId)
     throw new InputError("invalid_category", "fromCategoryId and toCategoryId must differ");
-  }
-  const live = new Set(
-    (await loadCategories(ports)).filter((entry) => !entry.archived).map((entry) => entry.id)
-  );
-  if (
-    !live.has(toCategoryId) ||
-    (fromCategoryId !== READY_TO_ASSIGN && !live.has(fromCategoryId))
-  ) {
-    throw new InputError("invalid_category", "a category id is not a live category");
-  }
-
+  const expected = readBudgetReview(input);
   const store = await ports.store();
-  const { state } = await computeMonthState(ports, store, month);
-  const assigned = (await store.getLedger(month))?.assignments ?? {};
-  const toBefore = assigned[toCategoryId] ?? 0;
-  let fromBefore: number | null = null;
-  if (fromCategoryId === READY_TO_ASSIGN) {
-    const ready = readyToAssignCents(await store.listAccounts(), state.categories);
-    if (amountCents > ready) {
-      throw new InputError("not_enough_ready", "amountCents is more than is ready to assign");
-    }
-  } else {
-    fromBefore = assigned[fromCategoryId] ?? 0;
-    const available = state.categories[fromCategoryId]?.availableCents ?? fromBefore;
-    if (amountCents > available) {
-      throw new InputError("not_enough_available", "amountCents is more than the source holds");
-    }
+  requireSameReview(expected, await requireBudgetPolicy(store));
+  const context = await budgetContext(ports, store, month);
+  if (context.setupRequired) throw staleBudget();
+  requireSameReview(expected, context);
+  const live = await liveCategories(ports);
+  if (context.flex?.active) {
+    for (const id of context.flex.flexIds) live.delete(id);
+    live.add(FLEX_POOL);
   }
-
-  // Both totals and the activity row land in one atomic write, so a failure changes nothing.
-  await store.commitBudgetChange({
-    month,
-    assignments: [
-      ...(fromBefore === null
-        ? []
-        : [{ categoryId: fromCategoryId, amountCents: fromBefore - amountCents }]),
-      { categoryId: toCategoryId, amountCents: toBefore + amountCents }
-    ],
-    activity: [
-      {
-        actor: "moss",
-        kind: "budget.move",
-        params: { month, fromCategoryId, toCategoryId, amountCents },
-        undo: {
-          month,
-          fromCategoryId,
-          toCategoryId,
-          fromPreviousCents: fromBefore,
-          toPreviousCents: toBefore
+  if (!live.has(toCategoryId) || (fromCategoryId !== READY_TO_ASSIGN && !live.has(fromCategoryId)))
+    throw new InputError(
+      "invalid_category",
+      "a category id is not a live category or is funded through the flexible pool"
+    );
+  const ledger = (await store.getLedger(month))?.assignments ?? {};
+  const fromBefore =
+    fromCategoryId === READY_TO_ASSIGN
+      ? null
+      : (context.state.categories[fromCategoryId]?.assignedCents ?? 0);
+  const toBefore = context.state.categories[toCategoryId]?.assignedCents ?? 0;
+  const available =
+    fromBefore === null
+      ? context.readyToAssignCents
+      : (context.state.categories[fromCategoryId]?.availableCents ?? fromBefore);
+  if (available === null)
+    throw new InputError("funding_unavailable", "Ready to assign is unavailable for this month");
+  if (amountCents > available)
+    throw new InputError(
+      fromBefore === null ? "not_enough_ready" : "not_enough_available",
+      fromBefore === null
+        ? "amountCents is more than is ready to assign"
+        : "amountCents is more than the source holds"
+    );
+  const fromAfter =
+    fromBefore === null ? null : safeCents(BigInt(fromBefore) - BigInt(amountCents));
+  const toAfter = safeCents(BigInt(toBefore) + BigInt(amountCents));
+  if (
+    !(await store.commitBudgetChange({
+      expected,
+      month,
+      assignments: [
+        ...(fromAfter === null
+          ? []
+          : [
+              {
+                categoryId: fromCategoryId,
+                amountCents: storedFlexTotal(fromCategoryId, fromAfter, ledger, context.flex)
+              }
+            ]),
+        {
+          categoryId: toCategoryId,
+          amountCents: storedFlexTotal(toCategoryId, toAfter, ledger, context.flex)
         }
-      }
-    ]
-  });
-
+      ],
+      activity: [
+        {
+          actor: "moss",
+          kind:
+            fromCategoryId === FLEX_POOL || toCategoryId === FLEX_POOL
+              ? "flex.move"
+              : "budget.move",
+          params: { month, fromCategoryId, toCategoryId, amountCents },
+          undo: {
+            month,
+            fromCategoryId,
+            toCategoryId,
+            fromPreviousCents: fromBefore,
+            toPreviousCents: toBefore
+          }
+        }
+      ]
+    }))
+  )
+    throw staleBudget();
   return {
     status: "ok",
     month,
@@ -312,65 +269,69 @@ export const budgetMoveHandler: ToolFactory = (ports) => async (input) => {
     toCategoryId,
     amountCents,
     before: { fromAssignedCents: fromBefore, toAssignedCents: toBefore },
-    after: {
-      fromAssignedCents: fromBefore === null ? null : fromBefore - amountCents,
-      toAssignedCents: toBefore + amountCents
-    }
+    after: { fromAssignedCents: fromAfter, toAssignedCents: toAfter }
   };
 };
 
-/** Queue twin of budget.assign — consumes the host job envelope. */
+/** Older queued commands without review tokens fail closed; they never gain a fresh review. */
 export const budgetApplyHandler: ToolFactory = (ports) => async (input) => {
-  const jobKind = readString(input, "jobKind", { required: true });
-  if (jobKind !== "finance.budget-apply") {
+  if (readString(input, "jobKind", { required: true }) !== "finance.budget-apply")
     throw new InputError("jobKind is not supported by this handler");
-  }
-  const params = input.params;
-  if (typeof params !== "object" || params === null || Array.isArray(params)) {
+  if (typeof input.params !== "object" || input.params === null || Array.isArray(input.params))
     throw new InputError("params must be an object");
-  }
-  const command = params as Record<string, unknown>;
+  const command = input.params as Record<string, unknown>;
   const month = readMonth(command);
-  const liveIds = new Set(
-    (await loadCategories(ports)).filter((entry) => !entry.archived).map((entry) => entry.id)
-  );
-
-  // Batch shape: parallel arrays. The single-category shape stays readable for jobs
-  // queued before the batch shape existed.
-  if (Array.isArray(command.categoryIds)) {
-    const ids = command.categoryIds as unknown[];
-    const amounts = Array.isArray(command.amountsCents) ? (command.amountsCents as unknown[]) : [];
-    if (ids.length === 0 || ids.length !== amounts.length || ids.length > MAX_BATCH) {
-      throw new InputError("categoryIds and amountsCents must be equal-length, 1 to 20 items");
-    }
-    const results: Record<string, unknown>[] = [];
-    for (let i = 0; i < ids.length; i += 1) {
-      const amountCents = amounts[i];
-      if (
-        typeof ids[i] !== "string" ||
-        typeof amountCents !== "number" ||
-        !Number.isInteger(amountCents) ||
-        Math.abs(amountCents) > AMOUNT_BOUND
-      ) {
-        throw new InputError("each batch item needs a category id and an integer amount");
-      }
-      results.push(
-        await applyAssignment(
-          ports,
-          { month, categoryId: ids[i] as string, amountCents },
-          "user",
-          liveIds
-        )
-      );
-    }
-    return { status: "ok", applied: results.length };
+  if (!Array.isArray(command.categoryIds)) {
+    const categoryId = readString(command, "categoryId", { required: true });
+    const amountCents = amount(command, "amountCents");
+    const previousCents = amount(command, "previousCents");
+    await applyAssignments(
+      ports,
+      month,
+      [{ categoryId, amountCents, previousCents }],
+      readBudgetReview(command),
+      "user"
+    );
+    return { status: "ok", month, categoryId, amountCents };
   }
-
-  const categoryId = readString(command, "categoryId", { required: true });
-  const amountCents = readInt(command, "amountCents", {
-    required: true,
-    min: -AMOUNT_BOUND,
-    max: AMOUNT_BOUND
+  const ids = command.categoryIds;
+  const amounts = command.amountsCents;
+  const previous = command.previousAmountsCents;
+  if (
+    !Array.isArray(amounts) ||
+    !Array.isArray(previous) ||
+    ids.length < 1 ||
+    ids.length > MAX_BATCH ||
+    ids.length !== amounts.length ||
+    ids.length !== previous.length
+  )
+    throw new InputError(
+      "categoryIds, amountsCents and previousAmountsCents must be equal-length, 1 to 20 items"
+    );
+  const assignments = ids.map((id, index) => {
+    if (typeof id !== "string")
+      throw new InputError("each batch item needs a category id and an integer amount");
+    return {
+      categoryId: id,
+      amountCents: amount({ value: amounts[index] }, "value"),
+      previousCents: amount({ value: previous[index] }, "value")
+    };
   });
-  return applyAssignment(ports, { month, categoryId, amountCents }, "user", liveIds);
+  if (new Set(ids).size !== ids.length) throw new InputError("categoryIds must be unique");
+  return applyAssignments(ports, month, assignments, readBudgetReview(command), "user");
+};
+
+/** A repairable ledger must not leave the Budget screen without a way forward. */
+export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
+  try {
+    return await budgetStatusRead(ports)(input);
+  } catch (error) {
+    if (!(error instanceof InputError) || error.code !== "card_ledger_review_required") throw error;
+    return {
+      month: readMonth(input),
+      cardLedgerReviewRequired: true,
+      readyUnavailable: "card_ledger_review_required",
+      readyToAssignCents: null
+    };
+  }
 };

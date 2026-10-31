@@ -1,3 +1,5 @@
+import { effectiveMerchantRules } from "../merchant-rules.js";
+import { handoffRequest, hydrateHandoffs } from "../../domain/provider-handoffs.js";
 // external-modules/finance/src/worker/handlers/sync.ts
 //
 // FIN-01 (#1146) Task 6: the sync engine. ONE handler serves both the
@@ -30,7 +32,6 @@ import type {
 import {
   categorize,
   cursorKey,
-  DEFAULT_CATEGORIES,
   monthKey,
   normalizePayee,
   NS,
@@ -47,6 +48,7 @@ import { buildCategorizeAi } from "../ai-port.js";
 import type { WorkerPorts } from "../ports.js";
 import type { ToolFactory } from "../registry.js";
 import { InputError, readString } from "../validate.js";
+import { loadCategories } from "./feed.js";
 import { buildPlaid, loadItems } from "./connect.js";
 
 // Plaid pages are capped at count:100 (adapter), so 100 pages = 10000
@@ -112,26 +114,13 @@ async function loadSeenPayeeKeys(store: FinanceStore): Promise<Set<string>> {
  * edits) keeps the read path elsewhere side-effect free.
  */
 async function loadCategorizeCtx(ports: WorkerPorts, store: FinanceStore): Promise<CategorizeCtx> {
-  let stored = (await ports.kv.get(NS.categories, "taxonomy")) as {
-    categories: Category[];
-  } | null;
-  if (stored === null) {
-    stored = { categories: [...DEFAULT_CATEGORIES] };
-    await ports.kv.set(NS.categories, "taxonomy", stored);
-  }
-  // Old-format and new-format keys both load. If one merchant ever holds two
-  // rules, the newest wins so load order cannot pick the loser.
-  const newest = new Map<string, Rule>();
-  for (const key of await ports.kv.list(NS.rules)) {
-    const rule = (await ports.kv.get(NS.rules, key)) as Rule | null;
-    if (!rule) continue;
-    const held = newest.get(rule.payeeKey);
-    if (!held || rule.createdAt >= held.createdAt) newest.set(rule.payeeKey, rule);
-  }
-  const rules = [...newest.values()];
+  const categories = await loadCategories(ports);
+  if (!store.budgetPolicy && (await ports.kv.get(NS.categories, "taxonomy")) === null)
+    await ports.kv.set(NS.categories, "taxonomy", { categories });
+  const rules = await effectiveMerchantRules(ports, store);
   return {
     rules,
-    categories: stored.categories,
+    categories,
     ai: buildCategorizeAi(ports.ai),
     review: {
       sortingTier: await readTier(ports, "sorting"),
@@ -321,14 +310,21 @@ async function syncItem(
   const counts = { added: 0, modified: 0, removed: 0, pages: 0 };
   for (const [index, page] of pages.entries()) {
     counts.pages += 1;
-    // Load exactly the months this page touches, plus each month's
-    // predecessor — the only chunk where a posted tx's pending twin can hide.
+    const request = handoffRequest(page);
+    await store.providerHandoffs?.capture(item.itemId, request.removedIds, request.posted, nowIso);
+    const handoffs = (await store.providerHandoffs?.load(item.itemId, request.ids)) ?? [];
+    // Load touched months, their predecessors and exact-ID handoff source months.
     // Pairs are tracked alongside the composed keys so the store RMW below
     // never has to re-derive accountId/month by parsing a chunk key (the
     // composed string format stays reduceSyncPage's internal addressing
     // only, per FIN-06c #1166 Task 8).
     const keys = new Set<string>();
     const pairs = new Map<string, { accountId: string; month: string }>();
+    for (const row of handoffs) {
+      const key = monthKey(row.accountId, row.date);
+      keys.add(key);
+      pairs.set(key, { accountId: row.accountId, month: row.date.slice(0, 7) });
+    }
     for (const tx of [...page.added, ...page.modified]) {
       const targetKey = monthKey(tx.account_id, tx.date);
       const prevKey = prevMonthKey(tx.account_id, tx.date);
@@ -357,7 +353,7 @@ async function syncItem(
       if (transactions) chunks[key] = { transactions };
     }
 
-    const reduced = reduceSyncPage(chunks, page);
+    const reduced = reduceSyncPage(hydrateHandoffs(chunks, page, handoffs), page);
     const categorized = await categorizeChunks(reduced.chunks, reduced.touched, categorizeCtx);
     const next = categorized.chunks;
     for (const key of reduced.touched) {
@@ -366,9 +362,12 @@ async function syncItem(
       // FIN-04 (#1149): mirror the changed month for shared accounts as part
       // of the normal write path.
       if (sharedIds.has(pair.accountId)) {
+        const saved = store.providerHandoffs
+          ? { transactions: (await store.getTransactionChunk(pair.accountId, pair.month)) ?? [] }
+          : next[key]!;
         await ports.mirror.set(
           sharedMonthKey(actorUserId, pair.accountId, pair.month),
-          toSharedChunk(next[key]!)
+          toSharedChunk(saved)
         );
       }
     }
@@ -395,6 +394,7 @@ async function syncItem(
     // The pagination start is kept while more pages remain so a later run can
     // still restart from it.
     const finished = index === pages.length - 1 && !hasMore;
+    if (finished) await store.providerHandoffs?.clear(item.itemId);
     await ports.kv.set(
       NS.connections,
       cursorKey(item.itemId),

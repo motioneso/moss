@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "id": "finance",
   "name": "Finance",
-  "version": "0.6.13",
+  "version": "0.7.0",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
-  "description": "Bank accounts, transactions, and budgets via Plaid.",
+  "description": "Manual and connected accounts, transactions, and budgets.",
   "auth": [
     {
       "id": "finance.plaid-client-id",
@@ -49,7 +49,22 @@
       "app.finance_categories",
       "app.finance_activity",
       "app.finance_budget_drafts",
-      "app.finance_budget_draft_lines"
+      "app.finance_budget_draft_lines",
+      "app.finance_reconciliations",
+      "app.finance_imports",
+      "app.finance_budget_policy",
+      "app.finance_targets",
+      "app.finance_bill_plans",
+      "app.finance_bill_occurrences",
+      "app.finance_flex_policies",
+      "app.finance_manual_transfers",
+      "app.finance_merchant_rules",
+      "app.finance_bill_adjustments",
+      "app.finance_transfer_corrections",
+      "app.finance_provider_handoffs",
+      "app.finance_card_policies",
+      "app.finance_card_assignments",
+      "app.finance_bill_suggestion_dismissals"
     ]
   },
   "settingsPath": "/settings",
@@ -58,58 +73,74 @@
       {
         "id": "finance.budget",
         "label": "Budget",
-        "description": "This month's budget: money ready to assign, and each category's assigned, spent and available amounts.",
+        "description": "One reviewed working currency; posted owned cash/card activity only. Historical manual balances reconstruct opening ledgers; bank snapshots disclose missing history. Future plans do not claim spendable cash. Month arrows step months. Target funding and envelope/flexible modes use captured review and confirmation; Check saved records appears only after stale or uncertain writes, Discard typed amounts only with drafts. Optional Card payments reserves cash per manual card from the current month, keeping earlier full-debt accounting. Funded purchases move category cash into reserves; unfunded credit spending never creates Ready. Linked manual payments consume reserves; refunds, excess and negative payment cash stay visible. Host-confirmed saves send no payment. Provider cards keep full-debt accounting. Unlinked transfers pause totals; review Transactions, then record linked transfers in Accounts. Cover overspending before target funding. Targets remain plans.",
         "path": "/"
       },
       {
         "id": "finance.transactions",
         "label": "Transactions",
-        "description": "Every bank transaction grouped by day, with a search box, an All and Needs a look filter with a count, a Predicted badge on Moss's guesses, a category picker, an Always for this merchant switch that starts off, Confirm all, a category picker on every confirmed row to change its category, and a Show more button when a month has more than 200 rows.",
+        "description": "One toolbar holds All or Needs a look, month arrows, payee/notes search, Filters and Export. Rows show date, payee, category, account and amount; badges appear only for review, pending, uncleared, household, possible duplicate and unbalanced splits. Confirmed rows change category from a quiet picker. Tick rows, or the header box for every editable loaded row, up to 200; a bar pinned to the bottom then offers one reviewed category change. Payees open captured facts, Split or Edit split, and owned notes; household details omit notes. Edit private note reads a fresh SQL version, then host-confirms saving or clearing up to 4,000 bytes without changing money, categories, links or reconciliation. KV/shared rows stay read only. Changed or uncertain saves keep copyable drafts. Captured category edits and audited inverse transfer corrections await host approval; stale/duplicate corrections refuse. Pending/KV/rule queues are separate. Busy/error states preserve filters.",
         "path": "/transactions"
       },
       {
         "id": "finance.accounts",
         "label": "Accounts",
-        "description": "Connected banks listed by their real names (filled in on the next sync), balances, sync status, reconnect, and net worth.",
+        "description": "Accounts opens on net worth with assets and debts, one total per currency, no FX. Accounts group by kind (cash, investments, credit cards, loans, other) with group totals; debts show negative. A name opens Transactions for that account. Rows show Manual or the bank with its sync time; a bank that cannot sync shows its status, as-of dates and Reconnect above the groups. Add account offers a manual account or Connect a bank. A manual row's menu adds transactions, reconciles, imports CSV and opens Manage. Manage captures an owned version for confirmed rename/close/reopen; closing needs a valid zero ledger, current statement or pristine baseline, no future entries and resolved bill plans. Closed accounts sit in a disclosure. Record transfer reviews two active owned manual cash/card ledgers with exact amount, date and resulting balances, saved atomically with guards; no money is sent. Failed or stale reads and writes keep drafts and need a fresh review.",
         "path": "/accounts"
       },
       {
         "id": "finance.start",
         "label": "Getting started",
-        "description": "Connect a first bank, let Moss sort the spending, then build the budget together. With no bank keys set, an admin sees an Add bank keys button and everyone else sees Waiting on your admin. After the first sync it shows Your first budget, a draft built from up to three months of history, with a Build my budget with Moss button and a Start this budget button.",
+        "description": "Begin with a private manual account without bank keys, enter transactions or import CSV from Accounts. Bank connection remains available after an admin configures keys. Connected accounts can build a first-budget draft from up to three months of history.",
         "path": "/start"
+      },
+      {
+        "id": "finance.reports",
+        "label": "Reports",
+        "description": "Reports is a primary tab with currency-separated spending, cash flow and own-account net worth. The period picker sits top left; a currency picker appears for multi-currency activity; no FX conversion. Cash flow charts monthly income and outflow with a net dot and period totals; hover, tap or arrow keys read a month; Monthly numbers opens the table. Net worth is a dated line, read the same way. Manual net worth replays opening balances and posted entries to the owner's local date; connected accounts carry snapshots forward; no market values are estimated. Sources, coverage and missing balances are disclosed. Category/payee bars (five on phones until Show all) and monthly income/outflow open exact signed contributions, including splits, with count, total and changed-record notes. Pending spending counts; refunds reduce outflow; own transfers are excluded. Private notes are omitted; Refresh updates totals; unsafe amounts are rejected. Busy detail reads show the wait; retry is explicit.",
+        "path": "/reports"
       },
       {
         "id": "finance.settings",
         "label": "Finance settings",
-        "description": "Everything Finance can configure: How much Moss does alone (Ask about everything, Handle routine and ask about new, Run it all and review weekly, or Custom; a new install starts on Handle routine and ask about new), the Maximum per budget move dollar limit, a Customize list of per-action switches, Bank connection keys for admins, and this week's activity with an Undo button on each row and an Earlier weeks button. Freedom and dollar-limit controls stay unavailable until their reads succeed. Read failures have separate explanations and Retry; unverified fallback values are not presented as confirmed settings.",
+        "description": "Finance preferences, merchant rules, bank keys and recent activity. Freedom presets and the Maximum per budget move stay unavailable until confirmed reads; failures offer Retry and preserve previous values. Customize sets per-action assistant preferences. Merchant rules have server-side normalized search, exact matching counts and bounded Show more. Add/edit/disable/enable use a captured rule revision, read-only monthly examples and mandatory host confirmation. Existing history is never retroactively edited. Cancel retains review; stale/uncertain saves block until an explicit successful saved-rule check. Initialization and empty lists are distinct; persistent setup needs the Finance migration worker. Bank keys remain admin-only. Recent activity has Undo and Earlier weeks. Busy rule reads honor the server wait before an explicit retry; no write or read is automatically retried.",
         "path": "/settings"
+      },
+      {
+        "id": "finance.upcoming",
+        "path": "/upcoming",
+        "description": "Upcoming plans, matches, skips and stops bills, a month at a time. Without a budget currency it offers Open Budget. The head totals due, paid and to go; skipped bills count nowhere. Desktop shows a month calendar; its bill chips open a panel with the same actions; the list groups bills by week; on phones a row's Details opens that panel. Suggested bills lists repeating charges, weekly to yearly, in the budget currency that no active plan covers; Add as bill prefills the form, Dismiss hides one for good. With no plans, suggestions replace the Add a bill empty state. One-off changes/reset need host confirmation, keeping cadence and actuals. Undo review before changing matched/skipped bills. Match reviews posted rows within seven days, nearest first, never auto-selected. Record bill entry previews a past expense on an active manual account, its balance effect and blocking same-amount duplicates. Check saved bills shows only after stale/uncertain writes. No bank instruction or auto-retry.",
+        "label": "Upcoming bills"
       }
     ],
     "features": [
       {
         "id": "finance.confirm-guesses",
-        "description": "On Transactions, a Needs a look row has a category picker, a Confirm button and an Always for this merchant switch (off by default; on, the new category becomes a rule for that merchant). Confirm all N confirms every Needs a look row the filter and search show, keeps Moss's guessed categories, makes no rules, and disappears when none are left. When no rows remain in Needs a look, the empty state says no transactions in this view need review; the current month, search and local confirmations determine that view."
+        "description": "On Transactions, Needs a look offers a category picker, Confirm and Always for this merchant (off by default). Owned posted unsplit SQL rows without a rule open a captured review: an existing category is confirmed, or a changed category shows before and after. Host approval and persisted success precede completion. Cancellation keeps the review; stale or uncertain outcomes require an explicit successful saved-record check. Loaded Review N categories captures up to 200 existing categories without making rules. Pending, compatibility and merchant-rule requests retain their queued workflow; queue acceptance is not persisted success. Shared, linked and split rows keep separate controls. When none remain, the current month and search determine the empty review state."
       },
       {
         "id": "finance.budget-typing",
-        "description": "On Budget, type a dollar amount into a category's Assigned box and press Enter or click away to save it. Saving never asks for approval, and Available updates. If the save fails the box goes back to its old amount with an error. Every change is logged with who made it, and the log keeps only ids and amounts."
+        "description": "Envelope and optional pooled flexible budgeting with signed rollover, targets and captured confirmed changes. Card payments offers reviewed per-manual-card cash reserves from this month; existing cards default to full-debt accounting. Funded spending and refunds move category cash; explicit manual transfer pairs consume payment cash. Unfunded debt never creates Ready. Negative payment cash blocks automatic target funding. Closed cards retain visible cash for release. Historical modes stay unchanged; provider-card reserves and disabling enrollment are not supported. No bank payment is sent. Stale or uncertain saves require checking saved records."
+      },
+      {
+        "id": "finance.budget-keyboard-detail",
+        "description": "On Budget, Enter in an Assigned field saves the typed amount and moves to the next category; Shift+Enter moves up and Escape reverts. An amount typed while another save is running waits and is sent once that save shows, unless the read shows a change from elsewhere, which asks to check saved records. Clicking a category name opens its details: this month's assigned, spent and available, its target, and quick amounts (fund target, assigned or spent last month, 3-month average spent) that fill the Assigned field for review. Move money there moves cash between this category and Ready to assign or another category, and covers overspending from Ready to assign by default. Move money waits while typed amounts are unsaved."
       },
       {
         "id": "finance.getting-started",
-        "description": "Getting started shows three steps (connect a bank, Moss sorts spending, build a budget together) with each step's state. A bank cannot be connected until an admin sets the bank keys in Finance settings."
+        "description": "Start without bank keys through Getting started \u2192 Add a manual account. Accounts imports UTF-8 CSV into manual accounts, up to 1 MiB, 200 rows and 500 KiB of mapped entries. Explicit column, date-order and money-direction mapping precedes a read-only preview in the account currency. Rows start uncategorized. Every possible duplicate needs Skip or Import anyway. Invalid dates, sub-cent/unsafe amounts and mixed currencies prevent saving. Receipt, transactions, balance and activity commit atomically; identical replay does not duplicate rows. A changed ledger requires a fresh preview. Uncertain saves require checking saved records. No provider-account import, FX conversion or automatic duplicate deletion. Approval and completed or skipped onboarding schedule ledger initialization through the normal module worker. If setup stays unavailable, an administrator can check that Finance workers are running. Startup requests are briefly coalesced per package."
       },
       {
         "id": "finance.first-budget",
-        "description": "After a bank has synced, Getting started builds a first budget from up to three months of history without asking Moss: each category's monthly average rounded up to the next five dollars, the middle monthly income, and merchants that charge about the same every month under Bills. It shows the plan total and how much income is still unplanned. Start this budget on that screen creates any missing categories and sets this month's amounts, then opens Budget. Only the button starts a budget; Moss in chat cannot. You can type a plan amount on any line, and Moss in chat can change, add or drop lines; the plan total and the unplanned amount always add up from the lines."
+        "description": "After connected or manual account history exists, Getting started builds a stored draft in the chosen budget currency. Edit amounts with Enter or Save; totals change only after persistence. Starting requires an explicit host confirmation and commits categories, assignments and draft status together. Stale reviews keep typed input for review; ambiguous outcomes require checking saved records. No bank connection is required. Budget offers Monthly refill targets: carried money plus this month's assignments count toward the plan. Current-month spending/refunds do not reopen it; future carry is provisional. Existing monthly targets stay contribution-based. Save is metadata only. Removing a target always asks for host confirmation and keeps earlier months' target history. Review target funding shows eligible suggestions first and retains current-month, ready-money, overspending, version and mandatory host-confirmation checks. No automatic funding or withdrawal of excess money."
       },
       {
         "id": "finance.needs-a-look",
-        "description": "Moss sorts each new transaction into a category and marks the ones it is unsure about as Needs a look. Whether Moss confirms its own guesses for merchants you have confirmed before, and for new merchants, follows the Sort purchases settings. A guessed category still counts toward the budget while it waits for review."
+        "description": "Moss sorts each new transaction into a category and marks the ones it is unsure about as Needs a look. Whether Moss confirms its own guesses for merchants you have confirmed before, and for new merchants, follows the Sort purchases settings. A guessed category still counts toward the budget while it waits for review. SQL sync privately captures pending metadata across pages and the 100-page continuation. Posted/manual/cross-account impostors cannot replace a pending source. Changed user-reviewed settlement money requires review; newer posted user choices win. Canonical saved chunks feed shared mirrors. Handoffs clear only after complete durable updates. Legacy KV needs migration for this handoff; full update atomicity remains unavailable. User-set categories needing attention say Review needed instead of Predicted."
       },
       {
         "id": "finance.chat-money-actions",
-        "description": "In chat, Moss can move money between categories, set a category's assigned total, make a merchant rule, and add, rename or archive categories. Each reports what it changed, before and after, and is logged. A move or change larger than the Maximum per budget move setting in Finance settings (default $100) asks for approval first; smaller ones follow the freedom setting."
+        "description": "In chat, Moss can move money between categories, set a category's assigned total, make a merchant rule, and add, rename or archive categories. Each reports what it changed, before and after, and is logged. A move or change larger than the Maximum per budget move setting in Finance settings (default $100) asks for approval first; smaller ones follow the freedom setting. SQL merchant rules use captured revisions and atomic configuration/activity. Legacy rules copy without deletion; disabled canonical rows prevent old KV rules returning. Undo restores configuration and its activity mark together. Rule-plus-category queued writes remain separate. Settings offers rule search/counts and up to 20 owned history examples in a chosen month. Add/edit/disable/enable always ask through the host, preserve cancellation and require a saved-rule check after stale or uncertain results. Rules initialization has a separate worker/retry state; history is never retroactively edited."
       },
       {
         "id": "finance.settings-freedom",
@@ -117,11 +148,7 @@
       },
       {
         "id": "finance.settings-limit",
-        "description": "On Finance settings, Maximum per budget move sets the dollar limit (a whole number from 0 to 100000, default 100). Moss asks for approval before any move or assigned total above it, at every step. It saves when you press Enter or click away; a bad or failed entry goes back to the saved amount with an error. Until policy and limit reads succeed, controls are unavailable. Retry reloads failed settings without writing; a failed refresh keeps the last confirmed values."
-      },
-      {
-        "id": "finance.settings-actions",
-        "description": "On Finance settings, Customize lists one switch per action Moss can take (sort purchases from merchants you have seen, move money between categories, sort purchases from new merchants, make merchant rules, add, rename or archive categories). On lets Moss do it alone, off makes Moss ask first. Connect a bank and Share an account show Always asks and cannot be switched."
+        "description": "On Finance settings, Maximum per budget move sets the dollar limit (a whole number from 0 to 100000, default 100). Moss asks for approval before any move or assigned total above it, at every step. It saves when you press Enter or click away; a bad or failed entry goes back to the saved amount with an error. Until policy and limit reads succeed, controls are unavailable. Retry reloads failed settings without writing; a failed refresh keeps the last confirmed values. Customize lists one switch per action Moss can take (sort purchases from merchants you have seen, move money between categories, sort purchases from new merchants, make merchant rules, add, rename or archive categories). On lets Moss do it alone, off makes Moss ask first. Connect a bank and Share an account show Always asks and cannot be switched. Reviewed native merchant-rule management always asks, independently of these assistant preferences."
       },
       {
         "id": "finance.settings-bank-keys",
@@ -130,12 +157,32 @@
       {
         "id": "finance.settings-activity",
         "description": "On Finance settings, the activity list shows this week's changes by you and by Moss, newest first, each with who did it and when. Undo reverses a row (a budget amount, a move between categories, a sorted purchase, a merchant rule, or a category added or archived) and says so inline if the data changed since. Earlier weeks loads the week before. With nothing yet it says Nothing yet."
+      },
+      {
+        "id": "finance.ledger-safety",
+        "description": "Amounts use safe integer hundredths and decimal provider rounding. Invalid calendar months are rejected. Transfer inference requires the same currency. A batch of budget assignments validates every category and amount before one SQL commit; a rejected batch changes nothing. SQL chat and queued category edits use captured revisions and one metadata-only batch with activity. Stale, split, linked, foreign or unavailable-category rows refuse without partial edits. Explicit notes stay off activity and job payloads. Same-ID provider-window updates preserve current user categories and notes; changed money requests review. Different-ID pending replacement and concurrent sync pages need separate acceptance. Category Undo restores metadata, reversal activity and the undone mark atomically. Queue acceptance is not proof of persistence; merchant-rule and category writes remain separate."
+      },
+      {
+        "id": "finance.register-filters-export",
+        "description": "Filters on the Transactions toolbar opens a panel for account, category, pending or posted status, manual ledger status, money in or out, uncategorized rows and possible duplicates; the button shows the active count. While the panel is closed each active filter is a removable chip, beside Clear filters. Possible duplicates match account, currency, amount, date and payee; they are suggestions and are never deleted automatically. Export > Loaded rows downloads a CSV of exactly the loaded filtered transactions with separate outflow and inflow columns, currency and posting state; it is not a complete account backup. When more rows match than are loaded, the loaded and total counts appear with Show more under the list. Export > Full history prepares owned history without notes or mirrors, refuses over 5,000 rows or 2 MiB, and retains original and inverse transfer correction identifiers."
+      },
+      {
+        "id": "finance.transaction-splits",
+        "description": "Split or Edit split in a payee's details divides an owned posted transaction into up to 20 non-transfer allocations totaling the exact signed amount. Saving awaits persistence and checks amount, currency and split revision. Provider corrections retain allocations for repair; unbalanced splits count once as uncategorized. One part removes a split. Select up to 200 loaded owned posted unsplit rows for one reviewed category change. Host confirmation saves all or none using captured row revisions. Amounts, accounts, dates, notes and reconciliation stay unchanged; no rule is created. Cancel retains choices; changed or uncertain saves require checking records before a new review. Shared, pending and legacy-storage rows are excluded. Older hosts explain the update required. Neither action moves bank money."
+      },
+      {
+        "id": "finance.manual-ledger",
+        "description": "Manual cash, checking, savings, cards, loans and assets need no credentials and stay private. Opening date/balance and a fixed two-decimal currency establish exact ledgers; posted entries commit atomically with replay identities and Moss-local date checks. Reconcile a statement with cleared entries, zero difference and current ledger revision; receipt, marks and activity commit together. Completed periods reject backdating; outstanding entries may clear later. More than 500 entries requires an earlier cutoff. Linked manual cash/card transfers use same-currency atomic pairs. Review an owned pair in Transactions to record one inverse correction: preserve original history, derive exact endpoints/amount/currency, recheck original/account versions and posting boundaries, confirm through the host. Closed accounts and duplicate corrections refuse. Uncertain saves keep inputs for a fresh read. Old hosts/storage need updating; provider reconciliation and automatic adjustments are unavailable."
+      },
+      {
+        "id": "finance.bill-plans",
+        "description": "On Upcoming, Your bill plans lists each plan with its account, how often it repeats, its first date and its expected amount. An active plan's row menu, the three dots, offers Stop future bills, or Stop sooner when an end date is already set. Either opens a dialog for the last planned date, inclusive; saving needs the current bills review. Bills after that date leave the calendar; paid and reviewed bills stay. To stop before a reviewed or changed bill, undo that review or one-off change first. Stopped plans sit last with the date they stopped and no menu. Plans cannot be edited or restarted; add a new bill instead."
       }
     ]
   },
   "runtime": { "workerEntrypoint": "dist/worker.js", "workerContractVersion": 1 },
   "assistantOnboarding": {
-    "guidance": "Finance holds the user's budget. Read before you write: call finance.budget.status or finance.transactions.query first. Amounts are integer cents. To move money, call finance.budget.move with both category ids; use \"ready_to_assign\" as the source when the money is unassigned. To set a category's total, call finance.budget.assign with previousCents, the total it has now. Example: \"move 50 to groceries\" with 80 ready to assign becomes finance.budget.move { fromCategoryId: \"ready_to_assign\", toCategoryId: \"groceries\", amountCents: 5000 }. Moves above the user's dollar limit ask for approval first. Report the before and after the tool returns. Never guess a category id; list categories first. While a first-budget draft is open, change it with finance.budget.draft.update after reading finance.budget.draft.get, and quote the totals it returns. Never start the budget; the user does that."
+    "guidance": "Read before writing. Budget amounts are integer cents in one reviewed currency. Read finance.budget.status for totals, ready money, revision and fingerprint; pass its tokens on writes. Never guess category ids. In flexible mode, fund the pool with finance.flex.assign; member amounts are informational. Mode changes use finance.flex.preview then explicit confirmed finance.flex.configure, including destinations when leaving. Assignment and move confirmations bind to previous totals; changed reviews reject without automatic retry. Read drafts before editing or explicitly confirmed start. Targets and bill plans do not move money. Bill reviews match owned posted transactions once; skip, undo or stop projections explicitly. Quote returned actual amounts and before/after totals. Ambiguous responses require checking saved records before retrying. No bank transfers or payments occur."
   },
   "preferences": [
     {
@@ -152,10 +199,244 @@
     {
       "name": "finance.accounts.list",
       "permissionId": "finance.accounts.list",
-      "description": "List connected bank accounts with live balances.",
+      "description": "List own and explicitly shared accounts, currencies, current balances and bank sync status. Manual account balances come from the ledger.",
       "risk": "read",
       "inputSchema": { "type": "object", "additionalProperties": false },
       "handler": "accounts.list"
+    },
+    {
+      "name": "finance.manual.context",
+      "permissionId": "finance.manual.context",
+      "actionLabel": "Read manual entry setup",
+      "description": "Read manual entry setup. Manual records only; no bank money is moved.",
+      "risk": "read",
+      "inputSchema": { "type": "object", "additionalProperties": false },
+      "handler": "manual.context"
+    },
+    {
+      "name": "finance.manual.account-create",
+      "permissionId": "finance.manual.account-create",
+      "actionLabel": "Add a manual account",
+      "description": "Add a manual account. Manual records only; no bank money is moved.",
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "name": { "type": "string", "minLength": 1, "maxLength": 320 },
+          "accountType": {
+            "type": "string",
+            "enum": ["checking", "savings", "cash", "credit", "loan", "asset"]
+          },
+          "isoCurrency": { "type": "string" },
+          "openingDate": { "type": "string" },
+          "openingBalanceCents": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "operationId",
+          "name",
+          "accountType",
+          "isoCurrency",
+          "openingDate",
+          "openingBalanceCents"
+        ]
+      },
+      "handler": "manual.account-create",
+      "executionPolicy": "confirm"
+    },
+    {
+      "name": "finance.manual.entry-create",
+      "permissionId": "finance.manual.entry-create",
+      "actionLabel": "Add a manual transaction",
+      "description": "Add a manual transaction. Manual records only; no bank money is moved.",
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "accountId": { "type": "string" },
+          "name": { "type": "string", "minLength": 1, "maxLength": 640 },
+          "date": { "type": "string" },
+          "amountCents": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "isoCurrency": { "type": "string" },
+          "categoryId": { "type": "string" },
+          "notes": { "type": "string", "maxLength": 4000 },
+          "cleared": { "type": "boolean" }
+        },
+        "required": [
+          "operationId",
+          "accountId",
+          "name",
+          "date",
+          "amountCents",
+          "isoCurrency",
+          "cleared"
+        ]
+      },
+      "handler": "manual.entry-create",
+      "executionPolicy": "confirm"
+    },
+    {
+      "name": "finance.reconciliation.read",
+      "permissionId": "finance.reconciliation.read",
+      "actionLabel": "Review a manual statement",
+      "description": "Read manual account statement entries and exact balances; no financial action.",
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "accountId": { "type": "string" },
+          "statementDate": { "type": "string" }
+        },
+        "required": ["accountId"]
+      },
+      "handler": "reconciliation.read"
+    },
+    {
+      "name": "finance.reconciliation.finish",
+      "permissionId": "finance.reconciliation.finish",
+      "actionLabel": "Reconcile a manual statement",
+      "description": "Finish an exact statement match and protect the completed period. No money is moved.",
+      "risk": "write",
+      "executionPolicy": "confirm",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": { "type": "string" },
+          "accountId": { "type": "string" },
+          "statementDate": { "type": "string" },
+          "balanceCents": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "isoCurrency": { "type": "string" },
+          "expectedRevision": { "type": "integer", "minimum": 0 },
+          "selectedIds": {
+            "type": "array",
+            "maxItems": 500,
+            "uniqueItems": true,
+            "items": { "type": "string", "maxLength": 128 }
+          }
+        },
+        "required": [
+          "operationId",
+          "accountId",
+          "statementDate",
+          "balanceCents",
+          "isoCurrency",
+          "expectedRevision",
+          "selectedIds"
+        ]
+      },
+      "handler": "reconciliation.finish"
+    },
+    {
+      "name": "finance.import.preview",
+      "permissionId": "finance.import.preview",
+      "actionLabel": "Review a CSV import",
+      "description": "Validate rows and identify possible duplicates without saving.",
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "accountId": { "type": "string", "maxLength": 128 },
+          "isoCurrency": { "type": "string" },
+          "rows": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sourceRow": { "type": "integer", "minimum": 1, "maximum": 200 },
+                "date": { "type": "string" },
+                "name": { "type": "string", "minLength": 1, "maxLength": 640 },
+                "amountCents": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "notes": { "type": "string", "maxLength": 4000 },
+                "allowDuplicate": { "type": "boolean" }
+              },
+              "required": ["sourceRow", "date", "name", "amountCents", "allowDuplicate"]
+            }
+          }
+        },
+        "required": ["accountId", "isoCurrency", "rows"]
+      },
+      "handler": "import.preview"
+    },
+    {
+      "name": "finance.import.apply",
+      "permissionId": "finance.import.apply",
+      "actionLabel": "Import manual transactions",
+      "description": "Atomically import reviewed manual transactions; no bank money moves.",
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "accountId": { "type": "string", "maxLength": 128 },
+          "isoCurrency": { "type": "string" },
+          "rows": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sourceRow": { "type": "integer", "minimum": 1, "maximum": 200 },
+                "date": { "type": "string" },
+                "name": { "type": "string", "minLength": 1, "maxLength": 640 },
+                "amountCents": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "notes": { "type": "string", "maxLength": 4000 },
+                "allowDuplicate": { "type": "boolean" }
+              },
+              "required": ["sourceRow", "date", "name", "amountCents", "allowDuplicate"]
+            }
+          },
+          "operationId": { "type": "string" },
+          "expectedRevision": { "type": "integer", "minimum": 0 },
+          "cleared": { "type": "boolean" }
+        },
+        "required": [
+          "accountId",
+          "isoCurrency",
+          "rows",
+          "operationId",
+          "expectedRevision",
+          "cleared"
+        ]
+      },
+      "handler": "import.apply",
+      "executionPolicy": "confirm"
     },
     {
       "name": "finance.setup.status",
@@ -174,7 +455,9 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "properties": { "environment": { "type": "string", "enum": ["production", "sandbox"] } }
+        "properties": {
+          "environment": { "type": "string", "enum": ["production", "sandbox"] }
+        }
       },
       "handler": "connect.start"
     },
@@ -200,22 +483,88 @@
     {
       "name": "finance.transactions.query",
       "permissionId": "finance.transactions.query",
-      "description": "Query synced transactions by month, account, category, or text.",
+      "description": "Query a calendar month of transactions by account, category, payee or private notes, posting status, manual ledger status, direction, uncategorized state, or possible duplicate. Manual status includes only owned posted manual entries and distinguishes uncleared, cleared-unreconciled and reconciled. Possible duplicates remain in the ledger; no automatic deletion.",
       "risk": "read",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "month": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}$" },
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          },
           "accountId": { "type": "string" },
           "categoryId": { "type": "string" },
           "search": { "type": "string" },
           "pendingOnly": { "type": "boolean" },
           "needsLookOnly": { "type": "boolean" },
-          "limit": { "type": "integer", "minimum": 1, "maximum": 2000 }
+          "limit": { "type": "integer", "minimum": 1, "maximum": 2000 },
+          "postingState": { "type": "string", "enum": ["pending", "posted"] },
+          "ledgerState": { "type": "string", "enum": ["uncleared", "cleared", "reconciled"] },
+          "direction": { "type": "string", "enum": ["inflow", "outflow"] },
+          "uncategorizedOnly": { "type": "boolean" },
+          "duplicatesOnly": { "type": "boolean" },
+          "transactionId": { "type": "string" },
+          "ownOnly": { "type": "boolean" }
         }
       },
       "handler": "transactions.query"
+    },
+    {
+      "name": "finance.transaction.split",
+      "actionLabel": "Save category splits",
+      "permissionId": "finance.transaction.split",
+      "description": "Allocate one posted transaction across 1 to 20 categories. Signed parts must equal the original amount. Refuses stale amount, currency or revision; does not move money.",
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "transactionId": { "type": "string" },
+          "accountId": { "type": "string" },
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          },
+          "expectedAmountCents": { "type": "integer" },
+          "expectedCurrency": { "type": "string" },
+          "expectedRevision": { "type": "integer", "minimum": 0 },
+          "categoryIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": { "type": "string" }
+          },
+          "amountsCents": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": { "type": "integer" }
+          }
+        },
+        "required": [
+          "transactionId",
+          "accountId",
+          "month",
+          "expectedAmountCents",
+          "expectedCurrency",
+          "expectedRevision",
+          "categoryIds",
+          "amountsCents"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string" },
+          "parts": { "type": "integer" },
+          "unchanged": { "type": "boolean" }
+        },
+        "required": ["status"]
+      },
+      "handler": "transaction.split",
+      "actionFamilyId": "sorting",
+      "executionPolicy": "auto"
     },
     {
       "name": "finance.transaction.categorize",
@@ -226,26 +575,15 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "transactionId": {
-            "type": "string"
-          },
-          "accountId": {
-            "type": "string"
-          },
+          "transactionId": { "type": "string" },
+          "accountId": { "type": "string" },
           "month": {
             "type": "string",
             "pattern": "^[0-9]{4}-[0-9]{2}$"
           },
-          "categoryId": {
-            "type": "string"
-          },
-          "amountCents": {
-            "type": "integer"
-          },
-          "notes": {
-            "type": "string",
-            "maxLength": 500
-          }
+          "categoryId": { "type": "string" },
+          "amountCents": { "type": "integer" },
+          "notes": { "type": "string", "maxLength": 500 }
         },
         "required": ["transactionId", "accountId", "month", "categoryId", "amountCents"]
       },
@@ -262,32 +600,56 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "transactionId": {
-            "type": "string"
-          },
-          "accountId": {
-            "type": "string"
-          },
+          "transactionId": { "type": "string" },
+          "accountId": { "type": "string" },
           "month": {
             "type": "string",
             "pattern": "^[0-9]{4}-[0-9]{2}$"
           },
-          "categoryId": {
-            "type": "string"
-          },
-          "amountCents": {
-            "type": "integer"
-          },
-          "notes": {
-            "type": "string",
-            "maxLength": 500
-          }
+          "categoryId": { "type": "string" },
+          "amountCents": { "type": "integer" },
+          "notes": { "type": "string", "maxLength": 500 }
         },
         "required": ["transactionId", "accountId", "month", "categoryId", "amountCents"]
       },
       "handler": "transaction.categorize-new",
       "actionFamilyId": "sorting_new",
       "executionPolicy": "auto"
+    },
+    {
+      "name": "finance.budget.configure",
+      "permissionId": "finance.budget.configure",
+      "actionLabel": "Choose a fixed budget currency",
+      "description": "Choose the budget's immutable working currency. Existing assignment amounts are preserved and require explicit acknowledgement. Open legacy drafts are discarded for a fresh currency-scoped build. No currency conversion occurs.",
+      "risk": "write",
+      "executionPolicy": "confirm",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "isoCurrency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "EUR",
+              "GBP",
+              "CAD",
+              "AUD",
+              "NZD",
+              "CHF",
+              "CNY",
+              "HKD",
+              "SGD",
+              "INR",
+              "MXN"
+            ]
+          },
+          "acknowledgeLegacy": { "type": "boolean" }
+        },
+        "required": ["isoCurrency", "acknowledgeLegacy"]
+      },
+      "handler": "budget.configure",
+      "confirmWhenKeys": ["isoCurrency"]
     },
     {
       "name": "finance.budget.status",
@@ -297,10 +659,25 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "properties": { "month": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}$" } },
+        "properties": {
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          }
+        },
         "required": ["month"]
       },
       "handler": "budget.status"
+    },
+    {
+      "name": "finance.budget.draft.build",
+      "permissionId": "finance.budget.draft.build",
+      "description": "Build a first-budget draft from posted history in the selected budget currency. Does not assign money or overwrite an existing draft or budget. Returns a persisted draft outcome or explains missing history.",
+      "risk": "write",
+      "executionPolicy": "auto",
+      "handler": "budget.draft.build",
+      "inputSchema": { "type": "object", "additionalProperties": false },
+      "actionFamilyId": "drafting"
     },
     {
       "name": "finance.budget.draft.get",
@@ -313,7 +690,7 @@
     {
       "name": "finance.budget.draft.update",
       "permissionId": "finance.budget.draft.update",
-      "description": "Change one line of the first-budget draft: set its plan amount, rename it, move it to another group, or drop it. Read the draft first with finance.budget.draft.get for the draft id and category keys. To add a line that is not in the draft, give a new lowercase categoryKey with categoryName, groupName (Bills, Everyday, Fun or Savings) and amountCents. Returns the line and the draft total before and after; quote those numbers instead of adding them up. It cannot start the budget.",
+      "description": "Change one line of the first-budget draft: set its plan amount, rename it, move it to another group, or drop it. Read the draft first with finance.budget.draft.get for the draft id and category keys. To add a line that is not in the draft, give a new lowercase categoryKey with categoryName, groupName (Bills, Everyday, Fun or Savings) and amountCents. Returns the line and the draft total before and after; quote those numbers instead of adding them up. It cannot start the budget. Pass expectedRevision and expectedFingerprint exactly from the latest matching budget or draft read. A stale review is rejected; refresh and review again before retrying.",
       "risk": "write",
       "inputSchema": {
         "type": "object",
@@ -335,18 +712,46 @@
           },
           "categoryName": { "type": "string", "maxLength": 80 },
           "groupName": { "type": "string", "enum": ["Bills", "Everyday", "Fun", "Savings"] },
-          "dropped": { "type": "boolean", "description": "True takes the line out of the budget." }
+          "dropped": { "type": "boolean", "description": "True takes the line out of the budget." },
+          "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
         },
-        "required": ["draftId", "categoryKey"]
+        "required": ["draftId", "categoryKey", "expectedRevision", "expectedFingerprint"]
       },
       "handler": "budget.draft.update",
       "actionFamilyId": "drafting",
       "executionPolicy": "auto"
     },
     {
+      "name": "finance.budget.draft.start",
+      "permissionId": "finance.budget.draft.start",
+      "description": "Start the reviewed first budget. All planned categories, amounts, activity and draft status commit together. Use the current draft id and review tokens; changed data rejects the whole start. Requires explicit confirmation.",
+      "actionLabel": "Start this budget",
+      "risk": "write",
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["draftId"],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "draftId": { "type": "string", "format": "uuid" },
+          "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": ["draftId", "expectedRevision", "expectedFingerprint"]
+      },
+      "handler": "budget.draft.start"
+    },
+    {
       "name": "finance.budget.assign",
       "permissionId": "finance.budget.assign",
-      "description": "Set a category's assigned total for a month. Pass the total it has now as previousCents (read it from finance.budget.status); a wrong value is rejected. Returns the before and after totals.",
+      "description": "Set a category's assigned total for a month. Pass the total it has now as previousCents (read it from finance.budget.status); a wrong value is rejected. Returns the before and after totals. Pass expectedRevision and expectedFingerprint exactly from the latest matching budget or draft read. A stale review is rejected; refresh and review again before retrying.",
       "risk": "write",
       "inputSchema": {
         "type": "object",
@@ -372,9 +777,21 @@
             "minimum": -100000000,
             "maximum": 100000000,
             "description": "The category's assigned total right now, in integer cents."
+          },
+          "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
           }
         },
-        "required": ["month", "categoryId", "amountCents", "previousCents"]
+        "required": [
+          "month",
+          "categoryId",
+          "amountCents",
+          "previousCents",
+          "expectedRevision",
+          "expectedFingerprint"
+        ]
       },
       "handler": "budget.assign",
       "actionFamilyId": "moving_money",
@@ -389,7 +806,7 @@
     {
       "name": "finance.budget.move",
       "permissionId": "finance.budget.move",
-      "description": "Move money between two categories for a month. Use fromCategoryId ready_to_assign to take unassigned money. Returns the before and after assigned totals.",
+      "description": "Move money between two categories for a month. Use fromCategoryId ready_to_assign to take unassigned money. Returns the before and after assigned totals. Pass expectedRevision and expectedFingerprint exactly from the latest matching budget or draft read. A stale review is rejected; refresh and review again before retrying.",
       "risk": "write",
       "inputSchema": {
         "type": "object",
@@ -413,9 +830,21 @@
             "minimum": 1,
             "maximum": 100000000,
             "description": "Amount to move, positive integer cents (50 dollars is 5000)."
+          },
+          "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
           }
         },
-        "required": ["month", "fromCategoryId", "toCategoryId", "amountCents"]
+        "required": [
+          "month",
+          "fromCategoryId",
+          "toCategoryId",
+          "amountCents",
+          "expectedRevision",
+          "expectedFingerprint"
+        ]
       },
       "handler": "budget.move",
       "actionFamilyId": "moving_money",
@@ -440,10 +869,7 @@
             "maxLength": 200,
             "description": "The merchant name as it appears on transactions."
           },
-          "categoryId": {
-            "type": "string",
-            "description": "Id of an existing category."
-          }
+          "categoryId": { "type": "string", "description": "Id of an existing category." }
         },
         "required": ["merchant", "categoryId"]
       },
@@ -514,13 +940,17 @@
     {
       "name": "finance.reports.spending",
       "permissionId": "finance.reports.spending",
-      "description": "Monthly spending by category and payee plus cash flow (income, outflow, net) over a window of recent months, including household-shared accounts.",
+      "description": "Monthly spending and cash flow, including pending and household-shared transactions, with transfers excluded. Returns available currencies; mixed currencies require an explicit currency before totals are returned. No FX conversion.",
       "risk": "read",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "months": { "type": "integer", "minimum": 1, "maximum": 24 }
+          "months": { "type": "integer", "minimum": 1, "maximum": 24 },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          }
         }
       },
       "handler": "reports.spending"
@@ -528,13 +958,17 @@
     {
       "name": "finance.reports.net-worth",
       "permissionId": "finance.reports.net-worth",
-      "description": "Daily net-worth series and current headline from your own account balance snapshots (liabilities negated).",
+      "description": "Daily own-account net worth from recorded balance snapshots (liabilities negated). Mixed currencies require an explicit currency before a headline is returned. Earlier balances carry forward; accounts without snapshots are omitted. No FX conversion.",
       "risk": "read",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "months": { "type": "integer", "minimum": 1, "maximum": 24 }
+          "months": { "type": "integer", "minimum": 1, "maximum": 24 },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          }
         }
       },
       "handler": "reports.net-worth"
@@ -555,6 +989,1203 @@
         "required": ["from", "to"]
       },
       "handler": "activity.list"
+    },
+    {
+      "name": "finance.target.set",
+      "permissionId": "finance.target.set",
+      "actionLabel": "Save a category target",
+      "description": "Save monthly contribution/refill, full-month weekly contribution or balance-by-date guidance from this month onward. Weekly requires per-week cents and weekday Sunday=0 through Saturday=6; every occurrence in the month counts. Does not assign money. To remove a target, use finance.target.remove. Read budget status first.",
+      "risk": "write",
+      "executionPolicy": "auto",
+      "actionFamilyId": "drafting",
+      "handler": "target.set",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "month": { "type": "string" },
+          "categoryId": { "type": "string" },
+          "kind": {
+            "type": "string",
+            "enum": ["monthly", "weekly", "refill", "balance"]
+          },
+          "amountCents": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+          "dueDate": { "type": "string" },
+          "weekday": { "type": "integer", "minimum": 0, "maximum": 6 },
+          "expectedRevision": { "type": "integer", "minimum": 0 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": [
+          "month",
+          "categoryId",
+          "kind",
+          "amountCents",
+          "expectedRevision",
+          "expectedFingerprint"
+        ]
+      }
+    },
+    {
+      "name": "finance.target.remove",
+      "permissionId": "finance.target.remove",
+      "actionLabel": "Remove a category target",
+      "description": "Remove a category's target from this month onward. Earlier months keep their target history and no assigned money moves. The person always confirms first. Read budget status first.",
+      "risk": "destructive",
+      "handler": "target.remove",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "month": { "type": "string" },
+          "categoryId": { "type": "string" },
+          "expectedRevision": { "type": "integer", "minimum": 0 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": ["month", "categoryId", "expectedRevision", "expectedFingerprint"]
+      }
+    },
+
+    {
+      "name": "finance.bills.read",
+      "permissionId": "finance.bills.read",
+      "actionLabel": "Review upcoming bills",
+      "description": "Review upcoming bills. Plans are projections; no payment or transaction is created. Writes require the current bills review.",
+      "risk": "read",
+      "handler": "bills.read",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "from": { "type": "string" },
+          "to": { "type": "string" }
+        },
+        "required": ["from", "to"]
+      }
+    },
+    {
+      "name": "finance.bills.suggestions",
+      "permissionId": "finance.bills.suggestions",
+      "actionLabel": "Find likely bills",
+      "description": "Find likely recurring bills from the owner's own posted charges in the last 400 days, budget currency only. Each suggestion carries the account, payee key, cadence, amount, last and next dates. Plans and dismissed suggestions are left out. Nothing is saved.",
+      "risk": "read",
+      "handler": "bills.suggestions",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      }
+    },
+    {
+      "name": "finance.bills.suggestions.dismiss",
+      "permissionId": "finance.bills.suggestions.dismiss",
+      "actionLabel": "Dismiss a bill suggestion",
+      "description": "Hide one bill suggestion, keyed by account, payee key, cadence and amount from finance.bills.suggestions. Nothing is deleted; a price change of more than a quarter shows it again.",
+      "risk": "write",
+      "handler": "bills.suggestion-dismiss",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "accountId": { "type": "string" },
+          "payeeKey": { "type": "string", "maxLength": 160 },
+          "cadence": { "type": "string", "enum": ["weekly", "fortnightly", "monthly", "yearly"] },
+          "amountCents": { "type": "integer", "minimum": 1, "maximum": 100000000 }
+        },
+        "required": ["accountId", "payeeKey", "cadence", "amountCents"]
+      },
+      "executionPolicy": "auto",
+      "actionFamilyId": "drafting"
+    },
+    {
+      "name": "finance.bill.create",
+      "permissionId": "finance.bill.create",
+      "actionLabel": "Save a recurring bill",
+      "description": "Save a recurring bill. Plans are projections; no payment or transaction is created. Writes require the current bills review.",
+      "risk": "write",
+      "handler": "bill.create",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string", "maxLength": 160 },
+          "accountId": { "type": "string" },
+          "categoryId": { "type": "string" },
+          "amountCents": { "type": "integer", "minimum": 1, "maximum": 100000000 },
+          "anchorDate": { "type": "string" },
+          "cadence": {
+            "type": "string",
+            "enum": ["once", "weekly", "fortnightly", "monthly", "yearly"]
+          },
+          "expectedRevision": { "type": "integer", "minimum": 0 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "accountId",
+          "categoryId",
+          "amountCents",
+          "anchorDate",
+          "cadence",
+          "expectedRevision",
+          "expectedFingerprint"
+        ]
+      },
+      "executionPolicy": "auto",
+      "actionFamilyId": "drafting"
+    },
+    {
+      "name": "finance.bill.decide",
+      "permissionId": "finance.bill.decide",
+      "actionLabel": "Review a bill occurrence",
+      "description": "Review a bill occurrence. Plans are projections; no payment or transaction is created. Writes require the current bills review.",
+      "risk": "write",
+      "handler": "bill.decide",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "planId": { "type": "string", "format": "uuid" },
+          "dueDate": { "type": "string" },
+          "state": { "type": "string", "enum": ["skipped", "matched"] },
+          "transactionId": { "type": "string" },
+          "expectedRevision": { "type": "integer", "minimum": 0 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": ["planId", "dueDate", "state", "expectedRevision", "expectedFingerprint"]
+      },
+      "executionPolicy": "auto",
+      "actionFamilyId": "drafting"
+    },
+    {
+      "name": "finance.bill.stop",
+      "permissionId": "finance.bill.stop",
+      "actionLabel": "Stop a bill plan",
+      "description": "Stop a bill plan. Plans are projections; no payment or transaction is created. Writes require the current bills review. An already ending plan may stop sooner; recorded occurrence decisions are preserved.",
+      "risk": "write",
+      "handler": "bill.stop",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "endDate": { "type": "string" },
+          "expectedRevision": { "type": "integer", "minimum": 0 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": ["id", "endDate", "expectedRevision", "expectedFingerprint"]
+      },
+      "executionPolicy": "auto",
+      "actionFamilyId": "drafting"
+    },
+    {
+      "name": "finance.bill.clear",
+      "permissionId": "finance.bill.clear",
+      "actionLabel": "Undo a bill review",
+      "description": "Return a skipped or matched occurrence to projected. Does not change the ledger.",
+      "risk": "write",
+      "handler": "bill.clear",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "planId": { "type": "string", "format": "uuid" },
+          "dueDate": { "type": "string" },
+          "expectedRevision": { "type": "integer", "minimum": 0 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": ["planId", "dueDate", "expectedRevision", "expectedFingerprint"]
+      },
+      "executionPolicy": "auto",
+      "actionFamilyId": "drafting"
+    },
+    {
+      "name": "finance.bill.adjust",
+      "permissionId": "finance.bill.adjust",
+      "actionLabel": "Change one bill occurrence",
+      "description": "Change one bill occurrence. Only unreviewed projections on active owned accounts; original schedule and ledger stay intact. Requires the captured bills review and host confirmation.",
+      "risk": "write",
+      "handler": "bill.adjust",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "dueDate": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "plannedDate": {
+            "type": "string"
+          },
+          "amountCents": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000000
+          }
+        },
+        "required": [
+          "planId",
+          "dueDate",
+          "expectedRevision",
+          "expectedFingerprint",
+          "plannedDate",
+          "amountCents"
+        ]
+      },
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["planId", "dueDate"],
+      "actionFamilyId": "drafting"
+    },
+    {
+      "name": "finance.bill.adjust-reset",
+      "permissionId": "finance.bill.adjust-reset",
+      "actionLabel": "Reset a one-off bill change",
+      "description": "Reset a one-off bill change. Only unreviewed projections on active owned accounts; original schedule and ledger stay intact. Requires the captured bills review and host confirmation.",
+      "risk": "write",
+      "handler": "bill.adjust-reset",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "dueDate": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": ["planId", "dueDate", "expectedRevision", "expectedFingerprint"]
+      },
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["planId", "dueDate"],
+      "actionFamilyId": "drafting"
+    },
+    {
+      "name": "finance.flex.preview",
+      "permissionId": "finance.flex.preview",
+      "actionLabel": "Review flexible budget",
+      "description": "Review cash-backed pool routing or explicitly allocate available money when leaving. Past months and transaction categories are preserved. Mode changes require current-month review and confirmation.",
+      "risk": "read",
+      "handler": "flex.preview",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "month": { "type": "string" },
+          "mode": { "type": "string", "enum": ["flex", "envelopes"] },
+          "flexIds": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": { "type": "string" }
+          },
+          "nonMonthlyIds": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": { "type": "string" }
+          },
+          "distribution": {
+            "type": "object",
+            "additionalProperties": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+          }
+        },
+        "required": ["month", "mode"]
+      }
+    },
+    {
+      "name": "finance.flex.configure",
+      "permissionId": "finance.flex.configure",
+      "actionLabel": "Change budget planning mode",
+      "description": "Review cash-backed pool routing or explicitly allocate available money when leaving. Past months and transaction categories are preserved. Mode changes require current-month review and confirmation.",
+      "risk": "write",
+      "handler": "flex.configure",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "month": { "type": "string" },
+          "mode": { "type": "string", "enum": ["flex", "envelopes"] },
+          "flexIds": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": { "type": "string" }
+          },
+          "nonMonthlyIds": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": { "type": "string" }
+          },
+          "distribution": {
+            "type": "object",
+            "additionalProperties": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+          },
+          "expectedRevision": { "type": "integer", "minimum": 0 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": ["month", "mode", "expectedRevision", "expectedFingerprint"]
+      },
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["month"]
+    },
+    {
+      "name": "finance.flex.assign",
+      "permissionId": "finance.flex.assign",
+      "description": "Set the total funding for the flexible pool, counted once. Pass its displayed previous total and review tokens from Budget. Member amounts remain informational guidance.",
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$",
+            "description": "Budget month, YYYY-MM."
+          },
+          "amountCents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000,
+            "description": "The new assigned total in integer cents (50 dollars is 5000)."
+          },
+          "previousCents": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "The category's assigned total right now, in integer cents."
+          },
+          "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": [
+          "month",
+          "amountCents",
+          "previousCents",
+          "expectedRevision",
+          "expectedFingerprint"
+        ]
+      },
+      "handler": "flex.assign",
+      "actionFamilyId": "moving_money",
+      "executionPolicy": "auto",
+      "confirmAbove": {
+        "inputKey": "amountCents",
+        "baseKey": "previousCents",
+        "preferenceKey": "freedomLimitDollars",
+        "scale": 100
+      },
+      "actionLabel": "Set the flexible pool assignment"
+    },
+    {
+      "name": "finance.transactions.bulk-category",
+      "permissionId": "finance.transactions.bulk-category",
+      "actionLabel": "Categorize selected transactions",
+      "description": "Categorize 1 to 200 reviewed owned posted unsplit transactions atomically. A changed or unavailable selection saves nothing. Preserves amounts, dates, clearing and reconciliation; creates no rules.",
+      "risk": "write",
+      "handler": "transactions.bulk-category",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "categoryId": { "type": "string" },
+          "rows": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": { "type": "string", "maxLength": 256 },
+                "writeRevision": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{32}$"
+                }
+              },
+              "required": ["id", "writeRevision"]
+            }
+          }
+        },
+        "required": ["categoryId", "rows"]
+      },
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["categoryId"]
+    },
+    {
+      "name": "finance.reports.transactions",
+      "permissionId": "finance.reports.transactions",
+      "actionLabel": "Read report transactions",
+      "description": "Read the exact signed transaction contributions behind a selected report category, payee, income or outflow period. Uses the same currency, pending and per-owner transfer policy. Returns a bounded page plus full count and total; omits notes.",
+      "risk": "read",
+      "handler": "reports.transactions",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "months": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 24
+          },
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "group": {
+            "type": "string",
+            "enum": ["category", "payee", "income", "outflow"]
+          },
+          "key": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "sharedOwnerIds": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "maxLength": 64
+            }
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          }
+        },
+        "required": ["month", "currency", "group"]
+      }
+    },
+    {
+      "name": "finance.transactions.export",
+      "permissionId": "finance.transactions.export",
+      "description": "Prepare a spreadsheet-safe CSV of owned transaction history across stored months. Optional inclusive dates and account filters; reads one SQL snapshot. Omits household mirrors and private notes. Refuses files above 5,000 rows or 2 MiB instead of truncating. Does not change financial data.",
+      "risk": "read",
+      "handler": "transactions.export",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "from": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+          "through": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+          "accountId": { "type": "string", "minLength": 1, "maxLength": 256 }
+        }
+      }
+    },
+    {
+      "name": "finance.transactions.confirm",
+      "permissionId": "finance.transactions.confirm",
+      "actionLabel": "Confirm reviewed categories",
+      "description": "Atomically confirm one to 200 captured owned posted unsplit transaction categories. Rechecks revision tokens, needs-look state and live categories; all persist with metadata-only activity or none do. Preserves amounts, notes, splits, clearing and reconciliation. No category or rule change.",
+      "risk": "write",
+      "handler": "transactions.confirm",
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["rows"],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rows": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": { "type": "string", "minLength": 1, "maxLength": 256 },
+                "writeRevision": { "type": "string", "pattern": "^[a-f0-9]{32}$" }
+              },
+              "required": ["id", "writeRevision"]
+            }
+          }
+        },
+        "required": ["rows"]
+      }
+    },
+    {
+      "name": "finance.manual.account-review",
+      "permissionId": "finance.manual.account-review",
+      "description": "Read an owned manual account and captured row revision, with exact ledger/statement checks and future bill-plan blockers for closing. Never returns credentials or transaction notes.",
+      "risk": "read",
+      "handler": "manual.account-review",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": { "accountId": { "type": "string", "minLength": 1, "maxLength": 256 } },
+        "required": ["accountId"]
+      }
+    },
+    {
+      "name": "finance.manual.account-update",
+      "permissionId": "finance.manual.account-update",
+      "actionLabel": "Update manual account",
+      "description": "Rename, close or reopen an owned manual ledger after reviewing its row revision. Changes metadata only and preserves opening/currency/type, balance dates, transactions and statements. Closing requires a verified zero ledger and resolved future dependencies. Does not operate a bank account.",
+      "risk": "write",
+      "handler": "manual.account-update",
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["accountId", "operation"],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "accountId": { "type": "string", "minLength": 1, "maxLength": 256 },
+          "expectedRevision": { "type": "string", "pattern": "^[a-f0-9]{32}$" },
+          "operation": { "type": "string", "enum": ["rename", "close", "reopen"] },
+          "name": { "type": "string", "minLength": 1, "maxLength": 80 }
+        },
+        "required": ["accountId", "expectedRevision", "operation"]
+      }
+    },
+    {
+      "name": "finance.manual.transfer-context",
+      "permissionId": "finance.manual.transfer-context",
+      "description": "Read owned active manual cash/card ledgers and captured account versions for recording same-currency linked transfers. No credentials, bank instructions, shared-owner endpoints or private notes.",
+      "risk": "read",
+      "handler": "manual.transfer-context",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "finance.manual.transfer-review",
+      "permissionId": "finance.manual.transfer-review",
+      "description": "Review an owned linked manual transfer, its correction links and both current eligible manual ledgers. Includes captured original/leg and account versions. Closed or reconciled originals remain historical; no bank operation occurs.",
+      "risk": "read",
+      "handler": "manual.transfer-review",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "originalTransferId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": ["originalTransferId"]
+      }
+    },
+    {
+      "name": "finance.manual.transfer-reverse",
+      "permissionId": "finance.manual.transfer-reverse",
+      "actionLabel": "Correct a manual transfer recording",
+      "description": "Record one audited inverse pair for an owned manual transfer, preserving its original entries and statement history. Server derives exact amount, currency and inverse endpoints from the original; captured source/account versions, valid posting date and duplicate-correction guard must hold. Replay-safe identity. No money or bank instruction is sent.",
+      "risk": "write",
+      "handler": "manual.transfer-reverse",
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["originalTransferId", "date"],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "originalTransferId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceRevision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "fromRevision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "toRevision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "cleared": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "operationId",
+          "originalTransferId",
+          "sourceRevision",
+          "fromRevision",
+          "toRevision",
+          "date"
+        ]
+      }
+    },
+    {
+      "name": "finance.manual.transfer-create",
+      "permissionId": "finance.manual.transfer-create",
+      "actionLabel": "Record a linked manual transfer",
+      "description": "Record a past movement as an atomic linked pair in two owned manual cash/card ledgers of the same currency. Rechecks captured versions, statement/date/precision bounds and replay identity. This records history in Moss and sends no money or bank instructions. Loan, investment, provider and shared endpoints are unsupported.",
+      "risk": "write",
+      "handler": "manual.transfer-create",
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["fromAccountId", "toAccountId", "amountCents"],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fromAccountId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "toAccountId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "fromRevision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "toRevision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "amountCents": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "isoCurrency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "EUR",
+              "GBP",
+              "CAD",
+              "AUD",
+              "NZD",
+              "CHF",
+              "CNY",
+              "HKD",
+              "SGD",
+              "INR",
+              "MXN"
+            ]
+          },
+          "cleared": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "operationId",
+          "fromAccountId",
+          "toAccountId",
+          "fromRevision",
+          "toRevision",
+          "date",
+          "amountCents",
+          "isoCurrency",
+          "cleared"
+        ]
+      }
+    },
+    {
+      "name": "finance.rules.list",
+      "permissionId": "finance.rules.list",
+      "description": "List owned canonical merchant rules, enabled state, captured revisions and categories. Normalized merchant search with exact matching count and an explicit loaded limit. Reads only; reports initialization separately from an empty list.",
+      "risk": "read",
+      "handler": "rules.list",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "search": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          }
+        }
+      }
+    },
+    {
+      "name": "finance.rules.preview",
+      "permissionId": "finance.rules.preview",
+      "description": "Preview one normalized merchant match against owned history in a selected month. Returns a matching count, up to twenty examples and current rule. Never edits existing history or applies a rule retroactively; notes and household mirrors are omitted.",
+      "risk": "read",
+      "handler": "rules.preview",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "merchant": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          }
+        },
+        "required": ["merchant", "month"]
+      }
+    },
+    {
+      "name": "finance.rules.update",
+      "permissionId": "finance.rules.update",
+      "actionLabel": "Save merchant rule",
+      "description": "After captured review, create or change an owned normalized merchant-to-category rule, or disable/re-enable it. Requires the captured revision for edits and expected absence for creation. Commits rule configuration and identifier-only activity atomically; stale edits save nothing. Does not modify existing transactions.",
+      "risk": "write",
+      "handler": "rules.update",
+      "executionPolicy": "confirm",
+      "actionFamilyId": "rules",
+      "confirmWhenKeys": ["merchant", "categoryId", "enabled"],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "merchant": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "categoryId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "expectedRevision": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{32}$"
+          }
+        },
+        "required": ["merchant", "categoryId", "enabled"]
+      }
+    },
+    {
+      "name": "finance.targets.fund",
+      "permissionId": "finance.targets.fund",
+      "handler": "targets.fund",
+      "actionLabel": "Assign money to selected targets",
+      "description": "Assign the captured additional suggestions to one to twenty selected owned current-month targets, within ready-to-assign money. Rebuild and compare guidance; all assignments and activity commit atomically. No bank money or transactions move.",
+      "risk": "write",
+      "executionPolicy": "confirm",
+      "actionFamilyId": "moving_money",
+      "confirmWhenKeys": ["categoryIds"],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "month": {
+            "type": "string"
+          },
+          "categoryIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "expectedAmountsCents": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000000
+            }
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": [
+          "month",
+          "categoryIds",
+          "expectedAmountsCents",
+          "expectedRevision",
+          "expectedFingerprint"
+        ]
+      }
+    },
+    {
+      "name": "finance.card-reserve.preview",
+      "permissionId": "finance.card-reserve.preview",
+      "actionLabel": "Review card-payment cash",
+      "description": "Reserve budget cash for an owned manual credit card. Enrollment starts this month; earlier months retain full-debt accounting. No payment is sent. Enroll assigns starting-debt cash; fund sets available payment cash. Preview exact effects, then save with captured budget tokens and host confirmation. Changed reviews reject.",
+      "risk": "read",
+      "handler": "card-reserve.preview",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "month": {
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "action": {
+            "type": "string",
+            "enum": ["enroll", "fund"]
+          },
+          "availableCents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["month", "accountId", "action", "availableCents"]
+      }
+    },
+    {
+      "name": "finance.card-reserve.save",
+      "permissionId": "finance.card-reserve.save",
+      "actionLabel": "Save card-payment cash",
+      "description": "Reserve budget cash for an owned manual credit card. Enrollment starts this month; earlier months retain full-debt accounting. No payment is sent. Enroll assigns starting-debt cash; fund sets available payment cash. Preview exact effects, then save with captured budget tokens and host confirmation. Changed reviews reject.",
+      "risk": "write",
+      "handler": "card-reserve.save",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "month": {
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "action": {
+            "type": "string",
+            "enum": ["enroll", "fund"]
+          },
+          "availableCents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": [
+          "month",
+          "accountId",
+          "action",
+          "availableCents",
+          "expectedRevision",
+          "expectedFingerprint"
+        ]
+      },
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["accountId", "month", "action", "availableCents"]
+    },
+    {
+      "name": "finance.bill.entry-preview",
+      "permissionId": "finance.bill.entry-preview",
+      "actionLabel": "Review a bill entry",
+      "description": "Record an already-occurred expense for a due bill on an active manual account. Preview exact balance effects and existing same-amount expenses first. Creation and matching are atomic; no bank instruction. Captured reviews, statement bounds and host confirmation protect writes.",
+      "risk": "read",
+      "handler": "bill.entry-preview",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "dueDate": {
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "categoryId": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1
+          },
+          "isoCurrency": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "amountCents": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "cleared": {
+            "type": "boolean"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "operationId",
+          "planId",
+          "dueDate",
+          "accountId",
+          "categoryId",
+          "name",
+          "isoCurrency",
+          "date",
+          "expectedFingerprint",
+          "amountCents",
+          "cleared",
+          "expectedRevision"
+        ]
+      }
+    },
+    {
+      "name": "finance.bill.entry-record",
+      "permissionId": "finance.bill.entry-record",
+      "actionLabel": "Record an expense and match its bill",
+      "description": "Record an already-occurred expense for a due bill on an active manual account. Preview exact balance effects and existing same-amount expenses first. Creation and matching are atomic; no bank instruction. Captured reviews, statement bounds and host confirmation protect writes.",
+      "risk": "write",
+      "handler": "bill.entry-record",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "dueDate": {
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "categoryId": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1
+          },
+          "isoCurrency": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "amountCents": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "cleared": {
+            "type": "boolean"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "operationId",
+          "planId",
+          "dueDate",
+          "accountId",
+          "categoryId",
+          "name",
+          "isoCurrency",
+          "date",
+          "expectedFingerprint",
+          "amountCents",
+          "cleared",
+          "expectedRevision"
+        ]
+      },
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["name", "accountId", "date", "amountCents", "isoCurrency", "cleared"]
+    },
+    {
+      "name": "finance.transaction.note-read",
+      "permissionId": "finance.transaction.note-read",
+      "handler": "transaction.note-read",
+      "risk": "read",
+      "description": "Read the current private note and captured version of one owned transaction.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "transactionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "accountId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          }
+        },
+        "required": ["transactionId", "accountId", "month"]
+      }
+    },
+    {
+      "name": "finance.transaction.note-save",
+      "permissionId": "finance.transaction.note-save",
+      "handler": "transaction.note-save",
+      "risk": "write",
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["transactionId", "accountId", "month", "writeRevision", "notes"],
+      "actionLabel": "Save private transaction note",
+      "description": "Save or clear one private note using its current captured version; financial and category fields stay unchanged.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "transactionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "accountId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          },
+          "writeRevision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 4000
+          }
+        },
+        "required": ["transactionId", "accountId", "month", "writeRevision", "notes"]
+      }
     }
   ],
   "assistantActionFamilies": [
@@ -667,8 +2298,20 @@
             "month": { "type": "identifier" },
             "categoryId": { "type": "identifier" },
             "amountCents": { "type": "integer", "min": -100000000, "max": 100000000 },
-            "categoryIds": { "type": "array", "maxItems": 20, "items": { "type": "identifier" } },
+            "categoryIds": {
+              "type": "array",
+              "maxItems": 20,
+              "items": { "type": "identifier" }
+            },
             "amountsCents": {
+              "type": "array",
+              "maxItems": 20,
+              "items": { "type": "integer", "min": -100000000, "max": 100000000 }
+            },
+            "expectedRevision": { "type": "integer", "min": 0, "max": 9007199254740991 },
+            "expectedFingerprint": { "type": "identifier" },
+            "previousCents": { "type": "integer", "min": -100000000, "max": 100000000 },
+            "previousAmountsCents": {
               "type": "array",
               "maxItems": 20,
               "items": { "type": "integer", "min": -100000000, "max": 100000000 }
@@ -709,7 +2352,9 @@
         "paramsSchema": {
           "type": "object",
           "fields": {
-            "draftId": { "type": "uuid" }
+            "draftId": { "type": "uuid" },
+            "expectedRevision": { "type": "integer", "min": 0, "max": 9007199254740991 },
+            "expectedFingerprint": { "type": "identifier" }
           }
         }
       },
@@ -723,7 +2368,9 @@
           "fields": {
             "draftId": { "type": "uuid" },
             "categoryKey": { "type": "identifier" },
-            "amountCents": { "type": "integer", "min": 0, "max": 100000000 }
+            "amountCents": { "type": "integer", "min": 0, "max": 100000000 },
+            "expectedRevision": { "type": "integer", "min": 0, "max": 9007199254740991 },
+            "expectedFingerprint": { "type": "identifier" }
           }
         }
       },
@@ -740,9 +2387,21 @@
               "maxItems": 200,
               "items": { "type": "identifier" }
             },
-            "accountIds": { "type": "array", "maxItems": 200, "items": { "type": "identifier" } },
-            "months": { "type": "array", "maxItems": 200, "items": { "type": "identifier" } },
-            "categoryIds": { "type": "array", "maxItems": 200, "items": { "type": "identifier" } },
+            "accountIds": {
+              "type": "array",
+              "maxItems": 200,
+              "items": { "type": "identifier" }
+            },
+            "months": {
+              "type": "array",
+              "maxItems": 200,
+              "items": { "type": "identifier" }
+            },
+            "categoryIds": {
+              "type": "array",
+              "maxItems": 200,
+              "items": { "type": "identifier" }
+            },
             "createRule": { "type": "boolean" }
           }
         }
@@ -756,6 +2415,33 @@
           "type": "object",
           "fields": {
             "activityId": { "type": "uuid" }
+          }
+        }
+      },
+      {
+        "name": "finance.split-apply",
+        "handler": "split.apply",
+        "retryLimit": 1,
+        "allowManualRun": true,
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "transactionId": { "type": "identifier" },
+            "accountId": { "type": "identifier" },
+            "month": { "type": "identifier" },
+            "expectedAmountCents": { "type": "integer", "min": -2000000000, "max": 2000000000 },
+            "expectedCurrency": { "type": "identifier" },
+            "expectedRevision": { "type": "integer", "min": 0, "max": 2147483646 },
+            "categoryIds": {
+              "type": "array",
+              "maxItems": 20,
+              "items": { "type": "identifier" }
+            },
+            "amountsCents": {
+              "type": "array",
+              "maxItems": 20,
+              "items": { "type": "integer", "min": -100000000, "max": 100000000 }
+            }
           }
         }
       }

@@ -1,3 +1,5 @@
+import { copyLegacyMerchantRules } from "../merchant-rules.js";
+import { merchantRuleSqlStore } from "../../domain/store-merchant-rules-sql.js";
 // external-modules/finance/src/worker/handlers/migrate.ts
 //
 // FIN-06b (#1166) Task 6: the one-shot per-owner KV -> SQL backfill. Queue-only
@@ -9,9 +11,10 @@
 // read), THEN writes the storeSelector marker, THEN deletes only the KV keys
 // it just copied. state:{month} budget caches are deleted here too but never
 // copied (F6-D1 — a throwaway performance projection, never source of
-// truth). cursor:*, link:*, rules, settings, and the
+// truth). cursor:*, link:*, settings, and the
 // finance.shared mirror are never read or touched. The categories taxonomy is
-// copied (never deleted) into app.finance_categories on every run.
+// copied (never deleted) into app.finance_categories on every run. Rules now copy
+// separately into canonical owned state without deleting legacy KV values.
 import type {
   AccountRecord,
   BudgetLedger,
@@ -23,6 +26,7 @@ import type {
 } from "../../domain/index.js";
 import type { Category } from "../../domain/index.js";
 import { DEFAULT_CATEGORIES, FinanceKvError, NS, tableGroupFor } from "../../domain/index.js";
+import { budgetSqlStore } from "../../domain/store-budget-sql.js";
 import type { WorkerPorts } from "../ports.js";
 import type { ToolFactory } from "../registry.js";
 import { MIGRATED_MARKER_KEY } from "../store.js";
@@ -137,14 +141,21 @@ async function insertIgnoreAssignment(
 /**
  * Copies the KV category taxonomy (or the 16 defaults when none is stored yet)
  * into app.finance_categories. Insert-ignore, so it is safe to run on every
- * reconcile, including for owners whose main migration already finished. The
- * KV taxonomy is left in place; it stays the read path until later tickets.
+ * reconcile, including owners whose main migration already finished. Once a
+ * currency policy exists, atomically cut over once and preserve SQL edits on replay.
  */
 export async function copyCategoriesToTable(ports: WorkerPorts, db: FinanceDb): Promise<void> {
   const stored = (await ports.kv.get(NS.categories, "taxonomy")) as {
     categories: Category[];
   } | null;
   const categories = stored?.categories ?? [...DEFAULT_CATEGORIES];
+  const policy = budgetSqlStore(db);
+  const configured = await policy.get();
+  if (configured) {
+    if (!configured.taxonomyReady)
+      await policy.initializeCategories(categories, ports.now().toISOString());
+    return;
+  }
   const nowIso = ports.now().toISOString();
   for (const [index, category] of categories.entries()) {
     await db.query(
@@ -182,7 +193,10 @@ export async function runStorageMigrate(ports: WorkerPorts): Promise<MigrateResu
   const marker = await ports.kv.get(NS.meta, MIGRATED_MARKER_KEY);
   if (marker !== null) {
     // Owners migrated before categories moved to a table still need that copy.
-    if (ports.db !== null) await copyCategoriesToTable(ports, ports.db);
+    if (ports.db !== null) {
+      await copyCategoriesToTable(ports, ports.db);
+      await copyLegacyMerchantRules(ports, merchantRuleSqlStore(ports.db));
+    }
     return { status: "already-migrated" };
   }
 
@@ -268,6 +282,7 @@ export async function runStorageMigrate(ports: WorkerPorts): Promise<MigrateResu
   }
 
   await copyCategoriesToTable(ports, db);
+  await copyLegacyMerchantRules(ports, merchantRuleSqlStore(db));
 
   // --- Count-verify with >= (a concurrent sync may have added rows this
   // invocation never read). A short count means data is missing — abort

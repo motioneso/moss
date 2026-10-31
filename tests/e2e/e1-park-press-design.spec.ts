@@ -87,6 +87,16 @@ async function financeSettings(page: Page, failure = false) {
       json: { invocation: { status: "succeeded", result: { activity: [] } } }
     })
   );
+  await page.route("**/api/ai/assistant-tools/finance.rules.list/invoke", (route) =>
+    route.fulfill({
+      json: {
+        invocation: {
+          status: "succeeded",
+          result: { supported: true, ready: true, rules: [], categories: [], total: 0, limit: 50 }
+        }
+      }
+    })
+  );
   await page.goto("/m/finance/settings");
   await expect(page.getByRole("heading", { name: "How much Moss does alone" })).toBeVisible();
 }

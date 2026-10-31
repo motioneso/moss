@@ -8,6 +8,8 @@ export interface DialogProps {
   readonly description?: ReactNode;
   readonly onClose: () => void;
   readonly footer?: ReactNode;
+  /** Keep the heading and actions visible while a long form scrolls within the body. */
+  readonly scrollBody?: boolean;
   readonly children: ReactNode;
   readonly "aria-labelledby"?: string;
   /** Extra class on the dialog surface, for a section to scope layout-only overrides (size, scroll). */
@@ -36,7 +38,13 @@ export function Dialog(props: DialogProps) {
       }}
     >
       <div
-        className={props.className ? `jds-dialog ${props.className}` : "jds-dialog"}
+        className={[
+          "jds-dialog",
+          props.scrollBody ? "jds-dialog--scroll-body" : "",
+          props.className ?? ""
+        ]
+          .filter(Boolean)
+          .join(" ")}
         ref={ref}
         tabIndex={-1}
         onKeyDown={onKeyDown}

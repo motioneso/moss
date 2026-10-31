@@ -1,0 +1,20 @@
+CREATE TABLE app.finance_manual_transfers (
+  owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
+  id uuid NOT NULL,
+  from_account_id text NOT NULL,
+  to_account_id text NOT NULL,
+  date date NOT NULL,
+  amount_cents bigint NOT NULL CHECK (amount_cents BETWEEN 1 AND 9007199254740991),
+  iso_currency text NOT NULL,
+  digest text NOT NULL CHECK (length(digest)=64),
+  cleared boolean NOT NULL,
+  created_at timestamptz NOT NULL,
+  from_transaction_id text GENERATED ALWAYS AS ('transfer:'||id::text||':out') STORED,
+  to_transaction_id text GENERATED ALWAYS AS ('transfer:'||id::text||':in') STORED,
+  PRIMARY KEY (owner_user_id,id),
+  CHECK (from_account_id<>to_account_id),
+  FOREIGN KEY (owner_user_id,from_account_id) REFERENCES app.finance_accounts(owner_user_id,account_id),
+  FOREIGN KEY (owner_user_id,to_account_id) REFERENCES app.finance_accounts(owner_user_id,account_id),
+  FOREIGN KEY (owner_user_id,from_transaction_id) REFERENCES app.finance_transactions(owner_user_id,id) DEFERRABLE INITIALLY DEFERRED,
+  FOREIGN KEY (owner_user_id,to_transaction_id) REFERENCES app.finance_transactions(owner_user_id,id) DEFERRABLE INITIALLY DEFERRED
+);

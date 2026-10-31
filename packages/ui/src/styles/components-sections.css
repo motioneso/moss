@@ -7,6 +7,10 @@
 .jds-section-head--center {
   align-items: center;
 }
+.jds-section-head--wrap {
+  flex-wrap: wrap;
+  row-gap: var(--space-1);
+}
 .jds-section-head--rule {
   padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--line-strong);

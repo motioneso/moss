@@ -60,7 +60,7 @@ Verified 2026-10-09 against GitHub and the repository.
 - **#1695 (OPEN). Module attachment upload and binary read.**
 - **#1696 (OPEN). Structured-AI image input.**
 
-Receipt text pasted into Chat works in phase 2 without either blocker.
+Receipt text pasted into Chat works in phase 3 without either blocker.
 
 **Blocks only per-task model choice (new issue, to be filed):**
 
@@ -153,11 +153,11 @@ change the later phases.
   items, lines that remember their meals, unconvertible units on their own lines, structured
   ordering fields and check-off times.
 - Bought moves ticked lines into the Pantry with edited amounts.
-- Leftovers, opt-in, stored as Pantry items.
+- Leftovers, opt-in, stored as Pantry items (phase 3).
 - Mark cooked removes ingredients from the Pantry and offers to log a portion.
 - Ratings per member, asked after mark cooked, skippable.
 - Favourites per person.
-- Receipt by Chat text now. Receipt photo when #1695 and #1696 land.
+- Receipt by Chat text in phase 3. Receipt photo when #1695 and #1696 land.
 - Units configurable, default US.
 - AI unavailable means generation fails with a retry. Everything else works.
 - Food log rebuilt as the Log area of Meals. Old log data is not kept.
@@ -327,7 +327,7 @@ so that project can use them.
     Pantry is right.
 64. As a user, I want Bought lines moved into the Pantry, so that I do not type them twice.
 65. As a user, I want to tell Moss in Chat what I bought, or paste a receipt's text, and have Moss
-    update the Pantry, so that a shop made without the list still counts.
+    update the Pantry, so that a shop made without the list still counts. (Receipt text: phase 3.)
 66. As a user, I want to photograph a receipt for the same result, once Moss can read images, so
     that I do not type.
 67. As a user, I want the list to keep store-neutral structured fields, so that a later ordering
@@ -342,6 +342,7 @@ so that project can use them.
 70. As a user, I want amounts to be optional, so that "some rice" is enough.
 71. As a user, I want a visible, editable Staples list, so that I control what counts as basic.
 72. As a user, I want Leftovers saved as Pantry items when I choose, so that they get eaten.
+    (Phase 3.)
 
 ### Cooking, logging and Rating
 
@@ -453,7 +454,8 @@ is listed in owned tables so deletion and owner-only RLS are generated. In phase
 Kitchen always has exactly one member, its owner.
 
 - **kitchens.** One per user, created lazily. Holds units system and default Pantry mode.
-- **household_members.** Name, optional `linked_user_id`, optional calorie target, Meal pattern
+- **household_members.** Name, optional linked account email (typed, resolved to an account in
+  phase 5, because a module cannot look up other users), optional calorie and macro targets, Meal pattern
   (ordered list of named meals), restrictions, preferences, `is_self`.
 - **meal_slot_rules.** Kitchen-level rule per named meal: `shared` or `solo`, with optional weekday
   set (for example lunch is `solo` Monday to Friday, `shared` at weekends). Default `shared`.
@@ -521,21 +523,22 @@ Log tables keep `owner_user_id` only. The log is personal and never moves into a
 - Each line stores the planned meals it came from. A plan change rebuilds generated lines and
   keeps manual lines and tick state where the line still exists.
 - Bought writes Pantry items with the edited amounts and stamps `bought_at`.
-- Receipt text from Chat goes through a structured AI call that returns items and amounts, shown for
+- Receipt text from Chat (phase 3) goes through a structured AI call that returns items and amounts, shown for
   confirmation before the Pantry changes.
 
 ### Cooking and log bridge
 
 - Mark cooked subtracts recipe ingredients scaled to the eaters from matching Pantry items, never
-  going below zero, and optionally saves Leftovers as Pantry items.
+  going below zero, and from phase 3 optionally saves Leftovers as Pantry items.
 - Mark cooked then offers to log a portion. Accepting calls the existing log path, so the estimator
   job runs exactly as for any logged meal.
 - The Rating prompt follows Mark cooked and can be skipped.
 
 ### Targets and units
 
-- The self member reads the owner's existing nutrition target preferences. Other members store
-  their own target. Linked members' own targets wait for phase 5.
+- Every member, the self member included, stores its own targets on its member row. Meals never
+  reads Food's nutrition preferences, because modules cannot read each other's data. Linked
+  members' own targets wait for phase 5.
 - Units default to US and can be switched per Kitchen. Stored quantities keep their original unit.
 
 ### Export and privacy
@@ -554,7 +557,7 @@ Three seams cover everything, agreed with Ben 2026-10-09.
 1. **Module tool handlers with a fake store and a scripted fake AI.** This is the main seam. The
    existing handler, store, domain and manifest unit tests are the prior art. New tests cover the
    following.
-   - Household member create, edit, delete, Meal pattern defaults, self member target fallback.
+   - Household member create, edit, delete, Meal pattern defaults, self member targets on its row.
    - Plan generation per day, chaining order, progress, cancel, failed day and retry.
    - Safety check pass, rewrite, cap reached, and every path that creates a meal (generate, swap,
      regenerate, Favourite placement).
@@ -565,8 +568,8 @@ Three seams cover everything, agreed with Ben 2026-10-09.
    - Calorie fit per meal and per day.
    - Shopping list merging, incompatible units, Pantry modes, Purchase amounts, sections, source
      meals, manual items, Staples, rebuild after plan change, tick, Bought into Pantry.
-   - Receipt text parsing and confirmation.
-   - Mark cooked Pantry subtraction, Leftovers, log offer through the existing estimator path,
+   - Receipt text parsing and confirmation (phase 3).
+   - Mark cooked Pantry subtraction, Leftovers (phase 3), log offer through the existing estimator path,
      Rating with near-veto.
    - AI error kinds leave non-AI tools working.
    - Shared and Solo slot rules, weekday rules and per-day overrides.

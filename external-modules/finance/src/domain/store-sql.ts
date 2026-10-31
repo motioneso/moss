@@ -1,18 +1,35 @@
+import { cardReserveSqlStore } from "./store-card-reserves-sql.js";
+import { transferCorrectionSqlStore } from "./store-transfer-corrections-sql.js";
+import { providerHandoffSqlStore } from "./store-provider-handoffs-sql.js";
+import { billAdjustmentSqlStore } from "./store-bill-adjustments-sql.js";
+import { merchantRuleSqlStore } from "./store-merchant-rules-sql.js";
+import { transactionMetadataSqlStore } from "./store-transaction-metadata-sql.js";
+import { transactionNoteSqlStore } from "./store-transaction-notes-sql.js";
+import { manualTransferSqlStore } from "./store-manual-transfers-sql.js";
+import { accountLifecycleSqlStore } from "./store-account-lifecycle-sql.js";
+import { historyExportSqlStore } from "./store-history-export-sql.js";
+import { transactionBulkSqlStore } from "./store-transaction-bulk-sql.js";
+import { TXN_COLUMNS, rowToTransaction, type TransactionRow } from "./store-transaction-rows.js";
+import { flexSqlStore } from "./store-flex-sql.js";
+import { billSqlStore } from "./store-bills-sql.js";
+import { billSuggestionSqlStore } from "./store-bill-suggestions-sql.js";
 // external-modules/finance/src/domain/store-sql.ts
 // FIN-06 (#1166, F6-D3): FinanceStore over module db.query (#1167). Every
 // statement here IS the contract — string-equality tested, since a drift
 // silently changes what RLS sees. Owner is always written in the SQL text
 // via app.current_actor_user_id(), never a param, and no statement filters
 // by owner (RLS + that GUC own that, per the #1167 classifier's read).
-import type {
-  AccountRecord,
-  ItemErrorDetail,
-  ItemRecord,
-  ReviewState,
-  TransactionRecord
-} from "./records.js";
+import type { AccountRecord, ItemErrorDetail, ItemRecord, TransactionRecord } from "./records.js";
 import type { BudgetDraft, DraftLine } from "./draft.js";
 import type { ActivityRecord, FinanceStore } from "./store-port.js";
+import { commitBudgetSql } from "./store-budget-change-sql.js";
+import { createBudgetDraftSql, saveBudgetDraftLineSql } from "./store-draft-sql.js";
+import { targetSqlStore } from "./store-targets-sql.js";
+import { budgetSqlStore } from "./store-budget-sql.js";
+import { manualSqlStore } from "./store-manual-sql.js";
+import { importSqlStore } from "./store-import-sql.js";
+import { reconciliationSqlStore } from "./store-reconciliation-sql.js";
+import { safeCents } from "./values.js";
 
 // Structural twin of #1167 ctx.db — domain files never import @moss/*, so
 // this is redeclared rather than imported (bundler independence, see
@@ -31,61 +48,43 @@ function monthWindow(month: string): { from: string; to: string } {
   return { from: `${month}-01`, to: `${next}-01` };
 }
 
-const TXN_COLUMNS =
-  "id, account_id, date::text AS date, amount_cents, iso_currency, name, merchant, " +
-  "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence";
-
-type TransactionRow = {
-  id: string;
-  account_id: string;
-  date: string;
-  amount_cents: string | number;
-  iso_currency: string;
-  name: string;
-  merchant: string | null;
-  plaid_category: string | null;
-  category_id: string | null;
-  pending: boolean;
-  pending_transaction_id: string | null;
-  categorized_by: TransactionRecord["categorizedBy"];
-  notes: string | null;
-  review_state: ReviewState;
-  ai_confidence: number | null;
-};
-
-function rowToTransaction(row: TransactionRow): TransactionRecord {
-  return {
-    id: row.id,
-    accountId: row.account_id,
-    date: row.date,
-    amountCents: Number(row.amount_cents),
-    isoCurrency: row.iso_currency,
-    name: row.name,
-    merchant: row.merchant,
-    plaidCategory: row.plaid_category,
-    categoryId: row.category_id,
-    pending: row.pending,
-    pendingTransactionId: row.pending_transaction_id,
-    categorizedBy: row.categorized_by,
-    notes: row.notes ?? undefined,
-    reviewState: row.review_state,
-    aiConfidence: row.ai_confidence
-  };
-}
-
-async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Promise<void> {
+async function upsertTransaction(
+  db: FinanceDb,
+  record: TransactionRecord,
+  preserveUserMetadata = false
+): Promise<void> {
+  if (record.source === "manual") {
+    if (preserveUserMetadata) return;
+    // Categories/notes remain editable after reconciliation; these fields never move money.
+    await db.query(
+      "UPDATE app.finance_transactions SET category_id = CASE WHEN splits = '[]'::jsonb THEN $2 ELSE category_id END, " +
+        "categorized_by = CASE WHEN splits = '[]'::jsonb THEN $3 ELSE categorized_by END, notes = $4, " +
+        "review_state = CASE WHEN splits = '[]'::jsonb THEN $5 ELSE review_state END " +
+        "WHERE id = $1 AND source = 'manual'",
+      [
+        record.id,
+        record.categoryId,
+        record.categorizedBy,
+        record.notes ?? null,
+        record.reviewState ?? "confirmed"
+      ]
+    );
+    return;
+  }
   await db.query(
     "INSERT INTO app.finance_transactions (owner_user_id, id, account_id, date, amount_cents, " +
       "iso_currency, name, merchant, plaid_category, category_id, pending, " +
-      "pending_transaction_id, categorized_by, notes, review_state, ai_confidence) " +
-      "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) " +
+      "pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits) " +
+      "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb) " +
       "ON CONFLICT (owner_user_id, id) DO UPDATE SET account_id = EXCLUDED.account_id, " +
       "date = EXCLUDED.date, amount_cents = EXCLUDED.amount_cents, iso_currency = EXCLUDED.iso_currency, " +
       "name = EXCLUDED.name, merchant = EXCLUDED.merchant, plaid_category = EXCLUDED.plaid_category, " +
-      "category_id = EXCLUDED.category_id, pending = EXCLUDED.pending, " +
+      "category_id = CASE WHEN finance_transactions.splits <> '[]'::jsonb OR ($17 AND finance_transactions.categorized_by = 'user') THEN finance_transactions.category_id ELSE EXCLUDED.category_id END, pending = EXCLUDED.pending, " +
       "pending_transaction_id = EXCLUDED.pending_transaction_id, " +
-      "categorized_by = EXCLUDED.categorized_by, notes = EXCLUDED.notes, " +
-      "review_state = EXCLUDED.review_state, ai_confidence = EXCLUDED.ai_confidence",
+      "categorized_by = CASE WHEN finance_transactions.splits <> '[]'::jsonb OR ($17 AND finance_transactions.categorized_by = 'user') THEN finance_transactions.categorized_by ELSE EXCLUDED.categorized_by END, notes = CASE WHEN $17 THEN finance_transactions.notes ELSE EXCLUDED.notes END, " +
+      "review_state = CASE WHEN finance_transactions.splits <> '[]'::jsonb OR ($17 AND finance_transactions.categorized_by = 'user') THEN " +
+      "CASE WHEN finance_transactions.amount_cents <> EXCLUDED.amount_cents OR finance_transactions.iso_currency <> EXCLUDED.iso_currency THEN 'needs_look' ELSE finance_transactions.review_state END " +
+      "ELSE EXCLUDED.review_state END, ai_confidence = EXCLUDED.ai_confidence WHERE finance_transactions.source = 'provider'",
     [
       record.id,
       record.accountId,
@@ -101,7 +100,9 @@ async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Prom
       record.categorizedBy ?? null,
       record.notes ?? null,
       record.reviewState ?? (record.categoryId == null ? "needs_look" : "confirmed"),
-      record.aiConfidence ?? null
+      record.aiConfidence ?? null,
+      JSON.stringify(record.splits ?? []),
+      preserveUserMetadata
     ]
   );
 }
@@ -145,11 +146,16 @@ function rowToItem(row: ItemRow): ItemRecord {
 
 const ACCOUNT_COLUMNS =
   "account_id, item_id, name, official_name, type, subtype, mask, balance_cents, " +
-  "iso_currency, updated_at, shared_to_household";
+  "iso_currency, updated_at, shared_to_household, source, opening_date::text AS opening_date, opening_balance_cents, ledger_revision, archived_at";
 
 type AccountRow = {
   account_id: string;
-  item_id: string;
+  item_id: string | null;
+  source?: string;
+  opening_date?: string;
+  opening_balance_cents?: string | number;
+  ledger_revision?: number;
+  archived_at?: string | null;
   name: string;
   official_name: string | null;
   type: string;
@@ -170,10 +176,19 @@ function rowToAccount(row: AccountRow): AccountRecord {
     type: row.type,
     subtype: row.subtype,
     mask: row.mask,
-    balanceCents: Number(row.balance_cents),
+    balanceCents: safeCents(row.balance_cents),
     isoCurrency: row.iso_currency,
     updatedAt: row.updated_at,
-    sharedToHousehold: row.shared_to_household
+    sharedToHousehold: row.shared_to_household,
+    ...(row.source === "manual"
+      ? {
+          source: "manual" as const,
+          openingDate: row.opening_date!,
+          openingBalanceCents: safeCents(row.opening_balance_cents!),
+          ledgerRevision: row.ledger_revision ?? 0,
+          archivedAt: row.archived_at ?? null
+        }
+      : {})
   };
 }
 
@@ -228,9 +243,9 @@ function rowToDraftLine(row: DraftLineRow): DraftLine {
     categoryKey: row.category_key,
     groupName: row.group_name,
     categoryName: row.category_name,
-    basisMonthlyCents: Number(row.basis_monthly_cents),
-    proposedCents: Number(row.proposed_cents),
-    adjustedCents: row.adjusted_cents === null ? null : Number(row.adjusted_cents),
+    basisMonthlyCents: safeCents(row.basis_monthly_cents),
+    proposedCents: safeCents(row.proposed_cents),
+    adjustedCents: row.adjusted_cents === null ? null : safeCents(row.adjusted_cents),
     adjustedBy: row.adjusted_by,
     dropped: row.dropped
   };
@@ -242,7 +257,7 @@ function rowToDraft(row: DraftRow, lines: DraftLine[]): BudgetDraft {
     status: row.status,
     basisFrom: row.basis_from,
     basisTo: row.basis_to,
-    monthlyIncomeCents: Number(row.monthly_income_cents),
+    monthlyIncomeCents: safeCents(row.monthly_income_cents),
     createdAt: isoText(row.created_at),
     startedAt: row.started_at === null ? null : isoText(row.started_at),
     lines
@@ -251,6 +266,57 @@ function rowToDraft(row: DraftRow, lines: DraftLine[]): BudgetDraft {
 
 export function sqlStore(db: FinanceDb): FinanceStore {
   return {
+    historyExport: historyExportSqlStore(db),
+    transfers: manualTransferSqlStore(db),
+    transferCorrections: transferCorrectionSqlStore(db),
+    providerHandoffs: providerHandoffSqlStore(db),
+    metadata: transactionMetadataSqlStore(db),
+    notes: transactionNoteSqlStore(db),
+    rules: merchantRuleSqlStore(db),
+    billAdjustments: billAdjustmentSqlStore(db),
+    accountLifecycle: accountLifecycleSqlStore(db),
+    supportsSplits: true,
+    bulk: transactionBulkSqlStore(db),
+    budgetPolicy: budgetSqlStore(db),
+    targets: targetSqlStore(db),
+    bills: billSqlStore(db),
+    billSuggestions: billSuggestionSqlStore(db),
+    flex: flexSqlStore(db),
+    cardReserves: cardReserveSqlStore(db),
+    manual: manualSqlStore(db),
+    reconciliation: reconciliationSqlStore(db),
+    imports: importSqlStore(db),
+    async setTransactionSplits(change) {
+      const { from, to } = monthWindow(change.month);
+      const result = await db.query<{ id: string }>(
+        "WITH changed AS (UPDATE app.finance_transactions SET splits = $1::jsonb, " +
+          "category_id = $2, categorized_by = 'user', review_state = 'confirmed', " +
+          "split_revision = split_revision + 1 " +
+          "WHERE id = $3 AND account_id = $4 AND date >= $5 AND date < $6 " +
+          "AND amount_cents = $7 AND split_revision = $8 AND iso_currency = $9 AND pending = false AND transfer_id IS NULL RETURNING id), " +
+          "logged AS (INSERT INTO app.finance_activity (owner_user_id, id, at, actor, kind, params) " +
+          "SELECT app.current_actor_user_id(), gen_random_uuid(), now(), 'user', 'transaction.split', $10::jsonb " +
+          "FROM changed RETURNING id) SELECT id FROM changed",
+        [
+          JSON.stringify(change.splits.length === 1 ? [] : change.splits),
+          change.splits.length === 1 ? change.splits[0]!.categoryId : null,
+          change.transactionId,
+          change.accountId,
+          from,
+          to,
+          change.expectedAmountCents,
+          change.expectedRevision,
+          change.expectedCurrency,
+          JSON.stringify({
+            transactionId: change.transactionId,
+            accountId: change.accountId,
+            month: change.month,
+            parts: change.splits.length
+          })
+        ]
+      );
+      return result.rows.length === 1;
+    },
     async listItems() {
       const result = await db.query<ItemRow>(`SELECT ${ITEM_COLUMNS} FROM app.finance_items`);
       return result.rows.map(rowToItem);
@@ -303,6 +369,14 @@ export function sqlStore(db: FinanceDb): FinanceStore {
     },
 
     async putAccount(record) {
+      if (record.source === "manual") {
+        // Sharing a stale account read cannot restore an older ledger balance.
+        await db.query(
+          "UPDATE app.finance_accounts SET shared_to_household = $2 WHERE account_id = $1 AND source = 'manual'",
+          [record.accountId, record.sharedToHousehold ?? false]
+        );
+        return;
+      }
       await db.query(
         "INSERT INTO app.finance_accounts (owner_user_id, account_id, item_id, name, official_name, " +
           "type, subtype, mask, balance_cents, iso_currency, updated_at, shared_to_household) " +
@@ -311,7 +385,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
           "name = EXCLUDED.name, official_name = EXCLUDED.official_name, type = EXCLUDED.type, " +
           "subtype = EXCLUDED.subtype, mask = EXCLUDED.mask, balance_cents = EXCLUDED.balance_cents, " +
           "iso_currency = EXCLUDED.iso_currency, updated_at = EXCLUDED.updated_at, " +
-          "shared_to_household = EXCLUDED.shared_to_household",
+          "shared_to_household = EXCLUDED.shared_to_household WHERE finance_accounts.source = 'provider'",
         [
           record.accountId,
           record.itemId,
@@ -365,11 +439,11 @@ export function sqlStore(db: FinanceDb): FinanceStore {
 
     async putTransactionChunk(accountId, month, records) {
       for (const record of records) {
-        await upsertTransaction(db, record);
+        await upsertTransaction(db, record, true);
       }
       const { from, to } = monthWindow(month);
       await db.query(
-        "DELETE FROM app.finance_transactions WHERE account_id = $1 AND date >= $2 AND date < $3 " +
+        "DELETE FROM app.finance_transactions WHERE source = 'provider' AND account_id = $1 AND date >= $2 AND date < $3 " +
           "AND NOT (id = ANY($4::text[]))",
         [accountId, from, to, records.map((record) => record.id)]
       );
@@ -396,7 +470,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
       );
       if (result.rows.length === 0) return null;
       const days: Record<string, number> = {};
-      for (const row of result.rows) days[row.day] = Number(row.balance_cents);
+      for (const row of result.rows) days[row.day] = safeCents(row.balance_cents);
       return days;
     },
 
@@ -425,7 +499,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
       );
       if (result.rows.length === 0) return null;
       const assignments: Record<string, number> = {};
-      for (const row of result.rows) assignments[row.category_id] = Number(row.assigned_cents);
+      for (const row of result.rows) assignments[row.category_id] = safeCents(row.assigned_cents);
       return { assignments };
     },
 
@@ -438,72 +512,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
       );
     },
 
-    async commitBudgetChange(change) {
-      const params: unknown[] = [
-        change.month,
-        JSON.stringify(
-          change.assignments.map((a) => ({
-            category_id: a.categoryId,
-            assigned_cents: a.amountCents
-          }))
-        ),
-        JSON.stringify(
-          change.activity.map((a) => ({
-            actor: a.actor,
-            kind: a.kind,
-            params: a.params,
-            undo: a.undo ?? null
-          }))
-        )
-      ];
-      const guards: string[] = [];
-      let draftIndex = 0;
-      let undoneIndex = 0;
-      if (change.startDraft) {
-        params.push(change.startDraft.draftId, change.startDraft.at);
-        draftIndex = params.length - 1;
-        guards.push(
-          `EXISTS (SELECT 1 FROM app.finance_budget_drafts WHERE id = $${draftIndex} AND status = 'open')`
-        );
-      }
-      if (change.markUndone) {
-        params.push(change.markUndone.activityId, change.markUndone.at);
-        undoneIndex = params.length - 1;
-        guards.push(
-          `EXISTS (SELECT 1 FROM app.finance_activity WHERE id = $${undoneIndex} AND undone_at IS NULL)`
-        );
-      }
-      const guard = guards.length > 0 ? guards.join(" AND ") : "true";
-      const draftCte =
-        draftIndex > 0
-          ? `, d AS (UPDATE app.finance_budget_drafts SET status = 'started', started_at = $${draftIndex + 1} ` +
-            `WHERE id = $${draftIndex} AND status = 'open' RETURNING 1)`
-          : ", d AS (SELECT 1 WHERE false)";
-      const undoneCte =
-        undoneIndex > 0
-          ? `, u AS (UPDATE app.finance_activity SET undone_at = $${undoneIndex + 1} ` +
-            `WHERE id = $${undoneIndex} AND undone_at IS NULL RETURNING 1)`
-          : ", u AS (SELECT 1 WHERE false)";
-      // One statement, so the host runs it as a single implicit transaction.
-      const result = await db.query<{ applied: boolean }>(
-        "WITH a AS (INSERT INTO app.finance_budget_assignments (owner_user_id, month, category_id, assigned_cents) " +
-          "SELECT app.current_actor_user_id(), $1, x.category_id, x.assigned_cents " +
-          "FROM jsonb_to_recordset($2::jsonb) AS x(category_id text, assigned_cents bigint) " +
-          `WHERE ${guard} ` +
-          "ON CONFLICT (owner_user_id, month, category_id) DO UPDATE SET assigned_cents = EXCLUDED.assigned_cents " +
-          "RETURNING 1), " +
-          "l AS (INSERT INTO app.finance_activity (owner_user_id, id, at, actor, kind, params, undo) " +
-          "SELECT app.current_actor_user_id(), gen_random_uuid(), now(), x.actor, x.kind, x.params, x.undo " +
-          "FROM jsonb_to_recordset($3::jsonb) AS x(actor text, kind text, params jsonb, undo jsonb) " +
-          `WHERE ${guard} RETURNING 1)` +
-          draftCte +
-          undoneCte +
-          " SELECT ((SELECT count(*) FROM a) + (SELECT count(*) FROM l) + (SELECT count(*) FROM d) + " +
-          "(SELECT count(*) FROM u)) > 0 AS applied",
-        params
-      );
-      return result.rows[0]?.applied === true;
-    },
+    commitBudgetChange: (change) => commitBudgetSql(db, change),
 
     async appendActivity(entry) {
       await db.query(
@@ -552,7 +561,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
         [month, categoryId]
       );
       const row = result.rows[0];
-      return row === undefined ? null : Number(row.amount);
+      return row === undefined ? null : safeCents(row.amount);
     },
 
     async getLatestDraft() {
@@ -572,39 +581,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
       return rowToDraft(row, lines.rows.map(rowToDraftLine));
     },
 
-    // The draft goes in as 'discarded' and flips to 'open' last, so a worker that dies
-    // part-way leaves no half-written draft for the screen to read.
-    async createDraft(build, createdAt) {
-      await db.query(
-        "UPDATE app.finance_budget_drafts SET status = 'discarded' WHERE status = 'open'"
-      );
-      const created = await db.query<{ id: string }>(
-        "INSERT INTO app.finance_budget_drafts (owner_user_id, id, status, basis_from, basis_to, " +
-          "monthly_income_cents, created_at) " +
-          "VALUES (app.current_actor_user_id(), gen_random_uuid(), 'discarded', $1, $2, $3, $4) RETURNING id",
-        [build.basisFrom, build.basisTo, build.monthlyIncomeCents, createdAt]
-      );
-      const draftId = created.rows[0]!.id;
-      for (const line of build.lines) {
-        await db.query(
-          "INSERT INTO app.finance_budget_draft_lines (owner_user_id, draft_id, category_key, " +
-            "group_name, category_name, basis_monthly_cents, proposed_cents) " +
-            "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6)",
-          [
-            draftId,
-            line.categoryKey,
-            line.groupName,
-            line.categoryName,
-            line.basisMonthlyCents,
-            line.proposedCents
-          ]
-        );
-      }
-      await db.query("UPDATE app.finance_budget_drafts SET status = 'open' WHERE id = $1", [
-        draftId
-      ]);
-      return draftId;
-    },
+    createDraft: (build, at, expected) => createBudgetDraftSql(db, build, at, expected),
 
     async markDraftStarted(draftId, startedAt) {
       await db.query(
@@ -614,29 +591,6 @@ export function sqlStore(db: FinanceDb): FinanceStore {
       );
     },
 
-    async saveDraftLine(draftId, line) {
-      await db.query(
-        "INSERT INTO app.finance_budget_draft_lines (owner_user_id, draft_id, category_key, " +
-          "group_name, category_name, basis_monthly_cents, proposed_cents, adjusted_cents, " +
-          "adjusted_by, dropped) " +
-          "SELECT app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9 " +
-          "WHERE EXISTS (SELECT 1 FROM app.finance_budget_drafts WHERE id = $1 AND status = 'open') " +
-          "ON CONFLICT (owner_user_id, draft_id, category_key) DO UPDATE SET " +
-          "group_name = EXCLUDED.group_name, category_name = EXCLUDED.category_name, " +
-          "adjusted_cents = EXCLUDED.adjusted_cents, adjusted_by = EXCLUDED.adjusted_by, " +
-          "dropped = EXCLUDED.dropped",
-        [
-          draftId,
-          line.categoryKey,
-          line.groupName,
-          line.categoryName,
-          line.basisMonthlyCents,
-          line.proposedCents,
-          line.adjustedCents,
-          line.adjustedBy,
-          line.dropped
-        ]
-      );
-    }
+    saveDraftLine: (draftId, line, expected) => saveBudgetDraftLineSql(db, draftId, line, expected)
   } satisfies FinanceStore;
 }

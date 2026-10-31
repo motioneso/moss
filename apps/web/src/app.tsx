@@ -40,6 +40,7 @@ import {
   type ExternalWebContributionProps
 } from "./external-modules/loader";
 import { createModuleHostActions } from "./external-modules/host-actions";
+import { ModuleToolsHost } from "./external-modules/tools-host";
 import { shouldShowOnboarding } from "./onboarding/resume";
 import { OnboardingWizard } from "./onboarding/onboarding-wizard";
 import { AppShell } from "./shell/app-shell";
@@ -515,11 +516,16 @@ function ExternalModuleMount(props: {
     [records, props.moduleId]
   );
   const page = (
-    <Component
-      hostActions={hostActions}
-      assistantSurface={assistantSurface}
-      refreshKey={refreshKey}
-    />
+    <ModuleToolsHost moduleId={props.moduleId} actorScopeKey={props.actorScopeKey}>
+      {(tools) => (
+        <Component
+          hostActions={hostActions}
+          assistantSurface={assistantSurface}
+          refreshKey={refreshKey}
+          tools={tools}
+        />
+      )}
+    </ModuleToolsHost>
   );
   if (!props.isDraft) return page;
   // #1756: a running draft gets the banner + its page, with the chat drawer docked beside it —

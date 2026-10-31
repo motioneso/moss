@@ -274,3 +274,62 @@ describe("finance.reports.net-worth", () => {
     expect(result.headlineCents).toBe(3_000);
   });
 });
+
+describe("currency-separated reports", () => {
+  it("requires a currency for mixed spending and keeps shared owners in that same currency", async () => {
+    const kv = fakeKv();
+    const mirror = fakeMirror();
+    await kv.set(NS.transactions, "checking:2026-07", {
+      transactions: [
+        tx({ id: "usd", amountCents: 1000 }),
+        tx({ id: "eur", amountCents: 2000, isoCurrency: "EUR" })
+      ]
+    });
+    await mirror.set("other:cash:2026-07", {
+      transactions: [tx({ id: "shared-eur", amountCents: 300, isoCurrency: "EUR" })]
+    });
+    const handler = reportsSpendingHandler(fakePorts(kv, mirror));
+    const input = { actorUserId: "u", activeUserIds: ["u", "other"], months: 1 };
+    expect(await handler(input)).toMatchObject({
+      currencies: ["EUR", "USD"],
+      currency: null,
+      currencySelectionRequired: true,
+      own: [],
+      shared: []
+    });
+    expect(await handler({ ...input, currency: "EUR" })).toMatchObject({
+      currency: "EUR",
+      currencySelectionRequired: false,
+      own: [{ cashFlow: { outflowCents: 2000 } }],
+      shared: [{ ownerUserId: "other", months: [{ cashFlow: { outflowCents: 300 } }] }]
+    });
+  });
+  it("never combines unlike account snapshots into one net-worth headline", async () => {
+    const kv = fakeKv();
+    for (const [accountId, isoCurrency, balanceCents] of [
+      ["usd", "USD", 1000],
+      ["eur", "EUR", 2000]
+    ] as const) {
+      await kv.set(NS.accounts, accountId, {
+        accountId,
+        itemId: "item",
+        name: accountId,
+        type: "depository",
+        isoCurrency,
+        balanceCents
+      });
+      await kv.set(NS.snapshots, `${accountId}:2026-07`, { days: { "2026-07-02": balanceCents } });
+    }
+    const handler = reportsNetWorthHandler(fakePorts(kv, throwingMirror()));
+    expect(await handler({ actorUserId: "u" })).toMatchObject({
+      currency: null,
+      currencySelectionRequired: true,
+      headlineCents: null,
+      points: []
+    });
+    expect(await handler({ actorUserId: "u", currency: "USD" })).toMatchObject({
+      currency: "USD",
+      headlineCents: 1000
+    });
+  });
+});

@@ -1,6 +1,7 @@
 // tests/unit/finance-store-sql-draft.test.ts
 // #3180: the draft statements are the contract (owner written in SQL, never a param),
 // and a draft only becomes visible (status open) after every line is written.
+import { budgetReview } from "./helpers/finance-budget-policy.js";
 import { describe, expect, it } from "vitest";
 
 import type { FinanceDb } from "../../external-modules/finance/src/domain/index.js";
@@ -21,8 +22,8 @@ function fakeDb(queued: readonly Record<string, unknown>[][] = []): FinanceDb & 
 }
 
 describe("sqlStore draft methods (#3180)", () => {
-  it("createDraft writes the draft hidden, then its lines, then flips it open last", async () => {
-    const db = fakeDb([[], [{ id: "d1" }]]);
+  it("createDraft submits the draft and its lines as one guarded statement", async () => {
+    const db = fakeDb([[{ id: "d1" }]]);
     const id = await sqlStore(db).createDraft(
       {
         basisFrom: "2026-07-01",
@@ -45,23 +46,16 @@ describe("sqlStore draft methods (#3180)", () => {
           }
         ]
       },
-      "2026-10-09T12:00:00.000Z"
+      "2026-10-09T12:00:00.000Z",
+      budgetReview
     );
     expect(id).toBe("d1");
-    expect(db.calls.map((c) => c.text.split(" ").slice(0, 3).join(" "))).toEqual([
-      "UPDATE app.finance_budget_drafts SET",
-      "INSERT INTO app.finance_budget_drafts",
-      "INSERT INTO app.finance_budget_draft_lines",
-      "INSERT INTO app.finance_budget_draft_lines",
-      "UPDATE app.finance_budget_drafts SET"
+    expect(db.calls).toHaveLength(1);
+    expect(db.calls[0]!.params.slice(-2)).toEqual([
+      budgetReview.revision,
+      budgetReview.fingerprint
     ]);
-    expect(db.calls[1]!.text).toContain(
-      "app.current_actor_user_id(), gen_random_uuid(), 'discarded'"
-    );
-    expect(db.calls[4]).toEqual({
-      text: "UPDATE app.finance_budget_drafts SET status = 'open' WHERE id = $1",
-      params: ["d1"]
-    });
+    expect(JSON.parse(db.calls[0]!.params[4] as string)).toHaveLength(2);
   });
 
   it("markDraftStarted only moves an open draft", async () => {
@@ -85,16 +79,20 @@ describe("sqlStore draft methods (#3180)", () => {
 
   it("saveDraftLine upserts one line of an open draft only, with the owner written in SQL", async () => {
     const db = fakeDb();
-    await sqlStore(db).saveDraftLine("d1", {
-      categoryKey: "groceries",
-      groupName: "Everyday",
-      categoryName: "Groceries",
-      basisMonthlyCents: 30433,
-      proposedCents: 30500,
-      adjustedCents: 60000,
-      adjustedBy: "moss",
-      dropped: false
-    });
+    await sqlStore(db).saveDraftLine(
+      "d1",
+      {
+        categoryKey: "groceries",
+        groupName: "Everyday",
+        categoryName: "Groceries",
+        basisMonthlyCents: 30433,
+        proposedCents: 30500,
+        adjustedCents: 60000,
+        adjustedBy: "moss",
+        dropped: false
+      },
+      budgetReview
+    );
     expect(db.calls).toHaveLength(1);
     const call = db.calls[0]!;
     expect(call.text).toContain("SELECT app.current_actor_user_id(), $1");
@@ -109,7 +107,9 @@ describe("sqlStore draft methods (#3180)", () => {
       30500,
       60000,
       "moss",
-      false
+      false,
+      budgetReview.revision,
+      budgetReview.fingerprint
     ]);
   });
 });

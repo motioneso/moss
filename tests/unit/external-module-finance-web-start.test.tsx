@@ -50,7 +50,10 @@ describe("Getting started (#3178)", () => {
   it("tells a member they are waiting on their admin when keys are missing", () => {
     const { renderer } = render({ keysConfigured: false, hasBank: false, isAdmin: false });
     expect(text(renderer)).toContain("Waiting on your admin");
-    expect(renderer.root.findAllByType("a")).toHaveLength(0);
+    expect(renderer.root.findAllByType("a").map((a) => a.props.href)).toEqual([
+      "/m/finance/accounts"
+    ]);
+    expect(text(renderer)).toContain("No bank keys are needed.");
     expect(renderer.root.findAllByType("button")).toHaveLength(0);
   });
 

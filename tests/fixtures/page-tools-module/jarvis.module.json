@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "id": "page-tools-proof",
+  "name": "Page tools proof",
+  "version": "0.1.0",
+  "publisher": "Moss tests",
+  "lifecycle": "optional",
+  "compatibility": {
+    "jarv1s": ">=0.1.0"
+  },
+  "storage": [
+    {
+      "namespace": "page-tools-proof.records",
+      "scopes": ["user"]
+    }
+  ],
+  "runtime": {
+    "workerEntrypoint": "dist/worker.js",
+    "workerContractVersion": 1
+  },
+  "assistantTools": [
+    {
+      "name": "page-tools-proof.save",
+      "permissionId": "page-tools-proof.save",
+      "description": "Save one synthetic test record.",
+      "risk": "write",
+      "inputSchema": {
+        "type": "object"
+      },
+      "handler": "save",
+      "actionLabel": "Save the synthetic entry"
+    },
+    {
+      "name": "page-tools-proof.read",
+      "permissionId": "page-tools-proof.read",
+      "description": "Read the synthetic test record.",
+      "risk": "read",
+      "inputSchema": {
+        "type": "object"
+      },
+      "handler": "read",
+      "actionLabel": "Read the synthetic entry"
+    },
+    {
+      "name": "page-tools-proof.delete",
+      "permissionId": "page-tools-proof.delete",
+      "description": "Delete the synthetic test record.",
+      "risk": "destructive",
+      "inputSchema": {
+        "type": "object"
+      },
+      "handler": "delete",
+      "actionLabel": "Delete the synthetic entry"
+    },
+    {
+      "name": "page-tools-proof.send",
+      "permissionId": "page-tools-proof.send",
+      "description": "Send to the synthetic recipient stand-in. No real recipient or network delivery.",
+      "actionLabel": "Send the synthetic entry",
+      "risk": "outbound",
+      "inputSchema": {
+        "type": "object"
+      },
+      "handler": "send"
+    }
+  ],
+  "web": {
+    "entrypoint": "dist/web/index.js",
+    "contractVersion": 2
+  },
+  "navigation": [
+    {
+      "id": "page-tools-proof",
+      "label": "Page tools proof",
+      "path": "/",
+      "icon": "landmark"
+    }
+  ]
+}

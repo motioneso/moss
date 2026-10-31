@@ -1,3 +1,8 @@
+import {
+  configuredBudgetStore,
+  budgetReviewInput,
+  budgetAccountFixture
+} from "./helpers/finance-budget-policy.js";
 // tests/unit/external-module-finance-draft.test.ts
 //
 // #3180: the first-budget draft. The builder is deterministic (numbers come only from the
@@ -228,8 +233,9 @@ function ports(kv: FinanceKv, activity: ActivityInput[] = []): WorkerPorts {
     kv,
     db: null,
     now: () => NOW,
+    localTimezone: "Etc/UTC",
     store: async () => ({
-      ...kvStore(kv),
+      ...configuredBudgetStore(kv),
       appendActivity: async (entry: ActivityInput) => {
         activity.push(entry);
       }
@@ -239,6 +245,7 @@ function ports(kv: FinanceKv, activity: ActivityInput[] = []): WorkerPorts {
 
 async function seedHistory(kv: FinanceKv): Promise<void> {
   const store = kvStore(kv);
+  await store.putAccount(budgetAccountFixture("acc1"));
   await store.putTransactionChunk("acc1", "2026-08", [
     tx({ id: "g1", date: "2026-08-04", amountCents: 20000 })
   ]);
@@ -291,7 +298,7 @@ describe("draft handlers", () => {
 
     const result = await draftStartHandler(p)({
       jobKind: "finance.draft-start",
-      params: { draftId: draft.id }
+      params: { ...budgetReviewInput, draftId: draft.id }
     });
     expect(result).toMatchObject({ started: true, assigned: 1 });
     expect((await kvStore(kv).getLedger("2026-10"))!.assignments).toEqual({ groceries: 25000 });
@@ -301,7 +308,10 @@ describe("draft handlers", () => {
 
     // A retry after a finished start changes nothing.
     expect(
-      await draftStartHandler(p)({ jobKind: "finance.draft-start", params: { draftId: draft.id } })
+      await draftStartHandler(p)({
+        jobKind: "finance.draft-start",
+        params: { ...budgetReviewInput, draftId: draft.id }
+      })
     ).toMatchObject({ alreadyStarted: true });
     expect(activity).toHaveLength(1);
   });
@@ -328,7 +338,10 @@ describe("draft handlers", () => {
         }
       ]
     });
-    await draftStartHandler(p)({ jobKind: "finance.draft-start", params: { draftId: latest.id } });
+    await draftStartHandler(p)({
+      jobKind: "finance.draft-start",
+      params: { ...budgetReviewInput, draftId: latest.id }
+    });
     expect((await kvStore(kv).getLedger("2026-10"))!.assignments).toEqual({ "pet-care": 8000 });
     const taxonomy = (await kv.get("finance.categories", "taxonomy")) as {
       categories: { id: string; name: string }[];
@@ -346,7 +359,7 @@ describe("draft handlers", () => {
     await expect(
       draftStartHandler(p)({
         jobKind: "finance.draft-start",
-        params: { draftId: "00000000-0000-4000-8000-000000000000" }
+        params: { ...budgetReviewInput, draftId: "00000000-0000-4000-8000-000000000000" }
       })
     ).rejects.toThrow(/draft/);
   });
@@ -381,13 +394,14 @@ async function builtDraft(): Promise<{ p: WorkerPorts; kv: FinanceKv; id: string
 
 const setJob = (draftId: string, categoryKey: string, amountCents: number) => ({
   jobKind: "finance.draft-set",
-  params: { draftId, categoryKey, amountCents }
+  params: { ...budgetReviewInput, draftId, categoryKey, amountCents }
 });
 
 describe("adjusting the draft (#3181)", () => {
   it("a chat update returns the line and the draft total before and after", async () => {
     const { p, id } = await builtDraft();
     const result = await draftUpdateHandler(p)({
+      ...budgetReviewInput,
       draftId: id,
       categoryKey: "groceries",
       amountCents: 60000
@@ -409,6 +423,7 @@ describe("adjusting the draft (#3181)", () => {
   it("a typed save carries no chat badge and keeps the total equal to the sum of the lines", async () => {
     const { p, id } = await builtDraft();
     await draftUpdateHandler(p)({
+      ...budgetReviewInput,
       draftId: id,
       categoryKey: "car-repairs",
       categoryName: "Car repairs",
@@ -418,6 +433,7 @@ describe("adjusting the draft (#3181)", () => {
     const typed = await draftSetHandler(p)(setJob(id, "car-repairs", 35000));
     expect(typed).toMatchObject({ totalBeforeCents: 35000, totalAfterCents: 60000 });
     const chat = await draftUpdateHandler(p)({
+      ...budgetReviewInput,
       draftId: id,
       categoryKey: "groceries",
       amountCents: 60000
@@ -438,6 +454,7 @@ describe("adjusting the draft (#3181)", () => {
   it("dropping a line takes it out of the total and an amount brings it back", async () => {
     const { p, id } = await builtDraft();
     const dropped = await draftUpdateHandler(p)({
+      ...budgetReviewInput,
       draftId: id,
       categoryKey: "groceries",
       dropped: true
@@ -450,10 +467,16 @@ describe("adjusting the draft (#3181)", () => {
   it("refuses a line that is not in the draft unless it carries a name, group and amount", async () => {
     const { p, id } = await builtDraft();
     await expect(
-      draftUpdateHandler(p)({ draftId: id, categoryKey: "pets", amountCents: 100 })
+      draftUpdateHandler(p)({
+        ...budgetReviewInput,
+        draftId: id,
+        categoryKey: "pets",
+        amountCents: 100
+      })
     ).rejects.toThrow(/categoryName/);
     await expect(
       draftUpdateHandler(p)({
+        ...budgetReviewInput,
         draftId: id,
         categoryKey: "pets",
         categoryName: "Pets",
@@ -466,27 +489,42 @@ describe("adjusting the draft (#3181)", () => {
 
   it("refuses an empty update, a wrong draft id, a negative amount and a started draft", async () => {
     const { p, id } = await builtDraft();
-    await expect(draftUpdateHandler(p)({ draftId: id, categoryKey: "groceries" })).rejects.toThrow(
-      /at least one/
-    );
+    await expect(
+      draftUpdateHandler(p)({ ...budgetReviewInput, draftId: id, categoryKey: "groceries" })
+    ).rejects.toThrow(/at least one/);
     await expect(
       draftUpdateHandler(p)({
+        ...budgetReviewInput,
         draftId: "00000000-0000-4000-8000-000000000000",
         categoryKey: "groceries",
         amountCents: 1
       })
     ).rejects.toThrow(/draft/);
     await expect(
-      draftUpdateHandler(p)({ draftId: id, categoryKey: "groceries", amountCents: -1 })
+      draftUpdateHandler(p)({
+        ...budgetReviewInput,
+        draftId: id,
+        categoryKey: "groceries",
+        amountCents: -1
+      })
     ).rejects.toThrow(/amountCents/);
-    await draftStartHandler(p)({ jobKind: "finance.draft-start", params: { draftId: id } });
+    await draftStartHandler(p)({
+      jobKind: "finance.draft-start",
+      params: { ...budgetReviewInput, draftId: id }
+    });
     await expect(draftSetHandler(p)(setJob(id, "groceries", 1))).rejects.toThrow(/started/);
   });
 
   it("started budget gets the adjusted amounts, including an added line", async () => {
     const { p, kv, id } = await builtDraft();
-    await draftUpdateHandler(p)({ draftId: id, categoryKey: "groceries", amountCents: 60000 });
     await draftUpdateHandler(p)({
+      ...budgetReviewInput,
+      draftId: id,
+      categoryKey: "groceries",
+      amountCents: 60000
+    });
+    await draftUpdateHandler(p)({
+      ...budgetReviewInput,
       draftId: id,
       categoryKey: "car-repairs",
       categoryName: "Car repairs",
@@ -494,7 +532,10 @@ describe("adjusting the draft (#3181)", () => {
       amountCents: 10000
     });
     await draftSetHandler(p)(setJob(id, "car-repairs", 35000));
-    await draftStartHandler(p)({ jobKind: "finance.draft-start", params: { draftId: id } });
+    await draftStartHandler(p)({
+      jobKind: "finance.draft-start",
+      params: { ...budgetReviewInput, draftId: id }
+    });
     expect((await kvStore(kv).getLedger("2026-10"))!.assignments).toEqual({
       groceries: 60000,
       "car-repairs": 35000

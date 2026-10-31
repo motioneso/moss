@@ -22,6 +22,7 @@ import type {
   ToolResult
 } from "@moss/module-sdk";
 import { sessionRateLimitKey } from "@moss/module-sdk/server";
+import { readActorLocale } from "@moss/settings";
 import { parsePositiveIntEnv } from "@moss/shared";
 
 import { ExternalModuleReportedError } from "./external-module-tools.js";
@@ -135,7 +136,17 @@ export function registerModuleToolInvokeRoute(
       }
 
       const requestId = access.requestId ?? randomUUID();
-      const ctx: ToolContext = { actorUserId: access.actorUserId, requestId, chatSessionId: "" };
+
+      // #1789: the actor's saved zone, as chat and background jobs pass it, so a module dates
+      // things by the user's calendar day.
+      const locale = await deps.dataContext.withDataContext(access, readActorLocale);
+      const ctx: ToolContext = {
+        actorUserId: access.actorUserId,
+        requestId,
+        chatSessionId: "",
+        locale,
+        localTimezone: locale.timezone
+      };
       const inputSummary = summarizeAssistantToolInput(input);
       const risk = await confirmationRisk(deps, access, tool, input, ctx);
 

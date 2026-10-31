@@ -1,3 +1,4 @@
+import { FLEX_POOL, flexForMonth, routeFlexAmounts, type FlexPolicy } from "./flex.js";
 // external-modules/finance/src/domain/envelope.ts
 //
 // FIN-03 (#1148) Task 1: pure YNAB-semantics budget derivation (spec delta
@@ -6,6 +7,8 @@
 // Spending-positive integer cents throughout (FIN-01 record convention).
 
 import type { TransactionRecord } from "./records.js";
+import { safeCents } from "./values.js";
+import { allocations } from "./splits.js";
 
 /** `ledger:{YYYY-MM}` value — the assignment SOURCE OF TRUTH. Values are
  *  set totals per category+month (assign sets, never increments), which is
@@ -34,6 +37,7 @@ export type BudgetMonthState = BudgetMonthStateCore & {
 
 export type BudgetDerivationInput = {
   /** YYYY-MM → assignment ledger. */
+  flexPolicies?: readonly FlexPolicy[];
   ledgers: Record<string, BudgetLedger>;
   /** YYYY-MM → all transactions dated in that month, every account merged. */
   transactionsByMonth: Record<string, TransactionRecord[]>;
@@ -58,26 +62,41 @@ export function deriveBudgetMonths(
   input: BudgetDerivationInput
 ): Record<string, BudgetMonthStateCore> {
   const months = [
-    ...new Set([...Object.keys(input.ledgers), ...Object.keys(input.transactionsByMonth)])
+    ...new Set([
+      ...Object.keys(input.ledgers),
+      ...Object.keys(input.transactionsByMonth),
+      ...(input.flexPolicies ?? []).map((p) => p.month)
+    ])
   ].sort();
 
   const result: Record<string, BudgetMonthStateCore> = {};
   // Only POSITIVE balances live here — a category whose available hits zero
   // (or below) drops out, so long-dead categories don't emit zero rows in
   // every later month.
-  const carry: Record<string, number> = {};
-  let cumIncome = 0;
-  let cumAssigned = 0;
-  let cumOverspend = 0; // ≤ 0; applies to months AFTER the one that overspent
+  const carry: Record<string, bigint> = {};
+  let cumIncome = 0n;
+  let cumAssigned = 0n;
+  let cumOverspend = 0n; // ≤ 0; applies to months AFTER the one that overspent
 
   for (const month of months) {
-    const assignments = input.ledgers[month]?.assignments ?? {};
-    const activity: Record<string, number> = {};
-    let income = 0;
-    for (const txn of input.transactionsByMonth[month] ?? []) {
+    const flex = flexForMonth(input.flexPolicies ?? [], month);
+    if (flex?.active) {
+      for (const id of flex.flexIds) {
+        carry[FLEX_POOL] = (carry[FLEX_POOL] ?? 0n) + (carry[id] ?? 0n);
+        delete carry[id];
+      }
+    }
+    const assignments = routeFlexAmounts(input.ledgers[month]?.assignments ?? {}, flex);
+    const activity: Record<string, bigint> = {};
+    let income = 0n;
+    const sourceRows = input.transactionsByMonth[month] ?? [];
+    for (const txn of sourceRows) safeCents(txn.amountCents);
+    for (const txn of sourceRows.flatMap(allocations)) {
       if (txn.categoryId === null || txn.categoryId === "transfers") continue;
-      activity[txn.categoryId] = (activity[txn.categoryId] ?? 0) + txn.amountCents;
-      if (txn.categoryId === "income") income += -txn.amountCents;
+      const categoryId =
+        flex?.active && flex.flexIds.includes(txn.categoryId) ? FLEX_POOL : txn.categoryId;
+      activity[categoryId] = (activity[categoryId] ?? 0n) + BigInt(safeCents(txn.amountCents));
+      if (txn.categoryId === "income") income -= BigInt(safeCents(txn.amountCents));
     }
 
     const categoryIds = new Set([
@@ -86,15 +105,19 @@ export function deriveBudgetMonths(
       ...Object.keys(activity)
     ]);
     const categories: Record<string, BudgetCategoryState> = {};
-    let assignedTotal = 0;
-    let overspend = 0;
+    let assignedTotal = 0n;
+    let overspend = 0n;
     for (const categoryId of categoryIds) {
-      const assignedCents = assignments[categoryId] ?? 0;
-      const activityCents = activity[categoryId] ?? 0;
-      const availableCents = (carry[categoryId] ?? 0) + assignedCents - activityCents;
-      categories[categoryId] = { assignedCents, activityCents, availableCents };
+      const assignedCents = BigInt(safeCents(assignments[categoryId] ?? 0));
+      const activityCents = activity[categoryId] ?? 0n;
+      const availableCents = (carry[categoryId] ?? 0n) + assignedCents - activityCents;
+      categories[categoryId] = {
+        assignedCents: safeCents(assignedCents),
+        activityCents: safeCents(activityCents),
+        availableCents: safeCents(availableCents)
+      };
       assignedTotal += assignedCents;
-      if (availableCents > 0) {
+      if (availableCents > 0n) {
         carry[categoryId] = availableCents;
       } else {
         delete carry[categoryId];
@@ -104,7 +127,7 @@ export function deriveBudgetMonths(
 
     cumIncome += income;
     cumAssigned += assignedTotal;
-    result[month] = { tbbCents: cumIncome - cumAssigned + cumOverspend, categories };
+    result[month] = { tbbCents: safeCents(cumIncome - cumAssigned + cumOverspend), categories };
     cumOverspend += overspend;
   }
 

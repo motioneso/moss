@@ -3,10 +3,15 @@ import { describe, expect, it } from "vitest";
 import {
   actionLabel,
   moduleLabel,
-  outcomeNote
+  outcomeNote,
+  sourceLabel
 } from "../../apps/web/src/settings/settings-activity-labels.js";
 
 describe("settings activity labels", () => {
+  it("distinguishes page actions from assistant activity", () => {
+    expect(sourceLabel("module_page")).toBe("Module page");
+    expect(sourceLabel("chat")).toBe("Chat");
+  });
   it("does not claim a rate limit or a later retry for a refused call", () => {
     const note = outcomeNote("refused") ?? "";
 

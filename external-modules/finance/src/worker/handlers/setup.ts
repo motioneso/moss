@@ -15,5 +15,9 @@ export const setupStatusHandler: ToolFactory = (ports: WorkerPorts) => async () 
   }
   const store = await ports.store();
   const items = await store.listItems();
-  return { keysConfigured, hasBank: items.length > 0 };
+  return {
+    keysConfigured,
+    hasBank: items.length > 0,
+    hasManualAccount: (await store.listAccounts()).some((account) => account.source === "manual")
+  };
 };

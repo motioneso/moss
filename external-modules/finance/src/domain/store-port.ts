@@ -1,3 +1,21 @@
+import type {
+  CardReserveStore,
+  CardReservePolicy,
+  CardReserveAssignment
+} from "./card-reserve-store.js";
+import type { TransferCorrectionStore } from "./transfer-corrections.js";
+import type { BillAdjustmentStore } from "./bill-adjustments.js";
+import type { MerchantRuleStore } from "./merchant-rules.js";
+import type { TransactionMetadataStore } from "./transaction-metadata.js";
+import type { TransactionNoteStore } from "./transaction-notes.js";
+import type { ManualTransferStore } from "./manual-transfers.js";
+import type { AccountLifecycleStore } from "./account-lifecycle.js";
+import type { HistoryExportStore } from "./history-export.js";
+import type { TransactionBulkStore } from "./transaction-bulk.js";
+import type { FlexStore, FlexPolicy } from "./flex.js";
+import type { BillStore } from "./bills.js";
+import type { BillSuggestionStore } from "./bill-suggestions.js";
+import type { TargetStore } from "./targets.js";
 // external-modules/finance/src/domain/store-port.ts
 // FIN-06 (#1166, F6-D3): the storage port both impls satisfy. Vocabulary is
 // deliberately the SAME record/chunk shapes handlers use today so the FIN-06c
@@ -6,6 +24,13 @@
 import type { AccountRecord, ItemRecord, TransactionRecord } from "./records.js";
 import type { BudgetLedger } from "./envelope.js";
 import type { BudgetDraft, DraftBuild, DraftLine } from "./draft.js";
+import type { Category } from "./taxonomy.js";
+import type { BudgetReview, BudgetPolicyStore } from "./budget-context.js";
+import type { ManualLedgerStore } from "./manual-ledger.js";
+import type { ImportStore } from "./csv-import.js";
+import type { ReconciliationStore } from "./reconciliation.js";
+import type { SplitChange } from "./splits.js";
+import type { ProviderHandoffStore } from "./provider-handoff-store.js";
 
 /**
  * One row of the activity trail (#3174). `params` and `undo` hold ids, cents
@@ -24,6 +49,11 @@ export interface ActivityInput {
  * unit. Either every part lands or none does.
  */
 export interface BudgetChange {
+  expected: BudgetReview;
+  flexPolicy?: FlexPolicy;
+  cardPolicy?: CardReservePolicy;
+  cardAssignment?: CardReserveAssignment;
+  categories?: Category[];
   month: string;
   assignments: { categoryId: string; amountCents: number }[];
   activity: ActivityInput[];
@@ -45,6 +75,27 @@ export interface ActivityRecord {
 }
 
 export interface FinanceStore {
+  readonly billAdjustments?: BillAdjustmentStore;
+  readonly rules?: MerchantRuleStore;
+  readonly metadata?: TransactionMetadataStore;
+  readonly notes?: TransactionNoteStore;
+  readonly transfers?: ManualTransferStore;
+  readonly transferCorrections?: TransferCorrectionStore;
+  readonly providerHandoffs?: ProviderHandoffStore;
+  readonly accountLifecycle?: AccountLifecycleStore;
+  readonly historyExport?: HistoryExportStore;
+  readonly supportsSplits: boolean;
+  readonly bulk?: TransactionBulkStore;
+  readonly targets?: TargetStore;
+  readonly bills?: BillStore;
+  readonly billSuggestions?: BillSuggestionStore;
+  readonly flex?: FlexStore;
+  readonly cardReserves?: CardReserveStore;
+  readonly budgetPolicy?: BudgetPolicyStore;
+  /** SQL-only ledger; legacy KV must migrate before manual entry. */
+  readonly manual?: ManualLedgerStore;
+  readonly reconciliation?: ReconciliationStore;
+  readonly imports?: ImportStore;
   listItems(): Promise<ItemRecord[]>;
   getItem(itemId: string): Promise<ItemRecord | null>;
   putItem(record: ItemRecord): Promise<void>;
@@ -62,7 +113,8 @@ export interface FinanceStore {
   /**
    * Replace one (account, month) window: upsert `records`, prune rows whose
    * id is absent (pending-twin removal / provider removals). Not atomic —
-   * both halves are idempotent and re-sync converges (cursor persists last).
+   * SQL preserves current user metadata for same-ID provider updates. Different-ID
+   * pending replacement and concurrent pages are separate convergence limits.
    */
   putTransactionChunk(
     accountId: string,
@@ -74,8 +126,10 @@ export interface FinanceStore {
    * confirmed. A merchant counts as "seen" when its normalized name is here.
    */
   listConfirmedPayeeNames(): Promise<string[]>;
-  /** Rewrite a single transaction in place (feed categorize/note paths). */
+  /** General/compatibility persistence. SQL category handlers use metadata instead. */
   putTransaction(record: TransactionRecord): Promise<void>;
+  /** Compare-and-set allocations plus activity in one SQL statement. False leaves data unchanged. */
+  setTransactionSplits(change: SplitChange): Promise<boolean>;
 
   /** Every (accountId, month) snapshot window that exists. */
   listSnapshotChunks(): Promise<{ accountId: string; month: string }[]>;
@@ -92,7 +146,7 @@ export interface FinanceStore {
   /**
    * Writes every assignment total, every activity row and the optional draft start or undo mark
    * in one atomic step. Returns false (and writes nothing) when a guard fails: the draft is no
-   * longer open or the row was already undone.
+   * longer open, the row was already undone, or the reviewed revision/ledger changed.
    */
   commitBudgetChange(change: BudgetChange): Promise<boolean>;
 
@@ -111,16 +165,15 @@ export interface FinanceStore {
   /** The newest draft that is open or started; null when none was ever built. */
   getLatestDraft(): Promise<BudgetDraft | null>;
   /**
-   * Store a freshly built draft as the open one and discard any older open
-   * draft. A draft becomes visible only after all its lines are written.
-   * Returns the new draft id.
+   * Store a fresh draft only when the review still matches and no open/started draft or
+   * assignments exist. All lines commit together. Returns null when the guard rejects.
    */
-  createDraft(build: DraftBuild, createdAt: string): Promise<string>;
+  createDraft(build: DraftBuild, createdAt: string, expected: BudgetReview): Promise<string | null>;
   /** Mark an open draft started. A draft that is not open is left alone. */
   markDraftStarted(draftId: string, startedAt: string): Promise<void>;
   /**
    * Insert or replace one line of an open draft. A draft that is not open (started,
    * discarded or unknown) is left alone, so a late edit cannot change a started budget.
    */
-  saveDraftLine(draftId: string, line: DraftLine): Promise<void>;
+  saveDraftLine(draftId: string, line: DraftLine, expected: BudgetReview): Promise<boolean>;
 }
