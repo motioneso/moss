@@ -17,7 +17,10 @@ This plan says only what Meals does.
 
 - Spec approved: Final, 2026-10-25.
 - Mockups agreed: the phase 1 prototype on PR #3880 is the design for every phase 2 screen.
-- Kill gate after phase 1 passed on 2026-10-31. Build it, and the wait for platform work is accepted.
+- Kill gate after phase 1 passed on 2026-10-31. Build it. Ruling 2 accepts the day-by-day
+  generation wait, and the wait for platform work is accepted.
+- "Meals owner" in this plan means the Meals build session, deciding under Ben's delegation of
+  2026-10-31. Ben can overrule any of its calls.
 - Task issues: one per slice, each `Part of #3317`, on project 2.
 - Hard platform dependencies, both accepted as waits:
   - S2 onward needs `ctx.jobs.enqueue` (#3722, PR #3884). This plan treats section 13.2.1 of
@@ -187,7 +190,7 @@ Destructive actions always get their own tool, so the host's confirmation rule s
 | Option                                        | For                                            | Against                                                                                      |
 | --------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | **L1. After page writes (S11) (recommended)** | The page works as designed, which is ruling B1 | Waits on #3723 and #3724                                                                     |
-| L2. After S6, with chat-only writes           | Reaches people sooner                          | This is option B2, rejected on 2026-10-31. Ticking a list through chat in a shop is unusable |
+| L2. After S6, with chat-only writes           | Reaches people sooner                          | This is option B2, rejected on 2026-10-30. Ticking a list through chat in a shop is unusable |
 
 ## 4. Determinism boundary
 
@@ -229,7 +232,7 @@ deterministic brand rule can add a flag but never clear one.
 | U3  | Generation has Stop and a retry for one failed day. Stop is a plan flag that the remaining day jobs check before they run                                                                        | No platform cancel is needed                          | S2              |
 | U4  | The list keeps the screen awake while shopping. No offline support in phase 2                                                                                                                    | A sleeping phone in a shop                            | S4              |
 
-U1 to U4 come from the Meals owner on 2026-10-31.
+U1 to U4 come from the Meals owner (section 0) on 2026-10-31.
 
 ## 6. Contracts
 
@@ -324,7 +327,7 @@ every field of its view, because the page sees only declared fields.
 | `meals.undo`             | write       | S4    | actionId                                                                        | `UndoResult`        |
 | `meals.pantry.get`       | read        | S5    | none                                                                            | `PantryView`        |
 | `meals.pantry.edit`      | write       | S5    | action `add`, `update`, `remove`; target `item` or `staple`                     | `PantryEditResult`  |
-| `meals.log.*` (6 tools)  | as Food     | S6    | Food's `list`, `summarize`, `log`, `correct`, `reestimate`, `delete`, renamed   | as Food             |
+| `meals.log.*` (6 tools)  | as Food     | S6    | `list`, `summarize`, `add` (Food's `log`), `correct`, `reestimate`, `delete`    | as Food             |
 | `meals.meal.edit`        | write       | S7    | action `lock`, `unlock`; S8 adds `move`, `set_eaters`; S10 adds `set_servings`  | `PlannedMealView`   |
 | `meals.meal.swap`        | write       | S7    | action `request_choices`, `choose`; S9 adds `quick`                             | `RecipeView`        |
 | `meals.day.edit`         | write       | S8    | action `set_text`, `clear_text`, `add_one_off`, `set_cook_limit`, `set_sharing` | `PlanDayView`       |
@@ -332,18 +335,19 @@ every field of its view, because the page sees only declared fields.
 | `meals.meal.rate`        | write       | S10   | ratings per member, 1-5 stars                                                   | `PlannedMealView`   |
 | `meals.favourites.edit`  | write       | S10   | action `add`, `remove`, `place`                                                 | `KitchenView`       |
 
-Thirty tools in total, counting the six log tools. Every plan-changing write rebuilds a list tied
+Twenty-nine tools in total, counting the six log tools. Every plan-changing write rebuilds a list tied
 to that plan (U1).
 
 ### 6.4 Queues
 
-| Queue                | Params (no strings)                                                                             | Key                                      | Settings                                           | Slice |
-| -------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------- | ----- |
-| `meals.plan-day`     | `planId` uuid, `dayId` uuid, `generation` integer 1-100000                                      | `plan-day:<dayId>:g<generation>`         | allowModuleEnqueue, timeoutMs 600000, retryLimit 1 | S2    |
-| `meals.meal-job`     | `mealId` uuid, `generation` integer, `mode` enum `swap_choices`, `quick_swap`, `safety_recheck` | `meal-job:<mealId>:<mode>:g<generation>` | allowModuleEnqueue, timeoutMs 600000, retryLimit 1 | S7    |
-| `meals.log-estimate` | `entryId` uuid, `revision` integer 1-1000000                                                    | `log-estimate:<entryId>:r<revision>`     | allowModuleEnqueue, retryLimit 2                   | S6    |
+| Queue                | Params (no strings)                                                                                      | Key                                      | Settings                                           | Slice |
+| -------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------- | ----- |
+| `meals.plan-day`     | `planId` uuid, `dayId` uuid, `generation` integer 1-100000                                               | `plan-day:<dayId>:g<generation>`         | allowModuleEnqueue, timeoutMs 600000, retryLimit 1 | S2    |
+| `meals.meal-job`     | `mealId` uuid, `generation` integer 1-100000, `mode` enum `swap_choices`, `quick_swap`, `safety_recheck` | `meal-job:<mealId>:<mode>:g<generation>` | allowModuleEnqueue, timeoutMs 600000, retryLimit 1 | S7    |
+| `meals.log-estimate` | `entryId` uuid, `revision` integer 1-1000000                                                             | `log-estimate:<entryId>:r<revision>`     | allowModuleEnqueue, retryLimit 2                   | S6    |
 
-S8 and S9 add the `safety_recheck` and `quick_swap` modes; S7 declares the whole enum up front.
+S7 declares the whole `mode` enum up front, and its handler rejects a mode whose slice has not
+landed. S8 adds `safety_recheck` and S9 adds `quick_swap`.
 
 Day job rules:
 
@@ -398,7 +402,7 @@ export interface MemberView {
   readonly mealPattern: readonly string[];
   readonly restrictions: readonly string[];
   readonly preferences: readonly string[];
-  readonly favouriteRecipeIds: readonly string[];
+  readonly favouriteRecipeIds: readonly string[]; // always [] until S10 adds favourites
 }
 export interface SlotRuleView {
   readonly slotName: string;
@@ -664,9 +668,12 @@ export function bindWrites(props: Readonly<Record<string, unknown>>): MealsWrite
 ### 6.8 DDL
 
 Every file is one statement. Every table carries `owner_user_id uuid NOT NULL REFERENCES
-app.users(id) ON DELETE CASCADE`, written as `owner` below. Kitchen-level tables add `kitchen_id
-uuid NOT NULL` with `FOREIGN KEY (owner_user_id, kitchen_id) REFERENCES app.meals_kitchens
-(owner_user_id, kitchen_id) ON DELETE CASCADE`, written as `kitchen` below. Every table has
+app.users(id) ON DELETE CASCADE`, written as `owner` below. Every table except `meals_kitchens`
+and the three log tables adds `kitchen_id uuid NOT NULL` with `FOREIGN KEY (owner_user_id,
+kitchen_id) REFERENCES app.meals_kitchens (owner_user_id, kitchen_id) ON DELETE CASCADE`, written
+as `kitchen` below. Child tables carry it too, so phase 5 can scope sharing by `kitchen_id` without
+a backfill. `UNIQUE (owner_user_id)` allows one Kitchen per owner, so a child's `kitchen_id` always
+equals its parent's in phase 2; phase 5 adds `kitchen_id` to the parent keys. Every table has
 `created_at` and `updated_at timestamptz NOT NULL DEFAULT now()`, omitted below. Every change is
 additive, so reverting a slice's code leaves unused tables, never broken ones.
 
@@ -716,7 +723,7 @@ CREATE TABLE app.meals_plans (owner, kitchen, plan_id uuid NOT NULL,
   idempotency_key text NOT NULL CHECK (char_length(idempotency_key) BETWEEN 1 AND 128),
   PRIMARY KEY (owner_user_id, plan_id), UNIQUE (owner_user_id, idempotency_key));
 
-CREATE TABLE app.meals_plan_days (owner, plan_id uuid NOT NULL, day_id uuid NOT NULL,
+CREATE TABLE app.meals_plan_days (owner, kitchen, plan_id uuid NOT NULL, day_id uuid NOT NULL,
   day_date date NOT NULL,
   status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','writing','ready','failed')),
   failure_reason text NULL CHECK (failure_reason IN ('needs_config','provider_error','usage_limited','validation_failed','aborted','safety_cap','timeout','stopped')),
@@ -738,7 +745,7 @@ CREATE TABLE app.meals_recipes (owner, kitchen, recipe_id uuid NOT NULL,
 
 CREATE INDEX meals_recipes_title_key ON app.meals_recipes (owner_user_id, title_key);
 
-CREATE TABLE app.meals_recipe_ingredients (owner, recipe_id uuid NOT NULL, position smallint NOT NULL,
+CREATE TABLE app.meals_recipe_ingredients (owner, kitchen, recipe_id uuid NOT NULL, position smallint NOT NULL,
   original_text text NOT NULL CHECK (char_length(original_text) BETWEEN 1 AND 200),
   name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 80),
   name_key text NOT NULL CHECK (char_length(name_key) BETWEEN 1 AND 80),
@@ -749,7 +756,7 @@ CREATE TABLE app.meals_recipe_ingredients (owner, recipe_id uuid NOT NULL, posit
   PRIMARY KEY (owner_user_id, recipe_id, position),
   FOREIGN KEY (owner_user_id, recipe_id) REFERENCES app.meals_recipes (owner_user_id, recipe_id) ON DELETE CASCADE);
 
-CREATE TABLE app.meals_planned_meals (owner, day_id uuid NOT NULL, meal_id uuid NOT NULL,
+CREATE TABLE app.meals_planned_meals (owner, kitchen, day_id uuid NOT NULL, meal_id uuid NOT NULL,
   slot_name text NOT NULL CHECK (char_length(slot_name) BETWEEN 1 AND 40),
   slot_position smallint NOT NULL,
   kind text NOT NULL CHECK (kind IN ('recipe','text')),
@@ -767,9 +774,11 @@ CREATE TABLE app.meals_planned_meals (owner, day_id uuid NOT NULL, meal_id uuid 
   PRIMARY KEY (owner_user_id, meal_id),
   FOREIGN KEY (owner_user_id, day_id) REFERENCES app.meals_plan_days (owner_user_id, day_id) ON DELETE CASCADE,
   FOREIGN KEY (owner_user_id, recipe_id) REFERENCES app.meals_recipes (owner_user_id, recipe_id),
+  FOREIGN KEY (owner_user_id, one_off_for) REFERENCES app.meals_household_members (owner_user_id, member_id) ON DELETE SET NULL (one_off_for),
+  FOREIGN KEY (owner_user_id, favourite_of) REFERENCES app.meals_household_members (owner_user_id, member_id) ON DELETE SET NULL (favourite_of),
   CHECK (kind = 'recipe' OR plain_text IS NOT NULL));
 
-CREATE TABLE app.meals_planned_meal_eaters (owner, meal_id uuid NOT NULL, member_id uuid NOT NULL,
+CREATE TABLE app.meals_planned_meal_eaters (owner, kitchen, meal_id uuid NOT NULL, member_id uuid NOT NULL,
   portion numeric(3,1) NOT NULL DEFAULT 1 CHECK (portion BETWEEN 0.5 AND 4),
   estimated_kcal integer NULL CHECK (estimated_kcal BETWEEN 0 AND 10000),
   safety text NOT NULL DEFAULT 'pending' CHECK (safety IN ('pending','pass','fail')),
@@ -785,7 +794,7 @@ S4:
 CREATE TABLE app.meals_shopping_lists (owner, kitchen, list_id uuid NOT NULL, plan_id uuid NULL,
   PRIMARY KEY (owner_user_id, list_id), UNIQUE (owner_user_id, kitchen_id));
 
-CREATE TABLE app.meals_shopping_list_items (owner, list_id uuid NOT NULL, line_id uuid NOT NULL,
+CREATE TABLE app.meals_shopping_list_items (owner, kitchen, list_id uuid NOT NULL, line_id uuid NOT NULL,
   line_key text NULL CHECK (char_length(line_key) BETWEEN 1 AND 120),
   name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 80),
   quantity numeric(10,3) NULL CHECK (quantity > 0),
@@ -831,14 +840,15 @@ CREATE TABLE app.meals_staples (owner, kitchen, staple_id uuid NOT NULL,
   PRIMARY KEY (owner_user_id, staple_id), UNIQUE (owner_user_id, kitchen_id, name_key));
 ```
 
-S6 copies Food's three log tables (`external-modules/food/sql/`) as `app.meals_log_entries`,
-`app.meals_log_estimates` and `app.meals_log_estimate_items`, with the same columns and checks. They
-carry `owner_user_id` only, because the log is personal and never moves into a Kitchen.
+S6 copies Food's four SQL files (`external-modules/food/sql/`). The three log tables become
+`app.meals_log_entries`, `app.meals_log_estimates` and `app.meals_log_estimate_items`, with the same
+columns and checks, and Food's owner and local-date index moves to `app.meals_log_entries`. The
+tables carry `owner_user_id` only, because the log is personal and never moves into a Kitchen.
 
 S7:
 
 ```sql
-CREATE TABLE app.meals_swap_choices (owner, meal_id uuid NOT NULL, choice_id uuid NOT NULL,
+CREATE TABLE app.meals_swap_choices (owner, kitchen, meal_id uuid NOT NULL, choice_id uuid NOT NULL,
   position smallint NOT NULL CHECK (position BETWEEN 1 AND 3),
   status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','writing','ready','failed')),
   recipe_id uuid NULL, generation integer NOT NULL DEFAULT 1,
@@ -878,6 +888,8 @@ Order rules:
 - Any prefix leaves Meals working, and prod untouched, because Meals is unlisted until S12.
 - The parts least likely to be cut come first. S1 to S4 are the smallest useful Meals (household,
   generate, read on the page, shopping list). Ben's review after S6 may cut any of S7 to S10.
+  S8, S9 and S10 each extend S7's tools, so cutting S7 cuts all four. S8, S9 and S10 need
+  nothing from each other, so any one of them can go alone.
   S11 then lights only the controls of slices that landed.
 
 | #   | Slice                               | Issue | Needs                       | UI  |
@@ -888,10 +900,10 @@ Order rules:
 | S4  | Shopping list and Bought            | #3888 | S2                          | yes |
 | S5  | Pantry, Staples, Pantry-aware plans | #3889 | S4                          | yes |
 | S6  | Log rebuild                         | #3890 | S1, S2                      | yes |
-| S7  | Lock, regenerate, swap choices      | #3891 | S3                          | yes |
+| S7  | Lock, regenerate, swap choices      | #3891 | S3, S4                      | yes |
 | S8  | Arrange the week                    | #3892 | S4, S7                      | yes |
 | S9  | Mid-week re-plan and quick swap     | #3893 | S5, S7                      | yes |
-| S10 | Cooking, ratings, favourites        | #3894 | S5, S6                      | yes |
+| S10 | Cooking, ratings, favourites        | #3894 | S5, S6, S7                  | yes |
 | S11 | Page write controls                 | #3895 | #3723, #3724, landed slices | yes |
 | S12 | List Meals, unlist Food             | #3896 | S11, S6                     | no  |
 | S13 | Remove Food from the repo           | #3897 | S12                         | no  |
@@ -993,7 +1005,9 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
   - one platform test in `tests/unit/external-worker-runtime.test.ts`
   - spec write-back C1, C4, C10
 - Decisions:
-  - Recipe and Safety calls pass `tierHint: "reasoning"`. The queue declares `timeoutMs: 600000`.
+  - Recipe and Safety calls pass `tierHint: "reasoning"`. The copied estimator passes
+    `"economy"`, where Food passes `"interactive"`, because spec story 83c puts nutrition
+    estimates on the economy tier. S6 reuses it unchanged. The queue declares `timeoutMs: 600000`.
   - Safety order: the deterministic check first; a failure regenerates without the model call.
     Then the model judgement. Two regenerations at most, then the meal fails with `safety_cap`.
   - A no-repeat hit regenerates and counts against the same cap.
@@ -1114,7 +1128,7 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
 - Live proof:
   - Build the list from the S3 plan.
   - "Add milk" in chat.
-  - Regenerate one day through chat and confirm ticks survive.
+  - Tick three lines, rebuild the list through chat, and confirm the ticks survive.
   - "I bought everything", then "undo that".
   - On a phone, on the dev instance's https address, the screen stays awake on List.
   - Do the visual pass.
@@ -1186,7 +1200,8 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
   - "Ate something else" as one free entry.
   - Calm totals against a target range.
   - No barcode library.
-- Review gate after S6: Ben reviews S1 to S6 on dev and may cut any of S7 to S10.
+- Review gate after S6: Ben reviews S1 to S6 on dev and may cut any of S7 to S10. Cutting S7
+  cuts S8, S9 and S10, because each extends S7's tools.
 
 ### S7. Lock, regenerate, swap choices
 
@@ -1200,7 +1215,8 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
   - Repeat requests with a new generation get a new key.
 - App map: features `meals.lock-regenerate` and `meals.swap`; screen `meals.swap` (`/plan/swap/:mealId`).
 - Live proof: lock two meals, regenerate the week, both survive; request swaps and choose one.
-  Do the visual pass.
+  Tick list lines, regenerate one day, and confirm the ticks survive and only changed lines show
+  a new amount. Do the visual pass.
 - Bar to beat: study section 1. Meals does:
   - Lock per meal with a count before regenerate.
   - Recently had dishes avoided by default.
@@ -1230,6 +1246,7 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
   "15-minute meal tonight".
 - Files: `sql` (6.8 S9); `meals.plan.control` replan; `meals.meal.swap` quick; `src/domain/replan.ts`;
   routes `plan/replan`, `plan/quick`; spec write-back C11.
+- Decisions: the quick swap passes `tierHint: "interactive"`, per spec story 83c.
 - Tests that fail first:
   - Re-plan touches only future, unlocked, uncooked meals, and today's meals whose usual time has
     not passed.
@@ -1323,6 +1340,7 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
   - `tests/unit/publish-module-registry.test.ts:250`
   - `tests/unit/module-preferences-routes.test.ts`
   - `tests/unit/module-registry-workflow-validation.test.ts:80`, `:82`, `:104`, `:606`
+  - `tests/unit/gateway-write-confirmation-coverage.test.ts:176`
   - every `tests/unit/external-module-food-*` file
   - `tests/e2e/food-log-and-read.spec.ts`
   - `tests/uat/specs/926-food-real-chat.uat.spec.ts`
@@ -1342,7 +1360,7 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
 | G-S2   | After S2 | The probe shows a stall kill, a day that resume cannot finish, or a median day over 8 minutes on the test copy | Meals owner, told to Ben |
 | G-S3   | After S3 | On a plain two-person household, more than 1 meal in 10 fails, over three 7-day runs                           | Meals owner, told to Ben |
 | G-S4   | After S4 | A 7-day list has more than two duplicate lines a shopper would merge by hand                                   | Meals owner              |
-| Review | After S6 | Ben's review on dev cuts any of S7 to S10                                                                      | Ben                      |
+| Review | After S6 | Ben's review on dev cuts any of S7 to S10; cutting S7 cuts S8 to S10                                           | Ben                      |
 | G-S11  | At S11   | The landed page-write contract differs from the draft in more than the adapter                                 | Meals owner re-plans S11 |
 
 A failed G-S2 switches to Fork G2 or a shorter day before S3 starts.
