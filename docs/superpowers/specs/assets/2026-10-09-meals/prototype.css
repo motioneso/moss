@@ -585,6 +585,11 @@
   overflow-wrap: anywhere;
 }
 
+/* A long amount wraps inside its column rather than running over the name. */
+.mls-line__amount .mls-num {
+  white-space: normal;
+}
+
 /* The shared styles mute bare labels; these labels are the row itself. */
 label.mls-line__body,
 label.mls-line__amount {
