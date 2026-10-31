@@ -5,10 +5,11 @@
 // persisted only AFTER a page's chunks are written), so every rule here is
 // idempotent by transaction_id: re-applying a page to its own output is a
 // byte-stable no-op. The reducer never does I/O — the caller loads exactly
-// the month chunks a page touches (each tx's month plus the previous month,
-// the only place a pending twin can hide per the grounded decisions doc).
-import { monthKey, prevMonthKey } from "./keys.js";
+// touched months and any exact-ID durable pending handoffs needed by that page.
+import { monthKey } from "./keys.js";
 import type { TransactionChunk, TransactionRecord } from "./records.js";
+import { decimalToCents } from "./values.js";
+import { splitsBalance } from "./splits.js";
 
 // Raw Plaid /transactions/sync entry (snake_case, float dollars). Declared
 // structurally instead of importing from adapters/ so the domain layer keeps
@@ -37,15 +38,14 @@ export type ChunkMap = Record<string, TransactionChunk>;
 
 /**
  * The ONE dollars→cents conversion in the module (spec "Money"). Plaid's
- * sign convention (spending-positive) is preserved as-is; Math.round guards
- * against IEEE754 artifacts (4.56 * 100 === 455.999…).
+ * sign convention (spending-positive) is preserved with decimal rounding.
  */
 export function toRecord(tx: PlaidTx): TransactionRecord {
   return {
     id: tx.transaction_id,
     accountId: tx.account_id,
     date: tx.date,
-    amountCents: Math.round(tx.amount * 100),
+    amountCents: decimalToCents(tx.amount),
     isoCurrency: tx.iso_currency_code ?? "USD",
     name: tx.name,
     merchant: tx.merchant_name,
@@ -66,7 +66,16 @@ function carryUserFields(from: TransactionRecord, onto: TransactionRecord): void
   if (from.categorizedBy !== "user") return;
   onto.categoryId = from.categoryId;
   onto.categorizedBy = "user";
+  if (from.reviewState !== undefined) onto.reviewState = from.reviewState;
   if (from.notes !== undefined) onto.notes = from.notes;
+  if (from.amountCents !== onto.amountCents || from.isoCurrency !== onto.isoCurrency)
+    onto.reviewState = "needs_look";
+  if (from.splits !== undefined) {
+    onto.splits = from.splits.map((split) => ({ ...split }));
+    onto.splitRevision = from.splitRevision;
+    if (onto.splits.length && (!splitsBalance(onto) || from.isoCurrency !== onto.isoCurrency))
+      onto.reviewState = "needs_look";
+  }
 }
 
 /** Sort contract from records.ts: date desc, then id asc. */
@@ -113,21 +122,25 @@ export function reduceSyncPage(
     // Same-id upsert / month-move: pull the previous version wherever it
     // lives, keeping the user's categorization on the replacement.
     const previousKey = location.get(record.id);
-    if (previousKey !== undefined) {
-      const previous = dropFrom(previousKey, record.id);
-      if (previous) carryUserFields(previous, record);
-    }
+    const previous = previousKey === undefined ? null : dropFrom(previousKey, record.id);
+    if (previous) carryUserFields(previous, record);
 
-    // Pending-twin replacement: a posted tx names its pending twin, which
-    // can only be in the tx's own month chunk or the previous month's
-    // (grounded decisions — pending never posts more than a month later).
+    // Explicit provider linkage can also identify an older durable handoff.
+    // Never treat a posted/manual/different-account record as a pending twin.
     if (!record.pending && record.pendingTransactionId !== null) {
-      for (const key of [target, prevMonthKey(record.accountId, record.date)]) {
-        const twinKey = location.get(record.pendingTransactionId);
-        if (twinKey !== key) continue;
+      const key = location.get(record.pendingTransactionId);
+      const source =
+        key === undefined
+          ? undefined
+          : next[key]?.transactions.find((row) => row.id === record.pendingTransactionId);
+      if (
+        key !== undefined &&
+        source?.pending &&
+        source.source !== "manual" &&
+        source.accountId === record.accountId
+      ) {
         const twin = dropFrom(key, record.pendingTransactionId);
-        if (twin) carryUserFields(twin, record);
-        break;
+        if (twin && previous?.categorizedBy !== "user") carryUserFields(twin, record);
       }
     }
 

@@ -23,6 +23,9 @@ const ignoredFiles = new Set([
   "packages/cli-runner/recipes/anthropic-adapter/npm-shrinkwrap.json"
 ]);
 const exemptFiles = new Set<string>([
+  // Finance's installable manifest is one declarative wire contract. Each tool must carry its
+  // complete input schema; keep validation explicit instead of deleting it to shorten JSON.
+  "external-modules/finance/jarvis.module.json",
   "packages/ai/src/repository.ts",
   "packages/ai/src/routes.ts",
   "apps/web/src/api/client.ts",

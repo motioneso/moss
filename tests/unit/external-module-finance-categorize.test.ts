@@ -73,6 +73,32 @@ describe("finance categorization pipeline (#1147)", () => {
     expect(calls[0]!.map((item) => item.id)).toEqual(["t-ai"]);
   });
 
+  it("ignores rules with missing or archived destinations without touching user allocations", async () => {
+    const categories = DEFAULT_CATEGORIES.map((c) => ({ ...c, archived: c.id === "groceries" }));
+    const existing = tx({
+      id: "user",
+      name: "TRADER JOE'S #123",
+      categoryId: "groceries",
+      categorizedBy: "user"
+    });
+    const rows = await categorize(
+      [
+        tx({ id: "archived", name: "TRADER JOE'S #456" }),
+        tx({ id: "missing", name: "Unknown shop" }),
+        existing
+      ],
+      [
+        ...RULES,
+        { payeeKey: "unknown shop", categoryId: "missing", createdAt: "2026-10-30T00:00:00Z" }
+      ],
+      categories,
+      null,
+      ASK
+    );
+    expect(rows.slice(0, 2).map((r) => r.categoryId)).toEqual([null, null]);
+    expect(rows[2]).toEqual(existing);
+  });
+
   it("never touches user-categorized or already-categorized records", async () => {
     const calls: AiTxInput[][] = [];
     const ai = async (batch: AiTxInput[]) => {

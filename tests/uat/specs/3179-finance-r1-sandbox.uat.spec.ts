@@ -273,7 +273,7 @@ test("Finance phase 1 works end to end against the Plaid sandbox", async ({ page
   const dayHeading = transactions
     .getByText(/^[A-Z][a-z]+day · [A-Z][a-z]+ \d+$/)
     .locator("visible=true");
-  const emptyMonth = transactions.getByRole("heading", { name: "Nothing yet" });
+  const emptyMonth = transactions.getByRole("heading", { name: "No transactions this month" });
   let monthsBack = 0;
   await expect(dayHeading.first().or(emptyMonth)).toBeVisible({ timeout: 30_000 });
   while (
@@ -415,6 +415,7 @@ test("Finance phase 1 works end to end against the Plaid sandbox", async ({ page
   await tabs.getByText("Accounts", { exact: true }).click();
   const accounts = page.locator('section[aria-label="Accounts"]');
   await expect(accounts.getByText("Plaid Checking").first()).toBeVisible({ timeout: 30_000 });
-  await expect(accounts.getByRole("region", { name: /First Platypus/ })).toBeVisible();
+  await expect(accounts.getByRole("region", { name: "Cash", exact: true })).toBeVisible();
+  await expect(accounts.getByText(/^First Platypus .* · Synced/).first()).toBeVisible();
   await crop(accounts, "accounts");
 });

@@ -4,7 +4,7 @@
 // balances as amounts owed (positive); money views show them negative.
 // Dependency-free so the web bundle can deep-import it.
 
-export type BalanceLike = { type: string; balanceCents: number };
+export type BalanceLike = { type: string; subtype?: string | null; balanceCents: number };
 
 /** True for account types whose balance is an amount owed. */
 export function isDebtType(type: string): boolean {

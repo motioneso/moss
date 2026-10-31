@@ -1,0 +1,1 @@
+CREATE INDEX finance_bill_adjustments_planned_date ON app.finance_bill_adjustments(owner_user_id, planned_date);

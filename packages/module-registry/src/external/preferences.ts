@@ -10,7 +10,7 @@
 // install, so an absent row is not "off" — it is "never touched", which resolves to the
 // manifest default. Every read runs inside the ACTOR's data context, so RLS (owner-only)
 // is what stops one user seeing another's switches.
-import type { AccessContext, DataContextRunner } from "@moss/db";
+import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import type {
   ExternalModulePreferenceDeclaration,
   ExternalModulePreferenceValue
@@ -71,11 +71,16 @@ export async function resolveModulePreferences(
   module: {
     readonly id: string;
     readonly preferences: readonly ExternalModulePreferenceDeclaration[];
-  }
+  },
+  scopedDb?: DataContextDb
 ): Promise<Record<string, ExternalModulePreferenceValue>> {
   if (module.preferences.length === 0) return {};
   const repository = new PreferencesRepository();
-  const stored = await runner.withDataContext(access, (scopedDb) => repository.list(scopedDb));
+  // A synchronous tool already holds an actor-scoped connection. Reuse it rather than
+  // acquiring a second connection (which deadlocks when the app pool has one slot).
+  const stored = scopedDb
+    ? await repository.list(scopedDb)
+    : await runner.withDataContext(access, (scope) => repository.list(scope));
   const resolved: Record<string, ExternalModulePreferenceValue> = {};
   for (const declaration of module.preferences) {
     const value = stored[modulePreferenceKey(module.id, declaration.key)];

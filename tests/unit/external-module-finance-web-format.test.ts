@@ -12,6 +12,8 @@ import {
 
 import {
   centsToAmountInput,
+  formatCents,
+  instantDayLabel,
   parseAmountToCents
 } from "../../external-modules/finance/src/web/format.js";
 
@@ -32,6 +34,44 @@ describe("parseAmountToCents", () => {
   it("accepts negative amounts (un-assigning money back to TBB)", () => {
     expect(parseAmountToCents("-20")).toBe(-2000);
     expect(parseAmountToCents("-$3.25")).toBe(-325);
+    expect(parseAmountToCents("-£3.25")).toBe(-325);
+  });
+
+  it("strips any currency symbol and spaces, before or after the digits", () => {
+    expect(parseAmountToCents("1234.56")).toBe(123456);
+    expect(parseAmountToCents("£12.50")).toBe(1250);
+    expect(parseAmountToCents("12.50 €")).toBe(1250);
+    expect(parseAmountToCents("12.50 €")).toBe(1250);
+    expect(parseAmountToCents("€ 1,234.56")).toBe(123456);
+    expect(parseAmountToCents("¥500")).toBe(50000);
+    expect(parseAmountToCents("1,000,000")).toBe(100_000_000);
+    expect(parseAmountToCents("1,234,567.89")).toBeNull();
+  });
+
+  it("reads a comma only as a thousands separator followed by exactly three digits", () => {
+    expect(parseAmountToCents("1,000")).toBe(100000);
+    expect(parseAmountToCents("999,999")).toBe(99999900);
+    expect(parseAmountToCents("12,345.60")).toBe(1234560);
+  });
+
+  it("refuses a decimal comma instead of saving it as a larger amount", () => {
+    expect(parseAmountToCents("12,50")).toBeNull();
+    expect(parseAmountToCents("250,00")).toBeNull();
+    expect(parseAmountToCents("€12,50")).toBeNull();
+    expect(parseAmountToCents("12,5")).toBeNull();
+    expect(parseAmountToCents("1,2345")).toBeNull();
+    expect(parseAmountToCents("1,23,456")).toBeNull();
+    expect(parseAmountToCents("1234,567")).toBeNull();
+    expect(parseAmountToCents("0,500")).toBeNull();
+    expect(parseAmountToCents(",50")).toBeNull();
+    expect(parseAmountToCents("12,")).toBeNull();
+    expect(parseAmountToCents("1,000,")).toBeNull();
+    expect(parseAmountToCents("1,000.5,0")).toBeNull();
+  });
+
+  it("refuses a second currency symbol or a symbol in the middle", () => {
+    expect(parseAmountToCents("$$12.50")).toBeNull();
+    expect(parseAmountToCents("1$2.50")).toBeNull();
   });
 
   it("rejects empty, garbage, and sub-cent precision", () => {
@@ -53,11 +93,25 @@ describe("parseAmountToCents", () => {
 });
 
 describe("centsToAmountInput", () => {
+  it("retains every cent at the safe integer boundary", () => {
+    expect(centsToAmountInput(Number.MAX_SAFE_INTEGER)).toBe("90071992547409.91");
+    expect(centsToAmountInput(-Number.MAX_SAFE_INTEGER)).toBe("-90071992547409.91");
+    expect(centsToAmountInput(-1)).toBe("-0.01");
+  });
   it("round-trips with the parser", () => {
     expect(centsToAmountInput(123456)).toBe("1234.56");
     expect(centsToAmountInput(0)).toBe("0.00");
     expect(centsToAmountInput(-2000)).toBe("-20.00");
     expect(parseAmountToCents(centsToAmountInput(37655))).toBe(37655);
+  });
+});
+
+describe("formatCents", () => {
+  it("formats the exact decimal without dividing cents through a float", () => {
+    expect(formatCents(Number.MAX_SAFE_INTEGER, "USD")).toBe("$90,071,992,547,409.91");
+    expect(formatCents(-Number.MAX_SAFE_INTEGER, "EUR")).toBe("-€90,071,992,547,409.91");
+    expect(formatCents(-1, "USD")).toBe("-$0.01");
+    expect(formatCents(0, "USD")).toBe("$0.00");
   });
 });
 
@@ -133,5 +187,24 @@ describe("typed budget amounts", () => {
       rows.map((row) => row.transactionId)
     );
     expect(chunkReviewRows([], false)).toEqual([]);
+  });
+});
+
+describe("instantDayLabel", () => {
+  it("shows a UTC timestamp on the reader's own calendar day", () => {
+    const zone = process.env.TZ;
+    try {
+      process.env.TZ = "America/Los_Angeles";
+      expect(instantDayLabel("2026-10-31 03:30:00 UTC")).toBe("Oct 30, 2026");
+      process.env.TZ = "Pacific/Auckland";
+      expect(instantDayLabel("2026-10-30 20:00:00 UTC")).toBe("Oct 31, 2026");
+    } finally {
+      if (zone === undefined) delete process.env.TZ;
+      else process.env.TZ = zone;
+    }
+  });
+
+  it("returns text it cannot read unchanged", () => {
+    expect(instantDayLabel("not a time")).toBe("not a time");
   });
 });

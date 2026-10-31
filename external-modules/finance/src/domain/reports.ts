@@ -5,6 +5,8 @@
 // computes the window from ports.now() and pre-excludes transfers
 // (domain/transfers.ts) before calling; nothing here touches a clock or KV.
 import type { TransactionRecord } from "./records.js";
+import { allocations } from "./splits.js";
+import { addCents, requireSingleCurrency } from "./values.js";
 
 /** Bucket key for categoryId===null rows. Reports INCLUDE uncategorized
  *  spending (unlike budget activity) — hiding it would make report totals
@@ -40,31 +42,38 @@ export function aggregateSpending(
   transactions: TransactionRecord[],
   window: string[]
 ): MonthSpending[] {
+  requireSingleCurrency(
+    transactions
+      .filter((row) => window.includes(row.date.slice(0, 7)))
+      .map((row) => row.isoCurrency)
+  );
   const byMonth = new Map<string, TransactionRecord[]>(window.map((month) => [month, []]));
   for (const txn of transactions) {
     byMonth.get(txn.date.slice(0, 7))?.push(txn);
   }
   return window.map((month) => {
-    const byCategory: Record<string, number> = {};
-    const byPayee: Record<string, number> = {};
+    const byCategory: Record<string, number> = Object.create(null);
+    const byPayee: Record<string, number> = Object.create(null);
     let incomeCents = 0;
     let outflowCents = 0;
-    for (const txn of byMonth.get(month) ?? []) {
+    for (const txn of (byMonth.get(month) ?? []).flatMap((row) =>
+      allocations(row).map((part) => ({ ...row, ...part }))
+    )) {
       if (txn.categoryId === "income") {
-        incomeCents += -txn.amountCents;
+        incomeCents = addCents(incomeCents, -txn.amountCents);
         continue;
       }
-      outflowCents += txn.amountCents;
+      outflowCents = addCents(outflowCents, txn.amountCents);
       const bucket = txn.categoryId ?? UNCATEGORIZED_BUCKET;
-      byCategory[bucket] = (byCategory[bucket] ?? 0) + txn.amountCents;
+      byCategory[bucket] = addCents(byCategory[bucket] ?? 0, txn.amountCents);
       const payee = txn.merchant ?? txn.name;
-      byPayee[payee] = (byPayee[payee] ?? 0) + txn.amountCents;
+      byPayee[payee] = addCents(byPayee[payee] ?? 0, txn.amountCents);
     }
     return {
       month,
       byCategory,
       byPayee,
-      cashFlow: { incomeCents, outflowCents, netCents: incomeCents - outflowCents }
+      cashFlow: { incomeCents, outflowCents, netCents: addCents(incomeCents, -outflowCents) }
     };
   });
 }
@@ -74,27 +83,27 @@ export function aggregateSpending(
  *  drop without re-implementing the arithmetic. */
 export function mergeSpendingMonths(window: string[], sources: MonthSpending[][]): MonthSpending[] {
   return window.map((month, index) => {
-    const byCategory: Record<string, number> = {};
-    const byPayee: Record<string, number> = {};
+    const byCategory: Record<string, number> = Object.create(null);
+    const byPayee: Record<string, number> = Object.create(null);
     let incomeCents = 0;
     let outflowCents = 0;
     for (const source of sources) {
       const entry = source[index];
       if (!entry || entry.month !== month) continue;
       for (const [key, cents] of Object.entries(entry.byCategory)) {
-        byCategory[key] = (byCategory[key] ?? 0) + cents;
+        byCategory[key] = addCents(byCategory[key] ?? 0, cents);
       }
       for (const [key, cents] of Object.entries(entry.byPayee)) {
-        byPayee[key] = (byPayee[key] ?? 0) + cents;
+        byPayee[key] = addCents(byPayee[key] ?? 0, cents);
       }
-      incomeCents += entry.cashFlow.incomeCents;
-      outflowCents += entry.cashFlow.outflowCents;
+      incomeCents = addCents(incomeCents, entry.cashFlow.incomeCents);
+      outflowCents = addCents(outflowCents, entry.cashFlow.outflowCents);
     }
     return {
       month,
       byCategory,
       byPayee,
-      cashFlow: { incomeCents, outflowCents, netCents: incomeCents - outflowCents }
+      cashFlow: { incomeCents, outflowCents, netCents: addCents(incomeCents, -outflowCents) }
     };
   });
 }

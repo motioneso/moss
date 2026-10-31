@@ -1,3 +1,5 @@
+import { safeCents } from "./values.js";
+import { allocations } from "./splits.js";
 // external-modules/finance/src/domain/draft.ts
 //
 // #3180 (Finance R1): the deterministic first-budget draft. Every number is a
@@ -49,7 +51,9 @@ export interface BudgetDraft {
 }
 
 export function roundUpToFiveDollars(cents: number): number {
-  return Math.ceil(cents / ROUND_UP_CENTS) * ROUND_UP_CENTS;
+  const value = BigInt(safeCents(cents));
+  const unit = BigInt(ROUND_UP_CENTS);
+  return safeCents(((value + (value > 0n ? unit - 1n : 0n)) / unit) * unit);
 }
 
 /** The amount a line plans: the adjusted amount when one was set, else the proposal. */
@@ -59,16 +63,20 @@ export function linePlanCents(line: DraftLine): number {
 
 /** Sum of the plan amounts over lines that are not dropped. */
 export function draftTotalCents(lines: readonly DraftLine[]): number {
-  let total = 0;
-  for (const line of lines) if (!line.dropped) total += linePlanCents(line);
-  return total;
+  return safeCents(
+    lines
+      .filter((line) => !line.dropped)
+      .reduce((total, line) => total + BigInt(safeCents(linePlanCents(line))), 0n)
+  );
 }
 
 /** Monthly income minus the draft total; negative means the plan is over income. */
 export function draftUnplannedCents(
   draft: Pick<BudgetDraft, "monthlyIncomeCents" | "lines">
 ): number {
-  return draft.monthlyIncomeCents - draftTotalCents(draft.lines);
+  return safeCents(
+    BigInt(safeCents(draft.monthlyIncomeCents)) - BigInt(draftTotalCents(draft.lines))
+  );
 }
 
 /** Groups a draft line can sit in. */
@@ -119,13 +127,13 @@ export function applyLineEdit(
   };
 }
 
-function median(values: number[]): number {
+function median(values: bigint[]): number {
   if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
+  const sorted = [...values].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 === 1
-    ? (sorted[mid] as number)
-    : Math.round(((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2);
+    ? safeCents(sorted[mid]!)
+    : safeCents((sorted[mid - 1]! + sorted[mid]! + 1n) / 2n);
 }
 
 /**
@@ -185,21 +193,26 @@ export function buildDraft(input: {
   const excluded = effectiveTransferIds(rows);
   const byId = new Map(input.categories.map((category) => [category.id, category] as const));
 
-  const spendByCategory = new Map<string, number>();
+  const spendByCategory = new Map<string, bigint>();
   const merchantsByCategory = new Map<string, Map<string, Map<string, number[]>>>();
-  const incomeByMonth = new Map<string, number>();
+  const incomeByMonth = new Map<string, bigint>();
 
   for (const month of basisMonths) {
-    for (const txn of input.transactionsByMonth[month] ?? []) {
+    for (const txn of (input.transactionsByMonth[month] ?? []).flatMap((row) =>
+      allocations(row).map((part) => ({ ...row, ...part }))
+    )) {
       if (txn.pending || txn.categoryId === null || excluded.has(txn.id)) continue;
       if (txn.categoryId === "transfers") continue;
       if (txn.categoryId === "income") {
-        incomeByMonth.set(month, (incomeByMonth.get(month) ?? 0) - txn.amountCents);
+        incomeByMonth.set(
+          month,
+          (incomeByMonth.get(month) ?? 0n) - BigInt(safeCents(txn.amountCents))
+        );
         continue;
       }
       spendByCategory.set(
         txn.categoryId,
-        (spendByCategory.get(txn.categoryId) ?? 0) + txn.amountCents
+        (spendByCategory.get(txn.categoryId) ?? 0n) + BigInt(safeCents(txn.amountCents))
       );
       if (txn.amountCents > 0) {
         const merchants =
@@ -216,20 +229,23 @@ export function buildDraft(input: {
   for (const [categoryId, spendCents] of spendByCategory) {
     const category = byId.get(categoryId);
     if (!category || category.archived || spendCents <= 0) continue;
-    const basisMonthlyCents = Math.round(spendCents / basisMonths.length);
+    const divisor = BigInt(basisMonths.length);
+    const basisMonthlyCents = safeCents((spendCents * 2n + divisor) / (2n * divisor));
     if (basisMonthlyCents <= 0) continue;
 
     // A category whose spend is mostly steady merchants is a bill, whatever its group.
     let group: CategoryGroupName = tableGroupFor(category.group);
     if (group !== "Bills") {
-      let steadyCents = 0;
-      let totalCents = 0;
+      let steadyCents = 0n;
+      let totalCents = 0n;
       for (const months of merchantsByCategory.get(categoryId)?.values() ?? []) {
-        const sum = [...months.values()].flat().reduce((acc, amount) => acc + amount, 0);
+        const sum = [...months.values()]
+          .flat()
+          .reduce((acc, amount) => acc + BigInt(safeCents(amount)), 0n);
         totalCents += sum;
         if (isSteady(months, basisMonths)) steadyCents += sum;
       }
-      if (totalCents > 0 && steadyCents * 2 >= totalCents) group = "Bills";
+      if (totalCents > 0 && steadyCents * 2n >= totalCents) group = "Bills";
     }
 
     lines.push({
@@ -243,7 +259,7 @@ export function buildDraft(input: {
   lines.sort((a, b) => a.categoryKey.localeCompare(b.categoryKey));
 
   const incomeMonths = basisMonths
-    .map((month) => incomeByMonth.get(month) ?? 0)
+    .map((month) => incomeByMonth.get(month) ?? 0n)
     .filter((value) => value > 0);
   return {
     basisFrom: `${basisMonths[0] as string}-01`,

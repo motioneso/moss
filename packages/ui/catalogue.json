@@ -167,6 +167,23 @@
       "flags": []
     },
     {
+      "name": "chart-parts",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/chart-parts.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": [
+        "ChartGrid",
+        "ChartReadout",
+        "ChartTicks",
+        "niceTicks",
+        "percentScale",
+        "readoutText",
+        "useActiveIndex"
+      ],
+      "options": [],
+      "flags": []
+    },
+    {
       "name": "chat-thread",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/chat-thread.tsx", "type": "registry:ui" }],
@@ -180,6 +197,18 @@
       "exports": ["ActivityPeek", "ChatFreshnessFooter", "Thread", "activityVerb", "groupRecords"],
       "options": [],
       "flags": []
+    },
+    {
+      "name": "checkbox",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/checkbox.tsx", "type": "registry:ui" }],
+      "dependencies": ["lucide-react"],
+      "exports": ["Checkbox"],
+      "options": [],
+      "flags": [
+        { "prop": "checked", "optional": false },
+        { "prop": "disabled", "optional": true }
+      ]
     },
     {
       "name": "checklist",
@@ -210,6 +239,15 @@
       "exports": ["ColorBox", "ColorPopover"],
       "options": [],
       "flags": [{ "prop": "open", "optional": false }]
+    },
+    {
+      "name": "column-chart",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/column-chart.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["ColumnChart"],
+      "options": [],
+      "flags": []
     },
     {
       "name": "combobox",
@@ -249,6 +287,7 @@
       "exports": ["Dialog"],
       "options": [],
       "flags": [
+        { "prop": "scrollBody", "optional": true },
         { "prop": "dismissOnEscape", "optional": true },
         { "prop": "dismissOnBackdrop", "optional": true },
         { "prop": "closeDisabled", "optional": true }
@@ -438,7 +477,7 @@
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/masthead.tsx", "type": "registry:ui" }],
       "dependencies": [],
-      "exports": ["Masthead", "MastheadClock", "MastheadDateline"],
+      "exports": ["Masthead", "MastheadClock", "MastheadDateline", "MastheadFigures"],
       "options": [
         {
           "prop": "tone",
@@ -460,7 +499,7 @@
         {
           "prop": "triggerVariant",
           "kind": "enum",
-          "values": ["icon", "content", "chip"],
+          "values": ["icon", "content", "chip", "button"],
           "optional": true,
           "default": null
         },
@@ -481,7 +520,20 @@
       "dependencies": [],
       "exports": ["MonthChip"],
       "options": [],
-      "flags": [{ "prop": "block", "optional": true }]
+      "flags": [
+        { "prop": "block", "optional": true },
+        { "prop": "muted", "optional": true },
+        { "prop": "struck", "optional": true }
+      ]
+    },
+    {
+      "name": "month-grid",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/month-grid.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["MonthGrid"],
+      "options": [],
+      "flags": []
     },
     {
       "name": "nav-index",
@@ -522,7 +574,7 @@
       "name": "peek-close-button",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/peek-close-button.tsx", "type": "registry:ui" }],
-      "dependencies": [],
+      "dependencies": ["lucide-react"],
       "exports": ["PeekCloseButton"],
       "options": [],
       "flags": []
@@ -538,6 +590,15 @@
         { "prop": "modal", "optional": true },
         { "prop": "dismissOnEscape", "optional": true }
       ]
+    },
+    {
+      "name": "period-stepper",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/period-stepper.tsx", "type": "registry:ui" }],
+      "dependencies": ["lucide-react"],
+      "exports": ["PeriodStepper"],
+      "options": [],
+      "flags": [{ "prop": "disabled", "optional": true }]
     },
     {
       "name": "radio-card-group",
@@ -577,6 +638,13 @@
           "values": ["default", "compact"],
           "optional": true,
           "default": null
+        },
+        {
+          "prop": "narrowMeta",
+          "kind": "enum",
+          "values": ["below", "beside"],
+          "optional": true,
+          "default": null
         }
       ],
       "flags": []
@@ -596,7 +664,10 @@
           "default": "baseline"
         }
       ],
-      "flags": [{ "prop": "rule", "optional": true }]
+      "flags": [
+        { "prop": "rule", "optional": true },
+        { "prop": "wrap", "optional": true }
+      ]
     },
     {
       "name": "segmented",
@@ -621,6 +692,15 @@
       "files": [{ "path": "packages/ui/src/select.tsx", "type": "registry:ui" }],
       "dependencies": ["lucide-react"],
       "exports": ["Select"],
+      "options": [],
+      "flags": [{ "prop": "quiet", "optional": true }]
+    },
+    {
+      "name": "selection-bar",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/selection-bar.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["SelectionBar"],
       "options": [],
       "flags": []
     },
@@ -678,6 +758,15 @@
           "default": null
         }
       ],
+      "flags": []
+    },
+    {
+      "name": "trend-chart",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/trend-chart.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["TrendChart"],
+      "options": [],
       "flags": []
     },
     {

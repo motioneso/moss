@@ -49,6 +49,35 @@ describe("monthWindow", () => {
 describe("aggregateSpending", () => {
   const window = ["2026-06", "2026-07"];
 
+  it("keeps arbitrary payee names as ordinary report data", () => {
+    const result = aggregateSpending(
+      [tx({ amountCents: 100, name: "__proto__" }), tx({ amountCents: 200, name: "constructor" })],
+      window
+    );
+    expect(result[1]!.byPayee["__proto__"]).toBe(100);
+    expect(result[1]!.byPayee.constructor).toBe(200);
+    expect(mergeSpendingMonths(window, [result])[1]!.cashFlow.outflowCents).toBe(300);
+  });
+
+  it("refuses to add unlike currencies or round an overflowing total", () => {
+    expect(() =>
+      aggregateSpending(
+        [tx({ amountCents: 100 }), tx({ amountCents: 100, isoCurrency: "EUR" })],
+        window
+      )
+    ).toThrow(/currency/);
+    expect(() =>
+      aggregateSpending(
+        [tx({ amountCents: Number.MAX_SAFE_INTEGER }), tx({ amountCents: 1 })],
+        window
+      )
+    ).toThrow(/safe integer/);
+    const maximum = aggregateSpending([tx({ amountCents: Number.MAX_SAFE_INTEGER })], window);
+    expect(() =>
+      mergeSpendingMonths(window, [maximum, aggregateSpending([tx({ amountCents: 1 })], window)])
+    ).toThrow(/safe integer/);
+  });
+
   it("sums signed cents per category with refunds netting, uncategorized bucketed", () => {
     const rows = [
       tx({ categoryId: "groceries", amountCents: 8_432 }),

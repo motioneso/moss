@@ -28,6 +28,7 @@ const MODULE_NAMES: Record<string, string> = {
 
 /** Plain action sentences for the tools people actually see. Keyed by the full tool name. */
 const ACTIONS: Record<string, string> = {
+  "finance.transaction.split": "Split a transaction into categories",
   "cli-tools.update": "Updated the assistant's command-line tools",
   "mcp.moss.calendar.listVisibleEvents": "Checked your calendar",
   "calendar.createEvent": "Added an event to your calendar",

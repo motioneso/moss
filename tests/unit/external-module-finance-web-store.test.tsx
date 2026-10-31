@@ -16,6 +16,7 @@ vi.mock("../../external-modules/finance/src/web/api", () => ({
 import {
   __resetStoreForTests,
   invalidateQueries,
+  invalidateToolQueries,
   useToolQuery
 } from "../../external-modules/finance/src/web/store";
 
@@ -52,6 +53,58 @@ describe("finance tool query store (#3197)", () => {
 
     expect(invokeTool).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(renderer.toJSON())).toContain("n=2");
+  });
+
+  it("refreshes detail reads without refetching unrelated report totals", async () => {
+    function ScopedProbe(props: { name: string }) {
+      const snap = useToolQuery<{ n: number }>(props.name);
+      return createElement("div", null, snap.status);
+    }
+    invokeTool.mockResolvedValue({ kind: "ok", result: { n: 1 } });
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        createElement(
+          "div",
+          null,
+          createElement(ScopedProbe, { name: "finance.reports.transactions" }),
+          createElement(ScopedProbe, { name: "finance.reports.spending" })
+        )
+      );
+    });
+    invokeTool.mockClear();
+    await act(async () => invalidateToolQueries("finance.reports.transactions"));
+    expect(invokeTool).toHaveBeenCalledTimes(1);
+    expect(invokeTool).toHaveBeenLastCalledWith("finance.reports.transactions", undefined);
+    await act(async () => renderer.unmount());
+  });
+
+  it("reads again on the next visit after a failed read, but keeps a good one", async () => {
+    invokeTool
+      .mockResolvedValueOnce({ kind: "error", message: "Network error" })
+      .mockResolvedValueOnce({ kind: "ok", result: { n: 3 } });
+
+    let first!: ReactTestRenderer;
+    await act(async () => {
+      first = create(createElement(Probe));
+    });
+    expect(JSON.stringify(first.toJSON())).toContain("other");
+    await act(async () => first.unmount());
+
+    let second!: ReactTestRenderer;
+    await act(async () => {
+      second = create(createElement(Probe));
+    });
+    expect(invokeTool).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(second.toJSON())).toContain("n=3");
+    await act(async () => second.unmount());
+
+    let third!: ReactTestRenderer;
+    await act(async () => {
+      third = create(createElement(Probe));
+    });
+    expect(invokeTool).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(third.toJSON())).toContain("n=3");
   });
 
   it("ignores an older answer that arrives after a newer one", async () => {

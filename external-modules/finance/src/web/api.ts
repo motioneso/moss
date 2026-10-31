@@ -4,15 +4,15 @@
 // requestJson — the invoke contract carries its payload
 // ({invocation:{blockedReason,...}}) on 403, and requestJson throws away
 // non-2xx bodies. Only risk:read tools are ever invoked here (D4: the REST
-// invoke route 403s non-read tools); every write goes through the module's
-// manual-run queue endpoint via runQueue below.
+// invoke route 403s non-read tools). Legacy writes use runQueue below;
+// reviewed page writes use the separate host-provided tools handle.
 import type { DirectoryUser } from "./household";
 
 export type ToolOutcome<T> =
   | { kind: "ok"; result: T }
   | { kind: "blocked"; reason: string }
   | { kind: "disabled" }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string; retryAfterSeconds?: number };
 
 type InvocationBody = {
   invocation?: {
@@ -34,7 +34,12 @@ export async function invokeTool<T extends Record<string, unknown>>(
   name: string,
   input?: Record<string, unknown>
 ): Promise<ToolOutcome<T>> {
-  let response: { ok: boolean; status: number; json: () => Promise<unknown> };
+  let response: {
+    ok: boolean;
+    status: number;
+    headers?: { get(name: string): string | null };
+    json: () => Promise<unknown>;
+  };
   try {
     response = await fetch(`/api/ai/assistant-tools/${encodeURIComponent(name)}/invoke`, {
       method: "POST",
@@ -48,6 +53,16 @@ export async function invokeTool<T extends Record<string, unknown>>(
   // 404 = tool not declared = module disabled/uninstalled server-side. A stale
   // browser session must fail closed to the disabled state (job-search spec).
   if (response.status === 404) return { kind: "disabled" };
+  if (response.status === 429) {
+    const supplied = Number(response.headers?.get("retry-after"));
+    const seconds =
+      Number.isFinite(supplied) && supplied >= 1 && supplied <= 3600 ? Math.ceil(supplied) : 60;
+    return {
+      kind: "error",
+      message: `Finance is temporarily busy. Wait ${seconds} second${seconds === 1 ? "" : "s"}, then try again. Your inputs are kept.`,
+      retryAfterSeconds: seconds
+    };
+  }
   const body = (await parseJson(response)) as InvocationBody | null;
   const invocation = body?.invocation;
   if (response.ok && invocation?.status === "succeeded") {

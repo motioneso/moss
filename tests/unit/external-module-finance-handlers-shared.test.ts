@@ -206,6 +206,20 @@ const SHARED_META = {
 };
 
 describe("finance.account.set-shared / finance.share-apply (#1149)", () => {
+  it("keeps manual accounts private until the mirror supports ledger updates", async () => {
+    const kv = fakeKv();
+    await kv.set(NS.accounts, "acc-1", accountRecord({ source: "manual", itemId: null }));
+    const { mirror, setKeys } = fakeMirror();
+    await expect(
+      accountSetSharedHandler(fakePorts({ kv, mirror }))({
+        actorUserId: OWNER,
+        accountId: "acc-1",
+        shared: true
+      })
+    ).rejects.toMatchObject({ code: "manual_sharing_unavailable" });
+    expect(setKeys).toEqual([]);
+    expect((await kv.get(NS.accounts, "acc-1"))?.sharedToHousehold).toBeUndefined();
+  });
   it("ON flips the record and mirrors meta + every stored month, allowlisted", async () => {
     const kv = fakeKv();
     await seedOwnedAccount(kv);

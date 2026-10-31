@@ -1,0 +1,227 @@
+/* Charts: hairline grid, 2px lines, columns capped at 24px. Series one is steel and series two
+   is gold in every theme; a single trend line takes the accent. */
+.jds-chart {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+}
+.jds-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.jds-chart__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.jds-chart__legend-total {
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.jds-chart__swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: currentColor;
+}
+.jds-chart__swatch--dot {
+  border-radius: 50%;
+}
+.jds-chart__frame {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: 12rem auto;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+.jds-chart__ticks {
+  position: relative;
+  font-size: var(--text-2xs);
+  line-height: 1;
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.jds-chart__tick {
+  position: absolute;
+  right: 0;
+  transform: translateY(50%);
+  white-space: nowrap;
+}
+.jds-chart__tick-size {
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  white-space: nowrap;
+}
+.jds-chart__plot {
+  position: relative;
+  min-width: 0;
+  touch-action: pan-y;
+}
+.jds-chart__plot:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: var(--space-1);
+}
+.jds-chart__grid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px solid var(--border);
+}
+.jds-chart__grid--zero {
+  border-top-color: var(--border-strong);
+}
+.jds-chart__cols {
+  position: absolute;
+  inset: 0;
+  display: grid;
+}
+.jds-chart__col {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+  padding-inline: 15%;
+}
+.jds-chart__col.is-active {
+  background: var(--surface-hover);
+}
+.jds-chart__slot {
+  position: relative;
+  flex: 0 1 24px;
+  min-width: 0;
+}
+.jds-chart__bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-radius: 4px 4px 0 0;
+  background: currentColor;
+}
+.jds-chart__bar--down {
+  border-radius: 0 0 4px 4px;
+}
+.jds-chart__dot {
+  position: absolute;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 2px var(--bg);
+  transform: translate(-50%, 50%);
+  pointer-events: none;
+}
+.jds-chart__svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.jds-chart__line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.jds-chart__area {
+  fill: currentColor;
+  fill-opacity: 0.1;
+}
+.jds-chart__cross {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--border-strong);
+  pointer-events: none;
+}
+.jds-chart__x {
+  grid-column: 2;
+  display: grid;
+  font-size: var(--text-2xs);
+  color: var(--text-subtle);
+  text-align: center;
+  white-space: nowrap;
+}
+.jds-chart__x--ends {
+  display: flex;
+  justify-content: space-between;
+}
+.jds-chart__tip {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.jds-chart__tip--start {
+  transform: none;
+}
+.jds-chart__tip--end {
+  transform: translateX(-100%);
+}
+.jds-chart__tip-title {
+  color: var(--text);
+  font-weight: 600;
+}
+.jds-chart__tip-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.jds-chart__tip-row strong {
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.jds-chart__key-line {
+  flex: none;
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+}
+.jds-chart__tone--1 {
+  color: var(--steel);
+}
+.jds-chart__tone--2 {
+  color: var(--gold-strong);
+}
+.jds-chart__tone--ink {
+  color: var(--text);
+}
+.jds-chart__tone--accent {
+  color: var(--accent-meter);
+}
+@media (max-width: 480px) {
+  .jds-chart__frame {
+    grid-template-rows: 10rem auto;
+  }
+  .jds-chart__x-minor {
+    visibility: hidden;
+  }
+}
