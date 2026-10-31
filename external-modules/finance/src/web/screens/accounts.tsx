@@ -283,8 +283,13 @@ function AccountsBody(props: {
 
       {closed.length ? (
         <section aria-label="Closed manual accounts" className="fnm-block fnm-block--tight">
-          <DisclosureToggle expanded={showClosed} onClick={() => setShowClosed(!showClosed)}>
+          <DisclosureToggle
+            expanded={showClosed}
+            className="fnm-disclosure-head"
+            onClick={() => setShowClosed(!showClosed)}
+          >
             Closed accounts ({closed.length})
+            <span className="fnm-disclosure-marker" aria-hidden="true" />
           </DisclosureToggle>
           {showClosed ? (
             <RowIndex density="compact">

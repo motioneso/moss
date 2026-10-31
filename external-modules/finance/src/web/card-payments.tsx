@@ -42,12 +42,8 @@ export function CardPayments(props: {
   if (!d.cardPayments.length && !d.cardChoices.length) return null;
   const disabled = props.disabled || !props.tools || d.month !== d.currentMonth;
   return (
-    <section className="fnm-block" aria-label="Card payments">
+    <section className="fnm-block fnm-block--tight" aria-label="Card payments">
       <SectionHead title="Card payments" rule />
-      <p className="jds-hint">
-        Cash set aside in your budget. Recording a payment happens in Accounts; Moss never sends
-        money.
-      </p>
       {d.month !== d.currentMonth ? (
         <Note variant="practical">
           Review payment cash in the current month. This month's saved accounting stays intact.
@@ -92,11 +88,14 @@ export function CardPayments(props: {
           </RowIndex>
           <DisclosureToggle
             expanded={details[c.accountId] === true}
+            className="fnm-disclosure-head"
+            aria-label={`Payment activity for ${c.name}`}
             onClick={() =>
               setDetails((current) => ({ ...current, [c.accountId]: !current[c.accountId] }))
             }
           >
-            {details[c.accountId] ? "Hide payment activity" : "See payment activity"}
+            Payment activity
+            <span className="fnm-disclosure-marker" aria-hidden="true" />
           </DisclosureToggle>
           {details[c.accountId] ? (
             <RowIndex variant="facts">
@@ -130,19 +129,14 @@ export function CardPayments(props: {
           {c.unfundedCents > 0 ? (
             <p className="jds-hint">
               {formatCents(c.unfundedCents, d.isoCurrency)} of this month's card purchases has no
-              category funding. It adds debt, never Ready to assign.
+              category funding.
             </p>
           ) : null}
         </section>
       ))}
       {d.cardChoices.map((c) => (
         <div key={c.accountId} className="fnm-spread">
-          <div>
-            <strong>{c.name}</strong>
-            <p className="jds-hint">
-              Full-debt accounting. Review before switching to cash reserved for payment.
-            </p>
-          </div>
+          <strong>{c.name}</strong>
           <Button
             size="sm"
             variant="secondary"

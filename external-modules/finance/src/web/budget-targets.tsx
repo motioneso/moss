@@ -53,46 +53,50 @@ export function BudgetTargets(props: BudgetTargetsProps): ReactNodeLike {
   const canEdit = !editing || categories.some((c) => c.id === editing);
   const editorCategories =
     editing && !canEdit ? [...categories, { id: editing, name: targetName(editing) }] : categories;
+  const addTarget = (
+    <Button
+      size="sm"
+      variant="secondary"
+      disabled={!props.tools || disabled || !categories.length}
+      onClick={() => setEditing("")}
+    >
+      Add a target
+    </Button>
+  );
   return (
-    <section className="fnm-block" aria-label="Category targets">
+    <section className="fnm-block fnm-block--tight" aria-label="Category targets">
       <SectionHead title="Plan for what matters" rule />
-      <p className="jds-hint">
-        Set a plan for each category. Funding is a separate, reviewed choice.
-      </p>
       {props.targets.length ? (
-        <RowIndex density="compact">
-          {props.targets.map((target) => (
-            <RowIndexItem
-              key={target.categoryId}
-              title={targetName(target.categoryId)}
-              excerpt={targetDescription(target, props.currency, props.month)}
-              meta={
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={!props.tools || disabled}
-                  onClick={() => setEditing(target.categoryId)}
-                >
-                  {categories.some((c) => c.id === target.categoryId)
-                    ? "Edit target"
-                    : "Review old target"}
-                </Button>
-              }
-            />
-          ))}
-        </RowIndex>
+        <>
+          <RowIndex density="compact">
+            {props.targets.map((target) => (
+              <RowIndexItem
+                key={target.categoryId}
+                title={targetName(target.categoryId)}
+                excerpt={targetDescription(target, props.currency, props.month)}
+                meta={
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!props.tools || disabled}
+                    onClick={() => setEditing(target.categoryId)}
+                  >
+                    {categories.some((c) => c.id === target.categoryId)
+                      ? "Edit target"
+                      : "Review old target"}
+                  </Button>
+                }
+              />
+            ))}
+          </RowIndex>
+          <div>{addTarget}</div>
+        </>
       ) : (
-        <p>No targets yet. Choose contributions, monthly refill, or dated savings.</p>
+        <div className="fnm-spread">
+          <p className="jds-hint">No targets yet.</p>
+          {addTarget}
+        </div>
       )}
-      <div>
-        <Button
-          variant="secondary"
-          disabled={!props.tools || disabled || !categories.length}
-          onClick={() => setEditing("")}
-        >
-          Add a target
-        </Button>
-      </div>
       {waiting ? (
         <p role="status">
           Refreshing saved target totals. If this stays here, check saved records.

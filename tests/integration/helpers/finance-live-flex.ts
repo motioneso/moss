@@ -66,7 +66,7 @@ export async function exerciseFlex(
       [FLEX_POOL]: { assignedCents: 20000, activityCents: 8243, availableCents: 11757 }
     }
   });
-  await page.getByRole("button", { name: "See flexible spending detail", exact: true }).click();
+  await page.getByRole("button", { name: "Flexible spending detail", exact: true }).click();
   for (const theme of ["light", "dark", "sage"]) {
     await page.evaluate((theme) => {
       document.documentElement.dataset.theme = theme;

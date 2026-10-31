@@ -65,11 +65,11 @@ export async function exerciseManualNetWorth(
       .getByRole("heading", { name: formatCents(123450, "EUR"), exact: true, level: 3 })
       .waitFor();
     await region.getByText("1 of 1 account included in this total.", { exact: true }).waitFor();
-    const sources = region.getByRole("button", { name: "Show balance sources", exact: true });
+    const sources = region.getByRole("button", { name: "Balance sources", exact: true });
     await sources.focus();
     await sources.press("Enter");
     await region.getByText(`Manual ledger through ${date}`, { exact: true }).waitFor();
-    const history = region.getByRole("button", { name: "Show balance history", exact: true });
+    const history = region.getByRole("button", { name: "Balance history", exact: true });
     await history.focus();
     await history.press("Space");
     await region

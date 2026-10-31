@@ -75,35 +75,34 @@ export function MerchantRulesSection(props: {
   );
   return (
     <section aria-label="Merchant rules" className="fnm-block fnm-block--tight">
-      <div className="fnm-spread">
-        <SectionHead title="Merchant rules" rule />
-        <Button
-          variant="secondary"
-          disabled={!ready || !props.tools}
-          onClick={() => setDialog({ scope: props.tools, rule: null })}
-        >
-          Add merchant rule
-        </Button>
-      </div>
-      <p className="jds-hint">
-        One normalized merchant, one category. Rules sort future uncategorized arrivals and preserve
-        existing history.
-      </p>
-      <div className="fnm-register-filters">
-        <label className="fnm-block fnm-block--tight">
-          Find a rule
-          <input
-            className="jds-input"
-            aria-label="Search merchant rules"
-            maxLength={200}
-            value={draftSearch}
-            disabled={loading || cooldown.cooling}
-            onChange={(e) => setSearch(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !loading && !cooldown.cooling) void load(draftSearch.trim());
-            }}
-          />
-        </label>
+      <SectionHead
+        title="Merchant rules"
+        rule
+        align="center"
+        meta={
+          <Button
+            variant="secondary"
+            disabled={!ready || !props.tools}
+            onClick={() => setDialog({ scope: props.tools, rule: null })}
+          >
+            Add merchant rule
+          </Button>
+        }
+      />
+      <div className="fnm-chips">
+        <input
+          className="jds-input fnm-search"
+          type="search"
+          placeholder="Find a merchant"
+          aria-label="Search merchant rules"
+          maxLength={200}
+          value={draftSearch}
+          disabled={loading || cooldown.cooling}
+          onChange={(e) => setSearch(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !loading && !cooldown.cooling) void load(draftSearch.trim());
+          }}
+        />
         <Button
           variant="secondary"
           disabled={loading || cooldown.cooling}
@@ -155,11 +154,12 @@ export function MerchantRulesSection(props: {
         </Note>
       ) : data?.ready ? (
         <>
-          <p className="jds-hint">
-            {data.rules?.length ?? 0} of {data.total ?? 0} rules loaded
-            {saved?.search ? ` for “${saved.search}”` : ""}. Search matches merchant letters,
-            ignoring digits and punctuation.
-          </p>
+          {data.total ? (
+            <p className="jds-hint">
+              {data.rules?.length ?? 0} of {data.total} rules loaded
+              {saved?.search ? ` for “${saved.search}”` : ""}
+            </p>
+          ) : null}
           {data.rules?.length ? (
             <RowIndex density="compact">
               {data.rules.map((r) => {
@@ -193,11 +193,7 @@ export function MerchantRulesSection(props: {
               })}
             </RowIndex>
           ) : (
-            <p>
-              {saved?.search
-                ? "No rules match this search. Try a merchant name without numbers."
-                : "No merchant rules yet. Preview a merchant match before adding your first rule."}
-            </p>
+            <p>{saved?.search ? "No rules match this search." : "No merchant rules yet."}</p>
           )}
           {(data.rules?.length ?? 0) < (data.total ?? 0) ? (
             data.limit! < 1000 ? (

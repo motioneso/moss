@@ -213,15 +213,12 @@ export async function exerciseMerchantRules(
     await search.fill("Synthetic Shop 123");
     await section.getByRole("button", { name: "Search rules", exact: true }).click();
     await section
-      .getByText(
-        "1 of 1 rules loaded for “Synthetic Shop 123”. Search matches merchant letters, ignoring digits and punctuation.",
-        { exact: true }
-      )
+      .getByText("1 of 1 rules loaded for “Synthetic Shop 123”", { exact: true })
       .waitFor();
     await search.fill("No matched merchant");
     await section.getByRole("button", { name: "Search rules", exact: true }).click();
     await section
-      .getByText("No rules match this search. Try a merchant name without numbers.", {
+      .getByText("No rules match this search.", {
         exact: true
       })
       .waitFor();

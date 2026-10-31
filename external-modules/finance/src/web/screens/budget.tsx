@@ -176,9 +176,16 @@ function CollapsedBalances(props: { accounts: BudgetAccount[]; currency: string 
   return (
     <section className="fnm-block fnm-block--tight">
       <SectionHead
+        wrap
         title={
-          <DisclosureToggle expanded={open} controls="fnm-balances" onClick={() => setOpen(!open)}>
+          <DisclosureToggle
+            expanded={open}
+            controls="fnm-balances"
+            className="fnm-disclosure-head"
+            onClick={() => setOpen(!open)}
+          >
             Budget accounts
+            <span className="fnm-disclosure-marker" aria-hidden="true" />
           </DisclosureToggle>
         }
         meta={

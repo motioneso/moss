@@ -46,16 +46,10 @@ export function FlexBudgetPanel(props: {
   const d = props.data;
   const active = d.flex?.active === true;
   return (
-    <section className="fnm-block" aria-label="Budget planning mode">
+    <section className="fnm-block fnm-block--tight" aria-label="Budget planning mode">
+      <SectionHead title="Planning mode" rule />
       <div className="fnm-spread">
-        <div className="fnm-inline">
-          <Badge>{active ? "Flexible pool" : "Category envelopes"}</Badge>
-          <p className="jds-hint">
-            {active
-              ? "One funded total for your flexible categories."
-              : "Give each category its own available money."}
-          </p>
-        </div>
+        <Badge>{active ? "Flexible pool" : "Category envelopes"}</Badge>
         <Button
           size="sm"
           variant="secondary"
@@ -81,21 +75,20 @@ export function FlexBudgetPanel(props: {
         </Note>
       ) : null}
       {d.month !== d.currentMonth ? (
-        <p className="jds-hint">
-          Planning mode changes happen in the current month. This month's saved policy is preserved.
-        </p>
+        <p className="jds-hint">Change planning mode in the current month.</p>
       ) : null}
       {active ? (
         <>
-          <DisclosureToggle expanded={detail} onClick={() => setDetail(!detail)}>
-            {detail ? "Hide flexible spending detail" : "See flexible spending detail"}
+          <DisclosureToggle
+            expanded={detail}
+            className="fnm-disclosure-head"
+            onClick={() => setDetail(!detail)}
+          >
+            Flexible spending detail
+            <span className="fnm-disclosure-marker" aria-hidden="true" />
           </DisclosureToggle>
           {detail ? (
             <div className="fnm-block">
-              <p className="jds-hint">
-                Category detail is informational. Spending and money are counted once in the
-                flexible pool.
-              </p>
               <RowIndex density="compact">
                 {d.flexDetail.map((row) => (
                   <RowIndexItem

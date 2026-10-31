@@ -41,8 +41,13 @@ export function NetWorthHistory(props: {
           open sources to see what is missing.
         </Note>
       ) : null}
-      <DisclosureToggle expanded={sources} onClick={() => setSources(!sources)}>
-        {sources ? "Hide balance sources" : "Show balance sources"}
+      <DisclosureToggle
+        expanded={sources}
+        className="fnm-disclosure-head"
+        onClick={() => setSources(!sources)}
+      >
+        Balance sources
+        <span className="fnm-disclosure-marker" aria-hidden="true" />
       </DisclosureToggle>
       {sources ? (
         <RowIndex density="compact">
@@ -70,8 +75,13 @@ export function NetWorthHistory(props: {
       ) : null}
       {props.points.length ? (
         <>
-          <DisclosureToggle expanded={history} onClick={() => setHistory(!history)}>
-            {history ? "Hide balance history" : "Show balance history"}
+          <DisclosureToggle
+            expanded={history}
+            className="fnm-disclosure-head"
+            onClick={() => setHistory(!history)}
+          >
+            Balance history
+            <span className="fnm-disclosure-marker" aria-hidden="true" />
           </DisclosureToggle>
           {history ? (
             <div className="fnm-block fnm-block--tight">

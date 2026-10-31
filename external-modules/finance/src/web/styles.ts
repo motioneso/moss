@@ -126,9 +126,9 @@ export const MODULE_STYLES = `
 .fnm-weeks { display: flex; flex-direction: column; gap: var(--space-5); margin-top: var(--space-3); }
 .fnm-week { display: flex; flex-direction: column; gap: var(--space-2); }
 .fnm-week > h3 { margin: 0; }
-/* Bill row meta: status and amount on one line, actions in at most two rows.
+/* Bill row meta: status and amount on one line, actions on one row at desktop width.
    Stacked phone rows hand the actions to the detail panel. */
-.fnm-occ { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-3); max-width: 26rem; }
+.fnm-occ { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-3); max-width: 38rem; }
 .fnm-occ .fnm-occ__actions { justify-content: flex-end; }
 .fnm-occ .fnm-occ__open { display: none; }
 @media (max-width: 560px) {

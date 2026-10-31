@@ -153,7 +153,9 @@ export async function exerciseCardReserves(
     const reviewButton = page.getByRole("button", { name: "Review payment cash", exact: true });
     await waitForAction(reviewButton);
     await capture("saved");
-    await page.getByRole("button", { name: "See payment activity", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Payment activity for Synthetic reserve card", exact: true })
+      .click();
     await page.getByText("Funded purchases this month", { exact: true }).waitFor();
     await capture("activity");
     // Record the payment through Accounts and the real guarded transfer tool, not a store stub.
