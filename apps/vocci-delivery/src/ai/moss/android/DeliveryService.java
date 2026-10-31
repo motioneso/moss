@@ -173,10 +173,6 @@ public final class DeliveryService extends Service {
         try {
             Map<String, Integer> inventory = active.inventory();
             RingTiming.mark("listing_done");
-            String named = active.announced();
-            RingTiming.mark("announced_in_listing opus=" + inventory.containsKey(named) + " opus_ext=" + inventory.containsKey(named + ".opus") + " json_ext=" + inventory.containsKey(named + ".json"));
-            { int index = 0, firstNew = -1, lastNew = -1; for (String entry : inventory.keySet()) { if (!previousInventory.containsKey(entry)) { if (firstNew < 0) firstNew = index; lastNew = index; } index++; }
-              RingTiming.mark("new_entries first=" + firstNew + " last=" + lastNew + " of=" + index); }
             long inventoryAt = System.currentTimeMillis();
             store.recordings.inventory(inventory, inventoryAt);
             voice.inventory(inventory, client);

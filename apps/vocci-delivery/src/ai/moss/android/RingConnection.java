@@ -132,7 +132,7 @@ final class RingConnection implements AutoCloseable {
     private void note(int command, byte[] payload) {
         if (command == RingTelemetry.RECORDING && payload.length > 2 && (payload[1] & 255) <= payload.length - 2) {
             announced = new String(payload, 2, payload[1] & 255, java.nio.charset.StandardCharsets.UTF_8);
-            RingTiming.mark("announce state" + (payload[0] & 255) + " namelen" + announced.length() + " valid=" + RingProtocol.validName(announced + ".opus"));
+            RingTiming.mark("announce state" + (payload[0] & 255) + " namelen" + announced.length());
         }
         telemetry.accept(command, payload, System.currentTimeMillis());
         if (watcher.accept(command, payload)) release();
