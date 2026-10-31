@@ -293,14 +293,18 @@ export function ChatDrawer(props: ChatDrawerProps) {
       setSendError(null);
       setNeedsProvider(false);
       setIsSending(true);
+      // Binding a different live thread empties the live log, so nothing earlier can match.
+      const clearsLiveLog = initiatingThreadId !== null && liveThreadId !== initiatingThreadId;
       setPendingUser({
         text: trimmed,
         attachments,
-        priorMatches: props.records.filter((r) => r.kind === "user" && r.text === trimmed).length
+        priorMatches: clearsLiveLog
+          ? 0
+          : props.records.filter((r) => r.kind === "user" && r.text === trimmed).length
       });
       const initiatingSurface = props.surface;
       const generation = generationRef.current;
-      if (initiatingThreadId !== null && liveThreadId !== initiatingThreadId) {
+      if (clearsLiveLog) {
         props.clearRecords(initiatingThreadId);
         setLiveThreadId(initiatingThreadId);
       }

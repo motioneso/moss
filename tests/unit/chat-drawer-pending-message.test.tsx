@@ -83,6 +83,10 @@ it("keeps the sent message on screen while the turn runs, even when an earlier m
   );
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const earlier = { kind: "user" as const, text: "hi", messageId: "user-1" };
+  let live: readonly TranscriptRecord[] = [
+    earlier,
+    { kind: "reply" as const, text: "hello", messageId: "assistant-1" }
+  ];
   const element = () =>
     createElement(
       QueryClientProvider,
@@ -93,7 +97,7 @@ it("keeps the sent message on screen while the turn runs, even when an earlier m
         createElement(ChatDrawer, {
           open: true,
           onClose: () => {},
-          records: [earlier, { kind: "reply" as const, text: "hello", messageId: "assistant-1" }],
+          records: live,
           clearRecords: () => {},
           streamErrorCount: 0,
           isFounder: false,
@@ -121,6 +125,10 @@ it("keeps the sent message on screen while the turn runs, even when an earlier m
     });
     const shown = (): readonly TranscriptRecord[] =>
       renderer.root.findByType(VoiceInputThread).props.records;
+    expect(shown().filter((r) => r.kind === "user" && r.text === "hi")).toHaveLength(2);
+    // The saved copy of this send arrives; it replaces the placeholder rather than adding to it.
+    live = [...live, { kind: "user" as const, text: "hi", messageId: "user-2" }];
+    await act(async () => renderer.update(element()));
     expect(shown().filter((r) => r.kind === "user" && r.text === "hi")).toHaveLength(2);
     await act(async () => finish());
     await vi.waitFor(async () => {
