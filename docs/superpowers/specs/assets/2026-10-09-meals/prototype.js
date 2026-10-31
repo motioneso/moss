@@ -751,8 +751,11 @@
     toast("Chat runs the same Meals actions. It is outside this prototype.", { icon: "message-square", tone: "drift" })
   );
 
-  // A number never wraps away from the unit or word after it: "3 lb", "2 × 1 lb", "1½ cups".
-  const keepUnit = (text) => String(text).replace(/(\d[\d.,/¼½¾⅓⅔⅛⅜⅝⅞]*) (?=\S)/g, "$1\u00a0");
+  // A number stays with the unit or word after it, and × with the number after it: "3 lb", "2 × 1 lb", "1½ cups".
+  const keepUnit = (text) =>
+    String(text)
+      .replace(/(\d[\d.,/¼½¾⅓⅔⅛⅜⅝⅞]*) (?=\S)/g, "$1\u00a0")
+      .replace(/× (?=\d)/g, "×\u00a0");
 
   // ---------- Public surface for screen files ----------
 
