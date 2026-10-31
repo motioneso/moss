@@ -12,6 +12,7 @@ import {
   Select,
   TrendChart,
   useEffect,
+  useRef,
   useState,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
@@ -26,7 +27,7 @@ import {
   monthLabel,
   shortMonthLabel
 } from "../format";
-import { EmptyState, outcomeGate } from "../states";
+import { DegradedState, EmptyState, LoadingState, outcomeGate } from "../states";
 import { invalidateToolQueries, useToolQuery } from "../store";
 import { navigate } from "../router";
 import type { DirectoryUser } from "../household";
@@ -79,6 +80,12 @@ interface BarRow {
   label: string;
   cents: number;
 }
+
+/** The household directory read. Shared spending merges once it has loaded. */
+type Directory =
+  | { status: "loading" }
+  | { status: "failed" }
+  | { status: "loaded"; users: DirectoryUser[] };
 
 /** Sort a byCategory/byPayee record into descending bar rows. */
 function toRows(record: Record<string, number>, label: (key: string) => string): BarRow[] {
@@ -207,27 +214,30 @@ function NetWorthSection(props: { result: NetWorthResult }): ReactNodeLike {
 
 function SpendingSection(props: {
   result: SpendingResult;
-  directory: DirectoryUser[] | null;
+  directory: Directory;
+  onRetryDirectory: () => void;
   onSelect: (selection: ReportSelection) => void;
 }): ReactNodeLike {
   const { window: windowMonths, own, shared, categories, currency } = props.result;
+  const { directory } = props;
   if (!currency)
     return (
       <EmptyState title="No transactions yet" body="Add or import transactions in Accounts." />
     );
-  const directory = props.directory;
-  // FIN-04/#1149 fail-closed posture: a shared contribution merges ONLY when
-  // its owner resolves in the user directory. A null directory (fetch failed
-  // or not loaded yet) silently degrades to own-only totals — never
-  // unattributed household money in the report.
-  const resolvable =
-    directory === null
-      ? []
-      : shared.filter((entry) => directory.some((user) => user.id === entry.ownerUserId));
-  const merged = mergeSpendingMonths(windowMonths, [
-    own,
-    ...resolvable.map((entry) => entry.months)
-  ]);
+  // A shared contribution merges only when its owner resolves in the household directory.
+  // The report waits for the directory, and says so when it cannot load.
+  if (shared.length > 0 && directory.status === "loading")
+    return <LoadingState label="Loading spending reports" />;
+  const users = directory.status === "loaded" ? directory.users : [];
+  const resolvable = shared.filter((entry) => users.some((user) => user.id === entry.ownerUserId));
+  let merged: MonthSpending[];
+  try {
+    merged = mergeSpendingMonths(windowMonths, [own, ...resolvable.map((entry) => entry.months)]);
+  } catch {
+    return (
+      <DegradedState detail="Spending is unavailable because the amounts are too large to add up exactly." />
+    );
+  }
   // Window is ascending, so the last merged entry is the current month —
   // the breakdown the bars show (the cash-flow table covers the rest).
   const latest = merged[merged.length - 1];
@@ -262,6 +272,16 @@ function SpendingSection(props: {
   const payeeRows = payeeRowsAll.slice(0, PAYEE_CAP);
   return (
     <div className="fnm-stack">
+      {shared.length > 0 && directory.status === "failed" ? (
+        <div className="fnm-block fnm-block--tight">
+          <Note variant="practical">Shared household spending is unavailable.</Note>
+          <div>
+            <Button variant="secondary" size="sm" onClick={props.onRetryDirectory}>
+              Try again
+            </Button>
+          </div>
+        </div>
+      ) : null}
       {resolvable.length > 0 ? (
         <p className="jds-caption">Includes shared household accounts</p>
       ) : null}
@@ -476,16 +496,21 @@ export function ReportsScreen(): ReactNodeLike {
   const [months, setMonths] = useState(6);
   const [selection, setSelection] = useState<ReportSelection | null>(null);
   const [currency, setCurrency] = useState("");
-  // Owner directory for the household merge; null = not loaded / failed, in
-  // which case the merge drops every shared contribution (fail closed).
-  const [directory, setDirectory] = useState<DirectoryUser[] | null>(null);
-  useEffect(() => {
-    let cancelled = false;
+  const [directory, setDirectory] = useState<Directory>({ status: "loading" });
+  const directoryRun = useRef(0);
+  // A loaded directory stays in view while a refresh reads it again.
+  const loadDirectory = () => {
+    const run = ++directoryRun.current;
+    setDirectory((old) => (old.status === "loaded" ? old : { status: "loading" }));
     void fetchUserDirectory().then((users) => {
-      if (!cancelled) setDirectory(users);
+      if (run === directoryRun.current)
+        setDirectory(users === null ? { status: "failed" } : { status: "loaded", users });
     });
+  };
+  useEffect(() => {
+    loadDirectory();
     return () => {
-      cancelled = true;
+      directoryRun.current += 1;
     };
   }, []);
   const input = { months, ...(currency ? { currency } : {}) };
@@ -550,6 +575,7 @@ export function ReportsScreen(): ReactNodeLike {
             onClick={() => {
               invalidateToolQueries("finance.reports.spending");
               invalidateToolQueries("finance.reports.net-worth");
+              loadDirectory();
             }}
           >
             Refresh
@@ -557,10 +583,7 @@ export function ReportsScreen(): ReactNodeLike {
         </div>
       )}
       {chooseCurrency ? (
-        <EmptyState
-          title="Choose a currency"
-          body="Each currency reports on its own, with no conversion."
-        />
+        <EmptyState title="Choose a currency" />
       ) : nothingYet ? (
         <EmptyState
           title="Nothing to report yet"
@@ -584,6 +607,7 @@ export function ReportsScreen(): ReactNodeLike {
               <SpendingSection
                 result={result}
                 directory={directory}
+                onRetryDirectory={loadDirectory}
                 onSelect={(scope) => {
                   invalidateToolQueries("finance.reports.transactions");
                   setSelection(scope);

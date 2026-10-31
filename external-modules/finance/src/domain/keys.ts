@@ -10,7 +10,7 @@ import { createHash } from "node:crypto";
 import { FinanceKvError } from "./errors.js";
 import { isCalendarDate } from "./values.js";
 
-export { normalizePayee } from "./payee.js";
+export { normalizePayee, payeeLength, RULE_PAYEE_MAX_CHARS } from "./payee.js";
 
 // 32 hex chars = 128 bits of sha256 (job-search keys.ts precedent) —
 // collision-safe at personal-finance scale.

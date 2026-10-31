@@ -111,6 +111,8 @@ describe("report detail review scope and pagination", () => {
     expect(text).toContain("Whole transaction:");
     expect(text).toContain("$1.50");
     expect(text).toContain("Pending");
+    expect(text).toContain("Oct 15");
+    expect(text).not.toContain("2026-10-15");
     await act(async () => r.unmount());
   });
   it("paginates loaded records without presenting the page sum as the full total", async () => {

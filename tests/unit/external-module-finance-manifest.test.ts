@@ -193,6 +193,7 @@ describe("finance manifest contract (#1146)", () => {
         // #3186: the Settings activity list.
         ["finance.activity.list", "activity.list"],
         ["finance.target.set", "target.set"],
+        ["finance.target.remove", "target.remove"],
         ["finance.bills.read", "bills.read"],
         ["finance.bills.suggestions", "bills.suggestions"],
         ["finance.bills.suggestions.dismiss", "bills.suggestion-dismiss"],
@@ -249,6 +250,11 @@ describe("finance manifest contract (#1146)", () => {
       executionPolicy: "confirm",
       confirmWhenKeys: ["transactionId", "accountId", "month", "writeRevision", "notes"]
     });
+    // Removing a target is a delete, so the page and chat both ask first and it can never auto-run.
+    expect(toolByName("finance.target.remove")).toMatchObject({ risk: "destructive" });
+    expect(toolByName("finance.target.remove").executionPolicy).toBeUndefined();
+    expect(toolByName("finance.target.remove").actionFamilyId).toBeUndefined();
+    expect(JSON.stringify(toolByName("finance.target.set").inputSchema)).not.toContain("removed");
     expect(toolByName("finance.bill.entry-preview")).toMatchObject({ risk: "read" });
     expect(toolByName("finance.bills.suggestions")).toMatchObject({ risk: "read" });
     expect(toolByName("finance.bills.suggestions.dismiss")).toMatchObject({

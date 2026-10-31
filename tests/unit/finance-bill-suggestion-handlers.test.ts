@@ -197,6 +197,36 @@ describe("finance.bills.suggestions.dismiss", () => {
     expect(f.dismiss).not.toHaveBeenCalled();
   });
 
+  it("measures the key length in characters, up to 160", async () => {
+    const astral = "\u{1D41A}";
+    for (const payeeKey of ["a".repeat(160), astral.repeat(160)]) {
+      const f = fixture();
+      await billSuggestionDismissHandler(f.ports)({ ...input, payeeKey });
+      expect(f.dismiss).toHaveBeenCalledOnce();
+    }
+    for (const payeeKey of ["a".repeat(161), astral.repeat(161)]) {
+      const f = fixture();
+      await expect(billSuggestionDismissHandler(f.ports)({ ...input, payeeKey })).rejects.toThrow();
+      expect(f.dismiss).not.toHaveBeenCalled();
+    }
+  });
+
+  it("dismisses a suggestion whose payee name was longer than the key allows", async () => {
+    const name = "Synthetic Film Club ".repeat(12);
+    const f = fixture({ rows: monthly("long", name) });
+    const { suggestions } = await read(f);
+    const payeeKey = suggestions![0]!.payeeKey;
+
+    // The cut falls on a space, so the key ends at the word before it.
+    expect(payeeKey).toHaveLength(159);
+    expect(payeeKey.endsWith("club")).toBe(true);
+    expect(await billSuggestionDismissHandler(f.ports)({ ...input, payeeKey })).toMatchObject({
+      status: "ok",
+      payeeKey
+    });
+    expect(f.dismiss).toHaveBeenCalledOnce();
+  });
+
   it("refuses an account that is not the owner's", async () => {
     const f = fixture();
     f.dismiss.mockResolvedValueOnce(false);

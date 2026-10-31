@@ -10,7 +10,7 @@ import {
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import type { ReportDetailRow, ReportDetailScope } from "../domain/report-details";
-import { formatCents, monthLabel } from "./format";
+import { formatCents, monthLabel, shortDayLabel } from "./format";
 import { outcomeGate } from "./states";
 import { invalidateToolQueries, useToolQuery } from "./store";
 import { useReadCooldown } from "./read-cooldown";
@@ -97,13 +97,7 @@ export function ReportDetails(props: {
     >
       <div className="fnm-block">
         <p>
-          Report amount: <strong>{formatCents(scope.expectedCents, scope.currency)}</strong>. Each
-          row shows its contribution to this view; a split can contribute less than its whole
-          transaction.
-        </p>
-        <p className="jds-hint">
-          Pending entries are included, refunds reduce spending, and transfers are excluded within
-          each owner's accounts. Shared entries remain read only.
+          Report amount: <strong>{formatCents(scope.expectedCents, scope.currency)}</strong>
         </p>
         {query.status === "settled" && query.outcome.kind === "error" ? (
           <p role="alert">
@@ -141,7 +135,7 @@ export function ReportDetails(props: {
                         excerpt={
                           <div className="fnm-block fnm-block--tight">
                             <span>
-                              {row.date} · {row.accountName}
+                              {shortDayLabel(row.date)} · {row.accountName}
                             </span>
                             <div className="fnm-chips">
                               {row.pending ? <Badge tone="steel">Pending</Badge> : null}

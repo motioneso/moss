@@ -14,3 +14,11 @@ export function normalizePayee(name: string): string {
     .replace(/\s+/gu, " ")
     .trim();
 }
+
+/** The longest payee key a stored merchant rule holds. */
+export const RULE_PAYEE_MAX_CHARS = 200;
+
+/** Characters as the database counts them, one per code point rather than per UTF-16 unit. */
+export function payeeLength(text: string): number {
+  return Array.from(text).length;
+}

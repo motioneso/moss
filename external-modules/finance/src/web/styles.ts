@@ -87,7 +87,7 @@ export const MODULE_STYLES = `
 .fnm-col-name { width: 34%; }
 .fnm-cell-stack { display: flex; flex-direction: column; gap: var(--space-2); min-width: 9rem; }
 .fnm-cell-meter { width: 7rem; margin-left: auto; }
-.fnm-assign { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-2); }
+.fnm-assign { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-3); }
 .fnm-field-error { width: 100%; max-width: 24rem; white-space: normal; text-align: start; }
 .fnm-assign__input { width: 100%; max-width: 9rem; text-align: right; }
 .fnm-col-assign { width: 9rem; }
@@ -112,7 +112,7 @@ export const MODULE_STYLES = `
 .fnm-txline { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: var(--space-1) var(--space-3); }
 .fnm-txline--check { grid-template-columns: auto minmax(0, 1fr) auto; }
 .fnm-txline__check { grid-row: 1 / span 2; align-self: start; }
-.fnm-txline__body { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.fnm-txline__body { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
 .fnm-txline--check .fnm-txline__body { grid-column: 2 / -1; }
 .fnm-txline__body > .fnm-row-badges { margin-top: 0; }
 .fnm-txline__name { min-width: 0; overflow-wrap: anywhere; }

@@ -50,6 +50,13 @@ export interface BillSuggestion {
 
 export const SUGGESTION_LOOKBACK_DAYS = 400;
 export const SUGGESTION_LIMIT = 20;
+/** The longest payee key a dismissal stores. */
+export const SUGGESTION_PAYEE_KEY_MAX = 160;
+
+/** The payee key a suggestion carries: cleaned, cut to the dismissal limit, end trimmed. */
+export function suggestionPayeeKey(text: string): string {
+  return Array.from(normalizePayee(text)).slice(0, SUGGESTION_PAYEE_KEY_MAX).join("").trimEnd();
+}
 
 const DAY = 86_400_000;
 const TOLERANCE: Record<SuggestedCadence, number> = {
@@ -83,8 +90,21 @@ function nextDate(day: string, cadence: SuggestedCadence): string {
   return toDay(Date.UTC(year, month, Math.min(date.getUTCDate(), last)));
 }
 
+const isMonthEnd = (day: string) => new Date(toTime(day) + DAY).getUTCDate() === 1;
+
+/** The last day of the month after the one holding `day`. */
+function nextMonthEnd(day: string): string {
+  const date = new Date(toTime(day));
+  return toDay(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 2, 0));
+}
+
 function fits(previous: string, current: string, cadence: SuggestedCadence): boolean {
-  const drift = Math.abs(toTime(current) - toTime(nextDate(previous, cadence))) / DAY;
+  const expected = [nextDate(previous, cadence)];
+
+  // A bill due at month end follows the last day, so a short month does not pull it earlier.
+  if (cadence === "monthly" && isMonthEnd(previous)) expected.push(nextMonthEnd(previous));
+
+  const drift = Math.min(...expected.map((day) => Math.abs(toTime(current) - toTime(day)) / DAY));
   return drift <= TOLERANCE[cadence];
 }
 
@@ -142,7 +162,7 @@ export function suggestBills(input: {
   const groups = new Map<string, { payeeKey: string; charges: SuggestionCharge[] }>();
   for (const charge of input.charges) {
     if (!(charge.amountCents > 0)) continue;
-    const payeeKey = normalizePayee(charge.merchant ?? charge.name);
+    const payeeKey = suggestionPayeeKey(charge.merchant ?? charge.name);
     if (!payeeKey) continue;
     const id = `${charge.accountId}\u0000${payeeKey}`;
     const group = groups.get(id) ?? { payeeKey, charges: [] };
@@ -183,7 +203,7 @@ export function suggestBills(input: {
         !input.plans.some(
           (plan) =>
             plan.accountId === s.accountId &&
-            (normalizePayee(plan.name) === s.payeeKey ||
+            (suggestionPayeeKey(plan.name) === s.payeeKey ||
               (plan.cadence === s.cadence &&
                 near(plan.amountCents, s.amountCents, 0.25) &&
                 dueNear(plan, s)))

@@ -45,19 +45,31 @@ const results: Record<string, unknown> = {
   }
 };
 
+// One reply per household list read, in order; the last one repeats.
+type DirectoryReply = () => Promise<{ ok: boolean; json: () => Promise<unknown> }>;
+const emptyDirectory: DirectoryReply = async () => ({
+  ok: true,
+  json: async () => ({ users: [] })
+});
+let directoryReplies: DirectoryReply[] = [emptyDirectory];
+let directoryReads = 0;
+
 function fakeFetch() {
+  directoryReads = 0;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
+      if (url === "/api/users/directory") {
+        const reply = directoryReplies[Math.min(directoryReads, directoryReplies.length - 1)]!;
+        directoryReads += 1;
+        return reply();
+      }
       const tool = decodeURIComponent(/assistant-tools\/([^/]+)\/invoke/.exec(url)?.[1] ?? "");
       return {
         ok: true,
         status: 200,
         headers: { get: () => null },
-        json: async () =>
-          url === "/api/users/directory"
-            ? { users: [] }
-            : { invocation: { status: "succeeded", result: results[tool] } }
+        json: async () => ({ invocation: { status: "succeeded", result: results[tool] } })
       };
     })
   );
@@ -83,6 +95,7 @@ afterEach(async () => {
   host = null;
   __resetStoreForTests();
   vi.unstubAllGlobals();
+  directoryReplies = [emptyDirectory];
 });
 
 const region = (name: string) =>
@@ -184,5 +197,93 @@ describe("Reports screen charts", () => {
     } finally {
       results["finance.reports.spending"] = original;
     }
+  });
+});
+
+describe("Reports with shared household spending", () => {
+  const original = results["finance.reports.spending"];
+  const withShared = (outflowCents: number, ownOutflowCents = 30_000) => ({
+    ...currency,
+    window: periods,
+    own: [
+      month("2026-08", 100_000, 50_000),
+      month("2026-09", 200_000, 150_000),
+      month("2026-10", 0, ownOutflowCents)
+    ],
+    shared: [
+      {
+        ownerUserId: "u2",
+        months: [month("2026-08", 0, 0), month("2026-09", 0, 0), month("2026-10", 0, outflowCents)]
+      }
+    ],
+    categories: []
+  });
+  const household: DirectoryReply = async () => ({
+    ok: true,
+    json: async () => ({ users: [{ id: "u2", name: "Sam" }] })
+  });
+  const failed: DirectoryReply = async () => ({ ok: false, json: async () => ({}) });
+  const legend = () =>
+    [...region("Cash flow").querySelectorAll(".jds-chart__legend-item")].map(
+      (item) => item.textContent
+    );
+  const button = (label: string) =>
+    [...document.querySelectorAll("button")].find((candidate) => candidate.textContent === label)!;
+
+  afterEach(() => {
+    results["finance.reports.spending"] = original;
+  });
+
+  it("holds the spending section until the household list has loaded", async () => {
+    results["finance.reports.spending"] = withShared(20_000);
+    let release!: () => void;
+    directoryReplies = [
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve(household());
+        })
+    ];
+    await mount();
+    expect(document.querySelector('section[aria-label="Cash flow"]')).toBeNull();
+    expect(document.body.textContent).not.toContain("Includes shared household accounts");
+    await act(async () => release());
+    await act(async () => {});
+    expect(legend()).toEqual(["Income$3,000.00", "Outflow$2,500.00", "Net$500.00"]);
+    expect(document.body.textContent).toContain("Includes shared household accounts");
+  });
+
+  it("says shared spending is unavailable when the household list fails, and retries", async () => {
+    results["finance.reports.spending"] = withShared(20_000);
+    directoryReplies = [failed, household];
+    await mount();
+    expect(document.body.textContent).toContain("Shared household spending is unavailable.");
+    expect(document.body.textContent).not.toContain("Includes shared household accounts");
+    expect(legend()).toEqual(["Income$3,000.00", "Outflow$2,300.00", "Net$700.00"]);
+    await act(async () => button("Try again").click());
+    await act(async () => {});
+    expect(directoryReads).toBe(2);
+    expect(document.body.textContent).not.toContain("Shared household spending is unavailable.");
+    expect(document.body.textContent).toContain("Includes shared household accounts");
+    expect(legend()).toEqual(["Income$3,000.00", "Outflow$2,500.00", "Net$500.00"]);
+  });
+
+  it("reads the household list again on Refresh", async () => {
+    results["finance.reports.spending"] = withShared(20_000);
+    directoryReplies = [household];
+    await mount();
+    expect(directoryReads).toBe(1);
+    await act(async () => button("Refresh").click());
+    await act(async () => {});
+    expect(directoryReads).toBe(2);
+    expect(legend()).toEqual(["Income$3,000.00", "Outflow$2,500.00", "Net$500.00"]);
+  });
+
+  it("reads Unavailable, not a broken screen, when combined amounts are too large to add", async () => {
+    results["finance.reports.spending"] = withShared(10, Number.MAX_SAFE_INTEGER - 5);
+    directoryReplies = [household];
+    await mount();
+    expect(document.body.textContent).toContain("Spending is unavailable");
+    expect(document.querySelector('section[aria-label="Cash flow"]')).toBeNull();
+    expect(region("Net worth")).not.toBeNull();
   });
 });

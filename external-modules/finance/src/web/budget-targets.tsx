@@ -189,6 +189,7 @@ function TargetDialog(
     expectedFingerprint: props.fingerprint
   });
   const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [blocked, setBlocked] = useState(false);
   const lock = useRef(false);
@@ -220,26 +221,35 @@ function TargetDialog(
     }
     lock.current = true;
     setBusy(true);
+    setRemoving(remove);
     try {
-      const result = await props.tools.invoke("finance.target.set", {
-        month: props.month,
-        categoryId,
-        kind: remove ? "removed" : kind,
-        amountCents: remove ? 0 : cents!,
-        ...(kind === "balance" && !remove ? { dueDate } : {}),
-        ...(kind === "weekly" && !remove ? { weekday: Number(weekday) } : {}),
-        ...review
-      });
+      // Removal is its own destructive tool, so the host asks the person to confirm it.
+      const result = remove
+        ? await props.tools.invoke("finance.target.remove", {
+            month: props.month,
+            categoryId,
+            ...review
+          })
+        : await props.tools.invoke("finance.target.set", {
+            month: props.month,
+            categoryId,
+            kind,
+            amountCents: cents!,
+            ...(kind === "balance" ? { dueDate } : {}),
+            ...(kind === "weekly" ? { weekday: Number(weekday) } : {}),
+            ...review
+          });
       if (result.status === "succeeded" && result.result.status === "ok") {
         invalidateQueries();
         props.onSaved(review.expectedFingerprint);
         props.onClose();
-      } else if (result.status === "cancelled") setMessage("Cancelled. Your entries are kept.");
+      } else if (result.status === "cancelled")
+        setMessage(remove ? "Cancelled. The target is kept." : "Cancelled. Your entries are kept.");
       else {
         setBlocked(true);
         props.onUncertain?.();
         setMessage(
-          "Saving could not be confirmed or the budget changed. Close this form, check saved records, and review the target before trying again."
+          `${remove ? "Removing" : "Saving"} could not be confirmed or the budget changed. Close this form, check saved records, and review the target before trying again.`
         );
         invalidateQueries();
       }
@@ -266,24 +276,24 @@ function TargetDialog(
           </Button>
           {existing ? (
             <Button variant="secondary" disabled={busy || blocked} onClick={() => void save(true)}>
-              Remove target
+              {busy && removing ? "Removing…" : "Remove target"}
             </Button>
           ) : null}
           <Button
             disabled={busy || blocked || !props.canEdit || (kind === "weekly" && !weekly)}
             onClick={() => void save()}
           >
-            {busy ? "Saving…" : "Save target"}
+            {busy && !removing ? "Saving…" : "Save target"}
           </Button>
         </div>
       }
     >
       <div className="fnm-block fnm-block--tight fnm-account-management">
-        <Note variant="practical">
-          {props.canEdit
-            ? "Saving a target does not assign money. Earlier months keep their target history."
-            : "This category is archived or funded through the flexible pool. You can remove the old target; assigned money and earlier target history stay intact."}
-        </Note>
+        {props.canEdit ? null : (
+          <Note variant="practical">
+            This category is archived or in the flexible pool, so its target can only be removed.
+          </Note>
+        )}
         <label className="fnm-block fnm-block--tight">
           Category
           <Select
@@ -363,18 +373,9 @@ function TargetDialog(
           <p role="status">
             {weekly
               ? weeklyPeriodLabel(weekly, props.currency, props.month)
-              : "Choose a weekday and a supported weekly amount to preview the full month."}
+              : "Choose a weekday and a supported weekly amount."}
           </p>
         ) : null}
-        <p className="jds-hint">
-          {kind === "weekly"
-            ? "Full-month plan, including when created mid-month. Progress counts new assignments, independent of spending and rollover. Funding is always a separate reviewed choice."
-            : kind === "refill"
-              ? "Counts carried money plus this month's assignments. Spending and refunds during the month do not change this plan. Future carry is provisional. Funding is a separate reviewed choice."
-              : kind === "monthly"
-                ? "Progress counts this month's assigned money, independent of spending and rollover."
-                : "Progress counts the category's available money. Spending reduces progress."}
-        </p>
         {message ? <p role="alert">{message}</p> : null}
       </div>
     </Dialog>

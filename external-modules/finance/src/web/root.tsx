@@ -5,6 +5,7 @@ import { UpcomingScreen } from "./screens/upcoming";
 import {
   Segmented,
   useEffect,
+  useMemo,
   useRef,
   useSyncExternalStore,
   type ExternalModuleToolsHandleV1,
@@ -17,6 +18,7 @@ import { ReportsScreen } from "./screens/reports";
 import { SettingsScreen } from "./screens/settings";
 import { StartScreen } from "./screens/start";
 import { TransactionsScreen } from "./screens/transactions";
+import { serialTools } from "./serial-tools";
 import { invalidateQueries } from "./store";
 import { currentLiveMessage, subscribeLive } from "./states";
 
@@ -59,6 +61,7 @@ export function Root(props: {
   tools?: ExternalModuleToolsHandleV1;
 }): ReactNodeLike {
   const path = useModulePath();
+  const tools = useMemo(() => (props.tools ? serialTools(props.tools) : undefined), [props.tools]);
   const lastRefresh = useRef(props.refreshKey);
   useEffect(() => {
     const previous = lastRefresh.current;
@@ -109,19 +112,19 @@ export function Root(props: {
         />
       </div>
       {path === "/start" ? (
-        <StartScreen tools={props.tools} hostActions={props.hostActions} />
+        <StartScreen tools={tools} hostActions={props.hostActions} />
       ) : path === "/" ? (
-        <BudgetScreen tools={props.tools} />
+        <BudgetScreen tools={tools} />
       ) : path === "/transactions" ? (
-        <TransactionsScreen tools={props.tools} />
+        <TransactionsScreen tools={tools} />
       ) : path === "/accounts" ? (
-        <AccountsScreen hostActions={props.hostActions} tools={props.tools} />
+        <AccountsScreen hostActions={props.hostActions} tools={tools} />
       ) : path === "/reports" ? (
         <ReportsScreen />
       ) : path === "/upcoming" ? (
-        <UpcomingScreen tools={props.tools} />
+        <UpcomingScreen tools={tools} />
       ) : path === "/settings" ? (
-        <SettingsScreen tools={props.tools} />
+        <SettingsScreen tools={tools} />
       ) : null}
     </div>
   );

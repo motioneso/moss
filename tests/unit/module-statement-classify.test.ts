@@ -76,6 +76,16 @@ describe("classifyModuleStatement", () => {
     expect(classifyError("SELECT 'set_config'").code).toBe("forbidden_statement");
   });
 
+  it("rejects advisory lock functions anywhere (another module's write lock key)", () => {
+    for (const statement of [
+      "SELECT pg_advisory_xact_lock(hashtextextended('moss:module-write:finance:u', 0))",
+      "SELECT pg_catalog.PG_ADVISORY_LOCK(1)",
+      'SELECT "pg_try_advisory_xact_lock"(1)',
+      "WITH l AS (SELECT pg_advisory_lock_shared(1)) SELECT * FROM l"
+    ])
+      expect(classifyError(statement).code).toBe("forbidden_statement");
+  });
+
   it("rejects unicode-escape and escape-string literals (skipper desync)", () => {
     expect(classifyError("SELECT U&'\\0064elete'").code).toBe("forbidden_statement");
     expect(classifyError('SELECT U&"x" FROM app.t').code).toBe("forbidden_statement");

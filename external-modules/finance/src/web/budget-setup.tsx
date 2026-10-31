@@ -13,10 +13,17 @@ import {
 import { invalidateQueries } from "./store";
 import { navigate } from "./router";
 
-function recordedAmount(cents: string): string {
+/** Exact whole cents of any size in the browser's own digits, grouping and decimal mark. */
+export function recordedAmount(cents: string, locale?: string): string {
   const value = BigInt(cents);
   const absolute = value < 0n ? -value : value;
-  return `${value < 0n ? "−" : ""}${(absolute / 100n).toLocaleString()}.${String(absolute % 100n).padStart(2, "0")}`;
+  const formatter = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+  // ECMA-402 reads a decimal string exactly; the TS library types only numbers.
+  const formatDecimal = formatter.format as (value: number | string) => string;
+  return `${value < 0n ? "−" : ""}${formatDecimal(`${absolute}E-2`)}`;
 }
 
 export function BudgetSetup(props: {
@@ -98,10 +105,6 @@ export function BudgetSetup(props: {
       {props.legacyMonths?.length ? (
         <section aria-label="Existing monthly assignments" className="fnm-block fnm-block--tight">
           <SectionHead title="Recorded monthly totals" rule />
-          <p className="jds-hint">
-            The same amounts, with no conversion. After setup they will be read as{" "}
-            {currency || "your chosen currency"}.
-          </p>
           <RowIndex variant="facts">
             {props.legacyMonths.map((row) => (
               <RowIndexItem

@@ -42,7 +42,13 @@ import { BudgetTargets } from "../budget-targets";
 import { CardPayments } from "../card-payments";
 import { CategoryDetail } from "../category-detail";
 import { FlexBudgetPanel } from "../flex-budget";
-import { currentMonth, monthLabel, parseAmountToCents, shiftMonth } from "../format";
+import {
+  centsToAmountInput,
+  currentMonth,
+  monthLabel,
+  parseAmountToCents,
+  shiftMonth
+} from "../format";
 import { useReadCooldown } from "../read-cooldown";
 import { navigate } from "../router";
 import { announce, outcomeGate } from "../states";
@@ -145,14 +151,21 @@ function RailBlock(props: {
   );
 }
 
+/** Scrolls to the first overspent row in the layout on screen, and moves focus to it. */
+function showOverspent(): void {
+  const rows = document.querySelectorAll<HTMLElement>("[data-overspent='true']");
+  const row = [...rows].find((candidate) => candidate.getClientRects().length > 0);
+  if (!row) return;
+  row.scrollIntoView({ block: "center", behavior: "smooth" });
+  const target =
+    row.querySelector<HTMLElement>("button.jds-table__rowlink, input:not(:disabled)") ?? row;
+  if (target === row) row.tabIndex = -1;
+  target.focus({ preventScroll: true });
+}
+
 function NeedsYou(props: { needsLook: number; overspent: number }): ReactNodeLike {
   const total = props.needsLook + props.overspent;
   if (total === 0) return null;
-  const showOverspent = (): void => {
-    document
-      .querySelector("[data-overspent='true']")
-      ?.scrollIntoView({ block: "center", behavior: "smooth" });
-  };
   return (
     <RailBlock eyebrow="Needs you" title={total === 1 ? "1 thing" : `${total} things`}>
       <div className="fnm-stat-pair">
@@ -558,7 +571,7 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
         tools={props.tools}
         returnFocusRef={returnTo}
         onQuickAmount={(cents) => {
-          onDraft(line.id, money(cents, line.currency));
+          onDraft(line.id, centsToAmountInput(cents));
           returnTo.current = assignField(detail.layout, line.id) ?? returnTo.current;
           setDetail(null);
         }}
@@ -631,10 +644,8 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
             body.cardLedgerReviewRequired ? (
               <section className="fnm-block" aria-label="Card ledger needs review">
                 <Note variant="practical">
-                  Review the card ledger before budgeting. Payment reserves need complete linked
-                  manual transfers in one currency. Repair unlinked transfer categories in
-                  Transactions, then use Record transfer in Accounts for payment pairs. Ready to
-                  assign is unavailable until the ledger is consistent.
+                  Review the card ledger before budgeting. Ready to assign is unavailable until the
+                  ledger is consistent.
                 </Note>
                 <Button variant="secondary" onClick={() => navigate("/transactions")}>
                   Review transactions

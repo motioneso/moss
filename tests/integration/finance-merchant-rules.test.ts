@@ -408,36 +408,35 @@ describe("canonical owned merchant rules", () => {
     expect(await current(name)).toMatchObject({ categoryId: "dining" });
     expect(await activities()).toHaveLength(count);
   });
-  it("preserves malformed or unavailable legacy rules and never marks a partial upgrade complete", async () => {
+  it("skips broken legacy rules, copies the rest and still finishes the upgrade", async () => {
     await withPorts(async (ports) => {
       await ports.kv.delete(NS.meta, RULES_MIGRATED_KEY);
-      await ports.kv.set(NS.rules, "synthetic:malformed", {
-        payeeKey: "synthetic malformed",
-        categoryId: "groceries",
-        createdAt: "invalid"
-      });
-      await expect(runStorageMigrate(ports)).rejects.toThrow("needs repair");
-      expect(await ports.kv.get(NS.rules, "synthetic:malformed")).not.toBeNull();
-      expect(await ports.kv.get(NS.meta, RULES_MIGRATED_KEY)).toBeNull();
-      await ports.kv.delete(NS.rules, "synthetic:malformed");
       const valid = { payeeKey: "synthetic import valid", categoryId: "groceries", createdAt: at };
+      const broken = {
+        "synthetic:malformed": { ...valid, payeeKey: "synthetic malformed", createdAt: "invalid" },
+        "synthetic:too-long": { ...valid, payeeKey: "q".repeat(201) },
+        "synthetic:unavailable": {
+          ...valid,
+          payeeKey: "synthetic import unavailable",
+          categoryId: "missing"
+        }
+      };
       await ports.kv.set(NS.rules, "synthetic:valid", valid);
-      await ports.kv.set(NS.rules, "synthetic:unavailable", {
-        ...valid,
-        payeeKey: "synthetic import unavailable",
-        categoryId: "missing"
-      });
-      await expect(runStorageMigrate(ports)).rejects.toThrow("unavailable category");
-      expect(await ports.kv.get(NS.meta, RULES_MIGRATED_KEY)).toBeNull();
-      expect(
-        (await (await ports.store()).rules!.all()).find((r) => r.id === contentHash(valid.payeeKey))
-      ).toBeUndefined();
-      expect(await ports.kv.get(NS.rules, "synthetic:valid")).toEqual(valid);
-      await ports.kv.delete(NS.rules, "synthetic:unavailable");
-      await runStorageMigrate(ports);
-      expect(
-        (await (await ports.store()).rules!.all()).find((r) => r.id === contentHash(valid.payeeKey))
-      ).toMatchObject({ enabled: true });
+      for (const [key, rule] of Object.entries(broken)) await ports.kv.set(NS.rules, key, rule);
+      try {
+        await runStorageMigrate(ports);
+        const stored = await (await ports.store()).rules!.all();
+        const find = (payeeKey: string) => stored.find((r) => r.id === contentHash(payeeKey));
+        expect(find(valid.payeeKey)).toMatchObject({ enabled: true, categoryId: "groceries" });
+        expect(find("synthetic malformed")).toBeUndefined();
+        expect(find("synthetic import unavailable")).toBeUndefined();
+        expect(await ports.kv.get(NS.meta, RULES_MIGRATED_KEY)).not.toBeNull();
+        expect(await ports.kv.get(NS.rules, "synthetic:valid")).toEqual(valid);
+        for (const [key, rule] of Object.entries(broken))
+          expect(await ports.kv.get(NS.rules, key)).toEqual(rule);
+      } finally {
+        for (const key of Object.keys(broken)) await ports.kv.delete(NS.rules, key);
+      }
     });
   });
   it("refuses an archived Undo destination without marking activity or changing the rule", async () => {

@@ -5,9 +5,19 @@
 // Escape reverts. Each layout keeps its own field order, so the hidden layout never takes focus.
 import { Badge, Button, SectionHead, type ReactNodeLike } from "@moss/module-web-sdk";
 import type { BudgetStatusResult, CategoryState } from "./budget-status";
-import { formatCents, parseAmountToCents } from "./format";
+import { centsToAmountInput, formatCents, parseAmountToCents } from "./format";
 
 export const money = (cents: number, currency: string): string => formatCents(cents, currency);
+
+/**
+ * The text an amount field starts with. It is the money format when the amount reader returns the
+ * same cents from it, and a plain number such as "250.00" when the browser's format would not
+ * read back safely.
+ */
+export function amountFieldText(cents: number, currency: string): string {
+  const shown = formatCents(cents, currency);
+  return parseAmountToCents(shown) === cents ? shown : centsToAmountInput(cents);
+}
 
 // Display order. Income and Transfers are not envelopes.
 const GROUPS = ["Flexible", "Fixed", "Non-monthly", "Bills", "Everyday", "Fun", "Savings"] as const;
@@ -167,7 +177,7 @@ function AssignCell(props: { line: Line; layout: Layout } & AssignProps): ReactN
         inputMode="decimal"
         enterKeyHint="next"
         disabled={locked}
-        value={draft ?? money(line.assigned, line.currency)}
+        value={draft ?? amountFieldText(line.assigned, line.currency)}
         onFocus={(event: { currentTarget: { select: () => void } }) => {
           event.currentTarget.select();
         }}

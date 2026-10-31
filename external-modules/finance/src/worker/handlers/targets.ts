@@ -14,17 +14,12 @@ export const targetSetHandler: ToolFactory = (ports) => async (input) => {
   const month = readString(input, "month", { required: true });
   if (!isCalendarMonth(month)) throw new InputError("month must be YYYY-MM");
   const categoryId = readString(input, "categoryId", { required: true });
-  const kind = readEnum(
-    input,
-    "kind",
-    ["monthly", "weekly", "refill", "balance", "removed"] as const,
-    {
-      required: true
-    }
-  );
+  const kind = readEnum(input, "kind", ["monthly", "weekly", "refill", "balance"] as const, {
+    required: true
+  });
   const amountCents = readInt(input, "amountCents", {
     required: true,
-    min: kind === "removed" ? 0 : 1,
+    min: 1,
     max: kind === "weekly" ? MAX_WEEKLY_CENTS : Number.MAX_SAFE_INTEGER
   });
   const weekday =
@@ -35,12 +30,10 @@ export const targetSetHandler: ToolFactory = (ports) => async (input) => {
   if (kind === "balance" && (!date || !isCalendarDate(date)))
     throw new InputError("Choose a valid target date");
   if (kind !== "balance" && date) throw new InputError("Only balance targets have a date");
-  if (kind === "removed" && amountCents !== 0)
-    throw new InputError("A removed target must have a zero amount");
   const expected = readBudgetReview(input);
   const store = await ports.store();
   requireSameReview(expected, await requireBudgetPolicy(store));
-  if (kind !== "removed") await assertCategoryFunding(store, month, [categoryId]);
+  await assertCategoryFunding(store, month, [categoryId]);
   if (!store.targets)
     throw new InputError("storage_upgrade_required", "Update Finance before saving targets");
   if (
@@ -53,6 +46,27 @@ export const targetSetHandler: ToolFactory = (ports) => async (input) => {
         dueDate: kind === "balance" ? date! : null,
         ...(weekday !== undefined ? { weekday } : {})
       },
+      expected,
+      ports.now().toISOString()
+    ))
+  )
+    throw staleBudget();
+  return { status: "ok", categoryId, month };
+};
+
+// Removal skips the funding check, so an archived or pooled category can still drop its old target.
+export const targetRemoveHandler: ToolFactory = (ports) => async (input) => {
+  const month = readString(input, "month", { required: true });
+  if (!isCalendarMonth(month)) throw new InputError("month must be YYYY-MM");
+  const categoryId = readString(input, "categoryId", { required: true });
+  const expected = readBudgetReview(input);
+  const store = await ports.store();
+  requireSameReview(expected, await requireBudgetPolicy(store));
+  if (!store.targets)
+    throw new InputError("storage_upgrade_required", "Update Finance before removing targets");
+  if (
+    !(await store.targets.save(
+      { categoryId, effectiveMonth: month, kind: "removed", amountCents: 0, dueDate: null },
       expected,
       ports.now().toISOString()
     ))

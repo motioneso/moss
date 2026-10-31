@@ -1,10 +1,10 @@
 // #3877: bill suggestions from the owner's own posted history, and dismissing one.
 import {
   suggestBills,
+  suggestionPayeeKey,
   SUGGESTION_LOOKBACK_DAYS,
   type SuggestionCharge
 } from "../../domain/bill-suggestions.js";
-import { normalizePayee } from "../../domain/keys.js";
 import type { ToolFactory } from "../registry.js";
 import { InputError, readEnum, readInt, readString } from "../validate.js";
 import { requireBudgetPolicy, requireSameReview } from "./budget-context.js";
@@ -77,7 +77,7 @@ export const billSuggestionsReadHandler: ToolFactory = (ports) => async () => {
 export const billSuggestionDismissHandler: ToolFactory = (ports) => async (input) => {
   const accountId = readString(input, "accountId", { required: true });
   const payeeKey = readString(input, "payeeKey", { required: true, maxBytes: 640 });
-  if (!payeeKey || payeeKey.length > 160 || normalizePayee(payeeKey) !== payeeKey)
+  if (!payeeKey || suggestionPayeeKey(payeeKey) !== payeeKey)
     throw new InputError("Use the payee key from a bill suggestion");
   const cadence = readEnum(input, "cadence", CADENCES, { required: true });
   const amountCents = readInt(input, "amountCents", { required: true, min: 1, max: 100000000 });

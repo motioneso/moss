@@ -30,6 +30,8 @@ const groceries: Record<string, [number, number]> = {
   "2026-07": [60_000, 45_500]
 };
 
+let currencyCode = "USD";
+
 function status(month: string) {
   const [assigned, spent] = groceries[month] ?? [0, 0];
   return {
@@ -37,7 +39,7 @@ function status(month: string) {
     currentMonth: "2026-10",
     revision: 7,
     fingerprint: "a".repeat(32),
-    isoCurrency: "USD",
+    isoCurrency: currencyCode,
     hasBank: true,
     hasBudget: true,
     readyToAssignCents: 123_456,
@@ -111,6 +113,8 @@ afterEach(async () => {
   host = null;
   __resetStoreForTests();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  currencyCode = "USD";
 });
 
 const field = (layout: "desktop" | "phone", id: string) =>
@@ -219,7 +223,7 @@ describe("Category detail panel", () => {
     await open("Groceries");
     await click(button("Use $520.00, spent last month", dialog()!));
     expect(dialog()).toBeNull();
-    expect(field("desktop", "groceries").value).toBe("$520.00");
+    expect(field("desktop", "groceries").value).toBe("520.00");
     expect(document.activeElement).toBe(field("desktop", "groceries"));
     expect(tools.invoke).not.toHaveBeenCalled();
     await press(field("desktop", "groceries"), "Enter");
@@ -245,7 +249,7 @@ describe("Category detail panel", () => {
     await open("Dining & coffee");
     const panel = dialog()!;
     expect(panel.querySelector<HTMLInputElement>('input[aria-label="Amount to move"]')!.value).toBe(
-      "$26.50"
+      "26.50"
     );
     expect(panel.querySelector<HTMLSelectElement>('select[aria-label="Move from"]')!.value).toBe(
       "ready_to_assign"
@@ -301,6 +305,84 @@ describe("Category detail panel", () => {
     const panel = dialog()!;
     expect(button("Move", panel).disabled).toBe(true);
     expect(panel.textContent).toContain("Save or clear typed amounts first.");
+  });
+});
+
+describe("Amount fields in a German-language browser", () => {
+  // A currency no other test formats, so its cached formatter is built under the stub.
+  function germanBrowser() {
+    const Real = Intl.NumberFormat;
+    vi.spyOn(Intl, "NumberFormat").mockImplementation(function (
+      _locale?: unknown,
+      options?: Intl.NumberFormatOptions
+    ) {
+      return new Real("de-DE", options);
+    } as never);
+  }
+
+  it("fills a plain number from a quick amount and keeps resting values readable", async () => {
+    currencyCode = "CHF";
+    germanBrowser();
+    const tools = idle();
+    await mount(tools);
+    // The money format here is "650,00 CHF", which the amount reader cannot take back.
+    expect(field("desktop", "groceries").value).toBe("650.00");
+    await open("Groceries");
+    const quick = [...dialog()!.querySelectorAll("button")].find((candidate) =>
+      candidate.getAttribute("aria-label")?.endsWith("spent last month")
+    )!;
+    await click(quick);
+    expect(field("desktop", "groceries").value).toBe("520.00");
+    await press(field("desktop", "groceries"), "Enter");
+    expect(tools.invoke).toHaveBeenCalledWith(
+      "finance.budget.assign",
+      expect.objectContaining({ categoryId: "groceries", amountCents: 52_000 })
+    );
+  });
+
+  it("fills the Move amount with a plain number", async () => {
+    currencyCode = "CHF";
+    germanBrowser();
+    await mount(idle());
+    await open("Dining & coffee");
+    expect(
+      dialog()!.querySelector<HTMLInputElement>('input[aria-label="Amount to move"]')!.value
+    ).toBe("26.50");
+  });
+
+  async function open(name: string) {
+    const opener = [...document.querySelectorAll("button.jds-table__rowlink")].find(
+      (candidate) => candidate.textContent === name
+    )!;
+    await click(opener);
+    await act(async () => {});
+  }
+});
+
+describe("Overspent tile", () => {
+  it("scrolls to the overspent row that is on screen and focuses its name", async () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView
+    });
+    try {
+      await mount(idle());
+      // Phone width: only the phone layout takes up space.
+      vi.spyOn(Element.prototype, "getClientRects").mockImplementation(function (this: Element) {
+        return (this.closest(".fnm-phone-only") ? [{}] : []) as unknown as DOMRectList;
+      });
+      const tile = document.querySelector<HTMLElement>(
+        ".fnm-phone-only button.jds-stat-tile--warn"
+      )!;
+      await click(tile);
+      const row = document.querySelector<HTMLElement>(".fnm-phone-only [data-overspent='true']")!;
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(scrollIntoView.mock.contexts[0]).toBe(row);
+      expect(document.activeElement).toBe(row.querySelector("button.jds-table__rowlink"));
+    } finally {
+      Reflect.deleteProperty(Element.prototype, "scrollIntoView");
+    }
   });
 });
 

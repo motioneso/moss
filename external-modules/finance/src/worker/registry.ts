@@ -41,7 +41,7 @@ import {
   manualAccountCreateHandler,
   manualEntryCreateHandler
 } from "./handlers/manual-ledger.js";
-import { targetSetHandler } from "./handlers/targets.js";
+import { targetRemoveHandler, targetSetHandler } from "./handlers/targets.js";
 import { budgetConfigureHandler } from "./handlers/budget-context.js";
 import { importPreviewHandler, importApplyHandler } from "./handlers/import.js";
 import {
@@ -140,13 +140,13 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "flex.configure": flexConfigureHandler,
   "flex.assign": flexAssignHandler,
   "target.set": targetSetHandler,
+  "target.remove": targetRemoveHandler,
   "targets.fund": targetFundHandler,
   "bills.read": billsReadHandler,
   "bills.suggestions": billSuggestionsReadHandler,
   "bills.suggestion-dismiss": billSuggestionDismissHandler,
   "bill.entry-preview": billEntryPreviewHandler,
   "bill.entry-record": billEntryRecordHandler,
-  billClearHandler,
   "bill.create": billCreateHandler,
   "bill.decide": billDecideHandler,
   "bill.stop": billStopHandler,

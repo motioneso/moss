@@ -13,7 +13,7 @@ import {
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import { FLEX_POOL, type FlexPolicy } from "../domain/flex";
-import { formatCents, parseAmountToCents } from "./format";
+import { formatCents, monthLabel, parseAmountToCents } from "./format";
 import { invalidateQueries } from "./store";
 interface Choice {
   id: string;
@@ -226,7 +226,7 @@ function FlexModeDialog(props: {
   return (
     <Dialog
       title={leaving ? "Return to category envelopes" : "Set up a flexible budget"}
-      description={`${d.month} · ${d.isoCurrency}`}
+      description={`${monthLabel(d.month)} · ${d.isoCurrency}`}
       scrollBody
       closeLabel="Close"
       closeDisabled={busy}
@@ -318,10 +318,6 @@ function FlexModeDialog(props: {
                 meta={formatCents(preview.readyAfterCents, d.isoCurrency)}
               />
             </RowIndex>
-            <p className="jds-hint">
-              Your saved budget changes only after confirmation. Transaction categories and previous
-              months stay intact.
-            </p>
           </section>
         ) : null}
         {message ? <p role="alert">{message}</p> : null}

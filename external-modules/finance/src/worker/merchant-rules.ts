@@ -1,7 +1,9 @@
 import {
   NS,
+  RULE_PAYEE_MAX_CHARS,
   contentHash,
   normalizePayee,
+  payeeLength,
   type FinanceStore,
   type MerchantRuleStore,
   type Rule
@@ -10,8 +12,8 @@ import type { WorkerPorts } from "./ports.js";
 import { InputError } from "./validate.js";
 export const RULES_MIGRATED_KEY = "rules:canonical-v1";
 
-/** Tolerant runtime reads retain the old behavior; upgrade refuses malformed legacy data. */
-export async function legacyMerchantRules(ports: WorkerPorts, strict = false): Promise<Rule[]> {
+/** The newest old rule per payee. Malformed rules are skipped. */
+export async function legacyMerchantRules(ports: WorkerPorts): Promise<Rule[]> {
   const newest = new Map<string, { rule: Rule; key: string }>();
   for (const key of await ports.kv.list(NS.rules)) {
     const value = (await ports.kv.get(NS.rules, key)) as Partial<Rule> | null;
@@ -19,20 +21,14 @@ export async function legacyMerchantRules(ports: WorkerPorts, strict = false): P
     if (
       typeof value.payeeKey !== "string" ||
       value.payeeKey.length === 0 ||
-      value.payeeKey.length > 200 ||
+      payeeLength(value.payeeKey) > RULE_PAYEE_MAX_CHARS ||
       normalizePayee(value.payeeKey) !== value.payeeKey ||
       typeof value.categoryId !== "string" ||
       !value.categoryId ||
       typeof value.createdAt !== "string" ||
       !Number.isFinite(Date.parse(value.createdAt))
-    ) {
-      if (strict)
-        throw new InputError(
-          "invalid_legacy_rule",
-          "An existing merchant rule needs repair before upgrading rules"
-        );
+    )
       continue;
-    }
     const rule = value as Rule,
       previous = newest.get(rule.payeeKey);
     if (
@@ -44,19 +40,26 @@ export async function legacyMerchantRules(ports: WorkerPorts, strict = false): P
   }
   return [...newest.values()].map(({ rule }) => rule);
 }
+
+/**
+ * Copies the old rules into the rule store once. Malformed rules and rules whose category is gone
+ * stay in the old store, and the upgrade still finishes. Dates go over in canonical form so the
+ * database parses every date the old read accepted.
+ */
 export async function copyLegacyMerchantRules(
   ports: WorkerPorts,
   rules: MerchantRuleStore
 ): Promise<void> {
   if (await ports.kv.get(NS.meta, RULES_MIGRATED_KEY)) return;
-  const legacy = await legacyMerchantRules(ports, true);
-  if (
-    legacy.length &&
-    !(await rules.importLegacy(legacy.map((r) => ({ ...r, id: contentHash(r.payeeKey) }))))
-  )
-    throw new InputError(
-      "invalid_legacy_rule",
-      "An existing rule references an unavailable category; rules were not upgraded"
+  const legacy = await legacyMerchantRules(ports);
+  if (legacy.length)
+    await rules.importLegacy(
+      legacy.map((r) => ({
+        id: contentHash(r.payeeKey),
+        payeeKey: r.payeeKey,
+        categoryId: r.categoryId,
+        createdAt: new Date(Date.parse(r.createdAt)).toISOString()
+      }))
     );
   await ports.kv.set(NS.meta, RULES_MIGRATED_KEY, { at: ports.now().toISOString() });
 }
@@ -71,6 +74,26 @@ export async function effectiveMerchantRules(
   }
   return [...newest.values()];
 }
+
+/**
+ * Refuses payee text no rule can hold and finishes the old-rule copy, then returns the payee key.
+ * Callers run it before saving anything else, so a refusal leaves nothing half-saved.
+ */
+export async function checkMerchantRule(
+  ports: WorkerPorts,
+  rules: MerchantRuleStore | undefined,
+  merchant: string
+): Promise<string> {
+  const payeeKey = normalizePayee(merchant);
+  if (payeeLength(payeeKey) > RULE_PAYEE_MAX_CHARS)
+    throw new InputError(
+      "rule_payee_too_long",
+      `A merchant rule takes at most ${RULE_PAYEE_MAX_CHARS} characters of payee text`
+    );
+  if (rules) await copyLegacyMerchantRules(ports, rules);
+  return payeeKey;
+}
+
 export async function setCanonicalMerchantRule(
   ports: WorkerPorts,
   store: FinanceStore,
@@ -83,8 +106,7 @@ export async function setCanonicalMerchantRule(
       "storage_upgrade_required",
       "Update Finance storage before managing rules"
     );
-  await copyLegacyMerchantRules(ports, store.rules);
-  const payeeKey = normalizePayee(merchant),
+  const payeeKey = await checkMerchantRule(ports, store.rules, merchant),
     ruleId = contentHash(payeeKey);
   const previous = (await store.rules.all()).find((r) => r.id === ruleId);
   if (

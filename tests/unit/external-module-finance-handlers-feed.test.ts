@@ -779,6 +779,67 @@ describe("finance review (#3176)", () => {
     });
   });
 
+  it("refuses a merchant rule whose payee text is too long, and saves nothing", async () => {
+    const kv = fakeKv();
+    await seedReview(kv);
+    await kv.set(NS.transactions, "acc-1:2026-07", {
+      transactions: [
+        txRecord({
+          id: "r-1",
+          name: "Long Name ".repeat(30),
+          categoryId: "dining",
+          reviewState: "needs_look"
+        })
+      ]
+    });
+    const before = JSON.stringify(await rows(kv));
+    const writes = kv.ops.length;
+    const activity: ActivityInput[] = [];
+
+    await expect(
+      reviewApplyHandler(fakePorts(kv, undefined, activity))(
+        envelope({
+          transactionIds: ["r-1"],
+          accountIds: ["acc-1"],
+          months: ["2026-07"],
+          categoryIds: ["groceries"],
+          createRule: true
+        })
+      )
+    ).rejects.toMatchObject({ code: "rule_payee_too_long" });
+
+    expect(JSON.stringify(await rows(kv))).toBe(before);
+    expect(activity).toEqual([]);
+    expect(await kv.list(NS.rules)).toEqual([]);
+    expect(kv.ops.length).toBe(writes);
+  });
+
+  it("still makes a merchant rule for payee text at the limit", async () => {
+    const kv = fakeKv();
+    await seedReview(kv);
+    const name = "q".repeat(200);
+    await kv.set(NS.transactions, "acc-1:2026-07", {
+      transactions: [txRecord({ id: "r-1", name, categoryId: "dining", reviewState: "needs_look" })]
+    });
+
+    await reviewApplyHandler(fakePorts(kv))(
+      envelope({
+        transactionIds: ["r-1"],
+        accountIds: ["acc-1"],
+        months: ["2026-07"],
+        categoryIds: ["groceries"],
+        createRule: true
+      })
+    );
+
+    const keys = await kv.list(NS.rules);
+    expect(keys).toHaveLength(1);
+    expect(await kv.get(NS.rules, keys[0]!)).toMatchObject({
+      payeeKey: name,
+      categoryId: "groceries"
+    });
+  });
+
   it("changes nothing when any row is invalid, and refuses rules on a batch", async () => {
     const kv = fakeKv();
     await seedReview(kv);

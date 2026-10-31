@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModuleToolOutcome } from "@moss/module-web-sdk";
-import { BudgetSetup } from "../../external-modules/finance/src/web/budget-setup";
+import { BudgetSetup, recordedAmount } from "../../external-modules/finance/src/web/budget-setup";
 let rendered: ReactTestRenderer | undefined;
 afterEach(async () => {
   if (rendered) await act(async () => rendered!.unmount());
@@ -56,5 +56,13 @@ describe("budget currency review", () => {
     expect(f.save().props.disabled).toBe(true);
     expect(JSON.stringify(rendered!.toJSON())).toContain("Update Moss");
     expect(f.invoke).not.toHaveBeenCalled();
+  });
+});
+describe("recorded monthly totals", () => {
+  it("reads whole cents in the browser's own grouping and decimal mark, at any size", () => {
+    expect(recordedAmount("123456", "en-US")).toBe("1,234.56");
+    expect(recordedAmount("123456", "de-DE")).toBe("1.234,56");
+    expect(recordedAmount("-5", "en-US")).toBe("\u22120.05");
+    expect(recordedAmount("9007199254740993", "en-US")).toBe("90,071,992,547,409.93");
   });
 });

@@ -19,8 +19,9 @@ export interface MerchantRuleChange {
 export interface MerchantRuleStore {
   all(): Promise<MerchantRule[]>;
   apply(change: MerchantRuleChange): Promise<boolean>;
+  /** Stores each rule whose category exists and skips the rest. */
   importLegacy(
     rules: { id: string; payeeKey: string; categoryId: string; createdAt: string }[]
-  ): Promise<boolean>;
+  ): Promise<void>;
   undo(activityId: string, writeRevision: string, at: string): Promise<boolean>;
 }

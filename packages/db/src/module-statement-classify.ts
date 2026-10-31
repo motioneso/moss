@@ -108,7 +108,10 @@ export function inspectModuleStatement(queryText: string): {
   //   inside an otherwise-allowed SELECT (volatile CTEs are guaranteed-executed).
   // - U&'…' unicode escapes can assemble "set_config" without the substring.
   // - E'…' backslash escapes (E'\'') desync skipQuoted and could hide keywords.
+  // - Advisory lock keys are shared across modules, so one module could hold the
+  //   host's per-module write lock and stall another module's saves.
   if (/set_config/i.test(queryText)) throw forbidden("set_config is not allowed");
+  if (/pg_(?:try_)?advisory/i.test(queryText)) throw forbidden("advisory locks are not allowed");
   if (/u&['"]/i.test(queryText)) throw forbidden("unicode-escaped literals are not allowed");
   // Word-boundary lookbehind: a bare "e'"/"E'" must start a new token to be an
   // E'...' escape-string prefix — without it, an ordinary literal ending in

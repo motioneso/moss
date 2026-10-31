@@ -12,21 +12,15 @@ export function merchantRuleSqlStore(db: FinanceDb): MerchantRuleStore {
       return result.rows[0]?.rules ?? [];
     },
     async importLegacy(rules) {
-      const result = await db.query<{ applied: boolean }>(
-        `WITH requested AS MATERIALIZED (
-          SELECT * FROM jsonb_to_recordset($1::jsonb) AS r(id text,"payeeKey" text,"categoryId" text,"createdAt" timestamptz)
-        ), valid AS MATERIALIZED (
-          SELECT r.* FROM requested r WHERE EXISTS(SELECT 1 FROM app.finance_merchant_rules WHERE id=r.id)
-            OR EXISTS(SELECT 1 FROM app.finance_categories WHERE id=r."categoryId")
-        ), saved AS (
-          INSERT INTO app.finance_merchant_rules(owner_user_id,id,payee_key,category_id,enabled,created_at,updated_at)
-          SELECT app.current_actor_user_id(),id,"payeeKey","categoryId",true,"createdAt","createdAt" FROM valid
-          WHERE (SELECT count(*) FROM valid)=(SELECT count(*) FROM requested)
-          ON CONFLICT(owner_user_id,id) DO NOTHING RETURNING id
-        ) SELECT (SELECT count(*) FROM valid)=(SELECT count(*) FROM requested) AS applied`,
+      // Rules whose category is gone are skipped, and a rule already stored wins.
+      await db.query(
+        `INSERT INTO app.finance_merchant_rules(owner_user_id,id,payee_key,category_id,enabled,created_at,updated_at)
+         SELECT app.current_actor_user_id(),r.id,r."payeeKey",r."categoryId",true,r."createdAt",r."createdAt"
+         FROM jsonb_to_recordset($1::jsonb) AS r(id text,"payeeKey" text,"categoryId" text,"createdAt" timestamptz)
+         WHERE EXISTS(SELECT 1 FROM app.finance_categories c WHERE c.id=r."categoryId")
+         ON CONFLICT DO NOTHING`,
         [JSON.stringify(rules)]
       );
-      return result.rows[0]?.applied === true;
     },
     async apply(c) {
       const result = await db.query<{ applied: boolean }>(

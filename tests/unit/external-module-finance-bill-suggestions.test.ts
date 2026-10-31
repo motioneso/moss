@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   suggestBills,
+  suggestionPayeeKey,
+  SUGGESTION_PAYEE_KEY_MAX,
   type SuggestionCharge
 } from "../../external-modules/finance/src/domain/bill-suggestions.js";
 
@@ -77,6 +79,93 @@ describe("bill suggestions", () => {
       name: "Oakwood Property",
       cadence: "monthly",
       nextDate: "2026-11-30"
+    });
+  });
+
+  describe("bills due on the last day of the month", () => {
+    const april = { today: "2026-04-20" };
+    const rent = (days: string[]) => monthly("Oakwood Property", 185_000, days);
+
+    it("keeps the run when the charge after a short February lands just past March's end", () => {
+      const found = suggest(rent(["2026-01-31", "2026-02-28", "2026-04-01"]), april);
+      expect(found).toHaveLength(1);
+      expect(found[0]).toMatchObject({ cadence: "monthly", lastDate: "2026-04-01", charges: 3 });
+    });
+
+    it.each([
+      ["2026-04-03", 1],
+      ["2026-04-04", 0]
+    ])("allows three days after the next month end: %s", (date, count) => {
+      expect(suggest(rent(["2026-01-31", "2026-02-28", date]), april)).toHaveLength(count);
+    });
+
+    it("treats a leap day as a month end", () => {
+      const days = ["2028-01-31", "2028-02-29", "2028-04-02"];
+      expect(suggest(rent(days), { today: "2028-04-20" })).toHaveLength(1);
+    });
+
+    it("does not stretch a bill whose earlier charge was not on a month end", () => {
+      expect(suggest(rent(["2026-01-27", "2026-02-27", "2026-04-01"]), april)).toEqual([]);
+    });
+
+    it("still passes a bill due on the 28th", () => {
+      const days = ["2026-01-28", "2026-02-28", "2026-03-28", "2026-04-28"];
+      const [found] = suggest(rent(days), { today: "2026-04-30" });
+      expect(found).toMatchObject({
+        cadence: "monthly",
+        lastDate: "2026-04-28",
+        nextDate: "2026-05-28",
+        charges: 4
+      });
+    });
+  });
+
+  describe("payee keys", () => {
+    const monthlyDays = ["2026-08-21", "2026-09-21", "2026-10-21"];
+
+    it("cleans the text, cuts it to the dismissal limit and trims the end", () => {
+      expect(SUGGESTION_PAYEE_KEY_MAX).toBe(160);
+      expect(suggestionPayeeKey("  NETFLIX.COM 8473 ")).toBe("netflixcom");
+      expect(suggestionPayeeKey("a".repeat(160))).toBe("a".repeat(160));
+      expect(suggestionPayeeKey("a".repeat(161))).toBe("a".repeat(160));
+      expect(suggestionPayeeKey(`${"a".repeat(159)} bcd`)).toBe("a".repeat(159));
+    });
+
+    it("counts characters, not UTF-16 units, and never splits a pair", () => {
+      const key = suggestionPayeeKey("\u{1D41A}".repeat(170));
+      expect(Array.from(key)).toHaveLength(160);
+      expect(key).toHaveLength(320);
+    });
+
+    it("returns a key that is already clean", () => {
+      for (const text of ["Synthetic Film Club ".repeat(12), "x".repeat(400), "  a  b  "]) {
+        const key = suggestionPayeeKey(text);
+        expect(suggestionPayeeKey(key)).toBe(key);
+      }
+    });
+
+    it("gives a long payee name a key that a dismissal and a plan can match", () => {
+      const long = "abcdefghij".repeat(20);
+      const [found] = suggest(monthly(long, 1_500, monthlyDays));
+      expect(found?.payeeKey).toBe(long.slice(0, SUGGESTION_PAYEE_KEY_MAX));
+      expect(found?.name).toBe(long);
+
+      const dismissal = {
+        accountId: "checking",
+        payeeKey: found!.payeeKey,
+        cadence: "monthly" as const,
+        amountCents: 1_500
+      };
+      expect(suggest(monthly(long, 1_500, monthlyDays), { dismissals: [dismissal] })).toEqual([]);
+
+      const plan = {
+        accountId: "checking",
+        name: long,
+        cadence: "monthly" as const,
+        amountCents: 9_999,
+        anchorDate: "2026-01-05"
+      };
+      expect(suggest(monthly(long, 1_500, monthlyDays), { plans: [plan] })).toEqual([]);
     });
   });
 

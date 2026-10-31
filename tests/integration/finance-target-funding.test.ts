@@ -1,4 +1,7 @@
-import { targetSetHandler } from "../../external-modules/finance/src/worker/handlers/targets.js";
+import {
+  targetRemoveHandler,
+  targetSetHandler
+} from "../../external-modules/finance/src/worker/handlers/targets.js";
 import type * as Funding from "../../external-modules/finance/src/domain/target-funding.js";
 import { BUDGET_FINGERPRINT_SQL } from "../../external-modules/finance/src/domain/budget-review-sql.js";
 import { budgetStatusHandler } from "../../external-modules/finance/src/worker/handlers/budget.js";
@@ -398,11 +401,9 @@ describe("installed selected target funding", () => {
     );
     const latest = await status();
     await owner((s) =>
-      targetSetHandler(ports(s))({
+      targetRemoveHandler(ports(s))({
         month,
         categoryId: "groceries",
-        kind: "removed",
-        amountCents: 0,
         expectedRevision: latest.revision,
         expectedFingerprint: latest.fingerprint
       })
@@ -676,12 +677,12 @@ describe("installed selected target funding", () => {
     const removal = {
       month,
       categoryId: "savings",
-      kind: "removed",
-      amountCents: 0,
       expectedRevision: captured.revision,
       expectedFingerprint: captured.fingerprint
     };
-    expect(await owner((s) => targetSetHandler(ports(s))(removal))).toMatchObject({ status: "ok" });
+    expect(await owner((s) => targetRemoveHandler(ports(s))(removal))).toMatchObject({
+      status: "ok"
+    });
     const removed = await snapshot();
     expect(removed.ledger).toEqual(prior.ledger);
     expect(removed.accounts).toEqual(prior.accounts);
@@ -695,7 +696,7 @@ describe("installed selected target funding", () => {
       expect.arrayContaining([expect.objectContaining({ categoryId: "savings" })])
     );
     const stable = await snapshot();
-    await expect(owner((s) => targetSetHandler(ports(s))(removal))).rejects.toThrow();
+    await expect(owner((s) => targetRemoveHandler(ports(s))(removal))).rejects.toThrow();
     expect(await snapshot()).toEqual(stable);
   });
 });

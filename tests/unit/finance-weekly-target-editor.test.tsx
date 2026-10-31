@@ -10,7 +10,7 @@ const tokens = { expectedRevision: 1, expectedFingerprint: "a".repeat(32) };
 const button = (r: ReactTestRenderer, name: string) =>
   r.root.findAllByType("button").find((b) => b.children.includes(name))!;
 describe("weekly contribution editor", () => {
-  it("requires an explicit weekday, explains the full month and saves only target metadata", async () => {
+  it("requires an explicit weekday, previews the full month and saves only target metadata", async () => {
     const invoke = vi.fn(async () => ({ status: "cancelled" as const }));
     let renderer!: ReactTestRenderer;
     await act(async () => {
@@ -43,7 +43,7 @@ describe("weekly contribution editor", () => {
     const copy = JSON.stringify(renderer.toJSON());
     expect(copy).toContain("5 Fridays");
     expect(copy).toContain("$125.05");
-    expect(copy).toContain("including when created mid-month");
+    expect(copy).not.toContain("mid-month");
     await act(async () => button(renderer, "Save target").props.onClick());
     expect(invoke).toHaveBeenCalledExactlyOnceWith("finance.target.set", {
       ...tokens,

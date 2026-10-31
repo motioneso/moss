@@ -23,7 +23,13 @@ import {
 } from "@moss/module-web-sdk";
 import type { BudgetStatusResult } from "./budget-status";
 import { AvailableCell, money, ZERO, type Line } from "./budget-table";
-import { monthLabel, parseAmountToCents, shiftMonth } from "./format";
+import {
+  centsToAmountInput,
+  dayYearLabel,
+  monthLabel,
+  parseAmountToCents,
+  shiftMonth
+} from "./format";
 import { announce } from "./states";
 import { invalidateQueries, useToolQuery } from "./store";
 import type { TargetProgress } from "../domain/targets";
@@ -86,7 +92,7 @@ function targetText(target: TargetProgress, currency: string): string {
         : target.kind === "refill"
           ? `Refill to ${amount}`
           : target.dueDate
-            ? `${amount} by ${target.dueDate}`
+            ? `${amount} by ${dayYearLabel(target.dueDate, "short")}`
             : `${amount} saved`;
   return target.status === "reached"
     ? `${goal}, reached`
@@ -118,7 +124,7 @@ function MoveMoney(props: {
     line.available < 0 ? READY_TO_ASSIGN : (props.others[0]?.id ?? "")
   );
   const [amount, setAmount] = useState(
-    line.available < 0 ? money(-line.available, line.currency) : ""
+    line.available < 0 ? centsToAmountInput(-line.available) : ""
   );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

@@ -3,7 +3,6 @@ import {
   Button,
   Checkbox,
   Dialog,
-  Note,
   RowIndex,
   RowIndexItem,
   useEffect,
@@ -135,10 +134,6 @@ export function TargetFundingDialog(props: {
       }
     >
       <div className="fnm-block fnm-block--tight">
-        <Note variant="practical">
-          Assign ready-to-assign money to selected categories. This changes your plan; no bank money
-          moves and no transaction is created.
-        </Note>
         <p>
           <strong>
             Ready to assign:{" "}

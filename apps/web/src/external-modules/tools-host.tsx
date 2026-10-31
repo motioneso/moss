@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { ExternalModuleToolsHandleV1 } from "@moss/module-web-sdk";
 import { Button, Dialog } from "@moss/ui";
 import { createModuleToolsController } from "./tool-controller";
@@ -17,6 +17,7 @@ export function ModuleToolsHost(props: Props) {
 function ModuleToolsSession(props: Props) {
   const [controller] = useState(() => createModuleToolsController(props.moduleId));
   const view = useSyncExternalStore(controller.subscribe, controller.getSnapshot, () => null);
+  const cancel = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     controller.activate();
     return () => controller.dispose();
@@ -30,9 +31,10 @@ function ModuleToolsSession(props: Props) {
           description={view.confirmation.actionLabel}
           onClose={() => controller.decide(false)}
           closeLabel="Cancel action"
+          initialFocusRef={view.confirmation.risk === "destructive" ? cancel : undefined}
           footer={
             <>
-              <Button variant="secondary" onClick={() => controller.decide(false)}>
+              <Button variant="secondary" ref={cancel} onClick={() => controller.decide(false)}>
                 Cancel
               </Button>
               <Button
@@ -50,9 +52,6 @@ function ModuleToolsSession(props: Props) {
               : view.confirmation.risk === "destructive"
                 ? "This action removes or replaces saved information. Review your selection before continuing."
                 : "This action needs your confirmation before Moss can continue."}
-          </p>
-          <p className="jds-hint">
-            The confirmation expires after two minutes. Cancelling leaves this action unapplied.
           </p>
         </Dialog>
       ) : null}

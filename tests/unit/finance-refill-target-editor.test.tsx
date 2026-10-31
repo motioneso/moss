@@ -45,8 +45,8 @@ describe("monthly refill editor", () => {
     expect(renderer.root.findAllByProps({ "aria-label": "Contribution weekday" })).toHaveLength(0);
     expect(renderer.root.findAllByProps({ "aria-label": "Target date" })).toHaveLength(0);
     const copy = JSON.stringify(renderer.toJSON());
-    expect(copy).toContain("Counts carried money plus this month's assignments");
-    expect(copy).toContain("Spending and refunds during the month do not change this plan");
+    expect(copy).toContain("Monthly refill");
+    expect(copy).not.toContain("Counts carried money");
     await act(async () => button(renderer, "Save target").props.onClick());
     expect(invoke).toHaveBeenCalledExactlyOnceWith("finance.target.set", {
       ...tokens,

@@ -22,6 +22,7 @@ import {
   type ExternalModuleToolsHandleV1,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
+import { amountFieldText } from "../budget-table";
 import { formatCents, monthLabel, parseAmountToCents } from "../format";
 import { navigate } from "../router";
 import { announce, LoadingState, outcomeGate } from "../states";
@@ -62,6 +63,9 @@ export interface DraftResult extends Record<string, unknown> {
 
 const money = (cents: number, currency?: string): string =>
   currency ? formatCents(cents, currency) : "Unavailable";
+
+const fieldAmount = (cents: number, currency?: string): string =>
+  currency ? amountFieldText(cents, currency) : "Unavailable";
 
 /** "2026-07-01" to "2026-09-30" reads as "July to September" (or one month). */
 export function basisLabel(basisFrom: string, basisTo: string): string {
@@ -111,7 +115,7 @@ function PlanCell(props: { line: DraftLineView } & EditProps): ReactNodeLike {
         aria-invalid={error ? "true" : undefined}
         inputMode="decimal"
         disabled={props.disabled}
-        value={typed ?? (line.dropped ? "" : money(line.planCents, line.isoCurrency))}
+        value={typed ?? (line.dropped ? "" : fieldAmount(line.planCents, line.isoCurrency))}
         placeholder={line.dropped ? "Not in budget" : undefined}
         onFocus={(event: { currentTarget: { select: () => void } }) => {
           event.currentTarget.select();

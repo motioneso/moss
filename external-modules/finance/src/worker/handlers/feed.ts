@@ -1,4 +1,4 @@
-import { setCanonicalMerchantRule } from "../merchant-rules.js";
+import { checkMerchantRule, setCanonicalMerchantRule } from "../merchant-rules.js";
 // external-modules/finance/src/worker/handlers/feed.ts
 //
 // FIN-02 (#1147) Task 10: the feed surface. transactions.query is the web
@@ -425,7 +425,8 @@ function readIdList(params: Record<string, unknown>, key: string): string[] {
  * Queue path for the Transactions screen: confirm or change the category of one
  * or many rows. The lists line up by position. Every row is checked before any
  * is written, so a bad id leaves the whole batch untouched. A merchant rule is
- * made only for a single row and only when asked.
+ * made only for a single row and only when asked, and it is checked before
+ * anything is saved, so a refused rule leaves the category as it was.
  */
 export const reviewApplyHandler: ToolFactory = (ports) => async (input) => {
   const jobKind = readString(input, "jobKind", { required: true });
@@ -469,6 +470,8 @@ export const reviewApplyHandler: ToolFactory = (ports) => async (input) => {
     const { record, previousCategoryId } = await applyCategory(ports, store, ids, context);
     applied.push({ record, ids, previousCategoryId });
   }
+  if (createRule && normalizePayee(applied[0]!.record.name) !== "")
+    await checkMerchantRule(ports, store.rules, applied[0]!.record.name);
   const savedMetadata = await saveMetadata(
     ports,
     store,
