@@ -15,11 +15,11 @@ export type HostActions = { openAssistant: (input: { starterPrompt: string }) =>
 type Area = "plan" | "list" | "pantry" | "household" | "log";
 
 const AREAS: ReadonlyArray<{ value: Area; label: string; path: string; empty: string }> = [
-  { value: "plan", label: "Plan", path: "/", empty: "No plan yet" },
-  { value: "list", label: "Shopping list", path: "/list", empty: "No shopping list yet" },
+  { value: "plan", label: "Plan", path: "/", empty: "Plan your first week" },
+  { value: "list", label: "Shopping list", path: "/list", empty: "Nothing to buy" },
   { value: "pantry", label: "Pantry", path: "/pantry", empty: "The Pantry is empty" },
   { value: "household", label: "Household", path: "/household", empty: "" },
-  { value: "log", label: "Log", path: "/log", empty: "Nothing logged yet" }
+  { value: "log", label: "Log", path: "/log", empty: "Nothing logged" }
 ];
 
 export function Root(props: Readonly<Record<string, unknown>>): ReactNodeLike {

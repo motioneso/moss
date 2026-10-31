@@ -95,6 +95,17 @@ describe("meals manifest", () => {
     expect(tool("meals.household.remove").selfOperationGrant).toBe("confirm_always");
   });
 
+  it("requires in each input schema what the handler requires, at the handler's limits", () => {
+    const save = tool("meals.kitchen.save").inputSchema as Schema;
+    expect(save.properties!.slotRules!.items!.required).toEqual(["slotName", "soloWeekdays"]);
+
+    const member = tool("meals.household.save").inputSchema as Schema & {
+      properties: Record<string, { items: { maxLength: number } }>;
+    };
+    expect(member.properties.restrictions.items.maxLength).toBe(80);
+    expect(member.properties.preferences.items.maxLength).toBe(120);
+  });
+
   it("registers every manifest handler and nothing more", () => {
     const tools = loadManifest().assistantTools as Array<Record<string, unknown>>;
     expect(Object.keys(HANDLERS).sort()).toEqual(

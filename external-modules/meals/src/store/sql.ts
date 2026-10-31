@@ -4,9 +4,11 @@
 // runtime role with RLS scoped to the acting owner, so no query names an owner except through
 // app.current_actor_user_id() on insert.
 //
-// ctx.db allows SELECT, INSERT, UPDATE and DELETE only, with no transactions. First-use creation
-// is therefore INSERT ... ON CONFLICT DO NOTHING against the unique keys, which keeps two racing
-// first reads to one Kitchen and one self member.
+// ctx.db allows SELECT, INSERT, UPDATE and DELETE only, with no transactions, and a read tool may
+// run SELECT only. So readKitchen never writes: before the first write it returns the default
+// Kitchen. The Kitchen and self member ids derive from the owner, so that view carries the same
+// ids the first write stores. Creation is INSERT ... ON CONFLICT DO NOTHING, which keeps two
+// racing first writes to one Kitchen and one self member.
 import type {
   KitchenView,
   MemberView,
@@ -42,7 +44,9 @@ export interface MemberFields {
 }
 
 export interface MealsStore {
-  /** Returns the owner's Kitchen, creating it and a self member named "You" on first use. */
+  /** Returns the owner's Kitchen without writing. Before the first write it is the default. */
+  readKitchen(): Promise<KitchenView>;
+  /** Returns the owner's Kitchen, storing it and a self member named "You" on first use. */
   getOrCreateKitchen(): Promise<KitchenView>;
   updateKitchen(kitchenId: string, patch: KitchenPatch): Promise<void>;
   /** One row per slot name. A rule for an existing slot replaces it. */
@@ -88,6 +92,31 @@ const MEMBER_COLUMNS =
   "carb_target_g, fat_target_g, meal_pattern, restrictions, preferences";
 
 const SELF_NAME = "You";
+
+// Ids derived from the acting owner, so a read before the first write names the stored rows.
+const KITCHEN_ID_SQL = "md5('meals.kitchen:' || app.current_actor_user_id()::text)::uuid";
+const SELF_ID_SQL = "md5('meals.self:' || app.current_actor_user_id()::text)::uuid";
+
+// Match the column defaults in sql/0001 and sql/0002.
+const DEFAULT_UNITS: UnitsSystem = "us";
+const DEFAULT_PANTRY_MODE: PantryMode = "prefer";
+const DEFAULT_MEAL_PATTERN = ["breakfast", "lunch", "dinner"];
+
+function unsavedSelf(memberId: string): MemberRow {
+  return {
+    member_id: memberId,
+    name: SELF_NAME,
+    is_self: true,
+    linked_account_email: null,
+    calorie_target: null,
+    protein_target_g: null,
+    carb_target_g: null,
+    fat_target_g: null,
+    meal_pattern: [...DEFAULT_MEAL_PATTERN],
+    restrictions: [],
+    preferences: []
+  };
+}
 
 function toMember(row: MemberRow): MemberView {
   return {
@@ -146,49 +175,66 @@ export function sqlStore(db: MealsDb): MealsStore {
     return rows;
   }
 
+  async function derivedIds(): Promise<{ kitchen_id: string; self_id: string }> {
+    const { rows } = await db.query<{ kitchen_id: string; self_id: string }>(
+      `SELECT ${KITCHEN_ID_SQL} AS kitchen_id, ${SELF_ID_SQL} AS self_id`
+    );
+    return rows[0]!;
+  }
+
+  async function view(): Promise<KitchenView> {
+    const kitchen = await readKitchen();
+    const ids = kitchen === null ? await derivedIds() : null;
+    const kitchenId = kitchen?.kitchen_id ?? ids!.kitchen_id;
+
+    let members = kitchen === null ? [] : await readMembers(kitchenId);
+    if (!members.some((member) => member.is_self)) {
+      const selfId = ids?.self_id ?? (await derivedIds()).self_id;
+      members = [unsavedSelf(selfId), ...members];
+    }
+
+    const { rows: rules } =
+      kitchen === null
+        ? { rows: [] as SlotRuleRow[] }
+        : await db.query<SlotRuleRow>(
+            "SELECT slot_name, solo_weekdays::int[] AS solo_weekdays, " +
+              "to_char(usual_time, 'HH24:MI') AS usual_time " +
+              "FROM app.meals_meal_slot_rules WHERE kitchen_id = $1 ORDER BY created_at, slot_name",
+            [kitchenId]
+          );
+
+    return {
+      kitchenId,
+      unitsSystem: kitchen?.units_system ?? DEFAULT_UNITS,
+      defaultPantryMode: kitchen?.default_pantry_mode ?? DEFAULT_PANTRY_MODE,
+      members: members.map(toMember),
+      slotRules: rules.map((rule) => ({
+        slotName: rule.slot_name,
+        soloWeekdays: rule.solo_weekdays,
+        usualTime: rule.usual_time
+      }))
+    };
+  }
+
   return {
+    readKitchen: view,
+
     async getOrCreateKitchen() {
-      let kitchen = await readKitchen();
-      if (kitchen === null) {
-        await db.query(
-          "INSERT INTO app.meals_kitchens (owner_user_id, kitchen_id) " +
-            "VALUES (app.current_actor_user_id(), gen_random_uuid()) " +
-            "ON CONFLICT (owner_user_id) DO NOTHING"
-        );
-        kitchen = await readKitchen();
-        if (kitchen === null) throw new Error("kitchen not visible after insert");
-      }
-
-      let members = await readMembers(kitchen.kitchen_id);
-      if (!members.some((member) => member.is_self)) {
-        await db.query(
-          "INSERT INTO app.meals_household_members " +
-            "(owner_user_id, kitchen_id, member_id, name, is_self) " +
-            "VALUES (app.current_actor_user_id(), $1, gen_random_uuid(), $2, true) " +
-            "ON CONFLICT (owner_user_id, kitchen_id) WHERE is_self DO NOTHING",
-          [kitchen.kitchen_id, SELF_NAME]
-        );
-        members = await readMembers(kitchen.kitchen_id);
-      }
-
-      const { rows: rules } = await db.query<SlotRuleRow>(
-        "SELECT slot_name, solo_weekdays::int[] AS solo_weekdays, " +
-          "to_char(usual_time, 'HH24:MI') AS usual_time " +
-          "FROM app.meals_meal_slot_rules WHERE kitchen_id = $1 ORDER BY created_at, slot_name",
-        [kitchen.kitchen_id]
+      // A bare ON CONFLICT covers both the owner key and the derived primary key under a race.
+      await db.query(
+        "INSERT INTO app.meals_kitchens (owner_user_id, kitchen_id) " +
+          `VALUES (app.current_actor_user_id(), ${KITCHEN_ID_SQL}) ON CONFLICT DO NOTHING`
       );
-
-      return {
-        kitchenId: kitchen.kitchen_id,
-        unitsSystem: kitchen.units_system,
-        defaultPantryMode: kitchen.default_pantry_mode,
-        members: members.map(toMember),
-        slotRules: rules.map((rule) => ({
-          slotName: rule.slot_name,
-          soloWeekdays: rule.solo_weekdays,
-          usualTime: rule.usual_time
-        }))
-      };
+      const kitchen = await readKitchen();
+      if (kitchen === null) throw new Error("kitchen not visible after insert");
+      await db.query(
+        "INSERT INTO app.meals_household_members " +
+          "(owner_user_id, kitchen_id, member_id, name, is_self) " +
+          `VALUES (app.current_actor_user_id(), $1, ${SELF_ID_SQL}, $2, true) ` +
+          "ON CONFLICT DO NOTHING",
+        [kitchen.kitchen_id, SELF_NAME]
+      );
+      return view();
     },
 
     async updateKitchen(kitchenId, patch) {

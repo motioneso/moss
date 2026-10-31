@@ -269,7 +269,7 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["slotName"],
+              "required": ["slotName", "soloWeekdays"],
               "properties": {
                 "slotName": {
                   "type": "string",

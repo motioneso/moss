@@ -33,6 +33,11 @@ interface FakeState {
   slotRules: SlotRuleView[];
 }
 
+// Owner-derived ids, as the SQL store derives them: a read before the first write names the rows
+// that write stores.
+const KITCHEN_ID = "00000000-0000-4000-8000-00000000000a";
+const SELF_ID = "00000000-0000-4000-8000-00000000000b";
+
 function fakeStore(): MealsStore & { state: FakeState } {
   const state: FakeState = { kitchen: null, members: [], slotRules: [] };
   let nextId = 1;
@@ -88,12 +93,24 @@ function fakeStore(): MealsStore & { state: FakeState } {
 
   return {
     state,
+    async readKitchen() {
+      if (state.kitchen === null) {
+        return {
+          kitchenId: KITCHEN_ID,
+          unitsSystem: "us",
+          defaultPantryMode: "prefer",
+          members: [{ ...blank("You", true), memberId: SELF_ID }],
+          slotRules: []
+        };
+      }
+      return view();
+    },
     async getOrCreateKitchen() {
       if (state.kitchen === null) {
-        state.kitchen = { kitchenId: id(), unitsSystem: "us", defaultPantryMode: "prefer" };
+        state.kitchen = { kitchenId: KITCHEN_ID, unitsSystem: "us", defaultPantryMode: "prefer" };
       }
       if (!state.members.some((member) => member.isSelf)) {
-        state.members.unshift(blank("You", true));
+        state.members.unshift({ ...blank("You", true), memberId: SELF_ID });
       }
       return view();
     },
@@ -152,7 +169,29 @@ function ctx(input: Record<string, unknown>) {
 
 // ── Tests ────────────────────────────────────────────────────────────────
 
+/** A store whose every write throws, as the host's read-tool rule does. */
+function readOnlyStore(): MealsStore {
+  const store = fakeStore();
+  const refuse = async () => {
+    throw new Error("forbidden_db_mutation");
+  };
+  return {
+    ...store,
+    getOrCreateKitchen: refuse,
+    updateKitchen: refuse,
+    upsertSlotRules: refuse,
+    addMember: refuse,
+    updateMember: refuse,
+    removeMember: refuse
+  };
+}
+
 describe("meals.kitchen.get", () => {
+  it("never writes, because the host lets a read tool run SELECT only", async () => {
+    const kitchen = await createKitchenGetHandler(readOnlyStore())(ctx({}));
+    expect(kitchen.members).toEqual([expect.objectContaining({ name: "You", isSelf: true })]);
+  });
+
   it("creates one Kitchen with one self member on first use, and no second on a repeat", async () => {
     const store = fakeStore();
     const get = createKitchenGetHandler(store);
@@ -239,6 +278,15 @@ describe("meals.household.save", () => {
     ).rejects.toMatchObject({ code: "member_not_found" });
   });
 
+  it("accepts a 120-character preference and rejects 121", async () => {
+    const save = createHouseholdSaveHandler(fakeStore());
+    const saved = await save(ctx({ name: "Sam", preferences: ["p".repeat(120)] }));
+    expect(saved.preferences).toEqual(["p".repeat(120)]);
+    await expect(save(ctx({ name: "Sam", preferences: ["p".repeat(121)] }))).rejects.toThrow(
+      /preferences/
+    );
+  });
+
   it("rejects out-of-range targets and an empty pattern", async () => {
     const save = createHouseholdSaveHandler(fakeStore());
     await expect(save(ctx({ name: "Sam", calorieTarget: 100 }))).rejects.toThrow(
@@ -261,6 +309,7 @@ describe("meals.household.remove", () => {
 
   it("refuses to remove the self member and keeps its row", async () => {
     const store = fakeStore();
+    await createHouseholdSaveHandler(store)(ctx({ name: "Sam" }));
     const kitchen = await createKitchenGetHandler(store)(ctx({}));
     const self = kitchen.members[0]!;
 

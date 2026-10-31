@@ -101,6 +101,29 @@ describe("Meals page shell", () => {
       .map((node) => flatten(node.props.children));
     expect(labels).toEqual(["Plan", "Shopping list", "Pantry", "Household", "Log"]);
   });
+
+  it("gives each unbuilt area the prototype's empty-state title and no action", async () => {
+    const titles: Array<[string, string]> = [
+      ["/m/meals", "Plan your first week"],
+      ["/m/meals/list", "Nothing to buy"],
+      ["/m/meals/pantry", "The Pantry is empty"],
+      ["/m/meals/log", "Nothing logged"]
+    ];
+    for (const [path, title] of titles) {
+      const renderer = await render(path);
+      const empty = renderer.root.find((node) => node.props.className === "jds-empty");
+      expect(text(renderer)).toContain(title);
+      expect(empty.findAll((node) => node.type === "button")).toEqual([]);
+    }
+  });
+
+  it("numbers the household section heads like the prototype", async () => {
+    const renderer = await render("/m/meals/household");
+    const numbers = renderer.root
+      .findAll((node) => node.props.className === "jds-section-head__number")
+      .map((node) => flatten(node.props.children));
+    expect(numbers).toEqual(["01", "02"]);
+  });
 });
 
 describe("Household with no tools handle", () => {

@@ -1,7 +1,7 @@
 // external-modules/meals/src/tools/household.ts
 //
-// The four S1 tools. Every handler reads the Kitchen through the store, which creates it on
-// first use, so planning for yourself needs no setup. Self targets live on the self member row
+// The four S1 tools. kitchen.get is a read tool and never writes; the write tools store the
+// Kitchen on first use, so planning for yourself needs no setup. Self targets live on the self member row
 // and no handler reads a preference store (spec correction C3).
 import type { ModuleWorkerContext } from "@moss/module-sdk/worker";
 
@@ -50,7 +50,7 @@ const HOUSEHOLD_REMOVE_KEYS = new Set(["memberId"]);
 export function createKitchenGetHandler(store: MealsStore) {
   return async (ctx: ModuleWorkerContext): Promise<KitchenView> => {
     requireNoUnknownKeys(stripEnvelope(ctx.input), KITCHEN_GET_KEYS);
-    return store.getOrCreateKitchen();
+    return store.readKitchen();
   };
 }
 
@@ -98,7 +98,7 @@ export function createHouseholdRemoveHandler(store: MealsStore) {
     requireNoUnknownKeys(input, HOUSEHOLD_REMOVE_KEYS);
     const memberId = readUuid(input, "memberId", { required: true });
 
-    const kitchen = await store.getOrCreateKitchen();
+    const kitchen = await store.readKitchen();
     if (kitchen.members.some((member) => member.memberId === memberId && member.isSelf)) {
       throw new InputError("self_member", "the self member cannot be removed");
     }
@@ -132,7 +132,7 @@ function readMemberFields(input: Record<string, unknown>, adding: boolean): Memb
       lowercase: true
     }),
     restrictions: readTextList(input, "restrictions", { minItems: 0, maxItems: 40, maxChars: 80 }),
-    preferences: readTextList(input, "preferences", { minItems: 0, maxItems: 40, maxChars: 80 })
+    preferences: readTextList(input, "preferences", { minItems: 0, maxItems: 40, maxChars: 120 })
   };
 }
 

@@ -11,6 +11,7 @@ import {
   moduleInstallRoleName,
   moduleRuntimeRoleName
 } from "../../packages/db/src/module-role-broker.js";
+import { classifyModuleStatement } from "../../packages/db/src/module-statement-classify.js";
 import { sqlStore, type MealsStore } from "../../external-modules/meals/src/store/sql.js";
 import {
   connectionStrings,
@@ -43,18 +44,31 @@ async function install() {
   });
 }
 
-/** Runs `fn` in one transaction as the module runtime role, acting for `actorUserId`. */
+/**
+ * Runs `fn` in one transaction as the module runtime role, acting for `actorUserId`.
+ * `readOnly` applies the host's read-tool rule (SELECT only) inside a READ ONLY transaction.
+ */
 async function asActor<T>(
   actorUserId: string,
-  fn: (store: MealsStore, client: pg.Client) => Promise<T>
+  fn: (store: MealsStore, client: pg.Client) => Promise<T>,
+  options: { readOnly?: boolean } = {}
 ): Promise<T> {
   const client = new Client({ connectionString: connectionStrings.app });
   await client.connect();
   try {
-    await client.query("BEGIN");
+    await client.query(options.readOnly ? "BEGIN READ ONLY" : "BEGIN");
     await client.query(`SET LOCAL ROLE ${runtimeRole}`);
     await client.query("SELECT set_config('app.actor_user_id', $1, true)", [actorUserId]);
-    const result = await fn(sqlStore(client), client);
+    const db = options.readOnly
+      ? {
+          query: <R>(text: string, params?: readonly unknown[]) => {
+            const kind = classifyModuleStatement(text);
+            if (kind !== "select") throw new Error(`read tool ran ${kind}`);
+            return client.query(text, params as unknown[]) as unknown as Promise<{ rows: R[] }>;
+          }
+        }
+      : client;
+    const result = await fn(sqlStore(db), client);
     await client.query("COMMIT");
     return result;
   } catch (error) {
@@ -118,7 +132,25 @@ describe("meals tables (S1 #3885)", () => {
     expect((await install()).installed).toHaveLength(0);
   });
 
-  it("creates one Kitchen and one self member even when two first reads race", async () => {
+  it("reads a new owner's Kitchen without writing, with the ids the first write keeps", async () => {
+    const read = await asActor(ids.userB, (store) => store.readKitchen(), { readOnly: true });
+    expect(read.members).toHaveLength(1);
+    expect(read.members[0]).toMatchObject({ name: "You", isSelf: true });
+    expect(read).toMatchObject({ unitsSystem: "us", defaultPantryMode: "prefer", slotRules: [] });
+
+    const saved = await asActor(ids.userB, (store) => store.getOrCreateKitchen());
+    expect(saved.kitchenId).toBe(read.kitchenId);
+    expect(saved.members[0]!.memberId).toBe(read.members[0]!.memberId);
+
+    const reread = await asActor(ids.userB, (store) => store.readKitchen(), { readOnly: true });
+    expect(reread).toEqual(saved);
+
+    const other = await asActor(ids.userA, (store) => store.readKitchen(), { readOnly: true });
+    expect(other.kitchenId).not.toBe(read.kitchenId);
+    expect(other.members[0]!.memberId).not.toBe(read.members[0]!.memberId);
+  });
+
+  it("creates one Kitchen and one self member even when two first writes race", async () => {
     const [first, second] = await Promise.all([
       asActor(ids.userA, (store) => store.getOrCreateKitchen()),
       asActor(ids.userA, (store) => store.getOrCreateKitchen())

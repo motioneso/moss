@@ -70,7 +70,12 @@ function Household(props: {
     <div className="mls-grid">
       <div className="mls-stack">
         <section className="mls-stack">
-          <SectionHead title="People" meta={count === 1 ? "1 person" : `${count} people`} rule />
+          <SectionHead
+            number="01"
+            title="People"
+            meta={count === 1 ? "1 person" : `${count} people`}
+            rule
+          />
           {failed ? (
             <p className="jds-caption" role="alert">
               Couldn't remove that person
@@ -170,7 +175,7 @@ function Together(props: { kitchen: KitchenView }): ReactNodeLike {
   const { kitchen } = props;
   return (
     <section className="mls-stack">
-      <SectionHead title="Who eats together" rule />
+      <SectionHead number="02" title="Who eats together" rule />
       <dl className="mls-facts">
         {slotsEaten(kitchen.members).flatMap((slot) => {
           const eaters = kitchen.members.filter((member) => member.mealPattern.includes(slot));
