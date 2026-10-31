@@ -346,8 +346,9 @@ to that plan (U1).
 | `meals.meal-job`     | `mealId` uuid, `generation` integer 1-100000, `mode` enum `swap_choices`, `quick_swap`, `safety_recheck` | `meal-job:<mealId>:<mode>:g<generation>` | allowModuleEnqueue, timeoutMs 600000, retryLimit 1 | S7    |
 | `meals.log-estimate` | `entryId` uuid, `revision` integer 1-1000000                                                             | `log-estimate:<entryId>:r<revision>`     | allowModuleEnqueue, retryLimit 2                   | S6    |
 
-S7 declares the whole `mode` enum up front, and its handler rejects a mode whose slice has not
-landed. S8 adds `safety_recheck` and S9 adds `quick_swap`.
+S7 declares the whole `mode` enum up front and handles `swap_choices` and `safety_recheck`. Its
+handler rejects `quick_swap` until S9 lands. S8 and S10 both start `safety_recheck`, so neither
+needs the other.
 
 Day job rules:
 
@@ -1207,10 +1208,13 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
 
 - Goal: lock meals, regenerate all, a day or a meal, and pick from two or three swap choices.
 - Files: `sql` (6.8 S7); `meals.meal.edit` (lock), `meals.plan.control` regenerate,
-  `meals.meal.swap`; the `meals.meal-job` queue; routes `plan/swap/:mealId`, `plan/new`.
+  `meals.meal.swap`; the `meals.meal-job` queue with the `swap_choices` and `safety_recheck`
+  modes; routes `plan/swap/:mealId`, `plan/new`.
 - Tests that fail first:
   - Regenerate never rewrites locked, cooked or text meals, and reports how many it will replace.
   - Each swap choice passes Safety before it is shown.
+  - `safety_recheck` re-runs Safety on a meal's recipe for its current eaters, and a failure marks
+    the meal with its reason.
   - Choose replaces the meal and rebuilds the list (U1).
   - Repeat requests with a new generation get a new key.
 - App map: features `meals.lock-regenerate` and `meals.swap`; screen `meals.swap` (`/plan/swap/:mealId`).
@@ -1225,11 +1229,12 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
 
 - Goal: move meals, change eaters, plain-text slots, One-off meals, a cook-time limit per night,
   and a per-day Shared or Solo override.
-- Files: `meals.meal.edit` (move, set_eaters); `meals.day.edit`; the `safety_recheck` mode; routes
-  `plan/move/:mealId`, `plan/eaters/:mealId`, `plan/text/:mealId`.
+- Files: `meals.meal.edit` (move, set_eaters); `meals.day.edit`; routes `plan/move/:mealId`,
+  `plan/eaters/:mealId`, `plan/text/:mealId`.
 - Tests that fail first:
   - Move rebuilds the list and keeps ticks.
-  - Changing eaters re-runs Safety for the new eaters. It fails if Safety runs only at generation.
+  - Changing eaters re-runs Safety for the new eaters, through S7's `safety_recheck` mode. It
+    fails if Safety runs only at generation.
   - A text slot never reaches the list.
   - The cook-time limit regenerates a longer recipe.
   - A Solo override writes one meal per eater for that day only.
@@ -1277,7 +1282,7 @@ Release note, S1 to S11: `Category: N/A`, because Meals is unlisted.
   - Undo restores the Pantry, skipping rows edited since.
   - The log offer logs one portion.
   - The near-veto excludes the recipe, and an explicit request overrides it.
-  - A favourite placed in a slot passes Safety first.
+  - A favourite placed in a slot passes Safety first, through S7's `safety_recheck` mode.
   - Database seam for the two tables.
 - App map: features `meals.cooking`, `meals.ratings`, `meals.favourites`.
 - Live proof: in chat, "I cooked tonight's dinner", accept the log offer, "undo that", rate it,
