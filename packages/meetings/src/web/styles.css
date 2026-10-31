@@ -156,10 +156,6 @@
   }
 }
 
-.meetings-download {
-  margin-top: var(--space-5);
-}
-
 .meetings-capture-heading {
   justify-content: flex-end;
 }

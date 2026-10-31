@@ -6,9 +6,7 @@ export function MeetingNotLinked() {
       title="Link your Mac"
       description="Open Trail Marker and follow its linking instructions."
     >
-      <div className="meetings-download">
-        <Button>Download app</Button>
-      </div>
+      <Button>Download app</Button>
     </EmptyState>
   );
 }

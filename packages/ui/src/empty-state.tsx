@@ -13,7 +13,7 @@ export function EmptyState({ icon, title, description, children }: EmptyStatePro
       {icon ? <span className="jds-empty__mark">{icon}</span> : null}
       <div className="jds-empty__title">{title}</div>
       {description ? <div className="jds-empty__sub">{description}</div> : null}
-      {children}
+      {children ? <div className="jds-empty__actions">{children}</div> : null}
     </div>
   );
 }

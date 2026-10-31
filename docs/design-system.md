@@ -311,6 +311,9 @@ returnFocusRef, dismissOnEscape, backdropRef})`; attach its returned onKeyDown t
 - Inline, inside a section: one quiet sentence, `role="status"`. Today uses `.cmd-empty` and
   `.agenda-clear` ("Gathering your morning briefing...").
 - Whole page or panel: `<EmptyState>` (`.jds-empty`) with title, optional description and action.
+  Children render in one `.jds-empty__actions` slot, a centred wrapping row with 12px
+  (`--space-3`) above it and 8px (`--space-2`) between controls. Pass bare buttons, not wrappers
+  with their own margin.
 - No fake counts, no generic placeholder cards, no spinners in the middle of a page.
 - Copy is sentence case and reads like the product talking, not documentation. Don't repeat the
   section name already on screen.
