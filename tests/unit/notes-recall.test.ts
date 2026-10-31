@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { dataContextBrand, type DataContextDb } from "@moss/db";
 
-const mockRetrieve = vi.hoisted(() => vi.fn());
+const mockEmbed = vi.hoisted(() => vi.fn());
+const mockSearch = vi.hoisted(() => vi.fn());
 
 vi.mock("@moss/settings", () => ({
   RuntimeConfigResolver: vi.fn()
@@ -13,24 +14,31 @@ vi.mock("@moss/memory", () => ({
   createEmbeddingProvider: vi.fn().mockReturnValue({}),
   MemoryRepository: vi.fn(),
   MemoryRetriever: vi.fn().mockImplementation(function MemoryRetriever(this: {
-    retrieve: typeof mockRetrieve;
+    embedQuery: typeof mockEmbed;
+    searchByEmbedding: typeof mockSearch;
   }) {
-    this.retrieve = mockRetrieve;
+    this.embedQuery = mockEmbed;
+    this.searchByEmbedding = mockSearch;
   })
 }));
 
 const { createNotesRecallPort } = await import("../../packages/notes/src/recall.js");
 
 const scopedDb = { db: {} as never, [dataContextBrand]: true } satisfies DataContextDb;
+const dataContext = {
+  withDataContext: async (_ctx: unknown, cb: (db: DataContextDb) => unknown) => cb(scopedDb)
+} as never;
+const EMBEDDING = [0.1, 0.2];
 
 describe("createNotesRecallPort", () => {
   beforeEach(() => {
-    mockRetrieve.mockReset();
+    mockEmbed.mockReset().mockResolvedValue(EMBEDDING);
+    mockSearch.mockReset();
   });
 
   it("maps RetrievedChunk fields to NotesRecallSnippet", async () => {
     const updatedAt = new Date("2026-08-01T00:00:00.000Z");
-    mockRetrieve.mockResolvedValue([
+    mockSearch.mockResolvedValue([
       {
         id: "chunk-1",
         sourcePath: "notes/todo.md",
@@ -43,38 +51,38 @@ describe("createNotesRecallPort", () => {
     ]);
 
     const port = createNotesRecallPort();
-    const result = await port.recall(scopedDb, "user-1", "milk", {});
+    const result = await port.recall(dataContext, "user-1", "milk", {});
 
     expect(result.snippets).toEqual([
       { sourcePath: "notes/todo.md", updatedAt, score: 0.87, text: "buy milk" }
     ]);
-    expect(mockRetrieve).toHaveBeenCalledWith(scopedDb, "milk", 8, "notes");
+    expect(mockSearch).toHaveBeenCalledWith(scopedDb, EMBEDDING, 8, "notes");
   });
 
   it("defaults to DEFAULT_LIMIT (8) when no limit is given", async () => {
-    mockRetrieve.mockResolvedValue([]);
+    mockSearch.mockResolvedValue([]);
 
     const port = createNotesRecallPort();
-    await port.recall(scopedDb, "user-1", "q", {});
+    await port.recall(dataContext, "user-1", "q", {});
 
-    expect(mockRetrieve).toHaveBeenCalledWith(scopedDb, "q", 8, "notes");
+    expect(mockSearch).toHaveBeenCalledWith(scopedDb, EMBEDDING, 8, "notes");
   });
 
   it("clamps a limit above MAX_LIMIT (20) down to 20", async () => {
-    mockRetrieve.mockResolvedValue([]);
+    mockSearch.mockResolvedValue([]);
 
     const port = createNotesRecallPort();
-    await port.recall(scopedDb, "user-1", "q", { limit: 500 });
+    await port.recall(dataContext, "user-1", "q", { limit: 500 });
 
-    expect(mockRetrieve).toHaveBeenCalledWith(scopedDb, "q", 20, "notes");
+    expect(mockSearch).toHaveBeenCalledWith(scopedDb, EMBEDDING, 20, "notes");
   });
 
   it("clamps a limit below 1 up to 1", async () => {
-    mockRetrieve.mockResolvedValue([]);
+    mockSearch.mockResolvedValue([]);
 
     const port = createNotesRecallPort();
-    await port.recall(scopedDb, "user-1", "q", { limit: 0 });
+    await port.recall(dataContext, "user-1", "q", { limit: 0 });
 
-    expect(mockRetrieve).toHaveBeenCalledWith(scopedDb, "q", 1, "notes");
+    expect(mockSearch).toHaveBeenCalledWith(scopedDb, EMBEDDING, 1, "notes");
   });
 });

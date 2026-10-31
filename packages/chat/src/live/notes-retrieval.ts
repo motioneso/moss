@@ -65,37 +65,36 @@ export class NotesContextRetriever {
     const decision = planPassiveRetrieval(input);
     if (!decision.shouldRetrieve) return { block: "", items: [] };
 
-    return this.deps.dataContext.withDataContext(
-      { actorUserId: input.actorUserId, requestId: "chat:notes-context-retrieval" },
-      async (scopedDb) => {
-        const settings = await this.settingsRepo.getOrCreate(scopedDb, input.actorUserId);
-        if (!settings.recallEnabled) return { block: "", items: [] };
+    const ctx = { actorUserId: input.actorUserId, requestId: "chat:notes-context-retrieval" };
 
-        const result = await this.deps.notesRecall.recall(
-          scopedDb,
-          input.actorUserId,
-          decision.query,
-          { limit: NOTES_RECALL_LIMIT }
-        );
+    // Short transaction: read the setting, then release the connection before the slow embedding.
+    const recallEnabled = await this.deps.dataContext.withDataContext(ctx, async (scopedDb) => {
+      const settings = await this.settingsRepo.getOrCreate(scopedDb, input.actorUserId);
+      return settings.recallEnabled;
+    });
+    if (!recallEnabled) return { block: "", items: [] };
 
-        const safe = result.snippets.filter((snippet) => {
-          if (isCredentialShaped(snippet.text) || isCredentialShaped(snippet.sourcePath)) {
-            console.warn(
-              JSON.stringify({
-                event: "chat.notes.credential-shaped-dropped"
-              })
-            );
-            return false;
-          }
-          return true;
-        });
-
-        const items = capItems([...safe].sort((a, b) => b.score - a.score));
-        const locale = await readPersonLocale(scopedDb, this.deps.localePreferences);
-        const block = renderNotesContextBlock(items, locale.timezone);
-        return { block, items };
-      }
+    const result = await this.deps.notesRecall.recall(
+      this.deps.dataContext,
+      input.actorUserId,
+      decision.query,
+      { limit: NOTES_RECALL_LIMIT }
     );
+
+    const safe = result.snippets.filter((snippet) => {
+      if (isCredentialShaped(snippet.text) || isCredentialShaped(snippet.sourcePath)) {
+        console.warn(JSON.stringify({ event: "chat.notes.credential-shaped-dropped" }));
+        return false;
+      }
+      return true;
+    });
+
+    const items = capItems([...safe].sort((a, b) => b.score - a.score));
+    const locale = await this.deps.dataContext.withDataContext(ctx, (scopedDb) =>
+      readPersonLocale(scopedDb, this.deps.localePreferences)
+    );
+    const block = renderNotesContextBlock(items, locale.timezone);
+    return { block, items };
   }
 }
 

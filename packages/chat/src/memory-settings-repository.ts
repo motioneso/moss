@@ -22,20 +22,29 @@ const DEFAULTS: Omit<UserMemorySettings, "userId" | "createdAt" | "updatedAt"> =
 
 export class ChatUserMemorySettingsRepository {
   async getOrCreate(scopedDb: DataContextDb, userId: string): Promise<UserMemorySettings> {
-    const result = await sql<{
+    type Row = {
       user_id: string;
       recall_enabled: boolean;
       facts_enabled: boolean;
       created_at: Date;
       updated_at: Date;
-    }>`
+    };
+
+    // Read first so an existing row is never locked; only a missing row is written.
+    const existing = await sql<Row>`
+      SELECT * FROM app.chat_user_memory_settings WHERE user_id = ${userId}::uuid
+    `.execute(scopedDb.db);
+    if (existing.rows[0]) return this.#mapRow(existing.rows[0]);
+
+    await sql`
       INSERT INTO app.chat_user_memory_settings (user_id, recall_enabled, facts_enabled)
       VALUES (${userId}::uuid, ${DEFAULTS.recallEnabled}, ${DEFAULTS.factsEnabled})
-      ON CONFLICT (user_id) DO UPDATE SET updated_at = app.chat_user_memory_settings.updated_at
-      RETURNING *
+      ON CONFLICT (user_id) DO NOTHING
     `.execute(scopedDb.db);
-
-    return this.#mapRow(result.rows[0]!);
+    const created = await sql<Row>`
+      SELECT * FROM app.chat_user_memory_settings WHERE user_id = ${userId}::uuid
+    `.execute(scopedDb.db);
+    return this.#mapRow(created.rows[0]!);
   }
 
   async update(
