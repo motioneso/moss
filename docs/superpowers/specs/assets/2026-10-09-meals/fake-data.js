@@ -679,7 +679,7 @@ SUBTOTAL            22.50`;
     kitchen: { owner: "Ben", members: ["Ben", "Maya"], invitePending: "maya@example.com" }
   };
 
-  window.MEALS_FAKE = {
+  const data = {
     TODAY,
     members,
     slotRules,
@@ -698,4 +698,87 @@ SUBTOTAL            22.50`;
     models,
     later
   };
+
+  // The "long text" review state stretches every name, line and note and inflates the numbers,
+  // so wrapping and truncation show on every screen. It applies at load, so switching it reloads.
+  const LONG_NAMES = { "m-ben": "Benedict Alexander", "m-maya": "Maya-Josephine Okonkwo-Whitfield" };
+  const TAILS = [
+    " with charred spring onions, smoked chilli butter and toasted seeds",
+    " with slow-roasted garlic, preserved lemon and a crisp herb crumb",
+    " with a sticky tamarind glaze, pickled shallots and coriander-free salsa verde"
+  ];
+  const tail = (i) => TAILS[i % TAILS.length];
+  const big = (n) => (n == null ? n : Math.round(n * 7));
+
+  const longify = (d) => {
+    for (const m of d.members) {
+      m.name = LONG_NAMES[m.id] || m.name;
+      m.restrictions.push("Anything cooked in sesame oil or finished with tahini");
+      m.preferences.push("Slow-cooked Sunday roasts with all the trimmings and extra gravy");
+      m.target = big(m.target);
+      if (m.linkedAccount) m.linkedAccount = "maya-josephine.okonkwo-whitfield@university-hospital.example.org";
+    }
+    Object.values(d.recipes).forEach((r, i) => {
+      r.title += i === 9 ? " (high-protein-post-workout-Mediterranean-inspired)" : tail(i);
+      r.minutes = r.minutes * 6 + 5;
+      r.kcal = big(r.kcal);
+      r.baseServings = r.baseServings * 6;
+      for (const g of r.ingredients) {
+        g.text += ", finely chopped and kept in a small bowl until the very end";
+        g.name = `${g.name} from the farmers' market stall by the station`;
+      }
+      r.steps = r.steps.map(
+        (s) =>
+          `${s} Keep the heat at medium, stir now and then, and taste for salt before moving on, because the stock and the cheese both bring their own.`
+      );
+    });
+    for (const day of d.plan.days)
+      for (const meal of day.meals) {
+        for (const f of meal.fit) {
+          f.kcal = big(f.kcal);
+          f.share = big(f.share);
+        }
+        if (meal.kind === "text")
+          meal.text = `${meal.text} at Maya's sister's birthday dinner at the new Ethiopian place on Fifth Avenue`;
+      }
+    d.plan.request =
+      "Meal prep breakfasts and weekday lunches that keep for four days in the fridge. Bring back Maya's traybake, keep Thursday under thirty minutes because of late meetings, and nothing with coriander, ever, for anyone in the house.";
+    d.plan.writtenBy = "Claude Sonnet, extended reasoning, household model";
+    d.pantry.forEach((p, i) => {
+      p.name += i % 2 ? " (opened, kept in the door of the big fridge)" : " from the bulk shop on Caledonia Road";
+      if (p.qty != null) p.qty = big(p.qty) * 13;
+      p.updated = "a little over three weeks ago";
+    });
+    for (const s of d.staples) s.name += " (the good organic one from the market)";
+    d.list.forEach((l, i) => {
+      l.name += i % 3 ? " (organic, unwaxed, from the farmers' market)" : " (extra-large family-size value pack)";
+      if (l.need) l.need = `${l.need} plus 2 lb 12 oz for the second batch`;
+      l.buy = `${l.buy} plus 3 × 1 lb 10 oz bulk packs`;
+      l.sources = l.sources.map((s, j) => s + tail(i + j));
+    });
+    d.log.targets = { calories: 14800, protein: 1240, carbs: 1980, fat: 625 };
+    for (const e of d.log.entries) {
+      e.text += ", plus a second helping and the leftover rice from the night before, eaten standing at the counter";
+      for (const k of ["kcal", "protein", "carbs", "fat"]) e[k] = big(e[k]);
+    }
+    for (const r of d.receiptItems) r.name += " (organic, store own-brand, family-size value pack)";
+    d.lastWeek = d.lastWeek.map((t, i) => t + tail(i));
+    for (const m of d.models) m.task += " for the whole household, including shared Kitchens";
+    for (const id of Object.keys(d.later.learned))
+      d.later.learned[id] = d.later.learned[id].map(
+        (s) => `${s} This held across the last six weeks of ratings, cooked marks and skipped meals.`
+      );
+    for (const h of d.later.history) h.change += ", Smoked paprika −1 tsp, Vegetable stock −3 cups, Garlic −3 cloves";
+    for (const r of d.later.restock) r.name += " (the big bag from the roaster on the corner)";
+    d.later.budget = { weekly: 12400, estimate: 11850 };
+    d.later.kitchen = {
+      owner: LONG_NAMES["m-ben"],
+      members: Object.values(LONG_NAMES),
+      invitePending: "maya-josephine.okonkwo-whitfield@university-hospital.example.org"
+    };
+  };
+
+  if (/[?&]state=long(&|$)/.test(window.location.hash)) longify(data);
+
+  window.MEALS_FAKE = data;
 })();

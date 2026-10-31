@@ -10,6 +10,7 @@
   S.logPortion = S.logPortion === undefined ? true : S.logPortion;
   S.rateDraft = {};
   S.subbed = {};
+  S.asWritten = false;
 
   const aiOff = () => A.reviewState() === "ai-off";
   const self = () => S.data.members.find((m) => m.isSelf);
@@ -123,10 +124,9 @@
     const using = S.subbed[`${meal.id}:${ing.name}`];
     return h`
       <li class="mls-ing">
-        <span class="mls-ing__amount">${amount(ing, factor)}</span>
+        <span class="mls-ing__amount">${S.asWritten ? "" : amount(ing, factor)}</span>
         <span class="mls-ing__body">
-          <span>${using ? h`<s>${sentence(ing.name)}</s> ${sentence(using)}` : sentence(ing.name)}</span>
-          <span class="jds-caption">${ing.text}</span>
+          ${S.asWritten ? h`<span>${ing.text}</span>` : h`<span>${using ? h`<s>${sentence(ing.name)}</s> ${sentence(using)}` : sentence(ing.name)}</span>`}
           ${
             item || ing.checkLabel || sub
               ? h`<span class="mls-row">
@@ -142,6 +142,24 @@
           }
         </span>
       </li>`;
+  };
+
+  // One line per eater: their Never-serve rules, and any label they must read.
+  const safetyView = (meal) => {
+    const rows = A.planSafety.safetyOf(meal).filter((s) => s.never.length);
+    if (!rows.length) return "";
+    const swap = !meal.cooked && rows.some((s) => s.labels.length) && A.planSafety.safeSwapFor(meal);
+    return h`
+      <section class="mls-safety-list" aria-label="Safety">
+        ${rows.map(
+          (s) => h`
+            <span class="mls-safety__why jds-caption${s.labels.length ? "" : " mls-safety__why--ok"}">
+              ${icon(s.labels.length ? "shield-alert" : "shield-check", 14)}
+              <span><strong>${s.member.name}:</strong> ${s.labels.length ? `check the ${s.labels.join(" and ")} label for ${s.never.join(", ").toLowerCase()}` : `no ${s.never.join(", ").toLowerCase()}`}</span>
+            </span>`
+        )}
+        ${swap ? btn("Safe swap", { variant: "link", size: "sm", action: "plan-safe-swap", data: { meal: meal.id }, disabled: aiOff() }) : ""}
+      </section>`;
   };
 
   const portionsLine = (meal) => {
@@ -212,6 +230,8 @@
         </div>
       </div>
 
+      ${safetyView(meal)}
+
       <div class="mls-recipe">
         <section class="mls-stack" aria-labelledby="rc-ing">
           ${sectionHead({ number: "01", title: "Ingredients", meta: caption(`Portions: ${portionsLine(meal)}`), rule: true })}
@@ -221,14 +241,28 @@
               <span class="jds-caption">${servings > 1 ? "servings" : "serving"}</span>
               ${overridden ? btn(`Reset to ${String(startServings(meal)).replace(".5", "½")}`, { variant: "link", size: "sm", action: "rc-servings-reset", data: { meal: meal.id } }) : ""}
             </span>
-            ${segmented(
-              [
-                { value: "us", label: "US" },
-                { value: "metric", label: "Metric" }
-              ],
-              S.units,
-              { label: "Units", action: "rc-units" }
-            )}
+            <span class="mls-row">
+              ${segmented(
+                [
+                  { value: "scaled", label: "Scaled" },
+                  { value: "written", label: "As written" }
+                ],
+                S.asWritten ? "written" : "scaled",
+                { label: "Ingredient text", action: "rc-written" }
+              )}
+              ${
+                S.asWritten
+                  ? ""
+                  : segmented(
+                      [
+                        { value: "us", label: "US" },
+                        { value: "metric", label: "Metric" }
+                      ],
+                      S.units,
+                      { label: "Units", action: "rc-units" }
+                    )
+              }
+            </span>
           </div>
           <ul class="mls-section mls-list" role="list">${r.ingredients.map((ing) => ingredientRow(ing, meal, factor))}</ul>
         </section>
@@ -377,9 +411,24 @@
     "rc-log": (el) => {
       S.logPortion = el.checked;
     },
+    "rc-written": (el) => {
+      S.asWritten = el.dataset.value === "written";
+      A.render();
+    },
+    "rc-cooked-undo": () => {
+      const u = S.cookedUndo;
+      if (!u) return;
+      S.data.pantry = u.pantry;
+      S.data.log.entries = u.entries;
+      A.findMeal(u.mealId).meal.cooked = false;
+      S.cookedUndo = null;
+      A.toast("Not cooked. Pantry put back.", { icon: "undo-2", tone: "drift" });
+      A.go(`recipe/${u.mealId}`);
+    },
     "rc-cooked": (el) => {
       const meal = mealOf(el);
       const r = A.recipe(meal.recipeId);
+      S.cookedUndo = { mealId: meal.id, pantry: structuredClone(S.data.pantry), entries: structuredClone(S.data.log.entries) };
       pantryPreview(meal).forEach((row) => {
         if (row.after != null) row.item.qty = Math.round(row.after * 100) / 100;
         row.item.updated = "just now";
@@ -397,7 +446,7 @@
           A.render();
         }, 1600);
       }
-      A.toast(left ? `Pantry updated. ${left} leftover ${left > 1 ? "portions" : "portion"} saved.` : "Pantry updated.", { title: "Cooked", icon: "check", tone: "ready" });
+      A.toast(left ? `Pantry updated. ${left} leftover ${left > 1 ? "portions" : "portion"} saved.` : "Pantry updated.", { title: "Cooked", icon: "check", tone: "ready", undo: "rc-cooked-undo", ms: 7000 });
       A.go(`recipe/${meal.id}/rate`);
     },
     "rc-rate": (el) => {

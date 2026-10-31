@@ -47,6 +47,7 @@
     if (l.staple) tags.push(badge(l.low ? "Staple, running low" : "Staple", "neutral"));
     if (l.restock) tags.push(badge(l.restock, "neutral", { icon: "refresh-cw" }));
     if (l.manual) tags.push(badge("Added", "neutral"));
+    if (l.changed === "New") tags.push(badge("New", "pine"));
     if (l.unconvertible)
       tags.push(h`<span title="Cups do not convert to how the Pantry holds this, so it stays on its own line.">${badge("Own line", "outline", { icon: "info" })}</span>`);
     if (l.checkLabel)
@@ -54,22 +55,25 @@
     return tags;
   };
 
+  // The name and amount are labels for the tick box, so the whole row ticks.
   const lineView = (l) => {
     const tags = lineTags(l);
     const meta = l.sources.length ? `For ${l.sources.join(", ")}` : l.convertedFrom || "";
+    const tick = `tick-${l.id}`;
     return h`
       <li class="mls-line${l.checked ? " mls-line--done" : ""}">
-        ${check("", l.checked, { action: "list-tick", data: { line: l.id }, ariaLabel: `Got ${l.name}` })}
-        <span class="mls-line__body">
+        ${check("", l.checked, { id: tick, action: "list-tick", data: { line: l.id }, ariaLabel: `Got ${l.name}` })}
+        <label class="mls-line__body" for="${tick}">
           <span class="mls-line__name">${l.name}</span>
           ${meta ? caption(meta) : ""}
           ${l.convertedFrom && l.sources.length ? caption(l.convertedFrom) : ""}
+          ${l.changed && l.changed !== "New" ? caption(l.changed) : ""}
           ${tags.length ? h`<span class="mls-row">${tags}</span>` : ""}
-        </span>
-        <span class="mls-line__amount">
+        </label>
+        <label class="mls-line__amount" for="${tick}">
           <span class="mls-num">${l.buy}</span>
-          ${l.need && l.need !== l.buy ? caption(`Needs ${l.need}`) : ""}
-        </span>
+          ${l.was ? caption(`Was ${l.was}`) : l.need && l.need !== l.buy ? caption(`Needs ${l.need}`) : ""}
+        </label>
         <span class="mls-line__tools">
           ${iconBtn("pencil", `Edit ${l.name}`, { href: A.hrefFor(`list/edit/${l.id}`) })}
           ${l.manual ? iconBtn("trash-2", `Delete ${l.name}`, { action: "list-delete", data: { line: l.id } }) : ""}
@@ -86,7 +90,59 @@
           <h3 class="jds-card-title">${name}</h3>
           ${caption(done ? `${done} of ${items.length}` : String(items.length))}
         </div>
-        <ul class="mls-list" role="list">${items.map(lineView)}</ul>
+        <ul class="mls-list mls-list--shop" role="list">${items.map(lineView)}</ul>
+      </section>`;
+  };
+
+  // What this week's meals need that the Pantry already holds, so nothing drops off silently.
+  const haveLines = () => {
+    const seen = new Map();
+    for (const day of S.data.plan.days) {
+      if (A.isPast(day.date)) continue;
+      for (const m of day.meals) {
+        if (m.kind !== "recipe" || m.cooked) continue;
+        const r = A.recipe(m.recipeId);
+        for (const i of r.ingredients) {
+          const p = A.onHand(i.name);
+          if (!p || lines().some((l) => l.name.toLowerCase() === i.name.toLowerCase())) continue;
+          const row = seen.get(p.id) || { item: p, sources: [] };
+          if (!row.sources.includes(r.title)) row.sources.push(r.title);
+          seen.set(p.id, row);
+        }
+      }
+    }
+    return [...seen.values()];
+  };
+
+  const pantryAmount = (p) => (p.qty == null ? "Some" : `${Math.round(p.qty * 100) / 100}${p.unit ? ` ${p.unit}` : ""}`);
+
+  const haveView = () => {
+    const rows = haveLines();
+    if (!rows.length) return "";
+    return h`
+      <section class="mls-section" aria-label="You have this">
+        <div class="mls-block-head">
+          <h3 class="jds-card-title">You have this</h3>
+          ${caption(String(rows.length))}
+        </div>
+        <ul class="mls-list" role="list">
+          ${rows.map(
+            ({ item, sources }) => h`
+              <li class="mls-line mls-line--plain">
+                <span class="mls-line__body">
+                  <span class="mls-line__name">${item.name}</span>
+                  ${caption(`For ${sources.join(", ")}`)}
+                </span>
+                <span class="mls-line__amount">
+                  <span class="mls-num">${pantryAmount(item)}</span>
+                  ${caption("In the Pantry")}
+                </span>
+                <span class="mls-line__tools">
+                  ${btn("Need more", { size: "sm", variant: "quiet", icon: "plus", action: "list-have-add", data: { item: item.id } })}
+                </span>
+              </li>`
+          )}
+        </ul>
       </section>`;
   };
 
@@ -131,7 +187,7 @@
       <aside class="mls-rail">
         <section class="mls-stack mls-stack--tight">
           ${eyebrow("Shopped without the list")}
-          <div class="mls-stack mls-stack--tiny">
+          <div class="mls-stack mls-stack--tight">
             ${btn("Paste a receipt", { icon: "receipt", href: A.hrefFor("list/receipt"), disabled: aiOff(), block: true })}
             <span class="mls-row">${btn("Photograph a receipt", { icon: "camera", disabled: true, size: "sm" })}${badge("Coming later", "neutral")}</span>
           </div>
@@ -190,6 +246,7 @@
       <div class="mls-grid">
         <div class="mls-stack">
           ${order.map((name) => sectionView(name, all.filter((l) => l.section === name)))}
+          ${haveView()}
         </div>
         ${rail()}
       </div>
@@ -364,6 +421,22 @@
       const l = findLine(el.dataset.line);
       l.checked = el.checked;
       if (!S.data.list.includes(l)) S.data.list.push(l);
+      A.render();
+      if (l.checked) A.toast(`Got ${l.name}.`, { icon: "check", undo: "list-tick-undo", ms: 5000 });
+      S.lastTick = l.checked ? l.id : null;
+    },
+    "list-tick-undo": () => {
+      const l = S.lastTick && findLine(S.lastTick);
+      if (!l) return;
+      l.checked = false;
+      S.lastTick = null;
+      document.getElementById("toast-root").innerHTML = "";
+      A.render();
+    },
+    "list-have-add": (el) => {
+      const p = S.data.pantry.find((x) => x.id === el.dataset.item);
+      S.data.list.push({ id: `lh-${p.id}`, name: p.name, need: "", buy: "1", section: F.sections.includes(p.section) ? p.section : "Other", sources: [], manual: true, staple: false, checked: false });
+      A.toast(`${p.name} added.`, { icon: "plus" });
       A.render();
     },
     "list-order": (el) => {

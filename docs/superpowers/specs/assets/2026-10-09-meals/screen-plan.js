@@ -127,20 +127,101 @@
 
   const listChanged = () => A.toast("Shopping list updated.", { icon: "shopping-basket" });
 
+  const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+
+  // A swap edits the list in place. Ticks stay, and only the lines the swap touched are marked.
+  const swapOnList = (fromId, toId) => {
+    const from = fromId ? A.recipe(fromId) : null;
+    const to = A.recipe(toId);
+    const sameName = (l, name) => l.name.toLowerCase() === name.toLowerCase();
+    let added = 0;
+    let dropped = 0;
+    if (from)
+      for (const i of from.ingredients) {
+        const l = S.data.list.find((x) => sameName(x, i.name) && x.sources.includes(from.title));
+        if (!l) continue;
+        l.sources = l.sources.filter((t) => t !== from.title);
+        const still = to.ingredients.find((j) => sameName(l, j.name));
+        if (still) {
+          l.sources.push(to.title);
+          if (still.text !== l.buy) Object.assign(l, { was: l.buy, buy: still.text, need: still.text });
+        } else if (!l.sources.length && !l.manual) {
+          if (l.checked) l.changed = "Not needed now";
+          else {
+            S.data.list = S.data.list.filter((x) => x !== l);
+            dropped++;
+          }
+        }
+      }
+    for (const i of to.ingredients) {
+      if (A.onHand(i.name) || S.data.list.some((x) => sameName(x, i.name))) continue;
+      S.data.list.push({ id: `ls${Date.now()}${added}`, name: cap(i.name), need: i.text, buy: i.text, section: i.section, sources: [to.title], manual: false, staple: false, checked: false, checkLabel: Boolean(i.checkLabel), changed: "New" });
+      added++;
+    }
+    return { added, dropped, kept: S.data.list.filter((l) => l.checked).length };
+  };
+
+  // Swap one meal, update the list, and offer one step back.
+  const swapMeal = (meal, day, recipeId, title) => {
+    S.planUndo = { mealId: meal.id, meal: structuredClone(meal), list: structuredClone(S.data.list) };
+    const fromId = meal.recipeId;
+    setRecipe(meal, recipeId, day.meals.indexOf(meal));
+    S.newMealId = meal.id;
+    const { added, dropped } = swapOnList(fromId, recipeId);
+    const parts = [added && `${added} added`, dropped && `${dropped} dropped`].filter(Boolean).join(", ");
+    A.go("plan");
+    A.toast(`List: ${parts || "no change"}. Ticks kept.`, { title: title || `Swapped to ${A.recipe(recipeId).title}`, icon: "shuffle", undo: "plan-swap-undo", ms: 7000 });
+  };
+
   // ---------- Meal ----------
 
+  // One row per eater: name, a meter of this meal against their share, and the numbers.
   const fitLine = (meal) =>
     meal.fit.length
       ? h`<div class="mls-fit">${meal.fit.map((f) => {
-          const over = f.kcal - f.share;
-          return h`<span class="mls-fit__item jds-caption"><strong>${A.member(f.memberId).name}</strong> <span class="mls-num">${f.kcal} of ${f.share}</span>${over > f.share * 0.05 ? badge(`${over} over`, "amber") : ""}</span>`;
+          const name = A.member(f.memberId).name;
+          const over = f.kcal - f.share > f.share * 0.05;
+          return h`
+            <span class="mls-fit__name jds-caption" title="${name}">${name}</span>
+            <div class="jds-progress${over ? " jds-progress--amber" : ""}" role="meter" aria-valuemin="0" aria-valuemax="${f.share}" aria-valuenow="${f.kcal}" aria-label="${name}: ${f.kcal} of ${f.share} kcal">
+              <div class="jds-progress__fill" style="width: ${Math.min(100, Math.round((f.kcal / f.share) * 100))}%"></div>
+            </div>
+            <span class="mls-num jds-caption">${f.kcal} / ${f.share}${over ? " over" : ""}</span>`;
         })}</div>`
       : "";
 
-  const needsLabelCheck = (meal) =>
-    meal.kind === "recipe" && A.recipe(meal.recipeId).ingredients.some((i) => i.checkLabel);
+  // Branded ingredients whose label the eaters with a Never-serve rule must read.
+  const safetyOf = (meal) => {
+    const r = meal.kind === "recipe" ? A.recipe(meal.recipeId) : null;
+    const labels = r ? r.ingredients.filter((i) => i.checkLabel).map((i) => i.name) : [];
+    return meal.eaters.map((id) => {
+      const m = A.member(id);
+      return { member: m, never: m.restrictions, labels: m.restrictions.length ? labels : [] };
+    });
+  };
 
-  const mealMenu = (meal, day) => {
+  const safetyReason = (meal) => {
+    const rows = safetyOf(meal).filter((s) => s.labels.length);
+    if (!rows.length) return "";
+    const labels = [...new Set(rows.flatMap((s) => s.labels))];
+    const why = rows.map((s) => `${s.never.join(", ").toLowerCase()} for ${s.member.name}`).join(", ");
+    return `Check the ${labels.join(" and ")} label: ${why}`;
+  };
+
+  // The first swap that needs no label read. Every swap already passes the Never-serve rules.
+  const safeSwapFor = (meal) => pool(meal.slot, [meal.recipeId]).find((id) => !A.recipe(id).ingredients.some((i) => i.checkLabel));
+
+  const safetyNote = (meal) => {
+    const why = safetyReason(meal);
+    if (!why) return "";
+    return h`
+      <div class="mls-safety">
+        <span class="mls-safety__why jds-caption">${icon("shield-alert", 14)}<span>${why}</span></span>
+        ${meal.cooked || A.isPast(A.findMeal(meal.id).day.date) ? "" : btn("Safe swap", { variant: "link", size: "sm", action: "plan-safe-swap", data: { meal: meal.id }, disabled: aiOff() || !safeSwapFor(meal) })}
+      </div>`;
+  };
+
+    const mealMenu = (meal, day) => {
     const favItems = S.data.members.map((m) => ({
       label: meal.favouriteOf === m.id ? `Not ${m.name}'s favourite` : `${m.name}'s favourite`,
       icon: "heart",
@@ -187,30 +268,34 @@
             ${mealMenu(meal, day)}
           </div>`;
     const expiring = A.phase() >= 3 && r && r.ingredients.some((i) => i.name === "baby spinach" || i.name === "sour cream");
+    const serves = meal.eaters.length;
     return h`
-      <article class="mls-meal${isNew ? " mls-meal--new" : ""}">
+      <article class="mls-meal${isNew ? " mls-meal--new" : ""}${meal.locked ? " mls-meal--locked" : ""}">
         ${
           r
             ? h`<a class="mls-meal__title" href="${A.hrefFor(`recipe/${meal.id}`)}">${r.title}</a>`
             : h`<p class="mls-meal__text">${meal.text}</p>`
         }
-        <div class="mls-row">
-          ${caption(A.names(meal.eaters))}
-          ${r ? h`<span class="mls-fit__item jds-caption">${icon("clock", 12)}${r.minutes} min</span>` : ""}
-        </div>
         ${fitLine(meal)}
         ${
-          fav || meal.cooked || needsLabelCheck(meal) || rated || expiring
+          fav || meal.cooked || meal.locked || rated || expiring
             ? h`<div class="mls-row">
                 ${meal.cooked ? badge("Cooked", "forest", { icon: "check" }) : ""}
+                ${meal.locked && !meal.cooked ? badge("Locked", "neutral", { icon: "lock" }) : ""}
                 ${fav ? badge(`${fav.name}'s favourite`, "neutral", { icon: "heart" }) : ""}
-                ${needsLabelCheck(meal) ? h`<span title="Moss suggested a brand. Check its label against everyone's restrictions.">${badge("Check the label", "outline", { icon: "info" })}</span>` : ""}
                 ${expiring ? badge("Uses food expiring soon", "amber", { icon: "clock" }) : ""}
                 ${rated ? caption(`Rated ${Object.entries(rated).map(([id, n]) => `${A.member(id).name} ${n} of 5`).join(", ")}`) : ""}
               </div>`
             : ""
         }
-        ${tools}
+        ${safetyNote(meal)}
+        <div class="mls-meal__foot">
+          <span class="mls-meal__meta jds-caption">
+            ${meal.fit.length ? "" : h`<span>${A.names(meal.eaters)}</span>`}
+            ${r ? h`<span class="mls-fit__item">${icon("users", 12)}Serves ${serves}</span><span class="mls-fit__item">${icon("clock", 12)}${r.minutes} min</span>` : ""}
+          </span>
+          ${tools}
+        </div>
       </article>`;
   };
 
@@ -499,6 +584,22 @@
     });
   };
 
+  // What a swap would do to the shopping list, without doing it.
+  const listPreview = (fromId, toId) => {
+    const from = fromId ? A.recipe(fromId) : null;
+    const to = A.recipe(toId);
+    const onList = (name) => S.data.list.find((l) => l.name.toLowerCase() === name.toLowerCase());
+    const adds = to.ingredients.filter((i) => !A.onHand(i.name) && !onList(i.name)).map((i) => i.name);
+    const drops = from
+      ? from.ingredients
+          .map((i) => onList(i.name))
+          .filter((l) => l && !l.manual && l.sources.length === 1 && l.sources[0] === from.title && !to.ingredients.some((j) => j.name.toLowerCase() === l.name.toLowerCase()))
+          .map((l) => l.name.toLowerCase())
+      : [];
+    const parts = [adds.length && `adds ${adds.join(", ")}`, drops.length && `drops ${drops.join(", ")}`].filter(Boolean);
+    return parts.length ? `List ${parts.join("; ")}` : "No change to the list";
+  };
+
   const choiceRow = (recipeId, meal, o = {}) => {
     const r = A.recipe(recipeId);
     const have = r.ingredients.filter((i) => A.onHand(i.name));
@@ -515,6 +616,7 @@
               ? h`<span class="jds-caption">${buy.length ? `To buy: ${buy.map((i) => i.name).join(", ")}` : "Nothing to buy"}</span>`
               : h`<span class="jds-caption">Uses ${have.length} ${have.length === 1 ? "thing" : "things"} you have</span>`
           }
+          ${o.listFrom !== undefined ? h`<span class="jds-caption">${listPreview(o.listFrom, recipeId)}</span>` : ""}
         </div>
         <span></span>
         ${btn("Choose", { size: "sm", action: o.action, data: { meal: meal.id, recipe: recipeId } })}
@@ -531,7 +633,7 @@
     return dialog({
       title: `Swap ${A.mealTitle(meal)}`,
       desc: `${A.weekday(found.day.date)} ${meal.slot.toLowerCase()} for ${A.names(meal.eaters)}`,
-      body: h`<div class="mls-section">${three.map((id) => choiceRow(id, meal, { action: "plan-swap-choose" }))}</div>`,
+      body: h`<div class="mls-section">${three.map((id) => choiceRow(id, meal, { action: "plan-swap-choose", listFrom: meal.recipeId || null }))}</div>`,
       foot: h`${btn("Three more", { variant: "quiet", icon: "refresh-cw", action: "plan-swap-more", disabled: aiOff() })}${btn("Cancel", { action: "close-dialog" })}`
     });
   };
@@ -729,6 +831,8 @@
 
   // ---------- Actions ----------
 
+  A.planSafety = { safetyOf, safeSwapFor };
+
   const mealOf = (el) => A.findMeal(el.dataset.meal);
 
   Object.assign(A.actions, {
@@ -838,10 +942,23 @@
     },
     "plan-swap-choose": (el) => {
       const { meal, day } = mealOf(el);
-      setRecipe(meal, el.dataset.recipe, day.meals.indexOf(meal));
-      S.newMealId = meal.id;
-      A.go("plan");
-      listChanged();
+      swapMeal(meal, day, el.dataset.recipe);
+    },
+    "plan-safe-swap": (el) => {
+      const { meal, day } = mealOf(el);
+      const pick = safeSwapFor(meal);
+      if (pick) swapMeal(meal, day, pick, `Safe swap: ${A.recipe(pick).title}`);
+    },
+    "plan-swap-undo": () => {
+      const u = S.planUndo;
+      if (!u) return;
+      const found = A.findMeal(u.mealId);
+      if (found) Object.assign(found.meal, u.meal);
+      S.data.list = u.list;
+      S.planUndo = null;
+      S.newMealId = null;
+      A.toast("Put the meal and the list back.", { icon: "undo-2", tone: "drift" });
+      A.render();
     },
     "plan-quick-limit": (el) => {
       S.quickLimit = Number(el.dataset.value);

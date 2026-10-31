@@ -277,6 +277,7 @@
 }
 
 .mls-meal__title {
+  overflow-wrap: anywhere;
   font-weight: var(--weight-bold);
   font-size: var(--text-md);
   line-height: var(--leading-snug);
@@ -291,6 +292,7 @@
 }
 
 .mls-meal__text {
+  overflow-wrap: anywhere;
   font-size: var(--text-md);
   line-height: var(--leading-snug);
   color: var(--text-muted);
@@ -302,10 +304,74 @@
   gap: var(--space-2);
 }
 
+/* Name, meter, numbers: one row per eater. */
 .mls-fit {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(2.5rem, 1fr) max-content;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.mls-fit__name {
+  max-width: 7.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--weight-semibold);
+}
+
+.mls-day__totals .mls-fit__item strong {
+  font-weight: var(--weight-semibold);
+}
+
+.mls-safety {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.mls-safety__why {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mls-safety__why svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--gold-ink);
+}
+
+.mls-safety__why--ok svg {
+  color: var(--accent-fg);
+}
+
+.mls-safety-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-6);
+  padding-bottom: var(--space-3);
+  border-bottom: var(--border-w) solid var(--border-subtle);
+}
+
+.mls-meal__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  padding-top: var(--space-1);
+}
+
+.mls-meal__meta {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-3);
+  min-width: 0;
 }
 
 .mls-fit__item {
@@ -434,7 +500,7 @@
 
 .mls-stars {
   display: inline-flex;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 
 .mls-rate-row {
@@ -504,6 +570,7 @@
 }
 
 .mls-line__name {
+  overflow-wrap: anywhere;
   font-weight: var(--weight-semibold);
   font-size: var(--text-md);
 }
@@ -513,7 +580,20 @@
   flex-direction: column;
   align-items: flex-end;
   gap: var(--space-1);
+  max-width: 14rem;
   text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* The shared styles mute bare labels; these labels are the row itself. */
+label.mls-line__body,
+label.mls-line__amount {
+  cursor: pointer;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .mls-line--done .mls-line__name {
@@ -523,7 +603,7 @@
 
 .mls-line__tools {
   display: flex;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 
 .mls-sticky {
@@ -767,8 +847,26 @@
     grid-row: 2;
   }
 
+  /* Shopping mode: taller rows and a bigger name for a thumb in a shop. */
   .mls-line {
     column-gap: var(--space-3);
+  }
+
+  .mls-line__amount {
+    max-width: 7.5rem;
+  }
+
+  .mls-list--shop .mls-line {
+    min-height: 64px;
+  }
+
+  .mls-list--shop .mls-line__name {
+    font-size: var(--text-lg);
+  }
+
+  .mls-toast-root {
+    bottom: 88px;
+    width: calc(100% - 2 * var(--space-4));
   }
 
   .mls-member {
@@ -833,6 +931,7 @@
 
   .mls-sticky {
     display: flex;
+    gap: var(--space-2);
     position: sticky;
     bottom: 0;
     z-index: 4;

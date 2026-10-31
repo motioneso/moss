@@ -169,7 +169,7 @@
 
   const check = (label, checked, o = {}) => h`
     <label class="jds-check">
-      <input type="checkbox"${attrs({ checked, "data-action": o.action, disabled: o.disabled, "aria-label": o.ariaLabel })}${dataAttrs(o.data)} />
+      <input type="checkbox"${attrs({ id: o.id, checked, "data-action": o.action, disabled: o.disabled, "aria-label": o.ariaLabel })}${dataAttrs(o.data)} />
       <span class="jds-check__box">${icon("check", 12)}</span>
       ${label ? h`<span>${label}</span>` : ""}
     </label>`;
@@ -539,7 +539,8 @@
     { value: "empty", label: "Empty" },
     { value: "loading", label: "Loading" },
     { value: "error", label: "Failed to load" },
-    { value: "ai-off", label: "AI unavailable" }
+    { value: "ai-off", label: "AI unavailable" },
+    { value: "long", label: "Long text" }
   ];
 
   const PHASES = [
@@ -702,7 +703,12 @@
     if (document.querySelector("#dialog-root .jds-dialog")) closeDialog();
   });
 
-  window.addEventListener("hashchange", render);
+  // The long-text data is built at load, so entering or leaving that state reloads.
+  const loadedLong = reviewState() === "long";
+  window.addEventListener("hashchange", () => {
+    if ((reviewState() === "long") !== loadedLong) location.reload();
+    else render();
+  });
 
   // ---------- Core actions ----------
 
