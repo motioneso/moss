@@ -233,3 +233,56 @@ it("surfaces host db.query errors as a generic handler_failed without leaking in
   expect(serialized).not.toContain("SELECT secret FROM t");
   child.kill();
 });
+
+it("serializes ctx.jobs.enqueue as exactly the four allowed fields and returns the resolved result (#3721)", async () => {
+  const { child, next } = await spawnWorker(
+    `defineModuleWorker({ handlers: { go: async (ctx) => ({
+  withParams: await ctx.jobs.enqueue({
+    queue: "meals.generate",
+    jobKind: "generate-day",
+    idempotencyKey: "plan-1:day-2",
+    params: { day: 2 },
+    actorUserId: "spoofed",
+    moduleId: "other"
+  }),
+  noParams: await ctx.jobs.enqueue({
+    queue: "meals.generate",
+    jobKind: "generate-day",
+    idempotencyKey: "plan-1:day-3"
+  })
+}) } });`
+  );
+
+  expect(await next()).toMatchObject({ method: "worker.ready" });
+  child.stdin?.write(
+    `${JSON.stringify({ jsonrpc: "2.0", id: "host:1", method: "module.invoke", params: { handler: "go", input: {} } })}\n`
+  );
+  const first = await next();
+  expect(first.method).toBe("jobs.enqueue");
+  expect(first.params).toEqual({
+    queue: "meals.generate",
+    jobKind: "generate-day",
+    idempotencyKey: "plan-1:day-2",
+    params: { day: 2 }
+  });
+  child.stdin?.write(
+    `${JSON.stringify({ jsonrpc: "2.0", id: first.id, result: { status: "duplicate" } })}\n`
+  );
+  const second = await next();
+  expect(second.params).toEqual({
+    queue: "meals.generate",
+    jobKind: "generate-day",
+    idempotencyKey: "plan-1:day-3"
+  });
+  child.stdin?.write(
+    `${JSON.stringify({ jsonrpc: "2.0", id: second.id, result: { status: "limited", limit: "invocation" } })}\n`
+  );
+  expect(await next()).toMatchObject({
+    id: "host:1",
+    result: {
+      withParams: { status: "duplicate" },
+      noParams: { status: "limited", limit: "invocation" }
+    }
+  });
+  child.kill();
+});
