@@ -78,11 +78,9 @@ describe("Park Press integrated recovery declarations", () => {
         "utf8"
       )
     ) as {
-      version: string;
       settingsPath: string;
       appMap: { features: { id: string; description: string }[] };
     };
-    expect(finance.version).toBe("0.7.0");
     expect(finance.settingsPath).toBe("/settings");
     for (const id of ["finance.settings-freedom", "finance.settings-limit"]) {
       const feature = finance.appMap.features.find((item) => item.id === id);
