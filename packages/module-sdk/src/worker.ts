@@ -61,6 +61,23 @@ export type ModuleJobEnqueueResult =
   | { readonly status: "duplicate" }
   | { readonly status: "limited"; readonly limit: "invocation" | "pending" | "hourly" };
 
+/**
+ * Starts a job on one of this module's own queues that declares `allowModuleEnqueue`. The actor
+ * is the current user and the host supplies it. A contract violation rejects with a generic RPC
+ * error. Expected outcomes resolve as a status.
+ */
+export interface ModuleJobsPort {
+  enqueue(input: {
+    /** Full declared queue name, for example "meals.generate". */
+    readonly queue: string;
+    /** /^[a-z][a-z0-9_.-]{0,63}$/ */
+    readonly jobKind: string;
+    /** /^[A-Za-z0-9][A-Za-z0-9_.:\/-]{0,127}$/ */
+    readonly idempotencyKey: string;
+    readonly params?: Readonly<Record<string, unknown>>;
+  }): Promise<ModuleJobEnqueueResult>;
+}
+
 export interface ModuleWorkerContext {
   readonly input: Record<string, unknown>;
   /**
@@ -175,6 +192,8 @@ export interface ModuleWorkerContext {
   };
   /** In-app notification post — see ModuleNotifyPort. */
   readonly notify: ModuleNotifyPort;
+  /** Module-authored job enqueue — see ModuleJobsPort. */
+  readonly jobs: ModuleJobsPort;
   /**
    * The acting user's permission tier for an action family this module declared in its
    * manifest (`assistantActionFamilies`), or the family's default when the user never chose.
@@ -254,6 +273,17 @@ export function defineModuleWorker(input: {
   };
   const notify: ModuleNotifyPort = {
     post: (postInput) => callParent("notify.post", postInput) as Promise<void>
+  };
+
+  const jobs: ModuleJobsPort = {
+    // Only these four fields go on the wire. The host binds actor and module.
+    enqueue: (enqueueInput) =>
+      callParent("jobs.enqueue", {
+        queue: enqueueInput.queue,
+        jobKind: enqueueInput.jobKind,
+        idempotencyKey: enqueueInput.idempotencyKey,
+        ...(enqueueInput.params === undefined ? {} : { params: enqueueInput.params })
+      }) as Promise<ModuleJobEnqueueResult>
   };
 
   const actionPolicy: ModuleWorkerContext["actionPolicy"] = {
@@ -343,6 +373,7 @@ export function defineModuleWorker(input: {
           embed,
           attachments,
           notify,
+          jobs,
           actionPolicy
         });
         send({ jsonrpc: "2.0", id: message.id, result });

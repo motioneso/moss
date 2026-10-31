@@ -10,8 +10,10 @@ import {
 } from "@moss/db";
 import type { EmbeddingProvider } from "@moss/memory";
 import { isSameOriginAppPath, type CreateNotificationInput } from "@moss/notifications";
-import type { ModuleAssistantToolRisk } from "@moss/module-sdk";
+import type { ModuleEnqueueLimits } from "@moss/jobs";
+import type { ExternalModuleQueueDeclaration, ModuleAssistantToolRisk } from "@moss/module-sdk";
 import { EMBED_BATCH_MAX } from "@moss/module-sdk";
+import type { ModuleJobEnqueueResult } from "@moss/module-sdk/worker";
 import type { ModuleFetchRequest, ModuleFetchResponse } from "@moss/module-sdk";
 import { createHostPinnedFetch } from "@moss/host-fetch";
 import {
@@ -60,7 +62,12 @@ export class ExternalModuleRpcError extends Error {
       // #2322 slice 2: the family key exists nowhere, so the feature is paused
       // for setup. The module sees only the code; the detail names the fix for
       // host logs.
-      | "credential_store_paused",
+      | "credential_store_paused"
+      // Module job enqueue (#3721): the four ways jobs.enqueue refuses. The module sees only the code.
+      | "forbidden_enqueue_mutation"
+      | "undeclared_queue"
+      | "module_inactive"
+      | "invalid_job_params",
     /**
      * Human-readable reason. Never crosses the worker boundary to the module —
      * it is for host logs and tests. The module still sees only the code.
@@ -136,6 +143,46 @@ const AI_MAX_OUTPUT_TOKENS_CAP = 32_768;
 // hundreds is the failure mode this caps, not a legitimate burst.
 export const NOTIFY_CALLS_PER_INVOCATION_CAP = 5;
 
+// Max ctx.jobs.enqueue calls per invocation that pass the queue check. Pending and hourly
+// limits are enforced inside the injected port; the composition root passes this value to
+// enqueueModuleJobForActor so no site invents its own numbers. No env var.
+export const JOB_ENQUEUE_CALLS_PER_INVOCATION_CAP = 5;
+export const MODULE_ENQUEUE_LIMITS: ModuleEnqueueLimits = { pending: 10, hourly: 120 };
+
+/**
+ * Result of the injected enqueue port. `inactive` and `invalid_params` are host-internal and
+ * never reach the module; the RPC maps them to thrown codes.
+ */
+export type ExternalModuleEnqueueResult =
+  | ModuleJobEnqueueResult
+  | { readonly status: "inactive" }
+  | { readonly status: "invalid_params" };
+
+const ENQUEUE_ALLOWED_KEYS = new Set(["queue", "jobKind", "idempotencyKey", "params"]);
+const ENQUEUE_JOB_KIND_RE = /^[a-z][a-z0-9_.-]{0,63}$/;
+const ENQUEUE_KEY_RE = /^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$/;
+
+function enqueueRequest(value: Record<string, unknown>): {
+  readonly queue: string;
+  readonly jobKind: string;
+  readonly idempotencyKey: string;
+  readonly params?: Readonly<Record<string, unknown>>;
+} {
+  for (const k of Object.keys(value)) {
+    if (!ENQUEUE_ALLOWED_KEYS.has(k)) {
+      throw new ExternalModuleRpcError("invalid_rpc", "jobs.enqueue received an unknown key");
+    }
+  }
+  const queue = stringParam(value, "queue");
+  const jobKind = stringParam(value, "jobKind");
+  const idempotencyKey = stringParam(value, "idempotencyKey");
+  if (!ENQUEUE_JOB_KIND_RE.test(jobKind) || !ENQUEUE_KEY_RE.test(idempotencyKey)) {
+    throw new ExternalModuleRpcError("invalid_rpc", "jobs.enqueue jobKind or key format");
+  }
+  if (value.params === undefined) return { queue, jobKind, idempotencyKey };
+  return { queue, jobKind, idempotencyKey, params: record(value.params) };
+}
+
 /**
  * Cipher for a credential write: always the current family key, never a held
  * object, so post-rotation writes land under the new key (#2322 slice 2).
@@ -183,6 +230,21 @@ export function createExternalModuleRpcHandler(input: {
     access: AccessContext,
     input: CreateNotificationInput
   ) => Promise<void>;
+  /**
+   * ctx.jobs.enqueue (#3721): starts a job on one of this module's own opted-in queues for the
+   * bound actor. Optional like postNotification. No production site wires it until the
+   * composition-root slice (#3722), so a real call gets invalid_rpc. The port runs steps 6 to 8
+   * (live check, payload check, locked limits and send).
+   */
+  readonly enqueueJob?: (
+    access: AccessContext,
+    request: {
+      readonly queue: ExternalModuleQueueDeclaration;
+      readonly jobKind: string;
+      readonly idempotencyKey: string;
+      readonly params?: Readonly<Record<string, unknown>>;
+    }
+  ) => Promise<ExternalModuleEnqueueResult>;
   readonly createFetch?: (allowedHosts: readonly string[]) => typeof fetch;
   readonly ai?: (
     scopedDb: DataContextDb,
@@ -206,6 +268,7 @@ export function createExternalModuleRpcHandler(input: {
   const resolvedSecrets = new Set<string>();
   let aiCalls = 0;
   let notifyCalls = 0;
+  let enqueueCalls = 0;
 
   return async (method, rawParams, rememberSecret, hostSignal) => {
     if (method === "attachments.readText") {
@@ -219,6 +282,41 @@ export function createExternalModuleRpcHandler(input: {
       } catch {
         return null;
       }
+    }
+    if (method === "jobs.enqueue") {
+      // Spec order (module-job-enqueue-design.md, RPC method jobs.enqueue). The risk check
+      // comes first so a read-risk tool learns nothing about wiring or body shape.
+      if (input.toolRisk === "read") {
+        throw new ExternalModuleRpcError("forbidden_enqueue_mutation");
+      }
+      if (!input.enqueueJob) throw new ExternalModuleRpcError("invalid_rpc");
+      const request = enqueueRequest(record(rawParams));
+      const queue = (input.module.manifest.worker?.queues ?? []).find(
+        (item) => item.name === request.queue && item.allowModuleEnqueue === true
+      );
+      if (!queue) throw new ExternalModuleRpcError("undeclared_queue");
+      enqueueCalls += 1;
+      if (enqueueCalls > JOB_ENQUEUE_CALLS_PER_INVOCATION_CAP) {
+        return warnEnqueueLimited(input.module.id, queue.name, request.jobKind, "invocation");
+      }
+      let result: ExternalModuleEnqueueResult;
+      try {
+        result = await input.enqueueJob(
+          { actorUserId: input.actorUserId, requestId: input.requestId },
+          { ...request, queue }
+        );
+      } catch {
+        // A port failure may carry the key or params in its message. The module gets the generic code.
+        throw new ExternalModuleRpcError("invalid_rpc", "jobs.enqueue failed");
+      }
+      if (result.status === "inactive") throw new ExternalModuleRpcError("module_inactive");
+      if (result.status === "invalid_params") {
+        throw new ExternalModuleRpcError("invalid_job_params");
+      }
+      if (result.status === "limited") {
+        return warnEnqueueLimited(input.module.id, queue.name, request.jobKind, result.limit);
+      }
+      return { status: result.status };
     }
     const params = record(rawParams);
     if (method === "notify.post") {
@@ -619,6 +717,19 @@ function embedTexts(value: Record<string, unknown>): readonly string[] {
     );
   }
   return value.texts as readonly string[];
+}
+
+function warnEnqueueLimited(
+  moduleId: string,
+  queue: string,
+  jobKind: string,
+  limit: "invocation" | "pending" | "hourly"
+): ModuleJobEnqueueResult {
+  // Module, queue, kind and limit name only. Never the key, params, counts or job ids.
+  console.warn(
+    `[module-jobs] enqueue limited module=${moduleId} queue=${queue} jobKind=${jobKind} limit=${limit}`
+  );
+  return { status: "limited", limit };
 }
 
 function record(value: unknown): Record<string, unknown> {
