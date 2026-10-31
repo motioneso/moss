@@ -63,3 +63,21 @@ assistant to read transaction data; this is not a claim that notes never reach a
   no-write-before-approval assertion fail with a valid disposable confirmation policy removed.
 - Run relevant lint/type/static checks and complete Finance checks; record aggregate failures
   against the known unrelated baseline. Do not call unrun acceptance complete.
+
+## Main-conversation design follow-up approved 2026-10-31
+
+Functional acceptance at 6d9d4904 passes all 237 Finance cases; strict design closure remains open.
+Two concrete issues are approved for correction before that closure:
+
+- A blocked retained draft must be read only, selectable and keyboard-copyable, with its reason
+  and explicit saved-note recovery action. Disabling the textarea prevents useful recovery.
+- A pending initial read must allow close/cancel. Ignore or abort its late result, including
+  after closing/reopening a different review, and preserve the pending-operation ownership lock.
+  A submitted write keeps its existing close protection; cancellation never implies undoing it.
+
+Regression acceptance: exercise keyboard selection of a blocked draft without changing it;
+close during an intentionally delayed real read, reopen with a newer saved version, release
+the older response and prove it cannot reopen, replace or unlock the newer review. Inspect
+desktop/phone and light/dark states, focus return and explicit loading/recovery copy. Run
+relevant full checks after the fixes. Main owns broader design decisions; these two corrections
+do not establish whole-product design approval.

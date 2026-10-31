@@ -1,0 +1,367 @@
+{
+  "sourceCommit": "6d9d490442fb2167ff747d2b1d17d4cd6240f6cf",
+  "tokensSha256": "cdb49c94f4fce3ac599690ac59c5161577f2c98e140435284cee6b9651a834e3",
+  "method": "Source token cascade/var resolution; sRGB relative luminance; OKLCH converted/clamped to sRGB as in the repository contrast matrix. Opaque role colors only; excludes disabled opacity, textures and arbitrary custom palettes.",
+  "results": [
+    {
+      "theme": "forest",
+      "mode": "light",
+      "pairs": {
+        "--text/--surface": {
+          "ratio": 13.378,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-muted/--surface": {
+          "ratio": 5.079,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-subtle/--surface": {
+          "ratio": 6.449,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--accent-fg/--sage-light": {
+          "ratio": 8.032,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-on-accent/--btn-primary-bg": {
+          "ratio": 9.723,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--focus-ring/--surface": {
+          "ratio": 9.15,
+          "floor": 3,
+          "passes": true
+        }
+      }
+    },
+    {
+      "theme": "forest",
+      "mode": "dark",
+      "pairs": {
+        "--text/--surface": {
+          "ratio": 13.18,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-muted/--surface": {
+          "ratio": 7.603,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-subtle/--surface": {
+          "ratio": 5.513,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--accent-fg/--sage-light": {
+          "ratio": 5.433,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-on-accent/--btn-primary-bg": {
+          "ratio": 9.249,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--focus-ring/--surface": {
+          "ratio": 5.922,
+          "floor": 3,
+          "passes": true
+        }
+      }
+    },
+    {
+      "theme": "sage",
+      "mode": "light",
+      "pairs": {
+        "--text/--surface": {
+          "ratio": 13.378,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-muted/--surface": {
+          "ratio": 5.079,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-subtle/--surface": {
+          "ratio": 6.449,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--accent-fg/--sage-light": {
+          "ratio": 5.945,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-on-accent/--btn-primary-bg": {
+          "ratio": 7.197,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--focus-ring/--surface": {
+          "ratio": 6.772,
+          "floor": 3,
+          "passes": true
+        }
+      }
+    },
+    {
+      "theme": "sage",
+      "mode": "dark",
+      "pairs": {
+        "--text/--surface": {
+          "ratio": 13.18,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-muted/--surface": {
+          "ratio": 7.603,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-subtle/--surface": {
+          "ratio": 5.513,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--accent-fg/--sage-light": {
+          "ratio": 5.314,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-on-accent/--btn-primary-bg": {
+          "ratio": 6.846,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--focus-ring/--surface": {
+          "ratio": 5.792,
+          "floor": 3,
+          "passes": true
+        }
+      }
+    },
+    {
+      "theme": "canyon",
+      "mode": "light",
+      "pairs": {
+        "--text/--surface": {
+          "ratio": 13.378,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-muted/--surface": {
+          "ratio": 5.079,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-subtle/--surface": {
+          "ratio": 6.449,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--accent-fg/--sage-light": {
+          "ratio": 5.556,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-on-accent/--btn-primary-bg": {
+          "ratio": 6.727,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--focus-ring/--surface": {
+          "ratio": 6.33,
+          "floor": 3,
+          "passes": true
+        }
+      }
+    },
+    {
+      "theme": "canyon",
+      "mode": "dark",
+      "pairs": {
+        "--text/--surface": {
+          "ratio": 13.18,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-muted/--surface": {
+          "ratio": 7.603,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-subtle/--surface": {
+          "ratio": 5.513,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--accent-fg/--sage-light": {
+          "ratio": 5.129,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-on-accent/--btn-primary-bg": {
+          "ratio": 6.399,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--focus-ring/--surface": {
+          "ratio": 5.59,
+          "floor": 3,
+          "passes": true
+        }
+      }
+    },
+    {
+      "theme": "teal",
+      "mode": "light",
+      "pairs": {
+        "--text/--surface": {
+          "ratio": 13.378,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-muted/--surface": {
+          "ratio": 5.079,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-subtle/--surface": {
+          "ratio": 6.449,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--accent-fg/--sage-light": {
+          "ratio": 4.933,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-on-accent/--btn-primary-bg": {
+          "ratio": 5.972,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--focus-ring/--surface": {
+          "ratio": 5.62,
+          "floor": 3,
+          "passes": true
+        }
+      }
+    },
+    {
+      "theme": "teal",
+      "mode": "dark",
+      "pairs": {
+        "--text/--surface": {
+          "ratio": 13.18,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-muted/--surface": {
+          "ratio": 7.603,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-subtle/--surface": {
+          "ratio": 5.513,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--accent-fg/--sage-light": {
+          "ratio": 5.448,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-on-accent/--btn-primary-bg": {
+          "ratio": 5.681,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--focus-ring/--surface": {
+          "ratio": 5.939,
+          "floor": 3,
+          "passes": true
+        }
+      }
+    },
+    {
+      "theme": "dusk",
+      "mode": "light",
+      "pairs": {
+        "--text/--surface": {
+          "ratio": 13.378,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-muted/--surface": {
+          "ratio": 5.079,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-subtle/--surface": {
+          "ratio": 6.449,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--accent-fg/--sage-light": {
+          "ratio": 7.055,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-on-accent/--btn-primary-bg": {
+          "ratio": 8.541,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--focus-ring/--surface": {
+          "ratio": 8.037,
+          "floor": 3,
+          "passes": true
+        }
+      }
+    },
+    {
+      "theme": "dusk",
+      "mode": "dark",
+      "pairs": {
+        "--text/--surface": {
+          "ratio": 13.18,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-muted/--surface": {
+          "ratio": 7.603,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-subtle/--surface": {
+          "ratio": 5.513,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--accent-fg/--sage-light": {
+          "ratio": 5.169,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--text-on-accent/--btn-primary-bg": {
+          "ratio": 8.124,
+          "floor": 4.5,
+          "passes": true
+        },
+        "--focus-ring/--surface": {
+          "ratio": 5.634,
+          "floor": 3,
+          "passes": true
+        }
+      }
+    }
+  ]
+}
