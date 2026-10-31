@@ -46,8 +46,12 @@ const PASSIVE_TIMEOUT_MS = 750;
 const PASSIVE_RECALL_LIMIT = 8;
 
 export interface PassiveMemoryGraphRecallPort {
-  recall(
-    scopedDb: DataContextDb,
+  /**
+   * Opens its own short transactions, so the slow query embedding runs with no
+   * connection or row lock held.
+   */
+  recallWithDataContext(
+    dataContext: Pick<DataContextRunner, "withDataContext">,
     ownerUserId: string,
     query: string,
     options: { readonly limit?: number }
@@ -111,23 +115,16 @@ export class PassiveContextRetriever {
     const decision = planPassiveRetrieval(input);
     if (!decision.shouldRetrieve) return { block: "", items: [] };
 
-    return this.deps.dataContext.withDataContext(
-      { actorUserId: input.actorUserId, requestId: "chat:passive-memory-retrieval" },
-      async (scopedDb) => {
-        const settings = await this.settingsRepo.getOrCreate(scopedDb, input.actorUserId);
-        if (!settings.recallEnabled || !settings.factsEnabled) return { block: "", items: [] };
-        const result = await this.deps.graphRecall.recall(
-          scopedDb,
-          input.actorUserId,
-          decision.query,
-          { limit: PASSIVE_RECALL_LIMIT }
-        );
-        const qualifying = result.items.filter((item) => item.score >= MIN_CONTEXT_SCORE);
-        const locale = await readPersonLocale(scopedDb, this.deps.localePreferences);
-        const block = renderRetrievedContextBlock(qualifying, locale.timezone);
-        return { block, items: qualifying };
-      }
+    if (!(await this.factsRecallEnabled(input.actorUserId))) return { block: "", items: [] };
+    const result = await this.deps.graphRecall.recallWithDataContext(
+      this.deps.dataContext,
+      input.actorUserId,
+      decision.query,
+      { limit: PASSIVE_RECALL_LIMIT }
     );
+    const qualifying = result.items.filter((item) => item.score >= MIN_CONTEXT_SCORE);
+    const timezone = await this.readTimezone(input.actorUserId);
+    return { block: renderRetrievedContextBlock(qualifying, timezone), items: qualifying };
   }
 
   private async retrieveNow(input: {
@@ -139,21 +136,32 @@ export class PassiveContextRetriever {
     const decision = planPassiveRetrieval(input);
     if (!decision.shouldRetrieve) return "";
 
+    if (!(await this.factsRecallEnabled(input.actorUserId))) return "";
+    const result = await this.deps.graphRecall.recallWithDataContext(
+      this.deps.dataContext,
+      input.actorUserId,
+      decision.query,
+      { limit: PASSIVE_RECALL_LIMIT }
+    );
+    return renderRetrievedContextBlock(result.items, await this.readTimezone(input.actorUserId));
+  }
+
+  private factsRecallEnabled(actorUserId: string): Promise<boolean> {
     return this.deps.dataContext.withDataContext(
-      { actorUserId: input.actorUserId, requestId: "chat:passive-memory-retrieval" },
+      { actorUserId, requestId: "chat:passive-memory-retrieval" },
       async (scopedDb) => {
-        const settings = await this.settingsRepo.getOrCreate(scopedDb, input.actorUserId);
-        if (!settings.recallEnabled || !settings.factsEnabled) return "";
-        const result = await this.deps.graphRecall.recall(
-          scopedDb,
-          input.actorUserId,
-          decision.query,
-          { limit: PASSIVE_RECALL_LIMIT }
-        );
-        const locale = await readPersonLocale(scopedDb, this.deps.localePreferences);
-        return renderRetrievedContextBlock(result.items, locale.timezone);
+        const settings = await this.settingsRepo.getOrCreate(scopedDb, actorUserId);
+        return settings.recallEnabled && settings.factsEnabled;
       }
     );
+  }
+
+  private async readTimezone(actorUserId: string): Promise<string> {
+    const locale = await this.deps.dataContext.withDataContext(
+      { actorUserId, requestId: "chat:passive-memory-retrieval" },
+      (scopedDb) => readPersonLocale(scopedDb, this.deps.localePreferences)
+    );
+    return locale.timezone;
   }
 }
 

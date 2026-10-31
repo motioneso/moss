@@ -25,8 +25,16 @@ vi.mock("@moss/memory", () => ({
 const { createNotesRecallPort } = await import("../../packages/notes/src/recall.js");
 
 const scopedDb = { db: {} as never, [dataContextBrand]: true } satisfies DataContextDb;
+let openTransactions = 0;
 const dataContext = {
-  withDataContext: async (_ctx: unknown, cb: (db: DataContextDb) => unknown) => cb(scopedDb)
+  withDataContext: async (_ctx: unknown, cb: (db: DataContextDb) => unknown) => {
+    openTransactions += 1;
+    try {
+      return await cb(scopedDb);
+    } finally {
+      openTransactions -= 1;
+    }
+  }
 } as never;
 const EMBEDDING = [0.1, 0.2];
 
@@ -84,5 +92,19 @@ describe("createNotesRecallPort", () => {
     await port.recall(dataContext, "user-1", "q", { limit: 0 });
 
     expect(mockSearch).toHaveBeenCalledWith(scopedDb, EMBEDDING, 1, "notes");
+  });
+
+  it("embeds the query with no transaction open", async () => {
+    let openDuringEmbed = -1;
+    mockEmbed.mockImplementation(async () => {
+      openDuringEmbed = openTransactions;
+      return EMBEDDING;
+    });
+    mockSearch.mockResolvedValue([]);
+
+    await createNotesRecallPort().recall(dataContext, "user-1", "q", {});
+
+    expect(openDuringEmbed).toBe(0);
+    expect(mockSearch).toHaveBeenCalledOnce();
   });
 });

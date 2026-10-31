@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { DataContextRunner } from "@moss/db";
+
 import {
   PassiveContextRetriever,
   planPassiveRetrieval,
@@ -175,7 +177,7 @@ describe("withPassiveRetrievalTimeout", () => {
 
 describe("PassiveContextRetriever", () => {
   it("returns empty context when recall setting is disabled", async () => {
-    const graphRecall = { recall: vi.fn() };
+    const graphRecall = { recallWithDataContext: vi.fn() };
     const retriever = new PassiveContextRetriever({
       dataContext: { withDataContext: async (_ctx, callback) => callback({} as never) },
       settingsRepo: {
@@ -198,12 +200,12 @@ describe("PassiveContextRetriever", () => {
         recentTurns: []
       })
     ).resolves.toBe("");
-    expect(graphRecall.recall).not.toHaveBeenCalled();
+    expect(graphRecall.recallWithDataContext).not.toHaveBeenCalled();
   });
 
   it("queries graph recall with limit 8 and renders only score-qualified items", async () => {
     const graphRecall = {
-      recall: vi.fn().mockResolvedValue({
+      recallWithDataContext: vi.fn().mockResolvedValue({
         query: "house project",
         items: [
           {
@@ -236,8 +238,11 @@ describe("PassiveContextRetriever", () => {
         ]
       })
     };
+    const dataContext: Pick<DataContextRunner, "withDataContext"> = {
+      withDataContext: async (_ctx, callback) => callback("scoped-db" as never)
+    };
     const retriever = new PassiveContextRetriever({
-      dataContext: { withDataContext: async (_ctx, callback) => callback("scoped-db" as never) },
+      dataContext,
       settingsRepo: {
         getOrCreate: async () => ({
           userId: "u1",
@@ -257,8 +262,8 @@ describe("PassiveContextRetriever", () => {
       recentTurns: []
     });
 
-    expect(graphRecall.recall).toHaveBeenCalledWith(
-      "scoped-db",
+    expect(graphRecall.recallWithDataContext).toHaveBeenCalledWith(
+      dataContext,
       "u1",
       "what did we decide about the house project?",
       { limit: 8 }
@@ -272,7 +277,7 @@ describe("PassiveContextRetriever", () => {
 describe("PassiveContextRetriever.retrieveWithItems", () => {
   it("returns empty block and empty items when recall disabled", async () => {
     const mockRecall = {
-      recall: vi.fn().mockResolvedValue({ items: [] })
+      recallWithDataContext: vi.fn().mockResolvedValue({ items: [] })
     };
     const mockSettings = {
       getOrCreate: vi
@@ -299,5 +304,53 @@ describe("PassiveContextRetriever.retrieveWithItems", () => {
     });
     expect(result.block).toBe("");
     expect(result.items).toEqual([]);
+  });
+});
+
+describe("PassiveContextRetriever transactions", () => {
+  it("holds no database transaction while the facts search runs", async () => {
+    let open = 0;
+    const dataContext: Pick<DataContextRunner, "withDataContext"> = {
+      withDataContext: async (_ctx, callback) => {
+        open += 1;
+        try {
+          return await callback({} as never);
+        } finally {
+          open -= 1;
+        }
+      }
+    };
+    let openDuringSearch: number | undefined;
+    const graphRecall = {
+      recallWithDataContext: vi.fn().mockImplementation(async () => {
+        openDuringSearch = open;
+        return { query: "", items: [] };
+      })
+    };
+    const retriever = new PassiveContextRetriever({
+      dataContext,
+      settingsRepo: {
+        getOrCreate: async () => ({
+          userId: "u1",
+          recallEnabled: true,
+          factsEnabled: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+      },
+      graphRecall
+    });
+
+    for (const method of ["retrieve", "retrieveWithItems"] as const) {
+      openDuringSearch = undefined;
+      await retriever[method]({
+        actorUserId: "u1",
+        userText: "what did we decide about the house project?",
+        threadTitle: null,
+        recentTurns: []
+      });
+      expect(openDuringSearch).toBe(0);
+    }
+    expect(graphRecall.recallWithDataContext).toHaveBeenCalledTimes(2);
   });
 });

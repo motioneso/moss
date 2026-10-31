@@ -1,4 +1,4 @@
-import { assertDataContextDb, type DataContextDb } from "@moss/db";
+import { assertDataContextDb, type DataContextDb, type DataContextRunner } from "@moss/db";
 
 import type { EmbeddingProvider } from "./embedding-provider.js";
 import { MemoryGraphDashboardRepository } from "./graph-dashboard-repository.js";
@@ -70,6 +70,38 @@ export class GraphMemoryRecallService {
     if (!trimmedQuery) return { query: trimmedQuery, items: [] };
 
     const queryEmbedding = await this.embeddingProvider.embedQuery(trimmedQuery);
+    return this.recallByEmbedding(scopedDb, ownerUserId, trimmedQuery, queryEmbedding, options);
+  }
+
+  /**
+   * Opens its own short transactions. The query embedding runs between them, so no
+   * connection or row lock is held while the embedding provider is slow.
+   */
+  async recallWithDataContext(
+    dataContext: Pick<DataContextRunner, "withDataContext">,
+    ownerUserId: string,
+    query: string,
+    options: MemoryRecallOptions = {}
+  ): Promise<MemoryRecallResult> {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) return { query: trimmedQuery, items: [] };
+
+    const queryEmbedding = await this.embeddingProvider.embedQuery(trimmedQuery);
+    return dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: "memory:graph-recall" },
+      (scopedDb) =>
+        this.recallByEmbedding(scopedDb, ownerUserId, trimmedQuery, queryEmbedding, options)
+    );
+  }
+
+  private async recallByEmbedding(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    trimmedQuery: string,
+    queryEmbedding: number[],
+    options: MemoryRecallOptions
+  ): Promise<MemoryRecallResult> {
+    assertDataContextDb(scopedDb);
     const candidates = await this.repository.listFactRecallCandidates(
       scopedDb,
       ownerUserId,
