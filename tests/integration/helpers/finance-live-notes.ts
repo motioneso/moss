@@ -232,9 +232,9 @@ export async function exercisePrivateNotes(
     await delivered;
     releaseInitialRead = undefined;
     // An older canceled read cannot release the newer submitted write's close protection.
-    expect(
-      await editor.locator('button[aria-label="Close private note editor"]').isDisabled()
-    ).toBe(true);
+    expect(await page.locator('button[aria-label="Close private note editor"]').isDisabled()).toBe(
+      true
+    );
     await guard.getByRole("button", { name: "Confirm action", exact: true }).focus();
     await page.keyboard.press("Tab");
     expect(await guard.evaluate((el) => el.contains(document.activeElement))).toBe(true);
