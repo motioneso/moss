@@ -239,6 +239,7 @@ function createFakeCtx(input: {
       } satisfies EmbedPort),
     attachments: { readText: notUsed("attachments.readText") },
     actionPolicy: { get: notUsed("actionPolicy.get") },
+    jobs: { enqueue: notUsed("jobs.enqueue") },
     notify: input.notify ?? { post: vi.fn(async () => undefined) }
   } as ModuleWorkerContext;
 }
