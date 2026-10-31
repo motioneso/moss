@@ -267,6 +267,34 @@ describe("Upcoming bills", () => {
     });
   });
 
+  it("keeps the last date on or after the plan's latest reviewed or changed bill", async () => {
+    const data = bills(true);
+    results["finance.bills.read"] = {
+      ...data,
+      occurrences: [
+        ...data.occurrences,
+        {
+          ...occurrence("rent", "Rent", "2026-11-22", 185_000, "projected"),
+          plannedDate: "2026-11-24",
+          adjusted: true
+        }
+      ]
+    };
+    const tools = await mount();
+    await click(button("Actions for Rent"));
+    await click(button("Stop future bills for Rent"));
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    const date = dialog.querySelector<HTMLInputElement>('[aria-label="Last planned date"]')!;
+    expect(date.value).toBe("2026-11-10");
+    expect(date.min).toBe("2026-11-24");
+    expect(button("Save last planned date", dialog).disabled).toBe(true);
+    expect(dialog.textContent).toContain(
+      "Undo the reviewed or changed bill on Nov 24, 2026 first, or choose that date or later."
+    );
+    await click(button("Save last planned date", dialog));
+    expect(tools.invoke).not.toHaveBeenCalled();
+  });
+
   it("dismisses a suggestion with its key fields and no question", async () => {
     const tools = await mount();
     const section = document.querySelector('section[aria-label="Suggested bills"]')!;

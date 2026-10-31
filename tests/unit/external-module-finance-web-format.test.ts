@@ -13,6 +13,7 @@ import {
 import {
   centsToAmountInput,
   formatCents,
+  instantDayLabel,
   parseAmountToCents
 } from "../../external-modules/finance/src/web/format.js";
 
@@ -186,5 +187,24 @@ describe("typed budget amounts", () => {
       rows.map((row) => row.transactionId)
     );
     expect(chunkReviewRows([], false)).toEqual([]);
+  });
+});
+
+describe("instantDayLabel", () => {
+  it("shows a UTC timestamp on the reader's own calendar day", () => {
+    const zone = process.env.TZ;
+    try {
+      process.env.TZ = "America/Los_Angeles";
+      expect(instantDayLabel("2026-10-31 03:30:00 UTC")).toBe("Oct 30, 2026");
+      process.env.TZ = "Pacific/Auckland";
+      expect(instantDayLabel("2026-10-30 20:00:00 UTC")).toBe("Oct 31, 2026");
+    } finally {
+      if (zone === undefined) delete process.env.TZ;
+      else process.env.TZ = zone;
+    }
+  });
+
+  it("returns text it cannot read unchanged", () => {
+    expect(instantDayLabel("not a time")).toBe("not a time");
   });
 });

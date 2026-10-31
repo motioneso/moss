@@ -138,6 +138,13 @@ export function dayYearLabel(date: string, month: "long" | "short"): string {
   });
 }
 
+/** "2026-07-15 23:30:00 UTC" → the reader's local day, such as "Jul 16, 2026" east of UTC. */
+export function instantDayLabel(instant: string): string {
+  const parsed = new Date(instant.replace(" UTC", "Z").replace(" ", "T"));
+  if (Number.isNaN(parsed.getTime())) return instant;
+  return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
 /** "2026-07-15" → "Jul 15" (ledger date column). */
 export function shortDayLabel(date: string): string {
   const parsed = new Date(`${date}T00:00:00Z`);

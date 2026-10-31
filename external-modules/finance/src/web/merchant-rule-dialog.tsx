@@ -289,9 +289,6 @@ export function MerchantRuleDialog(props: {
                     : "Preview matching history"}
               </Button>
             </div>
-            {merchant.trim() && categoryValid && !preview && !previewing && !message ? (
-              <p className="jds-hint">Preview matching history to review this rule.</p>
-            ) : null}
             {preview ? (
               <div className="fnm-block fnm-block--tight">
                 <p>

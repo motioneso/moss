@@ -187,7 +187,7 @@ export function ReconciliationDialog(props: {
       }
     >
       <div className="fnm-manual-form">
-        {loading ? <p role="status">Loading statement entries…</p> : null}
+        {loading && !view ? <p role="status">Loading statement entries…</p> : null}
         {view ? (
           <>
             <div className="fnm-manual-columns">
@@ -222,6 +222,8 @@ export function ReconciliationDialog(props: {
                 />
               </label>
             </div>
+            {/* Below the fields, so a read never moves the date being typed. */}
+            {loading ? <p role="status">Loading statement entries…</p> : null}
             <p className="jds-caption">
               {view.lastReconciledDate
                 ? `Last reconciled statement: ${dayYearLabel(view.lastReconciledDate, "short")}.`

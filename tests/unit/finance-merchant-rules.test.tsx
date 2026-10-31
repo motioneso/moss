@@ -140,11 +140,9 @@ describe("merchant rule captured review", () => {
       await act(async () => r.unmount());
     }
   );
-  it("says why Review rule is off until the history is previewed, then shows readable dates", async () => {
+  it("keeps Review rule off until the history is previewed, then shows readable dates", async () => {
     const { r } = await dialog({ status: "cancelled" }, false);
-    const reason = "Preview matching history to review this rule.";
     expect(button(r, "Review rule").props.disabled).toBe(true);
-    expect(JSON.stringify(r.toJSON())).toContain(reason);
     vi.mocked(invokeTool).mockResolvedValue({
       kind: "ok",
       result: {
@@ -165,7 +163,6 @@ describe("merchant rule captured review", () => {
     });
     await act(async () => button(r, "Preview matching history").props.onClick());
     const text = JSON.stringify(r.toJSON());
-    expect(text).not.toContain(reason);
     expect(text).toContain(monthLabel("2026-10"));
     expect(text).toContain(dayYearLabel("2026-10-02", "short"));
     expect(text).not.toContain("2026-10-02");
@@ -205,13 +202,13 @@ describe("merchant rule loading", () => {
       await act(async () => {
         r = create(createElement(MerchantRulesSection, { tools: { invoke: vi.fn() } }));
       });
-      expect(button(r!, "Wait before checking rules").props.disabled).toBe(true);
-      expect(button(r!, "Search rules").props.disabled).toBe(true);
+      expect(button(r!, "Wait before checking rules").props["aria-disabled"]).toBe(true);
+      expect(button(r!, "Search rules").props["aria-disabled"]).toBe(true);
       await act(async () => {
         vi.advanceTimersByTime(5000);
       });
       expect(invokeTool).toHaveBeenCalledOnce();
-      expect(button(r!, "Check saved rules").props.disabled).toBe(false);
+      expect(button(r!, "Check saved rules").props["aria-disabled"]).toBeUndefined();
       vi.mocked(invokeTool).mockResolvedValue({
         kind: "ok",
         result: { supported: true, ready: true, rules: [], categories, total: 0, limit: 50 }
@@ -247,7 +244,11 @@ describe("merchant rule loading", () => {
     });
     const started = vi.mocked(invokeTool).mock.calls.length;
     expect(search().props.disabled).toBeFalsy();
-    expect(button(r, "Search rules").props.disabled).toBe(true);
+    // The pressed button keeps focus and ignores clicks while the read runs.
+    expect(button(r, "Search rules").props.disabled).toBeUndefined();
+    expect(button(r, "Search rules").props["aria-disabled"]).toBe(true);
+    await act(async () => button(r, "Search rules").props.onClick());
+    expect(vi.mocked(invokeTool).mock.calls.length).toBe(started);
     await act(async () => search().props.onChange({ currentTarget: { value: "shops" } }));
     expect(search().props.value).toBe("shops");
     await act(async () => search().props.onKeyDown({ key: "Enter" }));

@@ -169,6 +169,18 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
   const peek = (peekKey && data?.occurrences.find((o) => occurrenceKey(o) === peekKey)) || null;
   const matchCandidates = data && selected ? billMatchCandidates(data.transactions, selected) : [];
   const canMatch = matchCandidates.some((row) => row.id === transactionId);
+
+  // The server refuses a last date before any reviewed or changed bill of the plan.
+  const stopFloor = stopping
+    ? data?.occurrences
+        .filter((o) => o.planId === stopping.id && (o.state !== "projected" || o.adjusted))
+        .flatMap((o) => [o.dueDate, o.plannedDate ?? o.dueDate])
+        .reduce<string | undefined>(
+          (latest, day) => (latest && latest >= day ? latest : day),
+          undefined
+        )
+    : undefined;
+  const beforeStopFloor = Boolean(stopFloor && endDate && endDate < stopFloor);
   useEffect(() => {
     setSelected(null);
     setStopping(null);
@@ -586,7 +598,9 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
                 Cancel
               </Button>
               <Button
-                disabled={busy || blocked || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)}
+                disabled={
+                  busy || blocked || !/^\d{4}-\d{2}-\d{2}$/.test(endDate) || beforeStopFloor
+                }
                 onClick={() => void write("finance.bill.stop", { id: stopping.id, endDate })}
               >
                 Save last planned date
@@ -595,22 +609,28 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
           }
         >
           <div className="fnm-block">
-            <p className="jds-hint">
-              To stop before a bill you reviewed or changed, undo that first.
-            </p>
             {message ? <p role="alert">{message}</p> : null}
-            <label className="fnm-block fnm-block--tight">
-              Last planned date, inclusive
-              <input
-                className="jds-input"
-                type="date"
-                aria-label="Last planned date"
-                value={endDate}
-                onChange={(e: { currentTarget: { value: string } }) =>
-                  setEndDate(e.currentTarget.value)
-                }
-              />
-            </label>
+            <div className="fnm-block fnm-block--tight">
+              <label className="fnm-block fnm-block--tight">
+                Last planned date, inclusive
+                <input
+                  className="jds-input"
+                  type="date"
+                  aria-label="Last planned date"
+                  min={stopFloor}
+                  value={endDate}
+                  onChange={(e: { currentTarget: { value: string } }) =>
+                    setEndDate(e.currentTarget.value)
+                  }
+                />
+              </label>
+              {beforeStopFloor && stopFloor ? (
+                <p role="status" className="jds-hint">
+                  Undo the reviewed or changed bill on {dayYearLabel(stopFloor, "short")} first, or
+                  choose that date or later.
+                </p>
+              ) : null}
+            </div>
           </div>
         </Dialog>
       ) : null}

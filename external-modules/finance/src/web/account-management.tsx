@@ -16,7 +16,7 @@ import type {
 } from "../domain/account-lifecycle";
 import { isDebtType } from "../domain/account-sign";
 import { invokeTool } from "./api";
-import { dayYearLabel, formatCents } from "./format";
+import { dayYearLabel, formatCents, instantDayLabel } from "./format";
 import type { ManualAccountChoice } from "./manual-entry";
 import { navigate } from "./router";
 import { announce } from "./states";
@@ -205,7 +205,7 @@ export function ManualAccountManager(props: {
             </div>
             <p className="jds-hint">
               {isDebtType(review.type) ? "Amount owed" : "Balance"} · observed{" "}
-              {dayYearLabel(review.balanceAsOf.slice(0, 10), "short")}. Opening{" "}
+              {instantDayLabel(review.balanceAsOf)}. Opening{" "}
               {formatCents(review.openingBalanceCents, review.isoCurrency)} on{" "}
               {dayYearLabel(review.openingDate, "short")}.
             </p>

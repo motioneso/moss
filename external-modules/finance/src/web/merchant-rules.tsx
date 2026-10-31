@@ -35,6 +35,7 @@ export function MerchantRulesSection(props: {
   } | null>(null);
   const readId = useRef(0);
   const cooldown = useReadCooldown();
+  const readBusy = loading || cooldown.cooling;
   const data = saved && saved.scope === props.tools ? saved.data : null;
   const load = async (search: string, limit = 50, clearBlocked = false) => {
     if (cooldown.cooling) return;
@@ -99,26 +100,30 @@ export function MerchantRulesSection(props: {
           value={draftSearch}
           onChange={(e) => setSearch(e.currentTarget.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !loading && !cooldown.cooling) void load(draftSearch.trim());
+            if (e.key === "Enter" && !readBusy) void load(draftSearch.trim());
           }}
         />
+        {/* aria-disabled keeps focus on the pressed button while a read runs. */}
         <Button
           variant="secondary"
-          disabled={loading || cooldown.cooling}
-          onClick={() => void load(draftSearch.trim())}
+          aria-disabled={readBusy || undefined}
+          onClick={() => {
+            if (!readBusy) void load(draftSearch.trim());
+          }}
         >
           Search rules
         </Button>
         <Button
           variant="link"
-          disabled={loading || cooldown.cooling}
-          onClick={() =>
-            void load(
-              saved && saved.scope === props.tools ? saved.search : "",
-              data?.limit ?? 50,
-              true
-            )
-          }
+          aria-disabled={readBusy || undefined}
+          onClick={() => {
+            if (!readBusy)
+              void load(
+                saved && saved.scope === props.tools ? saved.search : "",
+                data?.limit ?? 50,
+                true
+              );
+          }}
         >
           {loading
             ? "Loading rules…"
