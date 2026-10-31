@@ -24,8 +24,8 @@ const you = member({
 
 function ai() {
   return new ScriptedAi()
-    .always("recipe", recipeAnswer("Lentil soup"))
-    .always("safety", safetyPass(["m-you"]))
+    .always("recipe", recipeAnswer({ title: "Lentil soup" }))
+    .always("safety", safetyPass(1))
     .always("estimate", ESTIMATE_800);
 }
 
