@@ -22,6 +22,7 @@ final class RingConnection implements AutoCloseable {
     private BluetoothGatt gatt;
     private volatile boolean overflow, closed;
     private String stage = "connect";
+    private final LinkSpeed speed = new LinkSpeed(priority -> { BluetoothGatt g = gatt; return g != null && g.requestConnectionPriority(priority); });
     private final BluetoothGattCallback callback = new BluetoothGattCallback() {
         private void add(String kind, int status, byte[] bytes) {
             if (!closed && !events.offer(new Event(kind, status, bytes))) overflow = true;
@@ -48,8 +49,8 @@ final class RingConnection implements AutoCloseable {
             gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE);
             if (gatt == null) throw new IOException("connection_unavailable");
             await("connected"); RingTiming.mark("link_up");
-            // Short connection intervals speed up every request and reply that follows.
-            gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
+            // Short connection intervals speed up the sign-in and the first delivery; waiting switches back.
+            speed.fast();
             stage = "mtu";
             if (!gatt.requestMtu(247)) throw new IOException("mtu");
             await("mtu"); stage = "services";
@@ -179,8 +180,9 @@ final class RingConnection implements AutoCloseable {
         boolean firstHeard = false;
         long now = System.nanoTime(), end = now + TimeUnit.MILLISECONDS.toNanos(ms), lastSeen = now;
         while (System.nanoTime() < end && !interrupted.getAsBoolean()) {
+            speed.waiting();
             if (watcher.quiet(System.currentTimeMillis())) release();
-            if (released) { released = false; return true; }
+            if (released) return pressed();
             if (closed || overflow) throw new IOException("connection_closed");
             Event e = pending.isEmpty() ? events.poll(100, TimeUnit.MILLISECONDS) : pending.remove();
             if (e == null) {
@@ -191,9 +193,14 @@ final class RingConnection implements AutoCloseable {
             lastSeen = System.nanoTime();
             if (!firstHeard) { firstHeard = true; RingTiming.clock("first_event_heard"); }
             if (e.kind.equals(RingProtocol.UART)) uart.accept(e.bytes, this::note);
-            if (released) { released = false; return true; }
+            if (released) return pressed();
         }
         return false;
+    }
+    private boolean pressed() {
+        released = false;
+        speed.fast();
+        return true;
     }
     Map<String, Integer> inventory() throws Exception {
         stage = "inventory";
