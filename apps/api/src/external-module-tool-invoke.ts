@@ -244,10 +244,15 @@ export function registerModuleToolInvokeRoute(
         return reply.code(502).send({ error: "The module could not finish that" });
       }
 
-      // The tool ran. A result too large to return is still a completed write.
+      // The tool ran. A result too large to return is still a completed write, so `saved` tells
+      // the page not to retry it.
       await record("success", null, elapsed());
       if (result === null) {
-        return reply.code(413).send({ error: "The tool result is too large to show" });
+        return reply.code(413).send({
+          error: "The tool result is too large to show",
+          code: "result_too_large",
+          saved: tool.risk !== "read"
+        });
       }
       return reply.code(200).send({ invocation: { status: "succeeded", result } });
     }

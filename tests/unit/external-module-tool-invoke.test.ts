@@ -453,7 +453,17 @@ describe("module page tool route: failures", () => {
     const response = await call("meals", "meals.tickLine", { input: { lineId: "l1" } });
 
     expect(response.statusCode).toBe(413);
+    expect(response.json()).toMatchObject({ code: "result_too_large", saved: true });
     expect(recordActivity.mock.calls[0]![1]).toMatchObject({ outcome: "success" });
+  });
+
+  it("tells the page a too-large read changed nothing", async () => {
+    await build();
+    execute.mockResolvedValueOnce({ data: { blob: "x".repeat(2_000_000) } });
+    const response = await call("meals", "meals.readPlan", { input: { lineId: "l1" } });
+
+    expect(response.statusCode).toBe(413);
+    expect(response.json()).toMatchObject({ code: "result_too_large", saved: false });
   });
 
   it("still answers success when the activity record fails to save", async () => {
