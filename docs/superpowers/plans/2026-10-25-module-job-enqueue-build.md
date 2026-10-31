@@ -227,7 +227,7 @@ work, list every pending Ben question, push, report the PR to coordinator w1:p1E
 - Delivered: `createModuleEnqueuePort` builds the `enqueueJob` port. The API tool path
   (`external-module-tools.ts`, `server.ts`) and the worker queue path (`external-module-invoke.ts`,
   `external-module-job-handler.ts`, `worker.ts`) both call it, so the live check, the payload
-  check and the limits cannot drift. The briefing invoker and candidate hooks stay unwired.
+  check and the limits cannot drift. A candidate hook shares the tool RPC construction, so it receives the port, and the slice 3 read-risk check refuses its call before the port is reached (row 14). Only the briefing invoker is unwired.
   The developer guide gained section 13.2.1. No migration, env var, or change to the manual-run
   route, schedules or reconcile jobs.
 - Where the factory lives: `packages/module-registry/src/external/module-enqueue-port.ts`,
