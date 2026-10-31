@@ -8,12 +8,14 @@ import { createApiServer } from "../../apps/api/src/server.js";
 import { DataContextRunner, createDatabase, type DataContextDb, type MossDatabase } from "@moss/db";
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
 import { PreferencesRepository } from "@moss/structured-state";
+import { NotificationsRepository } from "@moss/notifications";
 import type { HeartbeatEvidenceItem, HeartbeatSource, MeResponse } from "@moss/shared";
 import {
   handleHeartbeatBeat,
   type HeartbeatBeatDeps,
   type HeartbeatBeatPayload
 } from "../../packages/chat/src/heartbeat/beat-job.js";
+import { HEARTBEAT_QUIET_HOURS_HOLD_LINE } from "../../packages/chat/src/heartbeat/publish.js";
 import type { HeartbeatGenerator } from "../../packages/chat/src/heartbeat/generation.js";
 import { HEARTBEAT_DAILY_ATTEMPTS } from "../../packages/chat/src/heartbeat/limits.js";
 import {
@@ -46,6 +48,7 @@ describe("chat heartbeat beat pipeline", () => {
   let aId: string;
   let bId: string;
   let cId: string;
+  let dId: string;
 
   // What the fake sources return, what the fake model does, and what was sent to the queue.
   let revision = "r1";
@@ -106,7 +109,7 @@ describe("chat heartbeat beat pipeline", () => {
     return workerContext.withDataContext({ actorUserId, requestId: "req:hb-pipeline-w" }, work);
   }
 
-  async function beat(owner: string) {
+  async function beat(owner: string, extra: Partial<HeartbeatBeatDeps> = {}) {
     const settings = await asWorker(owner, (db) =>
       db.db
         .selectFrom("app.heartbeat_settings")
@@ -126,7 +129,8 @@ describe("chat heartbeat beat pipeline", () => {
         preferences: new PreferencesRepository(),
         gateway,
         generate,
-        boss: fakeBoss
+        boss: fakeBoss,
+        ...extra
       })
     );
     const outcome = await asWorker(owner, (db) =>
@@ -157,6 +161,18 @@ describe("chat heartbeat beat pipeline", () => {
     );
   }
 
+  async function assistantMessages(owner: string) {
+    return asUser(owner, (db) =>
+      db.db
+        .selectFrom("app.chat_messages")
+        .select(["id", "body", "model_metadata"])
+        .where("role", "=", "assistant")
+        .orderBy("created_at", "asc")
+        .orderBy("id", "asc")
+        .execute()
+    );
+  }
+
   beforeAll(async () => {
     await resetEmptyFoundationDatabase();
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 4 });
@@ -170,7 +186,8 @@ describe("chat heartbeat beat pipeline", () => {
     for (const [name, email] of [
       ["A", "a.hbp@example.test"],
       ["B", "b.hbp@example.test"],
-      ["C", "c.hbp@example.test"]
+      ["C", "c.hbp@example.test"],
+      ["D", "d.hbp@example.test"]
     ] as const) {
       const res = await server.inject({
         method: "POST",
@@ -183,7 +200,8 @@ describe("chat heartbeat beat pipeline", () => {
       const id = me.json<MeResponse>().user.id;
       if (name === "A") aId = id;
       else if (name === "B") bId = id;
-      else cId = id;
+      else if (name === "C") cId = id;
+      else dId = id;
     }
   });
 
@@ -278,6 +296,52 @@ describe("chat heartbeat beat pipeline", () => {
     await beat(aId);
     beforeAnswer = null;
     expect((await mainMessages(aId)).length).toBe(before);
+  });
+
+  it("says on the check-in that the alert waits for quiet hours end, and only when it does", async () => {
+    const now = new Date();
+    const clock = (minutes: number) => {
+      const wrapped = ((minutes % 1440) + 1440) % 1440;
+      return `${String(Math.floor(wrapped / 60)).padStart(2, "0")}:${String(wrapped % 60).padStart(2, "0")}`;
+    };
+    const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+    const quietHoursHolding = new NotificationsRepository({
+      getSettings: async () => ({
+        enabled: true,
+        start: clock(nowMinutes - 60),
+        end: clock(nowMinutes + 60),
+        timezone: "UTC"
+      }),
+      getLocaleTimezone: async () => "UTC"
+    });
+    revision = "d1";
+    items = [item("d1", "Renew the passport")];
+    generatorBehavior = (ids) => ({
+      selected: [{ findingId: ids[0], note: "Worth doing today." }],
+      intro: "Quick check-in."
+    });
+    expect((await beat(dId, { notifications: quietHoursHolding })).outcome?.outcome).toBe(
+      "message"
+    );
+    const held = await assistantMessages(dId);
+    expect(held).toHaveLength(1);
+    const heldOrigin = (held[0]!.model_metadata as { origin: { intro: string } }).origin;
+    expect(heldOrigin.intro).toBe(`Quick check-in. ${HEARTBEAT_QUIET_HOURS_HOLD_LINE}`);
+    expect(held[0]!.body).toContain(HEARTBEAT_QUIET_HOURS_HOLD_LINE);
+
+    const quietHoursOff = new NotificationsRepository({
+      getSettings: async () => ({ enabled: false, start: "22:00", end: "07:00", timezone: null }),
+      getLocaleTimezone: async () => "UTC"
+    });
+    revision = "d2";
+    items = [item("d2", "Book the dentist")];
+    expect((await beat(dId, { notifications: quietHoursOff })).outcome?.outcome).toBe("message");
+    const messages = await assistantMessages(dId);
+    expect(messages).toHaveLength(2);
+    const latest = messages[1]!;
+    const latestOrigin = (latest.model_metadata as { origin: { intro: string } }).origin;
+    expect(latestOrigin.intro).toBe("Quick check-in.");
+    expect(latest.body).not.toContain(HEARTBEAT_QUIET_HOURS_HOLD_LINE);
   });
 
   it("rejects an unsupplied finding and an unsupported number, publishing nothing", async () => {
