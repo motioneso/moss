@@ -195,12 +195,12 @@ Page is bone paper, cards are warm white, one living accent (forest) plus decora
 | Next up               | Flat rail block: eyebrow, big display time in accent, sans title, muted note, underlined link, hairline beneath. Not the dark `--rail-*` block                                                                                                                                                                                                                                                                             |
 | Notes                 | Three shared `Note` variants; see below                                                                                                                                                                                                                                                                                                                                                                                    |
 | Links                 | Action links (open the briefing, meeting actions, hero links): `--accent-fg`, underlined, 4px offset, weight 600; `--hero-fg` on the hero. Section index links: accent, no underline at rest, underline on hover. Story headline links: normal ink, no accent. The news reading action still ships a 3px offset; new action links use 4px                                                                                  |
-| Rows                  | `<RowIndex>` (`.jds-index`): one bottom hairline per row (no implicit top rule), meta right-aligned; hover is a straight inset gold marker plus accent title, never a filled block                                                                                                                                                                                                                                         |
+| Rows                  | `<RowIndex>` (`.jds-index`): one bottom hairline per row (no implicit top rule), meta right-aligned; hover is a straight inset gold marker plus accent title, never a filled block. Rows stack on phones; `narrowMeta="beside"` keeps short meta, such as an amount and a row menu, beside the title                                                                                                                       |
 | Cards                 | `<Card>` (`.jds-card`): `--surface`, `--border`, `--radius-card`. For contained widgets in dialogs and settings. Today's sections and rail are not boxed                                                                                                                                                                                                                                                                   |
 | Hairlines             | `<Divider>` (`.jds-divider`, `--strong`, `--ink`, `--vertical`), `.jds-section-head__rule`                                                                                                                                                                                                                                                                                                                                 |
 | Eyebrows              | `.jds-eyebrow` (`--gold`, `--muted`, `--accent` tones), `.jds-masthead__eyebrow`                                                                                                                                                                                                                                                                                                                                           |
 | Small text            | `.jds-caption`, `.jds-label`                                                                                                                                                                                                                                                                                                                                                                                               |
-| Section-home masthead | Other sections' homes: `<Masthead tone="field">` (`.jds-masthead--field`), forest band, 4px gold bottom rule, eyebrow, Archivo title, optional lede and aside. Action button `<Button variant="field">`                                                                                                                                                                                                                    |
+| Section-home masthead | Other sections' homes: `<Masthead tone="field">` (`.jds-masthead--field`), forest band, 4px gold bottom rule, eyebrow, Archivo title, optional lede and aside. Action button `<Button variant="field">`. `MastheadFigures` sets labelled figures in the aside, such as the parts of a total in the title                                                                                                                   |
 | Plain masthead        | `<Masthead>`: ink on paper, with `MastheadDateline` and `MastheadClock`                                                                                                                                                                                                                                                                                                                                                    |
 | Footers               | No shared section footer. Dialogs use `.jds-dialog__foot`; the briefing reader uses `.brief-reader__footer-*`                                                                                                                                                                                                                                                                                                              |
 | Paper grain           | `body::after` in `texture.css`; static, `--texture-opacity`                                                                                                                                                                                                                                                                                                                                                                |
@@ -222,14 +222,15 @@ Today invented these locally; they now live in `@moss/ui` and Today uses them. A
 needs one uses the shared piece and never copies Today's local rules. Screens own width and margins
 only. All text sits at or above the 11px floor.
 
-| Pattern                | Shared piece                                                                                                                                | Replaces                                                                                                                                            |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Numbered section head  | `<SectionHead number title meta rule align>`, `.jds-section-head`                                                                           | `.tl-head`, `.desk-head`, `.ev-head`                                                                                                                |
-| Eyebrow                | `<Eyebrow tone>` (`subtle`, `gold`, `muted`, `accent`, `hero`), bold, 11px                                                                  | `.today-hero__eyebrow`, `.well__eyebrow`, `.nw-twnote__eyebrow`, `.ev-tomorrow__eyebrow`                                                            |
-| Notes                  | `<Note variant>` (`plan`, `pull`, `practical`), `.jds-note--*`                                                                              | `.tl-note`, `.nw-twnote`, `.cmd-practical`                                                                                                          |
-| Text-link buttons      | `<Button variant="link">` (retint with `--btn-link-color`)                                                                                  | `.today-hero__link`, `.cmd-next__link`                                                                                                              |
-| Clickable row          | `<RowButton className>`, `.jds-rowbtn` (strips the native button look; the screen sets spacing and hover)                                   | `.jds-task__main`, `.loose-row__main`, `.ev-done__main`, `.ev-loop__open`, `.ev-tomorrow__item`, `.brief-snapshot__main`, `.plan-review__titlelink` |
-| Expand/collapse toggle | `<DisclosureToggle expanded controls className>`, `.jds-disclosure` (sets `aria-expanded` and `aria-controls`; the screen draws the marker) | `.brief-reader__schedule-toggle`, `.brief-reader__callout-disclosure`                                                                               |
+| Pattern                | Shared piece                                                                                                                                                                             | Replaces                                                                                                                                            |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Numbered section head  | `<SectionHead number title meta rule align wrap>`, `.jds-section-head`                                                                                                                   | `.tl-head`, `.desk-head`, `.ev-head`                                                                                                                |
+| Eyebrow                | `<Eyebrow tone>` (`subtle`, `gold`, `muted`, `accent`, `hero`), bold, 11px                                                                                                               | `.today-hero__eyebrow`, `.well__eyebrow`, `.nw-twnote__eyebrow`, `.ev-tomorrow__eyebrow`                                                            |
+| Notes                  | `<Note variant>` (`plan`, `pull`, `practical`), `.jds-note--*`                                                                                                                           | `.tl-note`, `.nw-twnote`, `.cmd-practical`                                                                                                          |
+| Text-link buttons      | `<Button variant="link">` (retint with `--btn-link-color`)                                                                                                                               | `.today-hero__link`, `.cmd-next__link`                                                                                                              |
+| Clickable row          | `<RowButton className>`, `.jds-rowbtn` (strips the native button look; the screen sets spacing and hover)                                                                                | `.jds-task__main`, `.loose-row__main`, `.ev-done__main`, `.ev-loop__open`, `.ev-tomorrow__item`, `.brief-snapshot__main`, `.plan-review__titlelink` |
+| Expand/collapse toggle | `<DisclosureToggle expanded controls className>`, `.jds-disclosure` (sets `aria-expanded` and `aria-controls`; the screen draws the marker)                                              | `.brief-reader__schedule-toggle`, `.brief-reader__callout-disclosure`                                                                               |
+| Period stepper         | `<PeriodStepper label previousLabel nextLabel onPrevious onNext disabled>`, `.jds-stepper` (arrow buttons named by the period they open; takes the masthead ink inside a field masthead) | `.fnm-month-step`                                                                                                                                   |
 
 ### Hand-built Today buttons (#2918)
 
@@ -258,24 +259,32 @@ including Teal; its portability to custom palettes remains a separate check.
 
 Import from `@moss/ui`. Full option list in `packages/ui/OPTIONS.md`.
 
-| Group     | Components                                                                                            |
-| --------- | ----------------------------------------------------------------------------------------------------- |
-| Actions   | `Button`, `ButtonLink`, `IconButton`, `RowButton`, `DisclosureToggle`, `Menu`, `Segmented`, `Switch`  |
-| Forms     | `Field`, `FormLabel`, `Select`, `Combobox`                                                            |
-| Structure | `Masthead`, `Card`, `Divider`, `RowIndex`, `Dialog`, `PeekPanel`, `PeekCloseButton`, `HeldBanner`     |
-| Status    | `Badge`, `Chip`, `Indicator`, `StatTile`, `InfoTip`, `EmptyState`                                     |
-| Time/data | `AgendaRow`, `DayCell`, `EventChip`, `AllDayChip`, `MonthChip`, `NowLine`, `TodayPill`, `WeatherChip` |
-| Identity  | `Avatar`, `BrandMark`, `CategoryDot`, `LegendSwatch`                                                  |
-| Chat      | `Thread`, `ActivityPeek`, `ChatFreshnessFooter` (from `chat-thread.tsx`)                              |
+| Group     | Components                                                                                                            |
+| --------- | --------------------------------------------------------------------------------------------------------------------- |
+| Actions   | `Button`, `ButtonLink`, `IconButton`, `RowButton`, `DisclosureToggle`, `PeriodStepper`, `Menu`, `Segmented`, `Switch` |
+| Forms     | `Field`, `FormLabel`, `Select`, `Combobox`                                                                            |
+| Structure | `Masthead`, `Card`, `Divider`, `RowIndex`, `Dialog`, `PeekPanel`, `PeekCloseButton`, `HeldBanner`, `SelectionBar`     |
+| Status    | `Badge`, `Chip`, `Indicator`, `StatTile`, `InfoTip`, `EmptyState`                                                     |
+| Time/data | `AgendaRow`, `DayCell`, `EventChip`, `AllDayChip`, `MonthChip`, `MonthGrid`, `NowLine`, `TodayPill`, `WeatherChip`    |
+| Identity  | `Avatar`, `BrandMark`, `CategoryDot`, `LegendSwatch`                                                                  |
+| Chat      | `Thread`, `ActivityPeek`, `ChatFreshnessFooter` (from `chat-thread.tsx`)                                              |
+| Charts    | `ColumnChart`, `TrendChart`                                                                                           |
 
 - Use a component before a raw `jds-*` class. Use a listed option before adding one.
 - Missing a variant? Extend the component's union type in `packages/ui/src/`, then run
   `pnpm build:ui-catalogue`.
 - Missing a primitive? Add it to `packages/ui/src/` and `packages/ui/src/styles/`, never to the
   calling screen.
+- Charts use the shared ones. `ColumnChart` takes one or two series plus an optional ink marker
+  dot; `TrendChart` draws one dated line. Series one is `--steel` and series two is
+  `--gold-strong` in every theme, because park themes re-point the accent and accent beside gold
+  fails colour-blind separation in dark canyon. A single trend line takes `--accent-meter`.
+- A chart never holds the only copy of a number. Keep the table on the same screen (a disclosure
+  is fine), legend totals for two series, and the readout on hover, tap, focus and arrow keys.
 
 ## Interaction contracts
 
+- For long forms, `Dialog scrollBody` keeps the heading and footer visible while only the body scrolls. The default retains whole-dialog scrolling. Use the shared option instead of local sticky-header or footer rules.
 - `Dialog` remains inline so footer submit buttons keep their enclosing form. It generates title
   and description ids; an explicit `aria-labelledby` remains supported. Mount it only when open.
   Initial focus stays on an already-focused child, otherwise uses `initialFocusRef`, otherwise
@@ -290,12 +299,23 @@ Import from `@moss/ui`. Full option list in `packages/ui/OPTIONS.md`.
   A replacement dialog keeps its newly established focus instead of being overwritten by cleanup.
 - `PeekPanel` is explicitly nonmodal by default. `modal={true}` requires `onClose`, owns the
   `.cal-peek-scrim` and uses the same lifecycle. Give it `aria-label` or `aria-labelledby`.
+  The peek frame (`.cal-peek`, `.cal-peek-scrim`, `.cal-peek__head`, `.cal-peek__x`) is shared
+  CSS in `@moss/ui`, so module peeks render the same frame as Calendar. `PeekCloseButton` draws
+  the shared close cross and is labelled "Close details" unless the caller passes children or
+  an `aria-label`.
 - Responsive hosts may use `useDialogLifecycle({ref, enabled, modal, onClose, initialFocusRef,
 returnFocusRef, dismissOnEscape, backdropRef})`; attach its returned onKeyDown to the focusable
   surface. A backdrop exception must be an aria-hidden, noninteractive scrim, not a content wrapper.
 - `Menu` focuses an enabled item on open, supports Arrow Up/Down, Home/End, Escape and native Tab
   departure. Trigger Enter/Space retain native activation. `triggerContent`, `triggerVariant="content"`
   and `placement="top"` support the account menu without a second keyboard implementation.
+  `triggerVariant="button"` draws a secondary button with the visible `triggerContent` and a
+  chevron; `triggerLabel` stays the accessible name. Use it for a toolbar action that offers a
+  choice, such as Export.
+- `Select quiet` drops the box until hover or focus, for a value that is editable in place inside
+  a dense table row. Use the default box anywhere the select is the main control.
+- `SelectionBar` is a labelled region pinned to the bottom of its scroll container. Render it
+  only while rows are selected; it holds the count and the bulk actions.
 - Settings `Switch`, `Segmented`, `Avatar` and `Indicator` re-export canonical components. The
   compatibility Badge translates `pine` to `forest`. Settings `Field` accepts `controlId`, `hintId`,
   `errorId`, and `error`; the consumer supplies matching control id/aria-describedby/aria-invalid.
@@ -310,7 +330,8 @@ returnFocusRef, dismissOnEscape, backdropRef})`; attach its returned onKeyDown t
 - Don't render a section that has nothing useful to say (no "No plan yet" panels).
 - Inline, inside a section: one quiet sentence, `role="status"`. Today uses `.cmd-empty` and
   `.agenda-clear` ("Gathering your morning briefing...").
-- Whole page or panel: `<EmptyState>` (`.jds-empty`) with title, optional description and action.
+- Whole page or panel: `<EmptyState>` (`.jds-empty`) with title, optional description, and buttons
+  passed as `actions` (centred, 8px apart, 20px under the text).
 - No fake counts, no generic placeholder cards, no spinners in the middle of a page.
 - Copy is sentence case and reads like the product talking, not documentation. Don't repeat the
   section name already on screen.

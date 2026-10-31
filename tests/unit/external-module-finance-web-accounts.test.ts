@@ -81,8 +81,68 @@ describe("buildAccountsView", () => {
 
   it("totals net worth as assets less debts", () => {
     const view = buildAccountsView(accounts, [healthy, expired], NOW);
-    expect(view.netWorthCents).toBe(348210 - 61244 + 921000);
-    expect(view.currency).toBe("USD");
+    expect(view.netWorthByCurrency).toEqual([
+      { currency: "USD", netWorthCents: 348210 - 61244 + 921000 }
+    ]);
+  });
+
+  it("keeps currencies separate even within one bank and retains every row's currency", () => {
+    const view = buildAccountsView(
+      [
+        row({ accountId: "usd", itemId: "i1", balanceCents: 10000 }),
+        row({ accountId: "eur", itemId: "i1", balanceCents: 2345, isoCurrency: "EUR" }),
+        row({
+          accountId: "loan",
+          itemId: "i1",
+          balanceCents: 1200,
+          isoCurrency: "EUR",
+          type: "loan"
+        })
+      ],
+      [healthy],
+      NOW
+    );
+    expect(view.netWorthByCurrency).toEqual([
+      { currency: "EUR", netWorthCents: 1145 },
+      { currency: "USD", netWorthCents: 10000 }
+    ]);
+    expect(view.banks[0]!.accounts.map((account) => account.isoCurrency)).toEqual([
+      "USD",
+      "EUR",
+      "EUR"
+    ]);
+  });
+
+  it("does not round overflowing totals or hide individual balances", () => {
+    const view = buildAccountsView(
+      [
+        row({ accountId: "large", itemId: "i1", balanceCents: Number.MAX_SAFE_INTEGER }),
+        row({ accountId: "extra", itemId: "i1", balanceCents: 1 }),
+        row({ accountId: "eur", itemId: "i1", balanceCents: 250, isoCurrency: "EUR" })
+      ],
+      [healthy],
+      NOW
+    );
+    expect(view.netWorthByCurrency).toEqual([
+      { currency: "EUR", netWorthCents: 250 },
+      { currency: "USD", netWorthCents: null }
+    ]);
+    expect(view.banks[0]!.accounts).toHaveLength(3);
+  });
+
+  it("accumulates exactly before testing whether a final total can be displayed", () => {
+    const view = buildAccountsView(
+      [
+        row({ accountId: "large", itemId: "i1", balanceCents: Number.MAX_SAFE_INTEGER }),
+        row({ accountId: "extra", itemId: "i1", balanceCents: 2 }),
+        row({ accountId: "debt", itemId: "i1", balanceCents: 3, type: "credit" })
+      ],
+      [healthy],
+      NOW
+    );
+    expect(view.netWorthByCurrency).toEqual([
+      { currency: "USD", netWorthCents: Number.MAX_SAFE_INTEGER - 1 }
+    ]);
   });
 
   it("marks a healthy bank ready with a synced-ago line", () => {
@@ -143,6 +203,86 @@ describe("buildAccountsView", () => {
   it("is empty with no accounts", () => {
     const view = buildAccountsView([], [], NOW);
     expect(view.banks).toEqual([]);
-    expect(view.netWorthCents).toBe(0);
+    expect(view.groups).toEqual([]);
+    expect(view.netWorthByCurrency).toEqual([]);
+    expect(view.sidesByCurrency).toEqual([]);
+  });
+});
+
+describe("Accounts grouped by kind", () => {
+  const accounts: AccountsRow[] = [
+    row({ accountId: "card", itemId: "i1", name: "Card", type: "credit", balanceCents: 4000 }),
+    row({ accountId: "chk", itemId: "i1", name: "Checking", balanceCents: 10000 }),
+    row({
+      accountId: "brk",
+      itemId: "i2",
+      name: "Brokerage",
+      type: "investment",
+      balanceCents: 500
+    }),
+    {
+      ...row({ accountId: "wallet", itemId: "", name: "Wallet", type: "other", balanceCents: 900 }),
+      itemId: null,
+      source: "manual",
+      subtype: "cash"
+    },
+    {
+      ...row({ accountId: "car", itemId: "", name: "Car", type: "other", balanceCents: 700 }),
+      itemId: null,
+      source: "manual",
+      subtype: "asset"
+    },
+    row({ accountId: "mort", itemId: "i1", name: "Mortgage", type: "loan", balanceCents: 2000 })
+  ];
+
+  it("orders assets before debts and puts cash on hand with checking", () => {
+    const view = buildAccountsView(accounts, [healthy, expired], NOW);
+    expect(view.groups.map((g) => [g.title, g.rows.map((r) => r.name)])).toEqual([
+      ["Cash", ["Checking", "Wallet"]],
+      ["Investments", ["Brokerage"]],
+      ["Credit cards", ["Card"]],
+      ["Loans", ["Mortgage"]],
+      ["Other", ["Car"]]
+    ]);
+  });
+
+  it("totals each group in its own currency, debts negative", () => {
+    const view = buildAccountsView(
+      [...accounts, row({ accountId: "eur", itemId: "i1", name: "Euro", isoCurrency: "EUR" })],
+      [healthy, expired],
+      NOW
+    );
+    const totals = Object.fromEntries(view.groups.map((g) => [g.kind, g.totals]));
+    expect(totals.cash).toEqual([
+      { currency: "EUR", cents: 100 },
+      { currency: "USD", cents: 10900 }
+    ]);
+    expect(totals.credit).toEqual([{ currency: "USD", cents: -4000 }]);
+    expect(totals.loan).toEqual([{ currency: "USD", cents: -2000 }]);
+  });
+
+  it("splits net worth into assets and debts owed", () => {
+    const view = buildAccountsView(accounts, [healthy, expired], NOW);
+    expect(view.netWorthByCurrency).toEqual([{ currency: "USD", netWorthCents: 6100 }]);
+    expect(view.sidesByCurrency).toEqual([
+      { currency: "USD", assetsCents: 12100, debtsCents: 6000 }
+    ]);
+  });
+
+  it("names where each balance comes from, with an as-of date for a stale bank", () => {
+    const view = buildAccountsView(
+      accounts,
+      [
+        { ...healthy, institutionName: "Sandbox First Bank" },
+        { ...expired, institutionName: "Sandbox Brokerage" }
+      ],
+      NOW
+    );
+    const source = Object.fromEntries(
+      view.groups.flatMap((g) => g.rows.map((r) => [r.name, [r.manual, r.source]]))
+    );
+    expect(source.Checking).toEqual([false, "Sandbox First Bank · Synced 2 hours ago"]);
+    expect(source.Brokerage).toEqual([false, "Sandbox Brokerage · As of October 5"]);
+    expect(source.Wallet).toEqual([true, "Manual"]);
   });
 });

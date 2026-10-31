@@ -9,6 +9,8 @@
 
 export type ReviewState = "confirmed" | "needs_look";
 
+export type TransactionSplit = { categoryId: string; amountCents: number };
+
 export type TransactionRecord = {
   id: string;
   accountId: string;
@@ -33,8 +35,18 @@ export type TransactionRecord = {
   reviewState?: ReviewState;
   /** 0 to 1; set only when the AI step chose the category. */
   aiConfidence?: number | null;
-  /** Assistant-only free text — never in job payloads (metadata-only rule). */
+  /** Owner-private note — never in job payloads (metadata-only rule). */
   notes?: string;
+  /** User allocations; the bank parent remains the sole balance movement. */
+  splits?: TransactionSplit[];
+  /** Optimistic concurrency token for the allocation editor. */
+  splitRevision?: number;
+  source?: "provider" | "manual";
+  cleared?: boolean;
+  reconciledAt?: string | null;
+  transferId?: string;
+  /** Captured SQL row version; omitted from shared projections and persisted payloads. */
+  writeRevision?: string;
 };
 
 /** One month-chunk value at monthKey(); sorted date desc, then id asc. */
@@ -42,7 +54,12 @@ export type TransactionChunk = { transactions: TransactionRecord[] };
 
 export type AccountRecord = {
   accountId: string;
-  itemId: string;
+  itemId: string | null;
+  source?: "provider" | "manual";
+  openingDate?: string;
+  openingBalanceCents?: number;
+  ledgerRevision?: number;
+  archivedAt?: string | null;
   name: string;
   officialName: string | null;
   type: string;

@@ -71,7 +71,7 @@ describe("Park Press integrated recovery declarations", () => {
     expect(companion?.description).toContain("new link");
   });
 
-  it("versions Finance UI repairs as a new patch and describes confirmed settings", () => {
+  it("preserves Finance confirmed settings in the current release", () => {
     const finance = JSON.parse(
       readFileSync(
         new URL("../../external-modules/finance/jarvis.module.json", import.meta.url),
@@ -82,7 +82,7 @@ describe("Park Press integrated recovery declarations", () => {
       settingsPath: string;
       appMap: { features: { id: string; description: string }[] };
     };
-    expect(finance.version).toBe("0.6.13");
+    expect(finance.version).toBe("0.7.0");
     expect(finance.settingsPath).toBe("/settings");
     for (const id of ["finance.settings-freedom", "finance.settings-limit"]) {
       const feature = finance.appMap.features.find((item) => item.id === id);

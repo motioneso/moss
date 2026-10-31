@@ -217,7 +217,7 @@ start_abort() {
   grep -qF "$LAUNCH_FAILED_PREFIX" "$LAUNCH_LOG" 2>/dev/null && return 0
   echo "${LAUNCH_FAILED_PREFIX}start exited before the runner launched" >>"$LAUNCH_LOG" 2>/dev/null || true
   if [ -n "${LAUNCH_CONTAINER:-}" ]; then
-    docker rm -f "$LAUNCH_CONTAINER" >/dev/null 2>&1 || true
+    docker rm -fv "$LAUNCH_CONTAINER" >/dev/null 2>&1 || true
     echo "### CLEANUP removed gate container $LAUNCH_CONTAINER (aborted start)" >>"$LAUNCH_LOG" 2>/dev/null || true
   fi
   return 0
@@ -300,7 +300,7 @@ launch_gate_postgres() {
       LAUNCH_PORT="$port"
       return 0
     fi
-    docker rm -f "$name" >/dev/null 2>&1 || true
+    docker rm -fv "$name" >/dev/null 2>&1 || true
   done
   die "could not launch the gate database server (image $GATE_IMAGE) after 10 attempts"
 }
@@ -322,7 +322,7 @@ wait_gate_postgres_ready() {
 # Removes one throwaway server. Never fails the caller.
 remove_gate_container() {
   [ -n "${1:-}" ] || return 0
-  docker rm -f "$1" >/dev/null 2>&1 || true
+  docker rm -fv "$1" >/dev/null 2>&1 || true
   return 0
 }
 
@@ -437,7 +437,10 @@ cmd_start() {
   gatedb="jarvis_gate_${slug}"
 
   mkdir -p "$STATE_DIR"
-  log="$STATE_DIR/${slug}-$(date +%Y%m%d-%H%M%S).log"
+  # Same-checkout starts may share a second. Reserve a unique file atomically so
+  # their output and terminal sentinels cannot overwrite each other's receipts.
+  log="$(mktemp --suffix=.log "$STATE_DIR/${slug}-$(date +%Y%m%d-%H%M%S)-XXXXXX")" \
+    || die "could not reserve a gate log"
 
   # Early pointer (#2473). The pointer names the latest log before anything
   # else that can fail — including the receipt checks, the container checks
@@ -694,7 +697,7 @@ run_finish() {
   # The database dies with its server: the container goes on every ending —
   # pass, fail, or signal — and --keep-db keeps nothing behind.
   if [ -n "${RUN_CONTAINER:-}" ]; then
-    docker rm -f "$RUN_CONTAINER" >/dev/null 2>&1 || true
+    docker rm -fv "$RUN_CONTAINER" >/dev/null 2>&1 || true
     echo "### CLEANUP removed gate container $RUN_CONTAINER (rc=$rc)" >>"$RUN_LOG"
   else
     echo "### CLEANUP no gate container recorded (rc=$rc)" >>"$RUN_LOG"

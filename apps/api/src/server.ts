@@ -309,9 +309,8 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
         frameAncestors: ["'none'"]
       }
     },
-    // X-Frame-Options is redundant when frame-ancestors is set in CSP, but helmet
-    // sets it to DENY by default, which is a safe belt-and-suspenders header for
-    // older browsers.
+    // X-Frame-Options is redundant when frame-ancestors is set in CSP, but helmet sets it to DENY
+    // by default, which is a safe belt-and-suspenders header for older browsers.
     frameguard: { action: "deny" },
     // noSniff: true is the helmet default (X-Content-Type-Options: nosniff).
     // referrerPolicy: no-referrer keeps request metadata off third-party servers.
@@ -534,9 +533,8 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
 
     registerModuleToolInvokeRoute(server, { auth: authRuntime, resolveActiveModules, dataContext });
 
-    // The integrations family key loads per request from env or the master key
-    // store (#2312) — never eagerly here, so a missing key degrades the tools
-    // instead of failing startup.
+    // The integrations family key loads per request from env or the master key store (#2312) —
+    // never eagerly here, so a missing key degrades the tools instead of failing startup.
     const resolveActiveModulesWithIntegrations = createIntegrationsActiveModulesResolver(
       resolveActiveModules,
       {
@@ -794,10 +792,9 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     registerStaticWeb(server);
   });
 
-  // Central error handler (#413): every unhandled request error flows through
-  // here. Logs a structured allowlisted line and returns a safe body (fixed
-  // "Internal Server Error" on 5xx — no stack/internal detail). See
-  // error-handling.ts for the secrets-never-escape invariant.
+  // Central error handler (#413): every unhandled request error flows through here. Logs a
+  // structured allowlisted line and returns a safe body (fixed "Internal Server Error" on 5xx —
+  // no stack/internal detail). See error-handling.ts for the secrets-never-escape invariant.
   setMossErrorHandler(server, {
     recordRequestError: async (event, request) => {
       const input = { id: randomUUID(), ...event };

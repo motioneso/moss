@@ -93,10 +93,10 @@ describe("Finance review empty state scope", () => {
   it("describes an unsearched review view without conflating it with an unsynced month", async () => {
     financeRead();
     const renderer = await mount(createElement(TransactionsScreen));
-    expect(text(renderer)).toContain("Transactions appear after the first sync.");
+    expect(text(renderer)).toContain("Add or import transactions in Accounts.");
     await selectReview(renderer);
     expectReviewEmpty(renderer);
-    expect(text(renderer)).not.toContain("Transactions appear after the first sync.");
+    expect(text(renderer)).not.toContain("Add or import transactions in Accounts.");
   });
 
   it("keeps its claim scoped when search and month filters narrow the view", async () => {
@@ -104,12 +104,12 @@ describe("Finance review empty state scope", () => {
     const renderer = await mount(createElement(TransactionsScreen));
     await selectReview(renderer);
     await act(async () => {
-      renderer.root.findByProps({ "aria-label": "Search payees" }).props.onChange({
+      renderer.root.findByProps({ "aria-label": "Search payees or notes" }).props.onChange({
         target: { value: "Coffee" }
       });
       renderer.root
         .findAllByType("button")
-        .find((node) => collect(node) === "←")!
+        .find((node) => node.props["aria-label"] === "September 2026")!
         .props.onClick();
     });
     await act(async () => {

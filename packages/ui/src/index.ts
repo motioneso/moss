@@ -1,3 +1,5 @@
+export { Checkbox } from "./checkbox.js";
+export type { CheckboxProps } from "./checkbox.js";
 export { AgendaRow } from "./agenda-row.js";
 export type { AgendaRowProps, AgendaRowStatus } from "./agenda-row.js";
 export { AllDayChip } from "./all-day-chip.js";
@@ -25,6 +27,8 @@ export {
   groupRecords
 } from "./chat-thread.js";
 export type { ThreadRenderRecord, ThreadRecordContext } from "./chat-thread.js";
+export { ColumnChart } from "./column-chart.js";
+export type { ColumnChartMarker, ColumnChartProps, ColumnChartSeries } from "./column-chart.js";
 export { Chip } from "./chip.js";
 export { Combobox } from "./combobox.js";
 export type { ComboboxOption, ComboboxProps } from "./combobox.js";
@@ -54,6 +58,8 @@ export { RowButton } from "./row-button.js";
 export type { RowButtonProps } from "./row-button.js";
 export { DisclosureToggle } from "./disclosure-toggle.js";
 export type { DisclosureToggleProps } from "./disclosure-toggle.js";
+export { PeriodStepper } from "./period-stepper.js";
+export type { PeriodStepperProps } from "./period-stepper.js";
 export type { IconButtonProps, IconButtonSize, IconButtonVariant } from "./icon-button.js";
 export { Indicator } from "./indicator.js";
 export type { IndicatorProps, IndicatorStatus } from "./indicator.js";
@@ -61,10 +67,12 @@ export { InfoTip } from "./info-tip.js";
 export type { InfoTipProps } from "./info-tip.js";
 export { LegendSwatch } from "./legend-swatch.js";
 export type { LegendSwatchProps, LegendSwatchTone } from "./legend-swatch.js";
-export { Masthead, MastheadClock, MastheadDateline } from "./masthead.js";
+export { Masthead, MastheadClock, MastheadDateline, MastheadFigures } from "./masthead.js";
 export type {
   MastheadClockProps,
   MastheadDatelineProps,
+  MastheadFigureItem,
+  MastheadFiguresProps,
   MastheadProps,
   MastheadTone
 } from "./masthead.js";
@@ -78,6 +86,8 @@ export { Menu } from "./menu.js";
 export type { MenuItem, MenuProps } from "./menu.js";
 export { MonthChip } from "./month-chip.js";
 export type { MonthChipProps } from "./month-chip.js";
+export { MonthGrid } from "./month-grid.js";
+export type { MonthGridProps } from "./month-grid.js";
 export { NowLine } from "./now-line.js";
 export type { NowLineProps } from "./now-line.js";
 export { PeekCloseButton } from "./peek-close-button.js";
@@ -88,6 +98,9 @@ export { Segmented } from "./segmented.js";
 export type { SegmentedOption, SegmentedProps, SegmentedTone } from "./segmented.js";
 export { Textarea } from "./textarea.js";
 export { Select } from "./select.js";
+export type { SelectProps } from "./select.js";
+export { SelectionBar } from "./selection-bar.js";
+export type { SelectionBarProps } from "./selection-bar.js";
 export { StatTile } from "./stat-tile.js";
 export type { StatTileProps } from "./stat-tile.js";
 export { Switch } from "./switch.js";
@@ -108,3 +121,5 @@ export { useDialogLifecycle } from "./use-dialog-lifecycle.js";
 export type { DialogLifecycleOptions } from "./use-dialog-lifecycle.js";
 
 export { IdentityMetric } from "./identity-metric.js";
+export { TrendChart } from "./trend-chart.js";
+export type { TrendChartProps, TrendPoint } from "./trend-chart.js";

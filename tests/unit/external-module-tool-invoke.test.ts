@@ -16,6 +16,14 @@ import {
 } from "../../apps/api/src/external-module-tool-invoke.js";
 import { ExternalModuleReportedError } from "../../apps/api/src/external-module-tools.js";
 
+const { readActorLocale } = vi.hoisted(() => ({
+  readActorLocale: vi.fn(async (_db: unknown) => ({ timezone: "Pacific/Auckland" }))
+}));
+vi.mock("@moss/settings", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  readActorLocale
+}));
+
 const ORIGIN = "http://moss.test";
 const USER = "00000000-0000-4000-8000-0000000000a1";
 const CONFIRMATION_ID = "00000000-0000-4000-8000-00000000c0f1";
@@ -175,6 +183,21 @@ describe("module page tool route: direct runs", () => {
 
     expect(execute).toHaveBeenCalledTimes(1);
     expect((execute.mock.calls[0]![2] as { actorUserId: string }).actorUserId).toBe(USER);
+  });
+
+  it("hands the tool the session actor's saved locale and timezone", async () => {
+    const actorDb = { scope: "actor" };
+    await build({
+      dataContext: { withDataContext: async (_access, work) => work(actorDb as never) }
+    });
+    await call("meals", "meals.tickLine", { input: { lineId: "l1" } });
+
+    expect(readActorLocale).toHaveBeenCalledWith(actorDb);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls[0]![2]).toMatchObject({
+      locale: { timezone: "Pacific/Auckland" },
+      localTimezone: "Pacific/Auckland"
+    });
   });
 });
 

@@ -390,16 +390,169 @@
   color: var(--accent-fg);
 }
 
+.cal-mchip__aside {
+  flex: none;
+  margin-inline-start: auto;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.cal-mchip.is-muted {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+}
+
+.cal-mchip.is-muted .cal-mchip__title {
+  color: var(--text-muted);
+}
+
+.cal-mchip.is-struck .cal-mchip__title {
+  text-decoration: line-through;
+}
+
+.cal-mcell__date:not(button) {
+  cursor: default;
+}
+
+.cal-mcell__date:not(button):hover {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.cal-mcell.is-out .cal-mcell__date:not(button):hover {
+  color: var(--text-faint);
+}
+
+/* ===== month in page flow (MonthGrid) ===== */
+
+/* Rows grow with their entries. The full-page calendar sizes its own month. */
+
+.cal-month--fit {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cal-month--fit .cal-month__head,
+.cal-month--fit .cal-month__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.cal-month--fit .cal-month__dow {
+  padding: 9px 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cal-month--fit .cal-mcell {
+  min-width: 0;
+  min-height: 6.5rem;
+  padding: 5px 6px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cal-month--fit .cal-mcell__date {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px;
+  font: inherit;
+}
+
+.cal-month--fit .cal-mcell__date .n {
+  line-height: 1;
+}
+
+.cal-month--fit .cal-mcell__date .mo {
+  text-transform: uppercase;
+}
+
+.cal-month--fit .cal-mcell.is-today .cal-mcell__date .n {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cal-month--fit .cal-mcell__evs {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cal-month--fit .cal-mchip {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px 5px;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.cal-month--fit .cal-mchip__dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+}
+
+.cal-month--fit .cal-mchip__title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ===== detail peek (right flyout) ===== */
 
+/* PeekPanel and PeekCloseButton are shared, so their frame lives here for every surface. */
+
 .cal-peek-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
   background: transparent;
 }
 
 .cal-peek {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 384px;
+  max-width: calc(100vw - 40px);
+  z-index: 111;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 22px 26px;
+  overflow-y: auto;
   background: var(--surface);
   border-left: 1px solid var(--border);
   box-shadow: var(--shadow-xl);
+  animation: cal-peek-in 0.24s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cal-peek {
+    animation: none;
+  }
+}
+
+.cal-peek__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
 }
 
 @keyframes cal-peek-in {
@@ -424,6 +577,12 @@
 }
 
 .cal-peek__x {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
   border-radius: 8px;
   border: 0;
   background: transparent;

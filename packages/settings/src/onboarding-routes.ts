@@ -170,6 +170,8 @@ export interface OnboardingProbes {
 }
 
 export interface OnboardingRoutesDependencies {
+  /** Background initialization runs only after the owned onboarding state commits. */
+  readonly onOnboardingCommitted?: (actorUserId: string) => Promise<void>;
   readonly dataContext: DataContextRunner;
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly onboardingProbes?: OnboardingProbes;
@@ -906,6 +908,14 @@ export function registerOnboardingRoutes(
               return { completed: memberState.completedAt !== null };
             }
           );
+          try {
+            await dependencies.onOnboardingCommitted?.(accessContext.actorUserId);
+          } catch (error) {
+            request.log.warn(
+              { userId: accessContext.actorUserId, errorName: (error as Error).name },
+              "external module onboarding reconcile failed"
+            );
+          }
           return result;
         } catch (error) {
           return dependencies.handleRouteError(error, reply);

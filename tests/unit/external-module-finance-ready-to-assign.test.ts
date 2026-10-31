@@ -105,3 +105,37 @@ describe("readyToAssignCents (#3173)", () => {
     expect(ready).toBe(80_000);
   });
 });
+
+describe("exact ready-to-assign boundaries", () => {
+  it("includes manual cash without treating other assets as spendable money", () => {
+    expect(
+      readyToAssignCents(
+        [
+          { type: "other", subtype: "cash", balanceCents: 12345 },
+          { type: "other", subtype: "asset", balanceCents: 99999 },
+          { type: "loan", balanceCents: 40000 }
+        ],
+        {}
+      )
+    ).toBe(12345);
+  });
+  it("does not lose a cent when large balances cancel, regardless of order", () => {
+    const maximum = Number.MAX_SAFE_INTEGER;
+    const accounts = [checking(maximum), checking(2), card(maximum)];
+    expect(readyToAssignCents(accounts, {})).toBe(2);
+    expect(readyToAssignCents([...accounts].reverse(), {})).toBe(2);
+    expect(() => readyToAssignCents([checking(maximum), checking(1)], {})).toThrow(/safe integer/);
+  });
+  it("refuses unsafe individual balances and availability", () => {
+    expect(() => readyToAssignCents([checking(1.5)], {})).toThrow();
+    expect(() =>
+      readyToAssignCents([], {
+        groceries: {
+          assignedCents: 0,
+          activityCents: 0,
+          availableCents: Number.MAX_SAFE_INTEGER + 1
+        }
+      })
+    ).toThrow();
+  });
+});

@@ -1,4 +1,4 @@
-/* global document, window, URLSearchParams */
+/* global document, window */
 // Local fixture interactions only. No API calls or persistent changes.
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -42,7 +42,7 @@ function apply() {
   const phone = $("[data-phone-link]");
   if (phone) {
     const p = new URLSearchParams(current);
-    phone.href = `phone.html?page=${encodeURIComponent(location.pathname.split("/").pop())}&${p}`;
+    phone.href = `phone.html?page=${encodeURIComponent(window.location.pathname.split("/").pop())}&${p}`;
   }
   const textarea = $("#main-input");
   if (textarea) {

@@ -35,7 +35,7 @@ import {
   groupActivity,
   type ActivityRow
 } from "./settings-activity-line.js";
-import { actionLabel, moduleLabel, outcomeNote } from "./settings-activity-labels.js";
+import { actionLabel, moduleLabel, outcomeNote, sourceLabel } from "./settings-activity-labels.js";
 import type { PaneProps } from "./settings-types.js";
 import { Badge, PaneHead, Select } from "./settings-ui.js";
 
@@ -62,7 +62,12 @@ export function sinceForRange(range: DateRange, timeZone: string, now: Date = ne
   return new Date(now.getTime() - offsets[range]).toISOString();
 }
 
-function approvalLabel(mode: ActionAuditLogEntryDto["approvalMode"]): string {
+function approvalLabel(
+  mode: ActionAuditLogEntryDto["approvalMode"],
+  source?: ActionAuditLogEntryDto["sourceSurface"]
+): string {
+  if (source === "module_page" && mode === "auto") return "Requested on page";
+  if (source === "module_page" && mode === "confirmed") return "Confirmed on page";
   const labels: Record<typeof mode, string> = {
     auto: "Auto-run",
     yolo: "Auto-approved",
@@ -160,7 +165,9 @@ function buildDialog(row: ActivityRow, locale: LocaleSettingsDto): ActivityDialo
       statusText: failed ? "Did not work" : "Done",
       statusTone: failed ? "red" : "forest",
       badges: [],
-      meta: ["Chat", timeOf(entry.occurredAt), duration].filter(Boolean).join(" - "),
+      meta: [sourceLabel(entry.sourceSurface), timeOf(entry.occurredAt), duration]
+        .filter(Boolean)
+        .join(" - "),
       quote: null,
       steps: [
         {
@@ -168,7 +175,11 @@ function buildDialog(row: ActivityRow, locale: LocaleSettingsDto): ActivityDialo
           kindLabel: "tool action",
           title: actionLabel(entry),
           result: toolResultText(entry),
-          meta: [moduleLabel(entry.toolModuleId), approvalLabel(entry.approvalMode), duration]
+          meta: [
+            moduleLabel(entry.toolModuleId),
+            approvalLabel(entry.approvalMode, entry.sourceSurface),
+            duration
+          ]
             .filter(Boolean)
             .join(" - "),
           failed,
@@ -176,7 +187,7 @@ function buildDialog(row: ActivityRow, locale: LocaleSettingsDto): ActivityDialo
           facts: [
             ["Started", timeOf(entry.occurredAt)],
             ...(duration ? [["Took", duration] as const] : []),
-            ["Approval", approvalLabel(entry.approvalMode)],
+            ["Approval", approvalLabel(entry.approvalMode, entry.sourceSurface)],
             ["Model", "None, this step is a tool action"],
             ["Tokens", "None used"]
           ],
@@ -275,7 +286,11 @@ function buildDialog(row: ActivityRow, locale: LocaleSettingsDto): ActivityDialo
       kindLabel: "tool action",
       title: actionLabel(entry),
       result: toolResultText(entry),
-      meta: [moduleLabel(entry.toolModuleId), approvalLabel(entry.approvalMode), took]
+      meta: [
+        moduleLabel(entry.toolModuleId),
+        approvalLabel(entry.approvalMode, entry.sourceSurface),
+        took
+      ]
         .filter(Boolean)
         .join(" - "),
       failed: toolFailed,
@@ -284,7 +299,7 @@ function buildDialog(row: ActivityRow, locale: LocaleSettingsDto): ActivityDialo
       facts: [
         ["Started", timeOf(entry.occurredAt)],
         ...(took ? [["Took", took] as const] : []),
-        ["Approval", approvalLabel(entry.approvalMode)],
+        ["Approval", approvalLabel(entry.approvalMode, entry.sourceSurface)],
         ["Model", "None, this step is a tool action"],
         ["Tokens", "None used"]
       ] as ReadonlyArray<readonly [string, string]>,

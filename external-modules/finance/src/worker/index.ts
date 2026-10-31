@@ -67,6 +67,7 @@ function ports(ctx: ModuleWorkerContext): WorkerPorts {
     // (connect.start environment override) stay dropped until the SDK adds one.
     isAdmin: false,
     actionPolicy: ctx.actionPolicy,
+    localTimezone: ctx.localTimezone,
     now: () => new Date(),
     // FIN-06b (#1166 F6-D4): built once per invocation over this call's own
     // kv/db, then memoized inside the closure — see worker/store.ts.

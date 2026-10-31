@@ -199,6 +199,119 @@ function ids(result: Record<string, unknown>): string[] {
 }
 
 describe("finance feed handlers (#1147)", () => {
+  it.each([
+    ["uncleared", ["manual-absent", "manual-uncleared"]],
+    ["cleared", ["manual-cleared"]],
+    ["reconciled", ["manual-reconciled", "manual-reconciled-old-flag"]]
+  ])(
+    "isolates owned posted manual %s rows without changing the ledger",
+    async (ledgerState, expected) => {
+      const kv = fakeKv();
+      await seedFeed(kv);
+      const manual = (id: string, patch: Partial<TransactionRecord> = {}) =>
+        txRecord({ id, source: "manual", categoryId: "groceries", ...patch });
+      const records = [
+        manual("manual-absent"),
+        manual("manual-uncleared", { cleared: false }),
+        manual("manual-cleared", { cleared: true }),
+        manual("manual-reconciled", { cleared: true, reconciledAt: "2026-07-12T12:00:00Z" }),
+        manual("manual-reconciled-old-flag", {
+          cleared: false,
+          reconciledAt: "2026-07-12T12:00:00Z"
+        }),
+        manual("manual-pending", { cleared: true, pending: true }),
+        txRecord({ id: "provider-cleared", cleared: true }),
+        txRecord({ id: "provider-reconciled", reconciledAt: "2026-07-12T12:00:00Z" })
+      ];
+      await kv.set(NS.transactions, "acc-1:2026-07", { transactions: records });
+      const mirror = readOnlyMirror({
+        [sharedMonthKey(OTHER, "shared", "2026-07")]: {
+          transactions: [manual("shared-manual", { accountId: "shared", cleared: true })]
+        }
+      });
+      const writesBefore = kv.ops.length;
+      const handler = transactionsQueryHandler(fakePorts(kv, mirror));
+      const input = {
+        actorUserId: ACTOR,
+        activeUserIds: [ACTOR, OTHER],
+        ledgerState,
+        accountId: "acc-1",
+        categoryId: "groceries",
+        search: "acme",
+        postingState: "posted",
+        direction: "outflow"
+      };
+      const result = await handler(input);
+      expect(ids(result)).toEqual(expected);
+      expect(result.totalCount).toBe(expected.length);
+      const limited = await handler({ ...input, limit: 1 });
+      expect(ids(limited)).toEqual(expected.slice(0, 1));
+      expect(limited.totalCount).toBe(expected.length);
+      expect(ids(await handler({ ...input, postingState: "pending" }))).toEqual([]);
+      const withoutAccount = await handler({
+        actorUserId: ACTOR,
+        activeUserIds: [ACTOR, OTHER],
+        ledgerState
+      });
+      expect(ids(withoutAccount)).toEqual(expected);
+      expect(kv.ops.length).toBe(writesBefore);
+      expect(await kv.get(NS.transactions, "acc-1:2026-07")).toEqual({ transactions: records });
+      expect(ids(await handler({ actorUserId: ACTOR, accountId: "acc-1" }))).toHaveLength(
+        records.length
+      );
+    }
+  );
+  it.each(["posted", "all", "", 1])(
+    "rejects invalid manual ledger state %s",
+    async (ledgerState) => {
+      const kv = fakeKv();
+      await expect(
+        transactionsQueryHandler(fakePorts(kv, readOnlyMirror()))({
+          actorUserId: ACTOR,
+          ledgerState
+        })
+      ).rejects.toThrow("ledgerState must be one of");
+      expect(kv.ops).toEqual([]);
+    }
+  );
+  it("combines posting, direction, duplicate and category filters before limiting", async () => {
+    const kv = fakeKv();
+    await seedFeed(kv);
+    await kv.set(NS.transactions, "acc-1:2026-07", {
+      transactions: [
+        txRecord({ id: "dup-a", categoryId: "groceries" }),
+        txRecord({ id: "dup-b", categoryId: "groceries" }),
+        txRecord({
+          id: "refund",
+          amountCents: -1200,
+          pending: true,
+          notes: "Synthetic reimbursement"
+        })
+      ]
+    });
+    const handler = transactionsQueryHandler(fakePorts(kv, readOnlyMirror()));
+    const result = await handler({
+      actorUserId: ACTOR,
+      accountId: "acc-1",
+      categoryId: "groceries",
+      postingState: "posted",
+      direction: "outflow",
+      duplicatesOnly: true,
+      limit: 1
+    });
+    expect(ids(result)).toEqual(["dup-a"]);
+    expect(result.totalCount).toBe(2);
+    expect(
+      ids(
+        await handler({
+          actorUserId: ACTOR,
+          postingState: "pending",
+          direction: "inflow",
+          search: "reimbursement"
+        })
+      )
+    ).toEqual(["refund"]);
+  });
   it("query defaults to the current month and returns the feed in one call", async () => {
     const kv = fakeKv();
     await seedFeed(kv);
@@ -256,7 +369,7 @@ describe("finance feed handlers (#1147)", () => {
     await expect(handler({ limit: 2001 })).rejects.toThrow("at most 2000");
     // The total lets the screen offer Show more (review A11).
     expect((await handler({ limit: 10 })).totalCount).toBe(60);
-    await expect(handler({ month: "July 2026" })).rejects.toThrow("month must be YYYY-MM");
+    await expect(handler({ month: "July 2026" })).rejects.toThrow("month must be a valid YYYY-MM");
   });
 
   it("categorize-new sets user provenance, confirms the row, and persists notes", async () => {
@@ -522,6 +635,23 @@ describe("finance transactions.query household merge (#1149)", () => {
     expect((kv as ReturnType<typeof fakeKv>).ops.length).toBe(writesBefore);
   });
 
+  it("restricts an owned history link to own records and account choices", async () => {
+    const kv = fakeKv();
+    await seedFeed(kv);
+    const result = await transactionsQueryHandler(fakePorts(kv, sharedMirror()))({
+      actorUserId: ACTOR,
+      activeUserIds: [ACTOR, OTHER],
+      ownOnly: true,
+      limit: 200
+    });
+    expect(ids(result)).toEqual(["t-a", "t-c", "t-b"]);
+    expect((result.accounts as { accountId: string }[]).map((a) => a.accountId)).toEqual([
+      "acc-1",
+      "acc-2"
+    ]);
+    expect((result.transactions as { shared?: boolean }[]).some((t) => t.shared)).toBe(false);
+  });
+
   it("applies category, search, and pending filters to shared rows too", async () => {
     const kv = fakeKv();
     await seedFeed(kv);
@@ -645,6 +775,67 @@ describe("finance review (#3176)", () => {
     expect(keys).toHaveLength(1);
     expect(await kv.get(NS.rules, keys[0]!)).toMatchObject({
       payeeKey: "blue bottle",
+      categoryId: "groceries"
+    });
+  });
+
+  it("refuses a merchant rule whose payee text is too long, and saves nothing", async () => {
+    const kv = fakeKv();
+    await seedReview(kv);
+    await kv.set(NS.transactions, "acc-1:2026-07", {
+      transactions: [
+        txRecord({
+          id: "r-1",
+          name: "Long Name ".repeat(30),
+          categoryId: "dining",
+          reviewState: "needs_look"
+        })
+      ]
+    });
+    const before = JSON.stringify(await rows(kv));
+    const writes = kv.ops.length;
+    const activity: ActivityInput[] = [];
+
+    await expect(
+      reviewApplyHandler(fakePorts(kv, undefined, activity))(
+        envelope({
+          transactionIds: ["r-1"],
+          accountIds: ["acc-1"],
+          months: ["2026-07"],
+          categoryIds: ["groceries"],
+          createRule: true
+        })
+      )
+    ).rejects.toMatchObject({ code: "rule_payee_too_long" });
+
+    expect(JSON.stringify(await rows(kv))).toBe(before);
+    expect(activity).toEqual([]);
+    expect(await kv.list(NS.rules)).toEqual([]);
+    expect(kv.ops.length).toBe(writes);
+  });
+
+  it("still makes a merchant rule for payee text at the limit", async () => {
+    const kv = fakeKv();
+    await seedReview(kv);
+    const name = "q".repeat(200);
+    await kv.set(NS.transactions, "acc-1:2026-07", {
+      transactions: [txRecord({ id: "r-1", name, categoryId: "dining", reviewState: "needs_look" })]
+    });
+
+    await reviewApplyHandler(fakePorts(kv))(
+      envelope({
+        transactionIds: ["r-1"],
+        accountIds: ["acc-1"],
+        months: ["2026-07"],
+        categoryIds: ["groceries"],
+        createRule: true
+      })
+    );
+
+    const keys = await kv.list(NS.rules);
+    expect(keys).toHaveLength(1);
+    expect(await kv.get(NS.rules, keys[0]!)).toMatchObject({
+      payeeKey: name,
       categoryId: "groceries"
     });
   });

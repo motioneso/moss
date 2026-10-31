@@ -63,7 +63,9 @@ const DIALOG_PAGE = `<!doctype html>
 describe("parity capture topbar offset", () => {
   let browser: Browser;
   beforeAll(async () => {
-    browser = await chromium.launch();
+    browser = await chromium.launch(
+      process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}
+    );
   }, 60_000);
   afterAll(async () => {
     await browser?.close();

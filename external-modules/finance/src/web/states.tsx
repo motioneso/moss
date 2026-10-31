@@ -3,45 +3,65 @@
 // states shared by the feed (job-search precedent: every route funnels its
 // query snapshot through one gate so the states stay consistent). Text-only —
 // no icons, no animation, so prefers-reduced-motion needs no special casing.
-import { Card, type ReactNodeLike } from "@moss/module-web-sdk";
-import type { QuerySnapshot } from "./store";
+import {
+  Button,
+  Card,
+  EmptyState as SharedEmptyState,
+  useEffect,
+  useState,
+  type ReactNodeLike
+} from "@moss/module-web-sdk";
+import { invalidateQueries, type QuerySnapshot } from "./store";
 
+// A quick read shows nothing; a slow one shows one quiet status line.
 export function LoadingState(props: { label: string }): ReactNodeLike {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setShown(true), 300);
+    return () => clearTimeout(timer);
+  }, []);
   return (
-    <Card sunken role="status">
-      <div className="fnm-state">
-        <span className="jds-eyebrow">Loading</span>
-        <p>{props.label}…</p>
-      </div>
-    </Card>
+    <p className="jds-hint" role="status">
+      {shown ? `${props.label}…` : ""}
+    </p>
   );
 }
 
 export function EmptyState(props: {
   title: string;
-  body: string;
+  body?: string;
   action?: ReactNodeLike;
 }): ReactNodeLike {
+  return <SharedEmptyState title={props.title} description={props.body} actions={props.action} />;
+}
+
+export function ErrorState(props: { message: string; action?: ReactNodeLike }): ReactNodeLike {
   return (
-    <Card sunken>
+    <Card sunken role="alert">
       <div className="fnm-state">
-        <span className="jds-eyebrow">Nothing here yet</span>
-        <h2>{props.title}</h2>
-        <p>{props.body}</p>
+        <span className="jds-eyebrow">Something went wrong</span>
+        <p>{props.message}</p>
         {props.action ?? null}
       </div>
     </Card>
   );
 }
 
-export function ErrorState(props: { message: string }): ReactNodeLike {
+// Reruns every mounted read. Each settled read is a new outcome, so a repeat failure re-enables it.
+function RetryButton(props: { attempt: unknown }): ReactNodeLike {
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setBusy(false), [props.attempt]);
   return (
-    <Card sunken role="alert">
-      <div className="fnm-state">
-        <span className="jds-eyebrow">Something went wrong</span>
-        <p>{props.message}</p>
-      </div>
-    </Card>
+    <Button
+      variant="secondary"
+      disabled={busy}
+      onClick={() => {
+        setBusy(true);
+        invalidateQueries();
+      }}
+    >
+      {busy ? "Trying again…" : "Try again"}
+    </Button>
   );
 }
 
@@ -78,7 +98,7 @@ export function DegradedState(props: { detail: string }): ReactNodeLike {
 export function outcomeGate<T extends Record<string, unknown>>(
   snapshot: QuerySnapshot<T>,
   render: (result: T) => ReactNodeLike,
-  opts?: { loadingLabel?: string }
+  opts?: { loadingLabel?: string; errorMessage?: string; errorAction?: ReactNodeLike }
 ): ReactNodeLike {
   if (snapshot.status === "loading") {
     return <LoadingState label={opts?.loadingLabel ?? "Loading"} />;
@@ -88,7 +108,17 @@ export function outcomeGate<T extends Record<string, unknown>>(
   if (outcome.kind === "blocked") {
     return <DegradedState detail="This data needs confirmation in the assistant." />;
   }
-  if (outcome.kind === "error") return <ErrorState message={outcome.message} />;
+  if (outcome.kind === "error")
+    return (
+      <ErrorState
+        message={
+          outcome.retryAfterSeconds
+            ? outcome.message
+            : (opts?.errorMessage ?? "This section didn't load.")
+        }
+        action={opts?.errorAction ?? <RetryButton attempt={outcome} />}
+      />
+    );
   const status = (outcome.result as { status?: unknown }).status;
   if (status === "error") {
     return <DegradedState detail="This section could not load safely. Try again later." />;

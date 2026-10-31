@@ -68,6 +68,52 @@
   color: var(--text-subtle);
 }
 
+/* Quiet select: a value in a table cell that reads as text until hover or focus shows the field.
+   The wrap pulls left by the text inset and takes one line of height, so the value sits on the
+   same line as the text beside it. */
+.jds-selectwrap--quiet {
+  margin-inline-start: calc(-1 * var(--space-2));
+  margin-block: calc((1lh - 32px) / 2);
+}
+.jds-selectwrap .jds-select.jds-select--quiet {
+  height: 32px;
+  min-height: 0;
+  padding-left: var(--space-2);
+  font-size: inherit;
+  background: transparent;
+  border-color: transparent;
+}
+.jds-selectwrap .jds-select.jds-select--quiet:hover {
+  border-color: var(--border-strong);
+}
+.jds-selectwrap .jds-select.jds-select--quiet:focus {
+  border-color: var(--accent-fg);
+}
+.jds-selectwrap--quiet .jds-selectwrap__chev {
+  opacity: 0;
+  transition: var(--transition-control);
+}
+.jds-selectwrap--quiet:hover .jds-selectwrap__chev,
+.jds-selectwrap--quiet:focus-within .jds-selectwrap__chev {
+  opacity: 1;
+}
+@media (hover: none) {
+  .jds-selectwrap--quiet .jds-selectwrap__chev {
+    opacity: 1;
+  }
+}
+
+/* Phones keep the thumb-sized field. */
+@media (max-width: 720px) {
+  .jds-selectwrap--quiet {
+    margin-block: calc((1lh - 44px) / 2);
+  }
+  .jds-selectwrap .jds-select.jds-select--quiet {
+    height: 44px;
+    min-height: 44px;
+  }
+}
+
 .jds-check {
   font-size: var(--text-md);
   color: var(--text);
@@ -76,7 +122,7 @@
   border: var(--border-w-strong) solid var(--border-strong);
   border-radius: var(--radius-xs);
   background: var(--surface);
-  color: var(--white);
+  color: var(--text-on-accent);
 }
 .jds-check input:checked + .jds-check__box,
 .jds-check input:indeterminate + .jds-check__box {
@@ -424,4 +470,45 @@
   padding: var(--space-3);
   resize: vertical;
   line-height: var(--leading-normal);
+}
+
+/* Keep the authored 19px mark inside a comfortable selection target. Scoped to the
+   shared component so existing raw-check layouts keep their geometry. */
+.jds-check.jds-checkbox {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+  min-width: 28px;
+  min-height: 28px;
+}
+.jds-check.jds-checkbox input {
+  position: absolute;
+  opacity: 0;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  cursor: pointer;
+}
+.jds-check.jds-checkbox .jds-check__box {
+  width: 19px;
+  height: 19px;
+  flex: none;
+  margin-top: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.jds-check.jds-checkbox .jds-check__box svg {
+  width: 13px;
+  height: 13px;
+  opacity: 0;
+}
+.jds-check.jds-checkbox input:checked + .jds-check__box svg {
+  opacity: 1;
+}
+.jds-check.jds-checkbox input:disabled ~ * {
+  opacity: 0.5;
 }

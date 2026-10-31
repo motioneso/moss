@@ -1,5 +1,5 @@
 // #3723 T11: a page call reaches the real external tool binding, and the worker sees the session
-// user even when the page sends its own actor id in the input.
+// user even when the page sends its own actor id in the input, plus that user's saved zone.
 import Fastify from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import { describe, expect, it, vi } from "vitest";
@@ -7,6 +7,11 @@ import { describe, expect, it, vi } from "vitest";
 import type * as ModuleRegistryNodeModule from "@moss/module-registry/node";
 
 const invoke = vi.fn(async (..._args: unknown[]) => ({ data: { ok: true } }));
+
+vi.mock("@moss/settings", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  readActorLocale: async () => ({ timezone: "Pacific/Auckland" })
+}));
 
 vi.mock("@moss/module-registry/node", async (importOriginal) => {
   const actual = await importOriginal<typeof ModuleRegistryNodeModule>();
@@ -93,6 +98,7 @@ describe("module page calls reach the worker as the session user", () => {
     expect(response.json()).toEqual({ invocation: { status: "succeeded", result: { ok: true } } });
     expect(invoke).toHaveBeenCalledTimes(1);
     expect(invoke.mock.calls[0]?.[2]).toEqual({ lineId: "line-1", actorUserId: "session-user" });
+    expect(invoke.mock.calls[0]?.[4]).toMatchObject({ localTimezone: "Pacific/Auckland" });
     await server.close();
   });
 });

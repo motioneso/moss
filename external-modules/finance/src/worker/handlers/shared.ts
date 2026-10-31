@@ -40,6 +40,12 @@ export async function applyShareFlag(
   if (account === null) {
     throw new InputError("unknown_account", "accountId is not on record");
   }
+  if (shared && account.source === "manual") {
+    throw new InputError(
+      "manual_sharing_unavailable",
+      "Manual accounts are private while household ledger sharing is being added"
+    );
+  }
   // Flag first, mirror second, in the SAME invocation (spec delta §"Share /
   // unshare semantics"): a crash between the two leaves a stale mirror that
   // the next sync's own-prefix reconcile (ON→OFF) or replay (OFF→ON) heals.
