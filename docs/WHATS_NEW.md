@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Meals plan view.** The Meals Plan tab now shows the meals Moss has planned, day by day, and each meal opens as a recipe. [PR #3917](https://github.com/motioneso/moss/pull/3917)
 - **Finance budgeting, bills and reports.** Finance now lets you give every dollar a job from the keyboard, move money between categories, set savings targets, track upcoming bills, split and bulk-categorize transactions, reconcile against statements, import and export CSV files, see upcoming bills on a calendar with suggestions drawn from repeating charges, and see net worth, cash flow and spending in charts. [PR #3874](https://github.com/motioneso/moss/pull/3874)
 
 #### Fixed
