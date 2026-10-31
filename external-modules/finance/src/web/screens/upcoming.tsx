@@ -431,7 +431,7 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
               </div>
             </div>
           ),
-        { loadingLabel: "Loading bills" }
+        { loadingLabel: "Loading bills", errorMessage: "Your bills didn't load." }
       )}
       {data && recording ? (
         <BillEntryDialog

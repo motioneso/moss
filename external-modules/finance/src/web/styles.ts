@@ -9,7 +9,8 @@ export const MODULE_STYLES = `
 .fnm-root { max-width: 76.25rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
 .fnm-stack { display: flex; flex-direction: column; gap: 1rem; }
 .fnm-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
-.fnm-state { display: flex; flex-direction: column; gap: 0.5rem; }
+.fnm-state { display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+.fnm-state > .jds-btn { margin-top: 0.25rem; }
 .fnm-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .fnm-table { width: 100%; border-collapse: collapse; }
 .fnm-table th, .fnm-table td { text-align: left; vertical-align: top; padding: 0.25rem 0.75rem 0.25rem 0; }

@@ -28,6 +28,7 @@ import {
 } from "../format";
 import { EmptyState, outcomeGate } from "../states";
 import { invalidateToolQueries, useToolQuery } from "../store";
+import { navigate } from "../router";
 import type { DirectoryUser } from "../household";
 // Deep imports on purpose: the domain barrel re-exports keys.ts (node:crypto),
 // which the browser-platform web bundle cannot resolve. reports/net-worth are
@@ -164,8 +165,8 @@ function NetWorthSection(props: { result: NetWorthResult }): ReactNodeLike {
       <SectionHead title="Net worth" meta={currency ?? undefined} rule />
       {headlineCents === null || !currency ? (
         <EmptyState
-          title="No recorded balance history"
-          body="A manual opening balance or a connected balance snapshot is needed in this period. Open sources below to see what is missing."
+          title="No balance history in this period"
+          body="Add an opening balance or connect a bank in Accounts."
         />
       ) : (
         <div className="fnm-stack">
@@ -212,10 +213,7 @@ function SpendingSection(props: {
   const { window: windowMonths, own, shared, categories, currency } = props.result;
   if (!currency)
     return (
-      <EmptyState
-        title="No transactions yet"
-        body="Spending reports appear after manual entry, import or a connected account brings in transactions."
-      />
+      <EmptyState title="No transactions yet" body="Add or import transactions in Accounts." />
     );
   const directory = props.directory;
   // FIN-04/#1149 fail-closed posture: a shared contribution merges ONLY when
@@ -235,10 +233,7 @@ function SpendingSection(props: {
   const latest = merged[merged.length - 1];
   if (!latest) {
     return (
-      <EmptyState
-        title="No transactions yet"
-        body="Spending reports appear after manual entry, import or a connected account brings in transactions."
-      />
+      <EmptyState title="No transactions yet" body="Add or import transactions in Accounts." />
     );
   }
   const select = (
@@ -505,6 +500,15 @@ export function ReportsScreen(): ReactNodeLike {
     setCurrencies([...new Set(values)].sort());
   }, [spending, netWorth]);
   const chooseCurrency = currencies.length > 1 && currency === "";
+  // No balance history and no transactions: one invitation instead of two empty sections.
+  const nothingYet =
+    netWorth.status === "settled" &&
+    netWorth.outcome.kind === "ok" &&
+    !netWorth.outcome.result.unavailableReason &&
+    (netWorth.outcome.result.headlineCents === null || !netWorth.outcome.result.currency) &&
+    spending.status === "settled" &&
+    spending.outcome.kind === "ok" &&
+    !spending.outcome.result.currency;
   return (
     <section className="fnm-block" aria-label="Finance reports">
       <div className="fnm-spread">
@@ -555,6 +559,11 @@ export function ReportsScreen(): ReactNodeLike {
           title="Choose a currency"
           body="Each currency reports on its own, with no conversion."
         />
+      ) : nothingYet ? (
+        <EmptyState
+          title="Nothing to report yet"
+          action={<Button onClick={() => navigate("/accounts")}>Add an account</Button>}
+        />
       ) : (
         <>
           {outcomeGate(
@@ -563,7 +572,8 @@ export function ReportsScreen(): ReactNodeLike {
               <NetWorthSection result={result} />
             ),
             {
-              loadingLabel: "Loading net worth"
+              loadingLabel: "Loading net worth",
+              errorMessage: "Net worth didn't load."
             }
           )}
           {outcomeGate(
@@ -579,7 +589,8 @@ export function ReportsScreen(): ReactNodeLike {
               />
             ),
             {
-              loadingLabel: "Loading spending reports"
+              loadingLabel: "Loading spending reports",
+              errorMessage: "Spending didn't load."
             }
           )}
         </>

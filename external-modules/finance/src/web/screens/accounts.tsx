@@ -183,14 +183,14 @@ function AccountsBody(props: {
         title="Give your accounts a home"
         body="Add a manual account or connect a bank."
         action={
-          <div className="fnm-chips">
+          <>
             <Button variant="primary" size="sm" onClick={props.onAddAccount}>
               Add manual account
             </Button>
             <Button variant="secondary" size="sm" onClick={addBank}>
               Connect a bank
             </Button>
-          </div>
+          </>
         }
       />
     );
@@ -353,7 +353,7 @@ export function AccountsScreen(props: {
             onManage={setManaged}
           />
         ),
-        { loadingLabel: "Loading accounts" }
+        { loadingLabel: "Loading accounts", errorMessage: "Your accounts didn't load." }
       )}
       {managed ? (
         <ManualAccountManager

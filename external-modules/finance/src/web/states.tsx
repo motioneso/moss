@@ -4,13 +4,14 @@
 // query snapshot through one gate so the states stay consistent). Text-only —
 // no icons, no animation, so prefers-reduced-motion needs no special casing.
 import {
+  Button,
   Card,
   EmptyState as SharedEmptyState,
   useEffect,
   useState,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
-import type { QuerySnapshot } from "./store";
+import { invalidateQueries, type QuerySnapshot } from "./store";
 
 // A quick read shows nothing; a slow one shows one quiet status line.
 export function LoadingState(props: { label: string }): ReactNodeLike {
@@ -43,6 +44,24 @@ export function ErrorState(props: { message: string; action?: ReactNodeLike }): 
         {props.action ?? null}
       </div>
     </Card>
+  );
+}
+
+// Reruns every mounted read. Each settled read is a new outcome, so a repeat failure re-enables it.
+function RetryButton(props: { attempt: unknown }): ReactNodeLike {
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setBusy(false), [props.attempt]);
+  return (
+    <Button
+      variant="secondary"
+      disabled={busy}
+      onClick={() => {
+        setBusy(true);
+        invalidateQueries();
+      }}
+    >
+      {busy ? "Trying again…" : "Try again"}
+    </Button>
   );
 }
 
@@ -93,9 +112,11 @@ export function outcomeGate<T extends Record<string, unknown>>(
     return (
       <ErrorState
         message={
-          outcome.retryAfterSeconds ? outcome.message : (opts?.errorMessage ?? outcome.message)
+          outcome.retryAfterSeconds
+            ? outcome.message
+            : (opts?.errorMessage ?? "This section didn't load.")
         }
-        action={opts?.errorAction}
+        action={opts?.errorAction ?? <RetryButton attempt={outcome} />}
       />
     );
   const status = (outcome.result as { status?: unknown }).status;

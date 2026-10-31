@@ -723,7 +723,7 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
                 {categoryDetail(body)}
               </div>
             ),
-          { loadingLabel: "Loading budget" }
+          { loadingLabel: "Loading budget", errorMessage: "Your budget didn't load." }
         )}
       </div>
     </section>
