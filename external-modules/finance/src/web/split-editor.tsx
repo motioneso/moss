@@ -137,10 +137,6 @@ export function SplitEditor(props: {
       }
     >
       <div className="fnm-block fnm-block--tight">
-        <p>
-          Divide this transaction between categories. Money out is positive; refunds and money in
-          are negative. Keep one part to return to a single category.
-        </p>
         {parts.map((part, index) => (
           <div className="fnm-split-row" key={index}>
             <label className="fnm-block fnm-block--tight">
@@ -174,14 +170,17 @@ export function SplitEditor(props: {
                 }
               />
             </label>
-            <Button
-              variant="link"
-              aria-label={`Remove split ${index + 1}`}
-              disabled={busy || parts.length === 1}
-              onClick={() => setParts(parts.filter((_, at) => at !== index))}
-            >
-              Remove
-            </Button>
+            <div className="fnm-split-action">
+              <span aria-hidden="true">&nbsp;</span>
+              <Button
+                variant="link"
+                aria-label={`Remove split ${index + 1}`}
+                disabled={busy || parts.length === 1}
+                onClick={() => setParts(parts.filter((_, at) => at !== index))}
+              >
+                Remove
+              </Button>
+            </div>
           </div>
         ))}
         <div className="fnm-spread">

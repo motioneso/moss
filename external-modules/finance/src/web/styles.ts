@@ -119,6 +119,7 @@ export const MODULE_STYLES = `
 .fnm-txline__amount { white-space: nowrap; }
 .fnm-split-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; align-items: end; gap: var(--space-3); }
 .fnm-split-row input, .fnm-split-row select { width: 100%; min-width: 0; }
+.fnm-split-action { display: grid; grid-template-rows: auto 1fr; gap: var(--space-3); align-self: stretch; align-items: center; }
 /* Category detail panel: layout only. */
 .fnm-peek { display: flex; flex-direction: column; gap: var(--space-6); margin-top: var(--space-3); }
 .fnm-peek h2 { margin: 0; }
@@ -145,7 +146,8 @@ export const MODULE_STYLES = `
   .fnm-phone-only { display: block; }
   .fnm-chips { max-width: 100%; }
   .fnm-search { flex: 1 1 12rem; width: auto; }
-  .fnm-split-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .fnm-split-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .fnm-split-row > :first-child { grid-column: 1 / -1; }
   .fnm-move { grid-template-columns: minmax(0, 1fr); }
 }
 `;
