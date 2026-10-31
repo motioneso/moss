@@ -171,3 +171,20 @@ work, list every pending Ben question, push, report the PR to coordinator w1:p1E
   that observation as proof that this type-only change altered the artifact.
 - The initial static gate passed lint and was deliberately stopped during formatting when the
   Finance bump was assigned, to avoid reporting stale gate inputs. Final validation is rerun.
+
+### Slice 2 delivered (#3720)
+
+- `enqueueModuleJobForActor`, `deriveModuleJobId` and `ModuleEnqueueLimits` live in
+  `packages/jobs/src/module-job-enqueue.ts`. The SDK gained the `ModuleJobEnqueueResult` type only.
+  No RPC, port, migration or change to the manual-run, schedule or reconcile paths.
+- Job identity namespace: `71dd6e02-9cde-4943-ac23-3a72e0464852`, chosen by the Meals build and
+  permanent once any job uses it. Version 5 is implemented with `node:crypto` because no UUID
+  library is in the jobs dependency tree. Fixed vectors come from Python's `uuid.uuid5` and are in
+  `tests/unit/module-job-enqueue-id.test.ts`.
+- The function reuses `withModuleEnqueueLock` from #3735 (shared module barrier plus the per-actor
+  lock), so it cannot interleave with a disable sweep.
+- Real pg-boss suite: `tests/integration/module-job-enqueue.test.ts` (10 tests, spec cases 7-11,
+  13, 17, plus a sendModuleJob-counts test and a bad-format test). Run with
+  `scripts/run-gate.sh start --gate test:integration:3720`.
+- Mutation result: with the pending check removed, 5 of 10 tests failed (7, 9, 10, 13 and the
+  sendModuleJob count test). With the check restored, all 10 passed.
