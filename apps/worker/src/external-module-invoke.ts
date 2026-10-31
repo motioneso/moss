@@ -22,6 +22,7 @@ import type { CreateNotificationInput } from "@moss/notifications";
 import { createExternalModuleRpcHandler } from "@moss/module-registry/node";
 import type {
   ExternalModuleAiRequest,
+  ExternalModuleEnqueuePort,
   ExternalModuleAiResult,
   ExternalModuleAttachmentText,
   ExternalModuleWorkerRuntime
@@ -102,6 +103,9 @@ export interface VerifiedExternalModuleInvokerDeps {
     access: AccessContext,
     attachmentId: string
   ) => Promise<ExternalModuleAttachmentText | null>;
+  // ctx.jobs.enqueue (#3722): builds the enqueue port for one module. Optional like the deps
+  // above. The briefing invoker leaves it unset because its calls are read-risk.
+  readonly createEnqueuePort?: (module: ExternalModuleDiscovery) => ExternalModuleEnqueuePort;
   // #1306 Task 22: host-only, opt-in fetch override for UAT/e2e runs (see
   // external-module-job-handler.ts's resolveE2eFetchOverride/createE2eFixtureFetch,
   // the only caller that ever populates this today). Passed straight through to
@@ -224,6 +228,7 @@ export function createVerifiedExternalModuleInvoker(
       // ctx.attachments.readText (#109 parity fix): same as postNotification above — the
       // signature already matches, no per-call moduleId binding needed.
       readAttachmentText: deps.readAttachmentText,
+      ...(deps.createEnqueuePort ? { enqueueJob: deps.createEnqueuePort(current) } : {}),
       ...(deps.ai ? { ai: (scopedDb, request) => deps.ai!(scopedDb, args.moduleId, request) } : {}),
       // #1306 Task 22: spread only when present — a bare `createFetch: undefined`
       // key would still be "own key `in` the object" and defeat the seam's own

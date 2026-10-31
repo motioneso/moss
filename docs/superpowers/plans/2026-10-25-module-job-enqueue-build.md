@@ -221,3 +221,29 @@ work, list every pending Ben question, push, report the PR to coordinator w1:p1E
 - Mutation results (each protection removed, test run, then restored and green):
   risk gate removed, 1 failed; exact-keys check removed, 1 failed; own-queue check removed,
   2 failed; counter increment removed, 1 failed; inactive mapping removed, 1 failed.
+
+### Slice 4 evidence (#3722)
+
+- Delivered: `createModuleEnqueuePort` builds the `enqueueJob` port. The API tool path
+  (`external-module-tools.ts`, `server.ts`) and the worker queue path (`external-module-invoke.ts`,
+  `external-module-job-handler.ts`, `worker.ts`) both call it, so the live check, the payload
+  check and the limits cannot drift. A candidate hook shares the tool RPC construction, so it receives the port, and the slice 3 read-risk check refuses its call before the port is reached (row 14). Only the briefing invoker is unwired.
+  The developer guide gained section 13.2.1. No migration, env var, or change to the manual-run
+  route, schedules or reconcile jobs.
+- Where the factory lives: `packages/module-registry/src/external/module-enqueue-port.ts`,
+  exported from `@moss/module-registry/node`. That package already owns the port type and the
+  limit constants and already depends on `@moss/jobs`. Both apps import it without reaching into
+  another module's internals. The worker's live predicate (module enabled plus actor membership)
+  is assembled in `apps/worker/src/external-module-enqueue.ts`; the API's comes from the active
+  module resolver via `isExternalModuleActiveFor`.
+- Why `invalid_params` is a result and not a thrown type: the primitive throws plain `Error`s for
+  a bad payload. Recognising a typed class would change slice 2's code, so the factory runs
+  `assertModuleJobPayload` itself and maps a throw to `invalid_params`.
+- Tests: `tests/integration/module-worker-queue-enqueue.test.ts` (13, script
+  `test:integration:3722`) on a real worker runtime, a real pg-boss and the production
+  construction sites. Rows 1 to 6, 14, 15 (both roots, two causes each), 16 and 17.
+- Mutation results (each protection removed, suite run, then restored and green):
+  API live check removed, 2 failed (row 15 api root, both causes); worker live check removed,
+  2 failed (row 15 worker root, both causes); actor taken from outside the bound context,
+  3 failed (rows 1, 2 and 16).
+- Status: code-complete, not live-proved. Live proof comes with the Meals PR.

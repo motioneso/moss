@@ -20,6 +20,7 @@ export * from "./external/validate.js";
 export * from "./external/web-assets.js";
 export * from "./external/worker-runtime.js";
 export * from "./external/worker-rpc-host.js";
+export * from "./external/module-enqueue-port.js";
 export * from "./external/tool-manifests.js";
 export * from "./external/job-reconciler.js";
 export * from "./external/install-draft.js";

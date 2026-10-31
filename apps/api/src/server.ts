@@ -105,7 +105,8 @@ import {
   createActiveExternalModulesResolverForApi,
   createInstalledExternalModulesResolverForApi,
   createExternalActiveModulesResolver,
-  createExternalModuleTools
+  createExternalModuleTools,
+  isExternalModuleActiveFor
 } from "./external-module-tools.js";
 import { registerPlatformRoutes } from "./platform-module-routes.js";
 import { handleBetterAuthRequest } from "./better-auth-adapter.js";
@@ -459,6 +460,8 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       appDataContext: dataContext,
       settingsRepository: externalModulesRepository,
       boss,
+      rootDb: appDb,
+      isModuleActive: isExternalModuleActiveFor(getActiveExternalModules),
       logger: { warn: (data, message) => server.log.warn(data, message) },
       // ctx.ai bridge for module workers (#932, spec D6).
       ai: createModuleAiBridge({
