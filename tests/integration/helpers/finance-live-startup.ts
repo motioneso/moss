@@ -169,6 +169,15 @@ export async function exerciseFreshFinanceStartup(input: {
       new URL(route.request().url()).origin === input.base ? route.continue() : route.abort()
     );
     const page = await context.newPage();
+    // First run: Getting started links straight into the add-account form.
+    await page.goto(`${input.base}/m/finance/start`);
+    await page.getByRole("link", { name: "Add a manual account", exact: true }).waitFor();
+    if (input.artifacts)
+      await page.screenshot({
+        path: join(resolve(input.artifacts), "finance-first-run-start.png")
+      });
+    await page.getByRole("link", { name: "Add a manual account", exact: true }).click();
+    await page.getByRole("dialog", { name: "Add manual account", exact: true }).waitFor();
     await page.goto(`${input.base}/m/finance/accounts`);
     await openAddManualAccount(page);
     const account = page.getByRole("dialog", { name: "Add manual account", exact: true });
@@ -187,8 +196,17 @@ export async function exerciseFreshFinanceStartup(input: {
     ]);
     await page.goto(`${input.base}/m/finance`);
     await page.getByLabel("Budget currency", { exact: true }).selectOption("USD");
-    await page.getByRole("button", { name: "Review currency choice", exact: true }).click();
+    if (input.artifacts)
+      await page.screenshot({
+        path: join(resolve(input.artifacts), "finance-currency-screen.png")
+      });
+    await page.getByRole("button", { name: "Set currency", exact: true }).click();
     const confirm = page.getByRole("dialog", { name: "Confirm Finance action", exact: true });
+    await confirm.getByText("It cannot be changed afterwards.", { exact: false }).waitFor();
+    if (input.artifacts)
+      await page.screenshot({
+        path: join(resolve(input.artifacts), "finance-currency-warning.png")
+      });
     await confirm.getByRole("button", { name: "Confirm action", exact: true }).click();
     const assigned = page
       .getByLabel("Assigned to Groceries", { exact: true })

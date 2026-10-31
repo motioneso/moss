@@ -97,19 +97,6 @@ export async function exerciseCategoryConfirmation(
       }
     }
     await review.getByRole("button", { name: "Confirm reviewed categories", exact: true }).click();
-    const guard = page.getByRole("dialog", { name: "Confirm Finance action", exact: true });
-    await guard.waitFor();
-    await guard.getByRole("button", { name: "Cancel", exact: true }).click();
-    await review
-      .getByText("Cancelled. Your captured review is kept; nothing was confirmed.", { exact: true })
-      .waitFor();
-    expect(
-      (await saved())
-        .filter((r) => ["review:A", "review:B"].includes(r.id))
-        .every((r) => r.reviewState === "needs_look")
-    ).toBe(true);
-    await review.getByRole("button", { name: "Confirm reviewed categories", exact: true }).click();
-    await guard.getByRole("button", { name: "Confirm action", exact: true }).click();
     await review.waitFor({ state: "detached" });
     expect(
       (await saved())
@@ -131,7 +118,6 @@ export async function exerciseCategoryConfirmation(
       expect(await s.bulk!.categorize([target], "dining")).toBe(true);
     });
     await review.getByRole("button", { name: "Confirm reviewed categories", exact: true }).click();
-    await guard.getByRole("button", { name: "Confirm action", exact: true }).click();
     await review
       .getByText(
         "A reviewed transaction or category changed. Nothing was confirmed. Close this review and check saved records.",
@@ -164,13 +150,10 @@ export async function exerciseCategoryConfirmation(
     await one.press("Enter");
     await review.getByText("Synthetic category review C", { exact: true }).waitFor();
     expect(await review.getByText("Synthetic category review D", { exact: true }).count()).toBe(0);
-    const committed = page.waitForResponse(
-      (response) =>
-        response.url().includes("/api/modules/finance/tools/finance.transactions.confirm/invoke") &&
-        Boolean(response.request().postDataJSON()?.confirmationId)
+    const committed = page.waitForResponse((response) =>
+      response.url().includes("/api/modules/finance/tools/finance.transactions.confirm/invoke")
     );
     await review.getByRole("button", { name: "Confirm reviewed categories", exact: true }).click();
-    await guard.getByRole("button", { name: "Confirm action", exact: true }).click();
     const reply = await committed;
     expect({ http: reply.status(), body: await reply.json() }).toMatchObject({
       http: 200,

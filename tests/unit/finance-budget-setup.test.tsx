@@ -26,9 +26,7 @@ async function form(outcome?: ModuleToolOutcome, legacy = 0) {
   });
   const select = () => rendered!.root.findByProps({ "aria-label": "Budget currency" });
   const save = () =>
-    rendered!.root
-      .findAllByType("button")
-      .find((b) => b.children.includes("Review currency choice"))!;
+    rendered!.root.findAllByType("button").find((b) => b.children.includes("Set currency"))!;
   return { invoke, select, save };
 }
 describe("budget currency review", () => {
