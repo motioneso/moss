@@ -1,3 +1,4 @@
+import { peerRouteRateLimitKey } from "@moss/module-sdk/server";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   RecordingCapabilityError,
@@ -19,7 +20,7 @@ const limit = (max: number) => ({
   rateLimit: {
     max,
     timeWindow: "1 minute",
-    keyGenerator: (request: FastifyRequest) => `ip:${request.ip}`
+    keyGenerator: peerRouteRateLimitKey
   }
 });
 

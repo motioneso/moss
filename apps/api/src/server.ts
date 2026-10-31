@@ -74,7 +74,11 @@ import {
 } from "@moss/module-registry";
 import { parsePositiveIntEnv, type HostDiagnosticsInfo } from "@moss/shared";
 import { createModuleLogger, CORE_VERSION } from "@moss/module-sdk";
-import { actAsRateLimitKey, installActAsActorLookup } from "@moss/module-sdk/server";
+import {
+  actAsRateLimitKey,
+  installActAsActorLookup,
+  peerRouteRateLimitKey
+} from "@moss/module-sdk/server";
 // #917: /api/modules reads enablement through the public settings API; this is legitimate
 // composition-root wiring, not a module cross-import.
 import { INTEGRATIONS_FAMILY, SettingsRepository, loadFamilyKeyring } from "@moss/settings";
@@ -976,7 +980,7 @@ function registerBetterAuthRoutes(
         // keyGenerator inherits the GLOBAL keyGenerator (authPrincipalRateLimitKey), which
         // would let an attacker vary `Authorization: Bearer <junk-N>` to mint a fresh bucket
         // per request and fully bypass the sign-in brute-force throttle (OTNR-P4 #122 / C1).
-        keyGenerator: (req: FastifyRequest) => `ip:${req.ip}`,
+        keyGenerator: peerRouteRateLimitKey,
         allowList: (req: FastifyRequest) => {
           if (req.method !== "POST") return true;
           // Decode percent-encoded path before matching to close the %65mail bypass.

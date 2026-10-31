@@ -106,6 +106,15 @@ export function mcpSessionRateLimitKey(request: FastifyRequest): string {
   });
 }
 
+/**
+ * Rate-limit key for pre-credential routes: the peer address plus the route, so each route
+ * keeps its own counter. The limiter shares one store across routes, so a bare `ip:<peer>`
+ * key lets traffic on one route use up another route's allowance.
+ */
+export function peerRouteRateLimitKey(request: FastifyRequest): string {
+  return `ip:${request.ip}:${request.method}:${request.routeOptions.url ?? request.url}`;
+}
+
 function hash(value: string): string {
   return createHash("sha256").update(value).digest("hex").slice(0, 32);
 }

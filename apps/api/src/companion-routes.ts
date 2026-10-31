@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import { peerRouteRateLimitKey } from "@moss/module-sdk/server";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PgBoss } from "pg-boss";
 import { registerCompanionRecordingRoutes } from "./companion-recording-routes.js";
@@ -81,7 +82,7 @@ function ipRateLimit(max: number) {
     rateLimit: {
       max,
       timeWindow: "1 minute",
-      keyGenerator: (req: FastifyRequest) => `ip:${req.ip}`
+      keyGenerator: peerRouteRateLimitKey
     }
   };
 }

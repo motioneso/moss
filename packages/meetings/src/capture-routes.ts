@@ -1,6 +1,7 @@
 import { captureAudioDiagnostic } from "./capture-diagnostics.js";
 import { captureAuthorizationError } from "./capture-authorization.js";
 import { Ajv } from "ajv";
+import { peerRouteRateLimitKey } from "@moss/module-sdk/server";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type {
   MeetingCaptureAudioInput,
@@ -168,7 +169,7 @@ function ipRateLimit(max: number) {
     rateLimit: {
       max,
       timeWindow: "1 minute",
-      keyGenerator: (request: FastifyRequest) => `ip:${request.ip}`
+      keyGenerator: peerRouteRateLimitKey
     }
   };
 }
