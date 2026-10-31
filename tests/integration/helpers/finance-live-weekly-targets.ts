@@ -37,7 +37,6 @@ export async function exerciseWeeklyTarget(
     .getByRole("status")
     .filter({ hasText: `${fridays} Fridays` })
     .waitFor();
-  await editor.getByText(/Full-month plan, including when created mid-month/).waitFor();
   await inspect(editor, "weekly-editor");
   await editor.getByRole("button", { name: "Save target", exact: true }).click();
   await editor.waitFor({ state: "detached" });

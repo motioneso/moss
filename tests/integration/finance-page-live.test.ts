@@ -341,9 +341,7 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
       const page = await context.newPage();
       try {
         await page.goto(`${base}/m/finance`);
-        await page
-          .getByRole("heading", { name: "Give your budget a currency", exact: true })
-          .waitFor();
+        await page.getByRole("region", { name: "Budget currency setup", exact: true }).waitFor();
         const choose = page.getByRole("button", { name: "Review currency choice", exact: true });
         expect(await choose.isDisabled()).toBe(true);
         await page.getByLabel("Budget currency", { exact: true }).selectOption("USD");
