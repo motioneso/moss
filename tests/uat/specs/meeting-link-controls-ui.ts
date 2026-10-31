@@ -14,6 +14,8 @@ import {
   pairCaptureFixture,
   startCaptureNativeFixture
 } from "./meeting-capture-native-fixture.js";
+import { gotoUatPage } from "./uat-page-load.js";
+import { postWithRateLimitRetry } from "./uat-request-retry.js";
 import {
   CAPTURE_FIXTURE_TEXT,
   CAPTURE_SAMPLE_RATE,
@@ -42,11 +44,11 @@ export async function assertMeetingLinkControls({
       if (action === "unlink") {
         // Revocation cannot open a second recording approval. Reconnect through the same
         // Settings unlink and initial browser approval that a person uses for a new link.
-        await page.goto(`/meetings?id=${retainedMeetingId}`);
-        await page
+        const settingsLink = page
           .locator(".meetings-record-tools")
-          .getByRole("link", { name: "Settings", exact: true })
-          .click();
+          .getByRole("link", { name: "Settings", exact: true });
+        await gotoUatPage(page, `/meetings?id=${retainedMeetingId}`, settingsLink);
+        await settingsLink.click();
         await unlinkCaptureFixtureFromSettings(page, linked.device.id);
         const oldHeartbeat = await nativePost(
           baseURL,
@@ -189,11 +191,16 @@ export async function assertMeetingLinkControls({
           relinkedDeviceId = undefined;
         } else {
           // Recording-only revocation is exercised through the real owner API. The compact
-          // Meetings settings intentionally has no recording-permission toggle.
-          const revoked = await page.request.post("/api/companion/recording-capability/revoke", {
-            headers: { Origin: new URL(baseURL).origin },
-            data: { deviceId: linked.device.id }
-          });
+          // Meetings settings intentionally has no recording-permission toggle. The route is
+          // throttled by peer address, so a real client waits out its own throttle (#3821).
+          const revoked = await postWithRateLimitRetry(
+            page,
+            "/api/companion/recording-capability/revoke",
+            {
+              headers: { Origin: new URL(baseURL).origin },
+              data: { deviceId: linked.device.id }
+            }
+          );
           expect(revoked.status()).toBe(204);
         }
         const stoppedBy = Date.now() + 30_000;

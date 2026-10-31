@@ -23,6 +23,7 @@ import {
   claudeSignInWaitMs,
   signInClaudeThroughMoss
 } from "../claude-signin-handoff.js";
+import { gotoUatPage } from "./uat-page-load.js";
 
 /** The selected provider's kind: "openai-compatible" for Codex, "anthropic" for Claude. */
 export const REAL_CHAT_PROVIDER_KIND = uatRealChatProviderKind();
@@ -59,7 +60,7 @@ export async function readUatJson(
  * non-reset DB.
  */
 export async function signInUatAdmin(page: Page): Promise<void> {
-  await page.goto(requireUatBaseURL());
+  await gotoUatPage(page, requireUatBaseURL(), page.getByLabel("Email"));
   await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
