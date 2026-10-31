@@ -9,37 +9,39 @@
 
 ## 1. Summary for Ben
 
-**What you asked for.** The small, fast decision model sits at the front. "Turn off the lights"
-goes to it, it runs the tool and answers in a few words. Anything it is not sure about goes to the
-thinking model, as chat works today.
+**What you asked for.** The small, fast decision model answers first. For "turn off the lights" it
+runs the action and replies in a word or two. If it is not sure, the thinking model takes over, the
+way chat works today.
 
-**What already exists.** Most of this is built. The classifier gate already sits in front of every
-chat turn, asks the decision model which area and which tool, checks the answer against
-confidence bars, runs the tool through the normal safety path, and posts a reply. If it declines for
-any reason, the thinking model answers. It has three switch positions (Off, Watch only, On). On the
-production instance it has run in Watch only since 2026-10-04, and its On position is being freed
-from the review step by the Phase 0 plan.
+**Most of this already exists.** Moss already has a gate in front of every chat message. It asks the
+decision model which tool fits, checks how sure the model is, runs the tool with the normal safety
+rules, and posts a reply. If anything looks doubtful, the thinking model answers instead. It has
+three positions (Off, Watch only, On). Production has been in Watch only since 2026-10-04, and
+another plan is removing the review step that blocked On. So this spec extends that gate and does
+not add a second one.
 
-**What is actually new.** Three things.
+**What you decided on 2026-10-31, and what changes.**
 
-1. **The reply.** Today code fills in a fixed sentence per tool ("Kitchen lights off."). You want
-   the decision model to write the short reply. Jev and Clef cannot write sentences. They only pick
-   from lists, answer yes or no, and give scores. So model-written replies only work if you connect
-   a decision model that can write text. Plan: keep the fixed sentence as the safe default, and add
-   a model-written reply as an option that is checked against the real tool result before it is
-   shown. It falls back to the fixed sentence if the check fails.
-2. **Reach.** The gate only offers tools that are prepared for it, and it cannot fill in free-text
-   values with a pick-only model. The 2026-10-11 trial showed it never offered the Home Assistant
-   lights. The front door must widen what it can handle without loosening safety.
-3. **A visible record.** Activity history must say, for each message, which model handled it and
-   how long that took. The pieces exist, but a handled turn does not yet name the deciding model on
-   its own line.
+1. **Replies are fixed for now.** The reply is a set sentence per tool, or just "Done." The decision
+   model never writes text you read. Model-written replies are a possible later step and not part
+   of the first build.
+2. **Main chat comes first.** After that, news sorting and sports sorting are the next targets. They
+   are not chat, so they reuse the decision model and the confidence rules but need their own
+   entry points. Section 13 says what each needs.
+3. **No marker on replies.** Activity history is the only place that shows who handled a message.
+   Each handled message gets one line naming the deciding model and how long it took.
+4. **The admin turns it on, and each person can turn it off for themselves.** That personal switch
+   belongs to the person alone. Nobody else, including an admin, can see or change it.
 
-**What stays the same.** Deleting things and sending things outside Moss still ask first. One
-setting turns the whole front door off. Private chats never go through it.
+**What stays the same.** Deleting things and sending things outside Moss still hand over to the
+thinking model, which asks first. The two-week trial with a kill gate stays, and you make the call
+from real numbers. A new decision model that can write text must give the same answer twice before
+it acts.
 
-**What I need from you.** The answers in section 14. The big one is whether model-written replies
-are worth building at all, given that fixed sentences are faster and cannot make things up.
+**The first build also widens what it can handle.** The October trial showed it never offered the
+Home Assistant lights. Slice 1 fixes that, with lock, door and garage targets kept out of the list.
+
+**Still open.** Two questions in section 14.
 
 ## 2. Ground truth from the current tree
 
@@ -79,12 +81,12 @@ Each row is something the design relies on, with where it lives.
       |            |                  |
     handle        ask               escalate
       |            |                  |
-    run tool    show approval      thinking model
-    through     card, then run     answers as today,
-    gateway     on approval        with the original
-      |            |               message
-      v            v
-    reply (fixed sentence, or checked model-worded one)
+    run tool    recorded, then     thinking model
+    through     handed over like   answers as today,
+    gateway     escalate           with the original
+      |                            message
+      v
+    fixed reply (set sentence, or "Done.")
 
 The front door is the existing classifier gate, extended. It is not a second component. One
 setting, one code path, one record.
@@ -94,17 +96,17 @@ setting, one code path, one record.
 The front door returns exactly one verdict per message. It never returns free text to the user
 except through the reply step in section 6.
 
-| Verdict  | Meaning                                                                                                                                          | What happens                                                                                                                          |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| handle   | One eligible tool, every argument filled and validated, confidence and lead above the bar for the tool's risk, and the gateway needs no approval | The tool runs through the normal gateway path, the reply is posted, and no thinking-model turn starts                                 |
-| ask      | The tool is clear and filled, but the gateway requires a human yes (destructive, outbound without owner allowance, Sensitive or unsorted tool)   | An approval card is raised. On approval the tool runs and the reply is posted. On denial a fixed "Okay, I did not do that." is posted |
-| escalate | Anything else                                                                                                                                    | The thinking model gets the original message exactly as today. Nothing the front door computed is added to its prompt                 |
+| Verdict  | Meaning                                                                                                                                                                       | What happens                                                                                                          |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| handle   | One eligible tool, every argument filled and validated, confidence and lead above the bar for the tool's risk, and the gateway needs no approval                              | The tool runs through the normal gateway path, the reply is posted, and no thinking-model turn starts                 |
+| ask      | Recorded only, then escalated. The tool is clear and filled, but the gateway requires a human yes (destructive, outbound without owner allowance, Sensitive or unsorted tool) | Treated as escalate: the thinking model answers and shows the usual approval card                                     |
+| escalate | Anything else                                                                                                                                                                 | The thinking model gets the original message exactly as today. Nothing the front door computed is added to its prompt |
 
 Rules.
 
-1. `ask` is new. Today the gate declines in this case and the thinking model shows the card. The
-   early builds keep that behaviour (map `ask` to `escalate`) and the real card raise ships in
-   slice 4 behind its own live proof. See open question 3.
+1. `ask` stays mapped to `escalate`. When the gateway would need approval, the front door declines
+   and the thinking model shows the usual card, as the gate does today (default, Ben did not
+   object, 2026-10-31). Raising the card from the front door is not planned.
 2. Escalating is always safe and never an error. Every failure path ends in `escalate`.
 3. The front door never sees the thinking model's reply and never edits the original message.
 4. A verdict, its confidence, its lead and its reason code are written to the existing decision
@@ -130,8 +132,8 @@ runner-up. The weakest number across all questions is the one that counts, as to
 
 For a text-capable decision model the scores come from the same choice question (the adapter asks it
 to pick and score the options). These scores are less calibrated than a purpose-built decision
-model's. So a new text-capable model may start under a stricter rule: its pick must agree across two
-independent asks before it counts as `handle` (open question 6). Code never lowers a bar. A bar
+model's. So a new text-capable model starts under a stricter rule: its pick must agree across two
+independent asks before it counts as `handle` (a default; Ben did not object on 2026-10-31). Code never lowers a bar. A bar
 changes only through a new `THRESHOLD_VERSION` and a recorded ruling.
 
 **Widening reach without loosening safety.** The 2026-10-11 trial exposed the blockers.
@@ -146,26 +148,22 @@ changes only through a new `THRESHOLD_VERSION` and a recorded ruling.
 
 ## 6. The reply
 
-The reply has two sources, and the order is fixed.
+For now every handled turn shows a fixed reply, built by code. Ben ruled on 2026-10-31 that a plain
+"Done." is fine.
 
-1. **Record sentence, always built first.** The tool's declared template filled from the validated
-   tool result. Every piece of UI feedback renders from this. It exists for every handled turn.
-2. **Model-worded reply, optional, text-capable models only.** The decision model is asked to
-   reword the record sentence in at most 20 words, given only the tool name, the validated result
-   and the record sentence. A boundary check accepts the wording only if it is within the length
-   cap, contains every value that appears in the record sentence (names, numbers, states), contains
-   no URL and no instruction, and adds no value that is not in the result. If any check fails, the
-   record sentence is shown. There is no retry.
+- If the tool declares a reply sentence, the front door fills it from the validated tool result
+  (for example "Kitchen lights off."). A missing value makes the fill fail and counts as a failure.
+- If the tool declares none, the reply is "Done.".
+- A failed action shows the fixed failure sentence from section 7.
 
-Determinism boundary. The record decides what happened. The model has exactly two jobs.
+Determinism boundary. The record decides what happened and the reply renders from the record. The
+decision model has one job, which is to pick the area, tool and argument values from offered lists
+(and typed values if it is text-capable). It never writes text the user sees. Its prompt guidance
+stays under 150 words.
 
-1. Pick the area, tool and argument values from offered lists (and typed values if capable).
-2. Reword the record sentence.
-
-Prompt guidance for each job stays under 150 words. If it grows past that, the design is wrong.
-
-Choice-only models (Jev, Clef and compatible services) never get job 2. They always show the record
-sentence. This is a limit of what those services return, not a preference.
+Model-written replies are not part of slices 1 to 4. They stay a possible later option (R4). If
+built, they would need a boundary check that rejects any wording that drops or adds a value from the
+tool result, and fixed replies would remain the fallback.
 
 ## 7. Failure behavior
 
@@ -183,7 +181,6 @@ because the action may have half run.
 | A write, outbound or destructive tool fails or cannot be confirmed           | stops: fixed failure sentence, no thinking-model turn                    |
 | A handled turn cannot be saved after a non-read action ran                   | stops: the existing "That action ran, but its result could not be saved" |
 | The user presses Stop during the attempt                                     | the turn stops, no fallback                                              |
-| A model-worded reply fails its check                                         | the record sentence is shown and the failure is counted in the record    |
 
 The front door never blocks a message past its time limit and never retries a model call.
 
@@ -228,9 +225,9 @@ instance, first Watch only, then On. It continues past slice 3 only if all of th
 5. The median handled turn is at least three times faster than the median thinking-model turn.
 
 Ben makes the call from a report Moss produces from the record (percentages, medians, counts, and a
-list of every handled write). If it fails, model-worded replies (slice 5) are never built and the
-gate keeps its present behavior. The 15 percent and three-times figures are my starting numbers
-and are open question 5.
+list of every handled write). If it fails, rollout steps R1 to R4 are not started and the gate
+keeps its present behavior. The 15 percent and three-times figures are my starting numbers
+and are open question 2.
 
 ## 10. What the user sees
 
@@ -238,21 +235,29 @@ This uses screens that exist. Anything new is listed as TO BE AGREED and is not 
 
 **Existing, edited.**
 
-- The Settings row "Classifier" keeps its Off, Watch only and On control. Its help line gains one
-  sentence saying the decision model answers simple messages itself. That control is the single
-  switch that turns the front door off. There is no second setting.
+- The Settings row "Classifier" keeps its Off, Watch only and On control, which only the admin can
+  change. Turning it On makes the front door available to everyone on the instance. Its help line
+  gains one sentence saying the decision model answers simple messages itself.
+- A per-account switch lets any signed-in user turn the front door off for themselves. It is a
+  plain off-only switch on the user's own settings page. It changes nothing for anyone else.
 - Activity history already lists each decision check with its model name. This spec requires one
-  line per handled turn that names the deciding model, the tool, the time taken and, if used, the
-  model that worded the reply, so every message traces to what handled it. The line uses the
-  existing activity-line fields; no new endpoint.
+  line per handled turn that names the deciding model, the tool and the time taken, so every message
+  traces to what handled it. The line uses the existing activity-line fields; no new endpoint.
+  Activity history is the only trace. There is no marker on chat replies (ruled 2026-10-01 and
+  again 2026-10-31).
+
+**Access and privacy rule for the per-account switch.** The switch belongs to one account. It is
+stored in that user's own settings under row-level security, readable and writable only by that
+user. An admin cannot read it, set it or clear it, and the admin gate setting cannot override it.
+When it is off, the gate makes no decision-model call for that account and writes no decision
+record, the same as a private chat. Account deletion removes it. This keeps the "no admin
+private-data bypass" invariant intact.
 
 **TO BE AGREED with Ben (not designed here).**
 
-- A marker on a chat reply showing the decision model handled it. The 2026-10-01 ruling was "no
-  marker on chat replies". Whether to reverse that is open question 4.
+- Where the per-account switch sits on the user's settings page, and its wording.
 - A short "how is the decision model doing" view of handled share, speed and misses. Moss can state
   this from the record in chat today, so a screen is optional.
-- The approval card wording for `ask` turns, if it differs from the existing card.
 
 ## 11. App map entries to update
 
@@ -261,10 +266,13 @@ All in the same PR as the behavior, per the development standards.
 - `packages/shared/src/app-map-core.ts`: the Classifier row text (what On does, that private chats
   and attachments skip it, the verdicts in user terms, the failure outcomes, the single off switch)
   and the activity history text (handled-turn lines).
+- `packages/shared/src/app-map-core.ts`: also a Settings entry for the per-account switch (where it
+  is, that it is off-only, that it affects only the signed-in account, and that the admin turning
+  the front door on does not override it).
 - `packages/ai/src/manifest.ts`: feature `ai.classifier_gate_setting`, with its errors and
-  remediations (for example, a model that cannot word replies, so fixed sentences are used).
-- `packages/chat/src/manifest.ts`: the chat feature entry for handled turns and the
-  stop-without-fallback case.
+  remediations.
+- `packages/chat/src/manifest.ts`: the chat feature entry for handled turns, the Main-chat-only
+  scope, the per-account switch and the stop-without-fallback case.
 - Remove any statements that review is required, if any survive Phase 0.
 
 ## 12. Tests and live proof
@@ -279,13 +287,20 @@ All in the same PR as the behavior, per the development standards.
    Fails if the filter is dropped.
 5. Failure table: one test per row of section 7. Each escalate row asserts the thinking model
    receives the original message. Each stops row asserts it does not.
-6. Reply check: a model-worded reply that drops a value, adds a number, exceeds 20 words or holds a
-   URL is rejected and the record sentence is shown. Fails if the check is removed.
-7. Choice-only: job 2 is never sent to a choice-only model.
+6. Fixed reply: every handled turn shows the record sentence, or the plain fixed "Done." when the
+   tool declares no sentence. Fails if a path lets model text reach the user.
+7. Main chat only: a turn from any other surface escalates without a model call in the first
+   rollout. Fails if the surface check is removed.
 8. No names: the code paths contain no provider or model name.
 9. Yolo: with yolo on and an untrusted non-read tool, the card still appears or the turn escalates.
 10. Wired, not just defined: through the real chat route with a stand-in decision service, a handled
     turn skips the engine launch and the activity line names the model.
+11. Account off switch: a user with the switch off gets no decision-model call, no decision record
+    and no handled turn, while another user on the same instance is handled. Fails if the check is
+    missing or reads the wrong user.
+12. Switch privacy: another user, and an admin, cannot read or change a person's switch through any
+    route, and the admin gate setting cannot overwrite it. Fails against a broken row-level security
+    policy.
 
 **Live proof (Live-Path Gate).** On a dev instance with real data: sign in, choose a decision model
 in Settings, set On, and send "turn off the kitchen lights" through the chat UI. Assert the light
@@ -301,46 +316,44 @@ numbers for the kill gate. It runs unpiped with its exit code checked.
 
 ## 13. Slice breakdown
 
-Slices are session-sized and share a worktree and PR where they touch the same files.
+Slices are session-sized and share a worktree and PR where they touch the same files. The first
+rollout is Main chat only.
 
-| Slice | Content                                                                                                                                        | Ends with                                           |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| 1     | Reach: candidate-list argument preparation, "filled or deliberately blank", lock/door/garage filter, report that ignores tool-list loading     | Tests 3 and 4; the gate offers lights in a dry run  |
-| 2     | Record and visibility: handled-turn activity line naming the model and time, verdict and reason in the decision record, the measurement script | Test 10; the section 9 numbers can be produced      |
-| 3     | Run Watch only, then On, for two weeks on real traffic                                                                                         | Kill gate review by Ben                             |
-| 4     | `ask` verdict: the gate raises the approval card and runs on approval                                                                          | Tests 3 and 9; live proof of an approval round trip |
-| 5     | Model-worded reply for text-capable decision models, with the boundary check                                                                   | Tests 6 and 7; a second review on cost and speed    |
-| 6     | Moss helps the user choose and test a decision model in chat (existing ruling)                                                                 | App-map entries and live proof                      |
+| Slice | Content                                                                                                                                        | Ends with                                          |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| 1     | Reach: candidate-list argument preparation, "filled or deliberately blank", lock/door/garage filter, report that ignores tool-list loading     | Tests 3 and 4; the gate offers lights in a dry run |
+| 2     | Record and visibility: handled-turn activity line naming the model and time, verdict and reason in the decision record, the measurement script | Test 10; the section 9 numbers can be produced     |
+| 3     | The per-account off switch: setting, check in the gate, app map, privacy tests                                                                 | Tests 11 and 12                                    |
+| 4     | Run Watch only, then On, in Main chat for two weeks on real traffic                                                                            | Kill gate review by Ben                            |
 
-Slices 4 to 6 are planned in detail only after the kill gate passes.
+Rollout after the kill gate passes. Each step is planned in detail only after the one before it
+is judged.
+
+| Step | Target                                                          | What it needs                                                                                                                                                                                                                                                                                     |
+| ---- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1   | Other chat surfaces (side drawer, voice)                        | The same gate, a per-surface check that each surface hands the turn over the same way, and the same activity line                                                                                                                                                                                 |
+| R2   | News sorting                                                    | Not a chat turn, so it cannot use the chat entry point. It reuses the decision model, the confidence bars, the escalate-on-doubt rule and the activity line. It needs a declared set of choices per item (for example which topic, or keep or hide), its own record and its own kill-gate numbers |
+| R3   | Sports sorting                                                  | The same needs as news sorting, with its own choices (for example which league or team a story belongs to). It shares the news step's code and differs in the choice lists                                                                                                                        |
+| R4   | Optional model-written replies for text-capable decision models | A separate decision from Ben, a boundary check against the real tool result, and fixed replies kept as the fallback. Built only if the numbers show fixed replies are a problem                                                                                                                   |
+
+R2 and R3 are not chat. The shared piece is the question-and-bars engine, not the chat lifecycle.
+Their details belong in their own specs.
 
 ## 14. Open questions for Ben
 
-1. **Model-written replies.** Jev and Clef cannot write sentences. Do you want slice 5 at all, or
-   are fixed sentences per tool enough? I lean toward building slices 1 to 3 and deciding on slice 5
-   from the numbers.
-2. **A text-capable decision model.** If a user connects one, may it pick tools with free-text
+Ben's answers of 2026-10-31 are in section 15. Two points are still open.
+
+1. **A text-capable decision model.** If a user connects one, may it pick tools with free-text
    values? The 2026-10-11 ruling excluded a second extraction model, not the user's own capable
-   model. I lean yes.
-3. **Raising the approval card from the front door.** Today the gate declines and the thinking model
-   shows the card. Doing it in the front door skips the thinking-model round trip for destructive
-   requests but adds a path to prove. Build it (slice 4) or keep declining?
-4. **A marker on replies.** You ruled no marker on 2026-10-01. With the front door answering more
-   turns, is activity history alone still enough to show who answered?
-5. **Kill-gate numbers.** Are 15 percent handled, three times faster, and one tenth of the cost the
-   right bars? They are my starting guesses.
-6. **Agreement rule for text-capable models.** Should a new text-capable decision model need two
-   matching asks before it can handle anything (slower, safer), or the same bars as Jev?
-7. **Scope.** The current gate runs on every chat surface except private chats. Keep that, or limit
-   the front door to Main chat at first?
-8. **Where the switch lives.** It is admin-wide today because the model is an admin pick. Should a
-   person be able to turn the front door off for themselves only?
+   model. I lean yes, under the two-matching-answers rule in section 5.
+2. **Kill-gate numbers.** Are 15 percent handled, three times faster, and one tenth of the cost the
+   right bars? They are my starting guesses and stay as defaults until Ben changes them.
 
 ## 15. Rulings ledger
 
 Facts and decisions carried in, so nobody re-derives them.
 
-- 2026-10-01: no marker on chat replies; the activity log is the trace (reopened as question 4).
+- 2026-10-01 and 2026-10-31: no marker on chat replies; activity history is the only trace.
 - 2026-10-03: connected tools are on by default, sorted by Moss, with no per-tool review (#2984).
 - 2026-10-04: the Sensitive bar was lowered to 0.95 after System One never cleared 0.98 in 12 tries
   (#3043).
@@ -350,3 +363,11 @@ Facts and decisions carried in, so nobody re-derives them.
 - 2026-10-11 finding: Jev and Clef are `choice_only` and cannot return typed values or sentences.
 - Rejected idea, recorded: passing the decision model's text straight to the user. It would put
   model output in place of the record, against the determinism boundary.
+- 2026-10-31 (Ben): fixed responses only for now, even a plain "Done" is fine. Model-written replies
+  are dropped from the first slices and kept only as a possible later option.
+- 2026-10-31 (Ben): Main chat first. News sorting and sports sorting are the next targets.
+- 2026-10-31 (Ben): the admin turns the front door on. Any user may turn it off for their own
+  account only.
+- 2026-10-31 (defaults, Ben did not object): destructive and outbound actions still decline to the
+  thinking model, the kill gate stays, and a new text-capable decision model needs two matching
+  answers.
