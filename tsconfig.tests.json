@@ -19,6 +19,7 @@
     // Follow-up issue #1875 will type the module-web SDK surface against React types.
     "tests/unit/external-module-finance-web-root.test.tsx",
     "tests/unit/external-module-food-web-root.test.tsx",
+    "tests/unit/external-module-meals-web-root.test.tsx",
     "tests/unit/helpers/job-search-board-harness.tsx",
     "tests/unit/job-search-keyline.test.tsx",
     "tests/unit/job-search-manifest-conformance.test.tsx",
