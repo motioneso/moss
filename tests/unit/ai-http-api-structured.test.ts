@@ -92,6 +92,15 @@ describe("buildStructuredRequest", () => {
     expect(
       buildStructuredRequest("openai-compatible", "sk-o", "http://proxy.test/v1", makeInput()).url
     ).toBe("http://proxy.test/v1/chat/completions");
+    // #3559: a custom root keeps its own path instead of gaining a second version segment.
+    expect(
+      buildStructuredRequest(
+        "openai-compatible",
+        "sk-o",
+        "https://example.invalid/v1beta/openai",
+        makeInput()
+      ).url
+    ).toBe("https://example.invalid/v1beta/openai/chat/completions");
   });
 });
 

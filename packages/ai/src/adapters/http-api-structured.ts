@@ -1,7 +1,7 @@
 import type { ModuleServiceKey } from "@moss/shared";
 
 import type { ProviderKind } from "./transcript-reader.js";
-import { providerBaseUrl } from "../provider-base-url.js";
+import { openAiCompatibleApiRoot, providerBaseUrl } from "../provider-base-url.js";
 import { unfence } from "../structured/run-helpers.js";
 
 // #915 D6: provider mechanics only. Routing policy and credentials stay outside feature code.
@@ -158,13 +158,13 @@ export function buildStructuredRequest(
       };
     }
     case "openai-compatible": {
-      const base = providerBaseUrl("openai-compatible", baseUrl);
+      const base = openAiCompatibleApiRoot(baseUrl);
       if (input.nativeSearch) {
         // #2228: OpenAI's built-in web search tool only exists on the Responses API, so this
         // request (and only this one) switches endpoint. The Responses API carries the same
         // strict JSON schema under text.format, and url citations come back as annotations.
         return {
-          url: `${base}/v1/responses`,
+          url: `${base}/responses`,
           headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
           body: {
             model: input.model.provider_model_id,
@@ -183,7 +183,7 @@ export function buildStructuredRequest(
         };
       }
       return {
-        url: `${base}/v1/chat/completions`,
+        url: `${base}/chat/completions`,
         headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
         body: {
           model: input.model.provider_model_id,

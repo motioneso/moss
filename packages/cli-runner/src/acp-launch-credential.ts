@@ -11,7 +11,7 @@ import {
   MOSS_OPENCODE_PROVIDER_ID,
   type AcpProviderKind
 } from "@moss/acp";
-import { providerBaseUrl } from "@moss/ai";
+import { openAiCompatibleApiRoot, providerBaseUrl } from "@moss/ai";
 import type { RpcAcpSpawnCredential } from "@moss/chat/live";
 
 import type { AgentHomeOpencodeProvider } from "./agent-home-prepare-run.js";
@@ -58,7 +58,7 @@ export async function applyAgentCredential(
     path,
     id: MOSS_OPENCODE_PROVIDER_ID,
     entry: {
-      baseUrl: `${providerBaseUrl("openai-compatible", credential.baseUrl)}/v1`,
+      baseUrl: openAiCompatibleApiRoot(credential.baseUrl),
       model: credential.model,
       apiKeyEnv: MOSS_OPENCODE_API_KEY_ENV
     }
