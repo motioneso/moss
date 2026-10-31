@@ -374,6 +374,23 @@ describe("module page tool route: admission", () => {
     expect(statuses).toEqual([200, 200, 429]);
     expect(otherModule.statusCode).toBe(200);
   });
+
+  it.each(["0", "-5", "abc", "2.5"])(
+    "keeps the default limit of 120 when the override is %s",
+    async (override) => {
+      process.env.JARVIS_RL_MODULE_TOOL_MAX = override;
+      await build();
+      const statuses: number[] = [];
+      for (let index = 0; index < 121; index += 1) {
+        statuses.push(
+          (await call("meals", "meals.readPlan", { input: { lineId: "l1" } })).statusCode
+        );
+      }
+
+      expect(statuses.slice(0, 120).every((status) => status === 200)).toBe(true);
+      expect(statuses[120]).toBe(429);
+    }
+  );
 });
 
 describe("module page tool route: failures", () => {

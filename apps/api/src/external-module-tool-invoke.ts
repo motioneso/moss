@@ -22,6 +22,7 @@ import type {
   ToolResult
 } from "@moss/module-sdk";
 import { sessionRateLimitKey } from "@moss/module-sdk/server";
+import { parsePositiveIntEnv } from "@moss/shared";
 
 import { ExternalModuleReportedError } from "./external-module-tools.js";
 
@@ -81,8 +82,9 @@ export function registerModuleToolInvokeRoute(
     {
       config: {
         rateLimit: {
-          max: Number(
-            resolveMossEnv(process.env, "JARVIS_RL_MODULE_TOOL_MAX") ?? DEFAULT_MODULE_TOOL_MAX
+          max: parsePositiveIntEnv(
+            resolveMossEnv(process.env, "JARVIS_RL_MODULE_TOOL_MAX"),
+            DEFAULT_MODULE_TOOL_MAX
           ),
           timeWindow: "1 minute",
           keyGenerator: (request: FastifyRequest) =>

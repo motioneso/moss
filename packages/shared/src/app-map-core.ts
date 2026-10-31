@@ -161,7 +161,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     description:
       "Review every model call Moss made for you: chat answers, structured tasks, " +
       "transcription, embeddings, background tasks and tool runs, including actions done " +
-      "on a module's own page (shown as Module page), each as a plain action " +
+      "on a module's own page, each as a plain action " +
       "with how long it took. Opening a line shows the detail dialog with its steps and " +
       "facts. Filter by time range, module, or model with the model checklist; choices " +
       "are remembered per user and Reset filters restores the default. Quoted words " +
@@ -607,7 +607,7 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     class: "permission",
     remediationRef: "core.modules.redo_page_action",
     description:
-      "A delete or send started on a module's page was not done because its confirmation had " +
+      "An action that needed confirming on a module's page was not done because its confirmation had " +
       "expired, was cancelled, was already used, or did not match the action."
   },
   {
@@ -637,8 +637,8 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     class: "bug",
     remediationRef: "core.modules.check_then_redo_page_action",
     description:
-      "A module finished an action from its own page, but its reply was too large to show. The " +
-      "change was made and appears in Settings > Activity."
+      "A module finished an action from its own page, but its reply was too large to show. If it " +
+      "was a change, it was made and appears in Settings > Activity."
   }
 ];
 
