@@ -64,6 +64,7 @@ export type ConnectorSyncExplainCode =
   | "queued"
   | "waiting-for-worker"
   | "sign-in-expired"
+  | "provider-unavailable"
   | "connection-error"
   | "partial"
   | "capped"
@@ -148,6 +149,17 @@ export function explainConnectorSync(
   }
 
   if (input.lastSyncStatus === "failed") {
+    // #3839: Google unreachable is not the sign-in being refused. Keep the connection, say so
+    // plainly, and let the next scheduled run try again rather than asking for a reconnect.
+    if (input.lastSyncError === "provider-unavailable") {
+      return build("provider-unavailable", {
+        summary: `Last run ${formatRelative(input.lastSyncFinishedAt, nowMs)} could not reach ${providerLabel(input.providerType)}.`,
+        reason: `${providerLabel(input.providerType)} is not answering right now.`,
+        next: "Moss will try again on the next check.",
+        canReconnect: false,
+        canSyncNow: true
+      });
+    }
     const isAuthFailure = input.lastSyncError === "auth-error";
     if (isAuthFailure) {
       return build("sign-in-expired", {
@@ -231,6 +243,7 @@ const LABELS: Record<ConnectorSyncExplainCode, string> = {
   queued: "Queued",
   "waiting-for-worker": "Waiting for worker",
   "sign-in-expired": "Sign-in expired",
+  "provider-unavailable": "Will retry",
   "connection-error": "Connection error",
   partial: "Partial sync",
   capped: "More to fetch",
@@ -245,6 +258,7 @@ const TONES: Record<ConnectorSyncExplainCode, ConnectorSyncTone> = {
   queued: "neutral",
   "waiting-for-worker": "red",
   "sign-in-expired": "red",
+  "provider-unavailable": "amber",
   "connection-error": "red",
   partial: "amber",
   capped: "amber",
@@ -311,6 +325,8 @@ function errorCodeSentence(
   switch (error) {
     case "auth-error":
       return "The provider rejected the saved sign-in.";
+    case "provider-unavailable":
+      return "The provider was not answering.";
     case "calendar-error":
       return "Calendar could not be read.";
     case "calendar-item-error":
@@ -619,6 +635,15 @@ export function explainConnectorAccountHealth(
         label: "Sign-in expired",
         alert: `Last sync failed because ${isGoogle ? "Google" : "email"} access needs to be reconnected. Reconnect to resume syncing.`,
         canReconnect: true
+      };
+
+    case "provider-unavailable":
+      return {
+        code: explained.code,
+        tone: explained.tone,
+        label: "Will retry",
+        alert: `${isGoogle ? "Google" : "The email provider"} is not answering, will retry automatically.`,
+        canReconnect: false
       };
 
     case "connection-error":

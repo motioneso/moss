@@ -7,7 +7,9 @@ const GOOGLE_SYNC_ERROR_LABELS = new Set([
   "email-error",
   "email-needs-config",
   "email-message-error",
-  "no-active-connection"
+  "no-active-connection",
+  // #3839: Google was unreachable for a moment; the sign-in is still good and the next run retries.
+  "provider-unavailable"
 ]);
 
 /** The deferred-message set is capped so a continuation payload can never grow unbounded. */
