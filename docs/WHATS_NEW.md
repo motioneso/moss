@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-31
+
+#### Added
+
+- **Finance budgeting, bills and reports.** Finance now lets you give every dollar a job from the keyboard, move money between categories, set savings targets, track upcoming bills, split and bulk-categorize transactions, reconcile against statements, import and export CSV files, see upcoming bills on a calendar with suggestions drawn from repeating charges, and see net worth, cash flow and spending in charts. [PR #3874](https://github.com/motioneso/moss/pull/3874)
+
 ### 2026-10-30
 
 #### Changed
