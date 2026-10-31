@@ -974,12 +974,11 @@ function registerBetterAuthRoutes(
       rateLimit: {
         max: authMax,
         timeWindow: "1 minute",
-        // Credential POSTs are PRE-auth: there is no trusted principal yet, and the
-        // Authorization/Cookie headers are fully attacker-controlled. Key on the peer IP
-        // (C1 decision). This MUST be set explicitly: a per-route config.rateLimit with no
-        // keyGenerator inherits the GLOBAL keyGenerator (authPrincipalRateLimitKey), which
-        // would let an attacker vary `Authorization: Bearer <junk-N>` to mint a fresh bucket
-        // per request and fully bypass the sign-in brute-force throttle (OTNR-P4 #122 / C1).
+        // Credential POSTs are PRE-auth: Authorization/Cookie are attacker-controlled, so key
+        // on the peer IP and route (C1 decision). This MUST be set explicitly: without a
+        // keyGenerator the route inherits the GLOBAL principal key, and varying
+        // `Authorization: Bearer <junk-N>` would mint a fresh bucket per request and bypass
+        // the sign-in brute-force throttle (OTNR-P4 #122 / C1).
         keyGenerator: peerRouteRateLimitKey,
         allowList: (req: FastifyRequest) => {
           if (req.method !== "POST") return true;
