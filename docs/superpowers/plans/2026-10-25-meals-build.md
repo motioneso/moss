@@ -89,12 +89,12 @@ Both forks gate phase 2, not phase 1. Ben delegated both to the Meals build on 2
 
 ### Fork A: how a plan gets written day by day
 
-| Option                                             | For                                                        | Against                                                                                           |
-| -------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| **A1. New platform enqueue call (recommended)**    | Matches the spec. Chat-started plans work. No polling cost | New blocker issue and spec. Phase 2 generation waits on it                                        |
-| A2. Per-user cron every minute drains pending days | Works today. No platform change                            | Up to a minute of dead time per day. A job runs every minute for every user with Meals enabled    |
-| A3. The page starts each day through manual run    | Works today                                                | Breaks when the tab closes. Chat-started plans never finish. Rate limit of 6 per minute           |
-| A4. One job writes the whole plan                  | Simplest                                                   | 3.5 min per day observed on Melio, so 7 days overruns ten minutes. Any-length plans make it worse |
+| Option                                             | For                                                        | Against                                                                                        |
+| -------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **A1. New platform enqueue call (recommended)**    | Matches the spec. Chat-started plans work. No polling cost | New blocker issue and spec. Phase 2 generation waits on it                                     |
+| A2. Per-user cron every minute drains pending days | Works today. No platform change                            | Up to a minute of dead time per day. A job runs every minute for every user with Meals enabled |
+| A3. The page starts each day through manual run    | Works today                                                | Breaks when the tab closes. Chat-started plans never finish. Rate limit of 6 per minute        |
+| A4. One job writes the whole plan                  | Simplest                                                   | About 3.5 min per day observed, so 7 days overruns ten minutes. Any-length plans make it worse |
 
 The case for A2 is that it ships with no dependency, and the dead time is small next to a
 three-minute day. It loses because it charges every Meals user a job a minute forever to fix one
