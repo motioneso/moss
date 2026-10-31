@@ -167,6 +167,23 @@
       "flags": []
     },
     {
+      "name": "chart-parts",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/chart-parts.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": [
+        "ChartGrid",
+        "ChartReadout",
+        "ChartTicks",
+        "niceTicks",
+        "percentScale",
+        "readoutText",
+        "useActiveIndex"
+      ],
+      "options": [],
+      "flags": []
+    },
+    {
       "name": "chat-thread",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/chat-thread.tsx", "type": "registry:ui" }],
@@ -222,6 +239,15 @@
       "exports": ["ColorBox", "ColorPopover"],
       "options": [],
       "flags": [{ "prop": "open", "optional": false }]
+    },
+    {
+      "name": "column-chart",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/column-chart.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["ColumnChart"],
+      "options": [],
+      "flags": []
     },
     {
       "name": "combobox",
@@ -709,6 +735,15 @@
           "default": null
         }
       ],
+      "flags": []
+    },
+    {
+      "name": "trend-chart",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/trend-chart.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["TrendChart"],
+      "options": [],
       "flags": []
     },
     {

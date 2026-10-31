@@ -23,6 +23,39 @@ export function formatCents(amountCents: number, isoCurrency: string): string {
   return formatDecimal(`${safeCents(amountCents)}E-2`);
 }
 
+/** "2026-07" → "Jul" (chart axis). */
+export function shortMonthLabel(month: string): string {
+  const [year = 0, monthIndex = 1] = month.split("-").map(Number);
+  return new Date(Date.UTC(year, monthIndex - 1, 1)).toLocaleDateString(undefined, {
+    month: "short",
+    timeZone: "UTC"
+  });
+}
+
+const compactFormatters = new Map<string, Intl.NumberFormat>();
+
+/** 412_000 cents → "$4.1K" (chart axis, where a rounded value is enough). */
+export function formatCentsCompact(amountCents: number, isoCurrency: string): string {
+  let formatter = compactFormatters.get(isoCurrency);
+  if (!formatter) {
+    try {
+      formatter = new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency: isoCurrency,
+        notation: "compact",
+        maximumFractionDigits: 1
+      });
+    } catch {
+      formatter = new Intl.NumberFormat(undefined, {
+        notation: "compact",
+        maximumFractionDigits: 1
+      });
+    }
+    compactFormatters.set(isoCurrency, formatter);
+  }
+  return formatter.format(amountCents / 100);
+}
+
 /** "2026-07" → "July 2026" (feed month heading). */
 export function monthLabel(month: string): string {
   // Defaults satisfy noUncheckedIndexedAccess in the root test program;
@@ -83,6 +116,18 @@ export function dayLabel(date: string): string {
     timeZone: "UTC"
   });
   return `${weekday} · ${day}`;
+}
+
+/** "2026-07-15" → "July 15, 2026" or "Jul 15, 2026" (chart readout and axis). */
+export function dayYearLabel(date: string, month: "long" | "short"): string {
+  const parsed = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return parsed.toLocaleDateString(undefined, {
+    month,
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC"
+  });
 }
 
 /** "2026-07-15" → "Jul 15" (ledger date column). */

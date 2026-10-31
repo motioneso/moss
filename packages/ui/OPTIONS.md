@@ -57,6 +57,10 @@ _No enum or boolean props._
 
 _No enum or boolean props._
 
+## chart-parts
+
+_No enum or boolean props._
+
 ## chat-thread
 
 _No enum or boolean props._
@@ -78,6 +82,10 @@ _No enum or boolean props._
 ## color-box
 
 - **open** (required boolean flag)
+
+## column-chart
+
+_No enum or boolean props._
 
 ## combobox
 
@@ -244,6 +252,10 @@ _No enum or boolean props._
 ## today-pill
 
 - **variant** (required): `month`, `grid`
+
+## trend-chart
+
+_No enum or boolean props._
 
 ## weather-chip
 

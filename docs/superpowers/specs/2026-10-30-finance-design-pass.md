@@ -35,7 +35,7 @@ with four months of synthetic history.
 | Transactions: one toolbar (month, search, Filters). Filters open in a disclosure; active filters show as removable chips                | Six always-open selects cost a screen of height for a rare action                                            |
 | Transactions: dense rows (date, payee, category, account, amount). Review controls appear only on rows that need a look                 | Rows that need nothing should read as a ledger                                                               |
 | Selection bar appears only when rows are selected, pinned to the bottom of the list                                                     | An empty bulk bar is noise                                                                                   |
-| Accounts grouped by kind (cash, credit, loans, other) with a group total. Row actions move into a `Menu`                                | Four links per row read as clutter; grouping matches how both competitors show balances                      |
+| Accounts grouped by kind (cash, investments, credit cards, loans, other) with a group total. Row actions move into a `Menu`             | Four links per row read as clutter; grouping matches how both competitors show balances                      |
 | Reports: income vs spending bars per month with a net marker; net worth as a 2px line over a light area                                 | Charts should read at a glance; the table stays behind a disclosure for exact numbers                        |
 | Remove every explanatory, reassurance and instruction line listed above. Keep only status lines that change what the user does next     | Design-system rule and Ben's 2026-09-06 ruling                                                               |
 | Module answers a missing budget currency with a normal result the page understands; Upcoming points to the currency choice on Budget    | A first-run state must never look like a crash. The reviewed currency choice lives in one place              |
@@ -110,6 +110,112 @@ design-system class audit.
 - The loaded-of-total count shows under the list only when more rows match than are loaded.
   Otherwise it stays in the page for screen readers and is visually hidden.
 - Search is `type="search"`, so phones show the search key and a clear button.
+
+## Slice 4 build notes: Accounts
+
+- Groups run Cash, Investments, Credit cards, Loans, Other, so assets read before debts. Cash
+  holds checking, savings and cash on hand, the same rule ready to assign uses. Each group head
+  shows its total per currency.
+- The masthead reads Net worth, with the currency added only when there are several. Its lede
+  gives assets and the debts owed in the same currency.
+- One table per group with the same columns (name, balance, actions), so balances align down
+  the page. The group head labels its table, so there is no header row.
+- A row's name opens Transactions filtered to that account, through the register's existing
+  account link. Under the name, one line says Manual or names the bank with its sync time, or its
+  as-of date when the bank cannot sync.
+- A bank that cannot sync shows its status, stored message and Reconnect once, above the groups,
+  instead of on each of its rows.
+- Manual rows keep Add transaction, Reconcile, Import CSV and Manage in a row `Menu`. Each item
+  keeps its old accessible name ("Reconcile Synthetic wallet"). Bank rows have no menu.
+- The toolbar holds Record transfer and an Add account menu (Manual account, Connect a bank).
+  One add entry matches both competitors, and two controls fit one line at 320.
+- With no accounts the page is one `EmptyState` holding Add manual account and Connect a bank.
+  Record transfer needs two accounts, so the toolbar is hidden.
+- Removed: the Accounts section head (the tab names the page), the line explaining debts and
+  currencies, and the closed-accounts help line.
+
+## Slice 4 build notes: Reports
+
+- Two shared charts join `@moss/ui`: `ColumnChart` and `TrendChart`. No chart library; the marks
+  are positioned elements and one SVG path, styled by `components-charts.css`.
+- Cash flow is income and outflow columns per month with an ink dot for net. The legend carries
+  the window totals. Hover, tap, focus and the arrow keys show one month's readout, and a polite
+  live region speaks the same text.
+- Series colours are `--steel` then `--gold-strong`, the same in every theme. The palette
+  validator passes both modes on colour-blind separation, the normal-vision floor and 3:1
+  contrast. It flags the chroma floor because Park Press is muted by design, so the legend,
+  readout and table carry identity too. Accent beside gold failed in dark canyon, and park themes
+  re-point the accent, so the accent never takes a series slot.
+- Net worth is one 2px line over a 10% area, spaced by real dates because snapshot days are
+  uneven. It keeps zero on the axis unless the values sit far from it. The data holds only the
+  total, so there is no assets and debts split; that needs a server change.
+- The monthly table moves behind a Monthly numbers disclosure and keeps every open-detail button.
+  The chart never holds the only copy of a number.
+- Removed: the cash flow caption (pending included, refunds reduce outflow, transfers excluded)
+  and the net worth sources caption. Both facts move to the Reports app-map entry.
+
+## Slice 5 design: Upcoming calendar and bill suggestions
+
+### Bill calendar
+
+- Upcoming opens on a month grid of due bills under the period stepper. Each bill is a chip on
+  its planned date with name and amount; posted, skipped and needs-review states keep the badges
+  the list already uses.
+- The month total sits in the section head: due, paid so far, still to pay.
+- A chip opens the same bill actions the list row has today. The list stays below the grid as
+  the full record and the keyboard path.
+- Phone: no grid. The list grouped by week is the calendar.
+- Built from the shared month grid (`DayCell`, `.cal-month`) rather than a Finance copy.
+
+### Suggestion rules
+
+Input is the owner's own posted history for the last 400 days, in the budget currency.
+Excluded: pending, income and transfer categories, inflows, shared rows, and transactions
+already matched to a bill.
+
+| Step      | Rule                                                                                                                              |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Payee     | Group by account and `normalizePayee(merchant ?? name)`. An empty key never matches                                               |
+| Amount    | Within a payee, split charges into amount bands. A charge joins a band within max(10% of the band median, $1.00)                  |
+| Gap       | Weekly 7 days ±1, fortnightly 14 ±2, monthly one calendar month ±3 days, yearly one calendar year ±7 days                         |
+| Run       | Walk back from the newest charge while every gap fits one cadence. Weekly, fortnightly and monthly need 3 charges; yearly needs 2 |
+| Current   | The next expected date must be no more than one gap's tolerance in the past                                                       |
+| Existing  | Drop it when an active plan on the same account shares its payee key, or has the same cadence and an amount within 25%            |
+| Dismissed | Drop it when a dismissal for the same account, payee key and cadence is within 25% of its amount                                  |
+
+- The suggestion carries the display name (newest charge), the newest amount, the cadence, the
+  next expected date, the account and the newest charge's category when it has one.
+- Ties within a payee: each band is tested on its own, so two subscriptions from one store at
+  different prices become two suggestions.
+- Output is capped at 20, newest charge first.
+
+Near misses the tests must reject:
+
+- a grocery store on irregular 3 to 10 day gaps
+- a restaurant whose amounts vary more than the band allows
+- two monthly charges only
+- a monthly run that stopped three months ago
+- one payee at alternating prices where neither band reaches three charges
+- a refund or inflow from a subscription payee
+
+### Accept and dismiss
+
+- Accept opens the normal Add a bill form filled in. Saving goes through the usual review; the
+  new plan then hides the suggestion through the Existing rule.
+- Dismiss writes one owner-only row: account, payee key, cadence, amount, time. It never asks,
+  because it deletes nothing and only hides a suggestion.
+- New module table `app.finance_bill_suggestion_dismissals` (module migration 0042) with
+  `owner_user_id`, listed in the manifest's owned tables so the host adds its owner-only row
+  security. Unique on owner, account, payee key, cadence and amount, so two prices from one
+  payee dismiss separately.
+- Two new tools so Moss can do the same: `finance.bills.suggestions` (read) and
+  `finance.bills.suggestions.dismiss` (write). Payloads carry ids and the key fields, never notes.
+
+### Screen
+
+- Suggestions sit in one section under the calendar, only when there is at least one. Each row:
+  name, cadence and amount, last charged date, Add as bill, Dismiss.
+- No section with nothing to say, no explanatory line.
 
 ## Acceptance
 

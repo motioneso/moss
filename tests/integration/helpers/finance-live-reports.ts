@@ -191,6 +191,8 @@ export async function exerciseReportDetails(
   await dialog.getByText("Current detail total: $82.43", { exact: true }).waitFor();
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
   const cash = page.getByRole("region", { name: "Cash flow", exact: true });
+  await cash.getByRole("group", { name: "Cash flow by month", exact: true }).waitFor();
+  await cash.getByRole("button", { name: "Monthly numbers", exact: true }).click();
   await cash
     .getByRole("button", { name: `View income for ${monthLabel(month)}`, exact: true })
     .filter({ visible: true })

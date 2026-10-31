@@ -6,6 +6,7 @@ import { sql, type Kysely } from "kysely";
 import { createModuleStorageRpc, DataContextRunner, type MossDatabase } from "@moss/db";
 import type { BrowserContext } from "playwright-core";
 import { sqlStore } from "../../../external-modules/finance/src/domain/index.js";
+import { accountAction } from "./finance-live-account-menu.js";
 export async function exerciseAccountLifecycle(
   context: BrowserContext,
   base: string,
@@ -98,9 +99,7 @@ export async function exerciseAccountLifecycle(
 
   try {
     await page.goto(`${base}/m/finance/accounts`);
-    await page
-      .getByRole("button", { name: "Manage Synthetic lifecycle cash", exact: true })
-      .click();
+    await accountAction(page, "Synthetic lifecycle cash", "Manage Synthetic lifecycle cash");
     const manager = page.getByRole("dialog", { name: "Manage manual account", exact: true });
     await manager.getByRole("button", { name: "Rename account", exact: true }).click();
     await manager.getByLabel("Account name", { exact: true }).fill("Synthetic renamed cash");
@@ -119,7 +118,7 @@ export async function exerciseAccountLifecycle(
     await guard.getByRole("button", { name: "Confirm action", exact: true }).click();
     await manager.waitFor({ state: "detached" });
     expect((await saved()).name).toBe("Synthetic renamed cash");
-    await page.getByRole("button", { name: "Manage Synthetic renamed cash", exact: true }).click();
+    await accountAction(page, "Synthetic renamed cash", "Manage Synthetic renamed cash");
     await manager.getByRole("button", { name: "Review closing", exact: true }).click();
     await manager.getByText("The saved ledger is ready to close.", { exact: true }).waitFor();
     for (const theme of ["light", "dark", "sage"]) {
@@ -144,7 +143,7 @@ export async function exerciseAccountLifecycle(
     await manager.waitFor({ state: "detached" });
     expect((await saved()).archivedAt).not.toBeNull();
     await page
-      .getByRole("button", { name: "Add transaction to Synthetic renamed cash", exact: true })
+      .getByRole("button", { name: "Actions for Synthetic renamed cash", exact: true })
       .waitFor({ state: "detached" });
     await page.getByRole("button", { name: /Closed accounts \(/ }).click();
     await page.getByRole("button", { name: "Manage Synthetic renamed cash", exact: true }).click();
@@ -154,7 +153,7 @@ export async function exerciseAccountLifecycle(
     await guard.getByRole("button", { name: "Confirm action", exact: true }).click();
     await manager.waitFor({ state: "detached" });
     expect((await saved()).archivedAt).toBeNull();
-    await page.getByRole("button", { name: "Manage Synthetic renamed cash", exact: true }).click();
+    await accountAction(page, "Synthetic renamed cash", "Manage Synthetic renamed cash");
     await manager.getByRole("button", { name: "Rename account", exact: true }).click();
     await manager.getByLabel("Account name", { exact: true }).fill("Synthetic retained draft");
     await owner(async (s) => {

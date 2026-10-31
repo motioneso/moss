@@ -36,6 +36,7 @@ import { installModule } from "../../scripts/module-install.js";
 import { seedFinanceLive, seedFirstBudget } from "./helpers/finance-live-fixtures.js";
 import { exerciseBudgetWrites, exerciseFirstBudget } from "./helpers/finance-live-budget.js";
 import { connectionStrings, resetEmptyFoundationDatabase } from "./test-database.js";
+import { accountAction, openAddManualAccount } from "./helpers/finance-live-account-menu.js";
 
 describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
   "Finance installed browser live path",
@@ -555,7 +556,7 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
       const page = await context.newPage();
       try {
         await page.goto(`${base}/m/finance/accounts`);
-        await page.getByRole("button", { name: "Add manual account", exact: true }).click();
+        await openAddManualAccount(page);
         const accountDialog = page.getByRole("dialog", { name: "Add manual account", exact: true });
         await accountDialog.getByLabel("Account name", { exact: true }).fill("Synthetic wallet");
         await accountDialog.getByLabel("Account type", { exact: true }).selectOption("cash");
@@ -572,9 +573,7 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
         }>;
         const account = rows.find((row) => row.name === "Synthetic wallet")!;
         expect(account).toMatchObject({ source: "manual", balanceCents: 12345 });
-        await page
-          .getByRole("button", { name: "Add transaction to Synthetic wallet", exact: true })
-          .click();
+        await accountAction(page, "Synthetic wallet", "Add transaction to Synthetic wallet");
         const entryDialog = page.getByRole("dialog", { name: "Add transaction", exact: true });
         await entryDialog.getByLabel("Payee", { exact: true }).fill("Synthetic manual market");
         await entryDialog.getByLabel("Transaction amount", { exact: true }).fill("1.234");
@@ -650,14 +649,14 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
         ).toEqual([]);
         await page.reload();
         await page
-          .getByRole("button", { name: "Add transaction to Synthetic wallet", exact: true })
+          .getByRole("button", { name: "Actions for Synthetic wallet", exact: true })
           .waitFor();
         if (artifacts)
           await page.screenshot({
             path: join(resolve(artifacts), "finance-manual-accounts-phone.png"),
             fullPage: true
           });
-        await page.getByRole("button", { name: "Reconcile Synthetic wallet", exact: true }).click();
+        await accountAction(page, "Synthetic wallet", "Reconcile Synthetic wallet");
         const review = page.getByRole("dialog", { name: "Reconcile a statement", exact: true });
         await review.getByLabel("Statement balance", { exact: true }).fill("122.21");
         const finish = review.getByRole("button", { name: "Finish reconciliation", exact: true });
@@ -676,7 +675,7 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
           readTool,
           artifacts
         );
-        await page.getByRole("button", { name: "Reconcile Synthetic wallet", exact: true }).click();
+        await accountAction(page, "Synthetic wallet", "Reconcile Synthetic wallet");
         await review.getByLabel("Statement balance", { exact: true }).fill("122.22");
         expect(await finish.isEnabled()).toBe(true);
         const selection = review.getByRole("checkbox", {
@@ -704,7 +703,7 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
           artifacts
         );
         await page.reload();
-        await page.getByRole("button", { name: "Reconcile Synthetic wallet", exact: true }).click();
+        await accountAction(page, "Synthetic wallet", "Reconcile Synthetic wallet");
         await review.getByText(/Last reconciled statement:/).waitFor();
         expect(await finish.isDisabled()).toBe(true);
         const foreign = await post(

@@ -43,7 +43,7 @@ export const MODULE_STYLES = `
 .fnm-import-row > * { min-width: 0; overflow-wrap: anywhere; }
 .fnm-manual-form { display: flex; flex-direction: column; gap: var(--space-4); }
 @media (max-width: 480px) { .fnm-manual-columns { grid-template-columns: minmax(0, 1fr); } }
-.fnm-account-totals { display: grid; gap: var(--space-6); grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); }
+.fnm-account-totals { display: grid; gap: var(--space-6); margin-block-end: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); }
 .fnm-account-totals > * { margin: 0; min-width: 0; }
 .fnm-report-bar { grid-column: 1 / -1; grid-row: 2; min-width: 0; width: 100%; }
 .fnm-report-bar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-1) 0; }
@@ -53,20 +53,14 @@ export const MODULE_STYLES = `
 .fnm-report-month dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); margin: 0; }
 .fnm-report-month dd { margin: 0; }
 .fnm-report-trend { width: 100%; height: 8rem; display: block; }
-/* #3177 Accounts: status sits in the section head on wide screens and under the bank name on phone. */
-.fnm-bank-status-row { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-.fnm-bank-status { display: none; }
-.fnm-bal { display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; font-variant-numeric: tabular-nums; }
+/* #3177 Accounts: a bank that cannot sync shows its status and Reconnect above the groups. */
+.fnm-bank-status-row { display: inline-flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .fnm-switch-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-4); padding: var(--space-4) 0; border-bottom: var(--border-w) solid var(--border-subtle); }
 .fnm-switch-text { display: flex; flex-direction: column; gap: var(--space-1); }
 .fnm-limit { max-width: 14rem; }
 .fnm-disclosure-head { display: inline-flex; align-items: center; gap: var(--space-2); }
 .fnm-disclosure-marker { flex: 0 0 auto; width: 0.5rem; height: 0.5rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-0.15rem) rotate(45deg); transition: transform 120ms ease; }
 .fnm-disclosure-head[aria-expanded="true"] .fnm-disclosure-marker { transform: translateY(0.1rem) rotate(-135deg); }
-@media (max-width: 720px) {
-  .fnm-bank-meta { display: none; }
-  .fnm-bank-status { display: block; }
-}
 /* #3173 Budget: layout only. Desktop shows the table and rail, phone the row list. */
 .fnm-tabs { margin-bottom: var(--space-5); overflow-x: auto; scrollbar-width: none; }
 .fnm-tabs::-webkit-scrollbar { display: none; }

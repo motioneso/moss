@@ -19,6 +19,7 @@ import type { Browser } from "playwright-core";
 import { createExternalModuleJobHandler } from "../../../apps/worker/src/external-module-job-handler.js";
 import { createIsModuleEnabled } from "../../../apps/worker/src/worker-module-gate.js";
 import { connectionStrings } from "../test-database.js";
+import { openAddManualAccount } from "./finance-live-account-menu.js";
 
 type Person = { userId: string; cookie: string };
 export async function exerciseFreshFinanceStartup(input: {
@@ -169,7 +170,7 @@ export async function exerciseFreshFinanceStartup(input: {
     );
     const page = await context.newPage();
     await page.goto(`${input.base}/m/finance/accounts`);
-    await page.getByRole("button", { name: "Add manual account", exact: true }).click();
+    await openAddManualAccount(page);
     const account = page.getByRole("dialog", { name: "Add manual account", exact: true });
     await account.getByLabel("Account name", { exact: true }).fill("Synthetic fresh wallet");
     await account.getByLabel("Account type", { exact: true }).selectOption("cash");

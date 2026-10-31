@@ -1,23 +1,31 @@
-import { NetWorthHistory } from "../net-worth-history";
-import type { NetWorthCoverage } from "../../domain/net-worth-ledger";
 // external-modules/finance/src/web/screens/reports.tsx
 // FIN-05 (#1150) Task 6: the read-only Reports screen. Two read-risk tool
 // queries (finance.reports.spending / finance.reports.net-worth) — this
-// screen NEVER writes. No chart library: category/payee shares are CSS-width
-// bars and the net-worth trend is one inline SVG polyline in currentColor,
-// so raw colors stay in tokens.css and theme switching costs nothing.
+// screen NEVER writes. Category and payee shares are CSS-width bars; cash flow
+// and the net-worth trend use the shared @moss/ui charts.
 import {
   Button,
+  ColumnChart,
+  DisclosureToggle,
   Note,
   SectionHead,
   Select,
+  TrendChart,
   useEffect,
   useState,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
+import { NetWorthHistory } from "../net-worth-history";
+import type { NetWorthCoverage } from "../../domain/net-worth-ledger";
 import { ReportDetails, type ReportSelection } from "../report-details";
 import { fetchUserDirectory } from "../api";
-import { formatCents, monthLabel } from "../format";
+import {
+  dayYearLabel,
+  formatCents,
+  formatCentsCompact,
+  monthLabel,
+  shortMonthLabel
+} from "../format";
 import { EmptyState, outcomeGate } from "../states";
 import { invalidateToolQueries, useToolQuery } from "../store";
 import type { DirectoryUser } from "../household";
@@ -76,21 +84,6 @@ function toRows(record: Record<string, number>, label: (key: string) => string):
   return Object.entries(record)
     .map(([key, cents]) => ({ key, label: label(key), cents }))
     .sort((a, b) => b.cents - a.cents);
-}
-
-/** Scale the ascending point series into a 100×32 viewBox polyline (x 0..100,
- *  y inverted 30..2 with 2px padding; a flat series centers at y=16). */
-function trendPoints(points: NetWorthPoint[]): string {
-  const totals = points.map((point) => point.totalCents);
-  const min = Math.min(...totals);
-  const max = Math.max(...totals);
-  return points
-    .map((point, index) => {
-      const x = (index / (points.length - 1)) * 100;
-      const y = max === min ? 16 : 30 - ((point.totalCents - min) / (max - min)) * 28;
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(" ");
 }
 
 function BarList(props: {
@@ -152,30 +145,23 @@ function NetWorthSection(props: { result: NetWorthResult }): ReactNodeLike {
           <SectionHead
             title={<span className="fnm-money-wrap">{formatCents(headlineCents, currency)}</span>}
             titleAs="h3"
-            meta={props.result.asOf ? `As of ${props.result.asOf}` : undefined}
+            meta={
+              props.result.asOf ? `As of ${dayYearLabel(props.result.asOf, "short")}` : undefined
+            }
           />
-          <p className="jds-caption">
-            Manual balances follow opening amounts and recorded entries. Connected accounts use
-            saved snapshots, which may be older and carry forward. Missing balances are omitted. No
-            market values or exchange rates are estimated.
-          </p>
-          {/* A polyline needs ≥2 points; a single snapshot day renders the
-                headline alone. */}
           {points.length >= 2 ? (
-            <svg
-              viewBox="0 0 100 32"
-              preserveAspectRatio="none"
-              className="fnm-report-trend"
-              role="img"
-              aria-label="Net worth trend"
-            >
-              <polyline
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1"
-                points={trendPoints(points)}
-              />
-            </svg>
+            <TrendChart
+              label="Net worth"
+              points={points.map((point) => ({
+                at: Date.parse(`${point.date}T00:00:00Z`),
+                value: point.totalCents,
+                name: dayYearLabel(point.date, "long")
+              }))}
+              format={(cents) => formatCents(cents, currency)}
+              formatTick={(cents) => formatCentsCompact(cents, currency)}
+              startLabel={dayYearLabel(points[0]?.date ?? "", "short")}
+              endLabel={dayYearLabel(points.at(-1)?.date ?? "", "short")}
+            />
           ) : null}
         </div>
       )}
@@ -289,108 +275,176 @@ function SpendingSection(props: {
           )}
         </section>
       </div>
-      <section className="fnm-block fnm-block--tight" aria-label="Cash flow">
-        <SectionHead title="Cash flow" meta={currency} rule />
-        <p className="jds-caption">
-          Includes pending transactions. Refunds reduce outflow; transfers are excluded.
-        </p>
-        <table className="jds-table fnm-table fnm-desktop-only">
-          <thead>
-            <tr>
-              <th>Month</th>
-              <th>Income</th>
-              <th>Outflow</th>
-              <th>Net</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...merged].reverse().map((entry) => (
-              <tr key={entry.month}>
-                <td>{monthLabel(entry.month)}</td>
-                <td className="fnm-amount">
-                  <Button
-                    variant="link"
-                    size="sm"
-                    aria-label={`View income for ${monthLabel(entry.month)}`}
-                    onClick={() =>
-                      select("income", undefined, "Income", entry.cashFlow.incomeCents, entry.month)
-                    }
-                  >
-                    {formatCents(entry.cashFlow.incomeCents, currency)}
-                  </Button>
-                </td>
-                <td className="fnm-amount">
-                  <Button
-                    variant="link"
-                    size="sm"
-                    aria-label={`View outflow for ${monthLabel(entry.month)}`}
-                    onClick={() =>
-                      select(
-                        "outflow",
-                        undefined,
-                        "Outflow",
-                        entry.cashFlow.outflowCents,
-                        entry.month
-                      )
-                    }
-                  >
-                    {formatCents(entry.cashFlow.outflowCents, currency)}
-                  </Button>
-                </td>
-                <td className="fnm-amount">{formatCents(entry.cashFlow.netCents, currency)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="fnm-phone-only fnm-block">
-          {[...merged].reverse().map((entry) => (
-            <section
-              key={entry.month}
-              className="fnm-report-month"
-              aria-label={monthLabel(entry.month)}
-            >
-              <strong>{monthLabel(entry.month)}</strong>
-              <dl>
-                <dt>Income</dt>
-                <dd className="fnm-amount">
-                  <Button
-                    variant="link"
-                    size="sm"
-                    aria-label={`View income for ${monthLabel(entry.month)}`}
-                    onClick={() =>
-                      select("income", undefined, "Income", entry.cashFlow.incomeCents, entry.month)
-                    }
-                  >
-                    {formatCents(entry.cashFlow.incomeCents, currency)}
-                  </Button>
-                </dd>
-                <dt>Outflow</dt>
-                <dd className="fnm-amount">
-                  <Button
-                    variant="link"
-                    size="sm"
-                    aria-label={`View outflow for ${monthLabel(entry.month)}`}
-                    onClick={() =>
-                      select(
-                        "outflow",
-                        undefined,
-                        "Outflow",
-                        entry.cashFlow.outflowCents,
-                        entry.month
-                      )
-                    }
-                  >
-                    {formatCents(entry.cashFlow.outflowCents, currency)}
-                  </Button>
-                </dd>
-                <dt>Net</dt>
-                <dd className="fnm-amount">{formatCents(entry.cashFlow.netCents, currency)}</dd>
-              </dl>
-            </section>
-          ))}
-        </div>
-      </section>
+      <CashFlowSection merged={merged} currency={currency} select={select} />
     </div>
+  );
+}
+
+type CashFlowSelect = (
+  group: ReportSelection["group"],
+  key: string | undefined,
+  label: string,
+  expectedCents: number,
+  month: string
+) => void;
+
+/** Sum of safe cents, or null when the exact total would lose precision. */
+function sumCents(values: readonly number[]): number | null {
+  const total = Number(values.reduce((sum, value) => sum + BigInt(value), 0n));
+  return Number.isSafeInteger(total) ? total : null;
+}
+
+function CashFlowSection(props: {
+  merged: ReturnType<typeof mergeSpendingMonths>;
+  currency: string;
+  select: CashFlowSelect;
+}): ReactNodeLike {
+  const [showTable, setShowTable] = useState(false);
+  const { merged, currency } = props;
+  const money = (cents: number) => formatCents(cents, currency);
+  const total = (values: number[]) => {
+    const cents = sumCents(values);
+    return cents === null ? undefined : money(cents);
+  };
+  const income = merged.map((entry) => entry.cashFlow.incomeCents);
+  const outflow = merged.map((entry) => entry.cashFlow.outflowCents);
+  const net = merged.map((entry) => entry.cashFlow.netCents);
+  return (
+    <section className="fnm-block fnm-block--tight" aria-label="Cash flow">
+      <SectionHead title="Cash flow" meta={currency} rule />
+      <ColumnChart
+        label="Cash flow by month"
+        categories={merged.map((entry) => shortMonthLabel(entry.month))}
+        categoryNames={merged.map((entry) => monthLabel(entry.month))}
+        series={[
+          { key: "income", label: "Income", values: income, total: total(income) },
+          { key: "outflow", label: "Outflow", values: outflow, total: total(outflow) }
+        ]}
+        marker={{ label: "Net", values: net, total: total(net) }}
+        format={money}
+        formatTick={(cents) => formatCentsCompact(cents, currency)}
+      />
+      <DisclosureToggle
+        expanded={showTable}
+        controls="fnm-cash-flow-months"
+        className="fnm-disclosure-head"
+        onClick={() => setShowTable(!showTable)}
+      >
+        Monthly numbers
+        <span className="fnm-disclosure-marker" aria-hidden="true" />
+      </DisclosureToggle>
+      {showTable ? (
+        <div id="fnm-cash-flow-months">
+          <table className="jds-table fnm-table fnm-desktop-only">
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>Income</th>
+                <th>Outflow</th>
+                <th>Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...merged].reverse().map((entry) => (
+                <tr key={entry.month}>
+                  <td>{monthLabel(entry.month)}</td>
+                  <td className="fnm-amount">
+                    <Button
+                      variant="link"
+                      size="sm"
+                      aria-label={`View income for ${monthLabel(entry.month)}`}
+                      onClick={() =>
+                        props.select(
+                          "income",
+                          undefined,
+                          "Income",
+                          entry.cashFlow.incomeCents,
+                          entry.month
+                        )
+                      }
+                    >
+                      {money(entry.cashFlow.incomeCents)}
+                    </Button>
+                  </td>
+                  <td className="fnm-amount">
+                    <Button
+                      variant="link"
+                      size="sm"
+                      aria-label={`View outflow for ${monthLabel(entry.month)}`}
+                      onClick={() =>
+                        props.select(
+                          "outflow",
+                          undefined,
+                          "Outflow",
+                          entry.cashFlow.outflowCents,
+                          entry.month
+                        )
+                      }
+                    >
+                      {money(entry.cashFlow.outflowCents)}
+                    </Button>
+                  </td>
+                  <td className="fnm-amount">{money(entry.cashFlow.netCents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="fnm-phone-only fnm-block">
+            {[...merged].reverse().map((entry) => (
+              <section
+                key={entry.month}
+                className="fnm-report-month"
+                aria-label={monthLabel(entry.month)}
+              >
+                <strong>{monthLabel(entry.month)}</strong>
+                <dl>
+                  <dt>Income</dt>
+                  <dd className="fnm-amount">
+                    <Button
+                      variant="link"
+                      size="sm"
+                      aria-label={`View income for ${monthLabel(entry.month)}`}
+                      onClick={() =>
+                        props.select(
+                          "income",
+                          undefined,
+                          "Income",
+                          entry.cashFlow.incomeCents,
+                          entry.month
+                        )
+                      }
+                    >
+                      {money(entry.cashFlow.incomeCents)}
+                    </Button>
+                  </dd>
+                  <dt>Outflow</dt>
+                  <dd className="fnm-amount">
+                    <Button
+                      variant="link"
+                      size="sm"
+                      aria-label={`View outflow for ${monthLabel(entry.month)}`}
+                      onClick={() =>
+                        props.select(
+                          "outflow",
+                          undefined,
+                          "Outflow",
+                          entry.cashFlow.outflowCents,
+                          entry.month
+                        )
+                      }
+                    >
+                      {money(entry.cashFlow.outflowCents)}
+                    </Button>
+                  </dd>
+                  <dt>Net</dt>
+                  <dd className="fnm-amount">{money(entry.cashFlow.netCents)}</dd>
+                </dl>
+              </section>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </section>
   );
 }
 

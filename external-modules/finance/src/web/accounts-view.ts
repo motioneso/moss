@@ -1,7 +1,8 @@
 // external-modules/finance/src/web/accounts-view.ts
 // #3177: pure view model for the Accounts screen. Takes the rows of
 // finance.accounts.list and returns banks with a status line, a stale-bank
-// as-of date and the net worth total. No React, no I/O.
+// as-of date, the net worth total, and the same accounts grouped by kind.
+// No React, no I/O.
 
 import { signedBalanceCents } from "../domain/account-sign.js";
 import { safeCents } from "../domain/values.js";
@@ -15,6 +16,7 @@ export interface AccountsRow {
   name: string;
   mask: string | null;
   type: string;
+  subtype?: string | null;
   balanceCents: number;
   isoCurrency: string;
 }
@@ -50,10 +52,69 @@ export interface BankSection {
   accounts: AccountsLine[];
 }
 
+export type AccountKind = "cash" | "investment" | "credit" | "loan" | "other";
+
+export interface AccountGroupRow extends AccountsLine {
+  manual: boolean;
+  /** "Manual", or the bank name with its sync state or as-of date. */
+  source: string;
+}
+
+export interface CurrencyTotal {
+  currency: string;
+  /** Null means the exact sum exceeds safe display precision. */
+  cents: number | null;
+}
+
+export interface AccountGroup {
+  kind: AccountKind;
+  title: string;
+  totals: CurrencyTotal[];
+  rows: AccountGroupRow[];
+}
+
 export interface AccountsView {
   banks: BankSection[];
+  /** Assets first, debts last, so the page reads like a balance sheet. */
+  groups: AccountGroup[];
   /** No cross-currency total. Null means the exact sum exceeds safe display precision. */
   netWorthByCurrency: Array<{ currency: string; netWorthCents: number | null }>;
+  /** Debts are a positive amount owed. Same order as the net worth totals. */
+  sidesByCurrency: Array<{
+    currency: string;
+    assetsCents: number | null;
+    debtsCents: number | null;
+  }>;
+}
+
+const KINDS: ReadonlyArray<{ kind: AccountKind; title: string }> = [
+  { kind: "cash", title: "Cash" },
+  { kind: "investment", title: "Investments" },
+  { kind: "credit", title: "Credit cards" },
+  { kind: "loan", title: "Loans" },
+  { kind: "other", title: "Other" }
+];
+
+/** Checking, savings and cash on hand count as cash, the same rule ready to assign uses. */
+export function accountKind(type: string, subtype: string | null | undefined): AccountKind {
+  if (type === "depository" || (type === "other" && subtype === "cash")) return "cash";
+  if (type === "investment" || type === "credit" || type === "loan") return type;
+  return "other";
+}
+
+function addTo(totals: Map<string, bigint>, currency: string, cents: number): void {
+  totals.set(currency, (totals.get(currency) ?? 0n) + BigInt(cents));
+}
+
+function safeTotal(total: bigint | undefined): number | null {
+  const value = Number(total ?? 0n);
+  return Number.isSafeInteger(value) ? value : null;
+}
+
+function currencyTotals(totals: Map<string, bigint>): CurrencyTotal[] {
+  return [...totals.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currency, total]) => ({ currency, cents: safeTotal(total) }));
 }
 
 const MINUTE_MS = 60_000;
@@ -103,14 +164,15 @@ export function buildAccountsView(
   ].filter((id) => byItem.has(id));
 
   const totals = new Map<string, bigint>();
+  const assets = new Map<string, bigint>();
+  const debts = new Map<string, bigint>();
   const sections: BankSection[] = itemIds.map((itemId, index) => {
     const bank = bankFor.get(itemId);
     const lines = (byItem.get(itemId) ?? []).map((account) => {
       const balanceCents = safeCents(signedBalanceCents(account));
-      totals.set(
-        account.isoCurrency,
-        (totals.get(account.isoCurrency) ?? 0n) + BigInt(balanceCents)
-      );
+      addTo(totals, account.isoCurrency, balanceCents);
+      if (balanceCents < 0) addTo(debts, account.isoCurrency, -balanceCents);
+      else addTo(assets, account.isoCurrency, balanceCents);
       return {
         accountId: account.accountId,
         name: account.name,
@@ -157,13 +219,35 @@ export function buildAccountsView(
     };
   });
 
+  const kindOf = new Map(
+    accounts.map((account) => [account.accountId, accountKind(account.type, account.subtype)])
+  );
+  const groups = KINDS.map(({ kind, title }) => {
+    const groupTotals = new Map<string, bigint>();
+    const rows: AccountGroupRow[] = [];
+    for (const section of sections) {
+      const manual = section.itemId === "manual-account-group";
+      const state = section.asOf ? `As of ${section.asOf}` : section.statusLabel;
+      for (const line of section.accounts) {
+        if (kindOf.get(line.accountId) !== kind) continue;
+        addTo(groupTotals, line.isoCurrency, line.balanceCents);
+        rows.push({ ...line, manual, source: manual ? "Manual" : `${section.name} · ${state}` });
+      }
+    }
+    return { kind, title, totals: currencyTotals(groupTotals), rows };
+  }).filter((group) => group.rows.length > 0);
+
   return {
     banks: sections,
-    netWorthByCurrency: [...totals.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([currency, total]) => ({
-        currency,
-        netWorthCents: Number.isSafeInteger(Number(total)) ? Number(total) : null
-      }))
+    groups,
+    netWorthByCurrency: currencyTotals(totals).map(({ currency, cents }) => ({
+      currency,
+      netWorthCents: cents
+    })),
+    sidesByCurrency: currencyTotals(totals).map(({ currency }) => ({
+      currency,
+      assetsCents: safeTotal(assets.get(currency)),
+      debtsCents: safeTotal(debts.get(currency))
+    }))
   };
 }

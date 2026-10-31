@@ -25,6 +25,16 @@ function textOf(renderer: ReactTestRenderer): string {
   return JSON.stringify(renderer.toJSON());
 }
 
+type Instance = ReactTestRenderer["root"];
+
+function innerText(node: Instance | string): string {
+  return typeof node === "string" ? node : node.children.map(innerText).join("");
+}
+
+function buttonNamed(renderer: ReactTestRenderer, text: string): Instance | undefined {
+  return renderer.root.findAllByType("button").find((node) => innerText(node) === text);
+}
+
 async function render(openAssistant = vi.fn()) {
   let renderer!: ReactTestRenderer;
   await act(async () => {
@@ -74,7 +84,72 @@ describe("Accounts screen (#3177)", () => {
     expect(text).toContain("$100.00");
     expect(text).not.toContain("$111.45");
     expect(text).not.toContain("999.99");
-    expect(text).toContain("no exchange-rate conversion");
+    expect(text).not.toContain("no exchange-rate conversion");
+  });
+
+  it("groups accounts by kind under a single-currency net worth with assets and debts", async () => {
+    stubAccountsRead({
+      accounts: [
+        {
+          accountId: "chk",
+          itemId: "i1",
+          name: "Checking",
+          mask: "4821",
+          type: "depository",
+          balanceCents: 50000,
+          isoCurrency: "USD"
+        },
+        {
+          accountId: "card",
+          itemId: "i1",
+          name: "Card",
+          mask: null,
+          type: "credit",
+          balanceCents: 12000,
+          isoCurrency: "USD"
+        },
+        {
+          accountId: "wallet",
+          itemId: null,
+          source: "manual",
+          name: "Wallet",
+          mask: null,
+          type: "other",
+          subtype: "cash",
+          balanceCents: 2000,
+          isoCurrency: "USD"
+        }
+      ],
+      banks: [
+        {
+          itemId: "i1",
+          institutionId: "ins_1",
+          institutionName: "Sandbox First Bank",
+          status: "connected",
+          lastSyncAt: new Date().toISOString(),
+          message: null
+        }
+      ],
+      supportsManualManagement: true
+    });
+    const { renderer } = await render();
+    const text = textOf(renderer);
+    expect(text).toContain('"Net worth"');
+    expect(text).not.toContain("Net worth · USD");
+    expect(text).toContain("$400.00");
+    expect(text).toContain("Assets $520.00 · Debts $120.00");
+    expect(text).toContain("Credit cards");
+    expect(text).toContain("Sandbox First Bank · Synced just now");
+    expect(text).toContain("Manual");
+
+    const labels = renderer.root
+      .findAllByType("button")
+      .map((node) => node.props["aria-label"] as string | undefined);
+    expect(labels).toContain("View transactions for Checking");
+    expect(labels).toContain("Actions for Wallet");
+    expect(labels).not.toContain("Actions for Checking");
+    expect(labels).toContain("Add account");
+    expect(labels).not.toContain("Add transaction to Wallet");
   });
 
   it("explains an unavailable total without dropping account rows", async () => {
@@ -127,17 +202,20 @@ describe("Accounts screen (#3177)", () => {
     expect(text).toContain("As of October 5");
     expect(text).toContain("xxx7302");
 
-    const reconnect = renderer.root
-      .findAllByType("button")
-      .find((node) => JSON.stringify(node.props.children).includes("Reconnect"));
+    const reconnect = buttonNamed(renderer, "Reconnect");
     expect(reconnect).toBeDefined();
     act(() => reconnect!.props.onClick());
     expect(openAssistant).toHaveBeenCalledWith({ starterPrompt: "Reconnect my bank account" });
   });
 
-  it("offers Add a bank when nothing is connected", async () => {
+  it("offers a manual account and a bank connection when there are no accounts", async () => {
     stubAccountsRead({ accounts: [], banks: [] });
-    const { renderer } = await render();
-    expect(textOf(renderer)).toContain("Add a bank");
+    const { renderer, openAssistant } = await render();
+    const text = textOf(renderer);
+    expect(text).toContain("Add manual account");
+    expect(text).not.toContain("Record transfer");
+    const connect = buttonNamed(renderer, "Connect a bank");
+    act(() => connect!.props.onClick());
+    expect(openAssistant).toHaveBeenCalledWith({ starterPrompt: "Connect my bank account" });
   });
 });

@@ -1,17 +1,19 @@
-import { ManualTransferDialog } from "../manual-transfer";
-import { ManualAccountManager } from "../account-management";
 // external-modules/finance/src/web/screens/accounts.tsx
 // #3177: the Accounts screen. One read (finance.accounts.list) gives accounts
-// and banks; accounts-view.ts turns them into sections. Own accounts only:
-// household balances are context, not the user's net worth.
+// and banks; accounts-view.ts groups them by kind, assets before debts. Own
+// accounts only: household balances are context, not the user's net worth.
 //
-// Reconnect and Add a bank retain the assistant's connection flow. Manual
-// ledger forms use the optional host-mediated page tools handle.
+// Reconnect and Connect a bank use the assistant's connection flow. Manual
+// ledger forms use the optional host-mediated page tools handle. A row's name
+// opens Transactions filtered to that account.
+import { ManualTransferDialog } from "../manual-transfer";
+import { ManualAccountManager } from "../account-management";
 import {
   Button,
   Indicator,
   DisclosureToggle,
   Masthead,
+  Menu,
   RowIndex,
   RowIndexItem,
   SectionHead,
@@ -20,7 +22,14 @@ import {
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import { formatCents } from "../format";
-import { buildAccountsView, type AccountsBank, type AccountsRow } from "../accounts-view";
+import {
+  buildAccountsView,
+  type AccountGroup,
+  type AccountsBank,
+  type AccountsRow,
+  type CurrencyTotal
+} from "../accounts-view";
+import { navigate } from "../router";
 import { EmptyState, outcomeGate } from "../states";
 import { ManualEntryDialog, type ManualAccountChoice } from "../manual-entry";
 import { ImportDialog } from "../import-dialog";
@@ -54,9 +63,117 @@ function BankStatus(props: {
   );
 }
 
+function MoreIcon(): ReactNodeLike {
+  return (
+    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="5" cy="12" r="1.75" />
+      <circle cx="12" cy="12" r="1.75" />
+      <circle cx="19" cy="12" r="1.75" />
+    </svg>
+  );
+}
+
+const totalsLabel = (totals: CurrencyTotal[]): string =>
+  totals
+    .map(({ currency, cents }) => (cents === null ? "Unavailable" : formatCents(cents, currency)))
+    .join(" · ");
+
+const amountOrUnavailable = (cents: number | null, currency: string): string =>
+  cents === null ? "Unavailable" : formatCents(cents, currency);
+
+type RowAction = "entry" | "reconcile" | "import" | "manage";
+
+function AccountActions(props: {
+  name: string;
+  manageable: boolean;
+  onSelect: (action: RowAction) => void;
+}): ReactNodeLike {
+  const { name } = props;
+  return (
+    <Menu
+      triggerVariant="icon"
+      triggerIcon={<MoreIcon />}
+      triggerLabel={`Actions for ${name}`}
+      items={[
+        { id: "entry", label: "Add transaction", ariaLabel: `Add transaction to ${name}` },
+        { id: "reconcile", label: "Reconcile", ariaLabel: `Reconcile ${name}` },
+        { id: "import", label: "Import CSV", ariaLabel: `Import CSV into ${name}` },
+        ...(props.manageable
+          ? [{ id: "manage", label: "Manage", ariaLabel: `Manage ${name}` }]
+          : [])
+      ]}
+      onSelect={(id: string) => props.onSelect(id as RowAction)}
+    />
+  );
+}
+
+function AccountGroupTable(props: {
+  group: AccountGroup;
+  multiCurrency: boolean;
+  manageable: boolean;
+  onAction: (accountId: string, action: RowAction) => void;
+}): ReactNodeLike {
+  const { group } = props;
+  const titleId = `fnm-accounts-${group.kind}`;
+  return (
+    <section aria-labelledby={titleId} className="fnm-block fnm-block--tight">
+      <SectionHead
+        title={group.title}
+        titleId={titleId}
+        meta={<span className="fnm-amount">{totalsLabel(group.totals)}</span>}
+        rule
+      />
+      <table className="jds-table fnm-fixed" aria-labelledby={titleId}>
+        <colgroup>
+          <col />
+          <col className="fnm-col-amount" />
+          <col className="fnm-col-check" />
+        </colgroup>
+        <tbody>
+          {group.rows.map((row) => (
+            <tr key={row.accountId}>
+              <td>
+                <button
+                  type="button"
+                  className="jds-table__rowlink"
+                  aria-label={`View transactions for ${row.name}`}
+                  onClick={() =>
+                    navigate(`/transactions?accountId=${encodeURIComponent(row.accountId)}`)
+                  }
+                >
+                  {row.name}
+                </button>
+                {row.mask ? <span className="jds-hint">{` · xxx${row.mask}`}</span> : null}
+                <div className="jds-table__sub">{row.source}</div>
+              </td>
+              <td className="jds-table__num">
+                {formatCents(row.balanceCents, row.isoCurrency)}
+                {props.multiCurrency ? (
+                  <div className="jds-table__sub">{row.isoCurrency}</div>
+                ) : null}
+              </td>
+              <td>
+                {row.manual ? (
+                  <AccountActions
+                    name={row.name}
+                    manageable={props.manageable}
+                    onSelect={(action) => props.onAction(row.accountId, action)}
+                  />
+                ) : null}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 function AccountsBody(props: {
   result: AccountsResult;
   hostActions: HostActions;
+  onTransfer: () => void;
+  onAddAccount: () => void;
   onAddEntry: (account: ManualAccountChoice) => void;
   onReconcile: (account: ManualAccountChoice) => void;
   onImport: (account: ManualAccountChoice) => void;
@@ -72,169 +189,126 @@ function AccountsBody(props: {
     return (
       <EmptyState
         title="Give your accounts a home"
-        body="Add a manual account to start recording money, or connect a bank. Balances stay separate for each currency."
+        body="Add a manual account or connect a bank."
         action={
-          <Button variant="primary" size="sm" onClick={addBank}>
-            Add a bank
-          </Button>
+          <div className="fnm-chips">
+            <Button variant="primary" size="sm" onClick={props.onAddAccount}>
+              Add manual account
+            </Button>
+            <Button variant="secondary" size="sm" onClick={addBank}>
+              Connect a bank
+            </Button>
+          </div>
         }
       />
     );
   }
   const view = buildAccountsView(active, props.result.banks ?? [], new Date());
+  const multiCurrency = view.netWorthByCurrency.length > 1;
   const reconnect = (): void =>
     props.hostActions.openAssistant({ starterPrompt: "Reconnect my bank account" });
+  const onAction = (accountId: string, action: RowAction): void => {
+    if (action === "manage") return props.onManage(accountId);
+    const account = own.find((row) => row.accountId === accountId);
+    if (!account) return;
+    if (action === "entry") props.onAddEntry(account);
+    else if (action === "reconcile") props.onReconcile(account);
+    else props.onImport(account);
+  };
   return (
     <div className="fnm-stack">
-      <div className="fnm-account-totals" aria-label="Account totals by currency">
-        {view.netWorthByCurrency.map(({ currency, netWorthCents }) => (
-          <Masthead
-            key={currency}
-            tone="field"
-            eyebrow={`Net worth · ${currency}`}
-            title={netWorthCents === null ? "Unavailable" : formatCents(netWorthCents, currency)}
-          />
-        ))}
+      <div className="fnm-account-actions">
+        <Button variant="secondary" onClick={props.onTransfer}>
+          Record transfer
+        </Button>
+        <Menu
+          triggerVariant="button"
+          triggerContent="Add account"
+          triggerLabel="Add account"
+          items={[
+            { id: "manual", label: "Manual account", ariaLabel: "Add manual account" },
+            { id: "bank", label: "Connect a bank" }
+          ]}
+          onSelect={(id: string) => (id === "bank" ? addBank() : props.onAddAccount())}
+        />
       </div>
-      <p className="jds-caption">
-        Current manual ledger and latest bank balances, with debts subtracted. Each currency is kept
-        separate; no exchange-rate conversion is applied.
-      </p>
+
+      <div className="fnm-account-totals" aria-label="Account totals by currency">
+        {view.netWorthByCurrency.map(({ currency, netWorthCents }) => {
+          const sides = view.sidesByCurrency.find((side) => side.currency === currency);
+          return (
+            <Masthead
+              key={currency}
+              tone="field"
+              eyebrow={multiCurrency ? `Net worth · ${currency}` : "Net worth"}
+              title={amountOrUnavailable(netWorthCents, currency)}
+              lede={
+                sides
+                  ? `Assets ${amountOrUnavailable(sides.assetsCents, currency)} · Debts ${amountOrUnavailable(sides.debtsCents, currency)}`
+                  : undefined
+              }
+            />
+          );
+        })}
+      </div>
+
       {view.netWorthByCurrency.some((total) => total.netWorthCents === null) ? (
         <p className="jds-hint" role="status">
           A combined balance exceeds supported precision. Its total is unavailable; individual
           account balances remain below.
         </p>
       ) : null}
-      {view.banks.map((bank) => {
-        const status = (
-          <BankStatus
-            status={bank.status}
-            label={bank.statusLabel}
-            reconnect={bank.reconnect}
-            onReconnect={reconnect}
-          />
-        );
-        return (
-          <section key={bank.itemId} className="fnm-stack" aria-label={bank.name}>
-            <SectionHead
-              title={bank.name}
-              meta={<span className="fnm-bank-meta">{status}</span>}
-              rule
+
+      {view.banks
+        .filter((bank) => bank.status === "error")
+        .map((bank) => (
+          <div key={bank.itemId} className="fnm-block fnm-block--tiny">
+            <BankStatus
+              status="error"
+              label={`${bank.name} · ${bank.statusLabel}`}
+              reconnect={bank.reconnect}
+              onReconnect={reconnect}
             />
-            <div className="fnm-bank-status">{status}</div>
             {bank.message ? <p className="jds-hint">{bank.message}</p> : null}
-            <RowIndex variant="facts">
-              {bank.accounts.map((account) => (
-                <RowIndexItem
-                  key={account.accountId}
-                  title={
-                    <span>
-                      {account.name}
-                      {account.mask ? (
-                        <span className="jds-hint">{` · xxx${account.mask}`}</span>
-                      ) : null}
-                    </span>
-                  }
-                  meta={
-                    <div className="fnm-bal">
-                      <strong>{formatCents(account.balanceCents, account.isoCurrency)}</strong>
-                      <span className="jds-hint">{account.isoCurrency}</span>
-                      {own.find((row) => row.accountId === account.accountId)?.source ===
-                      "manual" ? (
-                        <div className="fnm-account-actions">
-                          {props.result.supportsManualManagement ? (
-                            <Button
-                              variant="link"
-                              aria-label={`Manage ${account.name}`}
-                              onClick={() => props.onManage(account.accountId)}
-                            >
-                              Manage
-                            </Button>
-                          ) : null}
-                          <Button
-                            variant="link"
-                            aria-label={`Add transaction to ${account.name}`}
-                            onClick={() => {
-                              const original = own.find(
-                                (row) => row.accountId === account.accountId
-                              )!;
-                              props.onAddEntry(original);
-                            }}
-                          >
-                            Add transaction
-                          </Button>
-                          <Button
-                            variant="link"
-                            aria-label={`Reconcile ${account.name}`}
-                            onClick={() =>
-                              props.onReconcile(
-                                own.find((row) => row.accountId === account.accountId)!
-                              )
-                            }
-                          >
-                            Reconcile
-                          </Button>
-                          <Button
-                            variant="link"
-                            aria-label={`Import CSV into ${account.name}`}
-                            onClick={() =>
-                              props.onImport(
-                                own.find((row) => row.accountId === account.accountId)!
-                              )
-                            }
-                          >
-                            Import CSV
-                          </Button>
-                        </div>
-                      ) : null}
-                      {bank.asOf ? <span className="jds-hint">{`As of ${bank.asOf}`}</span> : null}
-                    </div>
-                  }
-                />
-              ))}
-            </RowIndex>
-          </section>
-        );
-      })}
+          </div>
+        ))}
+
+      {view.groups.map((group) => (
+        <AccountGroupTable
+          key={group.kind}
+          group={group}
+          multiCurrency={multiCurrency}
+          manageable={props.result.supportsManualManagement === true}
+          onAction={onAction}
+        />
+      ))}
+
       {closed.length ? (
         <section aria-label="Closed manual accounts" className="fnm-block fnm-block--tight">
           <DisclosureToggle expanded={showClosed} onClick={() => setShowClosed(!showClosed)}>
             Closed accounts ({closed.length})
           </DisclosureToggle>
           {showClosed ? (
-            <>
-              <p className="jds-hint">
-                History is kept in Transactions, Reports and exports. Manage an account to reopen it
-                or view its history.
-              </p>
-              <RowIndex density="compact">
-                {closed.map((a) => (
-                  <RowIndexItem
-                    key={a.accountId}
-                    title={a.name}
-                    excerpt="Closed manual ledger"
-                    meta={
-                      <Button
-                        variant="link"
-                        aria-label={`Manage ${a.name}`}
-                        onClick={() => props.onManage(a.accountId)}
-                      >
-                        Manage
-                      </Button>
-                    }
-                  />
-                ))}
-              </RowIndex>
-            </>
+            <RowIndex density="compact">
+              {closed.map((a) => (
+                <RowIndexItem
+                  key={a.accountId}
+                  title={a.name}
+                  meta={
+                    <Button
+                      variant="link"
+                      aria-label={`Manage ${a.name}`}
+                      onClick={() => props.onManage(a.accountId)}
+                    >
+                      Manage
+                    </Button>
+                  }
+                />
+              ))}
+            </RowIndex>
           ) : null}
         </section>
       ) : null}
-      <div>
-        <Button variant="secondary" onClick={addBank}>
-          Add a bank
-        </Button>
-      </div>
     </div>
   );
 }
@@ -262,26 +336,14 @@ export function AccountsScreen(props: {
         />
       ) : null}
 
-      <SectionHead
-        title="Accounts"
-        meta={
-          <div className="fnm-chips">
-            <Button variant="secondary" onClick={() => setTransferring(true)}>
-              Record transfer
-            </Button>
-            <Button variant="secondary" onClick={() => setEditing(null)}>
-              Add manual account
-            </Button>
-          </div>
-        }
-        rule
-      />
       {outcomeGate(
         accounts,
         (result) => (
           <AccountsBody
             result={result}
             hostActions={props.hostActions}
+            onTransfer={() => setTransferring(true)}
+            onAddAccount={() => setEditing(null)}
             onAddEntry={setEditing}
             onReconcile={setReconciling}
             onImport={setImporting}

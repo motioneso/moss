@@ -27,6 +27,8 @@ export {
   groupRecords
 } from "./chat-thread.js";
 export type { ThreadRenderRecord, ThreadRecordContext } from "./chat-thread.js";
+export { ColumnChart } from "./column-chart.js";
+export type { ColumnChartMarker, ColumnChartProps, ColumnChartSeries } from "./column-chart.js";
 export { Chip } from "./chip.js";
 export { Combobox } from "./combobox.js";
 export type { ComboboxOption, ComboboxProps } from "./combobox.js";
@@ -115,3 +117,5 @@ export { useDialogLifecycle } from "./use-dialog-lifecycle.js";
 export type { DialogLifecycleOptions } from "./use-dialog-lifecycle.js";
 
 export { IdentityMetric } from "./identity-metric.js";
+export { TrendChart } from "./trend-chart.js";
+export type { TrendChartProps, TrendPoint } from "./trend-chart.js";

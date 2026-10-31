@@ -1,6 +1,7 @@
 import { join, resolve } from "node:path";
 import { expect } from "vitest";
 import type { BrowserContext } from "playwright-core";
+import { accountAction, openAddManualAccount } from "./finance-live-account-menu.js";
 type Read = (name: string, input?: Record<string, unknown>) => Promise<Record<string, unknown>>;
 type Post = (
   url: string,
@@ -19,16 +20,14 @@ export async function exerciseFinanceImport(
   const page = await context.newPage();
   try {
     await page.goto(`${base}/m/finance/accounts`);
-    await page.getByRole("button", { name: "Add manual account", exact: true }).click();
+    await openAddManualAccount(page);
     const create = page.getByRole("dialog", { name: "Add manual account", exact: true });
     await create.getByLabel("Account name", { exact: true }).fill("Synthetic import wallet");
     await create.getByLabel("Opening balance", { exact: true }).fill("1000.00");
     await create.getByLabel("Opening balance date", { exact: true }).fill(`${month}-01`);
     await create.getByRole("button", { name: "Add account", exact: true }).click();
     await create.waitFor({ state: "detached" });
-    await page
-      .getByRole("button", { name: "Import CSV into Synthetic import wallet", exact: true })
-      .click();
+    await accountAction(page, "Synthetic import wallet", "Import CSV into Synthetic import wallet");
     const dialog = page.getByRole("dialog", { name: "Import CSV", exact: true });
     const csv = `Date,Payee,Amount,Notes\r\n${month}-02,"Synthetic, market",1.23,"Synthetic import note"\r\n${month}-02,"Synthetic, market",1.23,\r\n${month}-03,Synthetic refund,-4.56,\r\n`;
     await dialog
@@ -106,7 +105,7 @@ export async function exerciseFinanceImport(
     await dialog.waitFor({ state: "detached" });
     await page.reload();
     await page
-      .getByRole("button", { name: "Import CSV into Synthetic import wallet", exact: true })
+      .getByRole("button", { name: "Actions for Synthetic import wallet", exact: true })
       .waitFor();
     const accounts = (await readTool("finance.accounts.list")).accounts as {
       accountId: string;
@@ -144,9 +143,7 @@ export async function exerciseFinanceImport(
     );
     expect(foreign.statusCode).toBe(422);
     expect(foreign.body).not.toContain("Synthetic import wallet");
-    await page
-      .getByRole("button", { name: "Import CSV into Synthetic import wallet", exact: true })
-      .click();
+    await accountAction(page, "Synthetic import wallet", "Import CSV into Synthetic import wallet");
     await dialog
       .getByLabel("CSV file", { exact: true })
       .setInputFiles({ name: "synthetic.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });

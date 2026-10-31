@@ -268,12 +268,19 @@ Import from `@moss/ui`. Full option list in `packages/ui/OPTIONS.md`.
 | Time/data | `AgendaRow`, `DayCell`, `EventChip`, `AllDayChip`, `MonthChip`, `NowLine`, `TodayPill`, `WeatherChip`                 |
 | Identity  | `Avatar`, `BrandMark`, `CategoryDot`, `LegendSwatch`                                                                  |
 | Chat      | `Thread`, `ActivityPeek`, `ChatFreshnessFooter` (from `chat-thread.tsx`)                                              |
+| Charts    | `ColumnChart`, `TrendChart`                                                                                           |
 
 - Use a component before a raw `jds-*` class. Use a listed option before adding one.
 - Missing a variant? Extend the component's union type in `packages/ui/src/`, then run
   `pnpm build:ui-catalogue`.
 - Missing a primitive? Add it to `packages/ui/src/` and `packages/ui/src/styles/`, never to the
   calling screen.
+- Charts use the shared ones. `ColumnChart` takes one or two series plus an optional ink marker
+  dot; `TrendChart` draws one dated line. Series one is `--steel` and series two is
+  `--gold-strong` in every theme, because park themes re-point the accent and accent beside gold
+  fails colour-blind separation in dark canyon. A single trend line takes `--accent-meter`.
+- A chart never holds the only copy of a number. Keep the table on the same screen (a disclosure
+  is fine), legend totals for two series, and the readout on hover, tap, focus and arrow keys.
 
 ## Interaction contracts
 
