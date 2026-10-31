@@ -16,6 +16,8 @@ const UNCERTAIN =
 function failureMessage(status: number, body: unknown): string {
   if (status === 409 && isRecord(body) && body.code === "confirmation_invalid")
     return "This confirmation is no longer valid. Refresh the page before starting the change again.";
+  if (status === 413 && isRecord(body) && body.saved === false)
+    return "This result is too large to show. Nothing was changed.";
   if (status === 429) return "Too many changes at once. Wait a minute before trying again.";
   if (status === 401) return "Your session has expired. Sign in again to make changes.";
   if (status === 403 || status === 404)
@@ -93,14 +95,8 @@ export function createModuleToolsController(moduleId: string, request: typeof fe
           return { status: "failed" };
         }
         if (confirmation) {
-          if (Date.parse(confirmation.expiresAt) <= Date.now()) {
-            void cancel(confirmation.id);
-            publish({
-              kind: "notice",
-              message: "This confirmation expired. Start the change again when you are ready."
-            });
-            return { status: "failed" };
-          }
+          // Expiry is the server's to judge. A device clock running fast would refuse every
+          // confirmation, and the server already answers confirmation_invalid once it lapses.
           const confirmed = await new Promise<boolean>((resolve) => {
             decision = resolve;
             publish({ kind: "confirmation", confirmation });
@@ -130,6 +126,14 @@ export function createModuleToolsController(moduleId: string, request: typeof fe
               ? { moduleCode: code }
               : {})
           };
+        }
+        if (reply.status === 413 && isRecord(reply.body) && reply.body.saved === true) {
+          // The write ran; only its result was too large to return. A retry would apply it twice.
+          publish({
+            kind: "notice",
+            message: "The change was saved. Refresh this page to see it."
+          });
+          return { status: "saved" };
         }
         publish({ kind: "notice", message: failureMessage(reply.status, reply.body) });
         return { status: "failed" };

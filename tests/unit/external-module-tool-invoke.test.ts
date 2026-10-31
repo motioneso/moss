@@ -199,6 +199,29 @@ describe("module page tool route: direct runs", () => {
       localTimezone: "Pacific/Auckland"
     });
   });
+
+  it("reads the time zone as the signed-in person", async () => {
+    readActorLocale.mockClear();
+    await build({
+      dataContext: {
+        withDataContext: async (access, work) => work({ actor: access.actorUserId } as never)
+      }
+    });
+    await call("meals", "meals.tickLine", { input: { lineId: "l1" } });
+
+    expect(readActorLocale).toHaveBeenCalledTimes(1);
+    expect(readActorLocale.mock.calls[0]![0]).toEqual({ actor: USER });
+  });
+
+  it("stops the call when the saved locale cannot be read", async () => {
+    await build();
+    readActorLocale.mockRejectedValueOnce(new Error("locale read failed"));
+    const response = await call("meals", "meals.tickLine", { input: { lineId: "l1" } });
+
+    expect(response.statusCode).toBe(500);
+    expect(execute).not.toHaveBeenCalled();
+    expect(recordActivity).not.toHaveBeenCalled();
+  });
 });
 
 describe("module page tool route: confirmation", () => {
@@ -453,7 +476,17 @@ describe("module page tool route: failures", () => {
     const response = await call("meals", "meals.tickLine", { input: { lineId: "l1" } });
 
     expect(response.statusCode).toBe(413);
+    expect(response.json()).toMatchObject({ code: "result_too_large", saved: true });
     expect(recordActivity.mock.calls[0]![1]).toMatchObject({ outcome: "success" });
+  });
+
+  it("tells the page a too-large read changed nothing", async () => {
+    await build();
+    execute.mockResolvedValueOnce({ data: { blob: "x".repeat(2_000_000) } });
+    const response = await call("meals", "meals.readPlan", { input: { lineId: "l1" } });
+
+    expect(response.statusCode).toBe(413);
+    expect(response.json()).toMatchObject({ code: "result_too_large", saved: false });
   });
 
   it("still answers success when the activity record fails to save", async () => {

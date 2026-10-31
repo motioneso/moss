@@ -39,7 +39,9 @@ const exemptFiles = new Set<string>([
   // #2521 restores this historical Study prototype stylesheet intact.
   ".superpowers/brainstorm/today-briefings-20260909/study.css",
   // #3529 N3 observer wiring pushes the UAT provisioner just past the limit.
-  "tests/uat/provisioner.ts"
+  "tests/uat/provisioner.ts",
+  // #3886 the manifest declares every Meals tool schema; the host reads one file per module.
+  "external-modules/meals/jarvis.module.json"
 ]);
 const checkedExtensions = new Set([
   ".css",

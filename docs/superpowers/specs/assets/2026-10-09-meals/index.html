@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Meals prototype</title>
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/tokens.css" />
+    <link rel="stylesheet" href="../../../../../packages/ui/src/styles.css" />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/components-forms.css" />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/components-keyline.css" />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles.css" />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/workspace-layout.css" />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/kit-shell-rename.css" />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/kit-shell-nav.css" />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/texture.css" />
+    <link rel="stylesheet" href="prototype.css" />
+    <script src="fake-data.js" defer></script>
+    <script src="icons.js" defer></script>
+    <script src="prototype.js" defer></script>
+    <script src="screen-plan.js" defer></script>
+    <script src="screen-recipe.js" defer></script>
+    <script src="screen-list.js" defer></script>
+    <script src="screen-pantry.js" defer></script>
+    <script src="screen-household.js" defer></script>
+    <script src="screen-log.js" defer></script>
+    <script src="screen-settings.js" defer></script>
+  </head>
+  <body>
+    <div class="app-frame" data-nav="full" id="app-frame">
+      <aside class="sidebar" id="moss-main-navigation">
+        <div class="brand-row">
+          <div class="brand-lockup">
+            <span class="brand-mark">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor" />
+                <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="var(--gold)" />
+                <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="currentColor" />
+              </svg>
+            </span>
+            <span class="brand-wordmark">Moss</span>
+          </div>
+          <span class="sidebar-mobile-close" data-mobile-close hidden></span>
+        </div>
+        <nav class="module-nav" aria-label="Main" id="shell-nav"></nav>
+      </aside>
+
+      <div class="workspace-area">
+        <header class="topbar">
+          <button
+            aria-label="Open navigation"
+            aria-controls="moss-main-navigation"
+            aria-expanded="false"
+            class="icon-button mobile-only"
+            id="open-nav"
+            title="Open navigation"
+            type="button"
+          ></button>
+          <div class="topbar-titles">
+            <div class="topbar-title-row">
+              <span class="topbar-title">Meals</span>
+              <a
+                class="topbar-settings-button jds-iconbtn jds-iconbtn--sm"
+                aria-label="Meals settings"
+                title="Meals settings"
+                href="#/settings"
+                id="settings-cog"
+              ></a>
+            </div>
+          </div>
+          <div class="topbar-actions">
+            <button
+              aria-label="Chat with Moss"
+              aria-pressed="false"
+              class="icon-button chat-unread-button"
+              id="chat-button"
+              title="Ask Moss"
+              type="button"
+            ></button>
+          </div>
+        </header>
+        <div class="workspace-body">
+          <main class="content-surface" id="main" tabindex="-1"></main>
+        </div>
+      </div>
+    </div>
+
+    <div id="dialog-root"></div>
+    <div class="mls-toast-root" id="toast-root" aria-live="polite"></div>
+    <aside class="mls-review jds-card jds-card--pad-sm jds-card--raised" id="review" aria-label="Review tools"></aside>
+    <div id="phone-root"></div>
+  </body>
+</html>

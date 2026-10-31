@@ -1,0 +1,999 @@
+/*
+ * Meals prototype: layout only. Every colour, type role and control look comes from
+ * tokens.css and the jds-* primitives. Each mls- class is listed in README.md with
+ * the reason no shared primitive covers it.
+ */
+
+/* tokens.css loads Archivo from /fonts/, which a file:// page cannot reach. */
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../../../../../apps/web/public/fonts/archivo/archivo-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../../../../../apps/web/public/fonts/archivo/archivo-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../../../../../apps/web/public/fonts/archivo/archivo-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../../../../../apps/web/public/fonts/archivo/archivo-latin-700-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("../../../../../apps/web/public/fonts/archivo/archivo-latin-800-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url("../../../../../apps/web/public/fonts/archivo/archivo-latin-900-normal.woff2") format("woff2");
+}
+
+/* ---------- Page frame ---------- */
+
+.mls-page {
+  max-width: 1220px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.mls-tabs {
+  overflow-x: auto;
+  padding-bottom: var(--space-1);
+}
+
+.mls-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 270px;
+  gap: 34px;
+  align-items: start;
+}
+
+.mls-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+  padding-left: 34px;
+  border-left: var(--border-w) solid var(--border);
+  position: sticky;
+  top: calc(var(--topbar-h) + var(--space-5));
+}
+
+.mls-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.mls-stack--tight {
+  gap: var(--space-3);
+}
+
+.mls-stack--tiny {
+  gap: var(--space-1);
+}
+
+.mls-stack--snug {
+  gap: var(--space-2);
+}
+
+.mls-stack--loose {
+  gap: var(--space-8);
+}
+
+/* Equal columns that fall to one on narrow screens. */
+.mls-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--space-5) 34px;
+}
+
+/* First-run setup reads as a short form, not a full-width page. */
+.mls-setup {
+  max-width: 40rem;
+}
+
+.mls-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.mls-row--between {
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.mls-row--baseline {
+  align-items: baseline;
+}
+
+.mls-num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mls-num--lg {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  line-height: 1.1;
+}
+
+.mls-icon {
+  flex: none;
+  width: 1em;
+  height: 1em;
+}
+
+.mls-block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid var(--accent-rule);
+}
+
+.mls-block-head > .jds-caption {
+  white-space: nowrap;
+}
+
+.mls-back {
+  align-self: flex-start;
+}
+
+/* The page gap spaces the masthead; its own bottom margin would double it. */
+.mls-hero .jds-masthead--field {
+  margin-bottom: 0;
+}
+
+.mls-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* ---------- Plan ---------- */
+
+.mls-planbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: var(--border-w) solid var(--border);
+}
+
+/* With nothing between the bar and the week, the first day's rule is the divider. */
+.mls-planbar:has(+ .mls-week) {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.mls-find {
+  display: grid;
+  grid-template-columns: minmax(0, 18rem) auto;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+}
+
+.mls-progress {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  flex: 1;
+}
+
+.mls-week {
+  display: flex;
+  flex-direction: column;
+}
+
+.mls-day {
+  padding: var(--space-5) 0 var(--space-6);
+  border-top: var(--border-w) solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.mls-day--today {
+  border-top: 2px solid var(--accent-rule);
+}
+
+.mls-day__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.mls-day__head .jds-section-head {
+  flex: 1;
+  min-width: 0;
+}
+
+.mls-day__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mls-day__totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-5);
+}
+
+.mls-slots {
+  display: grid;
+  grid-template-columns: repeat(var(--mls-slot-count, 4), minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.mls-slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.mls-slot__label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-bottom: var(--space-1);
+  border-bottom: var(--border-w) solid var(--border-subtle);
+}
+
+.mls-meal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.mls-meal + .mls-meal {
+  padding-top: var(--space-3);
+  border-top: var(--border-w) dashed var(--border-subtle);
+}
+
+.mls-meal__title {
+  overflow-wrap: anywhere;
+  font-weight: var(--weight-bold);
+  font-size: var(--text-md);
+  line-height: var(--leading-snug);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.mls-meal__title:hover {
+  color: var(--accent-fg);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.mls-meal__text {
+  overflow-wrap: anywhere;
+  font-size: var(--text-md);
+  line-height: var(--leading-snug);
+  color: var(--text-muted);
+}
+
+.mls-meal__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Name, meter, numbers: one row per eater. */
+.mls-fit {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(2.5rem, 1fr) max-content;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.mls-fit__name {
+  max-width: 7.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--weight-semibold);
+}
+
+.mls-day__totals .mls-fit__item strong {
+  font-weight: var(--weight-semibold);
+}
+
+.mls-safety {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.mls-safety__why {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mls-safety__why svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--gold-ink);
+}
+
+.mls-safety__why--ok svg {
+  color: var(--accent-fg);
+}
+
+.mls-safety-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-6);
+  padding-bottom: var(--space-3);
+  border-bottom: var(--border-w) solid var(--border-subtle);
+}
+
+.mls-meal__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  padding-top: var(--space-1);
+}
+
+.mls-meal__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+}
+
+.mls-fit__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.mls-writing {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mls-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--space-4);
+}
+
+.mls-meal--new {
+  animation: mls-rise var(--dur-slow) var(--ease-out) both;
+}
+
+@keyframes mls-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mls-meal--new {
+    animation: none;
+  }
+}
+
+.mls-past {
+  padding: var(--space-4) 0;
+  border-top: var(--border-w) solid var(--border);
+}
+
+/* ---------- Recipe ---------- */
+
+.mls-recipe {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: var(--space-8);
+  align-items: start;
+}
+
+.mls-recipe__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-bottom: var(--space-5);
+  border-bottom: var(--border-w) solid var(--border);
+}
+
+.mls-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mls-stepper__value {
+  min-width: 2.5ch;
+  text-align: center;
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.mls-ing {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: var(--space-1) var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: var(--border-w) solid var(--border-subtle);
+}
+
+.mls-ing__amount {
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.mls-ing__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.mls-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: mls-step;
+  display: flex;
+  flex-direction: column;
+}
+
+.mls-steps li {
+  counter-increment: mls-step;
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+  border-bottom: var(--border-w) solid var(--border-subtle);
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+  max-width: var(--measure);
+}
+
+.mls-steps li::before {
+  content: counter(mls-step, decimal-leading-zero);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-bold);
+  color: var(--accent-fg);
+  padding-top: 0.35em;
+}
+
+.mls-stars {
+  display: inline-flex;
+  gap: var(--space-2);
+}
+
+.mls-rate-row {
+  display: grid;
+  grid-template-columns: minmax(6rem, auto) auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: var(--border-w) solid var(--border-subtle);
+}
+
+/* ---------- Lists: shopping list, Pantry, log, members ---------- */
+
+.mls-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.mls-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mls-list dd {
+  margin: 0;
+}
+
+.mls-section + .mls-section {
+  margin-top: var(--space-6);
+}
+
+.mls-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: var(--border-w) solid var(--border-subtle);
+  min-height: 52px;
+}
+
+/* Short rows inside a member or a dialog. */
+.mls-line--compact {
+  min-height: 0;
+  padding: var(--space-2) 0;
+}
+
+/* Rows without a tick box. */
+.mls-line--plain {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+/* Rows and groups set their own display, so the find filter needs this to hide them. */
+.mls-line[hidden],
+.mls-section[hidden],
+.jds-empty[hidden] {
+  display: none;
+}
+
+.mls-line__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.mls-line__name {
+  overflow-wrap: anywhere;
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-md);
+}
+
+.mls-line__amount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+  max-width: 14rem;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* A before-and-after amount reads as one line, so it keeps its full width. */
+.mls-line__amount.mls-line__amount--change {
+  max-width: none;
+}
+
+.mls-line__amount.mls-line__amount--change .mls-num {
+  white-space: nowrap;
+}
+
+/* A long amount wraps inside its column rather than running over the name. */
+.mls-line__amount .mls-num {
+  white-space: normal;
+}
+
+/* The app-wide :where(label) rule mutes and shrinks labels; these labels are the row itself. */
+label.mls-line__body,
+label.mls-line__amount {
+  cursor: pointer;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.mls-line--done .mls-line__name {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.mls-line__tools {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.mls-sticky {
+  display: none;
+}
+
+.mls-member {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: start;
+  padding: var(--space-5) 0;
+  border-bottom: var(--border-w) solid var(--border);
+}
+
+.mls-facts {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.mls-facts dt {
+  margin: 0;
+}
+
+.mls-facts dd {
+  margin: 0;
+}
+
+.mls-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.mls-rule {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-4) 0;
+  border-bottom: var(--border-w) solid var(--border-subtle);
+}
+
+.mls-rule__editor {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.mls-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 44rem;
+}
+
+.mls-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.mls-form-grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Pushes a destructive action to the far side of a dialog foot. */
+.mls-foot-start {
+  margin-inline-end: auto;
+}
+
+.mls-inline-add {
+  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+}
+
+.mls-totals {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.mls-entry {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-4) 0;
+  border-bottom: var(--border-w) solid var(--border-subtle);
+}
+
+.mls-datebar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The shared card title fills its line; inside a row it sits beside its neighbours. */
+.mls-row > .jds-card-title,
+.mls-datebar > .jds-card-title {
+  width: auto;
+}
+
+.mls-table-scroll {
+  overflow-x: auto;
+}
+
+.mls-receipt {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 5rem 5.5rem;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.mls-dialog-wide {
+  width: min(720px, calc(100vw - 2 * var(--space-4)));
+  max-width: none;
+}
+
+.mls-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-5);
+  border: var(--border-w) dashed var(--border-strong);
+  border-radius: var(--radius-card);
+  text-align: center;
+}
+
+/* ---------- Toast ---------- */
+
+.mls-toast-root {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-6);
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.mls-toast-root > * {
+  pointer-events: auto;
+}
+
+/* ---------- Review tooling (not product UI) ---------- */
+
+.mls-review {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 80;
+  width: 300px;
+  max-height: calc(100vh - 2 * var(--space-4));
+  overflow-y: auto;
+  box-shadow: var(--shadow-pop);
+}
+
+.mls-review[data-collapsed="true"] {
+  width: auto;
+}
+
+.mls-review__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.mls-phone {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+}
+
+.mls-phone__frame {
+  width: 390px;
+  height: min(844px, calc(100vh - 2 * var(--space-6)));
+  border: var(--border-w) solid var(--border-strong);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-xl);
+  background: var(--bg);
+}
+
+/* ---------- Narrow widths ---------- */
+
+@media (max-width: 1180px) {
+  .mls-slots {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1080px) {
+  .mls-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mls-rail {
+    position: static;
+    padding-left: 0;
+    border-left: 0;
+    padding-top: var(--space-5);
+    border-top: var(--border-w) solid var(--border);
+  }
+
+  .mls-recipe {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-6);
+  }
+}
+
+@media (max-width: 720px) {
+  /* Five star buttons need the full dialog width on phone, so the name sits above them. */
+  .mls-rate-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+
+  /* The shared masthead keeps its aside right-aligned on phone, so the row stretches itself. */
+  .mls-hero__actions {
+    align-self: stretch;
+    justify-content: flex-start;
+  }
+
+  .mls-slots {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+
+  .mls-progress {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .mls-progress .jds-progress {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  /* Shopping mode: taller rows and a bigger name for a thumb in a shop. */
+  /* Long names wrap, so the row reads from the top: the tick sits on the name's first line. */
+  .mls-line {
+    column-gap: var(--space-3);
+    align-items: start;
+  }
+
+  .mls-line > .jds-check {
+    margin-top: calc((1lh - 20px) / 2);
+  }
+
+  .mls-line__amount:not(.mls-line__amount--change) {
+    max-width: 5.5rem;
+  }
+
+  .mls-list--shop .mls-line {
+    min-height: 64px;
+  }
+
+  .mls-list--shop .mls-line__name {
+    font-size: var(--text-lg);
+  }
+
+  .mls-toast-root {
+    bottom: 88px;
+    width: calc(100% - 2 * var(--space-4));
+  }
+
+  .mls-member {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .mls-member > :last-child {
+    grid-column: 2;
+  }
+
+  .mls-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+
+  .mls-facts dd + dt {
+    margin-top: var(--space-2);
+  }
+
+  .mls-rule {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .mls-rule > :nth-child(2) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .mls-form-grid,
+  .mls-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mls-form-grid--3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  /* Time and the edit button share the top line; the entry and its numbers sit below. */
+  .mls-entry {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 0;
+  }
+
+  .mls-entry > :first-child {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  .mls-entry > .mls-line__tools {
+    grid-row: 1;
+    grid-column: 2;
+    justify-self: end;
+  }
+
+  .mls-ing {
+    grid-template-columns: 6rem minmax(0, 1fr);
+  }
+
+  .mls-steps li {
+    grid-template-columns: 2rem minmax(0, 1fr);
+  }
+
+  .mls-sticky {
+    display: flex;
+    gap: var(--space-2);
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+    padding: var(--space-3) 0;
+    border-top: var(--border-w) solid var(--border);
+    background: var(--bg);
+  }
+
+  .mls-sticky > * {
+    flex: 1;
+  }
+
+  .mls-hide-phone {
+    display: none;
+  }
+
+  .mls-review {
+    left: var(--space-2);
+    right: var(--space-2);
+    bottom: var(--space-2);
+    width: auto;
+  }
+
+  /* Clears the phone action bar so its buttons stay reachable. */
+  .mls-review[data-collapsed="true"] {
+    left: auto;
+    bottom: 76px;
+  }
+}
