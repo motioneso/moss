@@ -9,6 +9,8 @@ export interface SectionHeadProps {
   readonly meta?: ReactNode;
   readonly rule?: boolean;
   readonly align?: "baseline" | "center";
+  /** A meta too long to share the line drops below the title instead of squeezing it. */
+  readonly wrap?: boolean;
   readonly titleAs?: ElementType;
   /** Id on the title, for a section's aria-labelledby. */
   readonly titleId?: string;
@@ -25,6 +27,7 @@ export function SectionHead(props: SectionHeadProps) {
     "jds-section-head",
     align === "center" ? "jds-section-head--center" : null,
     rule ? "jds-section-head--rule" : null,
+    props.wrap ? "jds-section-head--wrap" : null,
     className ?? null
   ]
     .filter(Boolean)

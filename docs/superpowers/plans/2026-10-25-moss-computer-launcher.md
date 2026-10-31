@@ -37,6 +37,22 @@ imports `main.ts`, `trust.ts` and more, so none of the real code is pinned.
   (no byte, a different byte, two bytes, early exit, closed channel, identity change, timeout)
   kills the child and refuses.
 
+### Amendment: the acknowledgement ends with the child closing its end (#3710)
+
+The acceptance above was implemented as "one byte, decided at the 7s deadline". That decision
+races the event loop: a second byte written just after the first can still be waiting for
+delivery when the deadline fires, so the launcher accepted a child it should have refused. This
+was seen as a unit test that failed at random on CI, never on a rerun.
+
+The message now has a terminator. The child writes the one `0x01` byte and then closes descriptor 3. The launcher reads until end of file and accepts only a stream of exactly one `0x01` byte that
+ended before the deadline. A socket keeps byte order, so everything the child wrote arrives before
+its end of file, whatever order the event loop dispatches events in; nothing after the end can
+arrive at all. The deadline now bounds how long the whole message may take instead of deciding
+the message halfway through it. "Closed channel" above still refuses: an end of file with no byte,
+or with any byte other than one `0x01`, kills the child. Closing descriptor 3 after the
+acknowledgement changes nothing else: `hold` never uses the channel again, and liveness stays
+with the parent-pid poll.
+
 ## Decision: pipe or socket pair on descriptor 3
 
 | Option | Mechanism                                               | Cost                                                                                |

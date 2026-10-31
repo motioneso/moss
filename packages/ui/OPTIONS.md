@@ -57,9 +57,18 @@ _No enum or boolean props._
 
 _No enum or boolean props._
 
+## chart-parts
+
+_No enum or boolean props._
+
 ## chat-thread
 
 _No enum or boolean props._
+
+## checkbox
+
+- **checked** (required boolean flag)
+- **disabled** (optional boolean flag)
 
 ## checklist
 
@@ -73,6 +82,10 @@ _No enum or boolean props._
 ## color-box
 
 - **open** (required boolean flag)
+
+## column-chart
+
+_No enum or boolean props._
 
 ## combobox
 
@@ -89,6 +102,7 @@ _No enum or boolean props._
 
 ## dialog
 
+- **scrollBody** (optional boolean flag)
 - **dismissOnEscape** (optional boolean flag)
 - **dismissOnBackdrop** (optional boolean flag)
 - **closeDisabled** (optional boolean flag)
@@ -156,12 +170,18 @@ _No enum or boolean props._
 
 ## menu
 
-- **triggerVariant** (optional): `icon`, `content`, `chip`
+- **triggerVariant** (optional): `icon`, `content`, `chip`, `button`
 - **placement** (optional): `bottom`, `top`
 
 ## month-chip
 
 - **block** (optional boolean flag)
+- **muted** (optional boolean flag)
+- **struck** (optional boolean flag)
+
+## month-grid
+
+_No enum or boolean props._
 
 ## nav-index
 
@@ -184,6 +204,10 @@ _No enum or boolean props._
 - **modal** (optional boolean flag)
 - **dismissOnEscape** (optional boolean flag)
 
+## period-stepper
+
+- **disabled** (optional boolean flag)
+
 ## radio-card-group
 
 - **disabled** (optional boolean flag)
@@ -196,17 +220,23 @@ _No enum or boolean props._
 
 - **variant** (optional): `default`, `facts`
 - **density** (optional): `default`, `compact`
+- **narrowMeta** (optional): `below`, `beside`
 
 ## section-head
 
 - **align** (optional, default `baseline`): `baseline`, `center`
 - **rule** (optional boolean flag)
+- **wrap** (optional boolean flag)
 
 ## segmented
 
 - **tone** (optional): `default`, `field`
 
 ## select
+
+- **quiet** (optional boolean flag)
+
+## selection-bar
 
 _No enum or boolean props._
 
@@ -230,6 +260,10 @@ _No enum or boolean props._
 ## today-pill
 
 - **variant** (required): `month`, `grid`
+
+## trend-chart
+
+_No enum or boolean props._
 
 ## weather-chip
 

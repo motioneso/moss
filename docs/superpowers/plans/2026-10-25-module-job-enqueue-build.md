@@ -171,3 +171,79 @@ work, list every pending Ben question, push, report the PR to coordinator w1:p1E
   that observation as proof that this type-only change altered the artifact.
 - The initial static gate passed lint and was deliberately stopped during formatting when the
   Finance bump was assigned, to avoid reporting stale gate inputs. Final validation is rerun.
+
+### Slice 2 delivered (#3720)
+
+- `enqueueModuleJobForActor`, `deriveModuleJobId` and `ModuleEnqueueLimits` live in
+  `packages/jobs/src/module-job-enqueue.ts`. The SDK gained the `ModuleJobEnqueueResult` type only.
+  No RPC, port, migration or change to the manual-run, schedule or reconcile paths.
+- Job identity namespace: `71dd6e02-9cde-4943-ac23-3a72e0464852`, chosen by the Meals build and
+  permanent once any job uses it. Version 5 is implemented with `node:crypto` because no UUID
+  library is in the jobs dependency tree. Fixed vectors come from Python's `uuid.uuid5` and are in
+  `tests/unit/module-job-enqueue-id.test.ts`.
+- The function reuses `withModuleEnqueueLock` from #3735 (shared module barrier plus the per-actor
+  lock), so it cannot interleave with a disable sweep.
+- Real pg-boss suite: `tests/integration/module-job-enqueue.test.ts` (10 tests, spec cases 7-11,
+  13, 17, plus a sendModuleJob-counts test and a bad-format test). Run with
+  `scripts/run-gate.sh start --gate test:integration:3720`.
+- Mutation result: with the pending check removed, 5 of 10 tests failed (7, 9, 10, 13 and the
+  sendModuleJob count test). With the check restored, all 10 passed.
+
+### Slice 3 delivered (#3721)
+
+- SDK: `ModuleJobsPort` and `ctx.jobs.enqueue`, bound to the RPC method `jobs.enqueue`. Only
+  queue, jobKind, idempotencyKey and optional params go on the wire. The result type is slice 2's
+  `ModuleJobEnqueueResult`.
+- RPC host (`worker-rpc-host.ts`): optional injected `enqueueJob` port and the spec's checks in
+  order: read risk (`forbidden_enqueue_mutation`), no port (`invalid_rpc`), exact keys and
+  formats (`invalid_rpc`), own opted-in queue read from the handler's own manifest
+  (`undeclared_queue`), per-invocation cap of 5 counted after the queue check
+  (`limited: invocation`, port not called), then the port. `inactive` throws `module_inactive`,
+  `invalid_params` throws `invalid_job_params`, any other port error becomes a generic
+  `invalid_rpc` with no key or params text. Every `limited` result logs one warning with module,
+  queue, job kind and limit name only.
+- Constants beside the AI cap: `JOB_ENQUEUE_CALLS_PER_INVOCATION_CAP` (5) and
+  `MODULE_ENQUEUE_LIMITS` (`{ pending: 10, hourly: 120 }`, slice 2's type) so slice 4 passes the
+  same numbers to the primitive. No env var.
+- Decision: the port result gains a third host-internal value, `invalid_params`. Step 7 runs
+  inside the port and the primitive throws a plain Error for a bad payload. Without a distinct
+  result the host would mislabel a database failure as bad params, or the registry package would
+  have to recognise a jobs error class. Slice 4's composition root runs `assertModuleJobPayload`
+  before the primitive and returns `invalid_params` on failure, which keeps the spec's order.
+- No composition-root wiring. Every production construction site has no port, so a real call
+  gets `invalid_rpc` until slice 4 (#3722).
+- Version bumps: the registry check named Finance 0.6.12 and Food 0.3.12 (Job Search was not
+  named). Bumped to 0.6.13 and 0.3.13; the Finance version assertion in
+  `tests/unit/park-press-integration.design.test.ts` follows. The check passes locally after.
+- Tests: `tests/unit/external-module-jobs-enqueue-port.test.ts` (12) and one serialization test in
+  `tests/unit/module-sdk-worker.test.ts`. The port test builds its port on the real
+  `assertModuleJobPayload`.
+- Mutation results (each protection removed, test run, then restored and green):
+  risk gate removed, 1 failed; exact-keys check removed, 1 failed; own-queue check removed,
+  2 failed; counter increment removed, 1 failed; inactive mapping removed, 1 failed.
+
+### Slice 4 evidence (#3722)
+
+- Delivered: `createModuleEnqueuePort` builds the `enqueueJob` port. The API tool path
+  (`external-module-tools.ts`, `server.ts`) and the worker queue path (`external-module-invoke.ts`,
+  `external-module-job-handler.ts`, `worker.ts`) both call it, so the live check, the payload
+  check and the limits cannot drift. A candidate hook shares the tool RPC construction, so it receives the port, and the slice 3 read-risk check refuses its call before the port is reached (row 14). Only the briefing invoker is unwired.
+  The developer guide gained section 13.2.1. No migration, env var, or change to the manual-run
+  route, schedules or reconcile jobs.
+- Where the factory lives: `packages/module-registry/src/external/module-enqueue-port.ts`,
+  exported from `@moss/module-registry/node`. That package already owns the port type and the
+  limit constants and already depends on `@moss/jobs`. Both apps import it without reaching into
+  another module's internals. The worker's live predicate (module enabled plus actor membership)
+  is assembled in `apps/worker/src/external-module-enqueue.ts`; the API's comes from the active
+  module resolver via `isExternalModuleActiveFor`.
+- Why `invalid_params` is a result and not a thrown type: the primitive throws plain `Error`s for
+  a bad payload. Recognising a typed class would change slice 2's code, so the factory runs
+  `assertModuleJobPayload` itself and maps a throw to `invalid_params`.
+- Tests: `tests/integration/module-worker-queue-enqueue.test.ts` (13, script
+  `test:integration:3722`) on a real worker runtime, a real pg-boss and the production
+  construction sites. Rows 1 to 6, 14, 15 (both roots, two causes each), 16 and 17.
+- Mutation results (each protection removed, suite run, then restored and green):
+  API live check removed, 2 failed (row 15 api root, both causes); worker live check removed,
+  2 failed (row 15 worker root, both causes); actor taken from outside the bound context,
+  3 failed (rows 1, 2 and 16).
+- Status: code-complete, not live-proved. Live proof comes with the Meals PR.

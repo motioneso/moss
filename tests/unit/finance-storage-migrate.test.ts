@@ -5,8 +5,8 @@
 // leaves KV as the untouched source of truth; the marker is written before
 // any KV key is deleted, never after); replay after the marker is a pure
 // no-op (idempotent under reconcile re-delivery); a short count-verify
-// aborts before either the marker or any delete; cursor:*/link:*/rules/
-// categories/settings/finance.shared are never read or touched; state:*
+// aborts before either the marker or any delete; cursor:*/link:*/settings/finance.shared are never touched;
+// categories and legacy rules copy without deletion; state:*
 // cache keys are deleted but never copied into SQL (F6-D1 — a throwaway
 // performance projection, not source of truth).
 import { describe, expect, it } from "vitest";
@@ -248,8 +248,8 @@ describe("finance.storage-migrate (FIN-06b #1166)", () => {
     const db = fakeDb();
     const result = await callHandler(kv, db);
     expect(result).toEqual({ status: "already-migrated" });
-    expect(db.calls).toHaveLength(16);
-    for (const call of db.calls) {
+    expect(db.calls.filter((c) => c.text.startsWith("INSERT"))).toHaveLength(16);
+    for (const call of db.calls.filter((c) => c.text.startsWith("INSERT"))) {
       expect(call.text).toContain("app.finance_categories");
       expect(call.text).toContain("DO NOTHING");
     }
@@ -270,7 +270,7 @@ describe("finance.storage-migrate (FIN-06b #1166)", () => {
     });
     const db = fakeDb();
     await callHandler(kv, db);
-    expect(db.calls.map((call) => call.params)).toEqual([
+    expect(db.calls.filter((c) => c.text.startsWith("INSERT")).map((call) => call.params)).toEqual([
       ["rent-mortgage", "Bills", "Rent & mortgage", 0, false, null],
       ["income", "Income", "Income", 1, true, null],
       ["my-pets", "Everyday", "Pets", 2, false, "2026-07-18T12:00:00.000Z"]
@@ -285,7 +285,9 @@ describe("finance.storage-migrate (FIN-06b #1166)", () => {
     });
     const db = fakeDb();
     await callHandler(kv, db);
-    const groups = new Set(db.calls.map((call) => call.params?.[1]));
+    const groups = new Set(
+      db.calls.filter((c) => c.text.startsWith("INSERT")).map((call) => call.params?.[1])
+    );
     expect([...groups].sort()).toEqual(["Bills", "Everyday", "Fun", "Income", "Savings"]);
     expect(db.calls.filter((call) => call.params?.[4] === true)).toHaveLength(1);
   });
@@ -316,8 +318,8 @@ describe("finance.storage-migrate (FIN-06b #1166)", () => {
     expect(await kv.get(NS.connections, "item:item-1")).not.toBeNull();
   });
 
-  it("rules/categories/settings/finance.shared are never read (mirror throws on any access)", async () => {
-    // seededKv() has no rules/categories/settings namespaces seeded at all;
+  it("the household mirror and credential/settings ports remain untouched", async () => {
+    // seededKv() has no rules/settings namespaces seeded at all;
     // the mirror port throws on every method (see ports() above) — a pass
     // here proves the handler never touches it.
     const kv = seededKv();

@@ -160,7 +160,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     label: "Activity",
     description:
       "Review every model call Moss made for you: chat answers, structured tasks, " +
-      "transcription, embeddings, background tasks and tool runs, each as a plain action " +
+      "transcription, embeddings, background tasks and tool runs, including actions done " +
+      "on a module's own page, each as a plain action " +
       "with how long it took. Opening a line shows the detail dialog with its steps and " +
       "facts. Filter by time range, module, or model with the model checklist; choices " +
       "are remembered per user and Reset filters restores the default. Quoted words " +
@@ -263,7 +264,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "modules",
     label: "Modules",
     description:
-      "Enable or disable user-toggleable modules. Every page header shows the page title with the date under it (for example SUN · OCT 4), including a Workshop project and the new-project page. Tasks, Calendar, Wellness, News and Sports also show a settings cog beside the title, which opens that module's own settings here. Today, The Workshop, Notifications and Settings have no cog because they have no settings of their own. A module that declares its own settings page sends its cog to that page, and this Modules list shows it as a link to the page instead of its own switches. Turning an external module off asks an admin to confirm, because waiting background jobs for that module are cancelled for good, jobs already running can finish, and turning the module back on starts its regular schedule again without bringing cancelled jobs back. When a single user loses access to a module, that user's waiting jobs for it are cancelled the same way.",
+      "Enable or disable user-toggleable modules. Every page header shows the page title with the date under it (for example SUN · OCT 4), including a Workshop project and the new-project page. Tasks, Calendar, Wellness, News and Sports also show a settings cog beside the title, which opens that module's own settings here. Today, The Workshop, Notifications and Settings have no cog because they have no settings of their own. A module that declares its own settings page sends its cog to that page, and this Modules list shows it as a link to the page instead of its own switches. Turning an external module off asks an admin to confirm, because waiting background jobs for that module are cancelled for good, jobs already running can finish, and turning the module back on starts its regular schedule again without bringing cancelled jobs back. When a single user loses access to a module, that user's waiting jobs for it are cancelled the same way. Installed module pages can save through host-provided tools. Destructive and outbound actions open a Moss confirmation dialog with Confirm action and Cancel; the decision expires after two minutes. The host holds one operation at a time and drops open decisions on page or account changes. A failed or uncertain response asks the person to refresh and check the result before trying again, rather than repeating a write automatically. Older hosts without this handle cannot run these page actions.",
     path: "/settings?section=modules",
     scope: "user"
   },
@@ -469,6 +470,13 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
 
 export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
   {
+    code: "core.modules.page_write_unavailable",
+    class: "transient",
+    remediationRef: "core.modules.check_page_result",
+    description:
+      "A module page could not obtain a confirmed result. A transport or result failure can occur after a write, so a failed response must not trigger an automatic retry."
+  },
+  {
     code: "android_hardware_status_unavailable",
     class: "transient",
     remediationRef: "android_hardware_status_recovery",
@@ -600,10 +608,55 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     remediationRef: "core.today.retry_evening_loop",
     description:
       "An evening open-loop choice (Tomorrow, Choose a day or Let it go) could not be saved, so the task was not changed."
+  },
+  {
+    code: "core.modules.page_action_confirmation_invalid",
+    class: "permission",
+    remediationRef: "core.modules.redo_page_action",
+    description:
+      "An action that needed confirming on a module's page was not done because its confirmation had " +
+      "expired, was cancelled, was already used, or did not match the action."
+  },
+  {
+    code: "core.modules.page_action_rate_limited",
+    class: "transient",
+    remediationRef: "core.modules.wait_then_redo_page_action",
+    description:
+      "A module's page sent more than 120 actions in a minute, so further actions were refused " +
+      "until the minute passes. Other modules are not affected."
+  },
+  {
+    code: "core.modules.page_action_rejected",
+    class: "validation",
+    remediationRef: "core.modules.follow_module_message",
+    description: "The module refused an action from its own page and nothing was changed."
+  },
+  {
+    code: "core.modules.page_action_failed",
+    class: "transient",
+    remediationRef: "core.modules.check_then_redo_page_action",
+    description:
+      "A module could not finish an action from its own page. The change may or may not have " +
+      "been made, so Moss never repeats it on its own."
+  },
+  {
+    code: "core.modules.page_action_result_too_large",
+    class: "bug",
+    remediationRef: "core.modules.check_then_redo_page_action",
+    description:
+      "A module finished an action from its own page, but its reply was too large to show. If it " +
+      "was a change, it was made and appears in Settings > Activity."
   }
 ];
 
 export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
+  {
+    id: "core.modules.check_page_result",
+    description:
+      "Refresh the module's data and check whether the change completed before starting a new operation. Review any new confirmation before continuing.",
+    path: "/",
+    scope: "user"
+  },
   {
     id: "android_hardware_status_recovery",
     description:
@@ -615,6 +668,29 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
     id: "core.ai.ask_user",
     description: "Ask the user to approve the action before trying it again.",
     path: "/",
+    scope: "user"
+  },
+  {
+    id: "core.modules.redo_page_action",
+    description: "Do the action again on the module's page and confirm it in the new dialog.",
+    scope: "user"
+  },
+  {
+    id: "core.modules.wait_then_redo_page_action",
+    description: "Wait a minute, then do the action again on the module's page.",
+    scope: "user"
+  },
+  {
+    id: "core.modules.follow_module_message",
+    description: "Follow the module's own message on its page, then try again.",
+    scope: "user"
+  },
+  {
+    id: "core.modules.check_then_redo_page_action",
+    description:
+      "Open Settings > Activity or reload the module's page to see whether the change was made " +
+      "before doing it again.",
+    path: "/settings?section=activity",
     scope: "user"
   },
   {

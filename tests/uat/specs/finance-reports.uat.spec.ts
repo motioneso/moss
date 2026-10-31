@@ -173,7 +173,8 @@ test("Finance reports derive net worth and pairing-excluded spending end-to-end"
   // Current month: income 0, outflow 8_432 + 675 + 185_000 − 1_250 = 192_857 →
   // net -$1,928.57 (the transfer pair nets to zero by exclusion, not by luck).
   const cashFlow = reports.locator('section[aria-label="Cash flow"]');
-  await expect(cashFlow.getByText("-$1,928.57", { exact: true })).toBeVisible();
+  await cashFlow.getByRole("button", { name: "Monthly numbers", exact: true }).click();
+  await expect(cashFlow.locator("table").getByText("-$1,928.57", { exact: true })).toBeVisible();
 
   // --- Persistence: reload drops all client state --------------------------------------
   // The numbers must come back from real KV reads through the worker, not from

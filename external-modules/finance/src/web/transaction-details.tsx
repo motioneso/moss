@@ -1,0 +1,205 @@
+import {
+  Button,
+  Dialog,
+  RowIndex,
+  RowIndexItem,
+  Textarea,
+  useRef,
+  useState,
+  type ExternalModuleToolsHandleV1,
+  type ReactNodeLike
+} from "@moss/module-web-sdk";
+import type { TransactionSplit } from "../domain/records";
+import { splitsBalance } from "../domain/splits";
+import { formatCents } from "./format";
+import { useTransactionNoteEditor } from "./transaction-note-editor";
+export interface DetailTransaction {
+  id: string;
+  accountId?: string;
+  name: string;
+  date: string;
+  amountCents: number;
+  isoCurrency: string;
+  categoryId: string | null;
+  notes?: string;
+  pending?: boolean;
+  shared?: boolean;
+  source?: "provider" | "manual";
+  cleared?: boolean;
+  reconciledAt?: string | null;
+  reviewState?: "confirmed" | "needs_look";
+  transferId?: string;
+  splits?: TransactionSplit[];
+}
+export interface TransactionDetailsInput {
+  row: DetailTransaction;
+  accountName: string;
+  categoryName: string;
+  categories: { id: string; name: string }[];
+}
+export function captureTransactionDetails(props: TransactionDetailsInput) {
+  return {
+    row: { ...props.row, splits: props.row.splits?.map((p) => ({ ...p })) },
+    account: props.accountName,
+    category: props.categoryName,
+    parts: (props.row.splits ?? []).map((p) => ({
+      name: props.categories.find((c) => c.id === p.categoryId)?.name ?? "Archived category",
+      amountCents: p.amountCents
+    }))
+  };
+}
+export type CapturedTransactionDetails = ReturnType<typeof captureTransactionDetails>;
+export function TransactionDetails(props: {
+  captured: CapturedTransactionDetails | null;
+  onClose: () => void;
+  tools?: ExternalModuleToolsHandleV1;
+  supportsNotes?: boolean;
+  /** Set when the row can be split; the screen closes this view and opens the split editor. */
+  onSplit?: () => void;
+}): ReactNodeLike {
+  const { captured } = props;
+  const row = captured?.row;
+  const focusKey = useRef("");
+  if (row) focusKey.current = JSON.stringify([row.id, row.accountId, row.shared === true]);
+  // Desktop and phone render distinct row buttons. Resolve the visible counterpart when
+  // the shared modal restores focus, including if the viewport changed during review.
+  const [returnFocusRef] = useState(() => ({
+    get current(): HTMLElement | null {
+      if (typeof document === "undefined") return null;
+      return (
+        [...document.querySelectorAll<HTMLButtonElement>("button[data-finance-details]")].find(
+          (button) =>
+            button.dataset.financeDetails === focusKey.current && button.getClientRects().length > 0
+        ) ?? document.querySelector<HTMLInputElement>('input[aria-label="Search payees or notes"]')
+      );
+    }
+  }));
+  const editor = useTransactionNoteEditor({
+    tools: props.tools,
+    target:
+      row?.accountId && !row.shared && props.supportsNotes
+        ? { transactionId: row.id, accountId: row.accountId, month: row.date.slice(0, 7) }
+        : null,
+    onSaved: props.onClose
+  });
+  const close = () => {
+    if (editor.reset()) props.onClose();
+  };
+  const notes = row?.shared ? null : (row?.notes ?? "");
+  const status = row?.pending
+    ? "Pending"
+    : row?.source !== "manual"
+      ? "Posted"
+      : row.reconciledAt
+        ? "Reconciled"
+        : row.cleared
+          ? "Cleared"
+          : "Uncleared";
+  return (
+    <>
+      {captured && row ? (
+        <Dialog
+          title={editor.editing ? "Edit private note" : "Transaction details"}
+          description={row.name}
+          scrollBody
+          onClose={close}
+          closeDisabled={editor.writing}
+          returnFocusRef={returnFocusRef}
+          closeLabel={editor.editing ? "Close private note editor" : "Close transaction details"}
+          footer={
+            editor.editing ? (
+              editor.footer
+            ) : (
+              <>
+                {props.onSplit ? (
+                  <Button variant="secondary" onClick={props.onSplit}>
+                    {row.splits?.length ? "Edit split" : "Split"}
+                  </Button>
+                ) : null}
+                <Button variant="secondary" onClick={close}>
+                  Back to register
+                </Button>
+              </>
+            )
+          }
+        >
+          {editor.editing ? (
+            editor.body
+          ) : (
+            <div className="fnm-block">
+              <strong className="fnm-amount">
+                {row.amountCents < 0
+                  ? "Money in"
+                  : row.amountCents > 0
+                    ? "Money out"
+                    : "No money movement"}
+                {" · "}
+                {formatCents(Math.abs(row.amountCents), row.isoCurrency)}
+              </strong>
+              {row.shared ? <p>Household · read only</p> : null}
+              <RowIndex variant="facts">
+                <RowIndexItem title="Date" meta={row.date} />
+                <RowIndexItem title="Account" meta={captured.account} />
+                <RowIndexItem title="Status" meta={status} />
+                <RowIndexItem
+                  title="Category"
+                  meta={
+                    row.transferId
+                      ? "Linked transfer"
+                      : captured.parts.length
+                        ? "Split between categories"
+                        : captured.category
+                  }
+                />
+                <RowIndexItem
+                  title="Review"
+                  meta={
+                    row.shared
+                      ? "Managed by owner"
+                      : row.reviewState === "needs_look" ||
+                          Boolean(row.splits?.length && !splitsBalance(row))
+                        ? "Review needed"
+                        : "Confirmed"
+                  }
+                />
+              </RowIndex>
+              {captured.parts.length ? (
+                <section className="fnm-block fnm-block--tight" aria-label="Split allocations">
+                  <strong>Split allocations</strong>
+                  <RowIndex variant="facts">
+                    {captured.parts.map((part, index) => (
+                      <RowIndexItem
+                        key={index}
+                        title={part.name}
+                        meta={formatCents(part.amountCents, row.isoCurrency)}
+                      />
+                    ))}
+                  </RowIndex>
+                </section>
+              ) : null}
+              <section className="fnm-block fnm-block--tight" aria-label="Transaction note">
+                <strong>Private note</strong>
+                {notes === null ? (
+                  <p>Private notes are not shared.</p>
+                ) : notes === "" ? (
+                  <p>No private note.</p>
+                ) : (
+                  <Textarea aria-label="Private transaction note" readOnly value={notes} rows={5} />
+                )}
+                {!row.shared && row.accountId && props.supportsNotes && props.tools ? (
+                  <Button variant="secondary" onClick={editor.start}>
+                    Edit private note
+                  </Button>
+                ) : !row.shared ? (
+                  <p className="jds-hint">
+                    Update Moss and Finance to edit private notes in this view.
+                  </p>
+                ) : null}
+              </section>
+            </div>
+          )}
+        </Dialog>
+      ) : null}
+    </>
+  );
+}

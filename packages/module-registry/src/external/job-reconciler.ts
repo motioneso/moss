@@ -200,10 +200,11 @@ export class ExternalModuleJobReconciler {
       }
     }
 
-    // #1166 F6-D4: one-shot per-user enqueue on every reconcile. "/" separator,
-    // NOT ":" — pg-boss v12 assertKey restricts keys to [\w.\-/] (#1147 lesson).
-    // Dedup here is best-effort (concurrent sends only); the real replay guard is
-    // the handler's idempotency marker.
+    // A key alone does not coalesce standard-queue inserts. Use thirty-second database
+    // buckets for lifecycle bursts, with a new key for each updated package. This is
+    // best effort per bucket; the handler's replay marker still owns correctness.
+    // Keys stay inside [\w.\-/] (#1147), so the hash's ":" becomes "-".
+    const packageKey = module.packageHash.replace(/[^\w.-]/g, "-");
     for (const job of module.manifest.worker?.reconcileJobs ?? []) {
       const queue = queueByName.get(job.queue);
       if (!queue) continue;
@@ -216,7 +217,8 @@ export class ExternalModuleJobReconciler {
         };
         assertModuleJobPayload(queue, payload);
         await this.deps.boss.send(queue.name, payload, {
-          singletonKey: `${moduleId}/${job.id}/${actorUserId}`
+          singletonKey: `${moduleId}/${job.id}/${actorUserId}/${packageKey}`,
+          singletonSeconds: 30
         });
       }
     }

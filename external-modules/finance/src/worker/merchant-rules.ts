@@ -1,0 +1,129 @@
+import {
+  NS,
+  RULE_PAYEE_MAX_CHARS,
+  contentHash,
+  normalizePayee,
+  payeeLength,
+  type FinanceStore,
+  type MerchantRuleStore,
+  type Rule
+} from "../domain/index.js";
+import type { WorkerPorts } from "./ports.js";
+import { InputError } from "./validate.js";
+export const RULES_MIGRATED_KEY = "rules:canonical-v1";
+
+/** The newest old rule per payee. Malformed rules are skipped. */
+export async function legacyMerchantRules(ports: WorkerPorts): Promise<Rule[]> {
+  const newest = new Map<string, { rule: Rule; key: string }>();
+  for (const key of await ports.kv.list(NS.rules)) {
+    const value = (await ports.kv.get(NS.rules, key)) as Partial<Rule> | null;
+    if (!value) continue;
+    if (
+      typeof value.payeeKey !== "string" ||
+      value.payeeKey.length === 0 ||
+      payeeLength(value.payeeKey) > RULE_PAYEE_MAX_CHARS ||
+      normalizePayee(value.payeeKey) !== value.payeeKey ||
+      typeof value.categoryId !== "string" ||
+      !value.categoryId ||
+      typeof value.createdAt !== "string" ||
+      !Number.isFinite(Date.parse(value.createdAt))
+    )
+      continue;
+    const rule = value as Rule,
+      previous = newest.get(rule.payeeKey);
+    if (
+      !previous ||
+      Date.parse(rule.createdAt) > Date.parse(previous.rule.createdAt) ||
+      (Date.parse(rule.createdAt) === Date.parse(previous.rule.createdAt) && key > previous.key)
+    )
+      newest.set(rule.payeeKey, { rule, key });
+  }
+  return [...newest.values()].map(({ rule }) => rule);
+}
+
+/**
+ * Copies the old rules into the rule store once. Malformed rules and rules whose category is gone
+ * stay in the old store, and the upgrade still finishes. Dates go over in canonical form so the
+ * database parses every date the old read accepted.
+ */
+export async function copyLegacyMerchantRules(
+  ports: WorkerPorts,
+  rules: MerchantRuleStore
+): Promise<void> {
+  if (await ports.kv.get(NS.meta, RULES_MIGRATED_KEY)) return;
+  const legacy = await legacyMerchantRules(ports);
+  if (legacy.length)
+    await rules.importLegacy(
+      legacy.map((r) => ({
+        id: contentHash(r.payeeKey),
+        payeeKey: r.payeeKey,
+        categoryId: r.categoryId,
+        createdAt: new Date(Date.parse(r.createdAt)).toISOString()
+      }))
+    );
+  await ports.kv.set(NS.meta, RULES_MIGRATED_KEY, { at: ports.now().toISOString() });
+}
+export async function effectiveMerchantRules(
+  ports: WorkerPorts,
+  store: FinanceStore
+): Promise<Rule[]> {
+  const newest = new Map((await legacyMerchantRules(ports)).map((r) => [r.payeeKey, r]));
+  for (const rule of (await store.rules?.all()) ?? []) {
+    if (rule.enabled) newest.set(rule.payeeKey, rule);
+    else newest.delete(rule.payeeKey);
+  }
+  return [...newest.values()];
+}
+
+/**
+ * Refuses payee text no rule can hold and finishes the old-rule copy, then returns the payee key.
+ * Callers run it before saving anything else, so a refusal leaves nothing half-saved.
+ */
+export async function checkMerchantRule(
+  ports: WorkerPorts,
+  rules: MerchantRuleStore | undefined,
+  merchant: string
+): Promise<string> {
+  const payeeKey = normalizePayee(merchant);
+  if (payeeLength(payeeKey) > RULE_PAYEE_MAX_CHARS)
+    throw new InputError(
+      "rule_payee_too_long",
+      `A merchant rule takes at most ${RULE_PAYEE_MAX_CHARS} characters of payee text`
+    );
+  if (rules) await copyLegacyMerchantRules(ports, rules);
+  return payeeKey;
+}
+
+export async function setCanonicalMerchantRule(
+  ports: WorkerPorts,
+  store: FinanceStore,
+  merchant: string,
+  categoryId: string,
+  actor: "user" | "moss"
+): Promise<{ ruleId: string; previousCategoryId: string | null }> {
+  if (!store.rules)
+    throw new InputError(
+      "storage_upgrade_required",
+      "Update Finance storage before managing rules"
+    );
+  const payeeKey = await checkMerchantRule(ports, store.rules, merchant),
+    ruleId = contentHash(payeeKey);
+  const previous = (await store.rules.all()).find((r) => r.id === ruleId);
+  if (
+    !payeeKey ||
+    !(await store.rules.apply({
+      id: ruleId,
+      payeeKey,
+      categoryId,
+      enabled: true,
+      expectedRevision: previous?.writeRevision ?? null,
+      actor,
+      at: ports.now().toISOString()
+    }))
+  )
+    throw new InputError(
+      "stale_rules",
+      "The merchant rule or category changed; check saved rules before trying again"
+    );
+  return { ruleId, previousCategoryId: previous?.enabled ? previous.categoryId : null };
+}

@@ -23,7 +23,8 @@ export interface MenuItem {
 export interface MenuProps {
   readonly triggerIcon?: ReactNode;
   readonly triggerContent?: ReactNode;
-  readonly triggerVariant?: "icon" | "content" | "chip";
+  /** `button` draws a secondary button with a chevron, for toolbar actions such as Export. */
+  readonly triggerVariant?: "icon" | "content" | "chip" | "button";
   readonly placement?: "bottom" | "top";
   /** Layout-only wrapper hook. */
   readonly className?: string;
@@ -116,9 +117,11 @@ export function Menu(props: MenuProps) {
         className={
           props.triggerVariant === "chip"
             ? `jds-btn jds-btn--chip${open ? " jds-btn--active" : ""}`
-            : props.triggerVariant === "content"
-              ? "jds-menu__trigger jds-menu__trigger--content"
-              : "jds-menu__trigger"
+            : props.triggerVariant === "button"
+              ? `jds-btn jds-btn--secondary${open ? " jds-btn--active" : ""}`
+              : props.triggerVariant === "content"
+                ? "jds-menu__trigger jds-menu__trigger--content"
+                : "jds-menu__trigger"
         }
         aria-label={props.triggerLabel}
         aria-expanded={open}
@@ -138,7 +141,7 @@ export function Menu(props: MenuProps) {
         }}
       >
         {props.triggerContent ?? props.triggerIcon}
-        {props.triggerVariant === "chip" ? (
+        {props.triggerVariant === "chip" || props.triggerVariant === "button" ? (
           <svg
             aria-hidden="true"
             width="14"

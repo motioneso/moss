@@ -366,7 +366,10 @@ describe("external module job reconciliation (#996, #860)", () => {
           jobKind: "acme.migrate",
           manifestHash: module.manifestHash
         },
-        options: { singletonKey: `acme/storage-migrate/${users[0]}` }
+        options: {
+          singletonKey: `acme/storage-migrate/${users[0]}/sha256-${"d".repeat(64)}`,
+          singletonSeconds: 30
+        }
       },
       {
         name: "acme.migrate",
@@ -376,7 +379,10 @@ describe("external module job reconciliation (#996, #860)", () => {
           jobKind: "acme.migrate",
           manifestHash: module.manifestHash
         },
-        options: { singletonKey: `acme/storage-migrate/${users[1]}` }
+        options: {
+          singletonKey: `acme/storage-migrate/${users[1]}/sha256-${"d".repeat(64)}`,
+          singletonSeconds: 30
+        }
       }
     ]);
     // "/" separator, not ":" — pg-boss v12 assertKey restricts keys to [\w.\-/] (#1147 lesson).

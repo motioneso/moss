@@ -5,13 +5,16 @@ export interface RowIndexProps {
   readonly variant?: "default" | "facts";
   /** Compact rows sit inside a section block: body-size title, tighter padding, no trailing gap. */
   readonly density?: "default" | "compact";
+  /** `beside` keeps short meta, such as an amount and a row menu, on the title's line on phones. */
+  readonly narrowMeta?: "below" | "beside";
 }
 
 export function RowIndex(props: RowIndexProps) {
   const className = [
     "jds-index",
     props.variant === "facts" ? "jds-index--facts" : "",
-    props.density === "compact" ? "jds-index--compact" : ""
+    props.density === "compact" ? "jds-index--compact" : "",
+    props.narrowMeta === "beside" ? "jds-index--meta-beside" : ""
   ]
     .filter(Boolean)
     .join(" ");

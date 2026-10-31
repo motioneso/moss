@@ -53,6 +53,22 @@ function skipQuoted(text: string, start: number): number {
   throw forbidden("unterminated quoted literal");
 }
 
+/** PostgreSQL block comments nest; scan iteratively without treating inner words as SQL. */
+function skipBlockComment(text: string, start: number): number {
+  let depth = 1;
+  for (let i = start + 2; i < text.length - 1; i++) {
+    if (text[i] === "/" && text[i + 1] === "*") {
+      depth++;
+      i++;
+    } else if (text[i] === "*" && text[i + 1] === "/") {
+      depth--;
+      i++;
+      if (depth === 0) return i + 1;
+    }
+  }
+  throw forbidden("unterminated block comment");
+}
+
 /** True when only whitespace and comments remain after `from`. */
 function isOnlyTrailingTrivia(text: string, from: number): boolean {
   for (let i = from; i < text.length; i += 1) {
@@ -65,9 +81,11 @@ function isOnlyTrailingTrivia(text: string, from: number): boolean {
       continue;
     }
     if (ch === "/" && text[i + 1] === "*") {
-      const close = text.indexOf("*/", i + 2);
-      if (close === -1) return false;
-      i = close + 1;
+      try {
+        i = skipBlockComment(text, i) - 1;
+      } catch {
+        return false;
+      }
       continue;
     }
     return false;
@@ -76,13 +94,24 @@ function isOnlyTrailingTrivia(text: string, from: number): boolean {
 }
 
 export function classifyModuleStatement(queryText: string): ModuleStatementKind {
+  return inspectModuleStatement(queryText).kind;
+}
+
+/** Reuse the allowlist lexer so comments/quoted text cannot hide a locking read. */
+export function inspectModuleStatement(queryText: string): {
+  kind: ModuleStatementKind;
+  locksRows: boolean;
+} {
   // Fail-closed prefilters, checked against the RAW text so no lexer state can
   // hide them:
   // - set_config would spoof the RLS GUCs (app.actor_user_id / role) from
   //   inside an otherwise-allowed SELECT (volatile CTEs are guaranteed-executed).
   // - U&'…' unicode escapes can assemble "set_config" without the substring.
   // - E'…' backslash escapes (E'\'') desync skipQuoted and could hide keywords.
+  // - Advisory lock keys are shared across modules, so one module could hold the
+  //   host's per-module write lock and stall another module's saves.
   if (/set_config/i.test(queryText)) throw forbidden("set_config is not allowed");
+  if (/pg_(?:try_)?advisory/i.test(queryText)) throw forbidden("advisory locks are not allowed");
   if (/u&['"]/i.test(queryText)) throw forbidden("unicode-escaped literals are not allowed");
   // Word-boundary lookbehind: a bare "e'"/"E'" must start a new token to be an
   // E'...' escape-string prefix — without it, an ordinary literal ending in
@@ -95,6 +124,8 @@ export function classifyModuleStatement(queryText: string): ModuleStatementKind 
     throw forbidden("escape string literals are not allowed");
   }
 
+  const lockWords: string[] = [];
+  let locksRows = false;
   let depth = 0;
   let firstWord: string | undefined;
   let topLevelKind: ModuleStatementKind | undefined;
@@ -113,13 +144,12 @@ export function classifyModuleStatement(queryText: string): ModuleStatementKind 
       continue;
     }
     if (ch === "/" && queryText[i + 1] === "*") {
-      const close = queryText.indexOf("*/", i + 2);
-      if (close === -1) throw forbidden("unterminated block comment");
-      i = close + 2;
+      i = skipBlockComment(queryText, i);
       continue;
     }
     if (ch === "'" || ch === '"') {
       i = skipQuoted(queryText, i);
+      lockWords.length = 0;
       continue;
     }
     if (ch === "$") {
@@ -153,6 +183,15 @@ export function classifyModuleStatement(queryText: string): ModuleStatementKind 
       let end = i + 1;
       while (end < queryText.length && /[A-Za-z0-9_]/.test(queryText[end]!)) end += 1;
       const word = queryText.slice(i, end).toUpperCase();
+      lockWords.push(word);
+      if (lockWords.length > 4) lockWords.shift();
+      const suffix = " " + lockWords.join(" ");
+      if (
+        ["FOR UPDATE", "FOR NO KEY UPDATE", "FOR SHARE", "FOR KEY SHARE"].some((clause) =>
+          suffix.endsWith(" " + clause)
+        )
+      )
+        locksRows = true;
       i = end;
       if (firstWord === undefined) {
         firstWord = word;
@@ -179,7 +218,7 @@ export function classifyModuleStatement(queryText: string): ModuleStatementKind 
     i += 1;
   }
   if (firstWord === undefined) throw forbidden("empty statement");
-  if (mutationKind !== undefined) return mutationKind;
+  if (mutationKind !== undefined) return { kind: mutationKind, locksRows };
   if (topLevelKind === undefined) throw forbidden("no top-level statement found");
-  return topLevelKind;
+  return { kind: topLevelKind, locksRows };
 }
