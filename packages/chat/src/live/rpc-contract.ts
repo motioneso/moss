@@ -164,6 +164,7 @@ export type RpcMethod =
   | "kill" // per-session (sessionKey required); private cleanup purges before kill
   | "listLiveSessions" // non-session (reconciliation, §4.6)
   | "probeProvider" // non-session (onboarding, §4.8)
+  | "setKeepWarmKeys" // non-session — session keys the warm pool must not idle-reap (#3854)
   | "recordLoginRejected" // non-session — tell the runner's own probe cache a sign-in was refused
   | "installProvider" // non-session (on-demand installer, install-contract §A.2 — ADDITIVE)
   | "beginLogin" // non-session (login presentation, login-contract §L.2 — ADDITIVE)
@@ -506,6 +507,18 @@ export interface RpcProbeProviderResult {
   readonly message?: string;
   /** Constrained summaries require the existing per-user process identity. */
   readonly constrainedUnavailableReason?: "per_user_isolation_required";
+}
+
+/**
+ * params for method "setKeepWarmKeys" (#3854) — instance-wide, no sessionKey. Replaces the set of
+ * session keys the runner's warm-pool idle sweep must spare. Metadata only: ids, no content.
+ */
+export interface RpcSetKeepWarmKeysParams {
+  readonly sessionKeys: readonly string[];
+}
+/** result for method "setKeepWarmKeys". */
+export interface RpcSetKeepWarmKeysResult {
+  readonly ok: true;
 }
 
 /**

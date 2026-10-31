@@ -564,9 +564,17 @@ export class ChatSessionManager {
    * reconciliation routine (both mutate `sessions` + revoke tokens).
    */
   async reapIdle(): Promise<void> {
+    let spared: ReadonlySet<string>;
+    try {
+      spared = await this.keepWarmSessionKeys();
+    } catch {
+      // Without the set, reaping could drop a warm session. The next tick retries.
+      return;
+    }
     await this.withMaintenanceLock(async () => {
       const now = this.deps.clock.now();
       for (const [sessionKey, session] of this.sessions) {
+        if (spared.has(sessionKey)) continue;
         if (session.incognito && (this.subscribers.get(sessionKey)?.size ?? 0) > 0) {
           continue;
         }
@@ -609,6 +617,51 @@ export class ChatSessionManager {
     await this.withMaintenanceLock(async () =>
       applyRemoteReap(this.sessions, this.deps.revokeMcpToken, sessionKey)
     );
+  }
+
+  private async keepWarmSessionKeys(): Promise<ReadonlySet<string>> {
+    const users = (await this.deps.keepWarm?.userIds()) ?? new Set<string>();
+    return new Set([...users].map((id) => surfaceSessionKey(id, DEFAULT_CHAT_SURFACE)));
+  }
+
+  /**
+   * One keep-warm pass: publish the spared keys, then start a main session for each keep-warm
+   * user that has none. Failures stay per user and retry on the next pass.
+   */
+  async keepWarmTick(): Promise<void> {
+    const port = this.deps.keepWarm;
+    if (!port) return;
+    const users = await port.userIds();
+    await port
+      .publishKeys?.([...users].map((id) => surfaceSessionKey(id, DEFAULT_CHAT_SURFACE)))
+      .catch(() => undefined);
+    await Promise.all(
+      [...users].map(async (userId) => {
+        if (this.sessions.has(surfaceSessionKey(userId, DEFAULT_CHAT_SURFACE))) return;
+        try {
+          await this.ensureSession(userId, await port.resolveUserName(userId));
+        } catch {
+          // Retried on the next pass.
+        }
+      })
+    );
+  }
+
+  /** Runs {@link keepWarmTick} every `intervalMs`. A no-op without a keep-warm port. */
+  startKeepWarm(intervalMs: number = 60_000): () => void {
+    if (!this.deps.keepWarm) return () => {};
+    let inFlight = false;
+    const handle = setInterval(() => {
+      if (inFlight) return;
+      inFlight = true;
+      void this.keepWarmTick()
+        .catch(() => {})
+        .finally(() => {
+          inFlight = false;
+        });
+    }, intervalMs);
+    handle.unref?.();
+    return () => clearInterval(handle);
   }
 
   /** Wire the production idle reaper. Returns a stop handle that clears the interval. */

@@ -24,11 +24,14 @@ import {
 import {
   CliChatUnavailableError,
   createRealEngineFactory,
+  DEFAULT_CHAT_SURFACE,
+  surfaceSessionKey,
   unavailableEngineFactory,
   type ChatEngineFactory,
   type RpcConnection
 } from "@moss/chat";
 import { createSanitizedTmuxIo } from "@moss/cli-runner";
+import { listVoiceEnabledUserIds } from "@moss/meetings";
 import type { CliChatEngine, PersistentRuntimeLaunchConfig, ReapReason } from "@moss/chat/live";
 import {
   CHAT_PERSISTENT_IDLE_REAP_MINUTES_CONFIG_KEY,
@@ -716,6 +719,13 @@ export async function resolveChatEngineFactory(deps: {
     persistentRuntimeEnabled: createPersistentRuntimeEnabledLiveReader(deps.appDb, deps.log),
     persistentPoolCap,
     readIdleReapMinutes: createIdleReapMinutesLiveReader(deps.appDb, deps.log),
+    // #3854 — hold-to-talk users keep their warm child through the idle sweep.
+    readExemptKeys: async () =>
+      new Set(
+        [...(await listVoiceEnabledUserIds(deps.appDb))].map((id) =>
+          surfaceSessionKey(id, DEFAULT_CHAT_SURFACE)
+        )
+      ),
     // #1554 task #6 — closes task #5's KNOWN GAP (see git history / relay-10 handoff for the prior
     // state): forwarded straight from this function's own `onPersistentReap` dep, which
     // `module-registry/src/index.ts` populates via `routes.ts`'s `adoptMcpTokenRevoke` late-bound

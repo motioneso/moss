@@ -89,7 +89,7 @@ export const recordingVoiceFeature = {
     }
   ],
   description:
-    "Opted-in hold audio enters normal Main chat automatically after transcription, including uncertain timing. Legacy requests keep their prior confirmation policy; baseline inventory stays Meetings evidence. Maximum 120 seconds.",
+    "Opted-in hold audio enters Main chat after transcription, including uncertain timing, and Main chat stays ready between presses. Legacy requests keep prior confirmation policy; baseline inventory stays Meetings evidence. Max 120 seconds.",
   errors: [
     {
       code: "recording_voice_ineligible",

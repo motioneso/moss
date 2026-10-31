@@ -46,6 +46,52 @@ describe("computeIdleReapIntervalMs", () => {
   });
 });
 
+describe("startIdleReapTimer — exempt keys (#3854)", () => {
+  it("reads the exempt keys fresh on every tick and hands them to the sweep", async () => {
+    vi.useFakeTimers();
+    try {
+      const sweepIdle = vi.fn(async (_ms: number, _keys?: ReadonlySet<string>) => {});
+      let keys = new Set(["a"]);
+      const stop = startIdleReapTimer({
+        pool: { sweepIdle },
+        readIdleReapMinutes: async () => 30,
+        readExemptKeys: async () => keys,
+        intervalMs: 1_000
+      });
+      await vi.advanceTimersByTimeAsync(1_000);
+      keys = new Set(["b"]);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(sweepIdle.mock.calls.map((c) => [...(c[1] ?? [])])).toEqual([["a"], ["b"]]);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("skips the sweep and reports when the exempt read fails", async () => {
+    vi.useFakeTimers();
+    try {
+      const sweepIdle = vi.fn(async () => {});
+      const onError = vi.fn();
+      const stop = startIdleReapTimer({
+        pool: { sweepIdle },
+        readIdleReapMinutes: async () => 30,
+        readExemptKeys: async () => {
+          throw new Error("read failed");
+        },
+        onError,
+        intervalMs: 1_000
+      });
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(sweepIdle).not.toHaveBeenCalled();
+      expect(onError).toHaveBeenCalledTimes(1);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("startIdleReapTimer — mechanics", () => {
   it("ticks on the given interval, sweeping with the threshold from a live read (minutes -> ms)", async () => {
     vi.useFakeTimers();

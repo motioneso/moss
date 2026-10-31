@@ -79,6 +79,7 @@ import {
 } from "./model-list-adapters.js";
 import { ensureProviderLaunchReady } from "./provider-first-run.js";
 import { providerTokenPath, readProviderCredentialEnv } from "./provider-token-store.js";
+import { KeepWarmKeys } from "./keep-warm-keys.js";
 import * as perUserSlot from "./per-user-slot.js";
 import {
   isStructuredLaunch,
@@ -232,6 +233,7 @@ export class CliChatEngineHost {
     const stop = startPoolIdleReapTimer({
       pool: persistentPool,
       readIdleReapMinutes,
+      readExemptKeys: this.keepWarm.read,
       intervalMs
     });
     this.idleReapStop = stop;
@@ -240,6 +242,8 @@ export class CliChatEngineHost {
       if (this.idleReapStop === stop) this.idleReapStop = null;
     };
   }
+
+  readonly keepWarm = new KeepWarmKeys();
 
   /** Stops the idle-reap timer if armed (server shutdown). Idempotent. */
   stopIdleReapTimer(): void {

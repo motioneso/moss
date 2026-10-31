@@ -20,7 +20,7 @@ const io = {} as TmuxIo;
 
 function makeHost(
   deps: {
-    persistentPool?: { sweepIdle(ms: number): Promise<void> };
+    persistentPool?: { sweepIdle(ms: number, keys?: ReadonlySet<string>): Promise<void> };
     readIdleReapMinutes?: () => Promise<number>;
   } = {}
 ): CliChatEngineHost {
@@ -62,11 +62,30 @@ describe("CliChatEngineHost.startIdleReapTimer (#1554 Decision 3)", () => {
     const stop = host.startIdleReapTimer(1_000);
     await vi.advanceTimersByTimeAsync(2_000);
     expect(sweepIdle).toHaveBeenCalledTimes(2);
-    expect(sweepIdle).toHaveBeenCalledWith(30 * 60_000);
+    expect(sweepIdle).toHaveBeenCalledWith(30 * 60_000, expect.any(Set));
 
     stop();
     await vi.advanceTimersByTimeAsync(5_000);
     expect(sweepIdle).toHaveBeenCalledTimes(2); // no further ticks after the returned stop()
+  });
+
+  it("hands the sweep the keep-warm keys the api last pushed (#3854)", async () => {
+    vi.useFakeTimers();
+    const sweepIdle = vi.fn(async (_ms: number, _keys?: ReadonlySet<string>) => {});
+    const host = makeHost({
+      persistentPool: { sweepIdle },
+      readIdleReapMinutes: async () => 30
+    });
+
+    host.keepWarm.set(["u1:drawer"]);
+    host.startIdleReapTimer(1_000);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect([...(sweepIdle.mock.calls[0]![1] ?? [])]).toEqual(["u1:drawer"]);
+
+    host.keepWarm.set([]);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect([...(sweepIdle.mock.calls[1]![1] ?? [])]).toEqual([]);
+    host.stopIdleReapTimer();
   });
 
   it("double-start guard: a second startIdleReapTimer() call clears the first timer, no orphan", async () => {

@@ -56,7 +56,8 @@ import {
   MEETING_CAPTURE_MAINTENANCE_QUEUES,
   createMeetingStopSummaryScheduler,
   createManualMeetingSummaryEnqueue,
-  registerMeetingStopSummaryWorker
+  registerMeetingStopSummaryWorker,
+  listVoiceEnabledUserIds
 } from "@moss/meetings";
 import {
   backtrackModuleManifest,
@@ -2400,6 +2401,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           createRecordingFactAuthority(deps.dataContext)
         ),
         rootDb: deps.rootDb,
+        // Hold-to-talk users keep a ready main chat (#3854). Chat sees ids only.
+        keepWarmUserIds: () => listVoiceEnabledUserIds(deps.rootDb),
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
         // General chat selects ACP; meeting questions use an explicit tool-free HTTP path.

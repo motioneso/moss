@@ -42,6 +42,7 @@ import {
   type RpcProbeProviderParams,
   type RpcProviderKind,
   type RpcRecordLoginRejectedParams,
+  type RpcSetKeepWarmKeysParams,
   type RpcReadNewParams,
   type RpcReadStructuredParams,
   type RpcRequest,
@@ -470,6 +471,17 @@ async function invoke(
         forceFresh: params.forceFresh,
         constrainedStructured: params.constrainedStructured === true
       });
+    }
+    case "setKeepWarmKeys": {
+      // Non-session verb (#3854): swap the set of keys the warm-pool idle sweep spares.
+      const params = req.params as RpcSetKeepWarmKeysParams;
+      if (
+        !Array.isArray(params?.sessionKeys) ||
+        !params.sessionKeys.every((k) => typeof k === "string")
+      )
+        throw new BadRequestError("sessionKeys must be a string array");
+      host.keepWarm.set(params.sessionKeys);
+      return { ok: true };
     }
     case "recordLoginRejected": {
       // ACP sessions run API-side and learn of a rejected sign-in there, but the settings

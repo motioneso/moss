@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { sql } from "kysely";
-import { assertDataContextDb, isUuid, type DataContextDb } from "@moss/db";
+import { sql, type Kysely } from "kysely";
+import { assertDataContextDb, isUuid, type DataContextDb, type MossDatabase } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
 
 const RECORDING_ID = /^(?:amsg_)?[0-9]{10}_[A-Za-z0-9_-]{1,24}$/;
@@ -134,4 +134,14 @@ export class RecordingVoiceEnablementRepository {
       input.endMs <= row.received_at.getTime();
     return { enablementId: row.id, automatic, capturedAt: automatic ? input.capturedAt : null };
   }
+}
+
+/** Users with an active hold-to-talk enablement. Ids only; chat keeps their main session warm. */
+export async function listVoiceEnabledUserIds(
+  db: Kysely<MossDatabase>
+): Promise<ReadonlySet<string>> {
+  const result = await sql<{ user_id: string }>`
+    SELECT user_id FROM app.list_voice_enabled_user_ids()
+  `.execute(db);
+  return new Set(result.rows.map((row) => row.user_id));
 }

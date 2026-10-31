@@ -20,6 +20,11 @@ export interface PersistentRuntimePoolDeps {
   // caller-driven kill (release()).
   readonly onReap?: (sessionKey: string, reason: ReapReason) => void;
   readonly clock: { now(): number };
+  /**
+   * Session keys that least-recently-used eviction must never pick (keep-warm users, #3854).
+   * Read on every admission. A failed read denies the admission rather than risk an eviction.
+   */
+  readonly readExemptKeys?: () => Promise<ReadonlySet<string>>;
 }
 
 export type AdmitResult =
@@ -64,7 +69,13 @@ export class PersistentRuntimePool {
         return this.construct(sessionKey, opts);
       }
 
-      const victim = await this.findIdleVictim();
+      let exempt: ReadonlySet<string> | undefined;
+      try {
+        exempt = await this.deps.readExemptKeys?.();
+      } catch {
+        return { kind: "denied" };
+      }
+      const victim = await this.findIdleVictim(exempt);
       if (!victim) {
         return { kind: "denied" };
       }
@@ -95,12 +106,16 @@ export class PersistentRuntimePool {
   /**
    * Idle-timeout sweep, called on a fixed interval by the composition root. Re-checks each
    * idle-tracked child's health() immediately before reaping (atomic re-check, no stale kill).
+   * Children whose key is in `exemptKeys` are never reaped here.
    */
-  sweepIdle(idleThresholdMs: number): Promise<void> {
+  sweepIdle(idleThresholdMs: number, exemptKeys?: ReadonlySet<string>): Promise<void> {
     return this.withLock(async () => {
       const now = this.deps.clock.now();
       const candidates = Array.from(this.children.values());
       for (const child of candidates) {
+        if (exemptKeys?.has(child.sessionKey)) {
+          continue;
+        }
         const health = await child.runtime.health();
         if (health.state !== "idle" || health.lastResultAt === null) {
           continue;
@@ -119,8 +134,10 @@ export class PersistentRuntimePool {
     return { kind: "admitted", runtime };
   }
 
-  private async findIdleVictim(): Promise<TrackedChild | null> {
-    const candidates = Array.from(this.children.values());
+  private async findIdleVictim(exempt?: ReadonlySet<string>): Promise<TrackedChild | null> {
+    const candidates = Array.from(this.children.values()).filter(
+      (child) => !exempt?.has(child.sessionKey)
+    );
     const healths = await Promise.all(candidates.map((child) => child.runtime.health()));
 
     let victim: TrackedChild | null = null;
