@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, it, expect, vi } from "vitest";
 import { CardPayments } from "../../external-modules/finance/src/web/card-payments";
+import { monthLabel } from "../../external-modules/finance/src/web/format";
 import type { ModuleToolOutcome } from "@moss/module-web-sdk";
 const button = (r: ReactTestRenderer, name: string) =>
   r.root.findAllByType("button").find((b) => b.children.includes(name))!;
@@ -127,6 +128,44 @@ describe("captured card-payment cash review", () => {
     });
     await act(async () => button(r, "Review payment cash").props.onClick());
     expect(r.root.findByType("input").props.value).toBe("90071992547409.90");
+    await act(async () => r.unmount());
+  });
+  it("titles the review dialog with the month name instead of the raw month", async () => {
+    const { r } = await setup();
+    const text = JSON.stringify(r.toJSON());
+    expect(text).toContain(`${monthLabel("2026-10")} · USD`);
+    expect(text).not.toContain("2026-10");
+    await act(async () => r.unmount());
+  });
+  it("shows no explanatory copy in the dialog or under the review", async () => {
+    const { r } = await setup();
+    expect(JSON.stringify(r.toJSON())).not.toContain("never sends a payment");
+    await act(async () => button(r, "Review amounts").props.onClick());
+    const text = JSON.stringify(r.toJSON());
+    expect(text).toContain("Review the money");
+    expect(text).not.toContain("Cash funding goes");
+    await act(async () => r.unmount());
+  });
+  it("gives a short reason when the buttons are off outside the current month", async () => {
+    let r!: ReactTestRenderer;
+    await act(async () => {
+      r = create(
+        createElement(CardPayments, {
+          data: {
+            month: "2026-09",
+            currentMonth: "2026-10",
+            isoCurrency: "USD",
+            cardPayments: [],
+            cardChoices: [{ accountId: "card", name: "Synthetic card" }]
+          },
+          tools: { invoke: vi.fn() }
+        })
+      );
+    });
+    expect(button(r, "Set up payment reserve").props.disabled).toBe(true);
+    const text = JSON.stringify(r.toJSON());
+    expect(text).toContain("Review payment cash in the current month.");
+    expect(text).not.toContain("saved accounting");
     await act(async () => r.unmount());
   });
   it("rejects sub-cent amounts before invoking a tool", async () => {

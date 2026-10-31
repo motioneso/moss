@@ -79,6 +79,34 @@ describe("finance tool query store (#3197)", () => {
     await act(async () => renderer.unmount());
   });
 
+  it("reads again on the next visit after a failed read, but keeps a good one", async () => {
+    invokeTool
+      .mockResolvedValueOnce({ kind: "error", message: "Network error" })
+      .mockResolvedValueOnce({ kind: "ok", result: { n: 3 } });
+
+    let first!: ReactTestRenderer;
+    await act(async () => {
+      first = create(createElement(Probe));
+    });
+    expect(JSON.stringify(first.toJSON())).toContain("other");
+    await act(async () => first.unmount());
+
+    let second!: ReactTestRenderer;
+    await act(async () => {
+      second = create(createElement(Probe));
+    });
+    expect(invokeTool).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(second.toJSON())).toContain("n=3");
+    await act(async () => second.unmount());
+
+    let third!: ReactTestRenderer;
+    await act(async () => {
+      third = create(createElement(Probe));
+    });
+    expect(invokeTool).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(third.toJSON())).toContain("n=3");
+  });
+
   it("ignores an older answer that arrives after a newer one", async () => {
     let resolveFirst!: (value: unknown) => void;
     invokeTool

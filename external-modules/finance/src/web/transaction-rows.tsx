@@ -10,10 +10,11 @@ import {
   Select,
   Switch,
   useEffect,
+  useRef,
   useState,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
-import { formatCents, shortDayLabel } from "./format";
+import { dayYearLabel, formatCents, shortDayLabel } from "./format";
 import { BULK_LIMIT, bulkEligible } from "./transaction-bulk";
 import type { SplitTransaction } from "./split-editor";
 import { splitsBalance } from "../domain/splits";
@@ -50,6 +51,27 @@ export interface Tx extends SplitTransaction {
   cleared?: boolean;
   reconciledAt?: string | null;
   writeRevision?: string;
+}
+
+/** The value a row's details button carries in `data-finance-details`. */
+export const detailsKey = (tx: Tx): string =>
+  JSON.stringify([tx.id, tx.accountId, tx.shared === true]);
+
+/**
+ * The row button whose `attribute` equals `value`, for a dialog to return focus to. Desktop and
+ * phone render distinct buttons, so the visible one is resolved when the dialog closes. Falls
+ * back to the search box when the row is gone.
+ */
+export function rowFocusTarget(
+  attribute: "data-finance-details" | "data-finance-transfer-id",
+  value: string
+): HTMLElement | null {
+  if (typeof document === "undefined") return null;
+  return (
+    [...document.querySelectorAll<HTMLButtonElement>(`button[${attribute}]`)].find(
+      (button) => button.getAttribute(attribute) === value && button.getClientRects().length > 0
+    ) ?? document.querySelector<HTMLInputElement>('input[aria-label="Search payees or notes"]')
+  );
 }
 
 export const isLook = (tx: Tx): boolean =>
@@ -148,6 +170,10 @@ function LookControls(props: {
 }
 
 // The quiet category picker on a confirmed row. Eligible changes open a captured review.
+//
+// A pointer pick saves at once. Chrome on Windows and Linux fires a change on every arrow press
+// of a closed dropdown, inside the key's own event task. A change that arrives there is held
+// until Enter or blur, and Escape puts the saved category back.
 function ChangeCategory(props: {
   tx: Tx;
   categories: TxCategory[];
@@ -155,20 +181,59 @@ function ChangeCategory(props: {
 }): ReactNodeLike {
   const { tx } = props;
   const [categoryId, setCategoryId] = useState(tx.categoryId ?? "");
-  useEffect(() => setCategoryId(tx.categoryId ?? ""), [tx.categoryId, tx.writeRevision]);
+  const saved = useRef(tx.categoryId ?? "");
+  const held = useRef<string | null>(null);
+  // The key whose event task is still running, or null once that task has finished.
+  const keyTask = useRef<string | null>(null);
+  useEffect(() => {
+    saved.current = tx.categoryId ?? "";
+    held.current = null;
+    setCategoryId(saved.current);
+  }, [tx.categoryId, tx.writeRevision]);
+
+  const save = (next: string) => {
+    const before = saved.current;
+    held.current = null;
+    setCategoryId(next);
+    if (next === before) return;
+    saved.current = next;
+    // A save that never ran puts the old category back on screen.
+    void props.onChange(tx, next).then((ok) => {
+      if (ok || saved.current !== next) return;
+      saved.current = before;
+      setCategoryId(before);
+    });
+  };
+  const release = () => {
+    if (held.current !== null) save(held.current);
+  };
+
   return (
     <Select
       quiet
       aria-label={`Category for ${tx.name}`}
       value={categoryId}
+      onKeyDown={(event: { key: string }) => {
+        keyTask.current = event.key;
+        setTimeout(() => {
+          keyTask.current = null;
+        }, 0);
+        if (event.key === "Enter") release();
+        else if (event.key === "Escape" && held.current !== null) {
+          held.current = null;
+          setCategoryId(saved.current);
+        }
+      }}
+      onBlur={release}
       onChange={(event: { target: { value: string } }) => {
         const next = event.target.value;
-        const before = categoryId;
+        // Enter commits an open list, so it counts as a pick.
+        if (keyTask.current === null || keyTask.current === "Enter") {
+          save(next);
+          return;
+        }
+        held.current = next;
         setCategoryId(next);
-        // A save that never ran puts the old category back on screen.
-        void props.onChange(tx, next).then((saved) => {
-          if (!saved) setCategoryId(before);
-        });
       }}
     >
       <option value="" disabled>
@@ -193,7 +258,7 @@ function CategoryCell(props: { tx: Tx; ctx: RowContext; look: boolean }): ReactN
           <Button
             variant="link"
             size="sm"
-            aria-label={`Review transfer for ${ctx.accountName(tx)} on ${tx.date}`}
+            aria-label={`Review transfer for ${ctx.accountName(tx)} on ${dayYearLabel(tx.date, "long")}`}
             data-finance-transfer-id={tx.transferId}
             onClick={() => ctx.onTransfer!(tx.transferId!)}
           >
@@ -251,7 +316,7 @@ function PayeeButton(props: { tx: Tx; ctx: RowContext }): ReactNodeLike {
       type="button"
       className="jds-table__rowlink"
       aria-label={`View transaction details for ${tx.name}`}
-      data-finance-details={JSON.stringify([tx.id, tx.accountId, tx.shared === true])}
+      data-finance-details={detailsKey(tx)}
       onClick={() => props.ctx.onDetails(tx)}
     >
       {tx.name}

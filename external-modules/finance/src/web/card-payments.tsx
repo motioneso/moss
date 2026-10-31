@@ -12,7 +12,7 @@ import {
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import type { CardPaymentState } from "../domain/card-reserves";
-import { centsToAmountInput, formatCents } from "./format";
+import { centsToAmountInput, formatCents, monthLabel } from "./format";
 import { parseLedgerAmount } from "./manual-entry";
 import { invalidateQueries } from "./store";
 export interface CardPaymentView extends CardPaymentState {
@@ -45,9 +45,7 @@ export function CardPayments(props: {
     <section className="fnm-block fnm-block--tight" aria-label="Card payments">
       <SectionHead title="Card payments" rule />
       {d.month !== d.currentMonth ? (
-        <Note variant="practical">
-          Review payment cash in the current month. This month's saved accounting stays intact.
-        </Note>
+        <p className="jds-hint">Review payment cash in the current month.</p>
       ) : null}
       {d.cardPayments.map((c) => (
         <section key={c.accountId} className="fnm-block" aria-label={`${c.name} payment reserve`}>
@@ -258,7 +256,7 @@ function PaymentDialog(props: {
     <Dialog
       scrollBody
       title={enroll ? "Set up card-payment reserve" : "Review card-payment cash"}
-      description={`${d.month} · ${d.isoCurrency}`}
+      description={`${monthLabel(d.month)} · ${d.isoCurrency}`}
       onClose={() => {
         if (!busy) props.onClose();
       }}
@@ -282,12 +280,6 @@ function PaymentDialog(props: {
         <p>
           <strong>{props.choice.name}</strong>
         </p>
-        <Note variant="practical">
-          {enroll
-            ? "Payment reserves stay active from this month; earlier months keep full-debt accounting. Funded purchases add category cash here. Starting debt needs separate cash."
-            : "Choose the available cash you want reserved for payment. Increasing it uses Ready to assign; reducing it releases cash."}{" "}
-          This never sends a payment.
-        </Note>
         <label className="fnm-block fnm-block--tight">
           {enroll ? "Cash to assign for starting debt" : "Available payment cash"}
           <input
@@ -323,11 +315,6 @@ function PaymentDialog(props: {
                 />
               ))}
             </RowIndex>
-            <p className="jds-hint">
-              Cash funding goes to cash spending first. When multiple cards share an underfunded
-              category, remaining cash is divided proportionally. Refunds can make payment cash
-              negative.
-            </p>
           </section>
         ) : null}
         {message ? <p role="alert">{message}</p> : null}

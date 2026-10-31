@@ -166,10 +166,12 @@ export async function exerciseCardReserves(
     await transfer.getByLabel("To account", { exact: true }).selectOption("card-proof");
     await transfer.getByLabel("Transfer amount USD", { exact: true }).fill("100.00");
     await transfer.getByRole("button", { name: "Review transfer", exact: true }).click();
-    await transfer
-      .getByText("Two linked entries will be saved together.", { exact: false })
-      .waitFor();
-    await transfer.getByRole("button", { name: "Record linked transfer", exact: true }).click();
+    const recordTransfer = transfer.getByRole("button", {
+      name: "Record linked transfer",
+      exact: true
+    });
+    await recordTransfer.waitFor();
+    await recordTransfer.click();
     await guard.waitFor();
     expect(await status()).toMatchObject({
       cardPayments: [{ availableCents: 15000, paymentsCents: 0 }]

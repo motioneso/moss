@@ -48,9 +48,11 @@ import {
   bulkEligible
 } from "../transaction-bulk";
 import {
+  detailsKey,
   isLook,
   LedgerRows,
   LedgerTable,
+  rowFocusTarget,
   type RowContext,
   type Tx,
   type TxAccount,
@@ -221,8 +223,32 @@ export function TransactionsScreen(
   const [details, setDetails] = useState<CapturedTransactionDetails | null>(null);
   const [detailsTx, setDetailsTx] = useState<Tx | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersButton = useRef<HTMLButtonElement | null>(null);
+  const focusFilters = () => filtersButton.current?.focus();
   const [editing, setEditing] = useState<Tx | null>(null);
   const [transferId, setTransferId] = useState<string | null>(null);
+  // The review returns focus to the row it was opened from, even after following a link inside it.
+  const transferOrigin = useRef<string | null>(null);
+  const [transferReturnFocus] = useState(() => ({
+    get current(): HTMLElement | null {
+      return rowFocusTarget("data-finance-transfer-id", transferOrigin.current ?? "");
+    }
+  }));
+  const openTransfer = (id: string) => {
+    transferOrigin.current = id;
+    setTransferId(id);
+  };
+  // The split editor opens as the details view closes, so it has no live control to return to.
+  const splitOrigin = useRef<Tx | null>(null);
+  useEffect(() => {
+    if (editing) {
+      splitOrigin.current = editing;
+      return;
+    }
+    const row = splitOrigin.current;
+    splitOrigin.current = null;
+    if (row) rowFocusTarget("data-finance-details", detailsKey(row))?.focus();
+  }, [editing]);
   const [selected, setSelected] = useState<ReadonlyMap<string, Tx>>(new Map());
   const [selectionLocked, setSelectionLocked] = useState(false);
   const [supportsBulk, setSupportsBulk] = useState(false);
@@ -459,6 +485,7 @@ export function TransactionsScreen(
             onChange={(event: { target: { value: string } }) => setDraft(event.target.value)}
           />
           <Button
+            ref={filtersButton}
             variant="secondary"
             active={filtersOpen}
             aria-expanded={filtersOpen}
@@ -503,6 +530,7 @@ export function TransactionsScreen(
           onChange={setFilters}
           accounts={filterOptions.accounts}
           categories={filterOptions.categories}
+          returnFocus={focusFilters}
         />
       ) : null}
       <RegisterFilterChips
@@ -512,6 +540,7 @@ export function TransactionsScreen(
         categories={filterOptions.categories}
         ownOnly={ownOnly}
         onIncludeShared={() => setOwnOnly(false)}
+        returnFocus={focusFilters}
       />
       {singleUncertain ? (
         <div className="fnm-chips" role="status">
@@ -573,7 +602,7 @@ export function TransactionsScreen(
             confirmed={confirmed}
             onConfirm={confirmOne}
             onChange={changeOne}
-            onTransfer={props.tools ? setTransferId : undefined}
+            onTransfer={props.tools ? openTransfer : undefined}
             selected={new Set(selected.keys())}
             selectionLocked={selectionLocked}
             onSelect={result?.supportsBulk && props.tools ? toggleSelection : undefined}
@@ -635,6 +664,7 @@ export function TransactionsScreen(
           key={transferId}
           transferId={transferId}
           tools={props.tools}
+          returnFocusRef={transferReturnFocus}
           onClose={() => setTransferId(null)}
           onReview={setTransferId}
           onSaved={() => {

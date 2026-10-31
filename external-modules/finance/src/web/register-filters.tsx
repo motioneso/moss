@@ -2,7 +2,7 @@
 //
 // Transactions filters. The panel opens from the toolbar's Filters button; while it is closed,
 // active filters show as removable chips.
-import { Button, Chip, Select, type ReactNodeLike } from "@moss/module-web-sdk";
+import { Button, Chip, Select, useRef, type ReactNodeLike } from "@moss/module-web-sdk";
 
 export interface RegisterFilters {
   accountId: string;
@@ -115,6 +115,8 @@ export function RegisterFilterPanel(
   props: FilterOptions & {
     value: RegisterFilters;
     onChange: (value: RegisterFilters) => void;
+    /** Moves focus to the Filters button when Clear filters removes the focused control. */
+    returnFocus?: () => void;
   }
 ): ReactNodeLike {
   return (
@@ -140,7 +142,13 @@ export function RegisterFilterPanel(
       ))}
       {activeFilterCount(props.value) > 0 ? (
         <div>
-          <Button variant="link" onClick={() => props.onChange(EMPTY_FILTERS)}>
+          <Button
+            variant="link"
+            onClick={() => {
+              props.returnFocus?.();
+              props.onChange(EMPTY_FILTERS);
+            }}
+          >
             Clear filters
           </Button>
         </div>
@@ -156,25 +164,43 @@ export function RegisterFilterChips(
     onChange: (value: RegisterFilters) => void;
     ownOnly: boolean;
     onIncludeShared: () => void;
+    /** Moves focus to the Filters button when no chip is left to take it. */
+    returnFocus?: () => void;
   }
 ): ReactNodeLike {
+  const row = useRef<HTMLDivElement | null>(null);
   const active = FIELDS.filter((field) => props.value[field.key] !== "");
   if (active.length === 0 && !props.ownOnly) return null;
+  // The removed chip's button unmounts, so focus moves to the next chip (else the previous one)
+  // first. Chip buttons are the ones with an aria-label; Clear filters is named by its text.
+  const remove = (index: number, apply: () => void) => {
+    const buttons = row.current?.querySelectorAll<HTMLButtonElement>("button[aria-label]");
+    const neighbour = buttons?.[index + 1] ?? buttons?.[index - 1];
+    if (neighbour) neighbour.focus();
+    else props.returnFocus?.();
+    apply();
+  };
+  const first = props.ownOnly ? 1 : 0;
   return (
-    <div className="fnm-chips" aria-label="Active filters">
+    <div ref={row} className="fnm-chips" aria-label="Active filters">
       {props.ownOnly ? (
-        <Chip onRemove={props.onIncludeShared} removeLabel="Include shared records">
+        <Chip
+          onRemove={() => remove(0, props.onIncludeShared)}
+          removeLabel="Include shared records"
+        >
           Your entries only
         </Chip>
       ) : null}
-      {active.map((field) => {
+      {active.map((field, index) => {
         const value = props.value[field.key];
         const label =
           field.options(props).find((option) => option.value === value)?.label ?? field.label;
         return (
           <Chip
             key={field.key}
-            onRemove={() => props.onChange({ ...props.value, [field.key]: "" })}
+            onRemove={() =>
+              remove(first + index, () => props.onChange({ ...props.value, [field.key]: "" }))
+            }
             removeLabel={`Remove ${field.noun} filter ${label}`}
           >
             {label}
@@ -182,7 +208,13 @@ export function RegisterFilterChips(
         );
       })}
       {active.length > 1 ? (
-        <Button variant="link" onClick={() => props.onChange(EMPTY_FILTERS)}>
+        <Button
+          variant="link"
+          onClick={() => {
+            props.returnFocus?.();
+            props.onChange(EMPTY_FILTERS);
+          }}
+        >
           Clear filters
         </Button>
       ) : null}

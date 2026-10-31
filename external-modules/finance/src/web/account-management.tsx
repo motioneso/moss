@@ -3,7 +3,6 @@ import {
   Badge,
   Button,
   Dialog,
-  Note,
   useEffect,
   useRef,
   useState,
@@ -17,8 +16,9 @@ import type {
 } from "../domain/account-lifecycle";
 import { isDebtType } from "../domain/account-sign";
 import { invokeTool } from "./api";
-import { formatCents } from "./format";
+import { dayYearLabel, formatCents } from "./format";
 import type { ManualAccountChoice } from "./manual-entry";
+import { navigate } from "./router";
 import { announce } from "./states";
 const blockers: Record<AccountCloseBlocker, string> = {
   not_open: "The opening date is still in the future.",
@@ -39,12 +39,12 @@ interface ReviewResult extends Record<string, unknown> {
 export function ManualAccountManager(props: {
   accountId: string;
   tools?: ExternalModuleToolsHandleV1;
+  returnFocusRef?: { current: HTMLElement | null };
   onClose: () => void;
   onSaved: () => void;
   onReconcile: (account: ManualAccountChoice) => void;
 }): ReactNodeLike {
-  const [review, setReview] = useState<AccountReview | null>(null),
-    [date, setDate] = useState("");
+  const [review, setReview] = useState<AccountReview | null>(null);
   const [mode, setMode] = useState<"details" | AccountOperation>("details"),
     [name, setName] = useState("");
   const [loading, setLoading] = useState(false),
@@ -66,7 +66,6 @@ export function ManualAccountManager(props: {
     setLoading(false);
     if (outcome.kind === "ok" && outcome.result.status === "ok" && outcome.result.account) {
       setReview(outcome.result.account);
-      setDate(outcome.result.today ?? "");
       setBlocked(false);
       setMode("details");
       if (!touched.current) setName(outcome.result.account.name);
@@ -136,8 +135,8 @@ export function ManualAccountManager(props: {
   const history = () => {
     if (!review) return;
     const month = (review.lastEntryDate ?? review.openingDate).slice(0, 7);
-    window.location.assign(
-      `/m/finance/transactions?${new URLSearchParams({ accountId: review.accountId, month, scope: "own" })}`
+    navigate(
+      `/transactions?${new URLSearchParams({ accountId: review.accountId, month, scope: "own" })}`
     );
   };
   return (
@@ -145,6 +144,7 @@ export function ManualAccountManager(props: {
       title="Manage manual account"
       description={review?.name ?? "Read your saved ledger before making changes"}
       scrollBody
+      returnFocusRef={props.returnFocusRef}
       onClose={() => {
         if (!busy) props.onClose();
       }}
@@ -204,17 +204,13 @@ export function ManualAccountManager(props: {
               <Badge>{review.archivedAt ? "Closed" : "Active"}</Badge>
             </div>
             <p className="jds-hint">
-              {isDebtType(review.type) ? "Amount owed" : "Balance"} · observed {review.balanceAsOf}.
-              Opening {formatCents(review.openingBalanceCents, review.isoCurrency)} on{" "}
-              {review.openingDate}.
+              {isDebtType(review.type) ? "Amount owed" : "Balance"} · observed{" "}
+              {dayYearLabel(review.balanceAsOf.slice(0, 10), "short")}. Opening{" "}
+              {formatCents(review.openingBalanceCents, review.isoCurrency)} on{" "}
+              {dayYearLabel(review.openingDate, "short")}.
             </p>
             {mode === "details" ? (
               <>
-                <p>
-                  {review.archivedAt
-                    ? "This manual ledger is closed. Its transactions, statements and report history are kept."
-                    : "Manage this manual ledger's name and status. Its opening balance, currency and recorded money stay intact."}
-                </p>
                 <div className="fnm-chips">
                   <Button variant="secondary" disabled={!ready} onClick={() => setMode("rename")}>
                     Rename account
@@ -250,11 +246,6 @@ export function ManualAccountManager(props: {
             ) : null}
             {mode === "close" ? (
               <>
-                <Note variant="practical">
-                  Closing stops new entries in this manual ledger and keeps its history. It requires
-                  a valid zero balance and a statement through {date}, or a pristine zero opening
-                  ledger.
-                </Note>
                 {review.blockers.length ? (
                   <ul>
                     {review.blockers.map((reason) => (
@@ -280,7 +271,7 @@ export function ManualAccountManager(props: {
                     <Button
                       variant="link"
                       disabled={busy || loading}
-                      onClick={() => window.location.assign("/m/finance/upcoming")}
+                      onClick={() => navigate("/upcoming")}
                     >
                       Review Upcoming bills
                     </Button>
@@ -288,12 +279,10 @@ export function ManualAccountManager(props: {
                 ) : null}
               </>
             ) : null}
-            {mode === "reopen" ? (
-              <Note variant="practical">
-                Reopen this ledger for new entries. Existing statements stay reconciled; entries
-                must still follow the last reconciled date
-                {review.lastReconciledDate ? ` (${review.lastReconciledDate})` : ""}.
-              </Note>
+            {mode === "reopen" && review.lastReconciledDate ? (
+              <p className="jds-hint">
+                Last reconciled statement: {dayYearLabel(review.lastReconciledDate, "short")}.
+              </p>
             ) : null}
           </>
         ) : null}

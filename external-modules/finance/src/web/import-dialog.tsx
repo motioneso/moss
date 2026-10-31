@@ -2,6 +2,7 @@ import {
   Button,
   Dialog,
   Select,
+  randomUuid,
   Switch,
   useState,
   useRef,
@@ -20,7 +21,7 @@ import {
   type ImportRow
 } from "../domain/csv-import";
 import { manualSaveMessage, type ManualAccountChoice } from "./manual-entry";
-import { formatCents } from "./format";
+import { dayYearLabel, formatCents } from "./format";
 import { invalidateQueries } from "./store";
 
 type Choice = "skip" | "import";
@@ -49,7 +50,7 @@ export function ImportDialog(props: {
   onSaved: () => void;
 }): ReactNodeLike {
   const fileInput = useRef<HTMLInputElement | null>(null);
-  const [operationId] = useState(() => crypto.randomUUID());
+  const [operationId] = useState(() => randomUuid());
   const [table, setTable] = useState<CsvTable | null>(null);
   const [mapping, setMapping] = useState(initialMapping);
   const [dateChosen, setDateChosen] = useState(false);
@@ -249,11 +250,6 @@ export function ImportDialog(props: {
         ) : null}
         {!preview ? (
           <>
-            <p className="jds-caption">
-              Add posted transactions to this manual account. Choose a UTF-8 CSV with a header, up
-              to 200 data rows and 1 MiB. Mapped entries allow up to 500 KiB. The opening balance
-              stays separate.
-            </p>
             <div className="fnm-block fnm-block--tight">
               <span>CSV file</span>
               <div>
@@ -273,16 +269,17 @@ export function ImportDialog(props: {
                 accept=".csv,text/csv"
                 aria-label="CSV file"
                 disabled={disabled}
-                onChange={(event: { target: { files: FileList | null } }) =>
-                  void loadFile(event.target.files?.[0])
-                }
+                onChange={(event: { target: { files: FileList | null; value: string } }) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  void loadFile(file);
+                }}
               />
             </div>
             {table ? (
               <>
                 <p role="status" className="jds-caption">
-                  {table.rows.length} data rows · {table.headers.length} columns. Choose how to read
-                  your file.
+                  {table.rows.length} data rows · {table.headers.length} columns
                 </p>
                 <div className="fnm-manual-columns">
                   {column("date", "Date column")}
@@ -338,11 +335,6 @@ export function ImportDialog(props: {
                   {column("notes", "Note column", true)}
                   {column("currency", "Currency column", true)}
                 </div>
-                <p className="jds-caption">
-                  Every row uses {props.account.isoCurrency}; a mapped currency must match exactly.
-                  Amounts use a decimal point, with no grouping, currency symbols or more than two
-                  decimal places. No currency conversion is applied.
-                </p>
               </>
             ) : null}
           </>
@@ -363,16 +355,11 @@ export function ImportDialog(props: {
               </p>
             </div>
             <p className="jds-caption">
-              Review {rows.length} rows in {preview.isoCurrency}. {rows.length - selected.length}{" "}
-              skipped. Entries begin uncategorized and need review.{" "}
-              {preview.debt
-                ? "Money out increases the amount owed."
-                : "Money out reduces this balance."}
+              {rows.length} rows in {preview.isoCurrency}. {rows.length - selected.length} skipped.
             </p>
             {preview.duplicateRows.length ? (
               <p role="status" className="jds-hint">
-                Possible duplicates match the date, amount and payee in this file or the ledger.
-                Choose Skip or Import anyway for each. {unresolved} decisions remaining.
+                {`${preview.duplicateRows.length} possible duplicate${preview.duplicateRows.length === 1 ? "" : "s"}. ${unresolved} decision${unresolved === 1 ? "" : "s"} remaining.`}
               </p>
             ) : null}
             <div className="fnm-import-rows" aria-label="Import rows">
@@ -381,7 +368,9 @@ export function ImportDialog(props: {
                   <div className="fnm-import-row">
                     <span>
                       {row.sourceRow}. {row.name}
-                      <span className="jds-caption fnm-block">{row.date}</span>
+                      <span className="jds-caption fnm-block">
+                        {dayYearLabel(row.date, "short")}
+                      </span>
                     </span>
                     <strong>
                       {formatCents(Math.abs(row.amountCents), preview.isoCurrency)}
@@ -415,10 +404,6 @@ export function ImportDialog(props: {
               disabled={disabled}
               onChange={setCleared}
             />
-            <p className="jds-caption">
-              Cleared means present on your bank statement. Importing records activity in Moss; it
-              does not move money. Nothing is added until the complete import succeeds.
-            </p>
             <div className="fnm-account-actions">
               <Button
                 disabled={disabled}

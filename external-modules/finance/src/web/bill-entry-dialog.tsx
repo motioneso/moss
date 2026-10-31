@@ -3,6 +3,7 @@ import {
   Dialog,
   Note,
   Switch,
+  randomUuid,
   useRef,
   useState,
   type ExternalModuleToolsHandleV1,
@@ -10,7 +11,7 @@ import {
 } from "@moss/module-web-sdk";
 import type { BillsView, Occurrence } from "./screens/upcoming";
 import { isCalendarDate } from "../domain/values";
-import { centsToAmountInput, formatCents } from "./format";
+import { centsToAmountInput, dayYearLabel, formatCents } from "./format";
 import { parseLedgerAmount } from "./manual-entry";
 import { invalidateQueries } from "./store";
 interface Preview extends Record<string, unknown> {
@@ -30,12 +31,13 @@ export function BillEntryDialog(props: {
   data: BillsView;
   occurrence: Occurrence;
   tools?: ExternalModuleToolsHandleV1;
+  returnFocusRef?: { current: HTMLElement | null };
   onClose: () => void;
   onUncertain: () => void;
 }): ReactNodeLike {
   const [data] = useState(props.data),
     [bill] = useState(props.occurrence);
-  const [operationId] = useState(() => crypto.randomUUID());
+  const [operationId] = useState(() => randomUuid());
   const [date, setDate] = useState(bill.plannedDate ?? bill.dueDate);
   const [amount, setAmount] = useState(centsToAmountInput(bill.expectedCents));
   const [cleared, setCleared] = useState(false),
@@ -137,8 +139,9 @@ export function BillEntryDialog(props: {
       scrollBody
       closeLabel="Close"
       closeDisabled={busy}
+      returnFocusRef={props.returnFocusRef}
       onClose={close}
-      description={`${bill.name} · ${data.isoCurrency} · originally ${bill.dueDate}`}
+      description={`${bill.name} · ${data.isoCurrency} · originally ${dayYearLabel(bill.dueDate, "short")}`}
       footer={
         <div className="fnm-spread">
           <Button variant="secondary" disabled={busy} onClick={close}>
@@ -173,10 +176,6 @@ export function BillEntryDialog(props: {
     >
       <div className="fnm-block">
         {message ? <p role="status">{message}</p> : null}
-        <Note variant="practical">
-          Record an expense that already happened. This adds a transaction in Moss and matches this
-          bill; no bank payment is sent.
-        </Note>
         {review ? (
           <>
             {!review.preview.canRecord ? (
@@ -220,7 +219,8 @@ export function BillEntryDialog(props: {
               <div>
                 <dt>Actual expense</dt>
                 <dd>
-                  {money(cents!)} · {date} · {cleared ? "Cleared" : "Not yet cleared"}
+                  {money(cents!)} · {dayYearLabel(date, "short")} ·{" "}
+                  {cleared ? "Cleared" : "Not yet cleared"}
                 </dd>
               </div>
               <div>
@@ -243,7 +243,7 @@ export function BillEntryDialog(props: {
               <ul>
                 {review.preview.candidates.map((t) => (
                   <li key={t.id}>
-                    {t.date} · {t.name} · {money(t.amountCents)}
+                    {dayYearLabel(t.date, "short")} · {t.name} · {money(t.amountCents)}
                   </li>
                 ))}
               </ul>
@@ -259,7 +259,6 @@ export function BillEntryDialog(props: {
               Actual expense date
               <input
                 className="jds-input"
-                aria-label="Bill entry date"
                 type="date"
                 value={date}
                 max={data.today}
@@ -273,7 +272,6 @@ export function BillEntryDialog(props: {
               Actual amount ({data.isoCurrency})
               <input
                 className="jds-input"
-                aria-label="Bill entry amount"
                 inputMode="decimal"
                 value={amount}
                 disabled={busy}
@@ -283,16 +281,17 @@ export function BillEntryDialog(props: {
               />
             </label>
             <Switch
-              ariaLabel="Bill expense cleared"
+              ariaLabel="Cleared on your statement"
               label="Cleared on your statement"
               checked={cleared}
               disabled={busy}
               onChange={setCleared}
             />
-            <p className="jds-hint">
-              Use a decimal point and at most two decimal places. Dates inside reconciled statements
-              cannot be changed.
-            </p>
+            {amount.trim() !== "" && (cents === null || cents <= 0) ? (
+              <p className="jds-hint" role="status">
+                Enter an amount above zero with at most two decimal places.
+              </p>
+            ) : null}
           </>
         )}
       </div>

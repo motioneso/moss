@@ -1,4 +1,5 @@
 import { parseCsv } from "../../../external-modules/finance/src/domain/csv-import.js";
+import { dayYearLabel } from "../../../external-modules/finance/src/web/format.js";
 import { join, resolve } from "node:path";
 import type { Page } from "playwright-core";
 import { expect } from "vitest";
@@ -128,8 +129,9 @@ export async function exerciseTransferCorrection(
     .filter({ visible: true })
     .first()
     .click();
+  const recordedOn = dayYearLabel(today, "short");
   await dialog
-    .getByText(`Correction recorded on ${today}. The original cannot be corrected twice.`, {
+    .getByText(`Correction recorded on ${recordedOn}. The original cannot be corrected twice.`, {
       exact: true
     })
     .waitFor();

@@ -84,8 +84,16 @@ export function OccurrenceActions(
   props: { occurrence: Occurrence } & OccurrenceHandlers
 ): ReactNodeLike {
   const o = props.occurrence;
+  // Weekly bills repeat, so every button names its bill and day after the visible action.
+  const target = `${o.name}, ${shortDayLabel(occurrenceDate(o))}`;
   const action = (label: string, run: () => void) => (
-    <Button size="sm" variant="secondary" disabled={props.disabled} onClick={run}>
+    <Button
+      size="sm"
+      variant="secondary"
+      aria-label={`${label}, ${target}`}
+      disabled={props.disabled}
+      onClick={run}
+    >
       {label}
     </Button>
   );
@@ -113,7 +121,7 @@ export const accountName = (view: BillsView, id: string) =>
 export const categoryName = (view: BillsView, id: string) =>
   view.categories.find((c) => c.id === id)?.name ?? "Archived category";
 
-/** Opened from a calendar chip. Dialogs opened here stack above it and return focus to it. */
+/** The detail panel for one bill, opened from a calendar chip or a list row. */
 export function OccurrencePeek(
   props: {
     occurrence: Occurrence;

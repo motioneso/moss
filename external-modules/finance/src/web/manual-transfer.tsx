@@ -3,8 +3,8 @@ import {
   Button,
   Checkbox,
   Dialog,
-  Note,
   Select,
+  randomUuid,
   useEffect,
   useRef,
   useState,
@@ -14,7 +14,7 @@ import {
 import type { TransferAccount } from "../domain/manual-transfers";
 import { safeCents } from "../domain/values";
 import { invokeTool } from "./api";
-import { formatCents } from "./format";
+import { dayYearLabel, formatCents } from "./format";
 import { parseLedgerAmount } from "./manual-entry";
 import { announce } from "./states";
 export function transferBalance(account: TransferAccount, movement: number): number {
@@ -57,7 +57,7 @@ export function ManualTransferDialog(props: {
     [cleared, setCleared] = useState(false),
     [captured, setCaptured] = useState<Captured | null>(null);
   const cooldown = useReadCooldown();
-  const [operationId] = useState(() => crypto.randomUUID()),
+  const [operationId] = useState(() => randomUuid()),
     generation = useRef(0),
     pending = useRef(false);
   const read = async () => {
@@ -225,11 +225,6 @@ export function ManualTransferDialog(props: {
       }
     >
       <div className="fnm-block fnm-block--tight fnm-account-management">
-        <Note variant="practical">
-          This records money already moved. Moss sends no money or bank instructions. Only
-          same-currency manual cash accounts and cards are supported; loans, investments, banks and
-          shared ledgers stay separate.
-        </Note>
         {loading ? <p role="status">Reading saved ledgers…</p> : null}
         {message ? <p role="status">{message}</p> : null}
         {blocked ? (
@@ -254,7 +249,8 @@ export function ManualTransferDialog(props: {
                 {formatCents(captured.amountCents, captured.from.isoCurrency)}{" "}
                 {captured.from.isoCurrency}
               </strong>{" "}
-              · {captured.date} · {captured.cleared ? "Cleared" : "Not yet cleared"}
+              · {dayYearLabel(captured.date, "short")} ·{" "}
+              {captured.cleared ? "Cleared" : "Not yet cleared"}
             </p>
             <p>
               From <strong>{captured.from.name}</strong>:{" "}
@@ -267,10 +263,6 @@ export function ManualTransferDialog(props: {
               {formatCents(captured.to.balanceCents, captured.to.isoCurrency)} →{" "}
               {formatCents(captured.toAfter, captured.to.isoCurrency)}
               {captured.to.type === "credit" ? " owed" : ""}.
-            </p>
-            <p>
-              Two linked entries will be saved together. This movement changes neither your total
-              net worth nor income and spending. Existing statement periods stay locked.
             </p>
           </>
         ) : context ? (
@@ -353,10 +345,6 @@ export function ManualTransferDialog(props: {
               />
               Both entries are cleared
             </label>
-            <p className="jds-hint">
-              Mark cleared only if both ledgers have posted this movement. A card balance is shown
-              as the amount owed; paying it lowers that balance.
-            </p>
           </>
         ) : null}
       </div>

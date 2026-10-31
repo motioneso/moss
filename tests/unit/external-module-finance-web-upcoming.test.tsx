@@ -216,7 +216,7 @@ describe("Upcoming bills", () => {
       )!;
     expect(row("Film Club").querySelector(".jds-badge")).toBeNull();
     expect(row("Power").querySelector(".jds-badge")?.textContent).toBe("Past due · projected");
-    await click(button("Details, Film Club"));
+    await click(button("Details, Film Club, Nov 15"));
     const panel = document.querySelector<HTMLElement>('[role="dialog"]')!;
     expect(panel.querySelector("h2")?.textContent).toBe("Film Club");
     expect(panel.textContent).toContain("Projected");
@@ -291,7 +291,12 @@ describe("Upcoming bills", () => {
     expect(value("Bill name")).toBe("Synthetic Stream");
     expect(value("Bill account")).toBe("cash");
     expect(value("Bill category")).toBe("subscriptions");
-    expect(value("Expected bill amount")).toBe("12.99");
+    // The visible label names the amount field; no separate accessible name overrides it.
+    const amount = [...form.querySelectorAll("label")]
+      .find((label) => label.textContent?.startsWith("Expected amount"))
+      ?.querySelector("input");
+    expect(amount?.value).toBe("12.99");
+    expect(amount?.hasAttribute("aria-label")).toBe(false);
     expect(value("First planned date")).toBe("2026-11-16");
     expect(value("Bill repeats")).toBe("monthly");
   });
@@ -325,5 +330,82 @@ describe("Upcoming bills", () => {
     await mount();
     expect(document.body.textContent).toContain("No bills yet");
     expect(document.querySelector('section[aria-label="Suggested bills"]')).toBeNull();
+  });
+
+  it("names every row action after its bill and day", async () => {
+    await mount();
+    const row = [...document.querySelectorAll(".fnm-week .jds-index__row")].find(
+      (node) => node.querySelector(".jds-index__title")?.textContent === "Power"
+    )!;
+    expect(buttons(row).map((candidate) => candidate.getAttribute("aria-label"))).toEqual(
+      expect.arrayContaining([
+        "Match posted, Power, Nov 5",
+        "Skip occurrence, Power, Nov 5",
+        "Change this occurrence, Power, Nov 5",
+        "Details, Power, Nov 5"
+      ])
+    );
+  });
+});
+
+describe("the bill panel hands over to the dialogs it opens", () => {
+  const dialogs = () => [...document.querySelectorAll<HTMLElement>('[role="dialog"]')];
+  const panelOpen = () => document.getElementById("fnm-bill-title") !== null;
+  const withRecordablePower = () => {
+    results["finance.bills.read"] = {
+      ...bills(true),
+      occurrences: bills(true).occurrences.map((o) => ({
+        ...o,
+        canRecordEntry: o.planId === "power"
+      }))
+    };
+  };
+
+  it.each([
+    ["Change this occurrence", "Change this occurrence"],
+    ["Record bill entry", "Record bill entry"],
+    ["Match posted", "Match a posted transaction"]
+  ])(
+    "closes the panel when %s opens its dialog and returns focus to the chip on cancel",
+    async (action, title) => {
+      withRecordablePower();
+      await mount();
+      const opener = chip("Power, Nov 5, $90.00, past due");
+      opener.focus();
+      await click(opener);
+      expect(panelOpen()).toBe(true);
+      await click(button(action, dialogs()[0]!));
+      expect(panelOpen()).toBe(false);
+      expect(dialogs()).toHaveLength(1);
+      expect(dialogs()[0]!.querySelector(".jds-dialog__title")?.textContent).toBe(title);
+      await click(button("Cancel", dialogs()[0]!));
+      expect(dialogs()).toHaveLength(0);
+      expect(document.activeElement).toBe(opener);
+    }
+  );
+
+  it("returns focus to the Details button that opened the panel", async () => {
+    await mount();
+    const details = button("Details, Power, Nov 5");
+    await click(details);
+    await click(button("Match posted", dialogs()[0]!));
+    expect(panelOpen()).toBe(false);
+    await click(button("Cancel", dialogs()[0]!));
+    expect(document.activeElement).toBe(details);
+  });
+
+  it("returns focus to a row's own button when a row opens the dialog after a panel did", async () => {
+    await mount();
+    const opener = chip("Power, Nov 5, $90.00, past due");
+    opener.focus();
+    await click(opener);
+    await click(button("Change this occurrence", dialogs()[0]!));
+    await click(button("Cancel", dialogs()[0]!));
+    const rowButton = button("Change this occurrence, Film Club, Nov 15");
+    rowButton.focus();
+    await click(rowButton);
+    expect(dialogs()).toHaveLength(1);
+    await click(button("Cancel", dialogs()[0]!));
+    expect(document.activeElement).toBe(rowButton);
   });
 });

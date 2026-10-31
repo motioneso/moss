@@ -87,6 +87,45 @@ describe("manual ledger forms", () => {
     expect(f.invoke).toHaveBeenCalledTimes(2);
     expect(f.onSaved).not.toHaveBeenCalled();
   });
+  it("says why Save is off when an entry amount is zero or negative", async () => {
+    const f = await form({ status: "succeeded", result: { status: "ok" } }, true);
+    await f.fill();
+    const amount = (value: string) =>
+      act(async () => f.field("Transaction amount").props.onChange({ target: { value } }));
+    const reason = "Enter an amount above zero. For a refund, set Direction to Money in / refund.";
+    expect(f.button("Save transaction").props.disabled).toBe(false);
+    expect(JSON.stringify(rendered!.toJSON())).not.toContain(reason);
+    for (const gone of ["does not move bank money", "Money out reduces this account balance"])
+      expect(JSON.stringify(rendered!.toJSON())).not.toContain(gone);
+    for (const value of ["-25", "0", "0.00"]) {
+      await amount(value);
+      expect(f.button("Save transaction").props.disabled).toBe(true);
+      expect(JSON.stringify(rendered!.toJSON())).toContain(reason);
+    }
+    await amount("25");
+    expect(f.button("Save transaction").props.disabled).toBe(false);
+    expect(JSON.stringify(rendered!.toJSON())).not.toContain(reason);
+  });
+  it("still accepts a zero or negative opening balance on a new account", async () => {
+    const f = await form({ status: "succeeded", result: { status: "ok" } });
+    await f.fill();
+    for (const value of ["0", "-5"]) {
+      await act(async () => f.field("Opening balance").props.onChange({ target: { value } }));
+      expect(f.button("Add account").props.disabled).toBe(false);
+      expect(JSON.stringify(rendered!.toJSON())).not.toContain("Enter an amount above zero");
+    }
+  });
+  it("opens without explanatory captions or a purpose subtitle", async () => {
+    const account = await form({ status: "succeeded", result: { status: "ok" } });
+    const text = JSON.stringify(rendered!.toJSON());
+    for (const gone of [
+      "Keep an account in Moss",
+      "Opening balances do not count",
+      "Manual accounts are currently private"
+    ])
+      expect(text).not.toContain(gone);
+    expect(account.field("Account name")).toBeDefined();
+  });
   it("sends exact cents and explicit cleared state then closes only on committed success", async () => {
     const f = await form({ status: "succeeded", result: { status: "ok" } }, true);
     await f.fill();

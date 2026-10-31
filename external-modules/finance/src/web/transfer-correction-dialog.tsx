@@ -2,7 +2,7 @@ import {
   Button,
   Checkbox,
   Dialog,
-  Note,
+  randomUuid,
   useEffect,
   useRef,
   useState,
@@ -13,7 +13,7 @@ import type { TransferReview } from "../domain/transfer-corrections";
 import type { TransferAccount } from "../domain/manual-transfers";
 import { isCalendarDate } from "../domain/values";
 import { invokeTool } from "./api";
-import { formatCents } from "./format";
+import { dayYearLabel, formatCents } from "./format";
 import { transferBalance } from "./manual-transfer";
 import { useReadCooldown } from "./read-cooldown";
 interface Context extends Record<string, unknown> {
@@ -23,6 +23,8 @@ interface Context extends Record<string, unknown> {
   receipt: TransferReview | null;
   accounts: TransferAccount[];
 }
+const statementThrough = (account?: TransferAccount): string =>
+  account?.lastReconciledDate ? dayYearLabel(account.lastReconciledDate, "short") : "none";
 interface Captured {
   receipt: TransferReview;
   from: TransferAccount;
@@ -38,6 +40,8 @@ export function TransferCorrectionDialog(props: {
   onClose: () => void;
   onSaved: () => void;
   onReview: (id: string) => void;
+  /** Where focus lands when the review closes; defaults to the control that opened it. */
+  returnFocusRef?: { readonly current: HTMLElement | null };
 }): ReactNodeLike {
   const [context, setContext] = useState<Context | null>(null),
     [loading, setLoading] = useState(true),
@@ -47,7 +51,7 @@ export function TransferCorrectionDialog(props: {
     [date, setDate] = useState(""),
     [cleared, setCleared] = useState(false),
     [captured, setCaptured] = useState<Captured | null>(null),
-    [operationId] = useState(() => crypto.randomUUID());
+    [operationId] = useState(() => randomUuid());
   const pending = useRef(false),
     generation = useRef(0),
     cooldown = useReadCooldown();
@@ -181,10 +185,10 @@ export function TransferCorrectionDialog(props: {
   return (
     <Dialog
       title="Review manual transfer"
-      description="Original history stays intact"
       scrollBody
       closeDisabled={busy}
       closeLabel="Close transfer review"
+      returnFocusRef={props.returnFocusRef}
       dismissOnEscape={!busy}
       dismissOnBackdrop={!busy}
       onClose={close}
@@ -219,10 +223,6 @@ export function TransferCorrectionDialog(props: {
       }
     >
       <div className="fnm-block fnm-block--tight fnm-account-management">
-        <Note variant="practical">
-          Correct a recording mistake with a new inverse pair. The original entries and statement
-          history stay saved. Moss sends no money or bank instructions.
-        </Note>
         {loading ? <p role="status">Reading saved transfer and ledgers…</p> : null}
         {message ? <p role="status">{message}</p> : null}
         {blocked ? (
@@ -240,7 +240,7 @@ export function TransferCorrectionDialog(props: {
               <strong>
                 {formatCents(receipt.amountCents, receipt.isoCurrency)} {receipt.isoCurrency}
               </strong>{" "}
-              · Original date {receipt.date}
+              · Original date {dayYearLabel(receipt.date, "short")}
             </p>
             <p>
               From <strong>{receipt.fromName}</strong> to <strong>{receipt.toName}</strong>.
@@ -257,8 +257,8 @@ export function TransferCorrectionDialog(props: {
             {receipt.correctedBy ? (
               <>
                 <p role="status">
-                  Correction recorded on {receipt.correctedBy.date}. The original cannot be
-                  corrected twice.
+                  Correction recorded on {dayYearLabel(receipt.correctedBy.date, "short")}. The
+                  original cannot be corrected twice.
                 </p>
                 <Button
                   variant="secondary"
@@ -277,7 +277,7 @@ export function TransferCorrectionDialog(props: {
         {captured ? (
           <>
             <p>
-              <strong>New correction · {captured.date}</strong> ·{" "}
+              <strong>New correction · {dayYearLabel(captured.date, "short")}</strong> ·{" "}
               {captured.cleared ? "Both entries cleared" : "Not yet cleared"}
             </p>
             <p>
@@ -291,10 +291,6 @@ export function TransferCorrectionDialog(props: {
               {formatCents(captured.to.balanceCents, captured.receipt.isoCurrency)} →{" "}
               {formatCents(captured.toAfter, captured.receipt.isoCurrency)}
               {captured.to.type === "credit" ? " owed" : ""}.
-            </p>
-            <p>
-              Two new linked entries will be saved together. Income, spending and total net worth
-              are unchanged; the original remains in history.
             </p>
           </>
         ) : receipt && !receipt.correctedBy && !unavailable ? (
@@ -314,8 +310,8 @@ export function TransferCorrectionDialog(props: {
             </label>
             {dateIssue ? <p role="status">{dateIssue}</p> : null}
             <p className="jds-hint">
-              {from?.name}: statement through {from?.lastReconciledDate ?? "none"}. {to?.name}:
-              statement through {to?.lastReconciledDate ?? "none"}.
+              {from?.name}: statement through {statementThrough(from)}. {to?.name}: statement
+              through {statementThrough(to)}.
             </p>
             <label className="fnm-inline">
               <Checkbox

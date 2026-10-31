@@ -7,6 +7,7 @@ import type { ModuleToolOutcome } from "@moss/module-web-sdk";
 import { MerchantRuleDialog } from "../../external-modules/finance/src/web/merchant-rule-dialog";
 import { MerchantRulesSection } from "../../external-modules/finance/src/web/merchant-rules";
 import { invokeTool } from "../../external-modules/finance/src/web/api";
+import { dayYearLabel, monthLabel } from "../../external-modules/finance/src/web/format";
 vi.mock("../../external-modules/finance/src/web/api", () => ({ invokeTool: vi.fn() }));
 const categories = [
   { id: "groceries", name: "Groceries" },
@@ -139,6 +140,50 @@ describe("merchant rule captured review", () => {
       await act(async () => r.unmount());
     }
   );
+  it("says why Review rule is off until the history is previewed, then shows readable dates", async () => {
+    const { r } = await dialog({ status: "cancelled" }, false);
+    const reason = "Preview matching history to review this rule.";
+    expect(button(r, "Review rule").props.disabled).toBe(true);
+    expect(JSON.stringify(r.toJSON())).toContain(reason);
+    vi.mocked(invokeTool).mockResolvedValue({
+      kind: "ok",
+      result: {
+        ...preview,
+        total: 1,
+        examples: [
+          {
+            id: "t1",
+            name: "Synthetic shop",
+            date: "2026-10-02",
+            amountCents: 1250,
+            isoCurrency: "USD",
+            categoryName: "Dining",
+            alreadyCategorized: false
+          }
+        ]
+      }
+    });
+    await act(async () => button(r, "Preview matching history").props.onClick());
+    const text = JSON.stringify(r.toJSON());
+    expect(text).not.toContain(reason);
+    expect(text).toContain(monthLabel("2026-10"));
+    expect(text).toContain(dayYearLabel("2026-10-02", "short"));
+    expect(text).not.toContain("2026-10-02");
+    expect(text).not.toContain("not retroactive");
+    expect(button(r, "Review rule").props.disabled).toBe(false);
+    await act(async () => r.unmount());
+  });
+  it("opens without the future-arrivals note or the normalization explainer", async () => {
+    const { r } = await dialog({ status: "cancelled" }, false);
+    const text = JSON.stringify(r.toJSON());
+    for (const gone of [
+      "Rules apply to future uncategorized arrivals",
+      "Matching ignores case",
+      "One normalized merchant match"
+    ])
+      expect(text).not.toContain(gone);
+    await act(async () => r.unmount());
+  });
   it("refuses to create over a rule already found in the read-only preview", async () => {
     const { r, props } = await dialog({ status: "cancelled" }, false);
     vi.mocked(invokeTool).mockResolvedValue({ kind: "ok", result: { ...preview, existing: rule } });
@@ -178,6 +223,43 @@ describe("merchant rule loading", () => {
       if (r) await act(async () => r!.unmount());
       vi.useRealTimers();
     }
+  });
+  it("keeps the search box usable while a search runs and ignores Enter until it finishes", async () => {
+    const data = { supported: true, ready: true, rules: [rule], categories, total: 1, limit: 50 };
+    vi.mocked(invokeTool).mockReset().mockResolvedValue({ kind: "ok", result: data });
+    let r!: ReactTestRenderer;
+    await act(async () => {
+      r = create(createElement(MerchantRulesSection, { tools: { invoke: vi.fn() } }));
+    });
+    const search = () => r.root.findByProps({ "aria-label": "Search merchant rules" });
+    let finish!: (value: Awaited<ReturnType<typeof invokeTool>>) => void;
+    vi.mocked(invokeTool).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    await act(async () => search().props.onChange({ currentTarget: { value: "shop" } }));
+    await act(async () => search().props.onKeyDown({ key: "Enter" }));
+    expect(invokeTool).toHaveBeenLastCalledWith("finance.rules.list", {
+      search: "shop",
+      limit: 50
+    });
+    const started = vi.mocked(invokeTool).mock.calls.length;
+    expect(search().props.disabled).toBeFalsy();
+    expect(button(r, "Search rules").props.disabled).toBe(true);
+    await act(async () => search().props.onChange({ currentTarget: { value: "shops" } }));
+    expect(search().props.value).toBe("shops");
+    await act(async () => search().props.onKeyDown({ key: "Enter" }));
+    expect(vi.mocked(invokeTool).mock.calls.length).toBe(started);
+    await act(async () => finish({ kind: "ok", result: data }));
+    await act(async () => search().props.onKeyDown({ key: "Enter" }));
+    expect(vi.mocked(invokeTool).mock.calls.length).toBe(started + 1);
+    expect(invokeTool).toHaveBeenLastCalledWith("finance.rules.list", {
+      search: "shops",
+      limit: 50
+    });
+    await act(async () => r.unmount());
   });
   it("preserves a loaded view on read failure and keeps edits unavailable until a successful check", async () => {
     const tools = { invoke: vi.fn() };

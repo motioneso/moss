@@ -658,7 +658,7 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
           });
         await accountAction(page, "Synthetic wallet", "Reconcile Synthetic wallet");
         const review = page.getByRole("dialog", { name: "Reconcile a statement", exact: true });
-        await review.getByLabel("Statement balance", { exact: true }).fill("122.21");
+        await review.getByLabel("Statement balance (USD)", { exact: true }).fill("122.21");
         const finish = review.getByRole("button", { name: "Finish reconciliation", exact: true });
         expect(await finish.isDisabled()).toBe(true);
         await review.getByRole("button", { name: "Close", exact: true }).click();
@@ -676,7 +676,7 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
           artifacts
         );
         await accountAction(page, "Synthetic wallet", "Reconcile Synthetic wallet");
-        await review.getByLabel("Statement balance", { exact: true }).fill("122.22");
+        await review.getByLabel("Statement balance (USD)", { exact: true }).fill("122.22");
         expect(await finish.isEnabled()).toBe(true);
         const selection = review.getByRole("checkbox", {
           name: /^Cleared: Synthetic manual market/

@@ -97,7 +97,6 @@ export function MerchantRulesSection(props: {
           aria-label="Search merchant rules"
           maxLength={200}
           value={draftSearch}
-          disabled={loading || cooldown.cooling}
           onChange={(e) => setSearch(e.currentTarget.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !loading && !cooldown.cooling) void load(draftSearch.trim());
@@ -138,19 +137,14 @@ export function MerchantRulesSection(props: {
       ) : null}
       {uncertain ? (
         <Note variant="practical">
-          Check saved rules successfully before reviewing another change. No write has been
-          automatically retried.
+          Check saved rules successfully before reviewing another change.
         </Note>
       ) : null}
       {data && !data.supported ? (
-        <Note variant="practical">
-          Merchant rule management needs updated Finance storage. Your existing compatibility rules
-          are preserved.
-        </Note>
+        <Note variant="practical">Merchant rule management needs updated Finance storage.</Note>
       ) : data && !data.ready ? (
         <Note variant="practical">
-          Merchant rules are getting ready. Check saved rules again shortly. If setup stays
-          unavailable, an administrator can check the Finance migration worker.
+          Merchant rules are getting ready. Check saved rules again shortly.
         </Note>
       ) : data?.ready ? (
         <>

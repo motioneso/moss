@@ -2,7 +2,6 @@ import { useReadCooldown } from "./read-cooldown";
 import {
   Button,
   Dialog,
-  Note,
   RowIndex,
   RowIndexItem,
   Select,
@@ -16,7 +15,7 @@ import {
 import type { MerchantRule } from "../domain/merchant-rules";
 import type { RuleCategory, RulePreview } from "./merchant-rule-types";
 import { invokeTool } from "./api";
-import { currentMonth, formatCents } from "./format";
+import { currentMonth, dayYearLabel, formatCents, monthLabel } from "./format";
 import { announce } from "./states";
 export function MerchantRuleDialog(props: {
   rule: MerchantRule | null;
@@ -146,7 +145,7 @@ export function MerchantRuleDialog(props: {
       description={
         captured
           ? `${captured.payeeKey} · ${captured.enabled ? captured.categoryName : "Disabled"}`
-          : "One normalized merchant match · future arrivals only"
+          : undefined
       }
       scrollBody
       onClose={close}
@@ -200,17 +199,13 @@ export function MerchantRuleDialog(props: {
       }
     >
       <div className="fnm-manual-form">
-        <Note variant="practical">
-          Rules apply to future uncategorized arrivals. Existing transactions and user categories
-          stay unchanged. No payment is made.
-        </Note>
         {captured ? (
           <>
             <p>
               Match the complete normalized merchant <strong>{captured.payeeKey}</strong>.{" "}
               {captured.enabled
                 ? `Use ${captured.categoryName} for new uncategorized arrivals.`
-                : "Stop this rule from assigning future categories. Its saved configuration and history remain."}
+                : "Stop this rule from assigning future categories."}
             </p>
             {original ? (
               <p className="jds-hint">
@@ -238,10 +233,6 @@ export function MerchantRuleDialog(props: {
                 }}
               />
             </label>
-            <p className="jds-hint">
-              Matching ignores case, digits and punctuation, and combines spaces. Preview the
-              normalized name before saving. To change an existing match, add a separate rule.
-            </p>
             <label className="fnm-block fnm-block--tight">
               Category
               <Select
@@ -298,6 +289,9 @@ export function MerchantRuleDialog(props: {
                     : "Preview matching history"}
               </Button>
             </div>
+            {merchant.trim() && categoryValid && !preview && !previewing && !message ? (
+              <p className="jds-hint">Preview matching history to review this rule.</p>
+            ) : null}
             {preview ? (
               <div className="fnm-block fnm-block--tight">
                 <p>
@@ -310,8 +304,7 @@ export function MerchantRuleDialog(props: {
                 ) : null}
                 <p className="jds-hint">
                   {preview.examples.length} of {preview.total} matching transactions in{" "}
-                  {preview.month}. These examples stay unchanged; this is not retroactive
-                  application.
+                  {monthLabel(preview.month)}
                 </p>
                 {preview.examples.length ? (
                   <RowIndex density="compact">
@@ -319,16 +312,13 @@ export function MerchantRuleDialog(props: {
                       <RowIndexItem
                         key={r.id}
                         title={r.name}
-                        excerpt={`${r.date} · ${r.categoryName}${r.alreadyCategorized ? " · already categorized" : ""}`}
+                        excerpt={`${dayYearLabel(r.date, "short")} · ${r.categoryName}${r.alreadyCategorized ? " · already categorized" : ""}`}
                         meta={`${r.amountCents < 0 ? "Inflow" : "Outflow"} ${formatCents(Math.abs(r.amountCents), r.isoCurrency)}`}
                       />
                     ))}
                   </RowIndex>
                 ) : (
-                  <p>
-                    No matching history in this month. You can still save this rule for future
-                    arrivals.
-                  </p>
+                  <p>No matching history in this month.</p>
                 )}
               </div>
             ) : null}

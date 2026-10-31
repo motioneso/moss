@@ -86,3 +86,141 @@ it("renders no chip row when nothing is filtered", async () => {
   expect(r.toJSON()).toBeNull();
   await act(async () => r.unmount());
 });
+
+// Chip remove buttons unmount with their chip, so focus has to move before the filter clears.
+type ChipProps = Parameters<typeof RegisterFilterChips>[0];
+const chipButtons = (count: number) => Array.from({ length: count }, () => ({ focus: vi.fn() }));
+
+async function renderChips(over: Partial<ChipProps>, buttons: { focus: () => void }[]) {
+  let r!: ReactTestRenderer;
+  await act(async () => {
+    r = create(
+      createElement(RegisterFilterChips, {
+        value: {
+          ...EMPTY_FILTERS,
+          accountId: "acc-1",
+          postingState: "posted" as const,
+          direction: "outflow" as const
+        },
+        onChange: vi.fn(),
+        accounts: [{ accountId: "acc-1", name: "Rewards Visa" }],
+        categories: [],
+        ownOnly: false,
+        onIncludeShared: vi.fn(),
+        ...over
+      }),
+      {
+        createNodeMock: (element) =>
+          (element.props as { className?: string }).className === "fnm-chips"
+            ? { querySelectorAll: () => buttons }
+            : null
+      }
+    );
+  });
+  return r;
+}
+
+const press = (r: ReactTestRenderer, name: string) =>
+  act(async () =>
+    r.root
+      .findAllByType("button")
+      .find((b) => b.props["aria-label"] === name || b.children.includes(name))!
+      .props.onClick()
+  );
+
+it("moves focus to the next chip when a chip is removed", async () => {
+  const buttons = chipButtons(3);
+  const returnFocus = vi.fn();
+  const r = await renderChips({ returnFocus }, buttons);
+  await press(r, "Remove account filter Rewards Visa");
+  expect(buttons[1]!.focus).toHaveBeenCalledOnce();
+  expect(buttons[0]!.focus).not.toHaveBeenCalled();
+  expect(buttons[2]!.focus).not.toHaveBeenCalled();
+  expect(returnFocus).not.toHaveBeenCalled();
+  await act(async () => r.unmount());
+});
+
+it("moves focus to the previous chip when the last chip is removed", async () => {
+  const buttons = chipButtons(3);
+  const r = await renderChips({ returnFocus: vi.fn() }, buttons);
+  await press(r, "Remove money direction filter Money out");
+  expect(buttons[1]!.focus).toHaveBeenCalledOnce();
+  expect(buttons[0]!.focus).not.toHaveBeenCalled();
+  expect(buttons[2]!.focus).not.toHaveBeenCalled();
+  await act(async () => r.unmount());
+});
+
+it("counts the Your entries only chip when it picks the neighbouring chip", async () => {
+  const buttons = chipButtons(3);
+  const onIncludeShared = vi.fn();
+  const r = await renderChips(
+    {
+      value: { ...EMPTY_FILTERS, accountId: "acc-1", direction: "outflow" as const },
+      ownOnly: true,
+      onIncludeShared,
+      returnFocus: vi.fn()
+    },
+    buttons
+  );
+  await press(r, "Remove account filter Rewards Visa");
+  expect(buttons[2]!.focus).toHaveBeenCalledOnce();
+  expect(buttons[1]!.focus).not.toHaveBeenCalled();
+  await press(r, "Include shared records");
+  expect(buttons[1]!.focus).toHaveBeenCalledOnce();
+  expect(onIncludeShared).toHaveBeenCalledOnce();
+  await act(async () => r.unmount());
+});
+
+it("hands focus to the Filters button, before the filter clears, when the last chip goes", async () => {
+  const buttons = chipButtons(1);
+  const onChange = vi.fn();
+  const returnFocus = vi.fn();
+  const r = await renderChips(
+    { value: { ...EMPTY_FILTERS, accountId: "acc-1" }, onChange, returnFocus },
+    buttons
+  );
+  await press(r, "Remove account filter Rewards Visa");
+  expect(returnFocus).toHaveBeenCalledOnce();
+  expect(buttons[0]!.focus).not.toHaveBeenCalled();
+  expect(returnFocus.mock.invocationCallOrder[0]).toBeLessThan(
+    onChange.mock.invocationCallOrder[0]!
+  );
+  await act(async () => r.unmount());
+});
+
+it("hands focus to the Filters button before Clear filters empties the chips", async () => {
+  const onChange = vi.fn();
+  const returnFocus = vi.fn();
+  const r = await renderChips({ onChange, returnFocus }, chipButtons(3));
+  await press(r, "Clear filters");
+  expect(onChange).toHaveBeenLastCalledWith(EMPTY_FILTERS);
+  expect(returnFocus).toHaveBeenCalledOnce();
+  expect(returnFocus.mock.invocationCallOrder[0]).toBeLessThan(
+    onChange.mock.invocationCallOrder[0]!
+  );
+  await act(async () => r.unmount());
+});
+
+it("hands focus to the Filters button before the panel's Clear filters removes itself", async () => {
+  const onChange = vi.fn();
+  const returnFocus = vi.fn();
+  let r!: ReactTestRenderer;
+  await act(async () => {
+    r = create(
+      createElement(RegisterFilterPanel, {
+        value: { ...EMPTY_FILTERS, direction: "inflow" as const },
+        onChange,
+        accounts: [],
+        categories: [],
+        returnFocus
+      })
+    );
+  });
+  await press(r, "Clear filters");
+  expect(onChange).toHaveBeenLastCalledWith(EMPTY_FILTERS);
+  expect(returnFocus).toHaveBeenCalledOnce();
+  expect(returnFocus.mock.invocationCallOrder[0]).toBeLessThan(
+    onChange.mock.invocationCallOrder[0]!
+  );
+  await act(async () => r.unmount());
+});

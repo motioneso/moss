@@ -85,17 +85,25 @@ export function currentMonth(): string {
 // the parser lets through is guaranteed legal for the queue params gate.
 const MAX_ASSIGN_CENTS = 100_000_000;
 
+// A comma counts only as a thousands separator: one to three leading digits, then groups of
+// exactly three. A decimal comma such as "12,50" fails instead of reading as 1250.
+const AMOUNT_TEXT = /^-?(?:(?:\d+|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{0,2})?|\.\d{1,2})$/;
+
 /**
- * Parse a user-typed assignment amount ("1,234.56", "$50", "-20") into
- * integer cents (FIN-03, #1148). Null — not an exception — for empty, garbage,
- * sub-cent precision, or out-of-bounds input: the budget screen keeps the
- * previous value rather than enqueueing a bad job.
+ * Parse a user-typed assignment amount ("1,234.56", "$50", "12.50 €", "-20") into integer
+ * cents (FIN-03, #1148). One currency symbol of any kind may open or close the amount and
+ * spaces are ignored. Returns null (never throws) for empty text, garbage, a decimal comma,
+ * sub-cent precision or an out-of-bounds amount, so the budget screen keeps its previous value
+ * instead of enqueueing a bad job.
  */
 export function parseAmountToCents(text: string): number | null {
-  const cleaned = text.trim().replace(/[$,\s]/g, "");
-  if (!/^-?(\d+(\.\d{0,2})?|\.\d{1,2})$/.test(cleaned)) return null;
+  const cleaned = text
+    .replace(/\s+/gu, "")
+    .replace(/^(-?)\p{Sc}/u, "$1")
+    .replace(/\p{Sc}$/u, "");
+  if (!AMOUNT_TEXT.test(cleaned)) return null;
   try {
-    const cents = decimalToCents(cleaned);
+    const cents = decimalToCents(cleaned.replace(/,/g, ""));
     return Math.abs(cents) > MAX_ASSIGN_CENTS ? null : cents;
   } catch {
     return null;

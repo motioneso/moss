@@ -193,6 +193,7 @@ describe("Accounts screen (#3177)", () => {
         {
           itemId: "i1",
           institutionId: "ins_1",
+          institutionName: "Maple Credit Union",
           status: "reauth-required",
           lastSyncAt: "2026-10-05T09:00:00Z",
           message: "The login details of this item have changed."
@@ -201,15 +202,91 @@ describe("Accounts screen (#3177)", () => {
     });
     const { renderer, openAssistant } = await render();
     const text = textOf(renderer);
-    expect(text).toContain("Sign-in expired");
+    expect(text).toContain("Maple Credit Union · Sign-in expired");
     expect(text).toContain("The login details of this item have changed.");
     expect(text).toContain("As of October 5");
     expect(text).toContain("xxx7302");
 
     const reconnect = buttonNamed(renderer, "Reconnect");
     expect(reconnect).toBeDefined();
+    expect(reconnect!.props["aria-label"]).toBe("Reconnect Maple Credit Union");
     act(() => reconnect!.props.onClick());
-    expect(openAssistant).toHaveBeenCalledWith({ starterPrompt: "Reconnect my bank account" });
+    expect(openAssistant).toHaveBeenCalledWith({
+      starterPrompt: "Reconnect my Maple Credit Union account"
+    });
+
+    // The status line and its message sit in one evenly spaced block.
+    const block = renderer.root.findAll(
+      (node) => node.type === "div" && innerText(node).includes("The login details")
+    );
+    expect(block.some((node) => String(node.props.className).includes("fnm-block--tight"))).toBe(
+      true
+    );
+  });
+
+  it("names each bank on its Reconnect button and starts that bank's reconnect", async () => {
+    const base = { type: "depository", isoCurrency: "USD", mask: null, balanceCents: 1000 };
+    const expired = { institutionId: "ins", status: "reauth-required", message: null };
+    stubAccountsRead({
+      accounts: [
+        { ...base, accountId: "a1", itemId: "i1", name: "Savings" },
+        { ...base, accountId: "a2", itemId: "i2", name: "Everyday" }
+      ],
+      banks: [
+        { ...expired, itemId: "i1", institutionName: "Maple Credit Union", lastSyncAt: null },
+        { ...expired, itemId: "i2", institutionName: "Harbor Bank", lastSyncAt: null }
+      ]
+    });
+    const { renderer, openAssistant } = await render();
+    const reconnects = renderer.root
+      .findAllByType("button")
+      .filter((node) => innerText(node) === "Reconnect");
+    expect(reconnects.map((node) => node.props["aria-label"])).toEqual([
+      "Reconnect Maple Credit Union",
+      "Reconnect Harbor Bank"
+    ]);
+    act(() => reconnects[1]!.props.onClick());
+    expect(openAssistant).toHaveBeenLastCalledWith({
+      starterPrompt: "Reconnect my Harbor Bank account"
+    });
+    act(() => reconnects[0]!.props.onClick());
+    expect(openAssistant).toHaveBeenLastCalledWith({
+      starterPrompt: "Reconnect my Maple Credit Union account"
+    });
+  });
+
+  it("gives every account table column a header for screen readers", async () => {
+    stubAccountsRead({
+      accounts: [
+        {
+          accountId: "chk",
+          itemId: "i1",
+          name: "Checking",
+          mask: "4821",
+          type: "depository",
+          balanceCents: 50000,
+          isoCurrency: "USD"
+        }
+      ],
+      banks: [
+        {
+          itemId: "i1",
+          institutionId: "ins_1",
+          institutionName: "Sandbox First Bank",
+          status: "connected",
+          lastSyncAt: new Date().toISOString(),
+          message: null
+        }
+      ]
+    });
+    const { renderer } = await render();
+    const headers = renderer.root.findAllByType("th");
+    expect(headers.map(innerText)).toEqual(["Account", "Balance", "Actions"]);
+    for (const header of headers) {
+      expect(header.props.scope).toBe("col");
+      expect(header.props.className).toBe("jds-sr-only");
+    }
+    expect(renderer.root.findAllByType("thead")).toHaveLength(1);
   });
 
   it("offers a manual account and a bank connection when there are no accounts", async () => {

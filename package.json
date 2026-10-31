@@ -206,7 +206,7 @@
     "test:recording-cleanup": "tsx scripts/test-integration.ts tests/integration/recording-managed-deletion.test.ts tests/integration/recording-deletion-process-race.test.ts",
     "test:integration:finance-manual": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-manual-ledger.test.ts",
     "test:integration:finance-live": "pnpm build:app-map && pnpm --filter @moss/web build && MOSS_FINANCE_LIVE=1 tsx scripts/test-integration.ts tests/integration/finance-page-live.test.ts",
-    "test:integration:finance-all": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/*finance*.test.ts",
+    "test:integration:finance-all": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/*finance*.test.ts tests/integration/module-page-tool-invoke.test.ts",
     "test:integration:finance-backend": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/*finance*.test.ts tests/integration/module-storage-rpc.test.ts --exclude tests/integration/finance-page-live.test.ts",
     "test:integration:finance-cards": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-card-reserves.test.ts tests/integration/finance-tables-install.test.ts tests/integration/module-storage-rpc.test.ts",
     "test:integration:finance-cards-negative": "pnpm build:app-map && MOSS_FINANCE_CARD_RLS_NEGATIVE=1 tsx scripts/test-integration.ts tests/integration/finance-card-reserves.test.ts",

@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModuleToolOutcome } from "@moss/module-web-sdk";
+import { dayYearLabel } from "../../external-modules/finance/src/web/format";
 import { ImportDialog } from "../../external-modules/finance/src/web/import-dialog";
 let rendered: ReactTestRenderer | undefined;
 afterEach(async () => {
@@ -90,6 +91,60 @@ describe("CSV review form", () => {
       })
     );
     expect(f.onSaved).toHaveBeenCalledOnce();
+  });
+  it("clears the file picker after every pick so the same file can be chosen again", async () => {
+    const f = await form({ status: "succeeded", result: { status: "ok" } });
+    const bad = {
+      value: "C:\\fakepath\\bank.csv",
+      files: [{ size: 1, arrayBuffer: async () => new Uint8Array([0xff]).buffer }]
+    };
+    await act(async () => f.field("CSV file").props.onChange({ target: bad }));
+    expect(JSON.stringify(rendered!.toJSON())).toContain("Save the CSV as UTF-8");
+    expect(bad.value).toBe("");
+    expect(() => f.field("Date column")).toThrow();
+    const fixed = {
+      value: "C:\\fakepath\\bank.csv",
+      files: [
+        {
+          size: 70,
+          arrayBuffer: async () =>
+            new TextEncoder().encode("Date,Payee,Amount\n2026-10-02,Synthetic,1.23").buffer
+        }
+      ]
+    };
+    await act(async () => f.field("CSV file").props.onChange({ target: fixed }));
+    expect(fixed.value).toBe("");
+    expect(f.field("Date column")).toBeDefined();
+    expect(JSON.stringify(rendered!.toJSON())).not.toContain("Save the CSV as UTF-8");
+  });
+  it("reports counts and readable dates without explanatory captions", async () => {
+    const f = await form({ status: "succeeded", result: { status: "ok" } });
+    await act(async () =>
+      f.field("CSV file").props.onChange({
+        target: {
+          files: [
+            {
+              size: 70,
+              arrayBuffer: async () =>
+                new TextEncoder().encode("Date,Payee,Amount\n2026-10-02,Synthetic,1.23").buffer
+            }
+          ]
+        }
+      })
+    );
+    const mapped = JSON.stringify(rendered!.toJSON());
+    expect(mapped).toContain(" data rows · ");
+    for (const gone of ["Add posted transactions", "Choose how to read", "Every row uses"])
+      expect(mapped).not.toContain(gone);
+    await f.load();
+    const reviewed = JSON.stringify(rendered!.toJSON());
+    expect(reviewed).toContain("1 possible duplicate. 1 decision remaining.");
+    expect(reviewed).toContain(dayYearLabel("2026-10-02", "short"));
+    expect(reviewed).not.toContain("2026-10-02");
+    for (const gone of ["Cleared means", "Entries begin uncategorized", "Choose Skip or Import"])
+      expect(reviewed).not.toContain(gone);
+    await f.choose("Duplicate decision for row 1", "skip");
+    expect(JSON.stringify(rendered!.toJSON())).toContain("0 decisions remaining.");
   });
   it("explains a failed read without suggesting an import was saved", async () => {
     const f = await form({ status: "succeeded", result: { status: "ok" } }, { status: "failed" });

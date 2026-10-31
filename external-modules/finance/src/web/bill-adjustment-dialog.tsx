@@ -1,7 +1,6 @@
 import {
   Button,
   Dialog,
-  Note,
   useEffect,
   useRef,
   useState,
@@ -9,7 +8,7 @@ import {
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import type { BillsView, Occurrence } from "./screens/upcoming";
-import { centsToAmountInput, formatCents, parseAmountToCents } from "./format";
+import { centsToAmountInput, dayYearLabel, formatCents, parseAmountToCents } from "./format";
 import { isCalendarDate } from "../domain/values";
 import { invalidateQueries } from "./store";
 export function BillAdjustmentDialog(props: {
@@ -17,6 +16,7 @@ export function BillAdjustmentDialog(props: {
   occurrence: Occurrence;
   reset: boolean;
   tools?: ExternalModuleToolsHandleV1;
+  returnFocusRef?: { current: HTMLElement | null };
   onClose: () => void;
   onUncertain: () => void;
 }): ReactNodeLike {
@@ -104,8 +104,9 @@ export function BillAdjustmentDialog(props: {
       scrollBody
       closeLabel="Close"
       closeDisabled={busy}
+      returnFocusRef={props.returnFocusRef}
       onClose={close}
-      description={`${original.name} · originally ${original.dueDate}`}
+      description={`${original.name} · originally ${dayYearLabel(original.dueDate, "short")}`}
       footer={
         <div className="fnm-spread">
           <Button variant="secondary" disabled={busy} onClick={close}>
@@ -129,26 +130,18 @@ export function BillAdjustmentDialog(props: {
       }
     >
       <div className="fnm-block fnm-block--tight">
-        <Note variant="practical">
-          This changes one projection. No payment is made and no transaction is created or edited.
-          Later dates keep the original schedule.
-        </Note>
         <p>
-          Current projection: {original.plannedDate ?? original.dueDate} ·{" "}
+          Current projection: {dayYearLabel(original.plannedDate ?? original.dueDate, "short")} ·{" "}
           {formatCents(original.expectedCents, data.isoCurrency)}
         </p>
         {captured ? (
           <>
             <p>
               <strong>
-                {reset ? "Return to plan" : "Proposed projection"}: {captured.plannedDate} ·{" "}
+                {reset ? "Return to plan" : "Proposed projection"}:{" "}
+                {dayYearLabel(captured.plannedDate, "short")} ·{" "}
                 {formatCents(captured.amountCents, data.isoCurrency)}
               </strong>
-            </p>
-            <p className="jds-hint">
-              {reset
-                ? "Remove this occurrence's one-off date and amount. Its original schedule remains."
-                : "Confirm this captured change in the next dialog."}
             </p>
             {!reset ? (
               <Button
@@ -191,10 +184,11 @@ export function BillAdjustmentDialog(props: {
                 }
               />
             </label>
-            <p className="jds-hint">
-              Use a positive amount with at most two decimal places. Only this occurrence changes;
-              matched actual amounts stay separate.
-            </p>
+            {amount.trim() !== "" && (cents === null || cents <= 0) ? (
+              <p className="jds-hint" role="status">
+                Enter an amount above zero with at most two decimal places.
+              </p>
+            ) : null}
           </>
         )}
         {message ? <p role="status">{message}</p> : null}

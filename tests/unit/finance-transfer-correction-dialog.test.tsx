@@ -9,6 +9,7 @@ const invokeTool = vi.fn();
 vi.mock("../../external-modules/finance/src/web/api", () => ({
   invokeTool: (...args: unknown[]) => invokeTool(...args)
 }));
+import { dayYearLabel } from "../../external-modules/finance/src/web/format";
 import { TransferCorrectionDialog } from "../../external-modules/finance/src/web/transfer-correction-dialog";
 const originalId = "99000000-0000-4000-8000-000000000001";
 function context() {
@@ -58,6 +59,12 @@ function context() {
 }
 const button = (r: ReactTestRenderer, name: string) =>
   r.root.findAllByType("button").find((b) => b.children.includes(name));
+const words = (node: unknown): string => {
+  if (node === null || node === undefined) return "";
+  if (typeof node === "string") return node;
+  if (Array.isArray(node)) return node.map(words).join("");
+  return words((node as { children?: unknown }).children);
+};
 afterEach(() => vi.clearAllMocks());
 describe("native audited transfer correction review", () => {
   it("captures inverse balances and suppresses duplicate writes and dismissal before React paints", async () => {
@@ -147,6 +154,68 @@ describe("native audited transfer correction review", () => {
     expect(JSON.stringify(renderer.toJSON())).toContain("Both ledgers must be open");
     expect(button(renderer, "Review correction")!.props.disabled).toBe(true);
     expect(invoke).not.toHaveBeenCalled();
+    await act(async () => renderer.unmount());
+  });
+  it("states dates in words and carries no explanatory lines", async () => {
+    invokeTool.mockResolvedValue({
+      kind: "ok",
+      result: {
+        ...context(),
+        accounts: context().accounts.map((account) => ({
+          ...account,
+          lastReconciledDate: "2026-10-20"
+        }))
+      }
+    });
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        createElement(TransferCorrectionDialog, {
+          transferId: originalId,
+          tools: { invoke: vi.fn() },
+          onClose: vi.fn(),
+          onSaved: vi.fn(),
+          onReview: vi.fn()
+        })
+      );
+    });
+    const before = words(renderer.toJSON());
+    expect(before).toContain(`Original date ${dayYearLabel("2026-10-28", "short")}`);
+    expect(before).toContain(`statement through ${dayYearLabel("2026-10-20", "short")}`);
+    await act(async () => button(renderer, "Review correction")!.props.onClick());
+    const after = words(renderer.toJSON());
+    expect(after).toContain(`New correction · ${dayYearLabel("2026-10-30", "short")}`);
+    for (const shown of [before, after]) {
+      expect(shown).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+      for (const gone of [
+        "Correct a recording mistake",
+        "Two new linked entries",
+        "Original history stays intact"
+      ])
+        expect(shown).not.toContain(gone);
+    }
+    await act(async () => renderer.unmount());
+  });
+  it("passes the row to return focus to into the dialog", async () => {
+    invokeTool.mockResolvedValue({ kind: "ok", result: context() });
+    const returnFocusRef = { current: null };
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        createElement(TransferCorrectionDialog, {
+          transferId: originalId,
+          tools: { invoke: vi.fn() },
+          returnFocusRef,
+          onClose: vi.fn(),
+          onSaved: vi.fn(),
+          onReview: vi.fn()
+        })
+      );
+    });
+    const dialog = renderer.root.findAll(
+      (node) => node.props.closeLabel === "Close transfer review"
+    )[0]!;
+    expect(dialog.props.returnFocusRef).toBe(returnFocusRef);
     await act(async () => renderer.unmount());
   });
 });

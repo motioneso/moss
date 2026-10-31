@@ -10,12 +10,12 @@ import {
 } from "@moss/module-web-sdk";
 import { isCalendarDate } from "../domain/values";
 import { invokeTool } from "./api";
+import { dayYearLabel } from "./format";
 import { downloadTransactionsCsv } from "./register";
 interface Prepared extends Record<string, unknown> {
   status: string;
   csv?: string;
   totalCount?: number;
-  preparedAt?: string;
 }
 export function HistoryExportDialog(props: {
   accounts: { accountId: string; name: string }[];
@@ -121,10 +121,6 @@ export function HistoryExportDialog(props: {
       }
     >
       <div className="fnm-block">
-        <p>
-          Download your stored transactions. Household entries and private notes are omitted. Each
-          row keeps its currency.
-        </p>
         {prepared ? (
           <Note variant="practical">
             <p role="status">
@@ -133,21 +129,11 @@ export function HistoryExportDialog(props: {
               {account
                 ? props.accounts.find((a) => a.accountId === account)?.name
                 : "All your accounts"}{" "}
-              · {from || "Beginning of history"} through {through || "Latest stored date"}.
-            </p>
-            <p>
-              Prepared at {prepared.preparedAt?.replace("T", " ").replace(/\.\d{3}Z$/, " UTC")}.
-              Changes made afterward are not included.{" "}
-              {prepared.totalCount === 0
-                ? "The CSV contains column headings only."
-                : "Download the CSV when you are ready."}
+              · {from ? dayYearLabel(from, "short") : "Beginning of history"} through{" "}
+              {through ? dayYearLabel(through, "short") : "Latest stored date"}.
             </p>
           </Note>
         ) : null}
-        <p className="jds-hint">
-          Leave dates empty for all history. Dates are inclusive; current register filters do not
-          apply. Limit: 5,000 rows and 2 MiB per file. Use smaller ranges for larger histories.
-        </p>
         <label className="fnm-block fnm-block--tight">
           Export account
           <Select
@@ -191,9 +177,7 @@ export function HistoryExportDialog(props: {
             {busy ? "Preparing CSV…" : "Prepare CSV"}
           </Button>
         </div>
-        {busy ? (
-          <p role="status">Reading matching owned records. No file has been downloaded.</p>
-        ) : null}
+        {busy ? <p role="status">Reading matching records.</p> : null}
         {error ? <p role="alert">{error}</p> : null}
       </div>
     </Dialog>

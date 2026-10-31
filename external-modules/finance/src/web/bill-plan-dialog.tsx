@@ -2,6 +2,7 @@ import {
   Button,
   Dialog,
   Select,
+  randomUuid,
   useRef,
   useState,
   type ExternalModuleToolsHandleV1,
@@ -28,7 +29,7 @@ export function BillPlanDialog(props: {
   onClose: () => void;
 }): ReactNodeLike {
   const initial = props.initial;
-  const [id] = useState(() => crypto.randomUUID());
+  const [id] = useState(() => randomUuid());
   const [review] = useState({
     expectedRevision: props.data.revision,
     expectedFingerprint: props.data.fingerprint
@@ -167,7 +168,6 @@ export function BillPlanDialog(props: {
           Expected amount ({props.data.isoCurrency})
           <input
             className="jds-input"
-            aria-label="Expected bill amount"
             inputMode="decimal"
             value={amount}
             disabled={busy}

@@ -88,9 +88,7 @@ export async function exerciseManualTransfers(
       .getByRole("checkbox", { name: "Both transfer entries are cleared", exact: true })
       .check();
     await dialog.getByRole("button", { name: "Review transfer", exact: true }).click();
-    await dialog
-      .getByText("Two linked entries will be saved together.", { exact: false })
-      .waitFor();
+    await dialog.getByRole("button", { name: "Record linked transfer", exact: true }).waitFor();
     for (const theme of ["light", "dark", "sage"]) {
       await page.evaluate((theme) => {
         document.documentElement.dataset.theme = theme;

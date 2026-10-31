@@ -1,7 +1,7 @@
 import { join, resolve } from "node:path";
 import { expect } from "vitest";
 import type { Browser } from "playwright-core";
-import { formatCents } from "../../../external-modules/finance/src/web/format.js";
+import { dayYearLabel, formatCents } from "../../../external-modules/finance/src/web/format.js";
 type Read = (name: string, input?: Record<string, unknown>) => Promise<Record<string, unknown>>;
 export async function exerciseManualNetWorth(
   browser: Browser,
@@ -68,7 +68,9 @@ export async function exerciseManualNetWorth(
     const sources = region.getByRole("button", { name: "Balance sources", exact: true });
     await sources.focus();
     await sources.press("Enter");
-    await region.getByText(`Manual ledger through ${date}`, { exact: true }).waitFor();
+    await region
+      .getByText(`Manual ledger through ${dayYearLabel(date, "short")}`, { exact: true })
+      .waitFor();
     const history = region.getByRole("button", { name: "Balance history", exact: true });
     await history.focus();
     await history.press("Space");

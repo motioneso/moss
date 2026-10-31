@@ -4,6 +4,7 @@ import {
   RowIndex,
   RowIndexItem,
   Switch,
+  randomUuid,
   useEffect,
   useState,
   type ExternalModuleToolsHandleV1,
@@ -15,19 +16,29 @@ import {
   type ReconciliationView
 } from "../domain/reconciliation";
 import { isCalendarDate } from "../domain/values";
-import { formatCents } from "./format";
+import { dayYearLabel, formatCents } from "./format";
 import { parseLedgerAmount, type ManualAccountChoice } from "./manual-entry";
+
+/** Quiet time after the last edit to the statement date before a new read starts. */
+const STATEMENT_DATE_PAUSE_MS = 600;
+
+/** A statement date worth reading: a real day between the account's opening and today. */
+function canReadStatement(date: string, today: string, openingDate: string): boolean {
+  return isCalendarDate(date) && date <= today && date >= openingDate;
+}
 
 export function ReconciliationDialog(props: {
   account: ManualAccountChoice;
   tools?: ExternalModuleToolsHandleV1;
+  returnFocusRef?: { current: HTMLElement | null };
   onClose: () => void;
   onSaved: () => void;
 }): ReactNodeLike {
-  const [operationId] = useState(() => crypto.randomUUID());
+  const [operationId] = useState(() => randomUuid());
   const [view, setView] = useState<ReconciliationView | null>(null);
   const [requestedDate, setRequestedDate] = useState("");
   const [statementDate, setStatementDate] = useState("");
+  const [loadedDate, setLoadedDate] = useState("");
   const [today, setToday] = useState("");
   const [balance, setBalance] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -65,9 +76,11 @@ export function ReconciliationDialog(props: {
           return;
         }
         const next = outcome.result.view as unknown as ReconciliationView;
+        const readDate = outcome.result.statementDate;
         setView(next);
         setStale(false);
-        setStatementDate(outcome.result.statementDate);
+        setLoadedDate(readDate);
+        setStatementDate((typed) => (typed === "" || typed === requestedDate ? readDate : typed));
         setToday(outcome.result.today);
         setSelected(
           new Set(next.entries.filter((entry) => entry.cleared).map((entry) => entry.id))
@@ -86,6 +99,12 @@ export function ReconciliationDialog(props: {
       active = false;
     };
   }, [props.tools, props.account.accountId, requestedDate, refresh]);
+  useEffect(() => {
+    if (!view || statementDate === loadedDate) return;
+    if (!canReadStatement(statementDate, today, view.openingDate)) return;
+    const timer = setTimeout(() => setRequestedDate(statementDate), STATEMENT_DATE_PAUSE_MS);
+    return () => clearTimeout(timer);
+  }, [view, statementDate, loadedDate, today]);
   const amount = parseLedgerAmount(balance);
   const tooMany = Boolean(view && view.totalEntries > MAX_RECONCILE_ENTRIES);
   const cleared = view && !tooMany ? reconciledSelectionBalance(view, selected) : null;
@@ -98,8 +117,16 @@ export function ReconciliationDialog(props: {
     (!view.lastReconciledDate || statementDate > view.lastReconciledDate)
   );
   const canFinish =
-    !loading && !busy && !uncertain && !stale && !tooMany && dateValid && difference === 0n;
-  const disabled = loading || busy || uncertain;
+    !loading &&
+    !busy &&
+    !uncertain &&
+    !stale &&
+    !tooMany &&
+    dateValid &&
+    statementDate === loadedDate &&
+    difference === 0n;
+  const locked = busy || uncertain;
+  const disabled = loading || locked;
   const save = async () => {
     if (!canFinish || !view || amount === null || !props.tools) return;
     setBusy(true);
@@ -144,6 +171,7 @@ export function ReconciliationDialog(props: {
     <Dialog
       title="Reconcile a statement"
       description={props.account.name}
+      returnFocusRef={props.returnFocusRef}
       onClose={() => {
         if (!busy) props.onClose();
       }}
@@ -159,10 +187,6 @@ export function ReconciliationDialog(props: {
       }
     >
       <div className="fnm-manual-form">
-        <p className="jds-caption">
-          Match the balance on your statement to the entries that have cleared. This records a check
-          of your ledger; it does not move money or add an adjustment.
-        </p>
         {loading ? <p role="status">Loading statement entries…</p> : null}
         {view ? (
           <>
@@ -176,11 +200,14 @@ export function ReconciliationDialog(props: {
                   value={statementDate}
                   min={view.openingDate}
                   max={today}
-                  disabled={disabled}
-                  onChange={(e: { target: { value: string } }) => {
-                    setStatementDate(e.target.value);
-                    if (isCalendarDate(e.target.value) && e.target.value <= today)
-                      setRequestedDate(e.target.value);
+                  disabled={locked}
+                  onChange={(e: { target: { value: string } }) => setStatementDate(e.target.value)}
+                  onBlur={() => {
+                    if (
+                      statementDate !== loadedDate &&
+                      canReadStatement(statementDate, today, view.openingDate)
+                    )
+                      setRequestedDate(statementDate);
                   }}
                 />
               </label>
@@ -188,22 +215,17 @@ export function ReconciliationDialog(props: {
                 {view.debt ? "Amount owed on statement" : "Statement balance"} ({view.isoCurrency})
                 <input
                   className="jds-input"
-                  aria-label="Statement balance"
                   inputMode="decimal"
                   value={balance}
-                  disabled={disabled}
+                  disabled={locked}
                   onChange={(e: { target: { value: string } }) => setBalance(e.target.value)}
                 />
               </label>
             </div>
             <p className="jds-caption">
               {view.lastReconciledDate
-                ? `Last reconciled statement: ${view.lastReconciledDate}.`
-                : `Opening baseline: ${view.openingDate}.`}{" "}
-              {view.debt
-                ? "Enter debt as a positive amount owed."
-                : "Include all money held in this account."}{" "}
-              Completed periods cannot receive new backdated entries.
+                ? `Last reconciled statement: ${dayYearLabel(view.lastReconciledDate, "short")}.`
+                : `Opening baseline: ${dayYearLabel(view.openingDate, "short")}.`}
             </p>
             <RowIndex density="compact">
               <RowIndexItem
@@ -245,18 +267,18 @@ export function ReconciliationDialog(props: {
               </p>
             ) : null}
             <p className="jds-caption">
-              {view.entries.length} unreconciled entries through this date. Previously reconciled
-              entries are already included in the baseline.
+              {view.entries.length} unreconciled entries through {dayYearLabel(loadedDate, "short")}
+              .
             </p>
             <RowIndex density="compact">
               {view.entries.map((entry) => (
                 <RowIndexItem
                   key={entry.id}
                   title={entry.name}
-                  excerpt={`${entry.date} · ${entry.amountCents > 0 ? "Money out" : "Money in"} · ${formatCents(Math.abs(entry.amountCents), view.isoCurrency)}`}
+                  excerpt={`${dayYearLabel(entry.date, "short")} · ${entry.amountCents > 0 ? "Money out" : "Money in"} · ${formatCents(Math.abs(entry.amountCents), view.isoCurrency)}`}
                   meta={
                     <Switch
-                      ariaLabel={`Cleared: ${entry.name} on ${entry.date}`}
+                      ariaLabel={`Cleared: ${entry.name} on ${dayYearLabel(entry.date, "short")}`}
                       checked={selected.has(entry.id)}
                       disabled={disabled || tooMany}
                       onChange={(checked) =>

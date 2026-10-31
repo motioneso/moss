@@ -74,7 +74,6 @@ export async function exerciseHistoryExport(
     await context.setOffline(false);
     await dialog.getByRole("button", { name: "Prepare CSV", exact: true }).click();
     await dialog.getByRole("status").filter({ hasText: "0 transactions ready" }).waitFor();
-    await dialog.getByText("The CSV contains column headings only.", { exact: false }).waitFor();
     await dialog.getByRole("button", { name: "Close", exact: true }).focus();
     await dialog.getByRole("button", { name: "Close", exact: true }).press("Enter");
     await page.reload();

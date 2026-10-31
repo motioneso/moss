@@ -6,7 +6,6 @@ import {
   EmptyState,
   Eyebrow,
   Menu,
-  Note,
   PeriodStepper,
   RowIndex,
   RowIndexItem,
@@ -144,6 +143,14 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
   const dialogReview = useRef<{ expectedRevision: number; expectedFingerprint: string } | null>(
     null
   );
+  // A dialog opened from the bill panel replaces the panel, so it returns focus to whatever
+  // opened the panel. Dialogs opened from a row return focus to the row's own button.
+  const panelOpener = useRef<HTMLElement | null>(null);
+  const dialogReturn = useRef<HTMLElement | null>(null);
+  const rememberOpener = (element: Element | null) => {
+    panelOpener.current =
+      element instanceof HTMLElement && element !== document.body ? element : null;
+  };
   const from = `${month}-01`;
   const to = `${month}-${new Date(Number(month.slice(0, 4)), Number(month.slice(5)), 0).getDate()}`;
   const query = useToolQuery<BillsView>("finance.bills.read", { from, to });
@@ -184,16 +191,16 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
         setSelected(null);
         setStopping(null);
         invalidateQueries();
-      } else if (result.status === "cancelled") setMessage("Cancelled. Your entries are kept.");
+      } else if (result.status === "cancelled") setMessage("Cancelled. Nothing was saved.");
       else {
         setBlocked(true);
         setMessage(
-          "The review changed or saving could not be confirmed. Check saved bills before trying again. Your entries are kept."
+          "The review changed or saving could not be confirmed. Use Check saved bills before trying again."
         );
       }
     } catch {
       setBlocked(true);
-      setMessage("Check saved bills before trying again. Your entries are kept.");
+      setMessage("Saving could not be confirmed. Use Check saved bills before trying again.");
     } finally {
       setBusy(false);
       lock.current = false;
@@ -218,10 +225,17 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
   const disabled = busy || blocked || refreshing || !props.tools;
   const handlers: OccurrenceHandlers = {
     disabled,
-    onAdjust: (occurrence, reset) => setAdjusting({ occurrence, reset }),
-    onRecord: setRecording,
+    onAdjust: (occurrence, reset) => {
+      dialogReturn.current = null;
+      setAdjusting({ occurrence, reset });
+    },
+    onRecord: (o) => {
+      dialogReturn.current = null;
+      setRecording(o);
+    },
     onMatch: (o) => {
       if (!data) return;
+      dialogReturn.current = null;
       dialogReview.current = {
         expectedRevision: data.revision,
         expectedFingerprint: data.fingerprint
@@ -233,6 +247,25 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
     onSkip: (o) =>
       void write("finance.bill.decide", { planId: o.planId, dueDate: o.dueDate, state: "skipped" }),
     onUndo: (o) => void write("finance.bill.clear", { planId: o.planId, dueDate: o.dueDate })
+  };
+  const leavePanel = () => {
+    dialogReturn.current = panelOpener.current;
+    setPeekKey(null);
+  };
+  const panelHandlers: OccurrenceHandlers = {
+    ...handlers,
+    onAdjust: (o, reset) => {
+      handlers.onAdjust(o, reset);
+      leavePanel();
+    },
+    onRecord: (o) => {
+      handlers.onRecord(o);
+      leavePanel();
+    },
+    onMatch: (o) => {
+      handlers.onMatch(o);
+      leavePanel();
+    }
   };
   const addSuggestion = (s: BillSuggestionView) =>
     setAdding({
@@ -320,7 +353,10 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
                     <BillCalendar
                       month={month}
                       view={body}
-                      onOpen={(o) => setPeekKey(occurrenceKey(o))}
+                      onOpen={(o) => {
+                        rememberOpener(document.activeElement);
+                        setPeekKey(occurrenceKey(o));
+                      }}
                     />
                     <div className="fnm-weeks">
                       {billWeeks(body.occurrences).map((week) => (
@@ -356,8 +392,11 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
                                       <Button
                                         size="sm"
                                         variant="secondary"
-                                        aria-label={`Details, ${o.name}`}
-                                        onClick={() => setPeekKey(occurrenceKey(o))}
+                                        aria-label={`Details, ${o.name}, ${shortDayLabel(occurrenceDate(o))}`}
+                                        onClick={(event) => {
+                                          rememberOpener(event.currentTarget);
+                                          setPeekKey(occurrenceKey(o));
+                                        }}
                                       >
                                         Details
                                       </Button>
@@ -438,6 +477,7 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
           data={data}
           occurrence={recording}
           tools={props.tools}
+          returnFocusRef={dialogReturn}
           onClose={() => setRecording(null)}
           onUncertain={() => setBlocked(true)}
         />
@@ -448,6 +488,7 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
           occurrence={adjusting.occurrence}
           reset={adjusting.reset}
           tools={props.tools}
+          returnFocusRef={dialogReturn}
           onClose={() => setAdjusting(null)}
           onUncertain={() => setBlocked(true)}
         />
@@ -457,7 +498,7 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
           occurrence={peek}
           view={data}
           onClose={() => setPeekKey(null)}
-          {...handlers}
+          {...panelHandlers}
         />
       ) : null}
       {data && adding ? (
@@ -474,7 +515,8 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
           scrollBody
           closeLabel="Close"
           closeDisabled={busy}
-          description={`${selected.name} · ${selected.plannedDate ?? selected.dueDate} · ${formatCents(selected.expectedCents, data.isoCurrency)} expected`}
+          returnFocusRef={dialogReturn}
+          description={`${selected.name} · ${dayYearLabel(selected.plannedDate ?? selected.dueDate, "short")} · ${formatCents(selected.expectedCents, data.isoCurrency)} expected`}
           onClose={() => {
             if (!busy) setSelected(null);
           }}
@@ -499,22 +541,14 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
             </div>
           }
         >
-          <div className="fnm-block">
-            <p>
-              Choose a posted transaction from the same account. Its actual amount may differ. This
-              does not edit the transaction.
-            </p>
+          <div className="fnm-block fnm-block--tight">
             {data.matchFrom && data.matchTo ? (
               <p className="jds-hint">
-                Posted expenses from {data.matchFrom} through {data.matchTo}, including seven days
-                either side of this month. Previously matched transactions are excluded.
+                Posted expenses from {dayYearLabel(data.matchFrom, "short")} through{" "}
+                {dayYearLabel(data.matchTo, "short")}.
               </p>
             ) : null}
-            {message ? (
-              <p role="alert">
-                {message} Close this review and check saved bills before trying again.
-              </p>
-            ) : null}
+            {message ? <p role="alert">{message}</p> : null}
             <Select
               aria-label="Posted transaction"
               value={transactionId}
@@ -528,21 +562,11 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
               </option>
               {matchCandidates.map((t) => (
                 <option value={t.id} key={t.id}>
-                  {t.date} · {t.name} · {formatCents(t.amountCents, data.isoCurrency)}
+                  {dayYearLabel(t.date, "short")} · {t.name} ·{" "}
+                  {formatCents(t.amountCents, data.isoCurrency)}
                 </option>
               ))}
             </Select>
-            {matchCandidates.length ? (
-              <p className="jds-hint">
-                Nearest date first, then nearest expected amount. Different amounts can still be
-                valid. Choose the expense you recognize.
-              </p>
-            ) : (
-              <Note variant="practical">
-                No unmatched posted expenses for this account in the shown date range. Check
-                Transactions for the payment, then close this review and use Check saved bills.
-              </Note>
-            )}
           </div>
         </Dialog>
       ) : null}
@@ -571,15 +595,10 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
           }
         >
           <div className="fnm-block">
-            <p>
-              Bills after this date come off the calendar. Paid and reviewed bills stay. To stop
-              before a bill you reviewed or changed, undo that first.
+            <p className="jds-hint">
+              To stop before a bill you reviewed or changed, undo that first.
             </p>
-            {message ? (
-              <p role="alert">
-                {message} Close this review and check saved bills before trying again.
-              </p>
-            ) : null}
+            {message ? <p role="alert">{message}</p> : null}
             <label className="fnm-block fnm-block--tight">
               Last planned date, inclusive
               <input

@@ -2,7 +2,6 @@ import {
   Badge,
   Button,
   DisclosureToggle,
-  Note,
   RowIndex,
   RowIndexItem,
   useState,
@@ -10,7 +9,7 @@ import {
 } from "@moss/module-web-sdk";
 import type { NetWorthCoverage } from "../domain/net-worth-ledger";
 import type { NetWorthPoint } from "../domain/net-worth";
-import { formatCents } from "./format";
+import { dayYearLabel, formatCents } from "./format";
 const reasons: Record<NonNullable<NetWorthCoverage["reason"]>, string> = {
   opening_missing: "Opening balance or date is missing.",
   not_open: "The account has not opened in this period.",
@@ -18,6 +17,12 @@ const reasons: Record<NonNullable<NetWorthCoverage["reason"]>, string> = {
   no_snapshot: "No recorded balance is available on or before this date.",
   outside_period: "No balance point is available in this report period."
 };
+function sourceLine(row: NetWorthCoverage): string {
+  if (row.reason) return reasons[row.reason];
+  const date = row.asOf ? dayYearLabel(row.asOf, "short") : null;
+  if (row.source === "ledger") return date ? `Manual ledger through ${date}` : "Manual ledger";
+  return date ? `Recorded snapshot from ${date}` : "Recorded snapshot";
+}
 export function NetWorthHistory(props: {
   coverage: NetWorthCoverage[];
   points: NetWorthPoint[];
@@ -35,12 +40,6 @@ export function NetWorthHistory(props: {
         {included} of {props.coverage.length} account{props.coverage.length === 1 ? "" : "s"}{" "}
         included in this total.
       </p>
-      {included < props.coverage.length ? (
-        <Note variant="practical">
-          Some accounts have no usable balance history for this period. Their balances are omitted;
-          open sources to see what is missing.
-        </Note>
-      ) : null}
       <DisclosureToggle
         expanded={sources}
         className="fnm-disclosure-head"
@@ -55,11 +54,7 @@ export function NetWorthHistory(props: {
             <RowIndexItem
               key={row.accountId}
               title={row.name}
-              excerpt={
-                row.reason
-                  ? reasons[row.reason]
-                  : `${row.source === "ledger" ? "Manual ledger through" : "Recorded snapshot from"} ${row.asOf}`
-              }
+              excerpt={sourceLine(row)}
               meta={
                 row.included && row.contributionCents !== null ? (
                   <span className="fnm-money-wrap">
@@ -85,10 +80,6 @@ export function NetWorthHistory(props: {
           </DisclosureToggle>
           {history ? (
             <div className="fnm-block fnm-block--tight">
-              <p className="jds-hint">
-                Recorded and ledger-derived points, newest first. Earlier recorded balances carry
-                forward between observations.
-              </p>
               <p role="status">
                 {currentPage * 50 + 1}–{currentPage * 50 + rows.length} of {props.points.length}{" "}
                 balance points
@@ -97,7 +88,7 @@ export function NetWorthHistory(props: {
                 {rows.map((point) => (
                   <RowIndexItem
                     key={point.date}
-                    title={point.date}
+                    title={dayYearLabel(point.date, "short")}
                     meta={
                       <span className="fnm-money-wrap">
                         {formatCents(point.totalCents, props.currency)}

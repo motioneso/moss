@@ -6,6 +6,7 @@ import type { BrowserContext, Locator } from "playwright-core";
 import type { Kysely } from "kysely";
 import { DataContextRunner, createModuleStorageRpc, type MossDatabase } from "@moss/db";
 import { sqlStore } from "../../../external-modules/finance/src/domain/index.js";
+import { shortDayLabel } from "../../../external-modules/finance/src/web/format.js";
 export async function exerciseBillEntry(
   context: BrowserContext,
   base: string,
@@ -97,11 +98,13 @@ export async function exerciseBillEntry(
         });
     }
   };
+  // Row buttons are named with the bill and the day it lands on.
+  const billDay = shortDayLabel(`${month}-01`);
   const button = (name: string) =>
     page
       .locator(".jds-index__row")
       .filter({ hasText: name })
-      .getByRole("button", { name: "Record bill entry", exact: true });
+      .getByRole("button", { name: `Record bill entry, ${name}, ${billDay}`, exact: true });
   const edit = page.getByRole("dialog", { name: "Record bill entry", exact: true });
   const review = page.getByRole("dialog", { name: "Review bill entry", exact: true });
   const guard = page.getByRole("dialog", { name: "Confirm Finance action", exact: true });
@@ -109,8 +112,9 @@ export async function exerciseBillEntry(
     await page.goto(`${base}/m/finance/upcoming`);
     await waitForFinanceAction(page, button(plan.name), "Check saved bills");
     await button(plan.name).click();
-    expect(await edit.getByLabel("Bill entry amount", { exact: true }).inputValue()).toBe("100.01");
-    await edit.getByLabel("Bill entry amount", { exact: true }).fill("100.99");
+    const amount = edit.getByLabel("Actual amount (USD)", { exact: true });
+    expect(await amount.inputValue()).toBe("100.01");
+    await amount.fill("100.99");
     await edit.getByRole("button", { name: "Review entry", exact: true }).click();
     await review.waitFor();
     await review.getByText("$899.01", { exact: true }).waitFor();

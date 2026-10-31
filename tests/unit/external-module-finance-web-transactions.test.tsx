@@ -6,7 +6,12 @@ import "./helpers/install-module-runtime";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { dayYearLabel } from "../../external-modules/finance/src/web/format";
 import { TransactionsScreen } from "../../external-modules/finance/src/web/screens/transactions";
+import {
+  detailsKey,
+  rowFocusTarget
+} from "../../external-modules/finance/src/web/transaction-rows";
 import { __resetStoreForTests } from "../../external-modules/finance/src/web/store";
 
 const tx = (id: string, over: Record<string, unknown> = {}) => ({
@@ -223,6 +228,99 @@ describe("Transactions screen (#3176)", () => {
     expect(call!.body.params).not.toHaveProperty("createRule");
   });
 
+  describe("category picker keys", () => {
+    const threeCategories = [...base.categories, { id: "fun", name: "Fun" }];
+    const picker = (renderer: ReactTestRenderer) =>
+      renderer.root.findAll(
+        (node) =>
+          node.props["aria-label"] === "Category for Payee c" && typeof node.type !== "string"
+      )[0]!;
+    // Chrome on Windows and Linux fires the change inside the arrow key's own task.
+    const arrowTo = (renderer: ReactTestRenderer, value: string) =>
+      act(async () => {
+        picker(renderer).props.onKeyDown({ key: "ArrowUp" });
+        picker(renderer).props.onChange({ target: { value } });
+      });
+    const press = (renderer: ReactTestRenderer, key: string) =>
+      act(async () => picker(renderer).props.onKeyDown({ key }));
+    const blur = (renderer: ReactTestRenderer) => act(async () => picker(renderer).props.onBlur());
+    const nextTask = () =>
+      act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    const open = async () => {
+      fakeFetch({ ...base, categories: threeCategories, transactions: rows, needsLookCount: 2 });
+      return render();
+    };
+
+    it("holds arrow-key changes without saving, then saves the last one on Enter", async () => {
+      const renderer = await open();
+      await arrowTo(renderer, "dining");
+      await arrowTo(renderer, "fun");
+      expect(queueCalls()).toHaveLength(0);
+      expect(picker(renderer).props.value).toBe("fun");
+      await press(renderer, "Enter");
+      expect(queueCalls()).toHaveLength(1);
+      expect(queueCalls()[0]!.body.params).toMatchObject({
+        transactionIds: ["c"],
+        categoryIds: ["fun"]
+      });
+    });
+
+    it("saves a held choice when the dropdown loses focus, and only once", async () => {
+      const renderer = await open();
+      await arrowTo(renderer, "dining");
+      expect(queueCalls()).toHaveLength(0);
+      await blur(renderer);
+      expect(queueCalls()).toHaveLength(1);
+      expect(queueCalls()[0]!.body.params).toMatchObject({ categoryIds: ["dining"] });
+      await blur(renderer);
+      await press(renderer, "Enter");
+      expect(queueCalls()).toHaveLength(1);
+    });
+
+    it("puts the saved category back on Escape and sends nothing", async () => {
+      const renderer = await open();
+      await arrowTo(renderer, "dining");
+      expect(picker(renderer).props.value).toBe("dining");
+      await press(renderer, "Escape");
+      expect(picker(renderer).props.value).toBe("groceries");
+      await blur(renderer);
+      await press(renderer, "Enter");
+      expect(queueCalls()).toHaveLength(0);
+    });
+
+    it("sends nothing when the held choice ends on the saved category", async () => {
+      const renderer = await open();
+      await arrowTo(renderer, "dining");
+      await arrowTo(renderer, "groceries");
+      await press(renderer, "Enter");
+      await blur(renderer);
+      expect(queueCalls()).toHaveLength(0);
+    });
+
+    it("saves a pointer pick at once, even after earlier key presses", async () => {
+      const renderer = await open();
+      await arrowTo(renderer, "dining");
+      await nextTask();
+      await act(async () => picker(renderer).props.onChange({ target: { value: "fun" } }));
+      expect(queueCalls()).toHaveLength(1);
+      expect(queueCalls()[0]!.body.params).toMatchObject({ categoryIds: ["fun"] });
+      await blur(renderer);
+      expect(queueCalls()).toHaveLength(1);
+    });
+
+    it("treats the Enter that commits an open list as a pick", async () => {
+      const renderer = await open();
+      await act(async () => {
+        picker(renderer).props.onKeyDown({ key: "Enter" });
+        picker(renderer).props.onChange({ target: { value: "dining" } });
+      });
+      expect(queueCalls()).toHaveLength(1);
+      expect(queueCalls()[0]!.body.params).toMatchObject({ categoryIds: ["dining"] });
+    });
+  });
+
   it("offers Show more when the month has more rows than loaded (review A11)", async () => {
     fakeFetch({ ...base, transactions: rows, needsLookCount: 2, totalCount: 450 });
     const renderer = await render();
@@ -352,5 +450,92 @@ describe("register read recovery", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]!.url).toContain("finance.transactions.query");
     await act(async () => renderer.unmount());
+  });
+});
+
+// react-test-renderer has no DOM, so real buttons stand in for the rows dialogs return focus to.
+function standIn(attribute: string, value: string, visible = true): HTMLButtonElement {
+  const element = document.createElement("button");
+  element.setAttribute(attribute, value);
+  element.getClientRects = () => (visible ? [{}] : []) as unknown as DOMRectList;
+  document.body.append(element);
+  return element;
+}
+
+describe("focus returns to the row after a dialog closes (review 7)", () => {
+  afterEach(() => document.body.replaceChildren());
+
+  it("keys a row by id, account and shared flag", () => {
+    expect(detailsKey(tx("c") as never)).toBe(JSON.stringify(["c", "acc-1", false]));
+    expect(detailsKey(tx("c", { shared: true }) as never)).toBe(
+      JSON.stringify(["c", "acc-1", true])
+    );
+    expect(detailsKey(tx("c", { accountId: "acc-2" }) as never)).not.toBe(
+      detailsKey(tx("c") as never)
+    );
+  });
+
+  it("resolves the visible button when desktop and phone both render the row", () => {
+    standIn("data-finance-details", "k", false);
+    const shown = standIn("data-finance-details", "k");
+    standIn("data-finance-details", "other");
+    expect(rowFocusTarget("data-finance-details", "k")).toBe(shown);
+  });
+
+  it("falls back to the search box when the row is gone, and to nothing without one", () => {
+    standIn("data-finance-details", "k", false);
+    expect(rowFocusTarget("data-finance-details", "k")).toBeNull();
+    const search = document.createElement("input");
+    search.setAttribute("aria-label", "Search payees or notes");
+    document.body.append(search);
+    expect(rowFocusTarget("data-finance-details", "k")).toBe(search);
+    expect(rowFocusTarget("data-finance-transfer-id", "t")).toBe(search);
+  });
+
+  it("returns focus to the row's details button when the split editor closes", async () => {
+    fakeFetch({ ...base, transactions: rows, supportsSplits: true, totalCount: 3 });
+    const target = standIn("data-finance-details", detailsKey(tx("c") as never));
+    const renderer = await render({ tools: { invoke: vi.fn() } as never });
+    const open = renderer.root.findAll(
+      (node) =>
+        node.type === "button" &&
+        node.props["aria-label"] === "View transaction details for Payee c"
+    )[0]!;
+    await act(async () => open.props.onClick());
+    await act(async () => button(renderer, "Split").props.onClick());
+    expect(text(renderer)).toContain("Split transaction");
+    expect(document.activeElement).not.toBe(target);
+    await act(async () => button(renderer, "Cancel").props.onClick());
+    expect(text(renderer)).not.toContain("Split transaction");
+    expect(document.activeElement).toBe(target);
+  });
+
+  it("sends the transfer review back to the row that opened it, even after following a link", async () => {
+    fakeFetch({
+      ...base,
+      transactions: [tx("t", { transferId: "tr-1", date: "2026-10-06" })],
+      totalCount: 1
+    });
+    const origin = standIn("data-finance-transfer-id", "tr-1");
+    const linked = standIn("data-finance-transfer-id", "tr-2");
+    const renderer = await render({ tools: { invoke: vi.fn() } as never });
+    const review = renderer.root.findAll(
+      (node) => node.type === "button" && textOf(node) === "Review transfer"
+    )[0]!;
+    expect(review.props["aria-label"]).toBe(
+      `Review transfer for Checking on ${dayYearLabel("2026-10-06", "long")}`
+    );
+    await act(async () => review.props.onClick());
+    const returnFocusRef = () =>
+      renderer.root.findAll((node) => node.props.closeLabel === "Close transfer review")[0]!.props
+        .returnFocusRef as { current: HTMLElement | null };
+    expect(returnFocusRef().current).toBe(origin);
+    await act(async () =>
+      renderer.root
+        .findAll((node) => typeof node.props.onReview === "function")[0]!
+        .props.onReview("tr-2")
+    );
+    expect(returnFocusRef().current).toBe(origin);
+    expect(returnFocusRef().current).not.toBe(linked);
   });
 });

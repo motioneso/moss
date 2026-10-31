@@ -1,4 +1,5 @@
 import { billMatchWindow } from "../../../external-modules/finance/src/domain/recurrence.js";
+import { dayYearLabel, shortDayLabel } from "../../../external-modules/finance/src/web/format.js";
 import { exerciseBillAdjustments } from "./finance-live-bill-adjustments.js";
 import { join, resolve } from "node:path";
 import { expect } from "vitest";
@@ -23,7 +24,7 @@ export async function exerciseBills(
   await dialog.getByLabel("Bill name", { exact: true }).fill("Synthetic market plan");
   await dialog.getByLabel("Bill account", { exact: true }).selectOption("synthetic-cash");
   await dialog.getByLabel("Bill category", { exact: true }).selectOption("groceries");
-  await dialog.getByLabel("Expected bill amount", { exact: true }).fill("82.00");
+  await dialog.getByLabel("Expected amount (USD)", { exact: true }).fill("82.00");
   await dialog.getByLabel("First planned date", { exact: true }).fill(`${month}-01`);
   for (const mode of ["light", "dark"]) {
     await page.evaluate((mode) => {
@@ -63,18 +64,22 @@ export async function exerciseBills(
     ])
   );
   await exerciseBillAdjustments(page, base, month, plan.id, read, artifacts);
+  // Row buttons are named with the bill and the day it lands on.
+  const rowButton = (label: string) =>
+    page.getByRole("button", {
+      name: `${label}, ${plan.name}, ${shortDayLabel(`${month}-01`)}`,
+      exact: true
+    });
   if (inspectEmpty) {
     await inspectEmpty(async () => {
       await page.reload();
-      await page.getByRole("button", { name: "Match posted", exact: true }).click();
+      await rowButton("Match posted").click();
       const empty = page.getByRole("dialog", { name: "Match a posted transaction", exact: true });
-      await empty
-        .getByText(
-          "No unmatched posted expenses for this account in the shown date range. Check Transactions for the payment, then close this review and use Check saved bills.",
-          { exact: true }
-        )
-        .waitFor();
-      expect(await empty.getByLabel("Posted transaction", { exact: true }).isDisabled()).toBe(true);
+      const posted = empty.getByLabel("Posted transaction", { exact: true });
+      expect(await posted.locator("option:checked").textContent()).toBe(
+        "No posted expenses available"
+      );
+      expect(await posted.isDisabled()).toBe(true);
       expect(
         await empty.getByRole("button", { name: "Save match", exact: true }).isDisabled()
       ).toBe(true);
@@ -118,32 +123,25 @@ export async function exerciseBills(
     previousBefore = restored;
     await page.reload();
   }
-  await page.getByRole("button", { name: "Match posted", exact: true }).click();
+  await rowButton("Match posted").click();
   const match = page.getByRole("dialog", { name: "Match a posted transaction", exact: true });
   expect(await match.getByLabel("Posted transaction", { exact: true }).inputValue()).toBe("");
   expect(await match.getByRole("button", { name: "Save match", exact: true }).isDisabled()).toBe(
     true
   );
-  await match
-    .getByText(
-      "Nearest date first, then nearest expected amount. Different amounts can still be valid. Choose the expense you recognize.",
-      { exact: true }
-    )
-    .waitFor();
   await match.getByLabel("Posted transaction", { exact: true }).selectOption("synthetic-market");
   const last = new Date(Number(month.slice(0, 4)), Number(month.slice(5)), 0).getDate();
   const window = billMatchWindow(`${month}-01`, `${month}-${last}`);
+  const windowFrom = dayYearLabel(window.from, "short");
+  const windowTo = dayYearLabel(window.to, "short");
   await match
-    .getByText(
-      `Posted expenses from ${window.from} through ${window.to}, including seven days either side of this month. Previously matched transactions are excluded.`,
-      { exact: true }
-    )
+    .getByText(`Posted expenses from ${windowFrom} through ${windowTo}.`, { exact: true })
     .waitFor();
   const selectedOption = await match
     .getByLabel("Posted transaction", { exact: true })
     .locator("option:checked")
     .textContent();
-  expect(selectedOption).toContain(previousDate.toISOString().slice(0, 10));
+  expect(selectedOption).toContain(dayYearLabel(previousDate.toISOString().slice(0, 10), "short"));
   for (const [theme, width] of [
     ["light", 1440],
     ["dark", 320]
@@ -165,9 +163,9 @@ export async function exerciseBills(
   await page.getByText("Posted $82.43", { exact: true }).waitFor();
   await page.reload();
   await page.getByText("Posted $82.43", { exact: true }).waitFor();
-  await page.getByRole("button", { name: "Undo review", exact: true }).click();
-  await page.getByRole("button", { name: "Skip occurrence", exact: true }).waitFor();
-  await page.getByRole("button", { name: "Skip occurrence", exact: true }).click();
+  await rowButton("Undo review").click();
+  await rowButton("Skip occurrence").waitFor();
+  await rowButton("Skip occurrence").click();
   await page.getByText("Skipped", { exact: true }).waitFor();
   for (const mode of ["light", "dark", "sage"]) {
     await page.evaluate((mode) => {

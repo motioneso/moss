@@ -2,6 +2,7 @@ import {
   Button,
   Dialog,
   Select,
+  randomUuid,
   Switch,
   useEffect,
   useState,
@@ -75,7 +76,7 @@ export function ManualEntryDialog(props: {
   onClose: () => void;
   onSaved: () => void;
 }): ReactNodeLike {
-  const [operationId] = useState(() => crypto.randomUUID());
+  const [operationId] = useState(() => randomUuid());
   const [context, setContext] = useState<Context | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -196,9 +197,7 @@ export function ManualEntryDialog(props: {
   return (
     <Dialog
       title={entry ? "Add transaction" : "Add manual account"}
-      description={
-        entry ? props.account!.name : "Keep an account in Moss without connecting a bank."
-      }
+      description={entry ? props.account!.name : undefined}
       onClose={() => {
         if (!busy) props.onClose();
       }}
@@ -354,29 +353,19 @@ export function ManualEntryDialog(props: {
               disabled={disabled}
               onChange={setCleared}
             />
-            <p className="jds-caption">
-              {debt
-                ? "Money out increases the amount owed; payments and refunds reduce it."
-                : "Money out reduces this account balance; money in increases it."}{" "}
-              This records activity in Moss and does not move bank money.
-            </p>
           </>
-        ) : (
-          <p className="jds-caption">
-            {debt
-              ? "Enter debt as a positive amount owed. A negative amount means a credit in your favor."
-              : "Enter the balance immediately before the first transaction you will record on this date."}{" "}
-            Opening balances do not count as income. Currency stays fixed for this ledger. Manual
-            accounts are currently private to you.
+        ) : null}
+        {cents === null ? (
+          <p className="jds-hint">Use a decimal point and no more than two decimal places.</p>
+        ) : entry && cents <= 0 ? (
+          <p className="jds-hint">
+            Enter an amount above zero. For a refund, set Direction to Money in / refund.
           </p>
-        )}
-        {cents !== null ? (
+        ) : (
           <p className="jds-caption">
             {entry ? "Entry" : "Opening balance"}:{" "}
             {formatCents(entry && direction === "in" ? -cents : cents, currency)}
           </p>
-        ) : (
-          <p className="jds-hint">Use a decimal point and no more than two decimal places.</p>
         )}
         {error ? (
           <p role="alert" className="jds-hint">

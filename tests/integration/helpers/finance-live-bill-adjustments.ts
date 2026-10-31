@@ -1,7 +1,7 @@
 import { join, resolve } from "node:path";
 import type { Page } from "playwright-core";
 import { expect } from "vitest";
-import { shiftMonth } from "../../../external-modules/finance/src/web/format.js";
+import { shiftMonth, shortDayLabel } from "../../../external-modules/finance/src/web/format.js";
 export async function exerciseBillAdjustments(
   page: Page,
   base: string,
@@ -44,7 +44,16 @@ export async function exerciseBillAdjustments(
     }
   };
   const guard = page.getByRole("dialog", { name: "Confirm Finance action", exact: true });
-  await page.getByRole("button", { name: "Change this occurrence", exact: true }).click();
+  // Row buttons are named with the bill and the day it lands on.
+  const billName = ((await bills(month)).plans as { id: string; name: string }[]).find(
+    (p) => p.id === planId
+  )!.name;
+  const rowButton = (scope: Pick<Page, "getByRole">, label: string, date: string) =>
+    scope.getByRole("button", {
+      name: `${label}, ${billName}, ${shortDayLabel(date)}`,
+      exact: true
+    });
+  await rowButton(page, "Change this occurrence", `${month}-01`).click();
   const edit = page.getByRole("dialog", { name: "Change this occurrence", exact: true });
   await edit.getByLabel("Occurrence planned date", { exact: true }).fill(`${next}-03`);
   await edit.getByLabel("Occurrence expected amount", { exact: true }).fill("81.99");
@@ -92,7 +101,7 @@ export async function exerciseBillAdjustments(
     ])
   );
   await inspect(page.getByRole("region", { name: "Upcoming bills", exact: true }), "list");
-  await changed.getByRole("button", { name: "Change this occurrence", exact: true }).click();
+  await rowButton(changed, "Change this occurrence", `${next}-03`).click();
   await edit.getByLabel("Occurrence expected amount", { exact: true }).fill("84.01");
   await edit.getByRole("button", { name: "Review bill change", exact: true }).click();
   // A second actual installed page wins; the first retains its captured, stale review.
@@ -100,7 +109,7 @@ export async function exerciseBillAdjustments(
   try {
     await other.goto(`${base}/m/finance/upcoming`);
     await stepMonth(other, "next");
-    await other.getByRole("button", { name: "Reset one-off change", exact: true }).click();
+    await rowButton(other, "Reset one-off change", `${next}-03`).click();
     await other
       .getByRole("dialog", { name: "Reset one-off bill change", exact: true })
       .getByRole("button", { name: "Confirm reset", exact: true })
@@ -127,13 +136,13 @@ export async function exerciseBillAdjustments(
     .getByText("Saved bills refreshed. Review the current records before saving.", { exact: true })
     .waitFor();
   await stepMonth(page, "previous");
-  await page.getByRole("button", { name: "Change this occurrence", exact: true }).click();
+  await rowButton(page, "Change this occurrence", `${month}-01`).click();
   await edit.getByLabel("Occurrence expected amount", { exact: true }).fill("81.99");
   await edit.getByRole("button", { name: "Review bill change", exact: true }).click();
   await review.getByRole("button", { name: "Confirm bill change", exact: true }).click();
   await guard.getByRole("button", { name: "Confirm action", exact: true }).click();
   await review.waitFor({ state: "detached" });
-  await page.getByRole("button", { name: "Reset one-off change", exact: true }).click();
+  await rowButton(page, "Reset one-off change", `${month}-01`).click();
   const reset = page.getByRole("dialog", { name: "Reset one-off bill change", exact: true });
   await reset.getByRole("button", { name: "Confirm reset", exact: true }).click();
   await guard.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -144,7 +153,7 @@ export async function exerciseBillAdjustments(
   await guard.getByRole("button", { name: "Confirm action", exact: true }).click();
   await reset.waitFor({ state: "detached" });
   await page.reload();
-  await page.getByRole("button", { name: "Change this occurrence", exact: true }).waitFor();
+  await rowButton(page, "Change this occurrence", `${month}-01`).waitFor();
   expect((await bills(month)).occurrences).toEqual(
     expect.arrayContaining([
       expect.objectContaining({

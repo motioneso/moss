@@ -30,13 +30,26 @@ async function fill(renderer: ReactTestRenderer, label: string, value: string) {
     renderer.root.findByProps({ "aria-label": label }).props.onChange({ currentTarget: { value } })
   );
 }
+// The amount field is named by its visible label, so look it up the way a person reads it.
+function amountField(r: ReactTestRenderer) {
+  const label = r.root.findAllByType("label").find((l) =>
+    l.children
+      .filter((c): c is string => typeof c === "string")
+      .join("")
+      .startsWith("Expected amount")
+  )!;
+  return label.findByType("input");
+}
+async function fillAmount(r: ReactTestRenderer, value: string) {
+  await act(async () => amountField(r).props.onChange({ currentTarget: { value } }));
+}
 const button = (r: ReactTestRenderer) =>
   r.root.findAllByType("button").find((b) => b.children.includes("Save bill plan"))!;
 async function complete(r: ReactTestRenderer) {
   await fill(r, "Bill name", "Synthetic utilities");
   await fill(r, "Bill account", "cash");
   await fill(r, "Bill category", "utilities");
-  await fill(r, "Expected bill amount", "123.45");
+  await fillAmount(r, "123.45");
 }
 describe("reviewed bill plan form", () => {
   it("requires explicit account/category and keeps the review captured when opened", async () => {
@@ -75,15 +88,14 @@ describe("reviewed bill plan form", () => {
     expect(button(renderer).props.disabled).toBe(true);
     await act(async () => button(renderer).props.onClick());
     expect(invoke).toHaveBeenCalledTimes(1);
-    expect(renderer.root.findByProps({ "aria-label": "Expected bill amount" }).props.value).toBe(
-      "123.45"
-    );
+    expect(amountField(renderer).props.value).toBe("123.45");
+    expect(amountField(renderer).props["aria-label"]).toBeUndefined();
   });
   it("rejects sub-cent input before invoking a host action", async () => {
     const invoke = vi.fn(async (): Promise<ModuleToolOutcome> => ({ status: "cancelled" }));
     const { renderer } = await render(invoke);
     await complete(renderer);
-    await fill(renderer, "Expected bill amount", "1.001");
+    await fillAmount(renderer, "1.001");
     expect(button(renderer).props.disabled).toBe(true);
     await act(async () => button(renderer).props.onClick());
     expect(invoke).not.toHaveBeenCalled();

@@ -18,6 +18,7 @@ import {
   RowIndex,
   RowIndexItem,
   SectionHead,
+  useRef,
   useState,
   type ExternalModuleToolsHandleV1,
   type ReactNodeLike
@@ -50,6 +51,7 @@ interface AccountsResult extends Record<string, unknown> {
 function BankStatus(props: {
   status: "ready" | "error";
   label: string;
+  bankName: string;
   reconnect: boolean;
   onReconnect: () => void;
 }): ReactNodeLike {
@@ -57,7 +59,7 @@ function BankStatus(props: {
     <span className="fnm-bank-status-row">
       <Indicator status={props.status} label={props.label} />
       {props.reconnect ? (
-        <Button size="sm" onClick={props.onReconnect}>
+        <Button size="sm" aria-label={`Reconnect ${props.bankName}`} onClick={props.onReconnect}>
           Reconnect
         </Button>
       ) : null}
@@ -74,6 +76,12 @@ const amountOrUnavailable = (cents: number | null, currency: string): string =>
   cents === null ? "Unavailable" : formatCents(cents, currency);
 
 type RowAction = "entry" | "reconcile" | "import" | "manage";
+
+/** The control that has focus right now, or null when focus sits on the page itself. */
+function focusedControl(): HTMLElement | null {
+  const active = typeof document === "undefined" ? null : document.activeElement;
+  return active instanceof HTMLElement && active !== document.body ? active : null;
+}
 
 function AccountActions(props: {
   name: string;
@@ -121,6 +129,19 @@ function AccountGroupTable(props: {
           <col className="fnm-col-amount" />
           <col className="fnm-col-check" />
         </colgroup>
+        <thead>
+          <tr>
+            <th scope="col" className="jds-sr-only">
+              Account
+            </th>
+            <th scope="col" className="jds-sr-only">
+              Balance
+            </th>
+            <th scope="col" className="jds-sr-only">
+              Actions
+            </th>
+          </tr>
+        </thead>
         <tbody>
           {group.rows.map((row) => (
             <tr key={row.accountId}>
@@ -197,8 +218,8 @@ function AccountsBody(props: {
   }
   const view = buildAccountsView(active, props.result.banks ?? [], new Date());
   const multiCurrency = view.netWorthByCurrency.length > 1;
-  const reconnect = (): void =>
-    props.hostActions.openAssistant({ starterPrompt: "Reconnect my bank account" });
+  const reconnect = (bankName: string): void =>
+    props.hostActions.openAssistant({ starterPrompt: `Reconnect my ${bankName} account` });
   const onAction = (accountId: string, action: RowAction): void => {
     if (action === "manage") return props.onManage(accountId);
     const account = own.find((row) => row.accountId === accountId);
@@ -260,12 +281,13 @@ function AccountsBody(props: {
       {view.banks
         .filter((bank) => bank.status === "error")
         .map((bank) => (
-          <div key={bank.itemId} className="fnm-block fnm-block--tiny">
+          <div key={bank.itemId} className="fnm-block fnm-block--tight">
             <BankStatus
               status="error"
               label={`${bank.name} · ${bank.statusLabel}`}
+              bankName={bank.name}
               reconnect={bank.reconnect}
-              onReconnect={reconnect}
+              onReconnect={() => reconnect(bank.name)}
             />
             {bank.message ? <p className="jds-hint">{bank.message}</p> : null}
           </div>
@@ -325,6 +347,11 @@ export function AccountsScreen(props: {
   const [managed, setManaged] = useState<string | null>(null);
   const [reconciling, setReconciling] = useState<ManualAccountChoice | null>(null);
   const [importing, setImporting] = useState<ManualAccountChoice | null>(null);
+  // The manager closes when it hands over to the reconciliation dialog, so the dialog returns
+  // focus to the control that opened the manager. A dialog opened from a row menu keeps its own
+  // opener.
+  const managerOpener = useRef<HTMLElement | null>(null);
+  const reconcileReturn = useRef<HTMLElement | null>(null);
   const accounts = useToolQuery<AccountsResult>("finance.accounts.list");
   return (
     <section aria-label="Accounts" className="fnm-stack">
@@ -348,9 +375,15 @@ export function AccountsScreen(props: {
             onTransfer={() => setTransferring(true)}
             onAddAccount={() => setEditing(null)}
             onAddEntry={setEditing}
-            onReconcile={setReconciling}
+            onReconcile={(account) => {
+              reconcileReturn.current = null;
+              setReconciling(account);
+            }}
             onImport={setImporting}
-            onManage={setManaged}
+            onManage={(accountId) => {
+              managerOpener.current = focusedControl();
+              setManaged(accountId);
+            }}
           />
         ),
         { loadingLabel: "Loading accounts", errorMessage: "Your accounts didn't load." }
@@ -360,12 +393,14 @@ export function AccountsScreen(props: {
           key={managed}
           accountId={managed}
           tools={props.tools}
+          returnFocusRef={managerOpener}
           onClose={() => setManaged(null)}
           onSaved={() => {
             setManaged(null);
             invalidateQueries();
           }}
           onReconcile={(account) => {
+            reconcileReturn.current = managerOpener.current;
             setManaged(null);
             setReconciling(account);
           }}
@@ -399,6 +434,7 @@ export function AccountsScreen(props: {
         <ReconciliationDialog
           account={reconciling}
           tools={props.tools}
+          returnFocusRef={reconcileReturn}
           onClose={() => setReconciling(null)}
           onSaved={() => {
             setReconciling(null);

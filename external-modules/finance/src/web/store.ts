@@ -59,6 +59,18 @@ function start(key: string, name: string, input?: Record<string, unknown>): void
   });
 }
 
+// A failed read is dropped once no screen shows it, so the next visit reads again.
+function release(key: string, entry: Entry, listener: () => void): void {
+  entry.listeners.delete(listener);
+  if (
+    entry.listeners.size === 0 &&
+    cache.get(key) === entry &&
+    entry.snapshot.status === "settled" &&
+    entry.snapshot.outcome.kind === "error"
+  )
+    cache.delete(key);
+}
+
 export function useToolQuery<T extends Record<string, unknown>>(
   name: string,
   input?: Record<string, unknown>
@@ -69,9 +81,7 @@ export function useToolQuery<T extends Record<string, unknown>>(
       const entry = entryFor(key);
       entry.listeners.add(onChange);
       start(key, name, input);
-      return () => {
-        entry.listeners.delete(onChange);
-      };
+      return () => release(key, entry, onChange);
     },
     // key encodes name+input, so it is the only dependency (no react-hooks plugin is
     // loaded for this tree — a disable directive for it would itself be a lint error).
@@ -90,9 +100,7 @@ export function useToolQueryRefreshing(name: string, input?: Record<string, unkn
     (onChange: () => void) => {
       const entry = entryFor(key);
       entry.listeners.add(onChange);
-      return () => {
-        entry.listeners.delete(onChange);
-      };
+      return () => release(key, entry, onChange);
     },
     [key]
   );

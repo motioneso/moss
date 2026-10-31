@@ -33,6 +33,44 @@ describe("parseAmountToCents", () => {
   it("accepts negative amounts (un-assigning money back to TBB)", () => {
     expect(parseAmountToCents("-20")).toBe(-2000);
     expect(parseAmountToCents("-$3.25")).toBe(-325);
+    expect(parseAmountToCents("-£3.25")).toBe(-325);
+  });
+
+  it("strips any currency symbol and spaces, before or after the digits", () => {
+    expect(parseAmountToCents("1234.56")).toBe(123456);
+    expect(parseAmountToCents("£12.50")).toBe(1250);
+    expect(parseAmountToCents("12.50 €")).toBe(1250);
+    expect(parseAmountToCents("12.50 €")).toBe(1250);
+    expect(parseAmountToCents("€ 1,234.56")).toBe(123456);
+    expect(parseAmountToCents("¥500")).toBe(50000);
+    expect(parseAmountToCents("1,000,000")).toBe(100_000_000);
+    expect(parseAmountToCents("1,234,567.89")).toBeNull();
+  });
+
+  it("reads a comma only as a thousands separator followed by exactly three digits", () => {
+    expect(parseAmountToCents("1,000")).toBe(100000);
+    expect(parseAmountToCents("999,999")).toBe(99999900);
+    expect(parseAmountToCents("12,345.60")).toBe(1234560);
+  });
+
+  it("refuses a decimal comma instead of saving it as a larger amount", () => {
+    expect(parseAmountToCents("12,50")).toBeNull();
+    expect(parseAmountToCents("250,00")).toBeNull();
+    expect(parseAmountToCents("€12,50")).toBeNull();
+    expect(parseAmountToCents("12,5")).toBeNull();
+    expect(parseAmountToCents("1,2345")).toBeNull();
+    expect(parseAmountToCents("1,23,456")).toBeNull();
+    expect(parseAmountToCents("1234,567")).toBeNull();
+    expect(parseAmountToCents("0,500")).toBeNull();
+    expect(parseAmountToCents(",50")).toBeNull();
+    expect(parseAmountToCents("12,")).toBeNull();
+    expect(parseAmountToCents("1,000,")).toBeNull();
+    expect(parseAmountToCents("1,000.5,0")).toBeNull();
+  });
+
+  it("refuses a second currency symbol or a symbol in the middle", () => {
+    expect(parseAmountToCents("$$12.50")).toBeNull();
+    expect(parseAmountToCents("1$2.50")).toBeNull();
   });
 
   it("rejects empty, garbage, and sub-cent precision", () => {
