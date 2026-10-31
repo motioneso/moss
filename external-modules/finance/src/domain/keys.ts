@@ -10,6 +10,8 @@ import { createHash } from "node:crypto";
 import { FinanceKvError } from "./errors.js";
 import { isCalendarDate } from "./values.js";
 
+export { normalizePayee } from "./payee.js";
+
 // 32 hex chars = 128 bits of sha256 (job-search keys.ts precedent) —
 // collision-safe at personal-finance scale.
 function sha256Hex32(input: string): string {
@@ -69,20 +71,6 @@ export function cursorKey(itemId: string): string {
  */
 export function linkKey(linkToken: string): string {
   return `link:${contentHash(linkToken)}`;
-}
-
-/**
- * Payee normalization for categorization rules (FIN-02): lowercase, strip
- * digits and punctuation, collapse whitespace runs — "Trader Joe's #123 "
- * and "TRADER JOES 456" both key the same rule.
- */
-export function normalizePayee(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[0-9]/gu, "")
-    .replace(/[^\p{L}\s]/gu, "")
-    .replace(/\s+/gu, " ")
-    .trim();
 }
 
 /** Current key for a merchant rule. */

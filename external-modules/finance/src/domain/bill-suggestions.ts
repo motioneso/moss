@@ -2,7 +2,7 @@
 // owner's own history, active plans and dismissals. Rules are in the 2026-10-30 design pass spec,
 // slice 5.
 import { billOccurrences, type BillCadence, type BillSchedule } from "./recurrence.js";
-import { normalizePayee } from "./keys.js";
+import { normalizePayee } from "./payee.js";
 
 export type SuggestedCadence = Exclude<BillCadence, "once">;
 
