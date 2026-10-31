@@ -95,14 +95,17 @@ export async function exerciseIndividualMetadata(
     await exerciseTransactionDetails(page, record.name, month, read, artifacts);
     // One change saves at once and offers Undo. No dialog opens.
     await picker().selectOption("dining");
-    await page.getByText(`${record.name} moved to Dining & coffee.`, { exact: true }).waitFor();
+    await page
+      .getByText(`${record.name} moved to Dining & coffee.`, { exact: true })
+      .first()
+      .waitFor();
     expect(await page.getByRole("dialog").count()).toBe(0);
     await expect.poll(async () => (await saved()).categoryId).toBe("dining");
     expect(await saved()).toMatchObject({ ...record, categoryId: "dining" });
     if (artifacts)
       await page.screenshot({ path: join(resolve(artifacts), "finance-single-change-notice.png") });
     await page.getByRole("button", { name: "Undo", exact: true }).click();
-    await page.getByText(`${record.name} is back in Groceries.`, { exact: true }).waitFor();
+    await page.getByText(`${record.name} is back in Groceries.`, { exact: true }).first().waitFor();
     await expect.poll(async () => (await saved()).categoryId).toBe("groceries");
     await page.reload();
     await expect.poll(() => picker().inputValue()).toBe("groceries");
@@ -139,7 +142,10 @@ export async function exerciseIndividualMetadata(
     await row()
       .getByRole("button", { name: /^Confirm .* for /, exact: false })
       .click();
-    await page.getByText(`Confirmed ${record.name} as Groceries.`, { exact: true }).waitFor();
+    await page
+      .getByText(`Confirmed ${record.name} as Groceries.`, { exact: true })
+      .first()
+      .waitFor();
     expect(await page.getByRole("dialog").count()).toBe(0);
     await expect.poll(async () => (await saved()).categoryId).toBe("groceries");
     expect(await saved()).toMatchObject({ ...record, amountCents: 4321 });
@@ -165,6 +171,9 @@ export async function exerciseIndividualMetadata(
     // A competing edit after the page loaded saves nothing.
     await seed(4321, true);
     await page.reload();
+    await row()
+      .getByRole("button", { name: /^Confirm .* for / })
+      .waitFor();
     await seed(5678, true);
     const competing = await saved();
     await row()

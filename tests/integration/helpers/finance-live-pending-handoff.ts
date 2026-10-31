@@ -62,6 +62,7 @@ export async function exercisePendingHandoffReview(
     await row.getByRole("button", { name: /^Confirm .* for /, exact: false }).click();
     await page
       .getByText(`Confirmed ${handoffPosted.name} as Groceries.`, { exact: true })
+      .first()
       .waitFor();
     expect(await page.getByRole("dialog").count()).toBe(0);
     if (artifacts)
