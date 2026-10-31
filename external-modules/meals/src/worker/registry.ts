@@ -41,6 +41,15 @@ const plan =
   (ctx) =>
     run(planDeps(ctx), stripEnvelope(ctx.input));
 
+/** A queue job arrives as { actorUserId, jobKind, idempotencyKey, params }. */
+function jobParams(input: unknown): Record<string, unknown> {
+  const params = (input as { readonly params?: unknown } | null)?.params;
+  if (typeof params !== "object" || params === null || Array.isArray(params)) {
+    throw new Error("plan-day: job params must be an object");
+  }
+  return params as Record<string, unknown>;
+}
+
 export const HANDLERS: Readonly<Record<string, Handler>> = {
   "kitchen.get": (ctx) => createKitchenGetHandler(storeFrom(ctx))(ctx),
   "kitchen.save": (ctx) => createKitchenSaveHandler(storeFrom(ctx))(ctx),
@@ -51,5 +60,5 @@ export const HANDLERS: Readonly<Record<string, Handler>> = {
   "plan.control": plan(planControl),
   "plan.delete": plan(planDelete),
   "meal.get": plan(mealGet),
-  "plan.day": plan(runPlanDay)
+  "plan.day": (ctx) => runPlanDay(planDeps(ctx), jobParams(ctx.input))
 };

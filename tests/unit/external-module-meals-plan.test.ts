@@ -16,6 +16,7 @@ import {
 } from "../../external-modules/meals/src/plans/tools.js";
 import type { MealsStore } from "../../external-modules/meals/src/store/sql.js";
 import { createKitchenGetHandler } from "../../external-modules/meals/src/tools/household.js";
+import { HANDLERS } from "../../external-modules/meals/src/worker/registry.js";
 import {
   AiError,
   ESTIMATE_800,
@@ -654,5 +655,26 @@ describe("reading and deleting", () => {
     await expect(mealGet(setup.deps, { mealId: meal!.mealId })).rejects.toThrow(/no meal/i);
     await drain(setup);
     expect(setup.ai.calls).toHaveLength(0);
+  });
+});
+
+describe("queue handler", () => {
+  it("reads the day job's ids from the params the host wraps them in", async () => {
+    // The worker host invokes a queue handler with { actorUserId, jobKind, idempotencyKey,
+    // params }, so the ids arrive inside params.
+    const ctx = {
+      input: {
+        actorUserId: "bbbbbbbb-0000-4000-8000-000000000001",
+        jobKind: "plan_day",
+        idempotencyKey: "plan-day:cccccccc-0000-4000-8000-000000000002:g1",
+        params: {
+          planId: "cccccccc-0000-4000-8000-000000000001",
+          dayId: "cccccccc-0000-4000-8000-000000000002",
+          generation: 1
+        }
+      },
+      db: { query: async () => ({ rows: [] }) }
+    } as unknown as Parameters<(typeof HANDLERS)["plan.day"]>[0];
+    await expect(HANDLERS["plan.day"]!(ctx)).resolves.toEqual({ status: "missing" });
   });
 });
