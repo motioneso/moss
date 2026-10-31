@@ -79,6 +79,7 @@ export async function exercisePrivateNotes(
   const field = () =>
     editor.getByRole("textbox", { name: "Edit private transaction note", exact: true });
   const start = async () => {
+    await waitForFinanceAction(page, open(), "Retry register");
     await open().click();
     await details.getByRole("button", { name: "Edit private note", exact: true }).click();
     await waitForFinanceAction(page, field(), "Check saved note");
@@ -156,7 +157,7 @@ export async function exercisePrivateNotes(
   let releaseInitialRead: (() => void) | undefined;
   try {
     await page.goto(`${base}/m/finance/transactions`);
-    await waitForFinanceAction(page, open(), "Check saved records");
+    await waitForFinanceAction(page, open(), "Retry register");
     const beforeLoading = await snapshot();
     let readHeld!: () => void, readDelivered!: () => void;
     const held = new Promise<void>((resolve) => {
@@ -254,7 +255,7 @@ export async function exercisePrivateNotes(
     );
     await expect.poll(() => open().evaluate((e) => document.activeElement === e)).toBe(true);
     await page.reload();
-    await waitForFinanceAction(page, open(), "Check saved records");
+    await waitForFinanceAction(page, open(), "Retry register");
     await start();
     expect(await field().inputValue()).toBe(draft);
     await field().fill("");
@@ -364,7 +365,7 @@ export async function exercisePrivateNotes(
     await editor.getByRole("button", { name: "Close private note editor", exact: true }).click();
     await expect.poll(() => search.evaluate((e) => document.activeElement === e)).toBe(true);
     await search.fill("");
-    await waitForFinanceAction(page, open(), "Check saved records");
+    await waitForFinanceAction(page, open(), "Retry register");
     await open().click();
     expect(
       await details
