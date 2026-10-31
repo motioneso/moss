@@ -90,6 +90,7 @@ import {
 import { registerFocusJudgmentPurgeWorker } from "@moss/focus-judgment";
 import { ESPN_FETCH_HOSTS } from "@moss/sports";
 import { NEWS_FETCH_HOSTS } from "@moss/news";
+import { createWorkerEnqueuePortFactory } from "./external-module-enqueue.js";
 import { createIsModuleDisabledByAdmin, createIsModuleEnabled } from "./worker-module-gate.js";
 
 // Ten-minute job timeout plus a minute of margin.
@@ -439,6 +440,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
       : null;
   };
   const getDiscoveryById = buildDiscoveryLookup(externalModuleHolder);
+  const isModuleEnabledNow = createIsModuleEnabled({ db: workerDb, getDiscoveryById });
   const listDiscoveredModuleIds = () =>
     externalModuleHolder.getDiscoveries().map((module) => module.id);
   const listActiveUserIds = async (moduleId: string): Promise<readonly string[]> =>
@@ -515,7 +517,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     boss,
     discoveries: externalModuleHolder.getDiscoveries,
     reservedQueueNames,
-    isModuleEnabled: createIsModuleEnabled({ db: workerDb, getDiscoveryById }),
+    isModuleEnabled: isModuleEnabledNow,
     isModuleDisabledByAdmin: createIsModuleDisabledByAdmin({ db: workerDb }),
     jobSweep: {
       listPendingActors: (moduleId) => listPendingModuleJobActors(workerDb, moduleId),
@@ -564,6 +566,14 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
           postNotification: postModuleNotification,
           readAttachmentText: readModuleAttachmentText,
           logger: workerLogger,
+          // ctx.jobs.enqueue (#3722): the actor is the parent job's envelope actor. The live
+          // check is the predicate this worker already trusts, plus actor membership.
+          createEnqueuePort: createWorkerEnqueuePortFactory({
+            boss,
+            rootDb: workerDb,
+            isModuleEnabled: isModuleEnabledNow,
+            listActiveUserIds
+          }),
           // #1789: so a module running as a background job files things under the user's
           // calendar day, not the server's. The request id names this read specifically —
           // it is not the job's own work, it is the host answering "where is this user".
