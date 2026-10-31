@@ -4,7 +4,7 @@
 // domain/safety.ts enforces that, so this file only shapes the call and validates the answer.
 
 import type { SafetyVerdict } from "../domain/safety.js";
-import type { RecipeDraft } from "./recipe.js";
+import { quotedRules, type RecipeDraft } from "./recipe.js";
 
 const FALLBACK_REASON = "Flagged by the safety check";
 const MISSING_REASON = "The safety check gave no answer for this eater";
@@ -44,8 +44,9 @@ export function buildSafetyPrompt(
   eaters: readonly { readonly restrictions: readonly string[] }[]
 ): string {
   const lines = [
-    "Check one recipe against each eater's Never serve list.",
-    "Fail an eater when any ingredient is, contains, or is commonly made with something on their list. " +
+    "Check one recipe against each eater's food rules. A rule names a food, or a diet such as " +
+      '"vegetarian" that excludes foods.',
+    "Fail an eater when any ingredient is, contains, or is commonly made with something their rules exclude. " +
       "Hidden sources count: stocks, sauces, pastes and garnishes. When unsure, fail.",
     "",
     'Example: eater 1 never eats fish; ingredient "1 tbsp Thai red curry paste" -> ' +
@@ -55,7 +56,7 @@ export function buildSafetyPrompt(
     ...recipe.ingredients.map((line) => `- ${line.originalText}`),
     ...eaters.map(
       (eater, index) =>
-        `Eater ${index + 1} never serve: ${eater.restrictions.length > 0 ? eater.restrictions.join(", ") : "nothing"}`
+        `Eater ${index + 1} ${eater.restrictions.length > 0 ? `must follow ${quotedRules(eater.restrictions)}` : "has no rules"}`
     )
   ];
   return lines.filter((line) => line !== "").join("\n");

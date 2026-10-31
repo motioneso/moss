@@ -173,6 +173,28 @@ describe("schemas and prompts", () => {
     expect(wordCount(recipePrompt)).toBeLessThan(150);
     expect(wordCount(buildSafetyPrompt(recipe, []))).toBeLessThan(150);
   });
+
+  // Live on moss-proof, "never serve vegetarian" read as "serve no vegetarian food": every
+  // shared meal for a vegetarian eater came back with meat.
+  it("gives a diet word as a rule to follow, never as a food to avoid", () => {
+    const rules = ["vegetarian", "no peanuts"];
+    const recipePrompt = buildRecipePrompt({
+      slotName: "dinner",
+      date: "2026-11-02",
+      eaters: [{ shareKcal: null, restrictions: rules, preferences: [] }],
+      cookTimeLimitMinutes: null,
+      requestText: null,
+      avoidTitles: [],
+      unitsSystem: "us"
+    });
+    const safetyPrompt = buildSafetyPrompt(parseRecipe(rawRecipe(), NO_LIMIT), [
+      { restrictions: rules }
+    ]);
+    for (const prompt of [recipePrompt, safetyPrompt]) {
+      expect(prompt).not.toMatch(/never serve:? vegetarian/i);
+      expect(prompt).toContain('must follow "vegetarian", "no peanuts"');
+    }
+  });
 });
 
 describe("calories per serving", () => {

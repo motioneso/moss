@@ -105,11 +105,16 @@ export const RECIPE_SCHEMA = {
   }
 } as const;
 
+/** Rules are quoted so a diet word reads as a diet to follow, not as a food to leave out. */
+export function quotedRules(restrictions: readonly string[]): string {
+  return restrictions.map((rule) => JSON.stringify(rule)).join(", ");
+}
+
 function eaterLine(eater: RecipeEater, index: number): string {
   const parts = [`Eater ${index + 1}:`];
   parts.push(
     eater.restrictions.length > 0
-      ? `never serve ${eater.restrictions.join(", ")}`
+      ? `must follow ${quotedRules(eater.restrictions)}`
       : "no restrictions"
   );
   if (eater.preferences.length > 0) parts.push(`prefers ${eater.preferences.join(", ")}`);
@@ -121,7 +126,8 @@ export function buildRecipePrompt(request: RecipeRequest): string {
   const avoid = request.avoidTitles.slice(-MAX_AVOID_TITLES);
   const lines = [
     "Write one home-cooked recipe for the meal below, for every eater listed.",
-    "Never use an ingredient any eater must never be served, including in sauces, stocks and garnishes.",
+    'Each eater\'s rules name foods they cannot eat, or a diet such as "vegetarian" whose excluded foods they cannot eat.',
+    "Never use an ingredient any eater's rules exclude, including in sauces, stocks and garnishes.",
     "Set checkLabel on any packaged or branded product.",
     `Use ${request.unitsSystem === "metric" ? "metric" : "US"} units.`,
     "",
