@@ -663,6 +663,11 @@ function parseUsage(value: unknown): TranscriptRecord["usage"] {
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+/** How many user messages in the log carry exactly this text. */
+export function countUserText(records: readonly TranscriptRecord[], text: string): number {
+  return records.filter((record) => record.kind === "user" && record.text === text).length;
+}
+
 export function reconcileFallbacks(
   fallbacks: readonly TranscriptRecord[],
   liveRecords: readonly TranscriptRecord[]
