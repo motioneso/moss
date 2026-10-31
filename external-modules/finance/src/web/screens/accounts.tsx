@@ -18,6 +18,7 @@ import {
   RowIndex,
   RowIndexItem,
   SectionHead,
+  useEffect,
   useRef,
   useState,
   type ExternalModuleToolsHandleV1,
@@ -196,6 +197,21 @@ function AccountsBody(props: {
   const own = (props.result.accounts ?? []).filter((account) => !account.shared);
   const closed = own.filter((a) => a.source === "manual" && a.archivedAt);
   const active = own.filter((a) => !closed.includes(a));
+  // A link from Getting started or an empty Transactions screen opens the matching dialog once.
+  const handedOver = useRef(false);
+  useEffect(() => {
+    if (handedOver.current || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const wanted = params.get("add");
+    if (!wanted) return;
+    handedOver.current = true;
+    window.history.replaceState({}, "", window.location.pathname);
+    const manual = active.filter((a) => a.source === "manual");
+    const target = manual.length === 1 ? manual[0] : undefined;
+    if (wanted === "account" || manual.length === 0) props.onAddAccount();
+    else if (target && wanted === "entry") props.onAddEntry(target);
+    else if (target && wanted === "import") props.onImport(target);
+  }, []);
   const addBank = (): void =>
     props.hostActions.openAssistant({ starterPrompt: "Connect my bank account" });
   if (own.length === 0) {

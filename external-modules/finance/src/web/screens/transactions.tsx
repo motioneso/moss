@@ -10,6 +10,7 @@
 import {
   Button,
   Menu,
+  Note,
   PeriodStepper,
   Segmented,
   useEffect,
@@ -41,12 +42,9 @@ import {
 import { TransferCorrectionDialog } from "../transfer-correction-dialog";
 import { TransactionConfirm } from "../transaction-confirm";
 import { HistoryExportDialog } from "../history-export-dialog";
-import {
-  TransactionBulkBar,
-  BulkCategoryDialog,
-  BULK_LIMIT,
-  bulkEligible
-} from "../transaction-bulk";
+import { TransactionBulkBar, BULK_LIMIT, bulkEligible } from "../transaction-bulk";
+import { saveSingleCategory } from "../transaction-single";
+import { navigate } from "../router";
 import {
   detailsKey,
   isLook,
@@ -109,6 +107,8 @@ function TransactionsBody(props: {
   confirmed: ReadonlySet<string>;
   onConfirm: (tx: Tx, categoryId: string, makeRule: boolean) => void;
   onChange: (tx: Tx, categoryId: string) => Promise<boolean>;
+  working: string | null;
+  onWork: (id: string | null) => void;
   onTransfer?: (id: string) => void;
   selected: ReadonlySet<string>;
   selectionLocked: boolean;
@@ -129,6 +129,11 @@ function TransactionsBody(props: {
       categories.find((category) => category.id === tx.categoryId)?.name ?? "Uncategorized",
     accountName: (tx) => accounts.find((account) => account.accountId === tx.accountId)?.name ?? "",
     confirmed,
+    working: props.working,
+    onWork: props.onWork,
+    allUncleared:
+      rows.length > 0 &&
+      rows.every((tx) => tx.source === "manual" && !tx.cleared && !tx.reconciledAt),
     onDetails: (tx) =>
       props.onDetails(
         tx,
@@ -165,7 +170,16 @@ function TransactionsBody(props: {
     return (
       <EmptyState
         title="No transactions this month"
-        body="Add or import transactions in Accounts."
+        action={
+          <>
+            <Button variant="primary" size="sm" onClick={() => navigate("/accounts?add=entry")}>
+              Add transaction
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate("/accounts?add=import")}>
+              Import CSV
+            </Button>
+          </>
+        }
       />
     );
   }
@@ -197,29 +211,17 @@ export function TransactionsScreen(
     ...EMPTY_FILTERS,
     ...(initial.accountId ? { accountId: initial.accountId } : {})
   }));
-  const [singleReview, setSingleReview] = useState<{
-    tx: Tx;
-    categoryId: string;
-    categoryName: string;
-    previousCategory: string;
-    confirmOnly: boolean;
-  } | null>(null);
-  const singlePending = useRef<((saved: boolean) => void) | null>(null);
+  const singleBusy = useRef(false);
   const [singleUncertain, setSingleUncertain] = useState(false);
   const [checkingSingle, setCheckingSingle] = useState(false);
   const singleReadSnapshot = useRef<unknown>(null);
-  useEffect(
-    () => () => {
-      singlePending.current?.(false);
-      singlePending.current = null;
-    },
-    []
-  );
-  const finishSingle = (saved: boolean): void => {
-    singlePending.current?.(saved);
-    singlePending.current = null;
-    setSingleReview(null);
-  };
+  // The one row whose category picker is open, and the last category save with its Undo.
+  const [working, setWorking] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{
+    text: string;
+    undo?: { id: string; categoryId: string };
+  } | null>(null);
+  const [undoing, setUndoing] = useState(false);
   const [details, setDetails] = useState<CapturedTransactionDetails | null>(null);
   const [detailsTx, setDetailsTx] = useState<Tx | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -365,19 +367,89 @@ export function TransactionsScreen(
     ).then((all) => all.every(Boolean));
   };
 
-  const reviewSingle = (tx: Tx, categoryId: string, confirmOnly: boolean): Promise<boolean> => {
-    if (singlePending.current || singleUncertain) return Promise.resolve(false);
-    return new Promise<boolean>((resolve) => {
-      singlePending.current = resolve;
-      setSingleReview({
-        tx: { ...tx },
-        confirmOnly,
+  const categoryLabel = (id: string | null): string =>
+    filterOptions.categories.find((c) => c.id === id)?.name ?? "Uncategorized";
+
+  // Saves at once. The notice names the row and category and offers Undo for a change.
+  const saveOne = async (tx: Tx, categoryId: string, confirmOnly: boolean): Promise<boolean> => {
+    if (!props.tools || !tx.writeRevision || singleBusy.current || singleUncertain) return false;
+    singleBusy.current = true;
+    setNotice(null);
+    setWorking(null);
+    try {
+      const outcome = await saveSingleCategory(
+        props.tools,
+        { id: tx.id, writeRevision: tx.writeRevision },
         categoryId,
-        categoryName: filterOptions.categories.find((c) => c.id === categoryId)?.name ?? categoryId,
-        previousCategory:
-          filterOptions.categories.find((c) => c.id === tx.categoryId)?.name ?? "Uncategorized"
+        confirmOnly
+      );
+      if (outcome === "saved") {
+        const label = categoryLabel(categoryId);
+        const text = confirmOnly
+          ? `Confirmed ${tx.name} as ${label}.`
+          : `${tx.name} moved to ${label}.`;
+        announce(text);
+        setConfirmed((previous) => new Set([...previous, tx.id]));
+        releaseOnRead.current = [...releaseOnRead.current, tx.id];
+        readArmed.current = true;
+        invalidateQueries();
+        setNotice({
+          text,
+          undo: !confirmOnly && tx.categoryId ? { id: tx.id, categoryId: tx.categoryId } : undefined
+        });
+        return true;
+      }
+      if (outcome === "cancelled") {
+        announce("Cancelled. Nothing was saved.");
+      } else if (outcome === "refused") {
+        setNotice({
+          text: `Moss could not save ${tx.name}. Check that the category is still available.`
+        });
+      } else {
+        setSingleUncertain(true);
+        setNotice({
+          text:
+            outcome === "stale"
+              ? `${tx.name} changed since this page loaded. Nothing was saved.`
+              : `Saving ${tx.name} could not be confirmed.`
+        });
+      }
+      return false;
+    } finally {
+      singleBusy.current = false;
+    }
+  };
+
+  const undoChange = async (): Promise<void> => {
+    const undo = notice?.undo;
+    if (!undo || !props.tools || undoing) return;
+    const row = (result?.transactions ?? []).find((tx) => tx.id === undo.id);
+    if (!row?.writeRevision) {
+      invalidateQueries();
+      setNotice({
+        text: "Could not undo yet. Wait a moment for the list to refresh, then try again.",
+        undo
       });
-    });
+      return;
+    }
+    setUndoing(true);
+    const outcome = await saveSingleCategory(
+      props.tools,
+      { id: row.id, writeRevision: row.writeRevision },
+      undo.categoryId,
+      false
+    );
+    setUndoing(false);
+    invalidateQueries();
+    if (outcome === "saved") {
+      const text = `${row.name} is back in ${categoryLabel(undo.categoryId)}.`;
+      announce(text);
+      setNotice({ text });
+    } else {
+      setNotice({
+        text: `Could not undo the change to ${row.name}. It may have changed since.`
+      });
+    }
   };
 
   const confirmOne = (tx: Tx, categoryId: string, makeRule: boolean): void => {
@@ -389,15 +461,16 @@ export function TransactionsScreen(
       categoryId !== "transfers" &&
       (unchanged ? supportsConfirm : supportsBulk)
     ) {
-      void reviewSingle(tx, categoryId, unchanged);
+      void saveOne(tx, categoryId, unchanged);
       return;
     }
+    setWorking(null);
     void send([tx], [categoryId], makeRule, "Confirmed.");
   };
 
   const changeOne = (tx: Tx, categoryId: string): Promise<boolean> => {
     if (supportsBulk && props.tools && bulkEligible(tx) && categoryId !== "transfers") {
-      return reviewSingle(tx, categoryId, false);
+      return saveOne(tx, categoryId, false);
     }
     return send([tx], [categoryId], false, "Category changed.").then((saved) => {
       release([tx.id]);
@@ -558,17 +631,22 @@ export function TransactionsScreen(
           </Button>
         </div>
       ) : null}
-      {singleReview ? (
-        <BulkCategoryDialog
-          rows={[singleReview.tx]}
-          category={{ id: singleReview.categoryId, name: singleReview.categoryName }}
-          previousCategory={singleReview.previousCategory}
-          confirmOnly={singleReview.confirmOnly}
-          tools={props.tools}
-          onClose={() => finishSingle(false)}
-          onSaved={() => finishSingle(true)}
-          onUncertain={() => setSingleUncertain(true)}
-        />
+      {notice ? (
+        <Note variant="practical">
+          <div className="fnm-look">
+            <span role="status">{notice.text}</span>
+            <div className="fnm-chips">
+              {notice.undo ? (
+                <Button variant="link" disabled={undoing} onClick={() => void undoChange()}>
+                  {undoing ? "Undoing…" : "Undo"}
+                </Button>
+              ) : null}
+              <Button variant="link" onClick={() => setNotice(null)}>
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        </Note>
       ) : null}
       <TransactionDetails
         captured={details}
@@ -602,6 +680,8 @@ export function TransactionsScreen(
             confirmed={confirmed}
             onConfirm={confirmOne}
             onChange={changeOne}
+            working={working}
+            onWork={setWorking}
             onTransfer={props.tools ? openTransfer : undefined}
             selected={new Set(selected.keys())}
             selectionLocked={selectionLocked}

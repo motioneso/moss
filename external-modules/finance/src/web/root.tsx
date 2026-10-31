@@ -47,7 +47,7 @@ const TAB_PATHS: Record<Tab, string> = {
 };
 
 function tabFor(path: string): Tab | "none" {
-  if (path === "/") return "budget";
+  if (path === "/" || path === "/start") return "budget";
   if (path === "/transactions") return "transactions";
   if (path === "/accounts") return "accounts";
   if (path === "/upcoming") return "upcoming";
