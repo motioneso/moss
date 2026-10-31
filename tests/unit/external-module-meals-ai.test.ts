@@ -197,6 +197,18 @@ describe("calories per serving", () => {
     await expect(estimateKcalPerServing(ai, recipe())).resolves.toBe(500);
   });
 
+  it("asks for the economy tier", async () => {
+    const hints: (string | undefined)[] = [];
+    const ai: MealsAi = {
+      generateStructured: async (input) => {
+        hints.push(input.tierHint);
+        return { ok: false, error: "provider_error" };
+      }
+    };
+    await estimateKcalPerServing(ai, recipe());
+    expect(hints).toEqual(["economy"]);
+  });
+
   it("is unknown when the estimate fails", async () => {
     await expect(estimateKcalPerServing(scriptedAi(new Error()), recipe())).resolves.toBeNull();
     const vague = scriptedAi({

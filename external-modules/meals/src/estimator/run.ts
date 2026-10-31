@@ -1,7 +1,8 @@
 // external-modules/meals/src/estimator/run.ts
 //
 // Copied from Food (external-modules/food/src/estimator/run.ts). Turns a description into an
-// estimate and never throws. Every AI error and every malformed answer becomes "failed".
+// estimate and never throws. Every AI error and every malformed answer becomes "failed". It asks
+// for the economy tier, where Food asks for interactive (spec story 83c).
 
 import type { MealsAi } from "../ai/port.js";
 import {
@@ -28,7 +29,7 @@ export async function estimateFromDescription(
   const result = await ai.generateStructured({
     schema: ESTIMATE_SCHEMA,
     prompt: buildEstimatePrompt(description, servingNote),
-    tierHint: "interactive"
+    tierHint: "economy"
   });
   if (!result.ok) return FAILED_OUTCOME;
 
