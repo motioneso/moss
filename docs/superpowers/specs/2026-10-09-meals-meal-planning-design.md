@@ -18,9 +18,9 @@ everyone's restrictions, preferences and calorie targets, use what is already in
 a shopping list with sensible amounts, and keep the pantry honest afterwards. Moss cannot help with
 any of that today.
 
-Melio (agent.meal-plan.app) shows the shape of a good answer. It splits a calorie target across
-meals, writes each meal with AI, checks nutrition, and sums the ingredients into a shopping list.
-It plans for one person only, ignores what is on hand, and forgets everything once the week ends.
+A good answer splits a calorie target across meals, writes each meal with AI, checks nutrition, and
+sums the ingredients into a shopping list. Planners of this kind usually plan for one person only,
+ignore what is on hand, and forget everything once the week ends.
 
 ## Module distribution model
 
@@ -262,14 +262,16 @@ so that project can use them.
 ### Safety
 
 33. As a user, I want every meal checked against every eater's restrictions before I see it, so
-    that I never get an unsafe meal.
+    that I am warned when a listed item is plainly in the ingredients. The check only says that
+    nothing listed was found outright, and it always tells me to double check. It never guarantees
+    a meal is safe.
 34. As a user, I want a failing meal rewritten automatically, so that I do not have to fix it.
-35. As a user, I want a slot that cannot be made safe to show as failed with a retry, so that Moss
-    never shows an unsafe meal as a fallback.
+35. As a user, I want a slot that cannot pass the check to show as failed with a retry, so that Moss
+    never shows a meal that failed the check as a fallback.
 36. As a user, I want a short note on uncertain ingredients like brands, so that I do not assume a
     suggested brand was already checked.
 37. As a user, I want swaps, regenerations and imported Favourites to pass the same check, so that
-    every path is safe.
+    every path gets the same check and the same reminder.
 
 ### Changing the plan
 
@@ -499,6 +501,9 @@ Log tables keep `owner_user_id` only. The log is personal and never moves into a
 - The Safety check is deterministic first (restriction terms against parsed and original ingredient
   text) and AI-assisted second. A failing meal is regenerated up to a fixed cap. A meal still
   failing after the cap leaves its slot failed with a retry.
+- The Safety check only reports that no listed restriction was found outright in the ingredients.
+  Every result, pass or fail, carries a reminder to double check, and the wording never says a meal
+  is safe or guaranteed.
 - The Safety check never vouches for a brand. An ingredient that names a brand or packaged
   product gets `check_label`, and the page shows a short check-the-label note.
 - Locked meals, plain-text slots and unchanged days are never rewritten.
@@ -602,14 +607,15 @@ The phase 1 prototype is checked by Ben's review, not by tests.
 
 - Grocery ordering from any store. That is its own project, using the list's structured fields.
 - Product and brand matching.
-- Medical or allergy guarantees beyond the Safety check against recorded restrictions.
+- Any medical or allergy guarantee. The Safety check never guarantees and always tells the user to
+  double check.
 - Any change to core packages. Gaps become blocker issues.
 - Sharing before phase 5. Phases 2 to 4 store the account link only.
 
 ## Further Notes
 
-- Melio research lives outside the repository. Melio took about three and a half minutes per day of
-  plan, which is why generation is split into one job per day.
+- Writing a day of plan takes about three and a half minutes, which is why generation is split into
+  one job per day.
 - The phase 1 prototype lives in a prototype folder beside this spec and is reviewed before phase 2
   tickets are written. It is throwaway code and is not imported by the module.
 - ADR 0011 records why data is keyed by Kitchen from day one.

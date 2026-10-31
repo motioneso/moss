@@ -41,6 +41,19 @@ function requireDate(input: Input, field: string): string {
   return value;
 }
 
+function parseMealTypes(value: unknown): readonly string[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.length > 8 ||
+    value.some((name) => typeof name !== "string" || name.trim() === "" || name.length > 40)
+  ) {
+    throw new PlanInputError("mealTypes must list 1 to 8 meal names such as dinner");
+  }
+  return value as string[];
+}
+
 async function loadView(deps: PlanDeps, plan: PlanRow): Promise<PlanView> {
   const [days, meals, kitchen] = await Promise.all([
     deps.store.listDays(plan.planId),
@@ -92,6 +105,7 @@ export async function planCreate(deps: PlanDeps, input: Input): Promise<PlanView
   if (requestRaw.length > MAX_REQUEST_TEXT) {
     throw new PlanInputError(`requestText must be at most ${MAX_REQUEST_TEXT} characters`);
   }
+  const mealTypes = parseMealTypes(input["mealTypes"]);
   const allowRepeats = input["allowRepeats"] ?? false;
   if (typeof allowRepeats !== "boolean")
     throw new PlanInputError("allowRepeats must be true or false");
@@ -100,7 +114,10 @@ export async function planCreate(deps: PlanDeps, input: Input): Promise<PlanView
   if (existing !== null) return loadView(deps, await requirePlan(deps, existing));
 
   const kitchen = await deps.ensureKitchen();
-  const skeleton = planSkeleton(kitchen, { startDate, days: dayCount });
+  const skeleton = planSkeleton(kitchen, { startDate, days: dayCount, mealTypes });
+  if (skeleton.every((day) => day.meals.length === 0)) {
+    throw new PlanInputError("No one in the household eats the meals asked for");
+  }
   const days = skeleton.map((day) => ({ dayId: deps.newId(), date: day.date }));
   const meals = skeleton.flatMap((day, index) =>
     day.meals.map((meal) => ({
@@ -137,6 +154,17 @@ export async function planGet(deps: PlanDeps, input: Input): Promise<PlanView> {
     if (planId === null) throw new PlanInputError("No plan covers that date");
   }
   return loadView(deps, await requirePlan(deps, planId));
+}
+
+/** The plan the Plan tab shows. `plan` is null when nothing has been planned yet. */
+export async function planCurrent(
+  deps: PlanDeps,
+  input: Input
+): Promise<{ readonly plan: PlanView | null }> {
+  const date = requireDate(input, "date");
+  const planId = await deps.store.findCurrentPlan(date);
+  if (planId === null) return { plan: null };
+  return { plan: await loadView(deps, await requirePlan(deps, planId)) };
 }
 
 function findDay(days: readonly DayRow[], input: Input): DayRow {

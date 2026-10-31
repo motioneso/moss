@@ -174,6 +174,7 @@ describe("meals manifest", () => {
       ["meals.household.remove", "destructive", "household.remove"],
       ["meals.plan.create", "write", "plan.create"],
       ["meals.plan.get", "read", "plan.get"],
+      ["meals.plan.current", "read", "plan.current"],
       ["meals.plan.control", "write", "plan.control"],
       ["meals.plan.delete", "destructive", "plan.delete"],
       ["meals.meal.get", "read", "meal.get"]
@@ -249,11 +250,27 @@ describe("meals manifest", () => {
     ["meals.household.remove", { removed: true }],
     ["meals.plan.create", PLAN],
     ["meals.plan.get", PLAN],
+    ["meals.plan.current", { plan: PLAN }],
     ["meals.plan.control", PLAN],
     ["meals.plan.delete", { deleted: true }],
     ["meals.meal.get", RECIPE]
   ])("%s output schema covers every view field", (name, sample) => {
     expect(uncovered(tool(name).outputSchema as Schema, sample)).toEqual([]);
+  });
+
+  it("gives every tool a plain-English action label, never the tool name", () => {
+    const tools = loadManifest().assistantTools as Array<{ name: string; actionLabel?: string }>;
+    for (const entry of tools) {
+      expect(entry.actionLabel, entry.name).toBeTruthy();
+      expect(entry.actionLabel, entry.name).not.toMatch(/[a-z]\.[a-z]/);
+    }
+  });
+
+  it("lets plan.create name which meals to plan", () => {
+    const create = tool("meals.plan.create");
+    const props = (create.inputSchema as Schema).properties as Record<string, { type: string }>;
+    expect(props["mealTypes"]?.type).toBe("array");
+    expect(create.description).toContain("mealTypes");
   });
 
   it("maps the Household and Settings screens and the chat feature", () => {
@@ -263,6 +280,7 @@ describe("meals manifest", () => {
     };
     expect(appMap.screens.map((screen) => [screen.id, screen.path])).toEqual(
       expect.arrayContaining([
+        ["meals.recipe", "/recipe"],
         ["meals.household", "/household"],
         ["meals.settings", "/settings"]
       ])

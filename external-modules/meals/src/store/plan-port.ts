@@ -128,6 +128,11 @@ export interface PlanStore {
   getPlan(planId: string): Promise<PlanRow | null>;
   /** The newest plan whose days include the date. */
   findPlanByDate(date: string): Promise<string | null>;
+  /**
+   * The plan the Plan tab shows on a date: one that covers it, else the next one to start, else
+   * the newest. Null when no plan exists.
+   */
+  findCurrentPlan(date: string): Promise<string | null>;
   setPlanState(planId: string, state: PlanState, pausedReason: EnqueueLimit | null): Promise<void>;
   deletePlan(planId: string): Promise<boolean>;
 

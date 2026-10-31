@@ -80,16 +80,16 @@ they run past 4,000 lines and one file would not be reviewable.
 - Long text is a review state. It stretches names, list lines, notes and numbers on every screen.
   The data is built at load, so entering or leaving it reloads the page.
 
-### Folded in from the competitor study
+### Shopping and safety behaviour
 
 Screen behaviour only. Offline, data export, receipt text and opt-in Leftovers stay out of phase 2.
 
 - Phone shopping mode. List rows grow to 64 px with a larger name, the whole row ticks, and each
-  tick shows an undo toast. Rivals make the tick box the only target, which misses in a shop.
+  tick shows an undo toast. A tick box as the only target is easy to miss in a shop.
 - A plan change never resets the list. Ticks stay; only changed lines show "Was" or "Not needed
-  now", and new lines carry a New badge. Losing ticks on a re-plan is the top rival complaint.
+  now", and new lines carry a New badge. Households expect ticks to survive a re-plan.
 - Safety per meal and per eater. The recipe page names each eater's rule and the reason, with a
-  one-tap Safe swap. No rival shows who a meal is unsafe for, or why.
+  one-tap Safe swap. Households want to see who a meal fails for, and why.
 - Mark cooked and Bought each offer one-step Undo in their toast. Full Pantry history stays in
   phase 3, so the undo covers only the last action.
 - Writing a plan shows Stop, and a failed day has its own Retry. One bad day should not cost the

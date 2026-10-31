@@ -137,6 +137,18 @@ export function sqlPlanStore(db: MealsDb): PlanStore {
       return row?.planId ?? null;
     },
 
+    async findCurrentPlan(date) {
+      const row = await one<{ planId: string }>(
+        'SELECT p.plan_id AS "planId" FROM app.meals_plans p ' +
+          "ORDER BY (p.start_date <= $1::date AND p.start_date + p.day_count > $1::date) DESC, " +
+          "(p.start_date > $1::date) DESC, " +
+          "CASE WHEN p.start_date > $1::date THEN p.start_date END ASC, " +
+          "p.created_at DESC, p.plan_id LIMIT 1",
+        [date]
+      );
+      return row?.planId ?? null;
+    },
+
     async setPlanState(planId, state: PlanState, pausedReason) {
       await db.query(
         "UPDATE app.meals_plans SET state = $2, paused_reason = $3, updated_at = now() " +
