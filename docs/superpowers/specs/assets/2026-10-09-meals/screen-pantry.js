@@ -246,7 +246,8 @@
 
   // ---------- Item dialog ----------
 
-  const sectionOptions = () => SECTION_ORDER.map((s) => ({ value: s, label: s }));
+  // Leftovers is a phase 3 group, so the picker cannot file an item where phase 2 hides it.
+  const sectionOptions = () => SECTION_ORDER.filter((s) => later() || s !== "Leftovers").map((s) => ({ value: s, label: s }));
   const storageOptions = () => STORAGE_ORDER.map((s) => ({ value: s, label: s }));
 
   const itemForm = (item) => h`
