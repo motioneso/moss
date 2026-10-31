@@ -7,6 +7,7 @@ import type { SafetyVerdict } from "../domain/safety.js";
 import type { RecipeDraft } from "./recipe.js";
 
 const FALLBACK_REASON = "Flagged by the safety check";
+const MISSING_REASON = "The safety check gave no answer for this eater";
 const MAX_REASON = 200;
 
 export const SAFETY_SCHEMA = {
@@ -61,10 +62,10 @@ export function buildSafetyPrompt(
 }
 
 /**
- * One entry per eater, in prompt order. Null means the model gave no verdict for that eater, so
- * the deterministic result stands alone. Throws on a malformed answer.
+ * One verdict per eater, in prompt order. An eater the answer leaves out fails, because the
+ * check fails closed. Throws on a malformed answer.
  */
-export function parseSafety(raw: unknown, eaterCount: number): readonly (SafetyVerdict | null)[] {
+export function parseSafety(raw: unknown, eaterCount: number): readonly SafetyVerdict[] {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("safety: answer must be an object");
   }
@@ -91,5 +92,5 @@ export function parseSafety(raw: unknown, eaterCount: number): readonly (SafetyV
       typeof reason === "string" && reason.trim() !== "" ? reason.trim() : FALLBACK_REASON;
     verdicts[index] = { verdict: "fail", reason: text.slice(0, MAX_REASON) };
   }
-  return verdicts;
+  return verdicts.map((verdict) => verdict ?? { verdict: "fail", reason: MISSING_REASON });
 }

@@ -339,6 +339,19 @@ describe("Safety", () => {
     expect(mealsOf(setup)[0]?.status).toBe("ready");
   });
 
+  it("regenerates when the model's answer leaves an eater out", async () => {
+    const ai = new ScriptedAi()
+      .always("recipe", recipeAnswer())
+      .script("safety", { eaters: [{ eater: 1, verdict: "pass" }] })
+      .always("safety", safetyPass(2))
+      .always("estimate", ESTIMATE_800);
+    const setup = fakeDeps(kitchenOf([you, sam]), ai);
+    await planCreate(setup.deps, createInput());
+    await drain(setup);
+    expect(ai.count("recipe")).toBe(2);
+    expect(mealsOf(setup)[0]?.status).toBe("ready");
+  });
+
   it("marks the eater failed when the model keeps failing, and stops at three attempts", async () => {
     const ai = new ScriptedAi()
       .always("recipe", recipeAnswer())

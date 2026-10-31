@@ -161,15 +161,12 @@ const EXPANSIONS: Readonly<Record<string, readonly string[]>> = {
   vegetarian: [...MEAT, ...FISH, ...SHELLFISH],
   vegan: [...MEAT, ...FISH, ...SHELLFISH, ...DAIRY, ...EGG, "honey"],
   pescatarian: MEAT,
-  "dairy free": DAIRY,
   dairy: DAIRY,
   lactose: DAIRY,
-  "gluten free": GLUTEN,
   gluten: GLUTEN,
   wheat: GLUTEN,
   coeliac: GLUTEN,
   celiac: GLUTEN,
-  "egg free": EGG,
   egg: EGG,
   eggs: EGG,
   shellfish: SHELLFISH,
@@ -193,6 +190,10 @@ const EXPANSIONS: Readonly<Record<string, readonly string[]>> = {
 
 const LEADING_NEGATION = /^(?:no|never|without|avoid|avoids|allergic to|allergy to|not)\s+/;
 
+/** Words people put after the food, as in "peanut allergy", "nut-free", "lactose intolerant". */
+const TRAILING_QUALIFIER =
+  /\s+(?:allergy|allergies|allergic|intolerance|intolerant|sensitivity|sensitive|free)$/;
+
 function normalise(text: string): string {
   return text
     .normalize("NFKD")
@@ -206,7 +207,7 @@ function normalise(text: string): string {
 function restrictionTerms(restriction: string): readonly string[] {
   const phrase = normalise(restriction)
     .replace(LEADING_NEGATION, "")
-    .replace(/ free$/, " free");
+    .replace(TRAILING_QUALIFIER, "");
   if (phrase === "") return [];
   const terms = EXPANSIONS[phrase] ?? [phrase];
   return terms.flatMap((term) => {

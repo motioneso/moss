@@ -160,6 +160,22 @@ describe("deterministic Safety", () => {
     expect(deterministicSafety([ingredient("8 prawns")], ["shellfish"]).verdict).toBe("fail");
   });
 
+  it.each([
+    ["peanut allergy", "2 tbsp peanut butter"],
+    ["nut allergy", "2 tbsp peanut butter"],
+    ["peanut allergies", "2 tbsp peanut butter"],
+    ["allergic to nuts", "50 g cashews"],
+    ["nut-free", "2 tbsp peanut butter"],
+    ["peanut-free", "2 tbsp peanut butter"],
+    ["shellfish allergy", "8 shrimp"],
+    ["seafood intolerance", "8 shrimp"],
+    ["lactose intolerant", "50 g cheddar"],
+    ["dairy sensitivity", "50 g cheddar"],
+    ["Egg-free", "2 eggs"]
+  ])("fails a conflicting ingredient for the restriction %j", (restriction, line) => {
+    expect(deterministicSafety([ingredient(line)], [restriction]).verdict).toBe("fail");
+  });
+
   it("does not match inside an unrelated word", () => {
     const verdict = deterministicSafety(
       [ingredient("1 tsp nutmeg"), ingredient("200 ml coconut milk")],

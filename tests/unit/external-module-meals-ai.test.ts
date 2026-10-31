@@ -108,11 +108,18 @@ describe("parseSafety", () => {
     ]);
   });
 
-  it("leaves an eater without a verdict as no opinion, and gives a bare failure a reason", () => {
+  it("fails an eater the answer leaves out, and gives a bare failure a reason", () => {
     const verdicts = parseSafety({ eaters: [{ eater: 1, verdict: "fail", reason: null }] }, 2);
     expect(verdicts[0]).toMatchObject({ verdict: "fail" });
     expect((verdicts[0] as { reason: string }).reason.length).toBeGreaterThan(0);
-    expect(verdicts[1]).toBeNull();
+    expect(verdicts[1]).toMatchObject({ verdict: "fail", reason: expect.any(String) });
+  });
+
+  it("fails every eater when the answer lists none", () => {
+    expect(parseSafety({ eaters: [] }, 2).map((verdict) => verdict.verdict)).toEqual([
+      "fail",
+      "fail"
+    ]);
   });
 
   it("rejects a malformed answer", () => {
