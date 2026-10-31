@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react",
+    "jsxFactory": "h",
+    "jsxFragmentFactory": "Fragment",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "paths": {
+      "@moss/module-sdk/worker": ["../../packages/module-sdk/src/worker.ts"],
+      "@moss/module-sdk/time": ["../../packages/module-sdk/src/time.ts"],
+      "@moss/module-sdk/list-limits": ["../../packages/module-sdk/src/list-limits.ts"]
+    }
+  },
+  "include": ["src"]
+}
