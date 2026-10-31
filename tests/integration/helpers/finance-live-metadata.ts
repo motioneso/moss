@@ -104,9 +104,24 @@ export async function exerciseIndividualMetadata(
     expect(await saved()).toMatchObject({ ...record, categoryId: "dining" });
     if (artifacts)
       await page.screenshot({ path: join(resolve(artifacts), "finance-single-change-notice.png") });
+    await page.setViewportSize({ width: 390, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
+      false
+    );
+    if (artifacts)
+      await page.screenshot({
+        path: join(resolve(artifacts), "finance-single-change-notice-390.png")
+      });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    // Undo still works after a search hides the row from the loaded list.
+    await page
+      .getByLabel("Search payees or notes", { exact: true })
+      .fill("nothing-matches-synthetic");
+    await page.getByText("No matches", { exact: true }).waitFor();
     await page.getByRole("button", { name: "Undo", exact: true }).click();
     await page.getByText(`${record.name} is back in Groceries.`, { exact: true }).first().waitFor();
     await expect.poll(async () => (await saved()).categoryId).toBe("groceries");
+    await page.getByLabel("Search payees or notes", { exact: true }).fill("");
     await page.reload();
     await expect.poll(() => picker().inputValue()).toBe("groceries");
 

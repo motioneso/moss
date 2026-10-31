@@ -219,7 +219,7 @@ export function TransactionsScreen(
   const [working, setWorking] = useState<string | null>(null);
   const [notice, setNotice] = useState<{
     text: string;
-    undo?: { id: string; categoryId: string };
+    undo?: { id: string; categoryId: string; month: string };
   } | null>(null);
   const [undoing, setUndoing] = useState(false);
   const [details, setDetails] = useState<CapturedTransactionDetails | null>(null);
@@ -395,7 +395,10 @@ export function TransactionsScreen(
         invalidateQueries();
         setNotice({
           text,
-          undo: !confirmOnly && tx.categoryId ? { id: tx.id, categoryId: tx.categoryId } : undefined
+          undo:
+            !confirmOnly && tx.categoryId
+              ? { id: tx.id, categoryId: tx.categoryId, month: tx.date.slice(0, 7) }
+              : undefined
         });
         return true;
       }
@@ -423,16 +426,28 @@ export function TransactionsScreen(
   const undoChange = async (): Promise<void> => {
     const undo = notice?.undo;
     if (!undo || !props.tools || undoing) return;
-    const row = (result?.transactions ?? []).find((tx) => tx.id === undo.id);
-    if (!row?.writeRevision) {
-      invalidateQueries();
-      setNotice({
-        text: "Could not undo yet. Wait a moment for the list to refresh, then try again.",
-        undo
+    setUndoing(true);
+    // A lookup by id gives the current revision even when the row has left the loaded list
+    // (filter, search, paging) or the list has not refreshed since the save.
+    let row: Tx | undefined;
+    try {
+      const lookup = await props.tools.invoke("finance.transactions.query", {
+        month: undo.month,
+        transactionId: undo.id
       });
+      if (lookup.status === "succeeded") {
+        row = ((lookup.result as unknown as TxResult).transactions ?? []).find(
+          (tx) => tx.id === undo.id
+        );
+      }
+    } catch {
+      row = undefined;
+    }
+    if (!row?.writeRevision) {
+      setUndoing(false);
+      setNotice({ text: "Could not undo. The transaction could not be found.", undo });
       return;
     }
-    setUndoing(true);
     const outcome = await saveSingleCategory(
       props.tools,
       { id: row.id, writeRevision: row.writeRevision },
