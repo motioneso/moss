@@ -82,6 +82,29 @@ describe("tasks heartbeat read", () => {
     const small = await read(tasksHeartbeatWindowExecute, ids.userA, { limit: 3 });
     expect(small.items).toHaveLength(3);
   });
+
+  it("keeps what is due soon visible behind a deep overdue backlog, and drops stale overdue", async () => {
+    const now = Date.now();
+    await runner.withDataContext(as(ids.userC), async (db) => {
+      for (let i = 1; i <= 25; i += 1)
+        await tasksRepo.create(db, {
+          title: `Overdue ${i}`,
+          dueAt: new Date(now - i * 3_600_000)
+        });
+      await tasksRepo.create(db, {
+        title: "Ancient overdue",
+        dueAt: new Date(now - 30 * 86_400_000)
+      });
+      await tasksRepo.create(db, { title: "Due soon", dueAt: new Date(now + 3_600_000) });
+    });
+
+    const result = await read(tasksHeartbeatWindowExecute, ids.userC);
+    const titles = result.items.map((item) => item.title);
+    expect(titles).toContain("Due soon");
+    expect(titles).not.toContain("Ancient overdue");
+    expect(result.items.length).toBeLessThanOrEqual(20);
+    expect(result.truncated).toBe(true);
+  });
 });
 
 describe("commitments heartbeat read", () => {

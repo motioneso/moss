@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { buildChatGatewayDependencies } from "../../packages/chat/src/routes.js";
+import {
+  buildBackgroundReadGatewayDependencies,
+  buildChatGatewayDependencies
+} from "../../packages/chat/src/routes.js";
 import type { PreferencesPort, DataContextRunner } from "@moss/db";
 import { DEFAULT_LOCALE_SETTINGS } from "@moss/shared";
 import type { AiRepository } from "../../packages/ai/src/repository.js";
@@ -146,6 +149,41 @@ describe("buildChatGatewayDependencies → resolveLocale (#2157, #3394)", () => 
       collaborators: {}
     });
     expect(deps.resolveLocale).toBeUndefined();
+  });
+});
+
+describe("buildBackgroundReadGatewayDependencies → resolveLocale (#3819)", () => {
+  const runner = {
+    withDataContext: async (_ctx: unknown, fn: (db: unknown) => unknown) => fn({})
+  } as unknown as DataContextRunner;
+
+  function build(localeRow: unknown) {
+    const localePreferences = {
+      get: vi.fn(async (_db: unknown, key: string) => (key === "locale" ? localeRow : undefined))
+    } as unknown as PreferencesPort;
+    return buildBackgroundReadGatewayDependencies({
+      resolveActiveModules: async () => [],
+      repository: {} as AiRepository,
+      runner,
+      tokens: {} as SessionTokenRegistry,
+      confirmations: {} as ConfirmationRegistry,
+      notifier: {} as SessionNotifier,
+      localePreferences
+    });
+  }
+
+  it("gives a background read the owner's stored zone instead of falling back to UTC", async () => {
+    const deps = build({ timezone: "Europe/Berlin", region: "de-DE", dateFormat: "12" });
+    await expect(deps.resolveLocale!("user1")).resolves.toMatchObject({
+      timezone: "Europe/Berlin"
+    });
+  });
+
+  it("uses the same default zone Settings shows when nothing is stored", async () => {
+    // A heartbeat source read called with no local timezone used to treat the day as UTC,
+    // which can move an overdue item by a day.
+    const deps = build(undefined);
+    await expect(deps.resolveLocale!("user1")).resolves.toEqual(DEFAULT_LOCALE_SETTINGS);
   });
 });
 
