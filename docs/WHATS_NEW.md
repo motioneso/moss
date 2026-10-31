@@ -40,6 +40,10 @@ feature that is not present in the image you are running.
 - **Buttons under empty messages.** Buttons under an empty or error message no longer sit tight against the text above them. [PR #3908](https://github.com/motioneso/moss/pull/3908)
 - **Confirming changes on module pages works with a fast clock.** Confirming a removal on a module's page now works even when your device's clock runs fast. [PR #3911](https://github.com/motioneso/moss/pull/3911)
 
+#### Changed
+
+- **Settings header stays on one row.** The Personal and Admin switch now sits to the left of the settings search box on one row, and only stacks on narrow windows. [PR #3915](https://github.com/motioneso/moss/pull/3915)
+
 ### 2026-10-30
 
 #### Changed
