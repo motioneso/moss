@@ -81,7 +81,7 @@ const actionAuditLogEntrySchema = {
     turnId: { type: ["string", "null"] },
     sourceSurface: {
       type: "string",
-      enum: ["chat", "proactive", "scheduled", "unknown"]
+      enum: ["chat", "proactive", "scheduled", "unknown", "module_page"]
     },
     inputSummary: actionAuditInputSummarySchema,
     // #2175: how long the tool call took; null when no call happened (e.g. a denial).
@@ -136,7 +136,7 @@ export type ActionAuditLogEntryDto = {
   readonly chatSessionId: string | null;
   /** #2956: the chat turn this tool row ran in; null outside a turn. Joins the answer line. */
   readonly turnId: string | null;
-  readonly sourceSurface: "chat" | "proactive" | "scheduled" | "unknown";
+  readonly sourceSurface: "chat" | "proactive" | "scheduled" | "unknown" | "module_page";
   readonly inputSummary: ActionAuditInputSummary | null;
   /** #2175: milliseconds the tool call took; null when no call happened (e.g. a denial). */
   readonly durationMs: number | null;

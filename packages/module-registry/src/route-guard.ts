@@ -168,6 +168,10 @@ export const PLATFORM_UNGUARDED_ROUTES: ReadonlySet<RouteKey> = new Set<RouteKey
   routeKey("DELETE", "/api/me/modules/:moduleId/credentials/:credentialId"),
   routeKey("GET", "/api/modules/:moduleId/web/*"),
   routeKey("POST", "/api/modules/:moduleId/queues/:queueName/run"),
+  // #3723: a module page runs its own tools. The handler fails closed on its own: trusted
+  // Origin, 401 without a session, one 404 unless the tool belongs to an active downloaded
+  // module (apps/api/src/external-module-tool-invoke.ts).
+  routeKey("POST", "/api/modules/:moduleId/tools/:name/invoke"),
   // #1725: module preferences are a PLATFORM surface addressed by module id, owned by no
   // module (external modules cannot declare routes[]). Both handlers fail closed on their
   // own — 401 without a session, 404 when the module is not active for the caller

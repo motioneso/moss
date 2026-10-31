@@ -103,6 +103,8 @@ export function sourceLabel(source: Entry["sourceSurface"]): string {
       return "Scheduled";
     case "unknown":
       return "Unknown source";
+    case "module_page":
+      return "Module page";
     default:
       return "Chat";
   }

@@ -160,7 +160,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     label: "Activity",
     description:
       "Review every model call Moss made for you: chat answers, structured tasks, " +
-      "transcription, embeddings, background tasks and tool runs, each as a plain action " +
+      "transcription, embeddings, background tasks and tool runs, including actions done " +
+      "on a module's own page, each as a plain action " +
       "with how long it took. Opening a line shows the detail dialog with its steps and " +
       "facts. Filter by time range, module, or model with the model checklist; choices " +
       "are remembered per user and Reset filters restores the default. Quoted words " +
@@ -600,6 +601,44 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     remediationRef: "core.today.retry_evening_loop",
     description:
       "An evening open-loop choice (Tomorrow, Choose a day or Let it go) could not be saved, so the task was not changed."
+  },
+  {
+    code: "core.modules.page_action_confirmation_invalid",
+    class: "permission",
+    remediationRef: "core.modules.redo_page_action",
+    description:
+      "An action that needed confirming on a module's page was not done because its confirmation had " +
+      "expired, was cancelled, was already used, or did not match the action."
+  },
+  {
+    code: "core.modules.page_action_rate_limited",
+    class: "transient",
+    remediationRef: "core.modules.wait_then_redo_page_action",
+    description:
+      "A module's page sent more than 120 actions in a minute, so further actions were refused " +
+      "until the minute passes. Other modules are not affected."
+  },
+  {
+    code: "core.modules.page_action_rejected",
+    class: "validation",
+    remediationRef: "core.modules.follow_module_message",
+    description: "The module refused an action from its own page and nothing was changed."
+  },
+  {
+    code: "core.modules.page_action_failed",
+    class: "transient",
+    remediationRef: "core.modules.check_then_redo_page_action",
+    description:
+      "A module could not finish an action from its own page. The change may or may not have " +
+      "been made, so Moss never repeats it on its own."
+  },
+  {
+    code: "core.modules.page_action_result_too_large",
+    class: "bug",
+    remediationRef: "core.modules.check_then_redo_page_action",
+    description:
+      "A module finished an action from its own page, but its reply was too large to show. If it " +
+      "was a change, it was made and appears in Settings > Activity."
   }
 ];
 
@@ -615,6 +654,29 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
     id: "core.ai.ask_user",
     description: "Ask the user to approve the action before trying it again.",
     path: "/",
+    scope: "user"
+  },
+  {
+    id: "core.modules.redo_page_action",
+    description: "Do the action again on the module's page and confirm it in the new dialog.",
+    scope: "user"
+  },
+  {
+    id: "core.modules.wait_then_redo_page_action",
+    description: "Wait a minute, then do the action again on the module's page.",
+    scope: "user"
+  },
+  {
+    id: "core.modules.follow_module_message",
+    description: "Follow the module's own message on its page, then try again.",
+    scope: "user"
+  },
+  {
+    id: "core.modules.check_then_redo_page_action",
+    description:
+      "Open Settings > Activity or reload the module's page to see whether the change was made " +
+      "before doing it again.",
+    path: "/settings?section=activity",
     scope: "user"
   },
   {
