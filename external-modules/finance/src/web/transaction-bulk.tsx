@@ -5,6 +5,7 @@ import {
   RowIndex,
   RowIndexItem,
   Select,
+  SelectionBar,
   useState,
   useRef,
   type ExternalModuleToolsHandleV1,
@@ -25,12 +26,15 @@ export interface BulkRow {
   pending?: boolean;
   splits?: readonly unknown[];
 }
+/** Most rows one bulk change may carry. */
+export const BULK_LIMIT = 200;
 export const bulkEligible = (row: BulkRow) =>
   !row.transferId &&
   !row.shared &&
   !row.pending &&
   !row.splits?.length &&
   Boolean(row.writeRevision);
+/** Renders only while rows are selected or a saved result needs a check. */
 export function TransactionBulkBar(props: {
   selected: readonly BulkRow[];
   loaded: readonly BulkRow[];
@@ -44,60 +48,55 @@ export function TransactionBulkBar(props: {
   const [category, setCategory] = useState("");
   const [open, setOpen] = useState(false);
   const [uncertain, setUncertain] = useState(false);
-  const eligible = props.loaded.filter(bulkEligible);
+  if (props.selected.length === 0 && !uncertain && !open) return null;
+  const full = props.selected.length >= BULK_LIMIT;
+  const unselected = props.loaded.filter(
+    (row) => bulkEligible(row) && !props.selected.some((picked) => picked.id === row.id)
+  );
   return (
-    <section aria-label="Bulk transaction editing" className="fnm-block fnm-block--tight">
-      <div className="fnm-spread">
-        <div className="fnm-chips">
-          <strong role="status" className="fnm-amount">
-            {props.selected.length} selected
-          </strong>
-          <Button
-            size="sm"
-            variant="link"
-            disabled={uncertain || eligible.length === 0 || props.selected.length >= 200}
-            onClick={props.onLoaded}
-          >
+    <SelectionBar aria-label="Selected transactions">
+      <div className="fnm-chips">
+        <strong role="status" className="fnm-amount">
+          {props.selected.length} selected{full ? " · limit reached" : ""}
+        </strong>
+        {unselected.length > 0 && !full ? (
+          <Button size="sm" variant="link" disabled={uncertain} onClick={props.onLoaded}>
             Select editable rows
           </Button>
-          <Button
-            size="sm"
-            variant="link"
-            disabled={!props.selected.length || uncertain}
-            onClick={props.onClear}
-          >
-            Clear selection
-          </Button>
-        </div>
-        <div className="fnm-chips">
-          <Select
-            aria-label="Category for selected transactions"
-            value={category}
-            disabled={uncertain}
-            onChange={(e) => setCategory(e.currentTarget.value)}
-          >
-            <option value="">Choose a category</option>
-            {props.categories
-              .filter((c) => !c.archived && c.id !== "transfers")
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-          </Select>
-          <Button
-            size="sm"
-            disabled={!props.tools || !props.selected.length || !category || uncertain}
-            onClick={() => setOpen(true)}
-          >
-            Review category change
-          </Button>
-        </div>
+        ) : null}
+        <Button
+          size="sm"
+          variant="link"
+          disabled={!props.selected.length || uncertain}
+          onClick={props.onClear}
+        >
+          Clear selection
+        </Button>
       </div>
-      <p className="jds-hint">
-        Select up to 200 loaded transactions you own. Pending, shared and split entries stay
-        separate. Changing filters keeps your selection.
-      </p>
+      <div className="fnm-chips">
+        <Select
+          aria-label="Category for selected transactions"
+          value={category}
+          disabled={uncertain}
+          onChange={(e) => setCategory(e.currentTarget.value)}
+        >
+          <option value="">Choose a category</option>
+          {props.categories
+            .filter((c) => !c.archived && c.id !== "transfers")
+            .map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+        </Select>
+        <Button
+          size="sm"
+          disabled={!props.tools || !props.selected.length || !category || uncertain}
+          onClick={() => setOpen(true)}
+        >
+          Review category change
+        </Button>
+      </div>
       {uncertain ? (
         <Note variant="practical">
           Check the saved register before making a new selection. Your previous choices are kept.
@@ -133,7 +132,7 @@ export function TransactionBulkBar(props: {
           }}
         />
       ) : null}
-    </section>
+    </SelectionBar>
   );
 }
 export function BulkCategoryDialog(props: {

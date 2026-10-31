@@ -84,3 +84,10 @@ export function dayLabel(date: string): string {
   });
   return `${weekday} · ${day}`;
 }
+
+/** "2026-07-15" → "Jul 15" (ledger date column). */
+export function shortDayLabel(date: string): string {
+  const parsed = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+}

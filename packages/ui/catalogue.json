@@ -473,7 +473,7 @@
         {
           "prop": "triggerVariant",
           "kind": "enum",
-          "values": ["icon", "content", "chip"],
+          "values": ["icon", "content", "chip", "button"],
           "optional": true,
           "default": null
         },
@@ -643,6 +643,15 @@
       "files": [{ "path": "packages/ui/src/select.tsx", "type": "registry:ui" }],
       "dependencies": ["lucide-react"],
       "exports": ["Select"],
+      "options": [],
+      "flags": [{ "prop": "quiet", "optional": true }]
+    },
+    {
+      "name": "selection-bar",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/selection-bar.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["SelectionBar"],
       "options": [],
       "flags": []
     },

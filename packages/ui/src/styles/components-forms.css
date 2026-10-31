@@ -68,6 +68,52 @@
   color: var(--text-subtle);
 }
 
+/* Quiet select: a value in a table cell that reads as text until hover or focus shows the field.
+   The wrap pulls left by the text inset and takes one line of height, so the value sits on the
+   same line as the text beside it. */
+.jds-selectwrap--quiet {
+  margin-inline-start: calc(-1 * var(--space-2));
+  margin-block: calc((1lh - 32px) / 2);
+}
+.jds-selectwrap .jds-select.jds-select--quiet {
+  height: 32px;
+  min-height: 0;
+  padding-left: var(--space-2);
+  font-size: inherit;
+  background: transparent;
+  border-color: transparent;
+}
+.jds-selectwrap .jds-select.jds-select--quiet:hover {
+  border-color: var(--border-strong);
+}
+.jds-selectwrap .jds-select.jds-select--quiet:focus {
+  border-color: var(--accent-fg);
+}
+.jds-selectwrap--quiet .jds-selectwrap__chev {
+  opacity: 0;
+  transition: var(--transition-control);
+}
+.jds-selectwrap--quiet:hover .jds-selectwrap__chev,
+.jds-selectwrap--quiet:focus-within .jds-selectwrap__chev {
+  opacity: 1;
+}
+@media (hover: none) {
+  .jds-selectwrap--quiet .jds-selectwrap__chev {
+    opacity: 1;
+  }
+}
+
+/* Phones keep the thumb-sized field. */
+@media (max-width: 720px) {
+  .jds-selectwrap--quiet {
+    margin-block: calc((1lh - 44px) / 2);
+  }
+  .jds-selectwrap .jds-select.jds-select--quiet {
+    height: 44px;
+    min-height: 44px;
+  }
+}
+
 .jds-check {
   font-size: var(--text-md);
   color: var(--text);

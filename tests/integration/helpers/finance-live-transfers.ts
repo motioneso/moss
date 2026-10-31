@@ -194,7 +194,15 @@ export async function exerciseManualTransfers(
     await page.goto(`${base}/m/finance/transactions`);
     await page.getByLabel("Search payees or notes", { exact: true }).fill("Manual transfer");
     await page.getByText("Linked transfer", { exact: true }).first().waitFor();
-    expect(await page.getByRole("button", { name: /Split Manual transfer/ }).count()).toBe(0);
+    await page
+      .getByRole("button", { name: /^View transaction details for Manual transfer/ })
+      .filter({ visible: true })
+      .first()
+      .click();
+    const details = page.getByRole("dialog", { name: "Transaction details", exact: true });
+    await details.getByRole("button", { name: "Back to register", exact: true }).waitFor();
+    expect(await details.getByRole("button", { name: /split/i }).count()).toBe(0);
+    await details.getByRole("button", { name: "Back to register", exact: true }).click();
     expect(await page.getByLabel(/Category for Manual transfer/).count()).toBe(0);
     await exerciseTransferCorrection(page, read, today, artifacts);
   } catch (error) {

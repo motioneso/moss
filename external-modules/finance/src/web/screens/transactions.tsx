@@ -1,11 +1,3 @@
-import {
-  TransactionDetails,
-  captureTransactionDetails,
-  type CapturedTransactionDetails
-} from "../transaction-details";
-import { TransferCorrectionDialog } from "../transfer-correction-dialog";
-import { TransactionConfirm } from "../transaction-confirm";
-import { HistoryExportDialog } from "../history-export-dialog";
 // external-modules/finance/src/web/screens/transactions.tsx
 //
 // #3176: the Park Press Transactions screen. One read, finance.transactions.query,
@@ -13,18 +5,13 @@ import { HistoryExportDialog } from "../history-export-dialog";
 // Legacy pending/KV/rule reviews use finance.review-apply jobs. Captured confirmation and bulk
 // categorization and split edits await reviewed host-tool persistence.
 //
-// Desktop and phone layouts both render; module CSS shows one and hides the other.
+// One toolbar holds the view, the month, search, Filters and Export. The ledger renders a table
+// and a phone row list; module CSS shows one and hides the other.
 import {
-  Badge,
-  Checkbox,
   Button,
+  Menu,
   PeriodStepper,
-  RowIndex,
-  RowIndexItem,
-  SectionHead,
   Segmented,
-  Select,
-  Switch,
   useEffect,
   useRef,
   useState,
@@ -33,48 +20,42 @@ import {
 } from "@moss/module-web-sdk";
 import { runWrite, type RunOutcome } from "../api";
 import { chunkReviewRows } from "../assign";
-import { currentMonth, dayLabel, formatCents, monthLabel, shiftMonth } from "../format";
+import { currentMonth, monthLabel, shiftMonth } from "../format";
 import { announce, EmptyState, outcomeGate } from "../states";
 import { invalidateQueries, invalidateToolQueries, useToolQuery } from "../store";
 import { downloadTransactionsCsv, transactionsCsv, initialRegisterScope } from "../register";
-import { EMPTY_FILTERS, filterInput, RegisterFilterBar } from "../register-filters";
-import { SplitEditor, type SplitTransaction } from "../split-editor";
-import { TransactionBulkBar, BulkCategoryDialog, bulkEligible } from "../transaction-bulk";
-import { splitsBalance } from "../../domain/splits";
-import type { TransactionRecord } from "../../domain/records";
-
-interface TxCategory {
-  id: string;
-  name: string;
-  archived?: boolean;
-}
-
-interface TxAccount {
-  accountId: string;
-  name: string;
-  mask?: string | null;
-}
-
-interface Tx extends SplitTransaction {
-  id: string;
-  accountId: string;
-  date: string;
-  amountCents: number;
-  isoCurrency: string;
-  name: string;
-  categoryId: string | null;
-  reviewState?: "confirmed" | "needs_look";
-  categorizedBy?: TransactionRecord["categorizedBy"];
-  shared?: boolean;
-  pending?: boolean;
-  possibleDuplicate?: boolean;
-  notes?: string;
-  source?: "manual";
-  transferId?: string;
-  cleared?: boolean;
-  reconciledAt?: string | null;
-  writeRevision?: string;
-}
+import {
+  activeFilterCount,
+  EMPTY_FILTERS,
+  filterInput,
+  REGISTER_FILTERS_ID,
+  RegisterFilterChips,
+  RegisterFilterPanel
+} from "../register-filters";
+import { SplitEditor } from "../split-editor";
+import {
+  TransactionDetails,
+  captureTransactionDetails,
+  type CapturedTransactionDetails
+} from "../transaction-details";
+import { TransferCorrectionDialog } from "../transfer-correction-dialog";
+import { TransactionConfirm } from "../transaction-confirm";
+import { HistoryExportDialog } from "../history-export-dialog";
+import {
+  TransactionBulkBar,
+  BulkCategoryDialog,
+  BULK_LIMIT,
+  bulkEligible
+} from "../transaction-bulk";
+import {
+  isLook,
+  LedgerRows,
+  LedgerTable,
+  type RowContext,
+  type Tx,
+  type TxAccount,
+  type TxCategory
+} from "../transaction-rows";
 
 interface TxResult extends Record<string, unknown> {
   month: string;
@@ -96,10 +77,6 @@ const SEARCH_DELAY_MS = 300;
 const PAGE_SIZE = 200;
 const MAX_PAGES = 10;
 
-const isLook = (tx: Tx): boolean =>
-  tx.shared !== true &&
-  (tx.reviewState === "needs_look" || Boolean(tx.splits?.length && !splitsBalance(tx)));
-
 /** True when the job was queued; false when the request failed and nothing will happen. */
 function afterRun(outcome: RunOutcome, queuedMessage: string, onQueued: () => void): boolean {
   if (outcome.kind === "queued") {
@@ -120,353 +97,21 @@ function afterRun(outcome: RunOutcome, queuedMessage: string, onQueued: () => vo
   return false;
 }
 
-function Amount(props: { tx: Tx }): ReactNodeLike {
-  const { tx } = props;
-  // Money in is stored negative.
-  if (tx.amountCents < 0) return <strong>+{formatCents(-tx.amountCents, tx.isoCurrency)}</strong>;
-  return <span>{formatCents(tx.amountCents, tx.isoCurrency)}</span>;
-}
-
-function TransactionStatus(props: { tx: Tx }): ReactNodeLike {
-  return (
-    <div className="fnm-chips">
-      {props.tx.pending ? <Badge tone="steel">Pending</Badge> : null}
-      {props.tx.source === "manual" ? (
-        <Badge tone="steel">
-          {props.tx.reconciledAt ? "Reconciled" : props.tx.cleared ? "Cleared" : "Uncleared"}
-        </Badge>
-      ) : null}
-      {props.tx.shared ? <Badge tone="steel">Household · read only</Badge> : null}
-      {props.tx.possibleDuplicate ? <Badge tone="amber">Possible duplicate</Badge> : null}
-      {props.tx.splits?.length && !splitsBalance(props.tx) ? (
-        <Badge tone="amber">Check split total</Badge>
-      ) : null}
-    </div>
-  );
-}
-
-// The category picker, Confirm button and merchant switch for one Needs a look row.
-function LookControls(props: {
-  tx: Tx;
-  categories: TxCategory[];
-  onConfirm: (tx: Tx, categoryId: string, makeRule: boolean) => void;
-}): ReactNodeLike {
-  const { tx } = props;
-  const [categoryId, setCategoryId] = useState(tx.categoryId ?? "");
-  const [makeRule, setMakeRule] = useState(false);
-  return (
-    <div className="fnm-block fnm-block--tight">
-      <div className="fnm-inline">
-        <Select
-          aria-label={`Category for ${tx.name}`}
-          value={categoryId}
-          onChange={(event: { target: { value: string } }) => setCategoryId(event.target.value)}
-        >
-          <option value="" disabled>
-            Choose a category
-          </option>
-          {props.categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </Select>
-        <Button
-          size="sm"
-          disabled={categoryId === ""}
-          onClick={() => props.onConfirm(tx, categoryId, makeRule)}
-        >
-          Confirm
-        </Button>
-      </div>
-      <Switch
-        ariaLabel={`Always use this category for ${tx.name}`}
-        label="Always for this merchant"
-        checked={makeRule}
-        onChange={setMakeRule}
-      />
-    </div>
-  );
-}
-
-// The category picker for a confirmed row. Eligible changes open a captured review.
-function ChangeCategory(props: {
-  tx: Tx;
-  categories: TxCategory[];
-  onChange: (tx: Tx, categoryId: string) => Promise<boolean>;
-}): ReactNodeLike {
-  const { tx } = props;
-  const [categoryId, setCategoryId] = useState(tx.categoryId ?? "");
-  useEffect(() => setCategoryId(tx.categoryId ?? ""), [tx.categoryId, tx.writeRevision]);
-  return (
-    <Select
-      aria-label={`Category for ${tx.name}`}
-      value={categoryId}
-      onChange={(event: { target: { value: string } }) => {
-        const next = event.target.value;
-        const before = categoryId;
-        setCategoryId(next);
-        // A save that never ran puts the old category back on screen.
-        void props.onChange(tx, next).then((saved) => {
-          if (!saved) setCategoryId(before);
-        });
-      }}
-    >
-      <option value="" disabled>
-        Uncategorized
-      </option>
-      {props.categories.map((category) => (
-        <option key={category.id} value={category.id}>
-          {category.name}
-        </option>
-      ))}
-    </Select>
-  );
-}
-
-interface DayGroup {
-  date: string;
-  rows: Tx[];
-}
-
-function groupByDay(rows: Tx[]): DayGroup[] {
-  const groups: DayGroup[] = [];
-  for (const tx of rows) {
-    const last = groups.at(-1);
-    if (last && last.date === tx.date) last.rows.push(tx);
-    else groups.push({ date: tx.date, rows: [tx] });
-  }
-  return groups;
-}
-
-interface RowContext {
-  categories: TxCategory[];
-  categoryName: (tx: Tx) => string;
-  accountName: (tx: Tx) => string;
-  confirmed: ReadonlySet<string>;
-  onConfirm: (tx: Tx, categoryId: string, makeRule: boolean) => void;
-  onChange: (tx: Tx, categoryId: string) => Promise<boolean>;
-  onSplit: (tx: Tx) => void;
-  onDetails: (tx: Tx) => void;
-  onTransfer?: (id: string) => void;
-  supportsSplits: boolean;
-  selected: ReadonlySet<string>;
-  selectionLocked: boolean;
-  onSelect?: (tx: Tx) => void;
-}
-
-function CategoryControls({
-  tx,
-  ctx,
-  look
-}: {
-  tx: Tx;
-  ctx: RowContext;
-  look: boolean;
-}): ReactNodeLike {
-  return (
-    <div className="fnm-category-controls">
-      {tx.transferId ? (
-        <>
-          <Badge>Linked transfer</Badge>
-          {!tx.shared && ctx.onTransfer ? (
-            <Button
-              variant="link"
-              size="sm"
-              aria-label={`Review transfer for ${ctx.accountName(tx)} on ${tx.date}`}
-              data-finance-transfer-id={tx.transferId}
-              onClick={() => ctx.onTransfer!(tx.transferId!)}
-            >
-              Review transfer
-            </Button>
-          ) : null}
-        </>
-      ) : tx.splits?.length ? (
-        <span>
-          {tx.splits.length} categories ·{" "}
-          {tx.splits
-            .map(
-              (part) =>
-                ctx.categories.find((c) => c.id === part.categoryId)?.name ?? "Archived category"
-            )
-            .join(", ")}
-        </span>
-      ) : tx.shared ? (
-        ctx.categoryName(tx)
-      ) : look ? (
-        <LookControls tx={tx} categories={ctx.categories} onConfirm={ctx.onConfirm} />
-      ) : (
-        <ChangeCategory
-          key={`${tx.id}:${tx.categoryId}`}
-          tx={tx}
-          categories={ctx.categories}
-          onChange={ctx.onChange}
-        />
-      )}
-      {ctx.supportsSplits && !tx.transferId && !tx.shared && !tx.pending ? (
-        <Button
-          variant="link"
-          size="sm"
-          aria-label={`${tx.splits?.length ? "Edit split for" : "Split"} ${tx.name}`}
-          onClick={() => ctx.onSplit(tx)}
-        >
-          {tx.splits?.length ? "Edit split" : "Split"}
-        </Button>
-      ) : null}
-    </div>
-  );
-}
-
-function TransactionSelection(props: { tx: Tx; ctx: RowContext }): ReactNodeLike {
-  return props.ctx.onSelect && bulkEligible(props.tx) ? (
-    <Checkbox
-      ariaLabel={`Select ${props.tx.name}`}
-      checked={props.ctx.selected.has(props.tx.id)}
-      disabled={
-        props.ctx.selectionLocked ||
-        (!props.ctx.selected.has(props.tx.id) && props.ctx.selected.size >= 200)
-      }
-      onChange={() => props.ctx.onSelect!(props.tx)}
-    />
-  ) : null;
-}
-
-function DayTable(props: { day: DayGroup; head: boolean; ctx: RowContext }): ReactNodeLike {
-  const { day, ctx } = props;
-  return (
-    <section className="fnm-block fnm-block--tight">
-      <SectionHead title={dayLabel(day.date)} rule />
-      <table className="jds-table fnm-fixed">
-        <colgroup>
-          <col className="fnm-col-payee" />
-          <col className="fnm-col-category" />
-          <col />
-          <col className="fnm-col-amount" />
-        </colgroup>
-        {props.head ? (
-          <thead>
-            <tr>
-              <th>Payee</th>
-              <th>Category</th>
-              <th>Account</th>
-              <th className="jds-table__num">Amount</th>
-            </tr>
-          </thead>
-        ) : null}
-        <tbody>
-          {day.rows.map((tx) => {
-            const look = isLook(tx) && !ctx.confirmed.has(tx.id);
-            return (
-              <tr key={tx.id}>
-                <td>
-                  <div className="fnm-block fnm-block--tight">
-                    <div className="fnm-inline">
-                      <TransactionSelection tx={tx} ctx={ctx} />
-                      <Button
-                        variant="link"
-                        size="sm"
-                        aria-label={`View transaction details for ${tx.name}`}
-                        data-finance-details={JSON.stringify([
-                          tx.id,
-                          tx.accountId,
-                          tx.shared === true
-                        ])}
-                        onClick={() => ctx.onDetails(tx)}
-                      >
-                        {tx.name}
-                      </Button>
-                    </div>
-                    <TransactionStatus tx={tx} />
-                    {look && !tx.splits?.length ? (
-                      <div>
-                        <Badge tone="amber">
-                          {tx.categorizedBy === "user" ? "Review needed" : "Predicted"}
-                        </Badge>
-                      </div>
-                    ) : null}
-                  </div>
-                </td>
-                <td>
-                  <CategoryControls tx={tx} ctx={ctx} look={look} />
-                </td>
-                <td>{ctx.accountName(tx)}</td>
-                <td className="jds-table__num">
-                  <Amount tx={tx} />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </section>
-  );
-}
-
-function DayRows(props: { day: DayGroup; ctx: RowContext }): ReactNodeLike {
-  const { day, ctx } = props;
-  return (
-    <section className="fnm-block fnm-block--tight">
-      <SectionHead title={dayLabel(day.date)} rule />
-      <RowIndex density="compact">
-        {day.rows.map((tx) => {
-          const look = isLook(tx) && !ctx.confirmed.has(tx.id);
-          return (
-            <RowIndexItem
-              key={tx.id}
-              title={
-                <span className="fnm-block fnm-block--tight">
-                  <span className="fnm-inline">
-                    <TransactionSelection tx={tx} ctx={ctx} />
-                    <Button
-                      variant="link"
-                      size="sm"
-                      aria-label={`View transaction details for ${tx.name}`}
-                      data-finance-details={JSON.stringify([
-                        tx.id,
-                        tx.accountId,
-                        tx.shared === true
-                      ])}
-                      onClick={() => ctx.onDetails(tx)}
-                    >
-                      {tx.name}
-                    </Button>
-                  </span>
-                  <TransactionStatus tx={tx} />
-                </span>
-              }
-              excerpt={
-                <div className="fnm-block fnm-block--tight">
-                  {look && !tx.splits?.length ? (
-                    <Badge tone="amber">
-                      {tx.categorizedBy === "user" ? "Review needed" : "Predicted"}
-                    </Badge>
-                  ) : null}
-                  <CategoryControls tx={tx} ctx={ctx} look={look} />
-                  <span>{ctx.accountName(tx)}</span>
-                </div>
-              }
-              meta={<Amount tx={tx} />}
-            />
-          );
-        })}
-      </RowIndex>
-    </section>
-  );
-}
+const splitEligible = (tx: Tx): boolean => !tx.transferId && !tx.shared && !tx.pending;
 
 function TransactionsBody(props: {
-  onDetails: (details: CapturedTransactionDetails) => void;
+  onDetails: (tx: Tx, details: CapturedTransactionDetails) => void;
   result: TxResult;
   filter: Filter;
   searching: boolean;
   confirmed: ReadonlySet<string>;
   onConfirm: (tx: Tx, categoryId: string, makeRule: boolean) => void;
   onChange: (tx: Tx, categoryId: string) => Promise<boolean>;
-  onSplit: (tx: Tx) => void;
   onTransfer?: (id: string) => void;
   selected: ReadonlySet<string>;
   selectionLocked: boolean;
   onSelect?: (tx: Tx) => void;
+  onSelectRows?: (rows: Tx[], checked: boolean) => void;
 }): ReactNodeLike {
   const { result, filter, confirmed } = props;
   const accounts = result.accounts ?? [];
@@ -475,6 +120,7 @@ function TransactionsBody(props: {
   const all = result.transactions ?? [];
   // Rows already confirmed here drop out of the Needs a look filter at once.
   const rows = filter === "look" ? all.filter((tx) => !confirmed.has(tx.id)) : all;
+  const editable = rows.filter(bulkEligible);
   const ctx: RowContext = {
     categories: live,
     categoryName: (tx) =>
@@ -483,6 +129,7 @@ function TransactionsBody(props: {
     confirmed,
     onDetails: (tx) =>
       props.onDetails(
+        tx,
         captureTransactionDetails({
           row: tx,
           accountName: ctx.accountName(tx),
@@ -493,11 +140,16 @@ function TransactionsBody(props: {
     onTransfer: props.onTransfer,
     onConfirm: props.onConfirm,
     onChange: props.onChange,
-    onSplit: props.onSplit,
     selected: props.selected,
     selectionLocked: props.selectionLocked,
     onSelect: props.onSelect,
-    supportsSplits: result.supportsSplits === true
+    selectAll: props.onSelectRows
+      ? {
+          checked: editable.length > 0 && editable.every((tx) => props.selected.has(tx.id)),
+          disabled: props.selectionLocked || editable.length === 0,
+          onChange: (checked) => props.onSelectRows!(editable, checked)
+        }
+      : undefined
   };
   if (rows.length === 0) {
     if (filter === "look") {
@@ -510,20 +162,15 @@ function TransactionsBody(props: {
     }
     return <EmptyState title="Nothing yet" body="Transactions appear after the first sync." />;
   }
-  const days = groupByDay(rows);
   return (
-    <div className="fnm-block">
-      <div className="fnm-desktop-only fnm-block">
-        {days.map((day, index) => (
-          <DayTable key={day.date} day={day} head={index === 0} ctx={ctx} />
-        ))}
+    <>
+      <div className="fnm-desktop-only">
+        <LedgerTable rows={rows} ctx={ctx} />
       </div>
-      <div className="fnm-phone-only fnm-block">
-        {days.map((day) => (
-          <DayRows key={day.date} day={day} ctx={ctx} />
-        ))}
+      <div className="fnm-phone-only">
+        <LedgerRows rows={rows} ctx={ctx} />
       </div>
-    </div>
+    </>
   );
 }
 
@@ -567,6 +214,8 @@ export function TransactionsScreen(
     setSingleReview(null);
   };
   const [details, setDetails] = useState<CapturedTransactionDetails | null>(null);
+  const [detailsTx, setDetailsTx] = useState<Tx | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [editing, setEditing] = useState<Tx | null>(null);
   const [transferId, setTransferId] = useState<string | null>(null);
   const [selected, setSelected] = useState<ReadonlyMap<string, Tx>>(new Map());
@@ -579,7 +228,19 @@ export function TransactionsScreen(
     setSelected((previous) => {
       const next = new Map(previous);
       if (next.has(tx.id)) next.delete(tx.id);
-      else if (next.size < 200) next.set(tx.id, { ...tx });
+      else if (next.size < BULK_LIMIT) next.set(tx.id, { ...tx });
+      return next;
+    });
+  };
+  const selectRows = (rows: readonly Tx[], checked: boolean): void => {
+    if (selectionLocked) return;
+    setSelected((previous) => {
+      const next = new Map(previous);
+      for (const tx of rows) {
+        if (!checked) next.delete(tx.id);
+        else if (bulkEligible(tx) && !next.has(tx.id) && next.size < BULK_LIMIT)
+          next.set(tx.id, { ...tx });
+      }
       return next;
     });
   };
@@ -732,16 +393,17 @@ export function TransactionsScreen(
   ).length;
   const lookCount = Math.max(0, (result?.needsLookCount ?? 0) - stillCounted);
 
+  // No count until the register loads, so a failed load never claims zero.
+  const lookLabel = result ? `Needs a look (${lookCount})` : "Needs a look";
+
+  const loaded = result?.transactions?.length ?? 0;
+  const total = result?.totalCount ?? loaded;
+  const activeFilters = activeFilterCount(filters);
+  const canSplit =
+    detailsTx !== null && result?.supportsSplits === true && splitEligible(detailsTx);
+
   return (
-    <section aria-label="Transactions" className="fnm-block">
-      {ownOnly ? (
-        <div className="fnm-chips">
-          <p className="jds-hint">Only your own ledger entries are shown.</p>
-          <Button variant="link" onClick={() => setOwnOnly(false)}>
-            Include shared records
-          </Button>
-        </div>
-      ) : null}
+    <section aria-label="Transactions" className="fnm-block fnm-block--tight">
       <div className="fnm-spread">
         <div className="fnm-chips">
           <Segmented
@@ -750,7 +412,7 @@ export function TransactionsScreen(
             onChange={(value: Filter) => setFilter(value)}
             options={[
               { value: "all", label: "All" },
-              { value: "look", label: `Needs a look (${lookCount})` }
+              { value: "look", label: lookLabel }
             ]}
           />
           {supportsConfirm ? (
@@ -785,62 +447,67 @@ export function TransactionsScreen(
           />
           <input
             className="jds-input fnm-search"
+            type="search"
             placeholder="Search payees or notes"
             aria-label="Search payees or notes"
             value={draft}
             onChange={(event: { target: { value: string } }) => setDraft(event.target.value)}
           />
+          <Button
+            variant="secondary"
+            active={filtersOpen}
+            aria-expanded={filtersOpen}
+            aria-controls={filtersOpen ? REGISTER_FILTERS_ID : undefined}
+            onClick={() => setFiltersOpen(!filtersOpen)}
+          >
+            {activeFilters ? `Filters · ${activeFilters}` : "Filters"}
+          </Button>
+          <Menu
+            triggerVariant="button"
+            triggerContent="Export"
+            triggerLabel="Export transactions"
+            items={[
+              { id: "loaded", label: "Loaded rows", disabled: !loaded },
+              { id: "history", label: "Full history…" }
+            ]}
+            onSelect={(id: string) => {
+              if (id === "history") {
+                setExporting(true);
+                return;
+              }
+              if (!result?.transactions?.length) return;
+              downloadTransactionsCsv(
+                transactionsCsv(
+                  result.transactions,
+                  (tx) =>
+                    result.accounts?.find((a) => a.accountId === tx.accountId)?.name ??
+                    tx.accountId,
+                  (tx) =>
+                    result.categories?.find((c) => c.id === tx.categoryId)?.name ?? "Uncategorized"
+                ),
+                month
+              );
+              announce("Exported the loaded rows.");
+            }}
+          />
         </div>
       </div>
-      <RegisterFilterBar
-        value={filters}
+      {filtersOpen ? (
+        <RegisterFilterPanel
+          value={filters}
+          onChange={setFilters}
+          accounts={filterOptions.accounts}
+          categories={filterOptions.categories}
+        />
+      ) : null}
+      <RegisterFilterChips
+        value={filtersOpen ? EMPTY_FILTERS : filters}
         onChange={setFilters}
         accounts={filterOptions.accounts}
         categories={filterOptions.categories}
+        ownOnly={ownOnly}
+        onIncludeShared={() => setOwnOnly(false)}
       />
-      {filters.attention === "duplicates" ? (
-        <p role="status">
-          These entries share an account, date, amount, currency and payee. They may be separate
-          purchases. Nothing has been removed.
-        </p>
-      ) : null}
-      {result ? (
-        <div className="fnm-spread">
-          <span role="status">
-            {result.transactions?.length ?? 0} of{" "}
-            {result.totalCount ?? result.transactions?.length ?? 0} matching transactions loaded ·{" "}
-            {monthLabel(month)}
-          </span>
-          <div className="fnm-chips">
-            <Button variant="secondary" onClick={() => setExporting(true)}>
-              Export history
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={!result.transactions?.length}
-              onClick={() => {
-                downloadTransactionsCsv(
-                  transactionsCsv(
-                    result.transactions ?? [],
-                    (tx) =>
-                      result.accounts?.find((a) => a.accountId === tx.accountId)?.name ??
-                      tx.accountId,
-                    (tx) =>
-                      result.categories?.find((c) => c.id === tx.categoryId)?.name ??
-                      "Uncategorized"
-                  ),
-                  month
-                );
-                announce(
-                  "Exported loaded transactions. The file includes only the rows loaded in this view."
-                );
-              }}
-            >
-              Export loaded rows
-            </Button>
-          </div>
-        </div>
-      ) : null}
       {singleUncertain ? (
         <div className="fnm-chips" role="status">
           <p>Check saved records before reviewing another category change.</p>
@@ -869,49 +536,43 @@ export function TransactionsScreen(
           onUncertain={() => setSingleUncertain(true)}
         />
       ) : null}
-      {supportsBulk && props.tools ? (
-        <TransactionBulkBar
-          selected={[...selected.values()]}
-          loaded={result?.transactions ?? []}
-          categories={result?.categories ?? filterOptions.categories}
-          tools={props.tools}
-          onClear={() => setSelected(new Map())}
-          onSaved={() => setSelected(new Map())}
-          onLockChange={setSelectionLocked}
-          onLoaded={() => {
-            if (selectionLocked) return;
-            setSelected((previous) => {
-              const next = new Map(previous);
-              for (const tx of result?.transactions ?? [])
-                if (bulkEligible(tx) && !next.has(tx.id) && next.size < 200)
-                  next.set(tx.id, { ...tx });
-              return next;
-            });
-          }}
-        />
-      ) : null}
       <TransactionDetails
         captured={details}
-        onClose={() => setDetails(null)}
+        onClose={() => {
+          setDetails(null);
+          setDetailsTx(null);
+        }}
         tools={props.tools}
         supportsNotes={result?.supportsNotes}
+        onSplit={
+          canSplit
+            ? () => {
+                setEditing(detailsTx);
+                setDetails(null);
+                setDetailsTx(null);
+              }
+            : undefined
+        }
       />
       {outcomeGate(
         query,
         (data) => (
           <TransactionsBody
-            onDetails={setDetails}
+            onDetails={(tx, captured) => {
+              setDetailsTx({ ...tx });
+              setDetails(captured);
+            }}
             result={data}
             filter={filter}
-            searching={search !== "" || Object.values(filters).some(Boolean)}
+            searching={search !== "" || activeFilters > 0}
             confirmed={confirmed}
             onConfirm={confirmOne}
             onChange={changeOne}
-            onSplit={setEditing}
             onTransfer={props.tools ? setTransferId : undefined}
             selected={new Set(selected.keys())}
             selectionLocked={selectionLocked}
             onSelect={result?.supportsBulk && props.tools ? toggleSelection : undefined}
+            onSelectRows={result?.supportsBulk && props.tools ? selectRows : undefined}
           />
         ),
         {
@@ -932,22 +593,31 @@ export function TransactionsScreen(
           )
         }
       )}
-      {result !== null &&
-      (result.totalCount ?? 0) > (result.transactions ?? []).length &&
-      pages < MAX_PAGES ? (
-        <div>
-          <Button variant="secondary" onClick={() => setPages(pages + 1)}>
-            Show more
-          </Button>
+      {result ? (
+        <div className={loaded < total ? "fnm-chips" : "fnm-visually-hidden"}>
+          <span role="status">
+            {pages >= MAX_PAGES && loaded < total
+              ? `Showing the first ${loaded.toLocaleString("en-US")}. Narrow the filters to see the rest.`
+              : `${loaded.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} transactions`}
+          </span>
+          {loaded < total && pages < MAX_PAGES ? (
+            <Button variant="secondary" onClick={() => setPages(pages + 1)}>
+              Show more
+            </Button>
+          ) : null}
         </div>
       ) : null}
-      {result &&
-      pages >= MAX_PAGES &&
-      (result.totalCount ?? 0) > (result.transactions?.length ?? 0) ? (
-        <p role="status">
-          This view shows at most 2,000 rows. Narrow the filters to see and export the remaining
-          transactions.
-        </p>
+      {supportsBulk && props.tools ? (
+        <TransactionBulkBar
+          selected={[...selected.values()]}
+          loaded={result?.transactions ?? []}
+          categories={result?.categories ?? filterOptions.categories}
+          tools={props.tools}
+          onClear={() => setSelected(new Map())}
+          onSaved={() => setSelected(new Map())}
+          onLockChange={setSelectionLocked}
+          onLoaded={() => selectRows(result?.transactions ?? [], true)}
+        />
       ) : null}
       {exporting ? (
         <HistoryExportDialog

@@ -17,11 +17,18 @@ export async function exerciseInstalledSplit(
   const page = await context.newPage();
   try {
     await page.goto(`${base}/m/finance/transactions`);
-    const opener = page
-      .getByRole("button", { name: "Split Synthetic weekend market", exact: true })
-      .filter({ visible: true });
-    await opener.waitFor({ timeout: 30_000 });
-    await opener.click();
+    const openDetails = async () => {
+      const opener = page
+        .getByRole("button", {
+          name: "View transaction details for Synthetic weekend market",
+          exact: true
+        })
+        .filter({ visible: true });
+      await opener.waitFor({ timeout: 30_000 });
+      await opener.click();
+      return page.getByRole("dialog", { name: "Transaction details", exact: true });
+    };
+    await (await openDetails()).getByRole("button", { name: "Split", exact: true }).click();
     await page.getByLabel("Split category 2", { exact: true }).selectOption("dining");
     await page.getByLabel("Split amount 1", { exact: true }).fill("60.00");
     await page.getByLabel("Split amount 2", { exact: true }).fill("22.43");
@@ -54,10 +61,9 @@ export async function exerciseInstalledSplit(
       "manual:net-worth-refund"
     ]);
     await page.reload();
-    await page
-      .getByRole("button", { name: "Edit split for Synthetic weekend market", exact: true })
-      .filter({ visible: true })
-      .waitFor();
+    const details = await openDetails();
+    await details.getByRole("button", { name: "Edit split", exact: true }).waitFor();
+    await details.getByRole("button", { name: "Back to register", exact: true }).click();
     if (artifacts)
       await page.screenshot({
         path: join(resolve(artifacts), "finance-installed-split-desktop.png"),

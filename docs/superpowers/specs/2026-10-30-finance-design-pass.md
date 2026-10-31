@@ -83,6 +83,34 @@ design-system class audit.
 - The detail panel is the shared `PeekPanel`, so focus return and modal isolation stay in the
   shared component.
 
+## Slice 3 build notes
+
+- Wide screens show one table: date, payee, category, account, amount. A date column replaces
+  per-day headings, so a filtered or searched list keeps its order without orphan heads.
+- Phone rows put payee and amount on the first line, then date and account, then the category.
+  Amounts never shrink.
+- Badges appear only for states that ask for attention: review, pending, uncleared, household,
+  possible duplicate, unbalanced split. Posted, cleared and reconciled rows carry none.
+- Confirmed rows edit their category through `Select quiet`, so the column reads as text until
+  hover or focus. Needs a look rows keep the full picker, Confirm and the merchant switch, in
+  the order they are used: picker on its own line, then the switch with Confirm at the end. On
+  the narrowest phones Confirm wraps under the switch rather than squeezing the picker.
+- The Needs a look tab shows its count only once the register loads, so a failed or pending load
+  never reads as zero.
+- Split moves from each row into the transaction details footer (Split, or Edit split). Details
+  stays a `Dialog` because the note editor already depends on its pending close lock.
+- Filters open in a panel under the toolbar; the button shows the active count. While the panel
+  is closed, active filters show as chips, so nothing appears twice. Your entries only is a chip
+  whose remove button includes shared records again.
+- Export becomes a toolbar `Menu` with Loaded rows and Full history. Both keep their existing
+  paths and limits.
+- The selection bar renders only while something is selected, a check is pending or its review
+  is open. The header box selects every editable loaded row up to 200. The bar keeps Select
+  editable rows because phone rows have no header box.
+- The loaded-of-total count shows under the list only when more rows match than are loaded.
+  Otherwise it stays in the page for screen readers and is visually hidden.
+- Search is `type="search"`, so phones show the search key and a clear button.
+
 ## Acceptance
 
 - Budget: the first category row is visible without scrolling at 1440x900.

@@ -303,7 +303,7 @@ export async function exercisePrivateNotes(
     expect((await snapshot()).note!.notes).toBe("Retained synthetic draft");
     const search = page.getByRole("textbox", { name: "Search payees or notes", exact: true });
     await search.fill("Retained synthetic draft");
-    await page.getByText("1 of 1 matching transactions loaded", { exact: false }).waitFor();
+    await page.getByText("1 of 1 transactions", { exact: true }).waitFor({ state: "attached" });
     await start();
     const uncertainDraft = "Committed before synthetic response loss";
     await field().fill(uncertainDraft);

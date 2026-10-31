@@ -162,7 +162,7 @@ _No enum or boolean props._
 
 ## menu
 
-- **triggerVariant** (optional): `icon`, `content`, `chip`
+- **triggerVariant** (optional): `icon`, `content`, `chip`, `button`
 - **placement** (optional): `bottom`, `top`
 
 ## month-chip
@@ -217,6 +217,10 @@ _No enum or boolean props._
 - **tone** (optional): `default`, `field`
 
 ## select
+
+- **quiet** (optional boolean flag)
+
+## selection-bar
 
 _No enum or boolean props._
 

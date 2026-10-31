@@ -125,4 +125,50 @@ describe("captured transaction details", () => {
       if (r) await act(async () => r.unmount());
     }
   });
+  it("offers Split only when the screen passes it, and names an existing split Edit split", async () => {
+    const onSplit = vi.fn();
+    const footerButtons = (r: ReactTestRenderer) =>
+      r.root.findAllByType("button").map((b) => b.children.join(""));
+    let r!: ReactTestRenderer;
+    try {
+      await act(async () => {
+        r = create(
+          createElement(TransactionDetails, {
+            captured: captureTransactionDetails(props()),
+            onClose: vi.fn()
+          })
+        );
+      });
+      expect(footerButtons(r)).not.toContain("Split");
+      await act(async () =>
+        r.update(
+          createElement(TransactionDetails, {
+            captured: captureTransactionDetails(props()),
+            onClose: vi.fn(),
+            onSplit
+          })
+        )
+      );
+      await act(async () =>
+        r.root
+          .findAllByType("button")
+          .find((b) => b.children.includes("Split"))!
+          .props.onClick()
+      );
+      expect(onSplit).toHaveBeenCalledTimes(1);
+      const split = { ...record, splits: [{ categoryId: "groceries", amountCents: 1234 }] };
+      await act(async () =>
+        r.update(
+          createElement(TransactionDetails, {
+            captured: captureTransactionDetails(props(split)),
+            onClose: vi.fn(),
+            onSplit
+          })
+        )
+      );
+      expect(footerButtons(r)).toContain("Edit split");
+    } finally {
+      if (r) await act(async () => r.unmount());
+    }
+  });
 });

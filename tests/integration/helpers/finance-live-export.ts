@@ -17,9 +17,13 @@ export async function exerciseHistoryExport(
   const page = await context.newPage();
   let downloads = 0;
   page.on("download", () => downloads++);
+  const openHistoryExport = async () => {
+    await page.getByRole("button", { name: "Export transactions", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Full history…", exact: true }).click();
+  };
   try {
     await page.goto(`${base}/m/finance/transactions`);
-    await page.getByRole("button", { name: "Export history", exact: true }).click();
+    await openHistoryExport();
     const dialog = page.getByRole("dialog", { name: "Export transaction history", exact: true });
     await dialog.getByRole("button", { name: "Prepare CSV", exact: true }).click();
     await dialog
@@ -74,7 +78,7 @@ export async function exerciseHistoryExport(
     await dialog.getByRole("button", { name: "Close", exact: true }).focus();
     await dialog.getByRole("button", { name: "Close", exact: true }).press("Enter");
     await page.reload();
-    await page.getByRole("button", { name: "Export history", exact: true }).click();
+    await openHistoryExport();
     expect(await dialog.getByLabel("From date (inclusive)", { exact: true }).inputValue()).toBe("");
     expect(await dialog.getByRole("button", { name: "Download CSV", exact: true }).count()).toBe(0);
   } catch (error) {

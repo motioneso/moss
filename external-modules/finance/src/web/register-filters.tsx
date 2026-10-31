@@ -1,10 +1,8 @@
-import {
-  Button,
-  DisclosureToggle,
-  Select,
-  useState,
-  type ReactNodeLike
-} from "@moss/module-web-sdk";
+// external-modules/finance/src/web/register-filters.tsx
+//
+// Transactions filters. The panel opens from the toolbar's Filters button; while it is closed,
+// active filters show as removable chips.
+import { Button, Chip, Select, type ReactNodeLike } from "@moss/module-web-sdk";
 
 export interface RegisterFilters {
   accountId: string;
@@ -24,6 +22,8 @@ export const EMPTY_FILTERS: RegisterFilters = {
   attention: ""
 };
 
+export const REGISTER_FILTERS_ID = "finance-register-filters";
+
 export function filterInput(filters: RegisterFilters): Record<string, unknown> {
   return {
     ...(filters.accountId ? { accountId: filters.accountId } : {}),
@@ -36,131 +36,156 @@ export function filterInput(filters: RegisterFilters): Record<string, unknown> {
   };
 }
 
-export function RegisterFilterBar(props: {
-  value: RegisterFilters;
-  onChange: (value: RegisterFilters) => void;
+export const activeFilterCount = (filters: RegisterFilters): number =>
+  Object.values(filters).filter(Boolean).length;
+
+interface FilterOptions {
   accounts: { accountId: string; name: string }[];
   categories: { id: string; name: string }[];
-}): ReactNodeLike {
-  const [expanded, setExpanded] = useState(false);
-  const active = Object.values(props.value).filter(Boolean).length;
-  const update = (key: keyof RegisterFilters, value: string): void =>
-    props.onChange({ ...props.value, [key]: value });
+}
+
+interface FilterField {
+  key: keyof RegisterFilters;
+  label: string;
+  /** Names the filter in its select and in the chip's remove button. */
+  noun: string;
+  all: string;
+  options: (lists: FilterOptions) => { value: string; label: string }[];
+}
+
+const FIELDS: FilterField[] = [
+  {
+    key: "accountId",
+    label: "Account",
+    noun: "account",
+    all: "All accounts",
+    options: (lists) => lists.accounts.map((a) => ({ value: a.accountId, label: a.name }))
+  },
+  {
+    key: "categoryId",
+    label: "Category",
+    noun: "category",
+    all: "All categories",
+    options: (lists) => lists.categories.map((c) => ({ value: c.id, label: c.name }))
+  },
+  {
+    key: "postingState",
+    label: "Status",
+    noun: "posting status",
+    all: "All statuses",
+    options: () => [
+      { value: "pending", label: "Pending" },
+      { value: "posted", label: "Posted" }
+    ]
+  },
+  {
+    key: "direction",
+    label: "Direction",
+    noun: "money direction",
+    all: "All directions",
+    options: () => [
+      { value: "inflow", label: "Money in" },
+      { value: "outflow", label: "Money out" }
+    ]
+  },
+  {
+    key: "ledgerState",
+    label: "Manual ledger status",
+    noun: "manual ledger status",
+    all: "All ledger statuses",
+    options: () => [
+      { value: "uncleared", label: "Uncleared" },
+      { value: "cleared", label: "Cleared" },
+      { value: "reconciled", label: "Reconciled" }
+    ]
+  },
+  {
+    key: "attention",
+    label: "Check",
+    noun: "transaction check",
+    all: "All transactions",
+    options: () => [
+      { value: "uncategorized", label: "Uncategorized" },
+      { value: "duplicates", label: "Possible duplicates" }
+    ]
+  }
+];
+
+export function RegisterFilterPanel(
+  props: FilterOptions & {
+    value: RegisterFilters;
+    onChange: (value: RegisterFilters) => void;
+  }
+): ReactNodeLike {
   return (
-    <div className="fnm-block fnm-block--tight">
-      <div className="fnm-phone-only">
-        <DisclosureToggle
-          expanded={expanded}
-          controls="finance-register-filters"
-          onClick={() => setExpanded(!expanded)}
-        >
-          {expanded ? "Hide filters" : "Show filters"}
-          {active ? ` · ${active} active` : ""}
-        </DisclosureToggle>
-      </div>
-      <div
-        id="finance-register-filters"
-        className="fnm-register-filters"
-        data-expanded={expanded}
-        aria-label="Transaction filters"
-      >
-        <label className="fnm-block fnm-block--tight">
-          Account
+    <div id={REGISTER_FILTERS_ID} className="fnm-register-filters" aria-label="Transaction filters">
+      {FIELDS.map((field) => (
+        <label key={field.key} className="fnm-block fnm-block--tight">
+          {field.label}
           <Select
-            value={props.value.accountId}
-            aria-label="Filter by account"
+            value={props.value[field.key]}
+            aria-label={`Filter by ${field.noun}`}
             onChange={(event: { target: { value: string } }) =>
-              update("accountId", event.target.value)
+              props.onChange({ ...props.value, [field.key]: event.target.value })
             }
           >
-            <option value="">All accounts</option>
-            {props.accounts.map((a) => (
-              <option key={a.accountId} value={a.accountId}>
-                {a.name}
+            <option value="">{field.all}</option>
+            {field.options(props).map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </Select>
         </label>
-        <label className="fnm-block fnm-block--tight">
-          Category
-          <Select
-            value={props.value.categoryId}
-            aria-label="Filter by category"
-            onChange={(event: { target: { value: string } }) =>
-              update("categoryId", event.target.value)
-            }
-          >
-            <option value="">All categories</option>
-            {props.categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className="fnm-block fnm-block--tight">
-          Status
-          <Select
-            value={props.value.postingState}
-            aria-label="Filter by posting status"
-            onChange={(event: { target: { value: string } }) =>
-              update("postingState", event.target.value)
-            }
-          >
-            <option value="">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="posted">Posted</option>
-          </Select>
-        </label>
-        <label className="fnm-block fnm-block--tight">
-          Direction
-          <Select
-            value={props.value.direction}
-            aria-label="Filter by money direction"
-            onChange={(event: { target: { value: string } }) =>
-              update("direction", event.target.value)
-            }
-          >
-            <option value="">All directions</option>
-            <option value="inflow">Money in</option>
-            <option value="outflow">Money out</option>
-          </Select>
-        </label>
-        <label className="fnm-block fnm-block--tight">
-          Manual ledger status
-          <Select
-            value={props.value.ledgerState}
-            aria-label="Filter by manual ledger status"
-            onChange={(event: { target: { value: string } }) =>
-              update("ledgerState", event.target.value)
-            }
-          >
-            <option value="">All ledger statuses</option>
-            <option value="uncleared">Uncleared</option>
-            <option value="cleared">Cleared</option>
-            <option value="reconciled">Reconciled</option>
-          </Select>
-        </label>
-        <label className="fnm-block fnm-block--tight">
-          Check
-          <Select
-            value={props.value.attention}
-            aria-label="Filter by transaction check"
-            onChange={(event: { target: { value: string } }) =>
-              update("attention", event.target.value)
-            }
-          >
-            <option value="">All transactions</option>
-            <option value="uncategorized">Uncategorized</option>
-            <option value="duplicates">Possible duplicates</option>
-          </Select>
-        </label>
-        {Object.values(props.value).some(Boolean) ? (
+      ))}
+      {activeFilterCount(props.value) > 0 ? (
+        <div>
           <Button variant="link" onClick={() => props.onChange(EMPTY_FILTERS)}>
             Clear filters
           </Button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Active filters while the panel is closed. Renders nothing when no filter is set. */
+export function RegisterFilterChips(
+  props: FilterOptions & {
+    value: RegisterFilters;
+    onChange: (value: RegisterFilters) => void;
+    ownOnly: boolean;
+    onIncludeShared: () => void;
+  }
+): ReactNodeLike {
+  const active = FIELDS.filter((field) => props.value[field.key] !== "");
+  if (active.length === 0 && !props.ownOnly) return null;
+  return (
+    <div className="fnm-chips" aria-label="Active filters">
+      {props.ownOnly ? (
+        <Chip onRemove={props.onIncludeShared} removeLabel="Include shared records">
+          Your entries only
+        </Chip>
+      ) : null}
+      {active.map((field) => {
+        const value = props.value[field.key];
+        const label =
+          field.options(props).find((option) => option.value === value)?.label ?? field.label;
+        return (
+          <Chip
+            key={field.key}
+            onRemove={() => props.onChange({ ...props.value, [field.key]: "" })}
+            removeLabel={`Remove ${field.noun} filter ${label}`}
+          >
+            {label}
+          </Chip>
+        );
+      })}
+      {active.length > 1 ? (
+        <Button variant="link" onClick={() => props.onChange(EMPTY_FILTERS)}>
+          Clear filters
+        </Button>
+      ) : null}
     </div>
   );
 }

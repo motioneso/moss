@@ -3,7 +3,6 @@
 // #3176: the Transactions screen. Server data comes through a faked fetch at the network
 // edge; the screen, store and queue helper run for real.
 import "./helpers/install-module-runtime";
-import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -65,10 +64,12 @@ function fakeFetch(result: Record<string, unknown>, queueStatus = 202) {
   );
 }
 
-async function render(): Promise<ReactTestRenderer> {
+async function render(
+  props: NonNullable<Parameters<typeof TransactionsScreen>[0]> = {}
+): Promise<ReactTestRenderer> {
   let renderer!: ReactTestRenderer;
   await act(async () => {
-    renderer = create(createElement(TransactionsScreen));
+    renderer = create(<TransactionsScreen {...props} />);
   });
   await act(async () => {});
   return renderer;
@@ -101,6 +102,15 @@ describe("Transactions screen (#3176)", () => {
   it("sends the labeled register filters to the server and exposes loaded export scope", async () => {
     fakeFetch({ ...base, transactions: rows, totalCount: 450 });
     const renderer = await render();
+    const filtersButton = () =>
+      renderer.root.findAll(
+        (node) =>
+          node.type === "button" &&
+          node.props["aria-expanded"] !== undefined &&
+          textOf(node).startsWith("Filters")
+      )[0]!;
+    expect(filtersButton().props["aria-expanded"]).toBe(false);
+    await act(async () => filtersButton().props.onClick());
     const picker = renderer.root.findAll(
       (node) => node.type === "select" && node.props["aria-label"] === "Filter by posting status"
     )[0]!;
@@ -108,9 +118,47 @@ describe("Transactions screen (#3176)", () => {
     expect(
       calls.filter((call) => call.body.input?.postingState === "posted").length
     ).toBeGreaterThan(0);
-    expect(text(renderer)).toContain("3 of 450 matching transactions loaded");
-    expect(text(renderer)).toContain("Export loaded rows");
+    expect(text(renderer)).toContain("3 of 450 transactions");
     expect(text(renderer)).toContain("Clear filters");
+    expect(textOf(filtersButton())).toBe("Filters · 1");
+    // Closing the panel leaves the active filter as a removable chip.
+    await act(async () => filtersButton().props.onClick());
+    const chip = renderer.root.findAll(
+      (node) =>
+        node.type === "button" && node.props["aria-label"] === "Remove posting status filter Posted"
+    )[0]!;
+    expect(chip).toBeDefined();
+    await act(async () => chip.props.onClick());
+    expect(textOf(filtersButton())).toBe("Filters");
+    const exportMenu = renderer.root.findAll(
+      (node) => node.type === "button" && node.props["aria-label"] === "Export transactions"
+    )[0]!;
+    await act(async () => exportMenu.props.onClick());
+    expect(text(renderer)).toContain("Loaded rows");
+    expect(text(renderer)).toContain("Full history…");
+  });
+
+  it("keeps the ledger to attention badges and puts the count out of sight when all rows load", async () => {
+    fakeFetch({
+      ...base,
+      transactions: [
+        rows[2],
+        tx("p", { pending: true }),
+        tx("m", { source: "manual", cleared: true })
+      ],
+      totalCount: 3
+    });
+    const renderer = await render();
+    const out = text(renderer);
+    expect(out).toContain("Pending");
+    expect(out).not.toContain("Cleared");
+    const status = renderer.root.findAll(
+      (node) =>
+        node.type === "span" &&
+        node.props.role === "status" &&
+        textOf(node) === "3 of 3 transactions"
+    )[0]!;
+    expect(status.parent!.props.className).toBe("fnm-visually-hidden");
   });
   it("distinguishes predictions from changed user categories and shows grouped review counts", async () => {
     fakeFetch({
@@ -253,6 +301,37 @@ describe("Transactions screen (#3176)", () => {
   });
 });
 
+describe("transaction selection", () => {
+  it("shows the selection bar only once the header box selects the editable rows", async () => {
+    const revision = "a".repeat(32);
+    fakeFetch({
+      ...base,
+      supportsBulk: true,
+      transactions: [
+        tx("a", { writeRevision: revision }),
+        tx("b", { writeRevision: revision }),
+        tx("pending", { pending: true, writeRevision: revision })
+      ],
+      totalCount: 3
+    });
+    const renderer = await render({ tools: { invoke: vi.fn() } as never });
+    const bar = () =>
+      renderer.root.findAll(
+        (node) => node.type === "section" && node.props["aria-label"] === "Selected transactions"
+      );
+    expect(bar()).toHaveLength(0);
+    const all = renderer.root.findAll(
+      (node) => node.type === "input" && node.props["aria-label"] === "Select all editable rows"
+    )[0]!;
+    await act(async () => all.props.onChange({ target: { checked: true } }));
+    expect(bar()).toHaveLength(1);
+    expect(textOf(bar()[0]!)).toContain("2 selected");
+    await act(async () => button(renderer, "Clear selection").props.onClick());
+    expect(bar()).toHaveLength(0);
+    await act(async () => renderer.unmount());
+  });
+});
+
 describe("register read recovery", () => {
   it("offers an explicit read-only retry with friendly error copy", async () => {
     vi.stubGlobal(
@@ -264,9 +343,12 @@ describe("register read recovery", () => {
     const renderer = await render();
     expect(text(renderer)).toContain("We couldn't load your transactions");
     expect(text(renderer)).not.toContain("Request failed");
+    // An unknown count is not shown as zero.
+    expect(text(renderer)).not.toContain("Needs a look (");
     fakeFetch({ ...base, transactions: rows, needsLookCount: 2 });
     await act(async () => button(renderer, "Retry register").props.onClick());
     expect(text(renderer)).toContain("Payee a");
+    expect(text(renderer)).toContain("Needs a look (2)");
     expect(calls).toHaveLength(1);
     expect(calls[0]!.url).toContain("finance.transactions.query");
     await act(async () => renderer.unmount());

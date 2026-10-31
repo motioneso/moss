@@ -23,9 +23,8 @@ export async function exerciseLedgerFilter(
   expect(result.totalCount).toBe(1);
   await page.goto(`${base}/m/finance/transactions`);
   const filter = page.getByLabel("Filter by manual ledger status", { exact: true });
-  await filter.waitFor({ state: "attached" });
-  if (!(await filter.isVisible()))
-    await page.getByRole("button", { name: /^Show filters/ }).click();
+  await page.getByRole("button", { name: /^Filters/ }).click();
+  await filter.waitFor();
   await page.getByLabel("Filter by account", { exact: true }).selectOption(accountId);
   const chooseFresh = async (value: string, expected: Record<string, unknown>[]) => {
     const [response] = await Promise.all([
@@ -60,8 +59,6 @@ export async function exerciseLedgerFilter(
       expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
         false
       );
-      if (!(await filter.isVisible()))
-        await page.getByRole("button", { name: /^Show filters/ }).click();
       expect(await filter.isVisible()).toBe(true);
       if (artifacts)
         await page.screenshot({

@@ -93,18 +93,28 @@ export const MODULE_STYLES = `
 .fnm-phone-only { display: none; }
 /* #3176 Transactions: layout only. */
 .fnm-spread { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
-.fnm-col-payee { width: 30%; }
-.fnm-col-category { width: 34%; }
-.fnm-col-amount { width: 14%; }
+.fnm-col-check { width: 2.75rem; }
+.fnm-col-date { width: 5.5rem; }
+.fnm-col-payee { width: 26%; }
+.fnm-col-category { width: 30%; }
+.fnm-col-amount { width: 8rem; }
 .fnm-search { width: 14rem; max-width: 100%; }
 .fnm-register-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); align-items: end; gap: var(--space-4); }
 .fnm-register-filters > label { min-width: 0; }
 .fnm-register-filters select { width: 100%; }
 .fnm-fixed td { overflow-wrap: anywhere; }
-.fnm-category-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
-.fnm-category-controls > span { flex: 1; min-width: 0; }
-.fnm-category-controls > .fnm-block { width: 100%; }
-.fnm-category-controls select { width: 100%; }
+.fnm-row-badges { margin-top: var(--space-2); }
+.fnm-look { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); }
+.fnm-fixed td > .jds-check, .fnm-txline__check > .jds-check { vertical-align: top; }
+/* Phone ledger row: payee and amount on the first line, the rest under the payee. */
+.fnm-txline { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: var(--space-1) var(--space-3); }
+.fnm-txline--check { grid-template-columns: auto minmax(0, 1fr) auto; }
+.fnm-txline__check { grid-row: 1 / span 2; align-self: start; }
+.fnm-txline__body { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.fnm-txline--check .fnm-txline__body { grid-column: 2 / -1; }
+.fnm-txline__body > .fnm-row-badges { margin-top: 0; }
+.fnm-txline__name { min-width: 0; overflow-wrap: anywhere; }
+.fnm-txline__amount { white-space: nowrap; }
 .fnm-split-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; align-items: end; gap: var(--space-3); }
 .fnm-split-row input, .fnm-split-row select { width: 100%; min-width: 0; }
 /* Category detail panel: layout only. */
@@ -118,7 +128,7 @@ export const MODULE_STYLES = `
   .fnm-desktop-only { display: none; }
   .fnm-phone-only { display: block; }
   .fnm-chips { max-width: 100%; }
-  .fnm-register-filters[data-expanded="false"] { display: none; }
+  .fnm-search { flex: 1 1 12rem; width: auto; }
   .fnm-split-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .fnm-move { grid-template-columns: minmax(0, 1fr); }
 }

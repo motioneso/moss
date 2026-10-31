@@ -54,6 +54,8 @@ export function TransactionDetails(props: {
   onClose: () => void;
   tools?: ExternalModuleToolsHandleV1;
   supportsNotes?: boolean;
+  /** Set when the row can be split; the screen closes this view and opens the split editor. */
+  onSplit?: () => void;
 }): ReactNodeLike {
   const { captured } = props;
   const row = captured?.row;
@@ -108,9 +110,16 @@ export function TransactionDetails(props: {
             editor.editing ? (
               editor.footer
             ) : (
-              <Button variant="secondary" onClick={close}>
-                Back to register
-              </Button>
+              <>
+                {props.onSplit ? (
+                  <Button variant="secondary" onClick={props.onSplit}>
+                    {row.splits?.length ? "Edit split" : "Split"}
+                  </Button>
+                ) : null}
+                <Button variant="secondary" onClick={close}>
+                  Back to register
+                </Button>
+              </>
             )
           }
         >
@@ -127,10 +136,6 @@ export function TransactionDetails(props: {
                 {" · "}
                 {formatCents(Math.abs(row.amountCents), row.isoCurrency)}
               </strong>
-              <p className="jds-hint">
-                As read when you opened this transaction. Close and reload the register to check for
-                changes.
-              </p>
               {row.shared ? <p>Household · read only</p> : null}
               <RowIndex variant="facts">
                 <RowIndexItem title="Date" meta={row.date} />
@@ -170,9 +175,6 @@ export function TransactionDetails(props: {
                       />
                     ))}
                   </RowIndex>
-                  <p className="jds-hint">
-                    Allocations describe this transaction; the parent amount is counted once.
-                  </p>
                 </section>
               ) : null}
               <section className="fnm-block fnm-block--tight" aria-label="Transaction note">

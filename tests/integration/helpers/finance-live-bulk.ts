@@ -140,15 +140,17 @@ export async function exerciseBulkCategory(
   await page
     .getByRole("button", { name: "Check saved records and clear review", exact: true })
     .click();
-  await page.getByText("0 selected", { exact: true }).waitFor();
+  await page
+    .getByRole("region", { name: "Selected transactions", exact: true })
+    .waitFor({ state: "detached" });
   await expect.poll(() => selected(names[0]!).isDisabled()).toBe(false);
   await page.setViewportSize({ width: 320, height: 900 });
-  await page.getByRole("button", { name: "Show filters", exact: true }).click();
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
   await page.getByLabel("Filter by category", { exact: true }).selectOption("groceries");
-  await page.getByRole("button", { name: "Hide filters · 1 active", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Filters · 1", exact: true }).waitFor();
   await page.getByRole("button", { name: "Clear filters", exact: true }).click();
-  await page.getByRole("button", { name: "Hide filters", exact: true }).click();
-  expect(await page.getByLabel("Filter by account", { exact: true }).isVisible()).toBe(false);
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
+  expect(await page.getByLabel("Filter by account", { exact: true }).count()).toBe(0);
   for (const width of [320, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(

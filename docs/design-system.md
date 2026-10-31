@@ -263,7 +263,7 @@ Import from `@moss/ui`. Full option list in `packages/ui/OPTIONS.md`.
 | --------- | --------------------------------------------------------------------------------------------------------------------- |
 | Actions   | `Button`, `ButtonLink`, `IconButton`, `RowButton`, `DisclosureToggle`, `PeriodStepper`, `Menu`, `Segmented`, `Switch` |
 | Forms     | `Field`, `FormLabel`, `Select`, `Combobox`                                                                            |
-| Structure | `Masthead`, `Card`, `Divider`, `RowIndex`, `Dialog`, `PeekPanel`, `PeekCloseButton`, `HeldBanner`                     |
+| Structure | `Masthead`, `Card`, `Divider`, `RowIndex`, `Dialog`, `PeekPanel`, `PeekCloseButton`, `HeldBanner`, `SelectionBar`     |
 | Status    | `Badge`, `Chip`, `Indicator`, `StatTile`, `InfoTip`, `EmptyState`                                                     |
 | Time/data | `AgendaRow`, `DayCell`, `EventChip`, `AllDayChip`, `MonthChip`, `NowLine`, `TodayPill`, `WeatherChip`                 |
 | Identity  | `Avatar`, `BrandMark`, `CategoryDot`, `LegendSwatch`                                                                  |
@@ -302,6 +302,13 @@ returnFocusRef, dismissOnEscape, backdropRef})`; attach its returned onKeyDown t
 - `Menu` focuses an enabled item on open, supports Arrow Up/Down, Home/End, Escape and native Tab
   departure. Trigger Enter/Space retain native activation. `triggerContent`, `triggerVariant="content"`
   and `placement="top"` support the account menu without a second keyboard implementation.
+  `triggerVariant="button"` draws a secondary button with the visible `triggerContent` and a
+  chevron; `triggerLabel` stays the accessible name. Use it for a toolbar action that offers a
+  choice, such as Export.
+- `Select quiet` drops the box until hover or focus, for a value that is editable in place inside
+  a dense table row. Use the default box anywhere the select is the main control.
+- `SelectionBar` is a labelled region pinned to the bottom of its scroll container. Render it
+  only while rows are selected; it holds the count and the bulk actions.
 - Settings `Switch`, `Segmented`, `Avatar` and `Indicator` re-export canonical components. The
   compatibility Badge translates `pine` to `forest`. Settings `Field` accepts `controlId`, `hintId`,
   `errorId`, and `error`; the consumer supplies matching control id/aria-describedby/aria-invalid.
