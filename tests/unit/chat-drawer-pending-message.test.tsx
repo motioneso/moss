@@ -56,7 +56,6 @@ vi.mock("../../apps/web/src/api/workflows-client.js", () => ({
   listWorkflowApprovals: vi.fn(async () => [])
 }));
 
-import { installBuiltInVisualTemplates, type VisualReplyV1 } from "@moss/shared";
 import { sendChatTurn } from "../../apps/web/src/api/client.js";
 import { ChatDrawer } from "../../apps/web/src/chat/chat-drawer.js";
 import { VoiceInputThread } from "../../apps/web/src/chat/voice-requests.js";
@@ -66,23 +65,8 @@ vi.mock("virtual:moss-module-web", () => ({
   MODULE_WEB_CONTRIBUTIONS: [],
   MODULE_PERSISTENT_CONTROLS: [],
   MODULE_VISUAL_CONTRACTS: [],
-  MODULE_VISUAL_RENDERERS: [
-    async () => ({
-      default: {
-        "test.chronology": ({ snapshot }: { snapshot: { retrievedAt: string } }) =>
-          createElement("p", null, `Source retrieved ${snapshot.retrievedAt}`)
-      }
-    })
-  ]
+  MODULE_VISUAL_RENDERERS: []
 }));
-installBuiltInVisualTemplates([
-  {
-    kind: "test.chronology",
-    snapshotKind: "test.chronology",
-    validate: () => true,
-    format: () => "chronology"
-  }
-]);
 it("keeps the sent message on screen while the turn runs, even when an earlier message has the same words", async () => {
   let finish!: () => void;
   vi.mocked(sendChatTurn).mockImplementationOnce(
