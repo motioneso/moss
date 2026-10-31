@@ -94,10 +94,15 @@ export async function exercisePrivateNotes(
   const capture = async (state: string) => {
     for (const [theme, width] of [
       ["light", 1440],
+      ["light", 320],
+      ["dark", 1440],
+      ["sage", 1440],
+      ["sage", 320],
       ["dark", 320]
     ] as const) {
       await page.evaluate((theme) => {
-        document.documentElement.dataset.theme = theme;
+        document.documentElement.dataset.theme = theme === "dark" ? "forest" : theme;
+        document.documentElement.dataset.colorMode = theme === "dark" ? "dark" : "light";
       }, theme);
       await page.setViewportSize({ width, height: 900 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
@@ -123,17 +128,83 @@ export async function exercisePrivateNotes(
         expect(current.y).toBeGreaterThanOrEqual(0);
         expect(current.y + current.height).toBeLessThan(foot.y);
       }
+      if (state === "edit") {
+        await field().focus();
+        for (const key of ["Tab", "Tab", "Tab", "Tab", "Shift+Tab", "Shift+Tab"]) {
+          await page.keyboard.press(key);
+          expect(await editor.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+        }
+      }
       if (artifacts)
         await page.screenshot({
           path: join(resolve(artifacts), `finance-private-note-${state}-${theme}-${width}.png`)
         });
     }
   };
+  const verifyCopyableDraft = async (expected: string) => {
+    expect(await field().isEnabled()).toBe(true);
+    expect(await field().getAttribute("readonly")).not.toBeNull();
+    await field().focus();
+    await page.keyboard.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
+    expect(
+      await field().evaluate((el) => ({ start: el.selectionStart, end: el.selectionEnd }))
+    ).toEqual({ start: 0, end: expected.length });
+    await page.keyboard.type("x");
+    expect(await field().inputValue()).toBe(expected);
+    await page.keyboard.press("ArrowRight");
+  };
+  let releaseInitialRead: (() => void) | undefined;
   try {
     await page.goto(`${base}/m/finance/transactions`);
     await waitForFinanceAction(page, open(), "Check saved records");
+    const beforeLoading = await snapshot();
+    let readHeld!: () => void, readDelivered!: () => void;
+    const held = new Promise<void>((resolve) => {
+      readHeld = resolve;
+    });
+    const delivered = new Promise<void>((resolve) => {
+      readDelivered = resolve;
+    });
+    const release = new Promise<void>((resolve) => {
+      releaseInitialRead = resolve;
+    });
+    await page.route(
+      /\/api\/ai\/assistant-tools\/finance\.transaction\.note-read\/invoke$/,
+      async (route) => {
+        const response = await route.fetch();
+        expect(response.ok()).toBe(true);
+        readHeld();
+        await release;
+        await route.fulfill({ response });
+        readDelivered();
+      },
+      { times: 1 }
+    );
+    await open().click();
+    await details.getByRole("button", { name: "Edit private note", exact: true }).click();
+    await held;
+    await editor.getByText("Reading saved note…", { exact: true }).waitFor();
+    await capture("loading");
+    expect(
+      await editor
+        .getByRole("button", { name: "Close private note editor", exact: true })
+        .isEnabled()
+    ).toBe(true);
+    expect(
+      await editor.getByRole("button", { name: "Back to details", exact: true }).isEnabled()
+    ).toBe(true);
+    await editor.getByRole("button", { name: "Close private note editor", exact: true }).click();
+    await editor.waitFor({ state: "detached" });
+    await expect.poll(() => open().evaluate((el) => document.activeElement === el)).toBe(true);
+    expect(await snapshot()).toEqual(beforeLoading);
+    await owned(async (store) => {
+      const row = (await store.notes!.read(target))!;
+      expect(
+        await store.notes!.save(target, row.writeRevision, "Newer synthetic saved note", at)
+      ).toBe("saved");
+    });
     await start();
-    expect(await field().inputValue()).toBe("Original synthetic note");
+    expect(await field().inputValue()).toBe("Newer synthetic saved note");
     const tooLong = "🦉".repeat(1001);
     await field().fill(tooLong);
     expect(await field().inputValue()).toBe(tooLong);
@@ -157,7 +228,17 @@ export async function exercisePrivateNotes(
       .waitFor();
     expect(await snapshot()).toEqual(before);
     expect(await guard.isVisible()).toBe(true);
-    await guard.getByRole("button", { name: "Cancel", exact: true }).click();
+    releaseInitialRead!();
+    await delivered;
+    releaseInitialRead = undefined;
+    // An older canceled read cannot release the newer submitted write's close protection.
+    expect(
+      await editor.locator('button[aria-label="Close private note editor"]').isDisabled()
+    ).toBe(true);
+    await guard.getByRole("button", { name: "Confirm action", exact: true }).focus();
+    await page.keyboard.press("Tab");
+    expect(await guard.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+    await page.keyboard.press("Escape");
     await editor
       .getByText("Cancelled. Your private note draft is kept.", { exact: true })
       .waitFor();
@@ -198,6 +279,7 @@ export async function exercisePrivateNotes(
     expect(
       await editor.getByRole("button", { name: "Save private note", exact: true }).count()
     ).toBe(0);
+    await verifyCopyableDraft("Retained synthetic draft");
     await capture("stale");
     await editor.getByRole("button", { name: "Check saved note", exact: true }).click();
     await waitForFinanceAction(
@@ -256,6 +338,7 @@ export async function exercisePrivateNotes(
     ).toBe(0);
     const committed = await snapshot();
     expect(committed.note!.notes).toBe(uncertainDraft);
+    await verifyCopyableDraft(uncertainDraft);
     await capture("uncertain");
     await editor.getByRole("button", { name: "Check saved note", exact: true }).click();
     await waitForFinanceAction(
@@ -297,6 +380,7 @@ export async function exercisePrivateNotes(
       });
     throw error;
   } finally {
+    releaseInitialRead?.();
     await page.close();
   }
 }

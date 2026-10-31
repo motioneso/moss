@@ -24,6 +24,7 @@ export function useTransactionNoteEditor(props: {
 }) {
   const [editing, setEditing] = useState(false),
     [busy, setBusy] = useState(false),
+    [writing, setWriting] = useState(false),
     [saved, setSaved] = useState<SavedTransactionNote | null>(null),
     [draft, setDraft] = useState<string | null>(null),
     [blocked, setBlocked] = useState(true),
@@ -31,6 +32,7 @@ export function useTransactionNoteEditor(props: {
     [recovered, setRecovered] = useState(false);
   const alive = useRef(true),
     pending = useRef(false),
+    writePending = useRef(false),
     generation = useRef(0),
     target = useRef<NoteTarget | null>(null),
     tools = useRef(props.tools);
@@ -43,8 +45,11 @@ export function useTransactionNoteEditor(props: {
     };
   }, []);
   const reset = () => {
-    if (pending.current) return;
+    if (writePending.current) return false;
     generation.current++;
+    pending.current = false;
+    setBusy(false);
+    setWriting(false);
     target.current = null;
     setEditing(false);
     setDraft(null);
@@ -52,6 +57,7 @@ export function useTransactionNoteEditor(props: {
     setBlocked(true);
     setMessage(null);
     setRecovered(false);
+    return true;
   };
   const check = async (first = false) => {
     if (!target.current || pending.current || cooldown.cooling) return;
@@ -95,8 +101,10 @@ export function useTransactionNoteEditor(props: {
         setMessage("The saved note could not be checked. Your draft is kept.");
       }
     } finally {
-      pending.current = false;
-      if (alive.current && version === generation.current) setBusy(false);
+      if (alive.current && version === generation.current) {
+        pending.current = false;
+        setBusy(false);
+      }
     }
   };
   const start = () => {
@@ -126,7 +134,9 @@ export function useTransactionNoteEditor(props: {
     )
       return;
     pending.current = true;
+    writePending.current = true;
     setBusy(true);
+    setWriting(true);
     setMessage(null);
     const version = ++generation.current;
     try {
@@ -141,6 +151,7 @@ export function useTransactionNoteEditor(props: {
         invalidateQueries();
         announce("Private note saved.");
         pending.current = false;
+        writePending.current = false;
         setBusy(false);
         reset();
         props.onSaved();
@@ -160,13 +171,18 @@ export function useTransactionNoteEditor(props: {
         );
       }
     } finally {
-      pending.current = false;
-      if (alive.current && version === generation.current) setBusy(false);
+      if (alive.current && version === generation.current) {
+        pending.current = false;
+        writePending.current = false;
+        setBusy(false);
+        setWriting(false);
+      }
     }
   };
   return {
     editing,
     busy,
+    writing,
     start,
     reset,
     body: (
@@ -201,7 +217,8 @@ export function useTransactionNoteEditor(props: {
                 aria-label="Edit private transaction note"
                 rows={recovered ? 5 : 7}
                 value={draft}
-                disabled={busy || blocked}
+                disabled={writing}
+                readOnly={blocked || busy}
                 aria-describedby="finance-note-capacity"
                 onChange={(e: { currentTarget: { value: string } }) =>
                   setDraft(e.currentTarget.value)
@@ -210,7 +227,9 @@ export function useTransactionNoteEditor(props: {
             </label>
             <p id="finance-note-capacity" className="jds-hint" role={!valid ? "alert" : undefined}>
               {valid
-                ? `${4000 - bytes} UTF-8 bytes available. Leave empty to clear this note.`
+                ? blocked
+                  ? "Your draft is kept read only. You can select and copy it. Check the saved note to edit again."
+                  : `${4000 - bytes} UTF-8 bytes available. Leave empty to clear this note.`
                 : "Use valid text without NUL, at most 4,000 UTF-8 bytes. Your draft has not been shortened."}
             </p>
           </>
@@ -219,7 +238,7 @@ export function useTransactionNoteEditor(props: {
     ),
     footer: (
       <div className="fnm-spread">
-        <Button variant="secondary" disabled={busy} onClick={reset}>
+        <Button variant="secondary" disabled={writing} onClick={reset}>
           Back to details
         </Button>
         {blocked ? (

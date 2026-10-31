@@ -81,10 +81,7 @@ export function TransactionDetails(props: {
     onSaved: props.onClose
   });
   const close = () => {
-    if (!editor.busy) {
-      editor.reset();
-      props.onClose();
-    }
+    if (editor.reset()) props.onClose();
   };
   const notes = row?.shared ? null : (row?.notes ?? "");
   const status = row?.pending
@@ -104,7 +101,7 @@ export function TransactionDetails(props: {
           description={row.name}
           scrollBody
           onClose={close}
-          closeDisabled={editor.busy}
+          closeDisabled={editor.writing}
           returnFocusRef={returnFocusRef}
           closeLabel={editor.editing ? "Close private note editor" : "Close transaction details"}
           footer={
