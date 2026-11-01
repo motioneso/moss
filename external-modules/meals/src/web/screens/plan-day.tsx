@@ -13,6 +13,7 @@ import {
 } from "@moss/module-web-sdk";
 
 import type { GenerationFailure, PlanDayView, PlannedMealView } from "../../contracts";
+import { isReplaceable } from "../../domain/regenerate";
 import { dayTitle, titleCase } from "../format";
 import { navigate } from "../router";
 
@@ -88,6 +89,46 @@ function Fit(props: { meal: PlannedMealView }): ReactNodeLike | null {
   );
 }
 
+/** What a meal's buttons do. Null hides every button (no write handle). */
+export interface MealActions {
+  readonly busy: boolean;
+  lock(meal: PlannedMealView): void;
+  unlock(meal: PlannedMealView): void;
+  swap(meal: PlannedMealView): void;
+  regenerateMeal(meal: PlannedMealView): void;
+  regenerateDay(day: PlanDayView): void;
+}
+
+function MealTools(props: { meal: PlannedMealView; actions: MealActions }): ReactNodeLike | null {
+  const { meal, actions } = props;
+  if (meal.kind !== "recipe" || meal.cookedAt !== null) return null;
+  return (
+    <div className="mls-meal__tools">
+      <Button
+        variant="quiet"
+        size="sm"
+        disabled={actions.busy}
+        onClick={() => (meal.locked ? actions.unlock(meal) : actions.lock(meal))}
+      >
+        {meal.locked ? "Unlock" : "Lock"}
+      </Button>
+      <Button variant="quiet" size="sm" disabled={actions.busy} onClick={() => actions.swap(meal)}>
+        Swap
+      </Button>
+      {isReplaceable(meal) ? (
+        <Button
+          variant="quiet"
+          size="sm"
+          disabled={actions.busy}
+          onClick={() => actions.regenerateMeal(meal)}
+        >
+          Regenerate
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 const DOUBLE_CHECK = "Always double check.";
 
 function Safety(props: { meal: PlannedMealView }): ReactNodeLike | null {
@@ -116,7 +157,7 @@ function Safety(props: { meal: PlannedMealView }): ReactNodeLike | null {
   );
 }
 
-function Meal(props: { meal: PlannedMealView }): ReactNodeLike {
+function Meal(props: { meal: PlannedMealView; actions: MealActions | null }): ReactNodeLike {
   const { meal } = props;
   if (meal.status === "failed") {
     return (
@@ -142,16 +183,19 @@ function Meal(props: { meal: PlannedMealView }): ReactNodeLike {
   return (
     <article className="mls-meal">
       {meal.kind === "recipe" && meal.title !== null ? (
-        <a
-          className="mls-meal__title"
-          href={`/m/meals/recipe/${meal.mealId}`}
-          onClick={(event: { preventDefault: () => void }) => {
-            event.preventDefault();
-            navigate(`/recipe/${meal.mealId}`);
-          }}
-        >
-          {meal.title}
-        </a>
+        <div className="mls-row">
+          <a
+            className="mls-meal__title"
+            href={`/m/meals/recipe/${meal.mealId}`}
+            onClick={(event: { preventDefault: () => void }) => {
+              event.preventDefault();
+              navigate(`/recipe/${meal.mealId}`);
+            }}
+          >
+            {meal.title}
+          </a>
+          {meal.locked ? <Badge outline>Locked</Badge> : null}
+        </div>
       ) : (
         <p className="mls-meal__text">{meal.plainText}</p>
       )}
@@ -164,6 +208,7 @@ function Meal(props: { meal: PlannedMealView }): ReactNodeLike {
         <span>Serves {servings % 1 === 0 ? servings : servings.toFixed(1)}</span>
         {meal.cookMinutes !== null ? <span>{meal.cookMinutes}&nbsp;min</span> : null}
       </p>
+      {props.actions !== null ? <MealTools meal={meal} actions={props.actions} /> : null}
     </article>
   );
 }
@@ -181,6 +226,7 @@ export function DaySection(props: {
   planActive: boolean;
   showSharing: boolean;
   onRetry: (() => void) | null;
+  actions: MealActions | null;
 }): ReactNodeLike {
   const { day, today } = props;
   const isToday = day.date === today;
@@ -192,6 +238,35 @@ export function DaySection(props: {
     meta = <Indicator status="idle" label="Waiting" />;
   else if (day.status === "pending") meta = <span className="jds-caption">Not written</span>;
   else if (isToday) meta = <Badge tone="forest">Today</Badge>;
+
+  const canRegenerate =
+    props.actions !== null && day.status === "ready" && day.meals.some(isReplaceable);
+  if (canRegenerate && meta === null) {
+    meta = (
+      <Button
+        variant="quiet"
+        size="sm"
+        disabled={props.actions!.busy}
+        onClick={() => props.actions!.regenerateDay(day)}
+      >
+        Regenerate day
+      </Button>
+    );
+  } else if (canRegenerate) {
+    meta = (
+      <span className="mls-row">
+        {meta}
+        <Button
+          variant="quiet"
+          size="sm"
+          disabled={props.actions!.busy}
+          onClick={() => props.actions!.regenerateDay(day)}
+        >
+          Regenerate day
+        </Button>
+      </span>
+    );
+  }
 
   const head = (
     <SectionHead number={number} title={dayTitle(day.date)} meta={meta} titleAs="h3" wrap />
@@ -258,7 +333,7 @@ export function DaySection(props: {
                 ) : null}
               </div>
               {meals.map((meal) => (
-                <Meal meal={meal} key={meal.mealId} />
+                <Meal meal={meal} key={meal.mealId} actions={props.actions} />
               ))}
             </div>
           ))}

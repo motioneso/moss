@@ -115,6 +115,19 @@ export interface ReadyMeal {
   readonly eaters: readonly MealEaterRow[];
 }
 
+export interface SwapChoiceRow {
+  readonly choiceId: string;
+  readonly position: number;
+  readonly status: WriteStatus;
+  readonly recipeId: string | null;
+  readonly generation: number;
+}
+
+export interface NewSwapChoice {
+  readonly choiceId: string;
+  readonly position: number;
+}
+
 export interface RecentTitle {
   readonly title: string;
   readonly titleKey: string;
@@ -179,6 +192,47 @@ export interface PlanStore {
     attempts: number,
     eaters?: readonly MealEaterRow[]
   ): Promise<boolean>;
+
+  /** Locks or unlocks a recipe meal that has not been cooked. False when the meal does not qualify. */
+  setMealLocked(mealId: string, locked: boolean): Promise<boolean>;
+  /**
+   * Sets the replaceable meals among `mealIds` (see domain/regenerate) back to pending and
+   * deletes their swap choices. Returns how many meals it reset. Their recipes stay stored.
+   */
+  resetMeals(mealIds: readonly string[]): Promise<number>;
+
+  /** Raises the meal's job counter and returns the new value, or null for a missing meal. */
+  startMealJob(mealId: string): Promise<number | null>;
+  /** Deletes the meal's swap choices and stores the new ones as pending, in one statement. */
+  replaceSwapChoices(
+    mealId: string,
+    kitchenId: string,
+    generation: number,
+    choices: readonly NewSwapChoice[]
+  ): Promise<void>;
+  listSwapChoices(mealId: string): Promise<readonly SwapChoiceRow[]>;
+  /** Sets a pending choice to writing when its generation matches. */
+  claimSwapChoice(choiceId: string, generation: number): Promise<boolean>;
+  /** Stores the choice's recipe and marks it ready, when the generation matches. */
+  saveChoiceReady(input: {
+    readonly choiceId: string;
+    readonly generation: number;
+    readonly kitchenId: string;
+    readonly recipe: ReadyMeal["recipe"];
+  }): Promise<boolean>;
+  failChoice(choiceId: string, generation: number): Promise<boolean>;
+  /**
+   * Puts a ready choice's recipe on its meal, marks the meal ready with the given eater rows, and
+   * deletes every choice for the meal. False when the choice is not ready or the meal is no longer
+   * a ready or failed, uncooked recipe meal.
+   */
+  chooseSwap(input: {
+    readonly mealId: string;
+    readonly choiceId: string;
+    readonly eaters: readonly MealEaterRow[];
+  }): Promise<boolean>;
+  /** Overwrites the Safety verdict of each listed eater. */
+  saveEaterVerdicts(mealId: string, eaters: readonly MealEaterRow[]): Promise<void>;
 
   getRecipes(recipeIds: readonly string[]): Promise<readonly RecipeRow[]>;
   /** Titles of ready meals in the kitchen on days from `from` to `to`, inclusive. */

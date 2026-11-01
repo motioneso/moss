@@ -4,10 +4,11 @@
 // enqueues the first day; the day job chains the rest.
 
 import type { PantryMode, PlanView, RecipeView } from "../contracts.js";
+import { isReplaceable } from "../domain/regenerate.js";
 import { MAX_PLAN_DAYS, parseIsoDate, planSkeleton } from "../domain/skeleton.js";
 import type { DayRow, NewPlan, PlanRow } from "../store/plan-port.js";
 import { PLAN_DAY_JOB_KIND, PLAN_DAY_QUEUE, planDayKey, type PlanDeps } from "./deps.js";
-import { planView, recipeView } from "./view.js";
+import { planView, recipeView, swapChoiceViews } from "./view.js";
 
 type Input = Readonly<Record<string, unknown>>;
 
@@ -16,7 +17,7 @@ const MAX_REQUEST_TEXT = 1000;
 
 export class PlanInputError extends Error {}
 
-function requireString(input: Input, field: string, max: number): string {
+export function requireString(input: Input, field: string, max: number): string {
   const value = input[field];
   if (typeof value !== "string" || value.trim() === "" || value.length > max) {
     throw new PlanInputError(`${field} must be 1 to ${max} characters`);
@@ -168,7 +169,7 @@ export async function planCurrent(
   return { plan: await loadView(deps, await requirePlan(deps, planId)) };
 }
 
-function findDay(days: readonly DayRow[], input: Input): DayRow {
+export function findDay(days: readonly DayRow[], input: Input): DayRow {
   const dayId = optionalString(input, "dayId");
   const date = dayId === null ? requireDate(input, "date") : null;
   const day = days.find((candidate) =>
@@ -176,6 +177,38 @@ function findDay(days: readonly DayRow[], input: Input): DayRow {
   );
   if (day === undefined) throw new PlanInputError("That day is not in this plan");
   return day;
+}
+
+/**
+ * Replaces the unlocked, uncooked recipe meals in scope: the whole plan, one day (dayId or date),
+ * or one meal (mealId). Locked, cooked and text meals stay. The shopping list is not touched here;
+ * it rebuilds when each day finishes writing, so ticks carry over by line.
+ */
+async function regenerate(deps: PlanDeps, plan: PlanRow, input: Input): Promise<void> {
+  const [days, meals] = await Promise.all([
+    deps.store.listDays(plan.planId),
+    deps.store.listMeals(plan.planId)
+  ]);
+  const mealId = optionalString(input, "mealId");
+  let scope = meals;
+  if (mealId !== null) {
+    scope = meals.filter((meal) => meal.mealId === mealId);
+    if (scope.length === 0) throw new PlanInputError("That meal is not in this plan");
+  } else if (input["dayId"] !== undefined || input["date"] !== undefined) {
+    const day = findDay(days, input);
+    scope = meals.filter((meal) => meal.dayId === day.dayId);
+  }
+  const targets = scope.filter(isReplaceable);
+  if (targets.length === 0) throw new PlanInputError("There is nothing to replace");
+
+  await deps.store.resetMeals(targets.map((meal) => meal.mealId));
+  await deps.store.setPlanState(plan.planId, "active", null);
+  const touched = new Set(targets.map((meal) => meal.dayId));
+  const affected = days.filter((day) => touched.has(day.dayId));
+  // The first day enqueues; the day job chains to the rest, which only need to be pending.
+  const [first, ...rest] = affected;
+  for (const day of rest) await deps.store.bumpDay(day.dayId);
+  if (first !== undefined) await enqueueDay(deps, plan.planId, first.dayId);
 }
 
 export async function planControl(deps: PlanDeps, input: Input): Promise<PlanView> {
@@ -194,8 +227,10 @@ export async function planControl(deps: PlanDeps, input: Input): Promise<PlanVie
     if (day.status === "ready") throw new PlanInputError("That day is already written");
     await deps.store.setPlanState(plan.planId, "active", null);
     await enqueueDay(deps, plan.planId, day.dayId);
+  } else if (action === "regenerate") {
+    await regenerate(deps, plan, input);
   } else {
-    throw new PlanInputError("action must be stop, resume or retry_day");
+    throw new PlanInputError("action must be stop, resume, retry_day or regenerate");
   }
   return loadView(deps, await requirePlan(deps, plan.planId));
 }
@@ -211,13 +246,29 @@ export async function planDelete(
   return { deleted: true };
 }
 
-export async function mealGet(deps: PlanDeps, input: Input): Promise<RecipeView> {
-  const meal = await deps.store.getMeal(requireString(input, "mealId", 64));
+export async function loadRecipe(deps: PlanDeps, mealId: string): Promise<RecipeView> {
+  const meal = await deps.store.getMeal(mealId);
   if (meal === null) throw new PlanInputError("No meal with that id");
+  const choices = await deps.store.listSwapChoices(mealId);
+  const recipeIds = [
+    ...(meal.recipeId ? [meal.recipeId] : []),
+    ...choices.flatMap((choice) => (choice.recipeId ? [choice.recipeId] : []))
+  ];
   const [recipes, kitchen, marks] = await Promise.all([
-    meal.recipeId ? deps.store.getRecipes([meal.recipeId]) : Promise.resolve([]),
+    recipeIds.length > 0 ? deps.store.getRecipes(recipeIds) : Promise.resolve([]),
     deps.kitchen(),
     deps.marks?.()
   ]);
-  return recipeView(meal, recipes[0], kitchen, marks);
+  const own = recipes.find((recipe) => recipe.recipeId === meal.recipeId);
+  return recipeView(
+    meal,
+    own,
+    kitchen,
+    marks,
+    swapChoiceViews(meal, choices, recipes, kitchen)
+  );
+}
+
+export async function mealGet(deps: PlanDeps, input: Input): Promise<RecipeView> {
+  return loadRecipe(deps, requireString(input, "mealId", 64));
 }

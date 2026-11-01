@@ -5,18 +5,20 @@
 import {
   Badge,
   Button,
+  Dialog,
   EmptyState,
   Masthead,
   useState,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 
-import type { PantryMode, PlanView } from "../../contracts";
+import type { PantryMode, PlanView, PlannedMealView } from "../../contracts";
 import { dateRange, todayIso } from "../format";
+import { navigate } from "../router";
 import { isWriting, type PlanState } from "../plan";
 import type { MealsWrites } from "../writes";
 import type { HostActions } from "../root";
-import { DaySection } from "./plan-day";
+import { DaySection, type MealActions } from "./plan-day";
 
 export const PANTRY_LABEL: Record<PantryMode, string> = {
   ignore: "Ignore the Pantry",
@@ -62,13 +64,20 @@ export function PlanScreen(props: {
   if (state.kind === "empty") {
     return (
       <EmptyState title="Plan your first week">
-        <Button
-          onClick={() =>
-            props.hostActions.openAssistant({ starterPrompt: "Plan my meals for the next week" })
-          }
-        >
-          Plan with Moss
-        </Button>
+        <div className="mls-row">
+          <Button
+            onClick={() =>
+              props.hostActions.openAssistant({ starterPrompt: "Plan my meals for the next week" })
+            }
+          >
+            Plan with Moss
+          </Button>
+          {props.writes !== null ? (
+            <Button variant="secondary" onClick={() => navigate("/plan/new")}>
+              Start a plan
+            </Button>
+          ) : null}
+        </div>
       </EmptyState>
     );
   }
@@ -97,6 +106,7 @@ function Plan(props: {
   const today = todayIso();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const writing = isWriting(plan);
   const last = plan.days[plan.days.length - 1]?.date ?? plan.startDate;
   const range = dateRange(plan.startDate, last);
@@ -114,6 +124,45 @@ function Plan(props: {
     if (outcome.kind === "failed" || outcome.kind === "rejected") setFailed(true);
     props.reload();
   }
+
+  async function editMeal(meal: PlannedMealView, action: "lock" | "unlock") {
+    if (writes === null || busy) return;
+    setBusy(true);
+    setFailed(false);
+    const outcome = await writes.invoke("meals.meal.edit", { mealId: meal.mealId, action });
+    setBusy(false);
+    if (outcome.kind !== "succeeded") setFailed(true);
+    props.reload();
+  }
+
+  async function swap(meal: PlannedMealView) {
+    if (writes === null || busy) return;
+    setBusy(true);
+    setFailed(false);
+    const outcome = await writes.invoke("meals.meal.swap", {
+      mealId: meal.mealId,
+      action: "request_choices"
+    });
+    setBusy(false);
+    if (outcome.kind === "succeeded") navigate(`/plan/swap/${meal.mealId}`);
+    else setFailed(true);
+  }
+
+  const actions: MealActions | null =
+    writes === null
+      ? null
+      : {
+          busy,
+          lock: (meal) => editMeal(meal, "lock"),
+          unlock: (meal) => editMeal(meal, "unlock"),
+          swap,
+          regenerateMeal: (meal) => control({ action: "regenerate", mealId: meal.mealId }),
+          regenerateDay: (target) => control({ action: "regenerate", dayId: target.dayId })
+        };
+  const lockedCount = plan.days.reduce(
+    (sum, day) => sum + day.meals.filter((meal) => meal.locked).length,
+    0
+  );
 
   const done = plan.progress.ready;
   const total = plan.progress.total;
@@ -139,6 +188,23 @@ function Plan(props: {
           <strong className="mls-num">{range}</strong>
           <Badge outline>{PANTRY_LABEL[plan.pantryMode]}</Badge>
         </div>
+        {!writing && writes !== null ? (
+          <div className="mls-row">
+            {plan.replaceable > 0 ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={busy}
+                onClick={() => setConfirming(true)}
+              >
+                Regenerate
+              </Button>
+            ) : null}
+            <Button variant="quiet" size="sm" onClick={() => navigate("/plan/new")}>
+              New plan
+            </Button>
+          </div>
+        ) : null}
         {writing ? (
           <div className="mls-progress">
             <span className="jds-caption" role="status">
@@ -216,9 +282,40 @@ function Plan(props: {
             onRetry={
               writes !== null ? () => control({ action: "retry_day", dayId: day.dayId }) : null
             }
+            actions={actions}
           />
         ))}
       </div>
+      {confirming ? (
+        <Dialog
+          title="Regenerate the plan"
+          onClose={() => setConfirming(false)}
+          closeLabel="Close"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setConfirming(false)}>
+                Cancel
+              </Button>
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  setConfirming(false);
+                  control({ action: "regenerate" });
+                }}
+              >
+                Regenerate
+              </Button>
+            </>
+          }
+        >
+          <p>
+            {plan.replaceable === 1 ? "1 meal" : `${plan.replaceable} meals`} will be replaced.
+            {lockedCount > 0
+              ? ` ${lockedCount === 1 ? "1 locked meal stays" : `${lockedCount} locked meals stay`}.`
+              : ""}
+          </p>
+        </Dialog>
+      ) : null}
     </div>
   );
 }

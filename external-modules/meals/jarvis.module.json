@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "meals",
   "name": "Meals",
-  "version": "0.4.0",
+  "version": "0.6.0",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": {
@@ -12,7 +12,15 @@
   "storage": [
     {
       "namespace": "meals.settings",
-      "scopes": ["user"]
+      "scopes": [
+        "user"
+      ]
+    },
+    {
+      "namespace": "meals.settings",
+      "scopes": [
+        "user"
+      ]
     }
   ],
   "database": {
@@ -35,7 +43,8 @@
       "app.meals_log_estimates",
       "app.meals_log_estimate_items",
       "app.meals_ratings",
-      "app.meals_favourites"
+      "app.meals_favourites",
+      "app.meals_swap_choices"
     ]
   },
   "runtime": {
@@ -82,6 +91,34 @@
               "type": "integer",
               "min": 1,
               "max": 1000000
+            }
+          }
+        }
+      },
+      {
+        "name": "meals.meal-job",
+        "handler": "meal.job",
+        "retryLimit": 1,
+        "allowModuleEnqueue": true,
+        "timeoutMs": 600000,
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "mealId": {
+              "type": "uuid"
+            },
+            "generation": {
+              "type": "integer",
+              "min": 1,
+              "max": 100000
+            },
+            "mode": {
+              "type": "enum",
+              "values": [
+                "swap_choices",
+                "quick_swap",
+                "safety_recheck"
+              ]
             }
           }
         }
@@ -150,6 +187,18 @@
         "label": "Log",
         "path": "/log",
         "description": "What you ate on a day, with calories and macros against your daily target. Log a meal by typing it, correct or delete an entry, and retry an estimate that is stuck."
+      },
+      {
+        "id": "meals.swap",
+        "label": "Swap a meal",
+        "path": "/plan/swap",
+        "description": "Three replacement recipes for one meal, each already checked for Safety against who eats it. Choose one to replace the meal; the shopping list rebuilds and keeps its ticks. Opened from Swap on a meal in the Plan tab."
+      },
+      {
+        "id": "meals.plan-new",
+        "label": "New plan",
+        "path": "/plan/new",
+        "description": "Start a meal plan: the first day, how many days, the Pantry mode and an optional note about what you want. Moss then writes the days one by one on the Plan tab."
       }
     ],
     "features": [
@@ -192,6 +241,14 @@
       {
         "id": "meals.favourites",
         "description": "Mark a recipe as a favourite for a person, and ask Moss to place a favourite into a meal slot. Placing runs the Never serve check first and refuses a locked meal."
+      },
+      {
+        "id": "meals.lock-regenerate",
+        "description": "Lock a written meal so Regenerate keeps it. Regenerate the whole plan, one day or one meal; locked, cooked and text meals stay, and the confirmation says how many meals will be replaced. Shopping list ticks survive."
+      },
+      {
+        "id": "meals.swap-choices",
+        "description": "Swap a meal: ask for three replacement recipes, each checked for Safety first, and choose one. Moss can start and finish a swap from chat."
       }
     ]
   },
@@ -201,14 +258,22 @@
       "label": "Meal planning",
       "description": "Plan meals, manage the household, list, Pantry and cooking.",
       "defaultTier": "ask_each_time",
-      "allowedTiers": ["ask_each_time", "trusted_auto", "always_confirm"]
+      "allowedTiers": [
+        "ask_each_time",
+        "trusted_auto",
+        "always_confirm"
+      ]
     },
     {
       "id": "meal_logging",
       "label": "Meal logging",
       "description": "Log what you ate and correct or delete a logged meal.",
       "defaultTier": "ask_each_time",
-      "allowedTiers": ["ask_each_time", "trusted_auto", "always_confirm"]
+      "allowedTiers": [
+        "ask_each_time",
+        "trusted_auto",
+        "always_confirm"
+      ]
     }
   ],
   "assistantTools": [
@@ -225,7 +290,13 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["kitchenId", "unitsSystem", "defaultPantryMode", "members", "slotRules"],
+        "required": [
+          "kitchenId",
+          "unitsSystem",
+          "defaultPantryMode",
+          "members",
+          "slotRules"
+        ],
         "properties": {
           "kitchenId": {
             "type": "string"
@@ -269,6 +340,12 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
                     }
                   ]
                 },
@@ -279,15 +356,31 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
                     }
                   ]
                 },
                 "macroTargets": {
                   "type": "object",
-                  "required": ["proteinG", "carbG", "fatG"],
+                  "required": [
+                    "proteinG",
+                    "carbG",
+                    "fatG"
+                  ],
                   "properties": {
                     "proteinG": {
                       "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        },
                         {
                           "type": "integer"
                         },
@@ -303,11 +396,23 @@
                         },
                         {
                           "type": "null"
+                        },
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
                         }
                       ]
                     },
                     "fatG": {
                       "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        },
                         {
                           "type": "integer"
                         },
@@ -349,7 +454,11 @@
             "type": "array",
             "items": {
               "type": "object",
-              "required": ["slotName", "soloWeekdays", "usualTime"],
+              "required": [
+                "slotName",
+                "soloWeekdays",
+                "usualTime"
+              ],
               "properties": {
                 "slotName": {
                   "type": "string"
@@ -362,6 +471,12 @@
                 },
                 "usualTime": {
                   "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    },
                     {
                       "type": "string"
                     },
@@ -393,11 +508,18 @@
         "properties": {
           "unitsSystem": {
             "type": "string",
-            "enum": ["us", "metric"]
+            "enum": [
+              "us",
+              "metric"
+            ]
           },
           "defaultPantryMode": {
             "type": "string",
-            "enum": ["ignore", "prefer", "only"],
+            "enum": [
+              "ignore",
+              "prefer",
+              "only"
+            ],
             "description": "ignore: plan without the Pantry. prefer: use what is on hand where it fits. only: plan only from what is on hand."
           },
           "slotRules": {
@@ -406,7 +528,10 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["slotName", "soloWeekdays"],
+              "required": [
+                "slotName",
+                "soloWeekdays"
+              ],
               "properties": {
                 "slotName": {
                   "type": "string",
@@ -432,6 +557,13 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+                    },
+                    {
+                      "type": "null"
                     }
                   ],
                   "description": "Usual time as HH:MM, or null."
@@ -443,7 +575,13 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["kitchenId", "unitsSystem", "defaultPantryMode", "members", "slotRules"],
+        "required": [
+          "kitchenId",
+          "unitsSystem",
+          "defaultPantryMode",
+          "members",
+          "slotRules"
+        ],
         "properties": {
           "kitchenId": {
             "type": "string"
@@ -487,6 +625,12 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
                     }
                   ]
                 },
@@ -497,15 +641,31 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
                     }
                   ]
                 },
                 "macroTargets": {
                   "type": "object",
-                  "required": ["proteinG", "carbG", "fatG"],
+                  "required": [
+                    "proteinG",
+                    "carbG",
+                    "fatG"
+                  ],
                   "properties": {
                     "proteinG": {
                       "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        },
                         {
                           "type": "integer"
                         },
@@ -521,11 +681,23 @@
                         },
                         {
                           "type": "null"
+                        },
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
                         }
                       ]
                     },
                     "fatG": {
                       "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        },
                         {
                           "type": "integer"
                         },
@@ -567,7 +739,11 @@
             "type": "array",
             "items": {
               "type": "object",
-              "required": ["slotName", "soloWeekdays", "usualTime"],
+              "required": [
+                "slotName",
+                "soloWeekdays",
+                "usualTime"
+              ],
               "properties": {
                 "slotName": {
                   "type": "string"
@@ -580,6 +756,12 @@
                 },
                 "usualTime": {
                   "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    },
                     {
                       "type": "string"
                     },
@@ -626,12 +808,28 @@
               },
               {
                 "type": "null"
+              },
+              {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 320
+              },
+              {
+                "type": "null"
               }
             ],
             "description": "Their Moss account email, if they have one."
           },
           "calorieTarget": {
             "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 800,
+                "maximum": 6000
+              },
+              {
+                "type": "null"
+              },
               {
                 "type": "integer",
                 "minimum": 800,
@@ -652,6 +850,14 @@
               },
               {
                 "type": "null"
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 600
+              },
+              {
+                "type": "null"
               }
             ]
           },
@@ -664,11 +870,27 @@
               },
               {
                 "type": "null"
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              {
+                "type": "null"
               }
             ]
           },
           "fatTargetG": {
             "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 400
+              },
+              {
+                "type": "null"
+              },
               {
                 "type": "integer",
                 "minimum": 0,
@@ -743,6 +965,12 @@
               },
               {
                 "type": "null"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
               }
             ]
           },
@@ -753,15 +981,31 @@
               },
               {
                 "type": "null"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
               }
             ]
           },
           "macroTargets": {
             "type": "object",
-            "required": ["proteinG", "carbG", "fatG"],
+            "required": [
+              "proteinG",
+              "carbG",
+              "fatG"
+            ],
             "properties": {
               "proteinG": {
                 "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  },
                   {
                     "type": "integer"
                   },
@@ -777,11 +1021,23 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
               "fatG": {
                 "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  },
                   {
                     "type": "integer"
                   },
@@ -830,7 +1086,9 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["memberId"],
+        "required": [
+          "memberId"
+        ],
         "properties": {
           "memberId": {
             "type": "string"
@@ -839,7 +1097,9 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["removed"],
+        "required": [
+          "removed"
+        ],
         "properties": {
           "removed": {
             "type": "boolean"
@@ -861,7 +1121,11 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["startDate", "days", "idempotencyKey"],
+        "required": [
+          "startDate",
+          "days",
+          "idempotencyKey"
+        ],
         "properties": {
           "startDate": {
             "type": "string",
@@ -875,7 +1139,11 @@
           },
           "pantryMode": {
             "type": "string",
-            "enum": ["ignore", "prefer", "only"],
+            "enum": [
+              "ignore",
+              "prefer",
+              "only"
+            ],
             "description": "Leave out to use the kitchen default."
           },
           "requestText": {
@@ -916,7 +1184,8 @@
           "state",
           "pausedReason",
           "progress",
-          "days"
+          "days",
+          "replaceable"
         ],
         "properties": {
           "planId": {
@@ -941,12 +1210,21 @@
               },
               {
                 "type": "null"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
               }
             ]
           },
           "progress": {
             "type": "object",
-            "required": ["ready", "total"],
+            "required": [
+              "ready",
+              "total"
+            ],
             "properties": {
               "ready": {
                 "type": "integer"
@@ -986,11 +1264,23 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
                     }
                   ]
                 },
                 "cookTimeLimitMinutes": {
                   "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    },
                     {
                       "type": "integer"
                     },
@@ -1044,6 +1334,12 @@
                           },
                           {
                             "type": "null"
+                          },
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
                           }
                         ]
                       },
@@ -1052,6 +1348,12 @@
                       },
                       "oneOffFor": {
                         "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          },
                           {
                             "type": "string"
                           },
@@ -1067,11 +1369,23 @@
                           },
                           {
                             "type": "null"
+                          },
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
                           }
                         ]
                       },
                       "title": {
                         "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          },
                           {
                             "type": "string"
                           },
@@ -1087,11 +1401,23 @@
                           },
                           {
                             "type": "null"
+                          },
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
                           }
                         ]
                       },
                       "cookMinutes": {
                         "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          },
                           {
                             "type": "integer"
                           },
@@ -1137,11 +1463,43 @@
                                 },
                                 {
                                   "type": "null"
+                                },
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
                                 }
                               ]
                             },
                             "fit": {
                               "anyOf": [
+                                {
+                                  "type": "object",
+                                  "required": [
+                                    "targetKcal",
+                                    "estimatedKcal",
+                                    "band",
+                                    "differenceKcal"
+                                  ],
+                                  "properties": {
+                                    "targetKcal": {
+                                      "type": "integer"
+                                    },
+                                    "estimatedKcal": {
+                                      "type": "integer"
+                                    },
+                                    "band": {
+                                      "type": "string"
+                                    },
+                                    "differenceKcal": {
+                                      "type": "integer"
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "null"
+                                },
                                 {
                                   "type": "object",
                                   "required": [
@@ -1196,6 +1554,12 @@
                           },
                           {
                             "type": "null"
+                          },
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
                           }
                         ]
                       }
@@ -1206,14 +1570,22 @@
                   "type": "array",
                   "items": {
                     "type": "object",
-                    "required": ["memberId", "fit"],
+                    "required": [
+                      "memberId",
+                      "fit"
+                    ],
                     "properties": {
                       "memberId": {
                         "type": "string"
                       },
                       "fit": {
                         "type": "object",
-                        "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                        "required": [
+                          "targetKcal",
+                          "estimatedKcal",
+                          "band",
+                          "differenceKcal"
+                        ],
                         "properties": {
                           "targetKcal": {
                             "type": "integer"
@@ -1234,6 +1606,9 @@
                 }
               }
             }
+          },
+          "replaceable": {
+            "type": "integer"
           }
         }
       }
@@ -1271,7 +1646,8 @@
           "state",
           "pausedReason",
           "progress",
-          "days"
+          "days",
+          "replaceable"
         ],
         "properties": {
           "planId": {
@@ -1296,12 +1672,21 @@
               },
               {
                 "type": "null"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
               }
             ]
           },
           "progress": {
             "type": "object",
-            "required": ["ready", "total"],
+            "required": [
+              "ready",
+              "total"
+            ],
             "properties": {
               "ready": {
                 "type": "integer"
@@ -1341,11 +1726,23 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
                     }
                   ]
                 },
                 "cookTimeLimitMinutes": {
                   "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    },
                     {
                       "type": "integer"
                     },
@@ -1399,6 +1796,12 @@
                           },
                           {
                             "type": "null"
+                          },
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
                           }
                         ]
                       },
@@ -1407,6 +1810,12 @@
                       },
                       "oneOffFor": {
                         "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          },
                           {
                             "type": "string"
                           },
@@ -1422,11 +1831,23 @@
                           },
                           {
                             "type": "null"
+                          },
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
                           }
                         ]
                       },
                       "title": {
                         "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          },
                           {
                             "type": "string"
                           },
@@ -1442,11 +1863,23 @@
                           },
                           {
                             "type": "null"
+                          },
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
                           }
                         ]
                       },
                       "cookMinutes": {
                         "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          },
                           {
                             "type": "integer"
                           },
@@ -1492,11 +1925,43 @@
                                 },
                                 {
                                   "type": "null"
+                                },
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
                                 }
                               ]
                             },
                             "fit": {
                               "anyOf": [
+                                {
+                                  "type": "object",
+                                  "required": [
+                                    "targetKcal",
+                                    "estimatedKcal",
+                                    "band",
+                                    "differenceKcal"
+                                  ],
+                                  "properties": {
+                                    "targetKcal": {
+                                      "type": "integer"
+                                    },
+                                    "estimatedKcal": {
+                                      "type": "integer"
+                                    },
+                                    "band": {
+                                      "type": "string"
+                                    },
+                                    "differenceKcal": {
+                                      "type": "integer"
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "null"
+                                },
                                 {
                                   "type": "object",
                                   "required": [
@@ -1551,6 +2016,12 @@
                           },
                           {
                             "type": "null"
+                          },
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
                           }
                         ]
                       }
@@ -1561,14 +2032,22 @@
                   "type": "array",
                   "items": {
                     "type": "object",
-                    "required": ["memberId", "fit"],
+                    "required": [
+                      "memberId",
+                      "fit"
+                    ],
                     "properties": {
                       "memberId": {
                         "type": "string"
                       },
                       "fit": {
                         "type": "object",
-                        "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                        "required": [
+                          "targetKcal",
+                          "estimatedKcal",
+                          "band",
+                          "differenceKcal"
+                        ],
                         "properties": {
                           "targetKcal": {
                             "type": "integer"
@@ -1589,6 +2068,9 @@
                 }
               }
             }
+          },
+          "replaceable": {
+            "type": "integer"
           }
         }
       }
@@ -1603,7 +2085,9 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["date"],
+        "required": [
+          "date"
+        ],
         "properties": {
           "date": {
             "type": "string",
@@ -1614,10 +2098,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["plan"],
+        "required": [
+          "plan"
+        ],
         "properties": {
           "plan": {
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "required": [
               "planId",
               "startDate",
@@ -1626,7 +2115,8 @@
               "state",
               "pausedReason",
               "progress",
-              "days"
+              "days",
+              "replaceable"
             ],
             "properties": {
               "planId": {
@@ -1651,12 +2141,21 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
               "progress": {
                 "type": "object",
-                "required": ["ready", "total"],
+                "required": [
+                  "ready",
+                  "total"
+                ],
                 "properties": {
                   "ready": {
                     "type": "integer"
@@ -1696,11 +2195,23 @@
                         },
                         {
                           "type": "null"
+                        },
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
                         }
                       ]
                     },
                     "cookTimeLimitMinutes": {
                       "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        },
                         {
                           "type": "integer"
                         },
@@ -1754,6 +2265,12 @@
                               },
                               {
                                 "type": "null"
+                              },
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
                               }
                             ]
                           },
@@ -1762,6 +2279,12 @@
                           },
                           "oneOffFor": {
                             "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              },
                               {
                                 "type": "string"
                               },
@@ -1777,11 +2300,23 @@
                               },
                               {
                                 "type": "null"
+                              },
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
                               }
                             ]
                           },
                           "title": {
                             "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              },
                               {
                                 "type": "string"
                               },
@@ -1797,11 +2332,23 @@
                               },
                               {
                                 "type": "null"
+                              },
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
                               }
                             ]
                           },
                           "cookMinutes": {
                             "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              },
                               {
                                 "type": "integer"
                               },
@@ -1847,11 +2394,43 @@
                                     },
                                     {
                                       "type": "null"
+                                    },
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
                                     }
                                   ]
                                 },
                                 "fit": {
                                   "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "required": [
+                                        "targetKcal",
+                                        "estimatedKcal",
+                                        "band",
+                                        "differenceKcal"
+                                      ],
+                                      "properties": {
+                                        "targetKcal": {
+                                          "type": "integer"
+                                        },
+                                        "estimatedKcal": {
+                                          "type": "integer"
+                                        },
+                                        "band": {
+                                          "type": "string"
+                                        },
+                                        "differenceKcal": {
+                                          "type": "integer"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "type": "null"
+                                    },
                                     {
                                       "type": "object",
                                       "required": [
@@ -1906,6 +2485,12 @@
                               },
                               {
                                 "type": "null"
+                              },
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
                               }
                             ]
                           }
@@ -1916,14 +2501,22 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "required": ["memberId", "fit"],
+                        "required": [
+                          "memberId",
+                          "fit"
+                        ],
                         "properties": {
                           "memberId": {
                             "type": "string"
                           },
                           "fit": {
                             "type": "object",
-                            "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                            "required": [
+                              "targetKcal",
+                              "estimatedKcal",
+                              "band",
+                              "differenceKcal"
+                            ],
                             "properties": {
                               "targetKcal": {
                                 "type": "integer"
@@ -1944,6 +2537,9 @@
                     }
                   }
                 }
+              },
+              "replaceable": {
+                "type": "integer"
               }
             }
           }
@@ -1953,8 +2549,8 @@
     {
       "name": "meals.plan.control",
       "permissionId": "meals.plan.control",
-      "description": "Stop a plan that is being written, resume a stopped or paused plan where it left off, or retry one day that failed. A retry keeps the day's finished meals and rewrites only the rest. Name the day by dayId or date. Retrying a day on a stopped plan resumes the whole plan, so later unwritten days are written too. A retry asked for while another day is being written waits its turn.",
-      "actionLabel": "Stop, resume or retry a meal plan",
+      "description": "Stop a plan that is being written, resume a stopped or paused plan where it left off, retry one day that failed, or regenerate. A retry keeps the day's finished meals and rewrites only the rest. Name the day by dayId or date. Retrying a day on a stopped plan resumes the whole plan, so later unwritten days are written too. A retry asked for while another day is being written waits its turn. Regenerate replaces written and failed recipe meals with new ones and never touches locked meals, cooked meals or text meals. It covers the whole plan, one day (dayId or date) or one meal (mealId). The plan's replaceable count says how many meals a whole-plan regenerate would replace. Shopping list ticks survive, and only lines whose amount changed show a new amount.",
+      "actionLabel": "Stop, resume, retry or regenerate a meal plan",
       "risk": "write",
       "actionFamilyId": "meal_planning",
       "executionPolicy": "auto",
@@ -1963,7 +2559,10 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["planId", "action"],
+        "required": [
+          "planId",
+          "action"
+        ],
         "properties": {
           "planId": {
             "type": "string",
@@ -1972,7 +2571,12 @@
           },
           "action": {
             "type": "string",
-            "enum": ["stop", "resume", "retry_day"]
+            "enum": [
+              "stop",
+              "resume",
+              "retry_day",
+              "regenerate"
+            ]
           },
           "dayId": {
             "type": "string",
@@ -1982,6 +2586,11 @@
           "date": {
             "type": "string",
             "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "mealId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
           }
         }
       },
@@ -1995,7 +2604,8 @@
           "state",
           "pausedReason",
           "progress",
-          "days"
+          "days",
+          "replaceable"
         ],
         "properties": {
           "planId": {
@@ -2020,12 +2630,21 @@
               },
               {
                 "type": "null"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
               }
             ]
           },
           "progress": {
             "type": "object",
-            "required": ["ready", "total"],
+            "required": [
+              "ready",
+              "total"
+            ],
             "properties": {
               "ready": {
                 "type": "integer"
@@ -2065,11 +2684,23 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
                     }
                   ]
                 },
                 "cookTimeLimitMinutes": {
                   "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    },
                     {
                       "type": "integer"
                     },
@@ -2123,6 +2754,12 @@
                           },
                           {
                             "type": "null"
+                          },
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
                           }
                         ]
                       },
@@ -2131,6 +2768,12 @@
                       },
                       "oneOffFor": {
                         "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          },
                           {
                             "type": "string"
                           },
@@ -2146,11 +2789,23 @@
                           },
                           {
                             "type": "null"
+                          },
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
                           }
                         ]
                       },
                       "title": {
                         "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          },
                           {
                             "type": "string"
                           },
@@ -2166,11 +2821,23 @@
                           },
                           {
                             "type": "null"
+                          },
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
                           }
                         ]
                       },
                       "cookMinutes": {
                         "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          },
                           {
                             "type": "integer"
                           },
@@ -2216,11 +2883,43 @@
                                 },
                                 {
                                   "type": "null"
+                                },
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
                                 }
                               ]
                             },
                             "fit": {
                               "anyOf": [
+                                {
+                                  "type": "object",
+                                  "required": [
+                                    "targetKcal",
+                                    "estimatedKcal",
+                                    "band",
+                                    "differenceKcal"
+                                  ],
+                                  "properties": {
+                                    "targetKcal": {
+                                      "type": "integer"
+                                    },
+                                    "estimatedKcal": {
+                                      "type": "integer"
+                                    },
+                                    "band": {
+                                      "type": "string"
+                                    },
+                                    "differenceKcal": {
+                                      "type": "integer"
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "null"
+                                },
                                 {
                                   "type": "object",
                                   "required": [
@@ -2275,6 +2974,12 @@
                           },
                           {
                             "type": "null"
+                          },
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
                           }
                         ]
                       }
@@ -2285,14 +2990,22 @@
                   "type": "array",
                   "items": {
                     "type": "object",
-                    "required": ["memberId", "fit"],
+                    "required": [
+                      "memberId",
+                      "fit"
+                    ],
                     "properties": {
                       "memberId": {
                         "type": "string"
                       },
                       "fit": {
                         "type": "object",
-                        "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                        "required": [
+                          "targetKcal",
+                          "estimatedKcal",
+                          "band",
+                          "differenceKcal"
+                        ],
                         "properties": {
                           "targetKcal": {
                             "type": "integer"
@@ -2313,6 +3026,9 @@
                 }
               }
             }
+          },
+          "replaceable": {
+            "type": "integer"
           }
         }
       }
@@ -2328,7 +3044,9 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["planId"],
+        "required": [
+          "planId"
+        ],
         "properties": {
           "planId": {
             "type": "string",
@@ -2339,7 +3057,9 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["deleted"],
+        "required": [
+          "deleted"
+        ],
         "properties": {
           "deleted": {
             "type": "boolean"
@@ -2358,7 +3078,9 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["mealId"],
+        "required": [
+          "mealId"
+        ],
         "properties": {
           "mealId": {
             "type": "string",
@@ -2422,6 +3144,12 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
@@ -2430,6 +3158,12 @@
               },
               "oneOffFor": {
                 "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  },
                   {
                     "type": "string"
                   },
@@ -2445,11 +3179,23 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
               "title": {
                 "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  },
                   {
                     "type": "string"
                   },
@@ -2465,11 +3211,23 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
               "cookMinutes": {
                 "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  },
                   {
                     "type": "integer"
                   },
@@ -2515,6 +3273,12 @@
                         },
                         {
                           "type": "null"
+                        },
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
                         }
                       ]
                     },
@@ -2522,7 +3286,38 @@
                       "anyOf": [
                         {
                           "type": "object",
-                          "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                          "required": [
+                            "targetKcal",
+                            "estimatedKcal",
+                            "band",
+                            "differenceKcal"
+                          ],
+                          "properties": {
+                            "targetKcal": {
+                              "type": "integer"
+                            },
+                            "estimatedKcal": {
+                              "type": "integer"
+                            },
+                            "band": {
+                              "type": "string"
+                            },
+                            "differenceKcal": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "targetKcal",
+                            "estimatedKcal",
+                            "band",
+                            "differenceKcal"
+                          ],
                           "properties": {
                             "targetKcal": {
                               "type": "integer"
@@ -2569,6 +3364,12 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               }
@@ -2576,6 +3377,12 @@
           },
           "recipeId": {
             "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              },
               {
                 "type": "string"
               },
@@ -2591,11 +3398,23 @@
               },
               {
                 "type": "null"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
               }
             ]
           },
           "servingsOverride": {
             "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              },
               {
                 "type": "number"
               },
@@ -2638,6 +3457,12 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
                     }
                   ]
                 },
@@ -2648,11 +3473,23 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
                     }
                   ]
                 },
                 "display": {
                   "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    },
                     {
                       "type": "string"
                     },
@@ -2677,7 +3514,13 @@
             "type": "array",
             "items": {
               "type": "object",
-              "required": ["choiceId", "status", "title", "cookMinutes", "eaters"],
+              "required": [
+                "choiceId",
+                "status",
+                "title",
+                "cookMinutes",
+                "eaters"
+              ],
               "properties": {
                 "choiceId": {
                   "type": "string"
@@ -2692,11 +3535,23 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
                     }
                   ]
                 },
                 "cookMinutes": {
                   "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    },
                     {
                       "type": "integer"
                     },
@@ -2739,6 +3594,12 @@
                           },
                           {
                             "type": "null"
+                          },
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
                           }
                         ]
                       },
@@ -2746,7 +3607,38 @@
                         "anyOf": [
                           {
                             "type": "object",
-                            "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                            "required": [
+                              "targetKcal",
+                              "estimatedKcal",
+                              "band",
+                              "differenceKcal"
+                            ],
+                            "properties": {
+                              "targetKcal": {
+                                "type": "integer"
+                              },
+                              "estimatedKcal": {
+                                "type": "integer"
+                              },
+                              "band": {
+                                "type": "string"
+                              },
+                              "differenceKcal": {
+                                "type": "integer"
+                              }
+                            }
+                          },
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "object",
+                            "required": [
+                              "targetKcal",
+                              "estimatedKcal",
+                              "band",
+                              "differenceKcal"
+                            ],
                             "properties": {
                               "targetKcal": {
                                 "type": "integer"
@@ -2802,7 +3694,9 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["mealId"],
+        "required": [
+          "mealId"
+        ],
         "properties": {
           "mealId": {
             "type": "string",
@@ -2813,7 +3707,12 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["meal", "pantryChanges", "undo", "logOffer"],
+        "required": [
+          "meal",
+          "pantryChanges",
+          "undo",
+          "logOffer"
+        ],
         "properties": {
           "meal": {
             "type": "object",
@@ -2958,7 +3857,12 @@
                       "anyOf": [
                         {
                           "type": "object",
-                          "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                          "required": [
+                            "targetKcal",
+                            "estimatedKcal",
+                            "band",
+                            "differenceKcal"
+                          ],
                           "properties": {
                             "targetKcal": {
                               "type": "integer"
@@ -3014,7 +3918,12 @@
             "type": "array",
             "items": {
               "type": "object",
-              "required": ["name", "before", "after", "unit"],
+              "required": [
+                "name",
+                "before",
+                "after",
+                "unit"
+              ],
               "properties": {
                 "name": {
                   "type": "string"
@@ -3054,7 +3963,11 @@
           },
           "undo": {
             "type": "object",
-            "required": ["actionId", "kind", "count"],
+            "required": [
+              "actionId",
+              "kind",
+              "count"
+            ],
             "properties": {
               "actionId": {
                 "type": "string"
@@ -3071,7 +3984,10 @@
             "anyOf": [
               {
                 "type": "object",
-                "required": ["description", "servingNote"],
+                "required": [
+                  "description",
+                  "servingNote"
+                ],
                 "properties": {
                   "description": {
                     "type": "string"
@@ -3102,7 +4018,10 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["mealId", "servings"],
+        "required": [
+          "mealId",
+          "servings"
+        ],
         "properties": {
           "mealId": {
             "type": "string",
@@ -3278,7 +4197,12 @@
                       "anyOf": [
                         {
                           "type": "object",
-                          "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                          "required": [
+                            "targetKcal",
+                            "estimatedKcal",
+                            "band",
+                            "differenceKcal"
+                          ],
                           "properties": {
                             "targetKcal": {
                               "type": "integer"
@@ -3433,7 +4357,13 @@
             "type": "array",
             "items": {
               "type": "object",
-              "required": ["choiceId", "status", "title", "cookMinutes", "eaters"],
+              "required": [
+                "choiceId",
+                "status",
+                "title",
+                "cookMinutes",
+                "eaters"
+              ],
               "properties": {
                 "choiceId": {
                   "type": "string"
@@ -3502,7 +4432,12 @@
                         "anyOf": [
                           {
                             "type": "object",
-                            "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                            "required": [
+                              "targetKcal",
+                              "estimatedKcal",
+                              "band",
+                              "differenceKcal"
+                            ],
                             "properties": {
                               "targetKcal": {
                                 "type": "integer"
@@ -3558,7 +4493,10 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["mealId", "ratings"],
+        "required": [
+          "mealId",
+          "ratings"
+        ],
         "properties": {
           "mealId": {
             "type": "string",
@@ -3572,7 +4510,10 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["memberId", "stars"],
+              "required": [
+                "memberId",
+                "stars"
+              ],
               "properties": {
                 "memberId": {
                   "type": "string",
@@ -3751,7 +4692,12 @@
                       "anyOf": [
                         {
                           "type": "object",
-                          "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                          "required": [
+                            "targetKcal",
+                            "estimatedKcal",
+                            "band",
+                            "differenceKcal"
+                          ],
                           "properties": {
                             "targetKcal": {
                               "type": "integer"
@@ -3906,7 +4852,13 @@
             "type": "array",
             "items": {
               "type": "object",
-              "required": ["choiceId", "status", "title", "cookMinutes", "eaters"],
+              "required": [
+                "choiceId",
+                "status",
+                "title",
+                "cookMinutes",
+                "eaters"
+              ],
               "properties": {
                 "choiceId": {
                   "type": "string"
@@ -3975,7 +4927,12 @@
                         "anyOf": [
                           {
                             "type": "object",
-                            "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                            "required": [
+                              "targetKcal",
+                              "estimatedKcal",
+                              "band",
+                              "differenceKcal"
+                            ],
                             "properties": {
                               "targetKcal": {
                                 "type": "integer"
@@ -4031,11 +4988,19 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["action", "memberId", "recipeId"],
+        "required": [
+          "action",
+          "memberId",
+          "recipeId"
+        ],
         "properties": {
           "action": {
             "type": "string",
-            "enum": ["add", "remove", "place"]
+            "enum": [
+              "add",
+              "remove",
+              "place"
+            ]
           },
           "memberId": {
             "type": "string",
@@ -4056,11 +5021,20 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["kitchen", "meal"],
+        "required": [
+          "kitchen",
+          "meal"
+        ],
         "properties": {
           "kitchen": {
             "type": "object",
-            "required": ["kitchenId", "unitsSystem", "defaultPantryMode", "members", "slotRules"],
+            "required": [
+              "kitchenId",
+              "unitsSystem",
+              "defaultPantryMode",
+              "members",
+              "slotRules"
+            ],
             "properties": {
               "kitchenId": {
                 "type": "string"
@@ -4119,7 +5093,11 @@
                     },
                     "macroTargets": {
                       "type": "object",
-                      "required": ["proteinG", "carbG", "fatG"],
+                      "required": [
+                        "proteinG",
+                        "carbG",
+                        "fatG"
+                      ],
                       "properties": {
                         "proteinG": {
                           "anyOf": [
@@ -4184,7 +5162,11 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": ["slotName", "soloWeekdays", "usualTime"],
+                  "required": [
+                    "slotName",
+                    "soloWeekdays",
+                    "usualTime"
+                  ],
                   "properties": {
                     "slotName": {
                       "type": "string"
@@ -4355,7 +5337,12 @@
                           "anyOf": [
                             {
                               "type": "object",
-                              "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                              "required": [
+                                "targetKcal",
+                                "estimatedKcal",
+                                "band",
+                                "differenceKcal"
+                              ],
                               "properties": {
                                 "targetKcal": {
                                   "type": "integer"
@@ -4430,13 +5417,24 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["listId", "planId", "pantryMode", "lines"],
+        "required": [
+          "listId",
+          "planId",
+          "pantryMode",
+          "lines"
+        ],
         "properties": {
           "listId": {
             "type": "string"
           },
           "planId": {
             "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              },
               {
                 "type": "string"
               },
@@ -4481,11 +5479,23 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
                     }
                   ]
                 },
                 "unit": {
                   "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    },
                     {
                       "type": "string"
                     },
@@ -4498,7 +5508,28 @@
                   "anyOf": [
                     {
                       "type": "object",
-                      "required": ["quantity", "unit"],
+                      "required": [
+                        "quantity",
+                        "unit"
+                      ],
+                      "properties": {
+                        "quantity": {
+                          "type": "number"
+                        },
+                        "unit": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "quantity",
+                        "unit"
+                      ],
                       "properties": {
                         "quantity": {
                           "type": "number"
@@ -4535,7 +5566,10 @@
                   "type": "array",
                   "items": {
                     "type": "object",
-                    "required": ["mealId", "label"],
+                    "required": [
+                      "mealId",
+                      "label"
+                    ],
                     "properties": {
                       "mealId": {
                         "type": "string"
@@ -4553,11 +5587,23 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
                     }
                   ]
                 },
                 "boughtAt": {
                   "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    },
                     {
                       "type": "string"
                     },
@@ -4585,7 +5631,9 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["planId"],
+        "required": [
+          "planId"
+        ],
         "properties": {
           "planId": {
             "type": "string",
@@ -4596,13 +5644,24 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["listId", "planId", "pantryMode", "lines"],
+        "required": [
+          "listId",
+          "planId",
+          "pantryMode",
+          "lines"
+        ],
         "properties": {
           "listId": {
             "type": "string"
           },
           "planId": {
             "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              },
               {
                 "type": "string"
               },
@@ -4647,11 +5706,23 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
                     }
                   ]
                 },
                 "unit": {
                   "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    },
                     {
                       "type": "string"
                     },
@@ -4664,7 +5735,28 @@
                   "anyOf": [
                     {
                       "type": "object",
-                      "required": ["quantity", "unit"],
+                      "required": [
+                        "quantity",
+                        "unit"
+                      ],
+                      "properties": {
+                        "quantity": {
+                          "type": "number"
+                        },
+                        "unit": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "quantity",
+                        "unit"
+                      ],
                       "properties": {
                         "quantity": {
                           "type": "number"
@@ -4701,7 +5793,10 @@
                   "type": "array",
                   "items": {
                     "type": "object",
-                    "required": ["mealId", "label"],
+                    "required": [
+                      "mealId",
+                      "label"
+                    ],
                     "properties": {
                       "mealId": {
                         "type": "string"
@@ -4719,11 +5814,23 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
                     }
                   ]
                 },
                 "boughtAt": {
                   "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    },
                     {
                       "type": "string"
                     },
@@ -4751,11 +5858,19 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["action"],
+        "required": [
+          "action"
+        ],
         "properties": {
           "action": {
             "type": "string",
-            "enum": ["add", "update", "remove", "tick", "untick"]
+            "enum": [
+              "add",
+              "update",
+              "remove",
+              "tick",
+              "untick"
+            ]
           },
           "lineId": {
             "type": "string",
@@ -4785,11 +5900,26 @@
               },
               {
                 "type": "null"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
               }
             ]
           },
           "unit": {
             "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 24
+              },
+              {
+                "type": "null"
+              },
               {
                 "type": "string",
                 "minLength": 1,
@@ -4819,17 +5949,31 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["list", "undo"],
+        "required": [
+          "list",
+          "undo"
+        ],
         "properties": {
           "list": {
             "type": "object",
-            "required": ["listId", "planId", "pantryMode", "lines"],
+            "required": [
+              "listId",
+              "planId",
+              "pantryMode",
+              "lines"
+            ],
             "properties": {
               "listId": {
                 "type": "string"
               },
               "planId": {
                 "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  },
                   {
                     "type": "string"
                   },
@@ -4874,11 +6018,23 @@
                         },
                         {
                           "type": "null"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
                         }
                       ]
                     },
                     "unit": {
                       "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        },
                         {
                           "type": "string"
                         },
@@ -4891,7 +6047,28 @@
                       "anyOf": [
                         {
                           "type": "object",
-                          "required": ["quantity", "unit"],
+                          "required": [
+                            "quantity",
+                            "unit"
+                          ],
+                          "properties": {
+                            "quantity": {
+                              "type": "number"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "quantity",
+                            "unit"
+                          ],
                           "properties": {
                             "quantity": {
                               "type": "number"
@@ -4928,7 +6105,10 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "required": ["mealId", "label"],
+                        "required": [
+                          "mealId",
+                          "label"
+                        ],
                         "properties": {
                           "mealId": {
                             "type": "string"
@@ -4946,11 +6126,23 @@
                         },
                         {
                           "type": "null"
+                        },
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
                         }
                       ]
                     },
                     "boughtAt": {
                       "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        },
                         {
                           "type": "string"
                         },
@@ -4968,7 +6160,33 @@
             "anyOf": [
               {
                 "type": "object",
-                "required": ["actionId", "kind", "count"],
+                "required": [
+                  "actionId",
+                  "kind",
+                  "count"
+                ],
+                "properties": {
+                  "actionId": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "count": {
+                    "type": "number"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "actionId",
+                  "kind",
+                  "count"
+                ],
                 "properties": {
                   "actionId": {
                     "type": "string"
@@ -5011,7 +6229,9 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["lineId"],
+              "required": [
+                "lineId"
+              ],
               "properties": {
                 "lineId": {
                   "type": "string",
@@ -5020,6 +6240,13 @@
                 },
                 "quantity": {
                   "anyOf": [
+                    {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    {
+                      "type": "null"
+                    },
                     {
                       "type": "number",
                       "exclusiveMinimum": 0
@@ -5038,6 +6265,14 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 24
+                    },
+                    {
+                      "type": "null"
                     }
                   ]
                 }
@@ -5048,17 +6283,32 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["list", "pantryAdded", "undo"],
+        "required": [
+          "list",
+          "pantryAdded",
+          "undo"
+        ],
         "properties": {
           "list": {
             "type": "object",
-            "required": ["listId", "planId", "pantryMode", "lines"],
+            "required": [
+              "listId",
+              "planId",
+              "pantryMode",
+              "lines"
+            ],
             "properties": {
               "listId": {
                 "type": "string"
               },
               "planId": {
                 "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  },
                   {
                     "type": "string"
                   },
@@ -5103,11 +6353,23 @@
                         },
                         {
                           "type": "null"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
                         }
                       ]
                     },
                     "unit": {
                       "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        },
                         {
                           "type": "string"
                         },
@@ -5120,7 +6382,28 @@
                       "anyOf": [
                         {
                           "type": "object",
-                          "required": ["quantity", "unit"],
+                          "required": [
+                            "quantity",
+                            "unit"
+                          ],
+                          "properties": {
+                            "quantity": {
+                              "type": "number"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "quantity",
+                            "unit"
+                          ],
                           "properties": {
                             "quantity": {
                               "type": "number"
@@ -5157,7 +6440,10 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "required": ["mealId", "label"],
+                        "required": [
+                          "mealId",
+                          "label"
+                        ],
                         "properties": {
                           "mealId": {
                             "type": "string"
@@ -5175,11 +6461,23 @@
                         },
                         {
                           "type": "null"
+                        },
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
                         }
                       ]
                     },
                     "boughtAt": {
                       "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        },
                         {
                           "type": "string"
                         },
@@ -5198,7 +6496,11 @@
           },
           "undo": {
             "type": "object",
-            "required": ["actionId", "kind", "count"],
+            "required": [
+              "actionId",
+              "kind",
+              "count"
+            ],
             "properties": {
               "actionId": {
                 "type": "string"
@@ -5226,7 +6528,9 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["listId"],
+        "required": [
+          "listId"
+        ],
         "properties": {
           "listId": {
             "type": "string",
@@ -5237,7 +6541,9 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["cleared"],
+        "required": [
+          "cleared"
+        ],
         "properties": {
           "cleared": {
             "type": "boolean"
@@ -5260,13 +6566,23 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["items", "staples"],
+        "required": [
+          "items",
+          "staples"
+        ],
         "properties": {
           "items": {
             "type": "array",
             "items": {
               "type": "object",
-              "required": ["itemId", "name", "quantity", "unit", "source", "updatedAt"],
+              "required": [
+                "itemId",
+                "name",
+                "quantity",
+                "unit",
+                "source",
+                "updatedAt"
+              ],
               "properties": {
                 "itemId": {
                   "type": "string"
@@ -5281,11 +6597,23 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
                     }
                   ]
                 },
                 "unit": {
                   "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    },
                     {
                       "type": "string"
                     },
@@ -5307,7 +6635,10 @@
             "type": "array",
             "items": {
               "type": "object",
-              "required": ["stapleId", "name"],
+              "required": [
+                "stapleId",
+                "name"
+              ],
               "properties": {
                 "stapleId": {
                   "type": "string"
@@ -5334,15 +6665,24 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["action"],
+        "required": [
+          "action"
+        ],
         "properties": {
           "action": {
             "type": "string",
-            "enum": ["add", "update", "remove"]
+            "enum": [
+              "add",
+              "update",
+              "remove"
+            ]
           },
           "target": {
             "type": "string",
-            "enum": ["item", "staple"]
+            "enum": [
+              "item",
+              "staple"
+            ]
           },
           "itemId": {
             "type": "string",
@@ -5367,11 +6707,26 @@
               },
               {
                 "type": "null"
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
               }
             ]
           },
           "unit": {
             "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 24
+              },
+              {
+                "type": "null"
+              },
               {
                 "type": "string",
                 "minLength": 1,
@@ -5386,17 +6741,30 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["pantry", "undo"],
+        "required": [
+          "pantry",
+          "undo"
+        ],
         "properties": {
           "pantry": {
             "type": "object",
-            "required": ["items", "staples"],
+            "required": [
+              "items",
+              "staples"
+            ],
             "properties": {
               "items": {
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": ["itemId", "name", "quantity", "unit", "source", "updatedAt"],
+                  "required": [
+                    "itemId",
+                    "name",
+                    "quantity",
+                    "unit",
+                    "source",
+                    "updatedAt"
+                  ],
                   "properties": {
                     "itemId": {
                       "type": "string"
@@ -5411,11 +6779,23 @@
                         },
                         {
                           "type": "null"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
                         }
                       ]
                     },
                     "unit": {
                       "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        },
                         {
                           "type": "string"
                         },
@@ -5437,7 +6817,10 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": ["stapleId", "name"],
+                  "required": [
+                    "stapleId",
+                    "name"
+                  ],
                   "properties": {
                     "stapleId": {
                       "type": "string"
@@ -5454,7 +6837,33 @@
             "anyOf": [
               {
                 "type": "object",
-                "required": ["actionId", "kind", "count"],
+                "required": [
+                  "actionId",
+                  "kind",
+                  "count"
+                ],
+                "properties": {
+                  "actionId": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "count": {
+                    "type": "number"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "actionId",
+                  "kind",
+                  "count"
+                ],
                 "properties": {
                   "actionId": {
                     "type": "string"
@@ -5488,7 +6897,9 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["actionId"],
+        "required": [
+          "actionId"
+        ],
         "properties": {
           "actionId": {
             "type": "string",
@@ -5499,7 +6910,10 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["restored", "skipped"],
+        "required": [
+          "restored",
+          "skipped"
+        ],
         "properties": {
           "restored": {
             "type": "number"
@@ -5540,7 +6954,14 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["entries", "totals", "targets", "calorieFit", "truncated", "totalCount"],
+        "required": [
+          "entries",
+          "totals",
+          "targets",
+          "calorieFit",
+          "truncated",
+          "totalCount"
+        ],
         "properties": {
           "entries": {
             "type": "array",
@@ -5579,6 +7000,12 @@
                 },
                 "servingNote": {
                   "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    },
                     {
                       "type": "string"
                     },
@@ -5684,6 +7111,93 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "caloriesKcal",
+                        "proteinG",
+                        "carbohydratesG",
+                        "fatG",
+                        "fiberG",
+                        "sugarG",
+                        "sodiumMg"
+                      ],
+                      "properties": {
+                        "caloriesKcal": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "proteinG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "carbohydratesG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fatG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fiberG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sugarG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sodiumMg": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
                     }
                   ]
                 },
@@ -5691,13 +7205,23 @@
                   "type": "array",
                   "items": {
                     "type": "object",
-                    "required": ["label", "portionNote", "nutrients"],
+                    "required": [
+                      "label",
+                      "portionNote",
+                      "nutrients"
+                    ],
                     "properties": {
                       "label": {
                         "type": "string"
                       },
                       "portionNote": {
                         "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          },
                           {
                             "type": "string"
                           },
@@ -5725,11 +7249,23 @@
                               },
                               {
                                 "type": "null"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
                               }
                             ]
                           },
                           "proteinG": {
                             "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              },
                               {
                                 "type": "number"
                               },
@@ -5745,11 +7281,23 @@
                               },
                               {
                                 "type": "null"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
                               }
                             ]
                           },
                           "fatG": {
                             "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              },
                               {
                                 "type": "number"
                               },
@@ -5765,6 +7313,12 @@
                               },
                               {
                                 "type": "null"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
                               }
                             ]
                           },
@@ -5775,11 +7329,23 @@
                               },
                               {
                                 "type": "null"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
                               }
                             ]
                           },
                           "sodiumMg": {
                             "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              },
                               {
                                 "type": "number"
                               },
@@ -5800,11 +7366,23 @@
                     },
                     {
                       "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
                     }
                   ]
                 },
                 "clarificationQuestion": {
                   "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    },
                     {
                       "type": "string"
                     },
@@ -5820,7 +7398,119 @@
             "anyOf": [
               {
                 "type": "object",
-                "required": ["localDate", "nutrients", "incomplete", "entriesWithoutEstimate"],
+                "required": [
+                  "localDate",
+                  "nutrients",
+                  "incomplete",
+                  "entriesWithoutEstimate"
+                ],
+                "properties": {
+                  "localDate": {
+                    "type": "string"
+                  },
+                  "nutrients": {
+                    "type": "object",
+                    "required": [
+                      "caloriesKcal",
+                      "proteinG",
+                      "carbohydratesG",
+                      "fatG",
+                      "fiberG",
+                      "sugarG",
+                      "sodiumMg"
+                    ],
+                    "properties": {
+                      "caloriesKcal": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "proteinG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "carbohydratesG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fatG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fiberG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sugarG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sodiumMg": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "incomplete": {
+                    "type": "boolean"
+                  },
+                  "entriesWithoutEstimate": {
+                    "type": "integer"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "localDate",
+                  "nutrients",
+                  "incomplete",
+                  "entriesWithoutEstimate"
+                ],
                 "properties": {
                   "localDate": {
                     "type": "string"
@@ -5924,10 +7614,21 @@
           },
           "targets": {
             "type": "object",
-            "required": ["caloriesKcal", "proteinG", "carbG", "fatG"],
+            "required": [
+              "caloriesKcal",
+              "proteinG",
+              "carbG",
+              "fatG"
+            ],
             "properties": {
               "caloriesKcal": {
                 "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  },
                   {
                     "type": "integer"
                   },
@@ -5943,11 +7644,23 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
               "carbG": {
                 "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  },
                   {
                     "type": "integer"
                   },
@@ -5963,6 +7676,12 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               }
@@ -5972,7 +7691,38 @@
             "anyOf": [
               {
                 "type": "object",
-                "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                "required": [
+                  "targetKcal",
+                  "estimatedKcal",
+                  "band",
+                  "differenceKcal"
+                ],
+                "properties": {
+                  "targetKcal": {
+                    "type": "integer"
+                  },
+                  "estimatedKcal": {
+                    "type": "integer"
+                  },
+                  "band": {
+                    "type": "string"
+                  },
+                  "differenceKcal": {
+                    "type": "integer"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "targetKcal",
+                  "estimatedKcal",
+                  "band",
+                  "differenceKcal"
+                ],
                 "properties": {
                   "targetKcal": {
                     "type": "integer"
@@ -6012,7 +7762,10 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["fromLocalDate", "toLocalDate"],
+        "required": [
+          "fromLocalDate",
+          "toLocalDate"
+        ],
         "properties": {
           "fromLocalDate": {
             "type": "string"
@@ -6058,11 +7811,23 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
               "proteinG": {
                 "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  },
                   {
                     "type": "number"
                   },
@@ -6078,11 +7843,23 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
               "fatG": {
                 "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  },
                   {
                     "type": "number"
                   },
@@ -6098,6 +7875,12 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
@@ -6108,11 +7891,23 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
               "sodiumMg": {
                 "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  },
                   {
                     "type": "number"
                   },
@@ -6147,7 +7942,10 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["description", "idempotencyKey"],
+        "required": [
+          "description",
+          "idempotencyKey"
+        ],
         "properties": {
           "description": {
             "type": "string"
@@ -6162,12 +7960,21 @@
           },
           "mealType": {
             "type": "string",
-            "enum": ["breakfast", "lunch", "dinner", "snack"],
+            "enum": [
+              "breakfast",
+              "lunch",
+              "dinner",
+              "snack"
+            ],
             "description": "Part of the day. Use it when the person names a meal such as lunch and gives no time; Moss stamps a usual time today. consumedAt wins when both are given."
           },
           "captureKind": {
             "type": "string",
-            "enum": ["text", "photo", "voice"]
+            "enum": [
+              "text",
+              "photo",
+              "voice"
+            ]
           },
           "servingNote": {
             "type": "string"
@@ -6179,7 +7986,9 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["entry"],
+        "required": [
+          "entry"
+        ],
         "properties": {
           "entry": {
             "type": "object",
@@ -6216,6 +8025,12 @@
               },
               "servingNote": {
                 "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  },
                   {
                     "type": "string"
                   },
@@ -6321,6 +8136,93 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "caloriesKcal",
+                      "proteinG",
+                      "carbohydratesG",
+                      "fatG",
+                      "fiberG",
+                      "sugarG",
+                      "sodiumMg"
+                    ],
+                    "properties": {
+                      "caloriesKcal": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "proteinG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "carbohydratesG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fatG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fiberG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sugarG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sodiumMg": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
@@ -6328,13 +8230,23 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": ["label", "portionNote", "nutrients"],
+                  "required": [
+                    "label",
+                    "portionNote",
+                    "nutrients"
+                  ],
                   "properties": {
                     "label": {
                       "type": "string"
                     },
                     "portionNote": {
                       "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        },
                         {
                           "type": "string"
                         },
@@ -6362,11 +8274,23 @@
                             },
                             {
                               "type": "null"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
                             }
                           ]
                         },
                         "proteinG": {
                           "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            },
                             {
                               "type": "number"
                             },
@@ -6382,11 +8306,23 @@
                             },
                             {
                               "type": "null"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
                             }
                           ]
                         },
                         "fatG": {
                           "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            },
                             {
                               "type": "number"
                             },
@@ -6402,6 +8338,12 @@
                             },
                             {
                               "type": "null"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
                             }
                           ]
                         },
@@ -6412,11 +8354,23 @@
                             },
                             {
                               "type": "null"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
                             }
                           ]
                         },
                         "sodiumMg": {
                           "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            },
                             {
                               "type": "number"
                             },
@@ -6437,11 +8391,23 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
               "clarificationQuestion": {
                 "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  },
                   {
                     "type": "string"
                   },
@@ -6468,7 +8434,9 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["entryId"],
+        "required": [
+          "entryId"
+        ],
         "properties": {
           "entryId": {
             "type": "string",
@@ -6478,7 +8446,9 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["entry"],
+        "required": [
+          "entry"
+        ],
         "properties": {
           "entry": {
             "type": "object",
@@ -6515,6 +8485,12 @@
               },
               "servingNote": {
                 "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  },
                   {
                     "type": "string"
                   },
@@ -6620,6 +8596,93 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "caloriesKcal",
+                      "proteinG",
+                      "carbohydratesG",
+                      "fatG",
+                      "fiberG",
+                      "sugarG",
+                      "sodiumMg"
+                    ],
+                    "properties": {
+                      "caloriesKcal": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "proteinG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "carbohydratesG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fatG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fiberG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sugarG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sodiumMg": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
@@ -6627,13 +8690,23 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": ["label", "portionNote", "nutrients"],
+                  "required": [
+                    "label",
+                    "portionNote",
+                    "nutrients"
+                  ],
                   "properties": {
                     "label": {
                       "type": "string"
                     },
                     "portionNote": {
                       "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        },
                         {
                           "type": "string"
                         },
@@ -6661,11 +8734,23 @@
                             },
                             {
                               "type": "null"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
                             }
                           ]
                         },
                         "proteinG": {
                           "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            },
                             {
                               "type": "number"
                             },
@@ -6681,11 +8766,23 @@
                             },
                             {
                               "type": "null"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
                             }
                           ]
                         },
                         "fatG": {
                           "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            },
                             {
                               "type": "number"
                             },
@@ -6701,6 +8798,12 @@
                             },
                             {
                               "type": "null"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
                             }
                           ]
                         },
@@ -6711,11 +8814,23 @@
                             },
                             {
                               "type": "null"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
                             }
                           ]
                         },
                         "sodiumMg": {
                           "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            },
                             {
                               "type": "number"
                             },
@@ -6736,11 +8851,23 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
               "clarificationQuestion": {
                 "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  },
                   {
                     "type": "string"
                   },
@@ -6767,7 +8894,10 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["entryId", "expectedRevision"],
+        "required": [
+          "entryId",
+          "expectedRevision"
+        ],
         "properties": {
           "entryId": {
             "type": "string"
@@ -6780,7 +8910,10 @@
             "type": "string"
           },
           "servingNote": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "consumedAt": {
             "type": "string",
@@ -6794,39 +8927,66 @@
             "type": "array",
             "description": "Entry N corrects the Nth food in the meal; null leaves that food alone. The meal's totals are recalculated from the foods afterwards.",
             "items": {
-              "type": ["object", "null"],
+              "type": [
+                "object",
+                "null"
+              ],
               "additionalProperties": false,
               "properties": {
                 "label": {
                   "type": "string"
                 },
                 "portionNote": {
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "nutrients": {
                   "type": "object",
                   "additionalProperties": false,
                   "properties": {
                     "caloriesKcal": {
-                      "type": ["number", "null"]
+                      "type": [
+                        "number",
+                        "null"
+                      ]
                     },
                     "proteinG": {
-                      "type": ["number", "null"]
+                      "type": [
+                        "number",
+                        "null"
+                      ]
                     },
                     "carbohydratesG": {
-                      "type": ["number", "null"]
+                      "type": [
+                        "number",
+                        "null"
+                      ]
                     },
                     "fatG": {
-                      "type": ["number", "null"]
+                      "type": [
+                        "number",
+                        "null"
+                      ]
                     },
                     "fiberG": {
-                      "type": ["number", "null"]
+                      "type": [
+                        "number",
+                        "null"
+                      ]
                     },
                     "sugarG": {
-                      "type": ["number", "null"]
+                      "type": [
+                        "number",
+                        "null"
+                      ]
                     },
                     "sodiumMg": {
-                      "type": ["number", "null"]
+                      "type": [
+                        "number",
+                        "null"
+                      ]
                     }
                   }
                 }
@@ -6837,7 +8997,9 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["entry"],
+        "required": [
+          "entry"
+        ],
         "properties": {
           "entry": {
             "type": "object",
@@ -6874,6 +9036,12 @@
               },
               "servingNote": {
                 "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  },
                   {
                     "type": "string"
                   },
@@ -6979,6 +9147,93 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "caloriesKcal",
+                      "proteinG",
+                      "carbohydratesG",
+                      "fatG",
+                      "fiberG",
+                      "sugarG",
+                      "sodiumMg"
+                    ],
+                    "properties": {
+                      "caloriesKcal": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "proteinG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "carbohydratesG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fatG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fiberG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sugarG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sodiumMg": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
@@ -6986,13 +9241,23 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": ["label", "portionNote", "nutrients"],
+                  "required": [
+                    "label",
+                    "portionNote",
+                    "nutrients"
+                  ],
                   "properties": {
                     "label": {
                       "type": "string"
                     },
                     "portionNote": {
                       "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        },
                         {
                           "type": "string"
                         },
@@ -7020,11 +9285,23 @@
                             },
                             {
                               "type": "null"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
                             }
                           ]
                         },
                         "proteinG": {
                           "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            },
                             {
                               "type": "number"
                             },
@@ -7040,11 +9317,23 @@
                             },
                             {
                               "type": "null"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
                             }
                           ]
                         },
                         "fatG": {
                           "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            },
                             {
                               "type": "number"
                             },
@@ -7060,6 +9349,12 @@
                             },
                             {
                               "type": "null"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
                             }
                           ]
                         },
@@ -7070,11 +9365,23 @@
                             },
                             {
                               "type": "null"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
                             }
                           ]
                         },
                         "sodiumMg": {
                           "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            },
                             {
                               "type": "number"
                             },
@@ -7095,11 +9402,23 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
               "clarificationQuestion": {
                 "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  },
                   {
                     "type": "string"
                   },
@@ -7124,7 +9443,9 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["entryId"],
+        "required": [
+          "entryId"
+        ],
         "properties": {
           "entryId": {
             "type": "string"
@@ -7133,7 +9454,10 @@
       },
       "outputSchema": {
         "type": "object",
-        "required": ["entryId", "deleted"],
+        "required": [
+          "entryId",
+          "deleted"
+        ],
         "properties": {
           "entryId": {
             "type": "string"
@@ -7144,6 +9468,891 @@
         }
       },
       "selfOperationGrant": "confirm_always"
+    },
+    {
+      "name": "meals.meal.edit",
+      "permissionId": "meals.meal.edit",
+      "description": "Lock or unlock one written recipe meal. A locked meal stays through every Regenerate. Cooked meals and text meals cannot be locked.",
+      "actionLabel": "Lock or unlock a meal",
+      "risk": "write",
+      "actionFamilyId": "meal_planning",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "handler": "meal.edit",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mealId",
+          "action"
+        ],
+        "properties": {
+          "mealId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "lock",
+              "unlock"
+            ]
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "meal",
+          "recipeId",
+          "baseServings",
+          "servingsOverride",
+          "steps",
+          "ingredients",
+          "swapChoices"
+        ],
+        "properties": {
+          "meal": {
+            "type": "object",
+            "required": [
+              "mealId",
+              "slotName",
+              "kind",
+              "sharing",
+              "status",
+              "failureReason",
+              "locked",
+              "oneOffFor",
+              "favouriteOf",
+              "title",
+              "plainText",
+              "cookMinutes",
+              "servings",
+              "eaters",
+              "checkLabelCount",
+              "cookedAt"
+            ],
+            "properties": {
+              "mealId": {
+                "type": "string"
+              },
+              "slotName": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "sharing": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "failureReason": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "locked": {
+                "type": "boolean"
+              },
+              "oneOffFor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "favouriteOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "title": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "plainText": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "cookMinutes": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "servings": {
+                "type": "number"
+              },
+              "eaters": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "memberId",
+                    "name",
+                    "portion",
+                    "safety",
+                    "safetyReason",
+                    "fit"
+                  ],
+                  "properties": {
+                    "memberId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "portion": {
+                      "type": "number"
+                    },
+                    "safety": {
+                      "type": "string"
+                    },
+                    "safetyReason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "fit": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "targetKcal",
+                            "estimatedKcal",
+                            "band",
+                            "differenceKcal"
+                          ],
+                          "properties": {
+                            "targetKcal": {
+                              "type": "integer"
+                            },
+                            "estimatedKcal": {
+                              "type": "integer"
+                            },
+                            "band": {
+                              "type": "string"
+                            },
+                            "differenceKcal": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "checkLabelCount": {
+                "type": "integer"
+              },
+              "cookedAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "recipeId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "baseServings": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "servingsOverride": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "originalText",
+                "name",
+                "quantity",
+                "unit",
+                "display",
+                "section",
+                "checkLabel",
+                "missing"
+              ],
+              "properties": {
+                "originalText": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "unit": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "display": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "section": {
+                  "type": "string"
+                },
+                "checkLabel": {
+                  "type": "boolean"
+                },
+                "missing": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "swapChoices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "choiceId",
+                "status",
+                "title",
+                "cookMinutes",
+                "eaters"
+              ],
+              "properties": {
+                "choiceId": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "title": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "cookMinutes": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "eaters": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "memberId",
+                      "name",
+                      "portion",
+                      "safety",
+                      "safetyReason",
+                      "fit"
+                    ],
+                    "properties": {
+                      "memberId": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "portion": {
+                        "type": "number"
+                      },
+                      "safety": {
+                        "type": "string"
+                      },
+                      "safetyReason": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fit": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "required": [
+                              "targetKcal",
+                              "estimatedKcal",
+                              "band",
+                              "differenceKcal"
+                            ],
+                            "properties": {
+                              "targetKcal": {
+                                "type": "integer"
+                              },
+                              "estimatedKcal": {
+                                "type": "integer"
+                              },
+                              "band": {
+                                "type": "string"
+                              },
+                              "differenceKcal": {
+                                "type": "integer"
+                              }
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.meal.swap",
+      "permissionId": "meals.meal.swap",
+      "description": "Swap one written or failed recipe meal. request_choices starts three replacement recipes, each checked for Safety before it shows; read the meal to see them as they finish. choose takes a ready choiceId, replaces the meal with it and rebuilds the shopping list. A locked meal can be swapped by asking.",
+      "actionLabel": "Swap a meal",
+      "risk": "write",
+      "actionFamilyId": "meal_planning",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "handler": "meal.swap",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mealId",
+          "action"
+        ],
+        "properties": {
+          "mealId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "request_choices",
+              "choose"
+            ]
+          },
+          "choiceId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "meal",
+          "recipeId",
+          "baseServings",
+          "servingsOverride",
+          "steps",
+          "ingredients",
+          "swapChoices"
+        ],
+        "properties": {
+          "meal": {
+            "type": "object",
+            "required": [
+              "mealId",
+              "slotName",
+              "kind",
+              "sharing",
+              "status",
+              "failureReason",
+              "locked",
+              "oneOffFor",
+              "favouriteOf",
+              "title",
+              "plainText",
+              "cookMinutes",
+              "servings",
+              "eaters",
+              "checkLabelCount",
+              "cookedAt"
+            ],
+            "properties": {
+              "mealId": {
+                "type": "string"
+              },
+              "slotName": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "sharing": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "failureReason": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "locked": {
+                "type": "boolean"
+              },
+              "oneOffFor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "favouriteOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "title": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "plainText": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "cookMinutes": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "servings": {
+                "type": "number"
+              },
+              "eaters": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "memberId",
+                    "name",
+                    "portion",
+                    "safety",
+                    "safetyReason",
+                    "fit"
+                  ],
+                  "properties": {
+                    "memberId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "portion": {
+                      "type": "number"
+                    },
+                    "safety": {
+                      "type": "string"
+                    },
+                    "safetyReason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "fit": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "targetKcal",
+                            "estimatedKcal",
+                            "band",
+                            "differenceKcal"
+                          ],
+                          "properties": {
+                            "targetKcal": {
+                              "type": "integer"
+                            },
+                            "estimatedKcal": {
+                              "type": "integer"
+                            },
+                            "band": {
+                              "type": "string"
+                            },
+                            "differenceKcal": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "checkLabelCount": {
+                "type": "integer"
+              },
+              "cookedAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "recipeId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "baseServings": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "servingsOverride": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "originalText",
+                "name",
+                "quantity",
+                "unit",
+                "display",
+                "section",
+                "checkLabel",
+                "missing"
+              ],
+              "properties": {
+                "originalText": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "unit": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "display": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "section": {
+                  "type": "string"
+                },
+                "checkLabel": {
+                  "type": "boolean"
+                },
+                "missing": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "swapChoices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "choiceId",
+                "status",
+                "title",
+                "cookMinutes",
+                "eaters"
+              ],
+              "properties": {
+                "choiceId": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "title": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "cookMinutes": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "eaters": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "memberId",
+                      "name",
+                      "portion",
+                      "safety",
+                      "safetyReason",
+                      "fit"
+                    ],
+                    "properties": {
+                      "memberId": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "portion": {
+                        "type": "number"
+                      },
+                      "safety": {
+                        "type": "string"
+                      },
+                      "safetyReason": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fit": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "required": [
+                              "targetKcal",
+                              "estimatedKcal",
+                              "band",
+                              "differenceKcal"
+                            ],
+                            "properties": {
+                              "targetKcal": {
+                                "type": "integer"
+                              },
+                              "estimatedKcal": {
+                                "type": "integer"
+                              },
+                              "band": {
+                                "type": "string"
+                              },
+                              "differenceKcal": {
+                                "type": "integer"
+                              }
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }

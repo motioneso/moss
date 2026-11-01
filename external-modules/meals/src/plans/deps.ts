@@ -49,3 +49,11 @@ export const PLAN_DAY_JOB_KIND = "plan_day";
 export function planDayKey(dayId: string, generation: number): string {
   return `plan-day:${dayId}:g${generation}`;
 }
+
+export const MEAL_JOB_QUEUE = "meals.meal-job";
+export const MEAL_JOB_KIND = "meal_job";
+export type MealJobMode = "swap_choices" | "quick_swap" | "safety_recheck";
+
+export function mealJobKey(mealId: string, mode: MealJobMode, generation: number): string {
+  return `meal-job:${mealId}:${mode}:g${generation}`;
+}

@@ -111,6 +111,8 @@ export interface PlanView {
   readonly state: "active" | "stopped" | "paused";
   readonly pausedReason: "invocation" | "pending" | "hourly" | null;
   readonly progress: { readonly ready: number; readonly total: number };
+  /** How many meals a regenerate of the whole plan would replace. */
+  readonly replaceable: number;
   readonly days: readonly PlanDayView[];
 }
 export interface IngredientView {
