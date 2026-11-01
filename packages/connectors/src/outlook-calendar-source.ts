@@ -12,7 +12,7 @@ export interface OutlookCalendarObservation {
 
 export class OutlookCalendarSourceError extends Error {
   constructor(
-    readonly code: "source-changed" | "partial" | "sign-in-needed",
+    readonly code: "source-changed" | "partial" | "sign-in-needed" | "settings-not-found",
     readonly stage?: "account" | "timezone" | "calendar" | "coverage"
   ) {
     // Never include a label, address, event ID or upstream exception in an error.
