@@ -28,6 +28,13 @@ import {
   logReestimate,
   logSummarize
 } from "../log/tools.js";
+import {
+  favouritesEdit,
+  mealCooked,
+  mealRate,
+  mealServings,
+  type CookingDeps
+} from "../cooking/tools.js";
 import { pantryEdit, pantryGet } from "../pantry/tools.js";
 import type { PantryDeps } from "../pantry/tools.js";
 import { runPlanDay } from "../plans/day-job.js";
@@ -40,6 +47,7 @@ import {
   planDelete,
   planGet
 } from "../plans/tools.js";
+import { sqlCookingStore } from "../store/cooking.js";
 import { sqlLogStore } from "../store/log.js";
 import { sqlListStore } from "../store/list.js";
 import { sqlPantryStore } from "../store/pantry.js";
@@ -63,6 +71,7 @@ function listDeps(ctx: ModuleWorkerContext): ListDeps {
     lists: sqlListStore(ctx.db),
     plans: sqlPlanStore(ctx.db),
     pantry: sqlPantryStore(ctx.db),
+    cooking: sqlCookingStore(ctx.db),
     kitchen: () => kitchens.readKitchen(),
     ensureKitchen: () => kitchens.getOrCreateKitchen(),
     newId: randomUUID,
@@ -81,6 +90,8 @@ function planDeps(ctx: ModuleWorkerContext): PlanDeps {
     onPlanChange: (planId, change) => listOnPlanChange(listDeps(ctx), planId, change),
     store: sqlPlanStore(ctx.db),
     pantry: sqlPantryStore(ctx.db),
+    marks: () => sqlCookingStore(ctx.db).readMarks(),
+    vetoes: (memberIds) => sqlCookingStore(ctx.db).vetoes(memberIds),
     kitchen: () => kitchens.readKitchen(),
     ensureKitchen: () => kitchens.getOrCreateKitchen(),
     ai: ctx.ai,
@@ -88,6 +99,21 @@ function planDeps(ctx: ModuleWorkerContext): PlanDeps {
     newId: randomUUID
   };
 }
+
+function cookingDeps(ctx: ModuleWorkerContext): CookingDeps {
+  return {
+    ...planDeps(ctx),
+    pantry: sqlPantryStore(ctx.db),
+    cooking: sqlCookingStore(ctx.db),
+    now: () => new Date(),
+    onPantryChange: () => listOnPantryChange(listDeps(ctx))
+  };
+}
+
+const cooking =
+  (run: (deps: CookingDeps, input: Record<string, unknown>) => Promise<unknown>): Handler =>
+  (ctx) =>
+    run(cookingDeps(ctx), stripEnvelope(ctx.input));
 
 function pantryDeps(ctx: ModuleWorkerContext): PantryDeps {
   const kitchens = storeFrom(ctx);
@@ -151,6 +177,10 @@ export const HANDLERS: Readonly<Record<string, Handler>> = {
   "plan.control": plan(planControl),
   "plan.delete": plan(planDelete),
   "meal.get": plan(mealGet),
+  "meal.cooked": cooking(mealCooked),
+  "meal.servings": cooking(mealServings),
+  "meal.rate": cooking(mealRate),
+  "favourites.edit": cooking(favouritesEdit),
   "list.get": list(listGet),
   "list.build": list(listBuild),
   "list.edit": list(listEdit),

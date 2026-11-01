@@ -7,6 +7,7 @@ import type { ModuleJobEnqueueResult } from "@moss/module-sdk/worker";
 
 import type { MealsAi } from "../ai/port.js";
 import type { KitchenView } from "../contracts.js";
+import type { Marks, Veto } from "../store/cooking-port.js";
 import type { PantryStore } from "../store/pantry-port.js";
 import type { PlanStore } from "../store/plan-port.js";
 
@@ -28,6 +29,10 @@ export interface PlanDeps {
   readonly ensureKitchen: () => Promise<KitchenView>;
   /** The Pantry and Staples, read when a plan's mode is prefer or only. */
   readonly pantry?: PantryStore;
+  /** Ratings and favourites shown on each eater. Absent in tests that ignore them. */
+  readonly marks?: () => Promise<Marks>;
+  /** One-star ratings by these people. Their recipes stay out of new plans unless asked for. */
+  readonly vetoes?: (memberIds: readonly string[]) => Promise<readonly Veto[]>;
   readonly ai: MealsAi;
   readonly jobs: PlanJobs;
   readonly newId: () => string;

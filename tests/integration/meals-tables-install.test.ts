@@ -50,7 +50,9 @@ const ownedTables = [
   "app.meals_undo_actions",
   "app.meals_log_entries",
   "app.meals_log_estimates",
-  "app.meals_log_estimate_items"
+  "app.meals_log_estimate_items",
+  "app.meals_ratings",
+  "app.meals_favourites"
 ];
 const bare = (table: string) => table.replace(/^app\./, "");
 
@@ -137,7 +139,7 @@ afterAll(async () => {
 
 describe("meals tables (S1 #3885)", () => {
   it("installs every migration with FORCE RLS on every table, and re-runs as a no-op", async () => {
-    expect(installedCount).toBe(22);
+    expect(installedCount).toBe(24);
     const client = new Client({ connectionString: connectionStrings.bootstrap });
     await client.connect();
     try {

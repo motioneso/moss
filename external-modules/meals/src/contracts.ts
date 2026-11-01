@@ -71,6 +71,10 @@ export interface EaterView {
   readonly safety: "pending" | "pass" | "fail";
   readonly safetyReason: string | null;
   readonly fit: CalorieFit | null;
+  /** This person's stars for the meal's recipe, 1 to 5, or null when unrated. */
+  readonly rating: number | null;
+  /** True when the meal's recipe is one of this person's favourites. */
+  readonly favourite: boolean;
 }
 export interface PlannedMealView {
   readonly mealId: string;

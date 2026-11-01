@@ -18,6 +18,7 @@ import {
 import { addDays } from "../domain/skeleton.js";
 import { mealShareKcal, portionFor } from "../domain/targets.js";
 import { estimateKcalPerServing } from "../estimator/recipe-kcal.js";
+import type { Veto } from "../store/cooking-port.js";
 import type { DayRow, MealEaterRow, MealRow, PlanRow } from "../store/plan-port.js";
 import type { PlanDeps } from "./deps.js";
 import { enqueueDay } from "./tools.js";
@@ -61,6 +62,8 @@ interface DayContext {
   readonly kitchen: KitchenView;
   readonly avoidTitles: string[];
   readonly recentKeys: Set<string>;
+  /** One-star recipes for people in this plan. A request that names the recipe overrides them. */
+  readonly vetoes: readonly Veto[];
   /** Null when the plan ignores the Pantry or there is no Pantry store. */
   readonly pantry: PantryInput | null;
 }
@@ -86,9 +89,19 @@ async function writeMeal(context: DayContext, meal: MealRow): Promise<MealOutcom
   );
   const restrictionsOf = (index: number) => people[index]?.restrictions ?? [];
 
+  const eaterIds = new Set(meal.eaters.map((eater) => eater.memberId));
+  const asked = titleKey(plan.requestText ?? "");
+  const vetoed = context.vetoes.filter(
+    (veto) =>
+      eaterIds.has(veto.memberId) &&
+      !(veto.titleKey !== "" && ` ${asked} `.includes(` ${veto.titleKey} `))
+  );
+  const vetoedKeys = new Set(vetoed.map((veto) => veto.titleKey));
+  const avoidTitles = [...context.avoidTitles, ...vetoed.map((veto) => veto.title)];
+
   let attempts = 0;
   let lastVerdicts: readonly SafetyVerdict[] | null = null;
-  let lastRejection: "safety" | "pantry" = "safety";
+  let lastRejection: "safety" | "pantry" | "veto" = "safety";
   const fail = async (reason: GenerationFailure): Promise<MealOutcome> => {
     const eaters = lastVerdicts
       ? meal.eaters.map((eater, index) => verdictRow(eater, lastVerdicts![index]!))
@@ -113,7 +126,7 @@ async function writeMeal(context: DayContext, meal: MealRow): Promise<MealOutcom
         })),
         cookTimeLimitMinutes: day.cookTimeLimitMinutes,
         requestText: plan.requestText,
-        avoidTitles: context.avoidTitles,
+        avoidTitles,
         unitsSystem: kitchen.unitsSystem,
         ...(context.pantry !== null && context.pantry.mode !== "ignore"
           ? {
@@ -138,6 +151,10 @@ async function writeMeal(context: DayContext, meal: MealRow): Promise<MealOutcom
 
     const key = titleKey(draft.title);
     if (!plan.allowRepeats && isRepeat(key, context.recentKeys)) continue;
+    if (vetoedKeys.has(key)) {
+      lastRejection = "veto";
+      continue;
+    }
 
     // Cook only from on hand: a recipe that needs anything else is rejected and rewritten.
     if (
@@ -211,8 +228,8 @@ async function writeMeal(context: DayContext, meal: MealRow): Promise<MealOutcom
     });
     return saved ? { kind: "ready", title: draft.title, titleKey: key } : { kind: "lost" };
   }
-  // Running out of tries on the Pantry rule is not a Never serve problem, so it says so.
-  return fail(lastRejection === "pantry" ? "validation_failed" : "safety_cap");
+  // Running out of tries on the Pantry or one-star rules is not a Never serve problem.
+  return fail(lastRejection !== "safety" ? "validation_failed" : "safety_cap");
 }
 
 /** Writes every unfinished meal. Returns the day's failure, or the reason it stopped early. */
@@ -275,6 +292,7 @@ export async function runPlanDay(
     const recent = plan.allowRepeats
       ? []
       : await deps.store.recentTitles(plan.kitchenId, addDays(day.date, -NO_REPEAT_DAYS), day.date);
+    const vetoes = (await deps.vetoes?.(kitchen.members.map((person) => person.memberId))) ?? [];
     const pantry =
       deps.pantry !== undefined && plan.pantryMode !== "ignore"
         ? await readPantryInput(deps, plan.pantryMode)
@@ -287,7 +305,8 @@ export async function runPlanDay(
       generation,
       kitchen,
       avoidTitles: recent.map((entry) => entry.title),
-      recentKeys: new Set(recent.map((entry) => entry.titleKey))
+      recentKeys: new Set(recent.map((entry) => entry.titleKey)),
+      vetoes
     });
     if (outcome.kind === "stale") return { status: "stale" };
     if (outcome.kind === "stopped") {

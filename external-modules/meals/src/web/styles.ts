@@ -99,6 +99,10 @@ export const MODULE_STYLES = `
 .mls-ingredients, .mls-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-3); }
 .mls-ingredient { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--space-3); }
 .mls-ingredient__name { display: flex; flex-direction: column; gap: var(--space-1); overflow-wrap: anywhere; }
+.mls-cook { display: flex; flex-direction: column; gap: var(--space-4); }
+.mls-cook__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.mls-cook__who { min-width: 6rem; font-weight: 600; }
+.mls-stars { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .mls-step { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr); gap: var(--space-3); overflow-wrap: anywhere; }
 @media (max-width: 640px) {
   .mls-line { column-gap: var(--space-3); align-items: start; }
