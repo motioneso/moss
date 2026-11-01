@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "finance",
   "name": "Finance",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
@@ -140,7 +140,7 @@
       },
       {
         "id": "finance.chat-money-actions",
-        "description": "In chat, Moss can move money between categories, set a category's assigned total, make a merchant rule, and add, rename or archive categories. Each reports what it changed, before and after, and is logged. A move or change larger than the Maximum per budget move setting in Finance settings (default $100) asks for approval first; smaller ones follow the freedom setting. SQL merchant rules use captured revisions and atomic configuration/activity. Legacy rules copy without deletion; disabled canonical rows prevent old KV rules returning. Undo restores configuration and its activity mark together. Rule-plus-category queued writes remain separate. Settings offers rule search/counts and up to 20 owned history examples in a chosen month. Add/edit/disable/enable always ask through the host, preserve cancellation and require a saved-rule check after stale or uncertain results. Rules initialization has a separate worker/retry state; history is never retroactively edited."
+        "description": "In chat, Moss can move money between categories, set a category's assigned total, make a merchant rule, and add, rename or archive categories. Each reports before and after and is logged. A move or change larger than the Maximum per budget move setting in Finance settings (default $100) asks for approval first; smaller ones follow the freedom setting. A chat merchant rule saves without asking, and Moss says what it did and where to undo it. SQL merchant rules use captured revisions and atomic configuration/activity. Undo restores configuration and its activity mark together. Settings offers rule search/counts and up to 20 owned history examples in a chosen month. Add/edit/disable/enable always ask through the host, preserve cancellation and require a saved-rule check after stale or uncertain results. Rules initialization has a separate worker/retry state; history is never retroactively edited."
       },
       {
         "id": "finance.settings-freedom",
@@ -860,7 +860,7 @@
     {
       "name": "finance.rule.set",
       "permissionId": "finance.rule.set",
-      "description": "Always put one merchant in one category from now on. Replaces an earlier rule for that merchant and returns the before and after category.",
+      "description": "Always put one merchant in one category from now on. Replaces an earlier rule for that merchant and returns the before and after category plus a message. Always repeat that message to the user in your reply, in full.",
       "risk": "write",
       "inputSchema": {
         "type": "object",
@@ -2212,9 +2212,9 @@
     {
       "id": "rules",
       "label": "Make merchant rules",
-      "description": "Always put a merchant in the same category.",
-      "freedom": "new",
-      "defaultTier": "ask_each_time",
+      "description": "Always put a merchant in the same category. Moss tells you what it did.",
+      "freedom": "routine",
+      "defaultTier": "trusted_auto",
       "allowedTiers": ["ask_each_time", "trusted_auto"]
     },
     {

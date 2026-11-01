@@ -44,6 +44,24 @@ function readName(input: Record<string, unknown>): string {
   return name;
 }
 
+/** Plain-English statement of what the rule did, returned in the tool result for the chat to show. */
+function ruleSetMessage(
+  merchant: string,
+  categoryName: string,
+  previousName: string | null,
+  unchanged: boolean
+): string {
+  const name = merchant.trim();
+  const where = "You can see or undo it in Finance settings: the Merchant rules list, or Activity.";
+  if (unchanged)
+    return `Nothing changed. A rule already sends ${name} to ${categoryName}. No existing transactions were changed. ${where}`;
+  const replaced =
+    previousName === null
+      ? ""
+      : ` It replaces the earlier rule that sent ${name} to ${previousName}.`;
+  return `I made a rule: ${name} always goes to ${categoryName}. Future transactions from ${name} will be sorted into ${categoryName} automatically.${replaced} No existing transactions were changed. ${where}`;
+}
+
 /**
  * Sets the category a merchant always goes to. Replaces any earlier rule for the
  * same merchant, and the old category rides in `before`.
@@ -51,10 +69,14 @@ function readName(input: Record<string, unknown>): string {
 export const ruleSetHandler: ToolFactory = (ports) => async (input) => {
   const merchant = readString(input, "merchant", { required: true, maxBytes: 200 });
   const categoryId = readString(input, "categoryId", { required: true });
-  const live = (await loadCategories(ports)).filter((entry) => !entry.archived);
-  if (!live.some((entry) => entry.id === categoryId)) {
+  const all = await loadCategories(ports);
+  const live = all.filter((entry) => !entry.archived);
+  const target = live.find((entry) => entry.id === categoryId);
+  if (!target) {
     throw new InputError("invalid_category", "categoryId is not a live category");
   }
+  const nameOf = (id: string | null): string | null =>
+    id === null ? null : (all.find((entry) => entry.id === id)?.name ?? null);
   const payeeKey = normalizePayee(merchant);
   if (payeeKey === "") {
     throw new InputError("invalid_merchant", "merchant has no letters to match on");
@@ -73,7 +95,13 @@ export const ruleSetHandler: ToolFactory = (ports) => async (input) => {
       status: "ok",
       ruleId,
       before: { categoryId: previousCategoryId },
-      after: { categoryId }
+      after: { categoryId },
+      message: ruleSetMessage(
+        merchant,
+        target.name,
+        nameOf(previousCategoryId),
+        previousCategoryId === categoryId
+      )
     };
   }
 
@@ -103,7 +131,13 @@ export const ruleSetHandler: ToolFactory = (ports) => async (input) => {
     status: "ok",
     ruleId,
     before: { categoryId: previousCategoryId },
-    after: { categoryId }
+    after: { categoryId },
+    message: ruleSetMessage(
+      merchant,
+      target.name,
+      nameOf(previousCategoryId),
+      previousCategoryId === categoryId
+    )
   };
 };
 
