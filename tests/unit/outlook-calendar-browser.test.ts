@@ -10,12 +10,13 @@ import { collectOutlookCalendar } from "../../packages/connectors/src/outlook-ca
 
 // Invented rendered browser observations. Keep the displayed week between CDP connections,
 // just as the dedicated browser does between scheduled refreshes.
-type SettingsLayout = "direct" | "menu" | "empty-menu" | "bare";
+type SettingsLayout = "direct" | "late-direct" | "menu" | "empty-menu" | "bare";
 
 function calendarBrowser(secondary = false, shared = false, layout: SettingsLayout = "direct") {
   let menuOpen = false;
   const clicked: string[] = [];
-  const settingsVisible = () => layout === "direct" || (layout === "menu" && menuOpen);
+  const settingsVisible = () =>
+    layout === "direct" || layout === "late-direct" || (layout === "menu" && menuOpen);
   const group = document.createElement("li");
   group.innerHTML = `<button><span>${shared ? "People’s calendars" : "My calendars"}</span></button><div><button role="option" aria-selected="true"><span>Calendar</span></button><button aria-label="More options"></button></div>`;
   const selected = group.querySelector('[role="option"]')!;
@@ -32,6 +33,7 @@ function calendarBrowser(secondary = false, shared = false, layout: SettingsLayo
       or: () => control,
       waitFor: async () => {
         if (name === "Settings" && !settingsVisible()) throw new Error("timeout");
+        if (name === "Access additional features" && layout === "bare") throw new Error("timeout");
       },
       isVisible: async () =>
         name === "Settings"
@@ -128,6 +130,13 @@ describe("Outlook browser refresh navigation", () => {
     expect((await collectOutlookCalendar(binding, now)).complete).toBe(true);
     expect(browser.clicked).not.toContain("Access additional features");
     expect(browser.clicked).toContain("Settings");
+  });
+  it("waits for a Settings button that is still painting before using the menu", async () => {
+    // isVisible is false at first glance; waitFor resolves once the button appears.
+    const browser = calendarBrowser(false, false, "late-direct");
+    transport.connect.mockResolvedValue(browser);
+    expect((await collectOutlookCalendar(binding, now)).complete).toBe(true);
+    expect(browser.clicked).not.toContain("Access additional features");
   });
   it("opens Settings through the additional features menu when it is hidden there", async () => {
     const browser = calendarBrowser(false, false, "menu");

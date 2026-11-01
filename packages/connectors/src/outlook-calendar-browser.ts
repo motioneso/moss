@@ -83,13 +83,22 @@ async function dismissMenu(menu: Locator): Promise<void> {
  * keep it under the "Access additional features" menu. Only opens controls.
  */
 async function openSettings(page: Page): Promise<void> {
+  // A page still painting may not show its controls yet, so each lookup waits briefly.
+  const appears = (control: Locator) =>
+    control
+      .first()
+      .waitFor({ state: "visible", timeout: 3_000 })
+      .then(
+        () => true,
+        () => false
+      );
   const direct = page.getByRole("button", SETTINGS);
-  if (await direct.first().isVisible()) {
+  if (await appears(direct)) {
     await click(direct.first());
     return;
   }
   const more = page.getByRole("button", { name: "Access additional features", exact: true });
-  if (!(await more.first().isVisible())) throw new OutlookCalendarSourceError("settings-not-found");
+  if (!(await appears(more))) throw new OutlookCalendarSourceError("settings-not-found");
   await click(more.first());
   const menu = page.getByRole("menu");
   const item = menu.getByRole("menuitem", SETTINGS).or(menu.getByRole("button", SETTINGS));
