@@ -120,7 +120,7 @@ const review = (ids: string[]) =>
 const activityCount = () =>
   owner(
     async (s) =>
-      (await s.listActivity("2026-10-01", "2026-11-01", 100)).filter(
+      (await s.listActivity("2026-10-01", "2100-01-01", 100)).filter(
         (a) => a.kind === "transaction.confirm"
       ).length
   );
