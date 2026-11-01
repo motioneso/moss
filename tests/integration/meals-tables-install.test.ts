@@ -14,6 +14,8 @@ import {
 import { classifyModuleStatement } from "../../packages/db/src/module-statement-classify.js";
 import type { PlanStore } from "../../external-modules/meals/src/store/plan-port.js";
 import type { ListStore } from "../../external-modules/meals/src/store/list-port.js";
+import type { LogStore } from "../../external-modules/meals/src/store/log-port.js";
+import { sqlLogStore } from "../../external-modules/meals/src/store/log.js";
 import { sqlListStore } from "../../external-modules/meals/src/store/list.js";
 import { sqlPlanStore } from "../../external-modules/meals/src/store/plans.js";
 import { sqlStore, type MealsStore } from "../../external-modules/meals/src/store/sql.js";
@@ -45,7 +47,10 @@ const ownedTables = [
   "app.meals_shopping_list_items",
   "app.meals_pantry_items",
   "app.meals_staples",
-  "app.meals_undo_actions"
+  "app.meals_undo_actions",
+  "app.meals_log_entries",
+  "app.meals_log_estimates",
+  "app.meals_log_estimate_items"
 ];
 const bare = (table: string) => table.replace(/^app\./, "");
 
@@ -131,8 +136,8 @@ afterAll(async () => {
 });
 
 describe("meals tables (S1 #3885)", () => {
-  it("installs seventeen migrations with FORCE RLS on every table, and re-runs as a no-op", async () => {
-    expect(installedCount).toBe(18);
+  it("installs every migration with FORCE RLS on every table, and re-runs as a no-op", async () => {
+    expect(installedCount).toBe(22);
     const client = new Client({ connectionString: connectionStrings.bootstrap });
     await client.connect();
     try {
@@ -630,6 +635,120 @@ describe("shopping list (S4 #3888)", () => {
     await asListActor(ids.userA, async (lists) => {
       const mine = await lists.readList();
       expect(mine.lines.find((line) => line.lineId === milkId)?.name).toBe("milk");
+    });
+  });
+});
+
+/** Runs `fn` as `asActor` does, with the food log store. */
+function asLogActor<T>(actorUserId: string, fn: (log: LogStore, client: pg.Client) => Promise<T>) {
+  return asActor(actorUserId, (_kitchens, client) => fn(sqlLogStore(client), client));
+}
+
+describe("meal log (S6 #3890)", () => {
+  const nutrients = (caloriesKcal: number | null, proteinG: number | null) => ({
+    caloriesKcal,
+    proteinG,
+    carbohydratesG: null,
+    fatG: null,
+    fiberG: null,
+    sugarG: null,
+    sodiumMg: null
+  });
+
+  it("keeps two owners apart through create, estimate, correct and delete", async () => {
+    const entryId = uuid(9100);
+    const created = await asLogActor(ids.userA, (log) =>
+      log.createEntry({
+        entryId,
+        consumedAt: new Date("2026-10-30T12:30:00Z"),
+        localDate: "2026-10-30",
+        timezoneOffset: 0,
+        description: "two eggs on toast",
+        servingNote: null,
+        captureKind: "text",
+        idempotencyKey: "s6-key-1"
+      })
+    );
+    expect(created).toMatchObject({ created: true });
+    expect(created.entry).toMatchObject({ estimateState: "pending", estimateRevision: 1 });
+
+    const again = await asLogActor(ids.userA, (log) =>
+      log.createEntry({
+        entryId: uuid(9101),
+        consumedAt: new Date("2026-10-30T12:30:00Z"),
+        localDate: "2026-10-30",
+        timezoneOffset: 0,
+        description: "two eggs on toast",
+        servingNote: null,
+        captureKind: "text",
+        idempotencyKey: "s6-key-1"
+      })
+    );
+    expect(again.created).toBe(false);
+    expect(again.entry.entryId).toBe(entryId);
+
+    const estimated = await asLogActor(ids.userA, (log) =>
+      log.recordEstimate(entryId, 1, {
+        state: "estimated",
+        items: [{ label: "eggs", portionNote: "2", nutrients: nutrients(180, 12) }],
+        nutrients: nutrients(180, 12),
+        missingDetails: null,
+        clarificationQuestion: null
+      })
+    );
+    expect(estimated).toMatchObject({ estimateState: "estimated", estimateRevision: 2 });
+
+    // A stale revision applies nothing.
+    expect(
+      await asLogActor(ids.userA, (log) => log.correctEntry(entryId, 1, { description: "stale" }))
+    ).toBeNull();
+
+    const corrected = await asLogActor(ids.userA, (log) =>
+      log.correctEntry(entryId, 2, { items: [{ nutrients: { caloriesKcal: 200 } }] })
+    );
+    expect(corrected?.estimateRevision).toBe(3);
+    expect(corrected?.items[0]?.nutrients).toMatchObject({ caloriesKcal: 200, proteinG: 12 });
+
+    await asLogActor(ids.userB, async (log, client) => {
+      expect(await log.getEntry(entryId)).toBeNull();
+      expect(await log.listForLocalDate("2026-10-30")).toEqual([]);
+      expect(
+        await log.recordEstimate(entryId, 3, {
+          state: "estimated",
+          items: [],
+          nutrients: null,
+          missingDetails: null,
+          clarificationQuestion: null
+        })
+      ).toBeNull();
+      expect(await log.correctEntry(entryId, 3, { description: "mine now" })).toBeNull();
+      expect(await log.deleteEntry(entryId)).toBe(false);
+      for (const table of [
+        "meals_log_entries",
+        "meals_log_estimates",
+        "meals_log_estimate_items"
+      ]) {
+        const gone = await client.query(`DELETE FROM app.${table} WHERE owner_user_id = $1`, [
+          ids.userA
+        ]);
+        expect(gone.rowCount).toBe(0);
+        const upd = await client.query(
+          `UPDATE app.${table} SET owner_user_id = owner_user_id WHERE owner_user_id = $1`,
+          [ids.userA]
+        );
+        expect(upd.rowCount).toBe(0);
+      }
+    });
+
+    const mine = await asLogActor(ids.userA, (log) => log.getEntry(entryId));
+    expect(mine).toMatchObject({ description: "two eggs on toast", estimateRevision: 3 });
+
+    expect(await asLogActor(ids.userA, (log) => log.deleteEntry(entryId))).toBe(true);
+    await asLogActor(ids.userA, async (_log, client) => {
+      for (const table of ["meals_log_estimates", "meals_log_estimate_items"]) {
+        const left = await client.query(`SELECT 1 FROM app.${table}`);
+        expect(left.rowCount).toBe(0);
+      }
     });
   });
 });

@@ -11,7 +11,10 @@ export type MealsWriteToolName =
   | "meals.list.edit"
   | "meals.list.bought"
   | "meals.pantry.edit"
-  | "meals.pantry.edit"
+  | "meals.log.add"
+  | "meals.log.correct"
+  | "meals.log.delete"
+  | "meals.log.reestimate"
   | "meals.undo";
 
 export type MealsWriteOutcome =

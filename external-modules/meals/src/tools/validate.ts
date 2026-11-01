@@ -250,3 +250,17 @@ export function readTextList(
   }
   return out;
 }
+
+/** A non-negative finite number, or null to clear it. Undefined when the key is absent. */
+export function readNutrientValue(
+  input: Record<string, unknown>,
+  key: string
+): number | null | undefined {
+  const value = input[key];
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new InputError(`${key} must be a non-negative finite number or null`);
+  }
+  return value;
+}

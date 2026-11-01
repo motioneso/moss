@@ -207,3 +207,71 @@ export interface CookedResult {
   readonly undo: UndoToken;
   readonly logOffer: { readonly description: string; readonly servingNote: string } | null;
 }
+
+export type CaptureKind = "text" | "photo" | "voice";
+export type EstimateState = "pending" | "needs_details" | "estimated" | "failed";
+
+/** Every field is nullable. Null means unknown, never zero. */
+export interface NutrientsView {
+  readonly caloriesKcal: number | null;
+  readonly proteinG: number | null;
+  readonly carbohydratesG: number | null;
+  readonly fatG: number | null;
+  readonly fiberG: number | null;
+  readonly sugarG: number | null;
+  readonly sodiumMg: number | null;
+}
+export interface LogItemView {
+  readonly label: string;
+  readonly portionNote: string | null;
+  readonly nutrients: NutrientsView;
+}
+export interface LogEntryView {
+  readonly entryId: string;
+  readonly consumedAt: string;
+  readonly localDate: string;
+  readonly timezoneOffset: number;
+  readonly description: string;
+  readonly servingNote: string | null;
+  readonly captureKind: CaptureKind;
+  readonly estimateState: EstimateState;
+  readonly estimateRevision: number;
+  readonly nutrients: NutrientsView | null;
+  readonly items: readonly LogItemView[];
+  readonly missingDetails: string | null;
+  readonly clarificationQuestion: string | null;
+}
+export interface LogTotalsView {
+  readonly localDate: string;
+  readonly nutrients: NutrientsView;
+  readonly incomplete: boolean;
+  readonly entriesWithoutEstimate: number;
+}
+/** The self member's daily targets. Null means no target set. */
+export interface LogTargetsView {
+  readonly caloriesKcal: number | null;
+  readonly proteinG: number | null;
+  readonly carbG: number | null;
+  readonly fatG: number | null;
+}
+export interface LogListResult {
+  readonly entries: readonly LogEntryView[];
+  /** Present for a single-day read. A range has no single day to total. */
+  readonly totals: LogTotalsView | null;
+  readonly targets: LogTargetsView;
+  /** The day's calories against the calorie target. Null without a target or a calorie total. */
+  readonly calorieFit: CalorieFit | null;
+  readonly truncated: boolean;
+  readonly totalCount: number;
+}
+export interface LogSummaryResult {
+  readonly fromLocalDate: string;
+  readonly toLocalDate: string;
+  readonly nutrients: NutrientsView;
+  readonly incomplete: boolean;
+  readonly entriesWithoutEstimate: number;
+  readonly daysWithEntries: number;
+}
+export interface LogEntryResult {
+  readonly entry: LogEntryView;
+}
