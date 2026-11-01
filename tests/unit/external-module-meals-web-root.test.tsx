@@ -105,11 +105,8 @@ describe("Meals page shell", () => {
     expect(labels).toEqual(["Plan", "Shopping list", "Pantry", "Household", "Log"]);
   });
 
-  it("gives each unbuilt area the prototype's empty-state title and no action", async () => {
-    const titles: Array<[string, string]> = [
-      ["/m/meals/pantry", "The Pantry is empty"],
-      ["/m/meals/log", "Nothing logged"]
-    ];
+  it("gives the unbuilt area the prototype's empty-state title and no action", async () => {
+    const titles: Array<[string, string]> = [["/m/meals/log", "Nothing logged"]];
     for (const [path, title] of titles) {
       const renderer = await render(path);
       const empty = renderer.root.find((node) => node.props.className === "jds-empty");

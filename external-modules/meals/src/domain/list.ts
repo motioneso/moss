@@ -5,6 +5,7 @@
 // so 2 cloves of garlic and 1 head of garlic stay apart.
 import type { StoreSection } from "../contracts.js";
 import { PACK_SIZES } from "./pack-sizes.js";
+import { coverage, isStaple, type PantryInput } from "./pantry.js";
 import { titleKey } from "./repeats.js";
 import { convert, formatNumber, normaliseUnit, unitFamily } from "./units.js";
 
@@ -25,8 +26,11 @@ export interface ListMealInput {
 
 export interface ListBuildInput {
   readonly meals: readonly ListMealInput[];
-  /** Name keys the Pantry covers. Their lines are marked, not dropped. Empty until S5. */
-  readonly coveredNameKeys?: ReadonlySet<string>;
+  /**
+   * The Pantry and Staples. Staple lines are dropped. With a mode other than ignore, lines the
+   * Pantry covers are marked, and lines it covers in part shrink to what is missing.
+   */
+  readonly pantry?: PantryInput;
 }
 
 export interface Purchase {
@@ -156,6 +160,30 @@ function mergeGroup(
   return { ...line, purchase: purchaseAmount(line) };
 }
 
+function withPantry(
+  lines: readonly GeneratedLine[],
+  pantry: PantryInput | undefined
+): GeneratedLine[] {
+  if (pantry === undefined) return [...lines];
+  const kept: GeneratedLine[] = [];
+  for (const line of lines) {
+    if (isStaple(line.name, pantry)) continue;
+    const cover =
+      pantry.mode === "ignore"
+        ? ({ kind: "none" } as const)
+        : coverage(line.name, line.quantity, line.unit, pantry.stock);
+    if (cover.kind === "covered") {
+      kept.push({ ...line, coveredByPantry: true });
+    } else if (cover.kind === "partial") {
+      const reduced = { ...line, quantity: cover.need };
+      kept.push({ ...reduced, purchase: purchaseAmount(reduced) });
+    } else {
+      kept.push(line);
+    }
+  }
+  return kept;
+}
+
 /** Merges every meal's ingredients into lines, scaled to the servings and grouped by section. */
 export function buildList(input: ListBuildInput): readonly GeneratedLine[] {
   const groups = new Map<string, { nameKey: string; entries: Entry[] }>();
@@ -175,13 +203,9 @@ export function buildList(input: ListBuildInput): readonly GeneratedLine[] {
       groups.set(lineKey, group);
     }
   }
-  const lines = [...groups].map(([lineKey, group]) =>
-    mergeGroup(
-      lineKey,
-      group.nameKey,
-      group.entries,
-      input.coveredNameKeys?.has(group.nameKey) ?? false
-    )
+  const lines = withPantry(
+    [...groups].map(([lineKey, group]) => mergeGroup(lineKey, group.nameKey, group.entries, false)),
+    input.pantry
   );
   return lines.sort(
     (a, b) =>

@@ -19,6 +19,7 @@ import {
   type ListMealInput,
   type StoredLine
 } from "../domain/list.js";
+import type { PantryInput } from "../domain/pantry.js";
 import { normaliseUnit } from "../domain/units.js";
 import type { StoredList } from "../store/list-port.js";
 import type { RecipeRow } from "../store/plan-port.js";
@@ -111,6 +112,24 @@ async function viewOf(deps: ListDeps, stored: StoredList): Promise<ShoppingListV
   return listView(stored, context.pantryMode ?? kitchen.defaultPantryMode, context.labels);
 }
 
+/** The Pantry and Staples for a list build, or undefined when there is no Pantry store. */
+async function pantryInput(
+  deps: ListDeps,
+  planMode: PantryMode | null
+): Promise<PantryInput | undefined> {
+  if (deps.pantry === undefined) return undefined;
+  const [items, staples, kitchen] = await Promise.all([
+    deps.pantry.readItems(),
+    deps.pantry.readStaples(),
+    planMode === null ? deps.kitchen() : Promise.resolve(null)
+  ]);
+  return {
+    mode: planMode ?? kitchen!.defaultPantryMode,
+    stock: items.map((item) => ({ name: item.name, quantity: item.quantity, unit: item.unit })),
+    staples: staples.map((staple) => staple.name)
+  };
+}
+
 /** Rebuilds the stored list from its plan. `empty` rebuilds as if the plan had no meals. */
 export async function rebuildList(
   deps: ListDeps,
@@ -119,7 +138,10 @@ export async function rebuildList(
   empty = false
 ): Promise<void> {
   const context = await planContext(deps, empty ? null : stored.planId);
-  const generated = buildList({ meals: context.meals });
+  const generated = buildList({
+    meals: context.meals,
+    pantry: context.meals.length > 0 ? await pantryInput(deps, context.pantryMode) : undefined
+  });
   const diff = reconcileList(stored.lines, generated);
   if (diff.insert.length + diff.update.length + diff.remove.length === 0) return;
   await deps.lists.applyDiff(
@@ -140,6 +162,14 @@ export async function listOnPlanChange(
   if (!stored.exists || stored.planId !== planId) return;
   const kitchen = await deps.kitchen();
   await rebuildList(deps, stored, kitchen.kitchenId, change === "deleted");
+}
+
+/** Pantry hook. Rebuilds the list that is tied to a plan, so its covered lines follow the Pantry. */
+export async function listOnPantryChange(deps: ListDeps): Promise<void> {
+  const stored = await deps.lists.readList();
+  if (!stored.exists || stored.planId === null) return;
+  const kitchen = await deps.kitchen();
+  await rebuildList(deps, stored, kitchen.kitchenId);
 }
 
 const GET_KEYS = new Set<string>();
@@ -337,6 +367,17 @@ export async function undo(deps: ListDeps, input: Input): Promise<UndoResult> {
   const record = await deps.lists.readUndo(actionId);
   if (record === null || record.undone) throw new InputError("There is nothing to undo");
 
+  if (record.kind === "removed" && record.state.item !== undefined) {
+    if (deps.pantry === undefined) throw new InputError("That action cannot be undone here");
+    const kitchen = await deps.kitchen();
+    const restored = await deps.pantry.undoRemoved(
+      actionId,
+      kitchen.kitchenId,
+      record.state.item as Record<string, unknown>
+    );
+    if (restored > 0) await listOnPantryChange(deps);
+    return { restored, skipped: 1 - restored };
+  }
   if (record.kind === "removed") {
     const stored = await deps.lists.readList();
     const kitchen = await deps.kitchen();

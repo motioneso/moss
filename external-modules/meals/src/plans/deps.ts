@@ -7,6 +7,7 @@ import type { ModuleJobEnqueueResult } from "@moss/module-sdk/worker";
 
 import type { MealsAi } from "../ai/port.js";
 import type { KitchenView } from "../contracts.js";
+import type { PantryStore } from "../store/pantry-port.js";
 import type { PlanStore } from "../store/plan-port.js";
 
 export interface PlanJobs {
@@ -25,6 +26,8 @@ export interface PlanDeps {
 
   /** The kitchen, with its row and self member stored. Only plan.create calls it. */
   readonly ensureKitchen: () => Promise<KitchenView>;
+  /** The Pantry and Staples, read when a plan's mode is prefer or only. */
+  readonly pantry?: PantryStore;
   readonly ai: MealsAi;
   readonly jobs: PlanJobs;
   readonly newId: () => string;

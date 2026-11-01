@@ -7,6 +7,7 @@ export type OutlookCalendarState =
   | "stale"
   | "sign-in-needed"
   | "source-changed"
+  | "settings-not-found"
   | "disconnected";
 export interface OutlookCalendarStatus {
   readonly available: boolean;
@@ -41,6 +42,7 @@ export const outlookCalendarStatusSchema = {
         "stale",
         "sign-in-needed",
         "source-changed",
+        "settings-not-found",
         "disconnected"
       ]
     },

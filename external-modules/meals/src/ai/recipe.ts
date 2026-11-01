@@ -13,6 +13,14 @@ export interface RecipeEater {
   readonly preferences: readonly string[];
 }
 
+/** What the household has on hand, for a plan whose Pantry mode is prefer or only. */
+export interface RecipePantry {
+  readonly mode: "prefer" | "only";
+  /** Pantry items as short text, such as "rice (500 g)". */
+  readonly items: readonly string[];
+  readonly staples: readonly string[];
+}
+
 export interface RecipeRequest {
   readonly slotName: string;
   readonly date: string;
@@ -22,6 +30,7 @@ export interface RecipeRequest {
   readonly requestText: string | null;
   readonly avoidTitles: readonly string[];
   readonly unitsSystem: UnitsSystem;
+  readonly pantry?: RecipePantry;
 }
 
 export interface RecipeDraft {
@@ -46,6 +55,7 @@ export const STORE_SECTIONS: readonly StoreSection[] = [
 ];
 
 const MAX_AVOID_TITLES = 60;
+const MAX_PANTRY_LINES = 80;
 const MAX_INGREDIENTS = 40;
 const MAX_STEPS = 30;
 const MAX_STEP_LENGTH = 600;
@@ -122,6 +132,22 @@ function eaterLine(eater: RecipeEater, index: number): string {
   return parts.join("; ");
 }
 
+function pantryLines(pantry: RecipePantry | undefined): string[] {
+  if (pantry === undefined) return [];
+  const quote = (list: readonly string[]) =>
+    list
+      .slice(0, MAX_PANTRY_LINES)
+      .map((entry) => JSON.stringify(entry))
+      .join(", ");
+  return [
+    pantry.mode === "only"
+      ? "Cook only from the ingredients on hand and the Staples listed here. Use no other ingredient."
+      : "Prefer ingredients the household already has on hand where they suit the meal, and add others only as needed.",
+    pantry.items.length > 0 ? `On hand: ${quote(pantry.items)}` : "Nothing is on hand.",
+    pantry.staples.length > 0 ? `Staples, always available: ${quote(pantry.staples)}` : ""
+  ];
+}
+
 export function buildRecipePrompt(request: RecipeRequest): string {
   const avoid = request.avoidTitles.slice(-MAX_AVOID_TITLES);
   const lines = [
@@ -141,6 +167,7 @@ export function buildRecipePrompt(request: RecipeRequest): string {
       ? `Must be ready in ${request.cookTimeLimitMinutes} minutes or less.`
       : "",
     avoid.length > 0 ? `Do not repeat any of these dishes: ${avoid.join("; ")}` : "",
+    ...pantryLines(request.pantry),
     request.requestText ? `The household asked: ${request.requestText}` : ""
   ];
   return lines.filter((line) => line !== "").join("\n");

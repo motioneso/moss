@@ -60,8 +60,65 @@ async function click(control: Locator): Promise<void> {
   });
 }
 
+const SETTINGS = { name: "Settings", exact: true } as const;
+
+/** Synthetic Escape closes a read-only menu without tripping the trusted-input guard. */
+async function dismissMenu(menu: Locator): Promise<void> {
+  await menu.evaluate((e) =>
+    e.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Escape",
+        code: "Escape",
+        keyCode: 27,
+        which: 27,
+        bubbles: true
+      })
+    )
+  );
+  await menu.waitFor({ state: "hidden" });
+}
+
+/**
+ * Opens the Settings panel. Wide layouts show a Settings button directly; others
+ * keep it under the "Access additional features" menu. Only opens controls.
+ */
+async function openSettings(page: Page): Promise<void> {
+  // A page still painting may not show its controls yet, so each lookup waits briefly.
+  const appears = (control: Locator) =>
+    control
+      .first()
+      .waitFor({ state: "visible", timeout: 3_000 })
+      .then(
+        () => true,
+        () => false
+      );
+  const direct = page.getByRole("button", SETTINGS);
+  if (await appears(direct)) {
+    await click(direct.first());
+    return;
+  }
+  const more = page.getByRole("button", { name: "Access additional features", exact: true });
+  if (!(await appears(more))) throw new OutlookCalendarSourceError("settings-not-found");
+  await click(more.first());
+  const menu = page.getByRole("menu");
+  const item = menu.getByRole("menuitem", SETTINGS).or(menu.getByRole("button", SETTINGS));
+  const found = await item
+    .first()
+    .waitFor({ state: "visible", timeout: 4_000 })
+    .then(
+      () => true,
+      () => false
+    );
+  if (!found) {
+    // Close whatever opened; nothing inside it is activated.
+    await dismissMenu(menu.first()).catch(() => undefined);
+    throw new OutlookCalendarSourceError("settings-not-found");
+  }
+  await click(item.first());
+}
+
 async function verifyAccount(page: Page, expected: string): Promise<void> {
-  await click(page.getByRole("button", { name: "Settings", exact: true }));
+  await openSettings(page);
   try {
     await click(page.getByRole("tab", { name: "Account", exact: true }));
     await click(page.getByRole("tab", { name: "Email account", exact: true }));
@@ -79,7 +136,7 @@ async function verifyAccount(page: Page, expected: string): Promise<void> {
 }
 
 async function displayTimeZone(page: Page): Promise<string> {
-  await click(page.getByRole("button", { name: "Settings", exact: true }));
+  await openSettings(page);
   try {
     await click(page.getByRole("tab", { name: "Calendar", exact: true }));
     const view = page.getByRole("tab", { name: "View", exact: true });
@@ -164,20 +221,8 @@ async function requirePrimaryCalendar(page: Page): Promise<void> {
       throw new OutlookCalendarSourceError("source-changed");
     }
   } finally {
-    // Synthetic Escape closes the read-only context menu without tripping the
-    // trusted-human-input guard. No menu action is invoked.
-    await menu.evaluate((e) =>
-      e.dispatchEvent(
-        new KeyboardEvent("keydown", {
-          key: "Escape",
-          code: "Escape",
-          keyCode: 27,
-          which: 27,
-          bubbles: true
-        })
-      )
-    );
-    await menu.waitFor({ state: "hidden" });
+    // No menu action is invoked.
+    await dismissMenu(menu);
   }
 }
 

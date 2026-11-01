@@ -162,7 +162,7 @@ export interface PantryItemView {
   readonly name: string;
   readonly quantity: number | null;
   readonly unit: string | null;
-  readonly source: "manual" | "bought";
+  readonly source: "manual" | "bought" | "leftover" | "receipt";
   readonly updatedAt: string;
 }
 export interface StapleView {
