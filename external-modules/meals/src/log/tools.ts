@@ -164,8 +164,18 @@ const ADD_KEYS = new Set([
   "timeZone",
   "captureKind",
   "servingNote",
+  "mealType",
   "idempotencyKey"
 ]);
+
+const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack"] as const;
+// Clock time used when the caller names a part of the day but no time.
+const MEAL_TYPE_TIME: Record<(typeof MEAL_TYPES)[number], string> = {
+  breakfast: "08:00:00",
+  lunch: "12:30:00",
+  dinner: "18:30:00",
+  snack: "15:00:00"
+};
 
 export async function logAdd(deps: LogDeps, input: Input): Promise<LogEntryResult> {
   requireNoUnknownKeys(input, ADD_KEYS);
@@ -181,8 +191,16 @@ export async function logAdd(deps: LogDeps, input: Input): Promise<LogEntryResul
   const servingNote =
     readString(input, "servingNote", { maxBytes: SERVING_NOTE_MAX_BYTES }) ?? null;
 
-  const consumedAt =
-    consumedAtRaw === undefined ? deps.now() : parseConsumedAt(consumedAtRaw, zone);
+  const mealType = readEnum(input, "mealType", MEAL_TYPES);
+  let consumedAt: Date;
+  if (consumedAtRaw !== undefined) {
+    consumedAt = parseConsumedAt(consumedAtRaw, zone);
+  } else if (mealType !== undefined) {
+    const today = resolveEntryLocalDate(deps.now(), zone).localDate;
+    consumedAt = parseConsumedAt(`${today}T${MEAL_TYPE_TIME[mealType]}`, zone);
+  } else {
+    consumedAt = deps.now();
+  }
   const { localDate, timezoneOffset } = resolveEntryLocalDate(consumedAt, zone);
 
   const { entry, created } = await deps.store.createEntry({
@@ -197,7 +215,7 @@ export async function logAdd(deps: LogDeps, input: Input): Promise<LogEntryResul
   });
 
   // A retry returns the existing entry and queues nothing, so one entry never gets two estimates.
-  // The entry is already saved, so a queue that is busy or down leaves it pending for a retry.
+  // The entry is already saved. A queue that is busy or down marks it failed so Retry picks it up.
   // Failing the call here would invite the caller to log the same meal twice.
   if (created) {
     try {
@@ -208,7 +226,14 @@ export async function logAdd(deps: LogDeps, input: Input): Promise<LogEntryResul
         params: { entryId: entry.entryId, revision: entry.estimateRevision }
       });
     } catch {
-      // Left pending on purpose.
+      const failed = await deps.store.recordEstimate(entry.entryId, entry.estimateRevision, {
+        state: "failed",
+        items: [],
+        nutrients: null,
+        missingDetails: null,
+        clarificationQuestion: null
+      });
+      return { entry: failed ?? entry };
     }
   }
   return { entry };

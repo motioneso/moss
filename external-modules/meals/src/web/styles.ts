@@ -92,6 +92,7 @@ export const MODULE_STYLES = `
 .mls-figure__value { font-size: var(--text-xl, 1.25rem); font-weight: var(--weight-semibold); }
 .mls-entry { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) 0; border-bottom: var(--border-w) solid var(--border-subtle); }
 .mls-entry__main { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-4); align-items: start; }
+.mls-entry > .mls-line__tools { margin-left: -0.8rem; flex-wrap: wrap; }
 .mls-item-form { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
 .mls-figures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); }
 .mls-back { align-self: flex-start; }
@@ -124,6 +125,9 @@ export const MODULE_STYLES = `
   .mls-totals > .mls-figure--lead { grid-column: 1 / -1; }
   .mls-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mls-ingredient { grid-template-columns: 4.5rem minmax(0, 1fr); }
+}
+@media (max-width: 360px) {
+  .mls-tabs .jds-segmented__opt { padding-inline: var(--space-1); white-space: nowrap; font-size: var(--text-sm); }
 }
 @media (max-width: 1080px) {
   .mls-grid { grid-template-columns: minmax(0, 1fr); }

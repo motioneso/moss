@@ -224,7 +224,7 @@ function EntryRow(props: {
         ) : null}
         {writes !== null ? (
           <>
-            {state === "failed" || state === "pending" ? (
+            {state === "failed" ? (
               <Button
                 variant="quiet"
                 size="sm"

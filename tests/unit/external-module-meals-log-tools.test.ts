@@ -85,8 +85,27 @@ describe("meals.log.add", () => {
       throw new Error("queue down");
     };
     const { entry } = await logAdd(r.deps, { description: "oatmeal", idempotencyKey: "k1" });
-    expect(entry.estimateState).toBe("pending");
+    expect(entry.estimateState).toBe("failed");
     expect(r.store.entries.size).toBe(1);
+  });
+
+  it("stamps a usual time for a named meal when no time is given", async () => {
+    const r = rig({ localTimezone: "America/Los_Angeles" });
+    const { entry } = await logAdd(r.deps, {
+      description: "chicken salad",
+      idempotencyKey: "k1",
+      mealType: "lunch"
+    });
+    expect(new Date(entry.consumedAt).getTime() + entry.timezoneOffset * 60_000).toBe(
+      Date.parse(`${entry.localDate}T12:30:00Z`)
+    );
+    const exact = await logAdd(r.deps, {
+      description: "toast",
+      idempotencyKey: "k2",
+      mealType: "lunch",
+      consumedAt: "2026-11-02T07:00:00"
+    });
+    expect(exact.entry.consumedAt).toBe("2026-11-02T15:00:00.000Z");
   });
 
   it("files the entry under the day in the user's own zone, which outranks the model's", async () => {

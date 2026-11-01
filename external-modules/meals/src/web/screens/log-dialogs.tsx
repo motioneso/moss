@@ -226,28 +226,26 @@ export function EditMealDialog(props: {
       }
     >
       <div className="mls-form">
-        <div className="mls-form-grid">
-          <Field>
-            <FormLabel htmlFor={`${baseId}-d`}>What you ate</FormLabel>
-            <input
-              id={`${baseId}-d`}
-              className="jds-input"
-              value={description}
-              maxLength={500}
-              onChange={(event: Typed) => setDescription(event.target.value)}
-            />
-          </Field>
-          <Field>
-            <FormLabel htmlFor={`${baseId}-t`}>Time</FormLabel>
-            <input
-              id={`${baseId}-t`}
-              className="jds-input"
-              type="time"
-              value={time}
-              onChange={(event: Typed) => setTime(event.target.value)}
-            />
-          </Field>
-        </div>
+        <Field>
+          <FormLabel htmlFor={`${baseId}-d`}>What you ate</FormLabel>
+          <input
+            id={`${baseId}-d`}
+            className="jds-input"
+            value={description}
+            maxLength={500}
+            onChange={(event: Typed) => setDescription(event.target.value)}
+          />
+        </Field>
+        <Field>
+          <FormLabel htmlFor={`${baseId}-t`}>Time</FormLabel>
+          <input
+            id={`${baseId}-t`}
+            className="jds-input"
+            type="time"
+            value={time}
+            onChange={(event: Typed) => setTime(event.target.value)}
+          />
+        </Field>
         {drafts.map((draft, index) => (
           <fieldset className="mls-item-form" key={index}>
             <legend className="jds-eyebrow">{`Food ${index + 1}`}</legend>

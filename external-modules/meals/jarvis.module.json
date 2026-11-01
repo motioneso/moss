@@ -4416,6 +4416,11 @@
             "type": "string",
             "description": "IANA time zone for an offset-less consumedAt value; for example, 2026-08-22T20:14:00 with America/Los_Angeles stores 2026-08-23T03:14:00.000Z. The host locale takes precedence when available."
           },
+          "mealType": {
+            "type": "string",
+            "enum": ["breakfast", "lunch", "dinner", "snack"],
+            "description": "Part of the day. Use it when the person names a meal such as lunch and gives no time; Moss stamps a usual time today. consumedAt wins when both are given."
+          },
           "captureKind": {
             "type": "string",
             "enum": ["text", "photo", "voice"]
