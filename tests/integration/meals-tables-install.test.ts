@@ -493,4 +493,42 @@ describe("meals plan tables (S2 #3886)", () => {
       expect(await plans.getMeal(uuid(5010))).toBeNull();
     });
   });
+  it("picks the current plan by cover, then next to start, then newest, per owner", async () => {
+    const owner = ids.userB;
+    // Created in this order so that "newest" is the covering plan, not the last-starting one.
+    const make = (base: number, startDate: string, dayCount: number, key: string) =>
+      asPlanActor(owner, async (plans, kitchens) => {
+        const kitchen = await kitchens.getOrCreateKitchen();
+        const days = Array.from({ length: dayCount }, (_, index) => {
+          const date = new Date(Date.parse(`${startDate}T00:00:00Z`) + index * 86_400_000);
+          return { dayId: uuid(base + 1 + index), date: date.toISOString().slice(0, 10) };
+        });
+        const created = await plans.createPlan({
+          planId: uuid(base),
+          kitchenId: kitchen.kitchenId,
+          startDate,
+          dayCount,
+          pantryMode: "prefer",
+          requestText: null,
+          allowRepeats: false,
+          idempotencyKey: key,
+          days,
+          meals: []
+        });
+        return created.planId;
+      });
+    const past = await make(7000, "2026-10-01", 2, "cur-past");
+    const future = await make(7100, "2026-11-20", 2, "cur-future");
+    const covering = await make(7200, "2026-11-02", 3, "cur-covering");
+
+    await asPlanActor(owner, async (plans) => {
+      expect(await plans.findCurrentPlan("2026-11-03")).toBe(covering);
+      expect(await plans.findCurrentPlan("2026-11-10")).toBe(future);
+      expect(await plans.findCurrentPlan("2026-12-01")).toBe(covering);
+      expect(await plans.findCurrentPlan("2026-10-01")).toBe(past);
+    });
+    await asPlanActor(ids.adminUser, async (plans) => {
+      expect(await plans.findCurrentPlan("2026-11-03")).toBeNull();
+    });
+  });
 });

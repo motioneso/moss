@@ -9,7 +9,14 @@ import type { ModuleWorkerContext } from "@moss/module-sdk/worker";
 
 import { runPlanDay } from "../plans/day-job.js";
 import type { PlanDeps } from "../plans/deps.js";
-import { mealGet, planControl, planCreate, planDelete, planGet } from "../plans/tools.js";
+import {
+  mealGet,
+  planControl,
+  planCreate,
+  planCurrent,
+  planDelete,
+  planGet
+} from "../plans/tools.js";
 import { sqlPlanStore } from "../store/plans.js";
 import { sqlStore } from "../store/sql.js";
 import { stripEnvelope } from "../tools/validate.js";
@@ -57,6 +64,7 @@ export const HANDLERS: Readonly<Record<string, Handler>> = {
   "household.remove": (ctx) => createHouseholdRemoveHandler(storeFrom(ctx))(ctx),
   "plan.create": plan(planCreate),
   "plan.get": plan(planGet),
+  "plan.current": plan(planCurrent),
   "plan.control": plan(planControl),
   "plan.delete": plan(planDelete),
   "meal.get": plan(mealGet),

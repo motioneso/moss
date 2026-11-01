@@ -49,6 +49,7 @@ beforeEach(() => {
   mockReadTool.mockReset();
   mockReadTool.mockImplementation(async (name: string) => {
     if (name === "meals.kitchen.get") return KITCHEN;
+    if (name === "meals.plan.current") return { plan: null };
     throw new Error(`unexpected tool ${name}`);
   });
 });
@@ -104,7 +105,6 @@ describe("Meals page shell", () => {
 
   it("gives each unbuilt area the prototype's empty-state title and no action", async () => {
     const titles: Array<[string, string]> = [
-      ["/m/meals", "Plan your first week"],
       ["/m/meals/list", "Nothing to buy"],
       ["/m/meals/pantry", "The Pantry is empty"],
       ["/m/meals/log", "Nothing logged"]

@@ -127,7 +127,7 @@ const read = (from: string, to: string) =>
       localTimezone: "UTC"
     } as WorkerPorts)({ from, to })
   );
-const activities = () => owner((s) => s.listActivity("2026-10-01", "2026-11-01", 500));
+const activities = () => owner((s) => s.listActivity("2026-10-01", "2100-01-01", 500));
 const save = (planId: string, dueDate: string, plannedDate: string, amountCents = 10001) =>
   owner(async (s) =>
     s.billAdjustments!.save(

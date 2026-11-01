@@ -245,13 +245,15 @@ function Hero(props: {
               : money(props.readyCents, props.currency!)
         }
         aside={
-          <PeriodStepper
-            label={monthLabel(props.month)}
-            previousLabel={monthLabel(shiftMonth(props.month, -1))}
-            nextLabel={monthLabel(shiftMonth(props.month, 1))}
-            onPrevious={() => props.onMonth(-1)}
-            onNext={() => props.onMonth(1)}
-          />
+          props.setupRequired ? undefined : (
+            <PeriodStepper
+              label={monthLabel(props.month)}
+              previousLabel={monthLabel(shiftMonth(props.month, -1))}
+              nextLabel={monthLabel(shiftMonth(props.month, 1))}
+              onPrevious={() => props.onMonth(-1)}
+              onNext={() => props.onMonth(1)}
+            />
+          )
         }
       />
     </div>

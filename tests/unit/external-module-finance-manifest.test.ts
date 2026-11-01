@@ -81,13 +81,15 @@ describe("finance manifest app map (#3177)", () => {
     expect(manifest.assistantTools.filter((t) => t.handler === "draft.build")).toEqual([]);
   });
 
-  it("requires the host guard for captured category confirmation", () => {
+  it("keeps the screen click prompt-free while chat asks for category changes", () => {
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
       assistantTools: { name: string }[];
     };
-    expect(
-      manifest.assistantTools.find((tool) => tool.name === "finance.transactions.confirm")
-    ).toMatchObject({ risk: "write", executionPolicy: "confirm", confirmWhenKeys: ["rows"] });
+    for (const name of ["finance.transactions.confirm", "finance.transactions.bulk-category"]) {
+      const tool = manifest.assistantTools.find((entry) => entry.name === name);
+      expect(tool).toMatchObject({ risk: "write", executionPolicy: "confirm" });
+      expect(tool).not.toHaveProperty("confirmWhenKeys");
+    }
   });
 
   it("requires the host guard for manual account metadata changes", () => {

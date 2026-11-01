@@ -2,7 +2,7 @@
 //
 // Reads only, through the read-tool route. Writes never come through here; they go through the
 // host's tools handle in writes.ts.
-export type MealsReadToolName = "meals.kitchen.get";
+export type MealsReadToolName = "meals.kitchen.get" | "meals.plan.current" | "meals.meal.get";
 
 export class ReadToolError extends Error {
   constructor(readonly status: number) {
