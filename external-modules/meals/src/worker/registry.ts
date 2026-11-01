@@ -14,9 +14,12 @@ import {
   listClear,
   listEdit,
   listGet,
+  listOnPantryChange,
   listOnPlanChange,
   undo
 } from "../lists/tools.js";
+import { pantryEdit, pantryGet } from "../pantry/tools.js";
+import type { PantryDeps } from "../pantry/tools.js";
 import { runPlanDay } from "../plans/day-job.js";
 import type { PlanDeps } from "../plans/deps.js";
 import {
@@ -28,6 +31,7 @@ import {
   planGet
 } from "../plans/tools.js";
 import { sqlListStore } from "../store/list.js";
+import { sqlPantryStore } from "../store/pantry.js";
 import { sqlPlanStore } from "../store/plans.js";
 import { sqlStore } from "../store/sql.js";
 import { stripEnvelope } from "../tools/validate.js";
@@ -47,6 +51,7 @@ function listDeps(ctx: ModuleWorkerContext): ListDeps {
   return {
     lists: sqlListStore(ctx.db),
     plans: sqlPlanStore(ctx.db),
+    pantry: sqlPantryStore(ctx.db),
     kitchen: () => kitchens.readKitchen(),
     ensureKitchen: () => kitchens.getOrCreateKitchen(),
     newId: randomUUID,
@@ -64,6 +69,7 @@ function planDeps(ctx: ModuleWorkerContext): PlanDeps {
   return {
     onPlanChange: (planId, change) => listOnPlanChange(listDeps(ctx), planId, change),
     store: sqlPlanStore(ctx.db),
+    pantry: sqlPantryStore(ctx.db),
     kitchen: () => kitchens.readKitchen(),
     ensureKitchen: () => kitchens.getOrCreateKitchen(),
     ai: ctx.ai,
@@ -71,6 +77,22 @@ function planDeps(ctx: ModuleWorkerContext): PlanDeps {
     newId: randomUUID
   };
 }
+
+function pantryDeps(ctx: ModuleWorkerContext): PantryDeps {
+  const kitchens = storeFrom(ctx);
+  return {
+    pantry: sqlPantryStore(ctx.db),
+    kitchen: () => kitchens.readKitchen(),
+    ensureKitchen: () => kitchens.getOrCreateKitchen(),
+    newId: randomUUID,
+    onPantryChange: () => listOnPantryChange(listDeps(ctx))
+  };
+}
+
+const pantryTool =
+  (run: (deps: PantryDeps, input: Record<string, unknown>) => Promise<unknown>): Handler =>
+  (ctx) =>
+    run(pantryDeps(ctx), stripEnvelope(ctx.input));
 
 const plan =
   (run: (deps: PlanDeps, input: Record<string, unknown>) => Promise<unknown>): Handler =>
@@ -102,6 +124,8 @@ export const HANDLERS: Readonly<Record<string, Handler>> = {
   "list.edit": list(listEdit),
   "list.bought": list(listBought),
   "list.clear": list(listClear),
+  "pantry.get": pantryTool(pantryGet),
+  "pantry.edit": pantryTool(pantryEdit),
   undo: list(undo),
   "plan.day": (ctx) => runPlanDay(planDeps(ctx), jobParams(ctx.input))
 };

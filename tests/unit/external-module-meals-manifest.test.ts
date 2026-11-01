@@ -20,6 +20,7 @@ import type {
   PlannedMealView,
   PlanView,
   RecipeView,
+  PantryView,
   ShoppingListView,
   UndoToken
 } from "../../external-modules/meals/src/contracts.js";
@@ -177,6 +178,19 @@ const LIST: Required<ShoppingListView> = {
   lines: [LINE]
 };
 const UNDO: Required<UndoToken> = { actionId: "a", kind: "bought", count: 2 };
+const PANTRY: Required<PantryView> = {
+  items: [
+    {
+      itemId: "i",
+      name: "Rice",
+      quantity: 500,
+      unit: "g",
+      source: "manual",
+      updatedAt: "2026-11-02T10:00:00Z"
+    }
+  ],
+  staples: [{ stapleId: "s", name: "Salt" }]
+};
 
 function tool(name: string): Record<string, unknown> {
   const tools = loadManifest().assistantTools as Array<Record<string, unknown>>;
@@ -191,7 +205,7 @@ describe("meals manifest", () => {
     expect(result.ok, JSON.stringify(!result.ok ? result.errors : [])).toBe(true);
   });
 
-  it("declares the S1 to S4 tools with their risks and handlers", () => {
+  it("declares the S1 to S5 tools with their risks and handlers", () => {
     const tools = loadManifest().assistantTools as Array<Record<string, unknown>>;
     expect(tools.map((entry) => [entry.name, entry.risk, entry.handler])).toEqual([
       ["meals.kitchen.get", "read", "kitchen.get"],
@@ -209,6 +223,8 @@ describe("meals manifest", () => {
       ["meals.list.edit", "write", "list.edit"],
       ["meals.list.bought", "write", "list.bought"],
       ["meals.list.clear", "destructive", "list.clear"],
+      ["meals.pantry.get", "read", "pantry.get"],
+      ["meals.pantry.edit", "write", "pantry.edit"],
       ["meals.undo", "write", "undo"]
     ]);
     expect(tool("meals.list.clear").selfOperationGrant).toBe("confirm_always");
@@ -261,7 +277,7 @@ describe("meals manifest", () => {
     ]);
   });
 
-  it("owns exactly the S1 to S4 tables", () => {
+  it("owns exactly the S1 to S5 tables", () => {
     expect(loadManifest().database).toEqual({
       ownedTables: [
         "app.meals_kitchens",
@@ -276,7 +292,8 @@ describe("meals manifest", () => {
         "app.meals_shopping_lists",
         "app.meals_shopping_list_items",
         "app.meals_pantry_items",
-        "app.meals_undo_actions"
+        "app.meals_undo_actions",
+        "app.meals_staples"
       ]
     });
   });
@@ -297,6 +314,8 @@ describe("meals manifest", () => {
     ["meals.list.edit", { list: LIST, undo: UNDO }],
     ["meals.list.bought", { list: LIST, pantryAdded: 2, undo: UNDO }],
     ["meals.list.clear", { cleared: true }],
+    ["meals.pantry.get", PANTRY],
+    ["meals.pantry.edit", { pantry: PANTRY, undo: UNDO }],
     ["meals.undo", { restored: 1, skipped: 0 }]
   ])("%s output schema covers every view field", (name, sample) => {
     expect(uncovered(tool(name).outputSchema as Schema, sample)).toEqual([]);

@@ -33,6 +33,7 @@ import {
   EditLineDialog,
   SECTION_LABELS
 } from "./list-dialogs";
+import { PANTRY_LABEL } from "./plan";
 
 const SECTION_ORDER = Object.keys(SECTION_LABELS) as StoreSection[];
 const TOAST_MS = 8000;
@@ -328,6 +329,7 @@ function List(props: {
               <span className="jds-caption">
                 <strong className="mls-num">{ticked.length}</strong> of {shopping.length} got
               </span>
+              <Badge outline>{PANTRY_LABEL[list.pantryMode]}</Badge>
               <div
                 className="jds-progress"
                 role="progressbar"

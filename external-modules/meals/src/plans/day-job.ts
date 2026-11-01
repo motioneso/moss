@@ -7,6 +7,7 @@ import type { AiFailure } from "../ai/port.js";
 import { buildRecipePrompt, parseRecipe, RECIPE_SCHEMA, type RecipeDraft } from "../ai/recipe.js";
 import { buildSafetyPrompt, parseSafety, SAFETY_SCHEMA } from "../ai/safety.js";
 import type { GenerationFailure, KitchenView, MemberView } from "../contracts.js";
+import { offPantry, type PantryInput } from "../domain/pantry.js";
 import { isRepeat, titleKey } from "../domain/repeats.js";
 import {
   applyBrandRule,
@@ -60,6 +61,13 @@ interface DayContext {
   readonly kitchen: KitchenView;
   readonly avoidTitles: string[];
   readonly recentKeys: Set<string>;
+  /** Null when the plan ignores the Pantry or there is no Pantry store. */
+  readonly pantry: PantryInput | null;
+}
+
+function pantryText(item: PantryInput["stock"][number]): string {
+  if (item.quantity === null) return item.name;
+  return `${item.name} (${item.quantity}${item.unit ? ` ${item.unit}` : ""})`;
 }
 
 function verdictRow(eater: MealEaterRow, verdict: SafetyVerdict): MealEaterRow {
@@ -80,6 +88,7 @@ async function writeMeal(context: DayContext, meal: MealRow): Promise<MealOutcom
 
   let attempts = 0;
   let lastVerdicts: readonly SafetyVerdict[] | null = null;
+  let lastRejection: "safety" | "pantry" = "safety";
   const fail = async (reason: GenerationFailure): Promise<MealOutcome> => {
     const eaters = lastVerdicts
       ? meal.eaters.map((eater, index) => verdictRow(eater, lastVerdicts![index]!))
@@ -105,7 +114,16 @@ async function writeMeal(context: DayContext, meal: MealRow): Promise<MealOutcom
         cookTimeLimitMinutes: day.cookTimeLimitMinutes,
         requestText: plan.requestText,
         avoidTitles: context.avoidTitles,
-        unitsSystem: kitchen.unitsSystem
+        unitsSystem: kitchen.unitsSystem,
+        ...(context.pantry !== null && context.pantry.mode !== "ignore"
+          ? {
+              pantry: {
+                mode: context.pantry.mode,
+                items: context.pantry.stock.map(pantryText),
+                staples: context.pantry.staples
+              }
+            }
+          : {})
       }),
       tierHint: "reasoning"
     });
@@ -121,11 +139,21 @@ async function writeMeal(context: DayContext, meal: MealRow): Promise<MealOutcom
     const key = titleKey(draft.title);
     if (!plan.allowRepeats && isRepeat(key, context.recentKeys)) continue;
 
+    // Cook only from on hand: a recipe that needs anything else is rejected and rewritten.
+    if (
+      context.pantry?.mode === "only" &&
+      offPantry(draft.ingredients, context.pantry).length > 0
+    ) {
+      lastRejection = "pantry";
+      continue;
+    }
+
     const ruleVerdicts = meal.eaters.map((_, index) =>
       deterministicSafety(draft.ingredients, restrictionsOf(index))
     );
     if (ruleVerdicts.some((verdict) => verdict.verdict === "fail")) {
       lastVerdicts = ruleVerdicts;
+      lastRejection = "safety";
       continue;
     }
 
@@ -149,6 +177,7 @@ async function writeMeal(context: DayContext, meal: MealRow): Promise<MealOutcom
     );
     if (merged.some((verdict) => verdict.verdict === "fail")) {
       lastVerdicts = merged;
+      lastRejection = "safety";
       continue;
     }
 
@@ -182,7 +211,8 @@ async function writeMeal(context: DayContext, meal: MealRow): Promise<MealOutcom
     });
     return saved ? { kind: "ready", title: draft.title, titleKey: key } : { kind: "lost" };
   }
-  return fail("safety_cap");
+  // Running out of tries on the Pantry rule is not a Never serve problem, so it says so.
+  return fail(lastRejection === "pantry" ? "validation_failed" : "safety_cap");
 }
 
 /** Writes every unfinished meal. Returns the day's failure, or the reason it stopped early. */
@@ -216,6 +246,18 @@ async function writeDay(
   return { kind: "done", failure };
 }
 
+async function readPantryInput(deps: PlanDeps, mode: PantryInput["mode"]): Promise<PantryInput> {
+  const [items, staples] = await Promise.all([
+    deps.pantry!.readItems(),
+    deps.pantry!.readStaples()
+  ]);
+  return {
+    mode,
+    stock: items.map((item) => ({ name: item.name, quantity: item.quantity, unit: item.unit })),
+    staples: staples.map((staple) => staple.name)
+  };
+}
+
 export async function runPlanDay(
   deps: PlanDeps,
   input: Readonly<Record<string, unknown>>
@@ -233,7 +275,12 @@ export async function runPlanDay(
     const recent = plan.allowRepeats
       ? []
       : await deps.store.recentTitles(plan.kitchenId, addDays(day.date, -NO_REPEAT_DAYS), day.date);
+    const pantry =
+      deps.pantry !== undefined && plan.pantryMode !== "ignore"
+        ? await readPantryInput(deps, plan.pantryMode)
+        : null;
     const outcome = await writeDay({
+      pantry,
       deps,
       plan,
       day,
