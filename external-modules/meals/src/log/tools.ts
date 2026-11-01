@@ -7,6 +7,7 @@ import { DEFAULT_LIST_LIMIT, applyListLimit } from "@moss/module-sdk/list-limits
 
 import type {
   CaptureKind,
+  LogEntryView,
   LogEntryResult,
   LogListResult,
   LogSummaryResult,
@@ -217,26 +218,34 @@ export async function logAdd(deps: LogDeps, input: Input): Promise<LogEntryResul
   // A retry returns the existing entry and queues nothing, so one entry never gets two estimates.
   // The entry is already saved. A queue that is busy or down marks it failed so Retry picks it up.
   // Failing the call here would invite the caller to log the same meal twice.
-  if (created) {
-    try {
-      await deps.jobs.enqueue({
-        queue: LOG_ESTIMATE_QUEUE,
-        jobKind: LOG_ESTIMATE_JOB_KIND,
-        idempotencyKey: logEstimateKey(entry.entryId, entry.estimateRevision),
-        params: { entryId: entry.entryId, revision: entry.estimateRevision }
-      });
-    } catch {
-      const failed = await deps.store.recordEstimate(entry.entryId, entry.estimateRevision, {
-        state: "failed",
-        items: [],
-        nutrients: null,
-        missingDetails: null,
-        clarificationQuestion: null
-      });
-      return { entry: failed ?? entry };
-    }
-  }
+  if (created) return { entry: await queueEstimate(deps, entry) };
   return { entry };
+}
+
+// Queues the estimate for an entry. A busy or broken queue marks the entry failed so Retry picks it
+// up, instead of leaving it on Estimating with no job behind it.
+async function queueEstimate(deps: LogDeps, entry: LogEntryView): Promise<LogEntryView> {
+  let queued: boolean;
+  try {
+    const result = await deps.jobs.enqueue({
+      queue: LOG_ESTIMATE_QUEUE,
+      jobKind: LOG_ESTIMATE_JOB_KIND,
+      idempotencyKey: logEstimateKey(entry.entryId, entry.estimateRevision),
+      params: { entryId: entry.entryId, revision: entry.estimateRevision }
+    });
+    queued = result.status !== "limited";
+  } catch {
+    queued = false;
+  }
+  if (queued) return entry;
+  const failed = await deps.store.recordEstimate(entry.entryId, entry.estimateRevision, {
+    state: "failed",
+    items: [],
+    nutrients: null,
+    missingDetails: null,
+    clarificationQuestion: null
+  });
+  return failed ?? entry;
 }
 
 // meals.log.reestimate
@@ -257,16 +266,7 @@ export async function logReestimate(deps: LogDeps, input: Input): Promise<LogEnt
       : entry;
   if (ready === null) throw new InputError(STALE);
 
-  const queued = await deps.jobs.enqueue({
-    queue: LOG_ESTIMATE_QUEUE,
-    jobKind: LOG_ESTIMATE_JOB_KIND,
-    idempotencyKey: logEstimateKey(entryId, ready.estimateRevision),
-    params: { entryId, revision: ready.estimateRevision }
-  });
-  if (queued.status === "limited") {
-    throw new InputError("Estimating is busy right now. Try again in a minute.");
-  }
-  return { entry: ready };
+  return { entry: await queueEstimate(deps, ready) };
 }
 
 // meals.log.correct
@@ -392,14 +392,7 @@ export async function logCorrect(deps: LogDeps, input: Input): Promise<LogEntryR
   if (entry === null) throw new InputError(STALE);
   // A correction moves the revision, which makes the queued estimate stale. An entry still waiting
   // for its estimate needs a new job at the new revision or it would wait forever.
-  if (entry.estimateState === "pending") {
-    await deps.jobs.enqueue({
-      queue: LOG_ESTIMATE_QUEUE,
-      jobKind: LOG_ESTIMATE_JOB_KIND,
-      idempotencyKey: logEstimateKey(entry.entryId, entry.estimateRevision),
-      params: { entryId: entry.entryId, revision: entry.estimateRevision }
-    });
-  }
+  if (entry.estimateState === "pending") return { entry: await queueEstimate(deps, entry) };
   return { entry };
 }
 

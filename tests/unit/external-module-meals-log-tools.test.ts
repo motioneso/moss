@@ -71,11 +71,11 @@ describe("meals.log.add", () => {
     expect(r.jobs.calls).toHaveLength(1);
   });
 
-  it("keeps the entry pending when the queue is full", async () => {
+  it("marks the entry failed when the queue is full, so Retry can pick it up", async () => {
     const r = rig();
     r.jobs.nextResult = "limited_pending";
     const { entry } = await logAdd(r.deps, { description: "oatmeal", idempotencyKey: "k1" });
-    expect(entry.estimateState).toBe("pending");
+    expect(entry.estimateState).toBe("failed");
     expect(r.store.entries.size).toBe(1);
   });
 
@@ -232,11 +232,27 @@ describe("meals.log.reestimate", () => {
     expect(r.jobs.calls).toHaveLength(0);
   });
 
-  it("says so when the queue is full", async () => {
+  it("leaves the entry failed when the queue is full, so Retry stays available", async () => {
     const r = rig({ ai: new ScriptedAi().script("estimate", new AiError("provider_error")) });
     const id = await addAndEstimate(r, "stew", "k1");
     r.jobs.nextResult = "limited_hourly";
-    await expect(logReestimate(r.deps, { entryId: id })).rejects.toThrow("busy");
+    const { entry } = await logReestimate(r.deps, { entryId: id });
+    expect(entry.estimateState).toBe("failed");
+    expect((await r.store.getEntry(id))!.estimateState).toBe("failed");
+  });
+});
+
+describe("meals.log.correct on a waiting entry", () => {
+  it("marks it failed when the queue is full", async () => {
+    const r = rig();
+    const { entry } = await logAdd(r.deps, { description: "stew", idempotencyKey: "k1" });
+    r.jobs.nextResult = "limited_hourly";
+    const result = await logCorrect(r.deps, {
+      entryId: entry.entryId,
+      expectedRevision: 1,
+      description: "soup"
+    });
+    expect(result.entry.estimateState).toBe("failed");
   });
 });
 

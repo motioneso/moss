@@ -22,7 +22,7 @@ import type { HostActions } from "../root";
 import type { MealsWrites } from "../writes";
 import { AddMealDialog, EditMealDialog } from "./log-dialogs";
 
-type Dialog = { kind: "add" } | { kind: "edit"; entryId: string } | null;
+type Dialog = { kind: "add" } | { kind: "edit"; entry: LogEntryView } | null;
 
 function zone(): string | null {
   try {
@@ -55,7 +55,7 @@ export function LogScreen(props: {
       <DayNav localDate={props.localDate} onDate={props.onDate} />
     </div>
   );
-  if (state.kind === "loading") {
+  if (state.kind === "loading" || (state.kind === "ready" && state.forDate !== props.localDate)) {
     return (
       <div className="mls-stack">
         {nav}
@@ -307,10 +307,9 @@ function Day(props: {
       askMoss
     );
 
-  const editing =
-    dialog?.kind === "edit"
-      ? day.entries.find((entry) => entry.entryId === dialog.entryId)
-      : undefined;
+  // The dialog keeps the entry as it was opened, so the save carries the revision the user saw
+  // even after the refresh replaces the live row.
+  const editing = dialog?.kind === "edit" ? dialog.entry : undefined;
   const uncounted = day.totals?.entriesWithoutEstimate ?? 0;
 
   return (
@@ -352,7 +351,7 @@ function Day(props: {
                       entry={entry}
                       writes={writes}
                       busy={busy}
-                      onEdit={(row) => setDialog({ kind: "edit", entryId: row.entryId })}
+                      onEdit={(row) => setDialog({ kind: "edit", entry: row })}
                       onRetry={(row) => void run("meals.log.reestimate", { entryId: row.entryId })}
                       onDelete={(row) => void run("meals.log.delete", { entryId: row.entryId })}
                     />

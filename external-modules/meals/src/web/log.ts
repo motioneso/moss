@@ -10,7 +10,7 @@ import { readTool } from "./api";
 export type LogState =
   | { readonly kind: "loading" }
   | { readonly kind: "error" }
-  | { readonly kind: "ready"; readonly day: LogListResult };
+  | { readonly kind: "ready"; readonly forDate: string; readonly day: LogListResult };
 
 export const LOG_POLL_MS = 5000;
 
@@ -20,9 +20,12 @@ export function useLog(localDate: string): { state: LogState; reload: () => void
   useEffect(() => {
     let live = true;
     readTool<LogListResult>("meals.log.list", { localDate }).then(
-      (day) => live && setState({ kind: "ready", day }),
+      (day) => live && setState({ kind: "ready", forDate: localDate, day }),
       () =>
-        live && setState((previous) => (previous.kind === "ready" ? previous : { kind: "error" }))
+        live &&
+        setState((previous) =>
+          previous.kind === "ready" && previous.forDate === localDate ? previous : { kind: "error" }
+        )
     );
     return () => {
       live = false;

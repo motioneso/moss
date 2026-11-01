@@ -171,6 +171,30 @@ describe("Log without a tools handle", () => {
     expect(buttons(renderer, "Try again")).toHaveLength(1);
   });
 
+  it("hides the old day while the next one loads, and shows an error when it fails", async () => {
+    const renderer = await render();
+    expect(text(renderer)).toContain("Two eggs on toast");
+    let fail!: (reason: Error) => void;
+    mockReadTool.mockImplementation(async (name: string) => {
+      if (name === "meals.log.list") {
+        return new Promise((_resolve, reject) => {
+          fail = reject;
+        });
+      }
+      return { plan: null };
+    });
+    await act(async () => {
+      buttons(renderer, "Previous day")[0]!.props.onClick();
+    });
+    expect(text(renderer)).not.toContain("Two eggs on toast");
+    expect(text(renderer)).toContain("Loading the Log");
+    await act(async () => {
+      fail(new Error("boom"));
+    });
+    expect(text(renderer)).not.toContain("Two eggs on toast");
+    expect(text(renderer)).toContain("Couldn't load the Log");
+  });
+
   it("expands a meal to its foods", async () => {
     const renderer = await render();
     await act(async () => {
@@ -225,6 +249,38 @@ describe("Log with a tools handle", () => {
       expectedRevision: 2,
       items: [{ nutrients: { caloriesKcal: 200 } }]
     });
+  });
+
+  it("saves at the revision the dialog opened with, even after a refresh replaces the row", async () => {
+    const invoke = vi.fn(async () => ({ status: "succeeded", result: {} }));
+    const renderer = await render({ tools: { invoke } });
+    await act(async () => {
+      buttons(renderer, "Edit Two eggs on toast")[0]!.props.onClick();
+    });
+    current = day({
+      entries: day().entries.map((row) =>
+        row.entryId === "e1" ? { ...row, estimateRevision: 3 } : row
+      )
+    });
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const calories = renderer.root.find(
+      (node) => node.type === "input" && node.props.value === "180"
+    );
+    await act(async () => {
+      calories.props.onChange({ target: { value: "200" } });
+    });
+    await act(async () => {
+      buttons(renderer, "Save")[0]!.props.onClick();
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "meals.log.correct",
+      expect.objectContaining({ entryId: "e1", expectedRevision: 2 })
+    );
   });
 
   it("refuses a figure that is not a number", async () => {
