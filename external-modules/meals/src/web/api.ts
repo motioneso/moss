@@ -7,7 +7,8 @@ export type MealsReadToolName =
   | "meals.plan.current"
   | "meals.meal.get"
   | "meals.list.get"
-  | "meals.pantry.get";
+  | "meals.pantry.get"
+  | "meals.log.list";
 
 export class ReadToolError extends Error {
   constructor(readonly status: number) {

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "meals",
   "name": "Meals",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": {
@@ -30,7 +30,10 @@
       "app.meals_shopping_list_items",
       "app.meals_pantry_items",
       "app.meals_undo_actions",
-      "app.meals_staples"
+      "app.meals_staples",
+      "app.meals_log_entries",
+      "app.meals_log_estimates",
+      "app.meals_log_estimate_items"
     ]
   },
   "runtime": {
@@ -61,6 +64,25 @@
             }
           }
         }
+      },
+      {
+        "name": "meals.log-estimate",
+        "handler": "log.estimate",
+        "retryLimit": 2,
+        "allowModuleEnqueue": true,
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "entryId": {
+              "type": "uuid"
+            },
+            "revision": {
+              "type": "integer",
+              "min": 1,
+              "max": 1000000
+            }
+          }
+        }
       }
     ]
   },
@@ -82,7 +104,7 @@
       {
         "id": "meals.plan",
         "label": "Meals",
-        "description": "The Meals page, with tabs for Plan, Shopping list, Pantry, Household and Log. Plan shows the meal plan day by day as Moss writes it, with tonight's dinner on top, and an empty state until a plan exists. Log shows an empty state until it is built.",
+        "description": "The Meals page, with tabs for Plan, Shopping list, Pantry, Household and Log. Plan shows the meal plan day by day as Moss writes it, with tonight's dinner on top, and an empty state until a plan exists.",
         "path": "/"
       },
       {
@@ -120,6 +142,12 @@
         "label": "Meals settings",
         "description": "Units (US or metric) and the default Pantry mode.",
         "path": "/settings"
+      },
+      {
+        "id": "meals.log",
+        "label": "Log",
+        "path": "/log",
+        "description": "What you ate on a day, with calories and macros against your daily target. Log a meal by typing it, correct or delete an entry, and retry an estimate that is stuck."
       }
     ],
     "features": [
@@ -146,6 +174,10 @@
       {
         "id": "meals.chat-pantry",
         "description": "Ask Moss what is in the Pantry, add or change an item or a Staple, or remove one and undo it."
+      },
+      {
+        "id": "meals.chat-log",
+        "description": "Log what you ate through Moss. Moss estimates calories and macros, answers what you ate on a day or over a range, corrects an entry, and deletes one after asking."
       }
     ]
   },
@@ -154,6 +186,13 @@
       "id": "meal_planning",
       "label": "Meal planning",
       "description": "Plan meals, manage the household, list, Pantry and cooking.",
+      "defaultTier": "ask_each_time",
+      "allowedTiers": ["ask_each_time", "trusted_auto", "always_confirm"]
+    },
+    {
+      "id": "meal_logging",
+      "label": "Meal logging",
+      "description": "Log what you ate and correct or delete a logged meal.",
       "defaultTier": "ask_each_time",
       "allowedTiers": ["ask_each_time", "trusted_auto", "always_confirm"]
     }
@@ -3726,6 +3765,1641 @@
           }
         }
       }
+    },
+    {
+      "name": "meals.log.list",
+      "permissionId": "meals.log.list",
+      "description": "List logged meals for one day (localDate) or a range of up to 31 days (fromLocalDate and toLocalDate). A single day also returns the day's totals, the self member's daily targets and how the calories compare to the calorie target. Totals count only estimated meals. A meal still being estimated is counted in entriesWithoutEstimate, never as zero.",
+      "actionLabel": "Look at what you ate",
+      "risk": "read",
+      "handler": "log.list",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "localDate": {
+            "type": "string"
+          },
+          "fromLocalDate": {
+            "type": "string"
+          },
+          "toLocalDate": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Maximum meals to return, keeping the most recent. Defaults to 200, which is also the ceiling."
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["entries", "totals", "targets", "calorieFit", "truncated", "totalCount"],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "entryId",
+                "consumedAt",
+                "localDate",
+                "timezoneOffset",
+                "description",
+                "servingNote",
+                "captureKind",
+                "estimateState",
+                "estimateRevision",
+                "nutrients",
+                "items",
+                "missingDetails",
+                "clarificationQuestion"
+              ],
+              "properties": {
+                "entryId": {
+                  "type": "string"
+                },
+                "consumedAt": {
+                  "type": "string"
+                },
+                "localDate": {
+                  "type": "string"
+                },
+                "timezoneOffset": {
+                  "type": "integer"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "servingNote": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "captureKind": {
+                  "type": "string"
+                },
+                "estimateState": {
+                  "type": "string"
+                },
+                "estimateRevision": {
+                  "type": "integer"
+                },
+                "nutrients": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "caloriesKcal",
+                        "proteinG",
+                        "carbohydratesG",
+                        "fatG",
+                        "fiberG",
+                        "sugarG",
+                        "sodiumMg"
+                      ],
+                      "properties": {
+                        "caloriesKcal": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "proteinG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "carbohydratesG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fatG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fiberG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sugarG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sodiumMg": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["label", "portionNote", "nutrients"],
+                    "properties": {
+                      "label": {
+                        "type": "string"
+                      },
+                      "portionNote": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "nutrients": {
+                        "type": "object",
+                        "required": [
+                          "caloriesKcal",
+                          "proteinG",
+                          "carbohydratesG",
+                          "fatG",
+                          "fiberG",
+                          "sugarG",
+                          "sodiumMg"
+                        ],
+                        "properties": {
+                          "caloriesKcal": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "proteinG": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "carbohydratesG": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "fatG": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "fiberG": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "sugarG": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "sodiumMg": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "missingDetails": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "clarificationQuestion": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "totals": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": ["localDate", "nutrients", "incomplete", "entriesWithoutEstimate"],
+                "properties": {
+                  "localDate": {
+                    "type": "string"
+                  },
+                  "nutrients": {
+                    "type": "object",
+                    "required": [
+                      "caloriesKcal",
+                      "proteinG",
+                      "carbohydratesG",
+                      "fatG",
+                      "fiberG",
+                      "sugarG",
+                      "sodiumMg"
+                    ],
+                    "properties": {
+                      "caloriesKcal": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "proteinG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "carbohydratesG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fatG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fiberG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sugarG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sodiumMg": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "incomplete": {
+                    "type": "boolean"
+                  },
+                  "entriesWithoutEstimate": {
+                    "type": "integer"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targets": {
+            "type": "object",
+            "required": ["caloriesKcal", "proteinG", "carbG", "fatG"],
+            "properties": {
+              "caloriesKcal": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "proteinG": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "carbG": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fatG": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "calorieFit": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                "properties": {
+                  "targetKcal": {
+                    "type": "integer"
+                  },
+                  "estimatedKcal": {
+                    "type": "integer"
+                  },
+                  "band": {
+                    "type": "string"
+                  },
+                  "differenceKcal": {
+                    "type": "integer"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "totalCount": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.log.summarize",
+      "permissionId": "meals.log.summarize",
+      "description": "Add up nutrition across a date range of up to 92 days. Meals without an estimate are counted, never treated as zero.",
+      "actionLabel": "Add up what you ate",
+      "risk": "read",
+      "handler": "log.summarize",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fromLocalDate", "toLocalDate"],
+        "properties": {
+          "fromLocalDate": {
+            "type": "string"
+          },
+          "toLocalDate": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "fromLocalDate",
+          "toLocalDate",
+          "nutrients",
+          "incomplete",
+          "entriesWithoutEstimate",
+          "daysWithEntries"
+        ],
+        "properties": {
+          "fromLocalDate": {
+            "type": "string"
+          },
+          "toLocalDate": {
+            "type": "string"
+          },
+          "nutrients": {
+            "type": "object",
+            "required": [
+              "caloriesKcal",
+              "proteinG",
+              "carbohydratesG",
+              "fatG",
+              "fiberG",
+              "sugarG",
+              "sodiumMg"
+            ],
+            "properties": {
+              "caloriesKcal": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "proteinG": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "carbohydratesG": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fatG": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fiberG": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sugarG": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sodiumMg": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "incomplete": {
+            "type": "boolean"
+          },
+          "entriesWithoutEstimate": {
+            "type": "integer"
+          },
+          "daysWithEntries": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.log.add",
+      "permissionId": "meals.log.add",
+      "description": "Log a meal from a description. The meal is saved at once as pending and Moss estimates calories and macros in the background. Read it again with meals.log.list to see the estimate. A retry with the same idempotencyKey returns the same meal.",
+      "actionLabel": "Log a meal",
+      "risk": "write",
+      "actionFamilyId": "meal_logging",
+      "executionPolicy": "auto",
+      "handler": "log.add",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["description", "idempotencyKey"],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "consumedAt": {
+            "type": "string",
+            "description": "When the meal was consumed: use an ISO instant with Z or a numeric offset, or an offset-less local date-time interpreted in timeZone. Example: 2026-08-22T20:14:00 with America/Los_Angeles stores 2026-08-23T03:14:00.000Z. DST gaps and folds require an explicit offset."
+          },
+          "timeZone": {
+            "type": "string",
+            "description": "IANA time zone for an offset-less consumedAt value; for example, 2026-08-22T20:14:00 with America/Los_Angeles stores 2026-08-23T03:14:00.000Z. The host locale takes precedence when available."
+          },
+          "mealType": {
+            "type": "string",
+            "enum": ["breakfast", "lunch", "dinner", "snack"],
+            "description": "Part of the day. Use it when the person names a meal such as lunch and gives no time; Moss stamps a usual time today. consumedAt wins when both are given."
+          },
+          "captureKind": {
+            "type": "string",
+            "enum": ["text", "photo", "voice"]
+          },
+          "servingNote": {
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["entry"],
+        "properties": {
+          "entry": {
+            "type": "object",
+            "required": [
+              "entryId",
+              "consumedAt",
+              "localDate",
+              "timezoneOffset",
+              "description",
+              "servingNote",
+              "captureKind",
+              "estimateState",
+              "estimateRevision",
+              "nutrients",
+              "items",
+              "missingDetails",
+              "clarificationQuestion"
+            ],
+            "properties": {
+              "entryId": {
+                "type": "string"
+              },
+              "consumedAt": {
+                "type": "string"
+              },
+              "localDate": {
+                "type": "string"
+              },
+              "timezoneOffset": {
+                "type": "integer"
+              },
+              "description": {
+                "type": "string"
+              },
+              "servingNote": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "captureKind": {
+                "type": "string"
+              },
+              "estimateState": {
+                "type": "string"
+              },
+              "estimateRevision": {
+                "type": "integer"
+              },
+              "nutrients": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "caloriesKcal",
+                      "proteinG",
+                      "carbohydratesG",
+                      "fatG",
+                      "fiberG",
+                      "sugarG",
+                      "sodiumMg"
+                    ],
+                    "properties": {
+                      "caloriesKcal": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "proteinG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "carbohydratesG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fatG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fiberG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sugarG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sodiumMg": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["label", "portionNote", "nutrients"],
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "portionNote": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "nutrients": {
+                      "type": "object",
+                      "required": [
+                        "caloriesKcal",
+                        "proteinG",
+                        "carbohydratesG",
+                        "fatG",
+                        "fiberG",
+                        "sugarG",
+                        "sodiumMg"
+                      ],
+                      "properties": {
+                        "caloriesKcal": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "proteinG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "carbohydratesG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fatG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fiberG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sugarG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sodiumMg": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "missingDetails": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "clarificationQuestion": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "selfOperationGrant": "granted_at_install"
+    },
+    {
+      "name": "meals.log.reestimate",
+      "permissionId": "meals.log.reestimate",
+      "description": "Retry the estimate for a meal that is still pending or whose estimate failed. A meal that already has an estimate is left alone. Use meals.log.correct to change one.",
+      "actionLabel": "Retry a meal estimate",
+      "risk": "write",
+      "actionFamilyId": "meal_logging",
+      "executionPolicy": "auto",
+      "handler": "log.reestimate",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["entryId"],
+        "properties": {
+          "entryId": {
+            "type": "string",
+            "description": "Identifier of the meal to re-estimate."
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["entry"],
+        "properties": {
+          "entry": {
+            "type": "object",
+            "required": [
+              "entryId",
+              "consumedAt",
+              "localDate",
+              "timezoneOffset",
+              "description",
+              "servingNote",
+              "captureKind",
+              "estimateState",
+              "estimateRevision",
+              "nutrients",
+              "items",
+              "missingDetails",
+              "clarificationQuestion"
+            ],
+            "properties": {
+              "entryId": {
+                "type": "string"
+              },
+              "consumedAt": {
+                "type": "string"
+              },
+              "localDate": {
+                "type": "string"
+              },
+              "timezoneOffset": {
+                "type": "integer"
+              },
+              "description": {
+                "type": "string"
+              },
+              "servingNote": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "captureKind": {
+                "type": "string"
+              },
+              "estimateState": {
+                "type": "string"
+              },
+              "estimateRevision": {
+                "type": "integer"
+              },
+              "nutrients": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "caloriesKcal",
+                      "proteinG",
+                      "carbohydratesG",
+                      "fatG",
+                      "fiberG",
+                      "sugarG",
+                      "sodiumMg"
+                    ],
+                    "properties": {
+                      "caloriesKcal": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "proteinG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "carbohydratesG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fatG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fiberG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sugarG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sodiumMg": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["label", "portionNote", "nutrients"],
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "portionNote": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "nutrients": {
+                      "type": "object",
+                      "required": [
+                        "caloriesKcal",
+                        "proteinG",
+                        "carbohydratesG",
+                        "fatG",
+                        "fiberG",
+                        "sugarG",
+                        "sodiumMg"
+                      ],
+                      "properties": {
+                        "caloriesKcal": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "proteinG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "carbohydratesG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fatG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fiberG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sugarG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sodiumMg": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "missingDetails": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "clarificationQuestion": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "selfOperationGrant": "granted_at_install"
+    },
+    {
+      "name": "meals.log.correct",
+      "permissionId": "meals.log.correct",
+      "description": "Correct a logged meal's description, serving note, time or one of the foods in it. Pass the expectedRevision from the last read. A stale revision is refused. The meal's totals are recalculated from its foods.",
+      "actionLabel": "Correct a logged meal",
+      "risk": "write",
+      "actionFamilyId": "meal_logging",
+      "executionPolicy": "auto",
+      "handler": "log.correct",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["entryId", "expectedRevision"],
+        "properties": {
+          "entryId": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "servingNote": {
+            "type": ["string", "null"]
+          },
+          "consumedAt": {
+            "type": "string",
+            "description": "When the meal was consumed: use an ISO instant with Z or a numeric offset, or an offset-less local date-time interpreted in timeZone. Example: 2026-08-22T20:14:00 with America/Los_Angeles stores 2026-08-23T03:14:00.000Z. DST gaps and folds require an explicit offset."
+          },
+          "timeZone": {
+            "type": "string",
+            "description": "IANA time zone for an offset-less consumedAt value; for example, 2026-08-22T20:14:00 with America/Los_Angeles stores 2026-08-23T03:14:00.000Z. The host locale takes precedence when available."
+          },
+          "items": {
+            "type": "array",
+            "description": "Entry N corrects the Nth food in the meal; null leaves that food alone. The meal's totals are recalculated from the foods afterwards.",
+            "items": {
+              "type": ["object", "null"],
+              "additionalProperties": false,
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "portionNote": {
+                  "type": ["string", "null"]
+                },
+                "nutrients": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "caloriesKcal": {
+                      "type": ["number", "null"]
+                    },
+                    "proteinG": {
+                      "type": ["number", "null"]
+                    },
+                    "carbohydratesG": {
+                      "type": ["number", "null"]
+                    },
+                    "fatG": {
+                      "type": ["number", "null"]
+                    },
+                    "fiberG": {
+                      "type": ["number", "null"]
+                    },
+                    "sugarG": {
+                      "type": ["number", "null"]
+                    },
+                    "sodiumMg": {
+                      "type": ["number", "null"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["entry"],
+        "properties": {
+          "entry": {
+            "type": "object",
+            "required": [
+              "entryId",
+              "consumedAt",
+              "localDate",
+              "timezoneOffset",
+              "description",
+              "servingNote",
+              "captureKind",
+              "estimateState",
+              "estimateRevision",
+              "nutrients",
+              "items",
+              "missingDetails",
+              "clarificationQuestion"
+            ],
+            "properties": {
+              "entryId": {
+                "type": "string"
+              },
+              "consumedAt": {
+                "type": "string"
+              },
+              "localDate": {
+                "type": "string"
+              },
+              "timezoneOffset": {
+                "type": "integer"
+              },
+              "description": {
+                "type": "string"
+              },
+              "servingNote": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "captureKind": {
+                "type": "string"
+              },
+              "estimateState": {
+                "type": "string"
+              },
+              "estimateRevision": {
+                "type": "integer"
+              },
+              "nutrients": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "caloriesKcal",
+                      "proteinG",
+                      "carbohydratesG",
+                      "fatG",
+                      "fiberG",
+                      "sugarG",
+                      "sodiumMg"
+                    ],
+                    "properties": {
+                      "caloriesKcal": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "proteinG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "carbohydratesG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fatG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fiberG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sugarG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sodiumMg": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["label", "portionNote", "nutrients"],
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "portionNote": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "nutrients": {
+                      "type": "object",
+                      "required": [
+                        "caloriesKcal",
+                        "proteinG",
+                        "carbohydratesG",
+                        "fatG",
+                        "fiberG",
+                        "sugarG",
+                        "sodiumMg"
+                      ],
+                      "properties": {
+                        "caloriesKcal": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "proteinG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "carbohydratesG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fatG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fiberG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sugarG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sodiumMg": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "missingDetails": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "clarificationQuestion": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "selfOperationGrant": "granted_at_install"
+    },
+    {
+      "name": "meals.log.delete",
+      "permissionId": "meals.log.delete",
+      "description": "Delete a logged meal.",
+      "actionLabel": "Delete a logged meal",
+      "risk": "destructive",
+      "handler": "log.delete",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["entryId"],
+        "properties": {
+          "entryId": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["entryId", "deleted"],
+        "properties": {
+          "entryId": {
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "selfOperationGrant": "confirm_always"
     }
   ]
 }

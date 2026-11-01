@@ -105,16 +105,6 @@ describe("Meals page shell", () => {
     expect(labels).toEqual(["Plan", "Shopping list", "Pantry", "Household", "Log"]);
   });
 
-  it("gives the unbuilt area the prototype's empty-state title and no action", async () => {
-    const titles: Array<[string, string]> = [["/m/meals/log", "Nothing logged"]];
-    for (const [path, title] of titles) {
-      const renderer = await render(path);
-      const empty = renderer.root.find((node) => node.props.className === "jds-empty");
-      expect(text(renderer)).toContain(title);
-      expect(empty.findAll((node) => node.type === "button")).toEqual([]);
-    }
-  });
-
   it("shows Nothing to buy on the empty list, with Ask Moss and no write control", async () => {
     const renderer = await render("/m/meals/list");
     expect(text(renderer)).toContain("Nothing to buy");
