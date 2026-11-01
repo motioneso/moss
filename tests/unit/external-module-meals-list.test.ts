@@ -101,7 +101,7 @@ describe("buildList", () => {
   it("marks lines the Pantry covers instead of dropping them", () => {
     const [line] = buildList({
       meals: [meal("m1", [ing("Rice", 100, "g")])],
-      coveredNameKeys: new Set(["rice"])
+      pantry: { mode: "prefer", stock: [{ name: "Rice", quantity: null, unit: null }], staples: [] }
     });
     expect(line!.coveredByPantry).toBe(true);
   });

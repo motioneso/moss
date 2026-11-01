@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "meals",
   "name": "Meals",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": {
@@ -29,7 +29,8 @@
       "app.meals_shopping_lists",
       "app.meals_shopping_list_items",
       "app.meals_pantry_items",
-      "app.meals_undo_actions"
+      "app.meals_undo_actions",
+      "app.meals_staples"
     ]
   },
   "runtime": {
@@ -81,14 +82,26 @@
       {
         "id": "meals.plan",
         "label": "Meals",
-        "description": "The Meals page, with tabs for Plan, Shopping list, Pantry, Household and Log. Plan shows the meal plan day by day as Moss writes it, with tonight's dinner on top, and an empty state until a plan exists. Pantry and Log show an empty state until they are built.",
+        "description": "The Meals page, with tabs for Plan, Shopping list, Pantry, Household and Log. Plan shows the meal plan day by day as Moss writes it, with tonight's dinner on top, and an empty state until a plan exists. Log shows an empty state until it is built.",
         "path": "/"
       },
       {
         "id": "meals.list",
         "label": "Shopping list",
-        "description": "The shopping list by store section, with amounts to buy, where each line came from, a You have this group, and Bought.",
+        "description": "The shopping list by store section, with amounts to buy, where each line came from, the plan's Pantry mode, a You have this group for what the Pantry covers, and Bought.",
         "path": "/list"
+      },
+      {
+        "id": "meals.pantry",
+        "label": "Pantry",
+        "description": "What the household has on hand, with a find box, an amount for each item (Some when there is no amount), and add, edit and remove. Removing an item offers Undo. A rail lists the Staples.",
+        "path": "/pantry"
+      },
+      {
+        "id": "meals.staples",
+        "label": "Staples",
+        "description": "Things always on hand, such as salt, oil and water. Staples never go on the shopping list and count as on hand when Moss plans.",
+        "path": "/pantry/staples"
       },
       {
         "id": "meals.recipe",
@@ -125,6 +138,14 @@
       {
         "id": "meals.chat-list",
         "description": "Add to the list, I bought everything, and undo through Moss."
+      },
+      {
+        "id": "meals.pantry-modes",
+        "description": "A plan's Pantry mode decides how Moss uses the Pantry. Ignore the Pantry lists everything. Use what I have subtracts what the Pantry covers from the shopping list and leans toward ingredients on hand. Cook only from what I have also rewrites any recipe that needs something that is neither in the Pantry nor a Staple. Add to the Pantry through the page or through Moss."
+      },
+      {
+        "id": "meals.chat-pantry",
+        "description": "Ask Moss what is in the Pantry, add or change an item or a Staple, or remove one and undo it."
       }
     ]
   },
@@ -3442,10 +3463,240 @@
       }
     },
     {
+      "name": "meals.pantry.get",
+      "permissionId": "meals.pantry.get",
+      "description": "Read the Pantry. Items carry a name, an optional amount and unit (no amount means the household has some), and where the item came from. Staples are the things always on hand, such as salt and oil, that never go on the shopping list.",
+      "actionLabel": "Read your Pantry",
+      "risk": "read",
+      "actionFamilyId": "meal_planning",
+      "handler": "pantry.get",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["items", "staples"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["itemId", "name", "quantity", "unit", "source", "updatedAt"],
+              "properties": {
+                "itemId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "unit": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "source": {
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "staples": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["stapleId", "name"],
+              "properties": {
+                "stapleId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.pantry.edit",
+      "permissionId": "meals.pantry.edit",
+      "description": "Add, change or remove a Pantry item or a Staple. action is add, update or remove. target is item (the default) or staple. add needs a name and takes an optional quantity and unit for an item; no quantity means the household has some. update changes an item by itemId, or renames a Staple by stapleId. Removing an item returns an undo token. Changing the Pantry updates a shopping list that follows a plan.",
+      "actionLabel": "Edit your Pantry",
+      "risk": "write",
+      "actionFamilyId": "meal_planning",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "handler": "pantry.edit",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action"],
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": ["add", "update", "remove"]
+          },
+          "target": {
+            "type": "string",
+            "enum": ["item", "staple"]
+          },
+          "itemId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "stapleId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 24
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["pantry", "undo"],
+        "properties": {
+          "pantry": {
+            "type": "object",
+            "required": ["items", "staples"],
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["itemId", "name", "quantity", "unit", "source", "updatedAt"],
+                  "properties": {
+                    "itemId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "quantity": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "unit": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "staples": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["stapleId", "name"],
+                  "properties": {
+                    "stapleId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "undo": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": ["actionId", "kind", "count"],
+                "properties": {
+                  "actionId": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "count": {
+                    "type": "number"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
       "name": "meals.undo",
       "permissionId": "meals.undo",
-      "description": "Undo the shopping list change an undo token names. A removed line comes back, and a Bought is reversed. A Pantry amount that was edited after Bought is left alone and counted as skipped.",
-      "actionLabel": "Undo a shopping list change",
+      "description": "Undo the change an undo token names. A removed shopping line or Pantry item comes back, and a Bought is reversed. A Pantry amount that was edited after Bought is left alone and counted as skipped.",
+      "actionLabel": "Undo a shopping list or Pantry change",
       "risk": "write",
       "actionFamilyId": "meal_planning",
       "executionPolicy": "auto",

@@ -18,7 +18,7 @@ import type { MealsWrites } from "../writes";
 import type { HostActions } from "../root";
 import { DaySection } from "./plan-day";
 
-const PANTRY_LABEL: Record<PantryMode, string> = {
+export const PANTRY_LABEL: Record<PantryMode, string> = {
   ignore: "Ignore the Pantry",
   prefer: "Prefer what's on hand",
   only: "Only what's on hand"
