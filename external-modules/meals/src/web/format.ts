@@ -1,5 +1,6 @@
 // external-modules/meals/src/web/format.ts
 import type { MemberView, SlotRuleView } from "../contracts";
+import { formatNumber } from "../domain/units";
 
 const SLOT_ORDER = ["breakfast", "lunch", "dinner"];
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -82,4 +83,20 @@ export function sharingRule(rule: SlotRuleView | undefined): string {
   if (key === "1,2,3,4,5") return "Solo on weekdays, shared at weekends";
   if (key === "6,7") return "Solo at weekends, shared on weekdays";
   return `Solo on ${days.map((day) => WEEKDAYS[day - 1]).join(", ")}`;
+}
+
+/** "500 ml", "2 cloves", or just "6" for a plain count. */
+export function amountText(quantity: number, unit: string | null): string {
+  const number = formatNumber(quantity, false);
+  return unit ? `${number} ${unit}` : number;
+}
+
+/** A typed amount such as "2 l" or "6". Null when it does not start with a number. */
+export function parseAmount(text: string): { quantity: number; unit: string | null } | null {
+  const match = /^(\d+(?:\.\d+)?)\s*(.*)$/.exec(text.trim());
+  if (match === null) return null;
+  const quantity = Number(match[1]);
+  if (!Number.isFinite(quantity) || quantity <= 0) return null;
+  const unit = (match[2] ?? "").trim();
+  return { quantity, unit: unit === "" ? null : unit };
 }

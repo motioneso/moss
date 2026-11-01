@@ -254,6 +254,9 @@ function validateAssistantToolPolicy(
   ) {
     errors.push("assistant tool confirmWhenKeys must be an array of non-empty strings");
   }
+  if (tool.confirmUnderYolo !== undefined && typeof tool.confirmUnderYolo !== "boolean") {
+    errors.push("assistant tool confirmUnderYolo must be a boolean");
+  }
   if (tool.confirmAbove !== undefined) {
     const rule = tool.confirmAbove as Record<string, unknown> | null;
     if (!rule || typeof rule !== "object" || Array.isArray(rule)) {

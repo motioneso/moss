@@ -176,7 +176,7 @@ const patch = async (id: string) => {
   const row = await read(id);
   return { id, writeRevision: row.writeRevision, categoryId: "dining" };
 };
-const activity = () => owner((s) => s.listActivity("2026-10-01", "2026-11-01", 200));
+const activity = () => owner((s) => s.listActivity("2026-10-01", "2100-01-01", 200));
 describe("metadata-only compare and set", () => {
   it("changes category and explicit notes, preserves every financial field and logs no notes", async () => {
     await seed("metadata:exact");

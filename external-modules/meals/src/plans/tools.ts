@@ -203,7 +203,9 @@ export async function planDelete(
   deps: PlanDeps,
   input: Input
 ): Promise<{ readonly deleted: true }> {
-  const deleted = await deps.store.deletePlan(requireString(input, "planId", 64));
+  const planId = requireString(input, "planId", 64);
+  if ((await deps.store.getPlan(planId)) !== null) await deps.onPlanChange?.(planId, "deleted");
+  const deleted = await deps.store.deletePlan(planId);
   if (!deleted) throw new PlanInputError("No plan with that id");
   return { deleted: true };
 }

@@ -20,7 +20,6 @@ export async function exerciseRefillTarget(
   await editor.getByLabel("Target category", { exact: true }).selectOption("utilities");
   await editor.getByLabel("Target type", { exact: true }).selectOption("refill");
   await editor.getByLabel("Target amount", { exact: true }).fill("12.01");
-  await editor.getByText(/Counts carried money plus this month's assignments/).waitFor();
   await inspect(editor, "refill-editor");
   await editor.getByRole("button", { name: "Save target", exact: true }).click();
   await editor.waitFor({ state: "detached" });

@@ -168,7 +168,7 @@ describe("manual ledger through installed module SQL and actual owner role", () 
     ).toEqual(["created", "created"]);
     expect((await owner((s) => s.getAccount(a.accountId)))?.balanceCents).toBe(103880);
     expect(await owner((s) => s.getTransactionChunk(a.accountId, "2026-10"))).toHaveLength(3);
-    const events = await owner((s) => s.listActivity("2026-10-01", "2026-11-01", 100));
+    const events = await owner((s) => s.listActivity("2026-10-01", "2100-01-01", 100));
     expect(events.filter((event) => event.params.accountId === a.accountId)).toHaveLength(4);
     expect(JSON.stringify(events)).not.toContain("Synthetic private note");
   });
@@ -202,7 +202,7 @@ describe("manual ledger through installed module SQL and actual owner role", () 
     ).toBe("overflow");
     expect(await owner((s) => s.getTransactionChunk(max.accountId, "2026-10"))).toBeNull();
     expect(
-      (await owner((s) => s.listActivity("2026-10-01", "2026-11-01", 100))).filter(
+      (await owner((s) => s.listActivity("2026-10-01", "2100-01-01", 100))).filter(
         (event) => event.params.accountId === max.accountId
       )
     ).toHaveLength(1);
@@ -308,7 +308,7 @@ describe("manual ledger through installed module SQL and actual owner role", () 
         )
       )
     ).toBe("created");
-    const events = await owner((s) => s.listActivity("2026-10-01", "2026-11-01", 100));
+    const events = await owner((s) => s.listActivity("2026-10-01", "2100-01-01", 100));
     expect(
       events.filter((e) => e.kind === "account.reconcile" && e.params.accountId === a.accountId)
     ).toHaveLength(2);
@@ -475,7 +475,7 @@ describe("atomic CSV imports through installed SQL", () => {
     expect(await owner((s) => s.imports!.apply(b))).toBe("unchanged");
     expect((await owner((s) => s.getAccount(a.accountId)))?.balanceCents).toBe(92090);
     expect(await owner((s) => s.imports!.apply({ ...b, digest: "2".repeat(64) }))).toBe("conflict");
-    const events = await owner((s) => s.listActivity("2026-10-01", "2026-11-01", 200));
+    const events = await owner((s) => s.listActivity("2026-10-01", "2100-01-01", 200));
     expect(
       events.filter((e) => e.kind === "transaction.import" && e.params.importId === b.id)
     ).toHaveLength(1);
@@ -614,7 +614,7 @@ describe("reviewed budget currency through owner-scoped installed storage", () =
     expect(results.sort()).toEqual(["conflict", "created"]);
     expect((await owner((s) => s.budgetPolicy!.get()))?.isoCurrency).toBe("USD");
     const logs = await owner(
-      (s) => s.listActivity("2026-10-01T00:00:00Z", "2026-11-01T00:00:00Z", 200),
+      (s) => s.listActivity("2026-10-01T00:00:00Z", "2100-01-01", 200),
       ids.userB
     );
     expect(logs.filter((row) => row.kind === "budget.configure")).toHaveLength(1);

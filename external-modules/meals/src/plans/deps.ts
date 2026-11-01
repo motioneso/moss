@@ -28,6 +28,11 @@ export interface PlanDeps {
   readonly ai: MealsAi;
   readonly jobs: PlanJobs;
   readonly newId: () => string;
+  /**
+   * Called after a plan's meals change (a day finished writing) and just before a plan is
+   * deleted, so a shopping list tied to the plan can rebuild. Absent in tests that ignore lists.
+   */
+  readonly onPlanChange?: (planId: string, change: "written" | "deleted") => Promise<void>;
 }
 
 export const PLAN_DAY_QUEUE = "meals.plan-day";

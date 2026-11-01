@@ -7,6 +7,16 @@ import { randomUUID } from "node:crypto";
 
 import type { ModuleWorkerContext } from "@moss/module-sdk/worker";
 
+import type { ListDeps } from "../lists/deps.js";
+import {
+  listBought,
+  listBuild,
+  listClear,
+  listEdit,
+  listGet,
+  listOnPlanChange,
+  undo
+} from "../lists/tools.js";
 import { runPlanDay } from "../plans/day-job.js";
 import type { PlanDeps } from "../plans/deps.js";
 import {
@@ -17,6 +27,7 @@ import {
   planDelete,
   planGet
 } from "../plans/tools.js";
+import { sqlListStore } from "../store/list.js";
 import { sqlPlanStore } from "../store/plans.js";
 import { sqlStore } from "../store/sql.js";
 import { stripEnvelope } from "../tools/validate.js";
@@ -31,9 +42,27 @@ export type Handler = (ctx: ModuleWorkerContext) => Promise<unknown>;
 
 const storeFrom = (ctx: ModuleWorkerContext) => sqlStore(ctx.db);
 
+function listDeps(ctx: ModuleWorkerContext): ListDeps {
+  const kitchens = storeFrom(ctx);
+  return {
+    lists: sqlListStore(ctx.db),
+    plans: sqlPlanStore(ctx.db),
+    kitchen: () => kitchens.readKitchen(),
+    ensureKitchen: () => kitchens.getOrCreateKitchen(),
+    newId: randomUUID,
+    now: () => new Date()
+  };
+}
+
+const list =
+  (run: (deps: ListDeps, input: Record<string, unknown>) => Promise<unknown>): Handler =>
+  (ctx) =>
+    run(listDeps(ctx), stripEnvelope(ctx.input));
+
 function planDeps(ctx: ModuleWorkerContext): PlanDeps {
   const kitchens = storeFrom(ctx);
   return {
+    onPlanChange: (planId, change) => listOnPlanChange(listDeps(ctx), planId, change),
     store: sqlPlanStore(ctx.db),
     kitchen: () => kitchens.readKitchen(),
     ensureKitchen: () => kitchens.getOrCreateKitchen(),
@@ -68,5 +97,11 @@ export const HANDLERS: Readonly<Record<string, Handler>> = {
   "plan.control": plan(planControl),
   "plan.delete": plan(planDelete),
   "meal.get": plan(mealGet),
+  "list.get": list(listGet),
+  "list.build": list(listBuild),
+  "list.edit": list(listEdit),
+  "list.bought": list(listBought),
+  "list.clear": list(listClear),
+  undo: list(undo),
   "plan.day": (ctx) => runPlanDay(planDeps(ctx), jobParams(ctx.input))
 };
