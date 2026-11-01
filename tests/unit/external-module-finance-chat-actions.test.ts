@@ -317,6 +317,29 @@ describe("finance.rule.set (#3185)", () => {
     });
   });
 
+  it("returns a plain message with merchant, category, future effect, no change to old rows, and where to undo", async () => {
+    const run = ruleSetHandler(fakePorts(fakeKv(), []));
+    const first = (await run({ merchant: "Trader Joe's #123", categoryId: "groceries" })) as {
+      message: string;
+    };
+    expect(first.message).toContain("Trader Joe's #123");
+    expect(first.message).toContain("Groceries");
+    expect(first.message).toContain("Future transactions");
+    expect(first.message).toContain("automatically");
+    expect(first.message).toContain("No existing transactions were changed");
+    expect(first.message).toContain("Merchant rules");
+    expect(first.message).toContain("Recent activity");
+    const again = (await run({ merchant: "Trader Joe's #123", categoryId: "groceries" })) as {
+      message: string;
+    };
+    expect(again.message).toContain("Nothing changed");
+    const moved = (await run({ merchant: "Trader Joe's #123", categoryId: "dining" })) as {
+      message: string;
+    };
+    expect(moved.message).toContain("replaces the earlier rule");
+    expect(moved.message).toContain("Groceries");
+  });
+
   it("rejects an unknown category and a merchant with no letters", async () => {
     const kv = fakeKv();
     const run = ruleSetHandler(fakePorts(kv, []));

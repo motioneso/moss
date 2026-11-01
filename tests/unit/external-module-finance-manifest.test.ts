@@ -314,7 +314,7 @@ describe("finance manifest contract (#1146)", () => {
       Object.fromEntries(
         (result.manifest.assistantActionFamilies ?? []).map((f) => [f.id, f.freedom])
       )
-    ).toMatchObject({ rules: "new", moving_money: "routine", categories: "new" });
+    ).toMatchObject({ rules: "routine", moving_money: "routine", categories: "new" });
     expect(result.manifest.assistantOnboarding?.guidance.split(/\s+/).length ?? 999).toBeLessThan(
       150
     );
@@ -328,7 +328,7 @@ describe("finance manifest contract (#1146)", () => {
     ).toEqual([
       ["sorting", "trusted_auto"],
       ["sorting_new", "ask_each_time"],
-      ["rules", "ask_each_time"],
+      ["rules", "trusted_auto"],
       ["moving_money", "trusted_auto"],
       ["categories", "ask_each_time"],
       ["bank_connections", "always_confirm"],
