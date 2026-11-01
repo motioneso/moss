@@ -44,6 +44,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Moss tells you when it makes a merchant rule.** When you ask Moss to always put a merchant in one category, it now does it right away and tells you what it did and where to undo it. [PR #3933](https://github.com/motioneso/moss/pull/3933)
 - **Finance category changes always ask first.** Moss now always asks before changing the category of your Finance transactions, even when YOLO mode is on. [PR #3928](https://github.com/motioneso/moss/pull/3928)
 - **Faster category changes in Finance.** Confirming or changing a transaction's category now takes one click with an Undo, the transactions list is tidier, and the first-run screens lead straight to adding an account. [PR #3920](https://github.com/motioneso/moss/pull/3920)
 - **Settings header stays on one row.** The Personal and Admin switch now sits to the left of the settings search box on one row, and only stacks on narrow windows. [PR #3915](https://github.com/motioneso/moss/pull/3915)
