@@ -6,7 +6,11 @@ export type MealsWriteToolName =
   | "meals.kitchen.save"
   | "meals.household.save"
   | "meals.household.remove"
-  | "meals.plan.control";
+  | "meals.plan.control"
+  | "meals.list.build"
+  | "meals.list.edit"
+  | "meals.list.bought"
+  | "meals.undo";
 
 export type MealsWriteOutcome =
   | { readonly kind: "succeeded"; readonly result: unknown }

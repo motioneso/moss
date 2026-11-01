@@ -15,10 +15,13 @@ import type {
   CalorieFit,
   EaterView,
   KitchenView,
+  ListLineView,
   MemberView,
   PlannedMealView,
   PlanView,
-  RecipeView
+  RecipeView,
+  ShoppingListView,
+  UndoToken
 } from "../../external-modules/meals/src/contracts.js";
 import { HANDLERS } from "../../external-modules/meals/src/worker/registry.js";
 
@@ -152,6 +155,29 @@ function uncovered(schema: Schema, value: unknown, path = ""): string[] {
   return [];
 }
 
+const LINE: Required<ListLineView> = {
+  lineId: "l",
+  name: "milk",
+  quantity: 500,
+  unit: "ml",
+  purchase: { quantity: 1, unit: "l" },
+  section: "dairy_eggs",
+  manual: false,
+  coveredByPantry: false,
+  notInPlan: false,
+  convertedFrom: ["1 cup"],
+  sources: [{ mealId: "meal", label: "Mon dinner" }],
+  checkedAt: "2026-11-02T18:00:00Z",
+  boughtAt: "2026-11-02T19:00:00Z"
+};
+const LIST: Required<ShoppingListView> = {
+  listId: "x",
+  planId: "p",
+  pantryMode: "prefer",
+  lines: [LINE]
+};
+const UNDO: Required<UndoToken> = { actionId: "a", kind: "bought", count: 2 };
+
 function tool(name: string): Record<string, unknown> {
   const tools = loadManifest().assistantTools as Array<Record<string, unknown>>;
   const found = tools.find((entry) => entry.name === name);
@@ -165,7 +191,7 @@ describe("meals manifest", () => {
     expect(result.ok, JSON.stringify(!result.ok ? result.errors : [])).toBe(true);
   });
 
-  it("declares the S1 and S2 tools with their risks and handlers", () => {
+  it("declares the S1 to S4 tools with their risks and handlers", () => {
     const tools = loadManifest().assistantTools as Array<Record<string, unknown>>;
     expect(tools.map((entry) => [entry.name, entry.risk, entry.handler])).toEqual([
       ["meals.kitchen.get", "read", "kitchen.get"],
@@ -177,8 +203,16 @@ describe("meals manifest", () => {
       ["meals.plan.current", "read", "plan.current"],
       ["meals.plan.control", "write", "plan.control"],
       ["meals.plan.delete", "destructive", "plan.delete"],
-      ["meals.meal.get", "read", "meal.get"]
+      ["meals.meal.get", "read", "meal.get"],
+      ["meals.list.get", "read", "list.get"],
+      ["meals.list.build", "write", "list.build"],
+      ["meals.list.edit", "write", "list.edit"],
+      ["meals.list.bought", "write", "list.bought"],
+      ["meals.list.clear", "destructive", "list.clear"],
+      ["meals.undo", "write", "undo"]
     ]);
+    expect(tool("meals.list.clear").selfOperationGrant).toBe("confirm_always");
+    expect(tool("meals.list.bought").selfOperationGrant).toBe("granted_at_install");
     expect(tool("meals.household.remove").selfOperationGrant).toBe("confirm_always");
     expect(tool("meals.plan.delete").selfOperationGrant).toBe("confirm_always");
   });
@@ -227,7 +261,7 @@ describe("meals manifest", () => {
     ]);
   });
 
-  it("owns exactly the S1 and S2 tables", () => {
+  it("owns exactly the S1 to S4 tables", () => {
     expect(loadManifest().database).toEqual({
       ownedTables: [
         "app.meals_kitchens",
@@ -238,7 +272,11 @@ describe("meals manifest", () => {
         "app.meals_recipes",
         "app.meals_recipe_ingredients",
         "app.meals_planned_meals",
-        "app.meals_planned_meal_eaters"
+        "app.meals_planned_meal_eaters",
+        "app.meals_shopping_lists",
+        "app.meals_shopping_list_items",
+        "app.meals_pantry_items",
+        "app.meals_undo_actions"
       ]
     });
   });
@@ -253,7 +291,13 @@ describe("meals manifest", () => {
     ["meals.plan.current", { plan: PLAN }],
     ["meals.plan.control", PLAN],
     ["meals.plan.delete", { deleted: true }],
-    ["meals.meal.get", RECIPE]
+    ["meals.meal.get", RECIPE],
+    ["meals.list.get", LIST],
+    ["meals.list.build", LIST],
+    ["meals.list.edit", { list: LIST, undo: UNDO }],
+    ["meals.list.bought", { list: LIST, pantryAdded: 2, undo: UNDO }],
+    ["meals.list.clear", { cleared: true }],
+    ["meals.undo", { restored: 1, skipped: 0 }]
   ])("%s output schema covers every view field", (name, sample) => {
     expect(uncovered(tool(name).outputSchema as Schema, sample)).toEqual([]);
   });
@@ -280,12 +324,14 @@ describe("meals manifest", () => {
     };
     expect(appMap.screens.map((screen) => [screen.id, screen.path])).toEqual(
       expect.arrayContaining([
+        ["meals.list", "/list"],
         ["meals.recipe", "/recipe"],
         ["meals.household", "/household"],
         ["meals.settings", "/settings"]
       ])
     );
     expect(appMap.features.map((feature) => feature.id)).toContain("meals.chat-household");
+    expect(appMap.features.map((feature) => feature.id)).toContain("meals.chat-list");
   });
 
   it("maps plan writing and Safety in the words the plan gives", () => {
@@ -296,7 +342,7 @@ describe("meals manifest", () => {
       "Ask Moss to plan any number of days up to 28. Days are written one by one. Stop, resume, or retry one day."
     );
     expect(description("meals.safety")).toBe(
-      "Every meal is checked against each eater's Never serve list. Packaged or branded ingredients carry a check-the-label note."
+      "Every meal is checked against each eater's Never serve list. The check only says nothing listed was found outright, never that a meal is safe, and every result, pass or fail, reminds you to double check. Packaged or branded ingredients carry a check-the-label note."
     );
   });
 });

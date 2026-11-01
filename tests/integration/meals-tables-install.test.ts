@@ -13,6 +13,8 @@ import {
 } from "../../packages/db/src/module-role-broker.js";
 import { classifyModuleStatement } from "../../packages/db/src/module-statement-classify.js";
 import type { PlanStore } from "../../external-modules/meals/src/store/plan-port.js";
+import type { ListStore } from "../../external-modules/meals/src/store/list-port.js";
+import { sqlListStore } from "../../external-modules/meals/src/store/list.js";
 import { sqlPlanStore } from "../../external-modules/meals/src/store/plans.js";
 import { sqlStore, type MealsStore } from "../../external-modules/meals/src/store/sql.js";
 import {
@@ -38,7 +40,11 @@ const ownedTables = [
   "app.meals_recipes",
   "app.meals_recipe_ingredients",
   "app.meals_planned_meals",
-  "app.meals_planned_meal_eaters"
+  "app.meals_planned_meal_eaters",
+  "app.meals_shopping_lists",
+  "app.meals_shopping_list_items",
+  "app.meals_pantry_items",
+  "app.meals_undo_actions"
 ];
 const bare = (table: string) => table.replace(/^app\./, "");
 
@@ -124,8 +130,8 @@ afterAll(async () => {
 });
 
 describe("meals tables (S1 #3885)", () => {
-  it("installs eleven migrations with FORCE RLS on every table, and re-runs as a no-op", async () => {
-    expect(installedCount).toBe(11);
+  it("installs seventeen migrations with FORCE RLS on every table, and re-runs as a no-op", async () => {
+    expect(installedCount).toBe(17);
     const client = new Client({ connectionString: connectionStrings.bootstrap });
     await client.connect();
     try {
@@ -474,7 +480,7 @@ describe("meals plan tables (S2 #3886)", () => {
         );
         expect(visible.rows[0].n, table).toBe(0);
         const updated = await client.query(
-          `UPDATE ${table} SET updated_at = now() WHERE owner_user_id = $1 RETURNING 1`,
+          `UPDATE ${table} SET owner_user_id = owner_user_id WHERE owner_user_id = $1 RETURNING 1`,
           [ids.userA]
         );
         expect(updated.rows, table).toHaveLength(0);
@@ -529,6 +535,100 @@ describe("meals plan tables (S2 #3886)", () => {
     });
     await asPlanActor(ids.adminUser, async (plans) => {
       expect(await plans.findCurrentPlan("2026-11-03")).toBeNull();
+    });
+  });
+});
+
+/** Runs `fn` as `asActor` does, with the shopping list store. */
+function asListActor<T>(
+  actorUserId: string,
+  fn: (lists: ListStore, kitchenId: string) => Promise<T>
+) {
+  return asActor(actorUserId, async (kitchens, client) => {
+    const kitchen = await kitchens.getOrCreateKitchen();
+    return fn(sqlListStore(client), kitchen.kitchenId);
+  });
+}
+
+describe("shopping list (S4 #3888)", () => {
+  const generated = (name: string) => ({
+    lineKey: `${name}|`,
+    nameKey: name,
+    name,
+    quantity: 2,
+    unit: null,
+    purchase: null,
+    section: "produce" as const,
+    coveredByPantry: false,
+    convertedFrom: [],
+    sourceMealIds: []
+  });
+
+  it("builds, ticks, buys and undoes for one owner, and keeps a second owner out", async () => {
+    const at = "2026-11-02T10:00:00.000Z";
+    const lineId = uuid(9001);
+    const itemId = uuid(9002);
+    const milkId = uuid(9003);
+    await asListActor(ids.userA, async (lists, kitchenId) => {
+      expect((await lists.readList()).exists).toBe(false);
+      const listId = await lists.ensureList(kitchenId, null);
+      await lists.applyDiff(
+        listId,
+        kitchenId,
+        { insert: [generated("carrot")], update: [], remove: [] },
+        [lineId]
+      );
+      await lists.addManual(listId, kitchenId, {
+        lineId: milkId,
+        name: "milk",
+        quantity: 1,
+        unit: "l",
+        section: "dairy_eggs"
+      });
+      expect(await lists.setTicks([lineId], true)).toBe(1);
+      const stored = await lists.readList();
+      expect(stored.lines.map((line) => line.name).sort()).toEqual(["carrot", "milk"]);
+      expect(stored.lines.find((line) => line.lineId === lineId)?.checkedAt).not.toBeNull();
+
+      await lists.markBought({
+        listId,
+        kitchenId,
+        at,
+        actionId: uuid(9004),
+        rows: [{ lineId, itemId, name: "carrot", nameKey: "carrot", quantity: 2, unit: null }]
+      });
+      const bought = await lists.readList();
+      expect(bought.lines.find((line) => line.lineId === lineId)?.boughtAt).not.toBeNull();
+      const undo = await lists.readUndo(uuid(9004));
+      expect(undo?.kind).toBe("bought");
+      expect(await lists.undoBought(uuid(9004), at, [lineId], [itemId])).toEqual({
+        restored: 1,
+        skipped: 0
+      });
+      const after = await lists.readList();
+      expect(after.lines.find((line) => line.lineId === lineId)?.boughtAt).toBeNull();
+    });
+
+    await asListActor(ids.userB, async (lists) => {
+      const theirs = await lists.readList();
+      expect(theirs.exists).toBe(false);
+      expect(theirs.lines).toEqual([]);
+      expect(await lists.setTicks([milkId], true)).toBe(0);
+      expect(await lists.updateLine(milkId, { name: "stolen" })).toBeNull();
+      expect(await lists.readUndo(uuid(9004))).toBeNull();
+    });
+    await asActor(ids.userB, async (_store, client) => {
+      for (const table of ownedTables.slice(-4)) {
+        const deleted = await client.query(
+          `DELETE FROM ${table} WHERE owner_user_id = $1 RETURNING 1`,
+          [ids.userA]
+        );
+        expect(deleted.rows, table).toHaveLength(0);
+      }
+    });
+    await asListActor(ids.userA, async (lists) => {
+      const mine = await lists.readList();
+      expect(mine.lines.find((line) => line.lineId === milkId)?.name).toBe("milk");
     });
   });
 });

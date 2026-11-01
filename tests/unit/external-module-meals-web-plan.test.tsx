@@ -149,6 +149,27 @@ describe("Meals Plan tab", () => {
     expect(text(renderer)).toContain("Serves 2");
   });
 
+  it("reminds the user to double check even when every check passed", async () => {
+    const renderer = await render();
+    expect(text(renderer)).toContain("Nothing from the Never serve list was found outright.");
+    expect(text(renderer)).toContain("Always double check.");
+    expect(text(renderer)).not.toMatch(/\bsafe\b/i);
+  });
+
+  it("words a failed check as found, never as unsafe, and still reminds", async () => {
+    current = () => ({
+      plan: plan({
+        days: [
+          day({ meals: [meal({ eaters: [eater({ safety: "fail", safetyReason: "peanut" })] })] })
+        ]
+      })
+    });
+    const renderer = await render();
+    expect(text(renderer)).toContain("Found something from the Never serve list for Rowan.");
+    expect(text(renderer)).toContain("Always double check.");
+    expect(text(renderer)).not.toMatch(/\bsafe\b/i);
+  });
+
   it("holds back a meal until its Safety result is known", async () => {
     current = () => ({
       plan: plan({ days: [day({ meals: [meal({ eaters: [eater({ safety: "pending" })] })] })] })

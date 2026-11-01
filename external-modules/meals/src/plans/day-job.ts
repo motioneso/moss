@@ -249,6 +249,7 @@ export async function runPlanDay(
     }
     result = outcome.failure === null ? "ready" : "failed";
     await deps.store.finishDay(dayId, generation, result, outcome.failure);
+    await deps.onPlanChange?.(planId, "written");
   }
 
   const current = await deps.store.getPlan(planId);
