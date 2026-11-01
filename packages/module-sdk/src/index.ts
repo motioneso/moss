@@ -697,6 +697,11 @@ export interface ModuleAssistantToolManifest {
    */
   readonly requiresConfirmation?: ToolRequiresConfirmation;
   /**
+   * When true, chat asks before every call, even when the person has YOLO mode on or the
+   * family is promoted to run without asking. Module screen routes are unaffected.
+   */
+  readonly confirmUnderYolo?: boolean;
+  /**
    * Set only by the integrations module on a connected tool Moss sorted as safe to run without
    * asking (see ToolRunsWithoutAsking). External module declarations never carry it.
    */

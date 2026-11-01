@@ -232,6 +232,7 @@ export function createExternalToolManifests(
             executionPolicy: tool.executionPolicy,
             selfOperationGrant: tool.selfOperationGrant,
             requiresConfirmation,
+            ...(tool.confirmUnderYolo === true ? { confirmUnderYolo: true } : {}),
             inputSchema: tool.inputSchema,
             isExternal: true,
             outputSchema: tool.outputSchema,

@@ -94,6 +94,7 @@ export async function familyAllowsAutoRun(
   perCallResolved = false
 ): Promise<boolean> {
   if (tool.risk === "destructive") return false;
+  if (tool.confirmUnderYolo === true) return false;
   const familyId = tool.actionFamilyId;
   if (tool.isExternal === true) {
     if (!familyId) return true;

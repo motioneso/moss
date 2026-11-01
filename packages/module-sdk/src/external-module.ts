@@ -226,6 +226,8 @@ export interface ExternalModuleAssistantToolDeclaration {
   readonly confirmWhen?: readonly ExternalModuleConfirmWhenClause[];
   readonly confirmWhenKeys?: readonly string[];
   readonly confirmAbove?: ExternalModuleConfirmAboveRule;
+  /** Chat always asks before this tool runs, even under YOLO. Screen routes are unaffected. */
+  readonly confirmUnderYolo?: boolean;
   readonly inputSchema?: JsonSchema;
   readonly outputSchema?: JsonSchema;
   /** Opt-in to the chat classifier menu; absent means ineligible. See ExternalModuleClassifierDeclaration. */

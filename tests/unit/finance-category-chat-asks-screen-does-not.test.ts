@@ -7,7 +7,11 @@ import Fastify, { type FastifyInstance } from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { resolvePolicy, type ActionPolicyLookup } from "../../packages/ai/src/gateway/policy.js";
+import {
+  familyAllowsAutoRun,
+  resolvePolicy,
+  type ActionPolicyLookup
+} from "../../packages/ai/src/gateway/policy.js";
 import type { ModuleAssistantToolManifest, MossModuleManifest } from "@moss/module-sdk";
 
 import { registerModuleToolInvokeRoute } from "../../apps/api/src/external-module-tool-invoke.js";
@@ -27,6 +31,7 @@ type Declared = {
   actionFamilyId?: string;
   executionPolicy?: "auto" | "confirm";
   confirmWhenKeys?: string[];
+  confirmUnderYolo?: boolean;
 };
 type Shipped = {
   assistantTools: Declared[];
@@ -57,6 +62,7 @@ function shippedTool(name: string): ModuleAssistantToolManifest {
     risk: declared.risk,
     actionFamilyId: declared.actionFamilyId,
     executionPolicy: declared.executionPolicy,
+    ...(declared.confirmUnderYolo ? { confirmUnderYolo: true } : {}),
     isExternal: true,
     actionLabel: name,
     inputSchema: { type: "object", properties: {} },
@@ -84,6 +90,16 @@ describe("finance category changes: chat asks, screen click does not", () => {
   it.each(TOOLS)("chat asks before %s runs, even with the family promoted", async (name) => {
     const decision = await resolvePolicy(shippedTool(name), "finance", false, promotedLookup);
     expect(decision).toBe("confirm");
+  });
+
+  // YOLO runs a write when familyAllowsAutoRun says yes (#3417), so this is the YOLO gate.
+  it.each(TOOLS)("YOLO does not run %s without asking", async (name) => {
+    expect(await familyAllowsAutoRun(shippedTool(name), "finance", promotedLookup)).toBe(false);
+  });
+
+  it("YOLO still runs a sibling tool that does not declare the protection", async () => {
+    const sibling = { ...shippedTool(TOOLS[0]), confirmUnderYolo: undefined };
+    expect(await familyAllowsAutoRun(sibling, "finance", promotedLookup)).toBe(true);
   });
 
   it.each(TOOLS)("the screen route runs %s on the click with no confirmation", async (name) => {
