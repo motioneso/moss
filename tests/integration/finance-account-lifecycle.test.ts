@@ -176,7 +176,7 @@ describe("reviewed manual account lifecycle", () => {
     const current = (await review("life:name"))!;
     expect(await update("life:name", "rename", current.name, current.revision)).toBe(true);
     expect((await review("life:name"))!.revision).toBe(current.revision);
-    const activity = await owner((s) => s.listActivity("2026-10-01", "2026-11-01", 100));
+    const activity = await owner((s) => s.listActivity("2026-10-01", "2100-01-01", 100));
     expect(activity.filter((a) => a.kind === "account.rename")).toHaveLength(1);
     expect(JSON.stringify(activity.filter((a) => a.kind === "account.rename"))).not.toContain(
       "renamed"

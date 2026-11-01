@@ -133,7 +133,7 @@ const snapshot = () =>
     history: await s.targets!.versions!(),
     ledger: await s.getLedger(month),
     prior: await s.getLedger("2026-09"),
-    activity: await s.listActivity("2026-10-01", "2026-11-01", 500)
+    activity: await s.listActivity("2026-10-01", "2100-01-01", 500)
   }));
 function command(
   view: Awaited<ReturnType<typeof status>>,

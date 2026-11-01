@@ -187,7 +187,7 @@ const snapshot = (e: BillEntryCreate) =>
       (d) => d.planId === e.planId
     ),
     revision: (await s.budgetPolicy!.get())!.revision,
-    activity: (await s.listActivity("2026-10-01T00:00:00Z", "2026-11-01T00:00:00Z", 1000)).filter(
+    activity: (await s.listActivity("2026-10-01T00:00:00Z", "2100-01-01", 1000)).filter(
       (a) => a.kind === "bill.record-entry" && a.params.planId === e.planId
     )
   }));
