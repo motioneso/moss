@@ -38,6 +38,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Outlook calendar sync with hidden Settings.** Outlook calendar sync now works when Outlook keeps its Settings button inside the three-dot menu, and says clearly when it cannot find Settings. [PR #3934](https://github.com/motioneso/moss/pull/3934)
 - **Buttons under empty messages.** Buttons under an empty or error message no longer sit tight against the text above them. [PR #3908](https://github.com/motioneso/moss/pull/3908)
 - **Confirming changes on module pages works with a fast clock.** Confirming a removal on a module's page now works even when your device's clock runs fast. [PR #3911](https://github.com/motioneso/moss/pull/3911)
 
