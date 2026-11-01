@@ -177,7 +177,7 @@ const change = (
 });
 const current = (merchant: string) =>
   owner(async (s) => (await s.rules!.all()).find((r) => r.id === change(merchant).id)!);
-const activities = () => owner((s) => s.listActivity("2026-10-01", "2026-11-01", 500));
+const activities = () => owner((s) => s.listActivity("2026-10-01", "2100-01-01", 500));
 const query = (text: string, params: unknown[] = []) =>
   runner.withDataContext({ actorUserId: ids.userA }, (scope) =>
     createModuleStorageRpc(scope, "finance").query(text, params)
@@ -473,7 +473,7 @@ describe("canonical owned merchant rules", () => {
       expect((result.rules as unknown[]).length).toBe(1);
       const s = await ports.store(),
         history = await s.listMonthTransactions("2026-10"),
-        count = (await s.listActivity("2026-10-01", "2026-11-01", 500)).length;
+        count = (await s.listActivity("2026-10-01", "2100-01-01", 500)).length;
       const preview = await rulesPreviewHandler(ports)({
         merchant: "Synthetic History #1",
         month: "2026-10"
@@ -481,7 +481,7 @@ describe("canonical owned merchant rules", () => {
       expect(preview).toMatchObject({ payeeKey: "synthetic history", total: 1, limit: 20 });
       expect(JSON.stringify(preview)).not.toContain("Synthetic private note");
       expect(await s.listMonthTransactions("2026-10")).toEqual(history);
-      expect(await s.listActivity("2026-10-01", "2026-11-01", 500)).toHaveLength(count);
+      expect(await s.listActivity("2026-10-01", "2100-01-01", 500)).toHaveLength(count);
       expect(
         await rulesUpdateHandler(ports)({
           merchant: "Synthetic native API",
