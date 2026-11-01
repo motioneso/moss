@@ -52,8 +52,7 @@ function ruleSetMessage(
   unchanged: boolean
 ): string {
   const name = merchant.trim();
-  const where =
-    "You can see or undo it in Finance settings: the Merchant rules list, or Recent activity.";
+  const where = "You can see or undo it in Finance settings: the Merchant rules list, or Activity.";
   if (unchanged)
     return `Nothing changed. A rule already sends ${name} to ${categoryName}. No existing transactions were changed. ${where}`;
   const replaced =

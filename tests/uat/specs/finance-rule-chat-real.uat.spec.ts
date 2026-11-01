@@ -70,4 +70,10 @@ test("chat merchant rule saves without asking and says what it did", async ({ pa
   expect(reply).toMatch(/future|automatic/i);
   expect(reply).toMatch(/no existing|not changed|unchanged|weren't changed|were not changed/i);
   expect(reply).toMatch(/settings|undo|activity|merchant rules/i);
+
+  // Finance settings shows the fresh-install preset as Handle routine, ask about new.
+  await page.goto(`${baseURL}/m/finance/settings`);
+  const preset = page.getByRole("radio", { name: /Handle routine, ask about new/ });
+  await expect(preset).toBeChecked({ timeout: 30_000 });
+  await page.screenshot({ path: `${SHOTS}/2-settings-preset.png` });
 });

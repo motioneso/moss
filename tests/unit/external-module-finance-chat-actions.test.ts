@@ -328,7 +328,7 @@ describe("finance.rule.set (#3185)", () => {
     expect(first.message).toContain("automatically");
     expect(first.message).toContain("No existing transactions were changed");
     expect(first.message).toContain("Merchant rules");
-    expect(first.message).toContain("Recent activity");
+    expect(first.message).toContain("or Activity.");
     const again = (await run({ merchant: "Trader Joe's #123", categoryId: "groceries" })) as {
       message: string;
     };

@@ -32,7 +32,7 @@ const FAMILY_KIND: Record<TaggedFamily, "routine" | "new"> = {
   sorting: "routine",
   moving_money: "routine",
   sorting_new: "new",
-  rules: "new",
+  rules: "routine",
   categories: "new"
 };
 export const STEP_NUMBER: Record<Step, 1 | 2 | 3> = { ask: 1, routine: 2, all: 3 };
