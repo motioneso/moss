@@ -1,0 +1,9 @@
+FROM docker.io/library/alpine:3.22
+RUN apk add --no-cache chromium python3 \
+    && adduser -D -u 1000 browser \
+    && mkdir /profile && chown browser:browser /profile
+RUN apk add --no-cache py3-websocket-client
+COPY runner.py cdp.py /opt/probe/
+USER browser
+ENV HOME=/profile
+ENTRYPOINT ["python3", "/opt/probe/runner.py"]

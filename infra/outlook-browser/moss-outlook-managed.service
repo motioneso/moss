@@ -1,0 +1,24 @@
+# User unit for the dedicated non-root runtime account. Installer is pending.
+# Keep separate from the deployed legacy moss-outlook-browser.service.
+[Unit]
+Description=Moss managed Outlook lifecycle broker
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -B %h/.local/lib/moss-outlook/service.py --config %h/.config/moss-outlook/service.json
+UMask=0077
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=45
+SendSIGKILL=yes
+StandardOutput=null
+StandardError=null
+# Rootless Podman uses newuidmap/newgidmap. Host NoNewPrivileges would break
+# namespace creation; container no-new-privileges is enforced by podman.py.
+
+[Install]
+WantedBy=default.target

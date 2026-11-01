@@ -1,0 +1,11 @@
+# Probe image: the candidate image's pinned base and Chromium, with a pipe-mode runner.
+FROM docker.io/library/python@sha256:884d3f3d9b4ef25b050f984ca8781efd6b0f49312721d2c321536b7cecf1c224
+RUN apk add --no-cache chromium=149.0.7827.53-r0 \
+    && mkdir -p /profile /ctl /opt/moss /etc/chromium/policies/managed \
+    && chown 1000:1000 /profile /ctl
+COPY proxy.py /opt/moss/proxy.py
+COPY runner.py /opt/moss/runner.py
+COPY policy.json /etc/chromium/policies/managed/moss.json
+ENV HOME=/profile PYTHONDONTWRITEBYTECODE=1
+USER 1000:1000
+ENTRYPOINT ["python3", "-B", "/opt/moss/runner.py"]

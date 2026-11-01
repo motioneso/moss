@@ -1,0 +1,12 @@
+# Candidate browser image. Rebuild/reverify on every browser security update;
+# these input pins do not replace security review of the final immutable image.
+FROM docker.io/library/python@sha256:884d3f3d9b4ef25b050f984ca8781efd6b0f49312721d2c321536b7cecf1c224
+RUN apk add --no-cache chromium=149.0.7827.53-r0 py3-websocket-client=1.9.0-r0 \
+    && mkdir -p /profile /opt/moss /etc/chromium/policies/managed \
+    && chown 1000:1000 /profile
+COPY proxy.py /opt/moss/proxy.py
+COPY image/runner.py /opt/moss/runner.py
+COPY image/policy.json /etc/chromium/policies/managed/moss.json
+ENV HOME=/profile PYTHONDONTWRITEBYTECODE=1
+USER 1000:1000
+ENTRYPOINT ["python3", "-B", "/opt/moss/runner.py"]

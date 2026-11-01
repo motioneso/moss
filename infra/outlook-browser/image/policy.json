@@ -1,0 +1,11 @@
+{
+  "AutofillAddressEnabled": false,
+  "AutofillCreditCardEnabled": false,
+  "BackgroundModeEnabled": false,
+  "BrowserSignin": 0,
+  "DefaultNotificationsSetting": 2,
+  "DownloadRestrictions": 3,
+  "PasswordManagerEnabled": false,
+  "PrintingEnabled": false,
+  "SyncDisabled": true
+}
