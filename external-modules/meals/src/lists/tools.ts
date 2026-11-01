@@ -375,6 +375,7 @@ export async function undo(deps: ListDeps, input: Input): Promise<UndoResult> {
       kitchen.kitchenId,
       record.state.item as Record<string, unknown>
     );
+    if (restored > 0) await listOnPantryChange(deps);
     return { restored, skipped: 1 - restored };
   }
   if (record.kind === "removed") {

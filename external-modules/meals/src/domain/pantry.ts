@@ -23,20 +23,59 @@ export interface PantryInput {
 /** Always on hand. */
 const FREE = new Set(["water", "ice"]);
 
+/** Folds a simple English plural to its singular. */
+function singular(word: string): string {
+  if (word.length > 3 && word.endsWith("ies")) return `${word.slice(0, -3)}y`;
+  if (word.length > 3 && /(ch|sh|[sxo])es$/.test(word)) return word.slice(0, -2);
+  if (word.length > 2 && word.endsWith("s") && !word.endsWith("ss")) return word.slice(0, -1);
+  return word;
+}
+
 const words = (name: string): string[] => titleKey(name).split(" ").filter(Boolean);
 
 /**
- * True when two names are the same food. "Rice" and "basmati rice" match because the shorter
- * name's words all appear in the longer one and both end in the same word. "Rice" and
- * "rice vinegar" do not.
+ * Words that describe the state or kind of a food without making it a different food. They may
+ * be dropped before names are compared. Any other extra word makes a different food.
+ */
+const DESCRIPTORS = new Set([
+  "fresh",
+  "dried",
+  "dry",
+  "ground",
+  "organic",
+  "large",
+  "small",
+  "medium",
+  "raw",
+  "ripe",
+  "frozen",
+  "chopped",
+  "sliced",
+  "minced",
+  "plain",
+  "basmati",
+  "jasmine",
+  "long",
+  "grain"
+]);
+
+function core(name: string): string[] {
+  const all = words(name).map(singular);
+  const kept = all.filter((word) => !DESCRIPTORS.has(word));
+  return kept.length > 0 ? kept : all;
+}
+
+/**
+ * True when two names are the same food. The names must be equal after folding plurals and
+ * dropping descriptor words, so "rice" matches "Basmati rice" and "tomatoes" matches "tomato",
+ * while "milk" does not match "coconut milk", "pepper" does not match "bell pepper", and "rice"
+ * does not match "rice vinegar".
  */
 export function namesMatch(a: string, b: string): boolean {
-  const left = words(a);
-  const right = words(b);
+  const left = core(a);
+  const right = core(b);
   if (left.length === 0 || right.length === 0) return false;
-  if (left[left.length - 1] !== right[right.length - 1]) return false;
-  const [short, long] = left.length <= right.length ? [left, right] : [right, left];
-  return short.every((word) => long.includes(word));
+  return left.length === right.length && left.every((word, i) => word === right[i]);
 }
 
 export function isStaple(name: string, input: PantryInput): boolean {

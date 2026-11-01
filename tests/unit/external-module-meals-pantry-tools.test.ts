@@ -201,6 +201,20 @@ describe("the list follows the Pantry", () => {
     expect(list.lines.find((l) => l.name === "salt")).toBeUndefined();
   });
 
+  it("rebuilds the list when a removed item is brought back", async () => {
+    const { listDeps, pantry, pantryDeps, planId } = await planned("prefer");
+    const itemId = pantry.seed("Rice");
+    await listBuild(listDeps, { planId });
+    const line = async () => (await listDeps.lists.readList()).lines.find((l) => l.name === "rice");
+    expect((await line())?.coveredByPantry).toBe(true);
+
+    const removed = await pantryEdit(pantryDeps, { action: "remove", itemId });
+    expect((await line())?.coveredByPantry).toBe(false);
+
+    await undo(listDeps, { actionId: removed.undo!.actionId });
+    expect((await line())?.coveredByPantry).toBe(true);
+  });
+
   it("rebuilds the list when the Pantry changes", async () => {
     const { listDeps, pantryDeps, planId } = await planned("prefer");
     await listBuild(listDeps, { planId });

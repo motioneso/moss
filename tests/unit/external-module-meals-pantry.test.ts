@@ -37,6 +37,19 @@ describe("name matching", () => {
     expect(namesMatch("basmati rice", "rice")).toBe(true);
   });
 
+  it("folds plurals and ignores descriptor words", () => {
+    expect(namesMatch("tomatoes", "tomato")).toBe(true);
+    expect(namesMatch("fresh basil", "basil")).toBe(true);
+    expect(namesMatch("berries", "berry")).toBe(true);
+  });
+
+  it("does not match a different food that adds a word", () => {
+    expect(namesMatch("milk", "coconut milk")).toBe(false);
+    expect(namesMatch("pepper", "bell pepper")).toBe(false);
+    expect(namesMatch("butter", "peanut butter")).toBe(false);
+    expect(namesMatch("coconut milk", "milk")).toBe(false);
+  });
+
   it("does not match a different food that contains the word", () => {
     expect(namesMatch("rice", "rice vinegar")).toBe(false);
     expect(namesMatch("onion", "onion powder")).toBe(false);
