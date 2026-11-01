@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "finance",
   "name": "Finance",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
@@ -116,7 +116,7 @@
     "features": [
       {
         "id": "finance.confirm-guesses",
-        "description": "On Transactions, Needs a look offers a category picker, Confirm and Always for this merchant (off by default). Owned posted unsplit SQL rows without a rule open a captured review: an existing category is confirmed, or a changed category shows before and after. Host approval and persisted success precede completion. Cancellation keeps the review; stale or uncertain outcomes require an explicit successful saved-record check. Loaded Review N categories captures up to 200 existing categories without making rules. Pending, compatibility and merchant-rule requests retain their queued workflow; queue acceptance is not persisted success. Shared, linked and split rows keep separate controls. When none remain, the current month and search determine the empty review state."
+        "description": "On Transactions, a Needs a look row shows its guessed category with Confirm and Change. Confirm keeps the guess in one click. Change opens one picker with Always for this merchant (off by default). A category change on an owned posted unsplit SQL row saves at once with no approval dialog, and a notice names the transaction and category with Undo. Stale or uncertain outcomes save nothing and need an explicit saved-record check. Selecting several rows or choosing Review N categories opens one review before saving up to 200, without making rules. Pending, compatibility and merchant-rule requests keep their queued workflow. Shared, linked and split rows keep separate controls. An empty month offers Add transaction and Import CSV."
       },
       {
         "id": "finance.budget-typing",
@@ -128,7 +128,7 @@
       },
       {
         "id": "finance.getting-started",
-        "description": "Start without bank keys through Getting started \u2192 Add a manual account. Accounts imports UTF-8 CSV into manual accounts, up to 1 MiB, 200 rows and 500 KiB of mapped entries. Explicit column, date-order and money-direction mapping precedes a read-only preview in the account currency. Rows start uncategorized. Every possible duplicate needs Skip or Import anyway. Invalid dates, sub-cent/unsafe amounts and mixed currencies prevent saving. Receipt, transactions, balance and activity commit atomically; identical replay does not duplicate rows. A changed ledger requires a fresh preview. Uncertain saves require checking saved records. No provider-account import, FX conversion or automatic duplicate deletion. Approval and completed or skipped onboarding schedule ledger initialization through the normal module worker. If setup stays unavailable, an administrator can check that Finance workers are running. Startup requests are briefly coalesced per package."
+        "description": "Start without bank keys through Getting started \u2192 Add a manual account (opens the add form). Accounts imports UTF-8 CSV into manual accounts, up to 1 MiB, 200 rows and 500 KiB of mapped entries. Explicit column, date-order and money-direction mapping precedes a read-only preview in the account currency. Rows start uncategorized. Every possible duplicate needs Skip or Import anyway. Invalid dates, sub-cent/unsafe amounts and mixed currencies prevent saving. Receipt, transactions, balance and activity commit atomically; identical replay does not duplicate rows. A changed ledger requires a fresh preview. Uncertain saves require checking saved records. No provider-account import, FX conversion or automatic duplicate deletion. Approval and completed or skipped onboarding schedule ledger initialization through the normal module worker. If setup stays unavailable, an administrator can check that Finance workers are running. Startup requests are briefly coalesced per package."
       },
       {
         "id": "finance.first-budget",
@@ -168,7 +168,7 @@
       },
       {
         "id": "finance.transaction-splits",
-        "description": "Split or Edit split in a payee's details divides an owned posted transaction into up to 20 non-transfer allocations totaling the exact signed amount. Saving awaits persistence and checks amount, currency and split revision. Provider corrections retain allocations for repair; unbalanced splits count once as uncategorized. One part removes a split. Select up to 200 loaded owned posted unsplit rows for one reviewed category change. Host confirmation saves all or none using captured row revisions. Amounts, accounts, dates, notes and reconciliation stay unchanged; no rule is created. Cancel retains choices; changed or uncertain saves require checking records before a new review. Shared, pending and legacy-storage rows are excluded. Older hosts explain the update required. Neither action moves bank money."
+        "description": "Split or Edit split in a payee's details divides an owned posted transaction into up to 20 non-transfer allocations totaling the exact signed amount. Saving awaits persistence and checks amount, currency and split revision. Provider corrections retain allocations for repair; unbalanced splits count once as uncategorized. One part removes a split. Select up to 200 loaded owned posted unsplit rows for one reviewed category change. Review selected transactions saves all or none using captured row revisions. When Moss proposes the same change in chat, it asks first. Amounts, accounts, dates, notes and reconciliation stay unchanged; no rule is created. Cancel retains choices; changed or uncertain saves require checking records before a new review. Shared, pending and legacy-storage rows are excluded. Older hosts explain the update required. Neither action moves bank money."
       },
       {
         "id": "finance.manual-ledger",
@@ -619,7 +619,7 @@
     {
       "name": "finance.budget.configure",
       "permissionId": "finance.budget.configure",
-      "actionLabel": "Choose a fixed budget currency",
+      "actionLabel": "Set the budget currency. It cannot be changed afterwards.",
       "description": "Choose the budget's immutable working currency. Existing assignment amounts are preserved and require explicit acknowledgement. Open legacy drafts are discarded for a fresh currency-scoped build. No currency conversion occurs.",
       "risk": "write",
       "executionPolicy": "confirm",
@@ -1430,6 +1430,7 @@
       "description": "Categorize 1 to 200 reviewed owned posted unsplit transactions atomically. A changed or unavailable selection saves nothing. Preserves amounts, dates, clearing and reconciliation; creates no rules.",
       "risk": "write",
       "handler": "transactions.bulk-category",
+      "actionFamilyId": "sorting",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -1455,8 +1456,7 @@
         },
         "required": ["categoryId", "rows"]
       },
-      "executionPolicy": "confirm",
-      "confirmWhenKeys": ["categoryId"]
+      "executionPolicy": "confirm"
     },
     {
       "name": "finance.reports.transactions",
@@ -1536,8 +1536,8 @@
       "description": "Atomically confirm one to 200 captured owned posted unsplit transaction categories. Rechecks revision tokens, needs-look state and live categories; all persist with metadata-only activity or none do. Preserves amounts, notes, splits, clearing and reconciliation. No category or rule change.",
       "risk": "write",
       "handler": "transactions.confirm",
+      "actionFamilyId": "sorting",
       "executionPolicy": "confirm",
-      "confirmWhenKeys": ["rows"],
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,

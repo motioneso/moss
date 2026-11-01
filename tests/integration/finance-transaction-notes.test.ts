@@ -177,7 +177,7 @@ describe("captured private transaction notes", () => {
     });
     expect(strip(after)).toEqual(strip(before));
     expect((await read(t))!.notes).toBe("  Synthetic café 🦉\nprivate context  ");
-    const logs = await owner((s) => s.listActivity("2026-10-01", "2026-11-01", 100));
+    const logs = await owner((s) => s.listActivity("2026-10-01", "2100-01-01", 100));
     const log = logs.find((a) => a.params.transactionId === t.transactionId)!;
     expect(log.kind).toBe("transaction.note");
     expect(log.undo).toBeNull();

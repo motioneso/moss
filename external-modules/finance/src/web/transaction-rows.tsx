@@ -85,6 +85,11 @@ export interface RowContext {
   confirmed: ReadonlySet<string>;
   onConfirm: (tx: Tx, categoryId: string, makeRule: boolean) => void;
   onChange: (tx: Tx, categoryId: string) => Promise<boolean>;
+  /** The one Needs a look row whose category picker is open, if any. */
+  working: string | null;
+  onWork: (id: string | null) => void;
+  /** True when every row on screen is uncleared, so the tag would say nothing. */
+  allUncleared: boolean;
   onDetails: (tx: Tx) => void;
   onTransfer?: (id: string) => void;
   selected: ReadonlySet<string>;
@@ -101,20 +106,21 @@ function Amount(props: { tx: Tx }): ReactNodeLike {
   return <span>{formatCents(tx.amountCents, tx.isoCurrency)}</span>;
 }
 
-/** Only states that ask for attention. Cleared, reconciled and posted rows carry no badge. */
-function RowBadges(props: { tx: Tx; look: boolean }): ReactNodeLike {
+/**
+ * Only states that ask for attention. Cleared, reconciled and posted rows carry no badge, and
+ * neither do rows that simply need a look, because their Confirm and Change buttons say so.
+ * Uncleared is dropped while every row on screen is uncleared.
+ */
+function RowBadges(props: { tx: Tx; allUncleared: boolean }): ReactNodeLike {
   const { tx } = props;
-  const uncleared = tx.source === "manual" && !tx.cleared && !tx.reconciledAt;
+  const uncleared =
+    tx.source === "manual" && !tx.cleared && !tx.reconciledAt && !props.allUncleared;
   const unbalanced = Boolean(tx.splits?.length && !splitsBalance(tx));
-  const review = props.look && !tx.splits?.length;
-  if (!tx.pending && !uncleared && !tx.shared && !tx.possibleDuplicate && !unbalanced && !review) {
+  if (!tx.pending && !uncleared && !tx.shared && !tx.possibleDuplicate && !unbalanced) {
     return null;
   }
   return (
     <div className="fnm-chips fnm-row-badges">
-      {review ? (
-        <Badge tone="amber">{tx.categorizedBy === "user" ? "Review needed" : "Predicted"}</Badge>
-      ) : null}
       {tx.pending ? <Badge tone="steel">Pending</Badge> : null}
       {uncleared ? <Badge tone="steel">Uncleared</Badge> : null}
       {tx.shared ? <Badge tone="steel">Household · read only</Badge> : null}
@@ -124,21 +130,62 @@ function RowBadges(props: { tx: Tx; look: boolean }): ReactNodeLike {
   );
 }
 
-// The category picker for one Needs a look row, then the merchant switch and Confirm in the
-// order they are used.
+// A Needs a look row shows its suggested category as plain text with Confirm and Change. The
+// picker, the merchant switch and the save button open for one row at a time.
 function LookControls(props: {
   tx: Tx;
   categories: TxCategory[];
+  categoryName: string;
+  open: boolean;
+  onOpen: (open: boolean) => void;
   onConfirm: (tx: Tx, categoryId: string, makeRule: boolean) => void;
 }): ReactNodeLike {
   const { tx } = props;
   const [categoryId, setCategoryId] = useState(tx.categoryId ?? "");
   const [makeRule, setMakeRule] = useState(false);
+  if (!props.open) {
+    return (
+      <div className="fnm-look">
+        {tx.categoryId ? <span>{props.categoryName}</span> : null}
+        <div className="fnm-chips">
+          {tx.categoryId ? (
+            <>
+              <Button
+                size="sm"
+                aria-label={`Confirm ${props.categoryName} for ${tx.name}`}
+                onClick={() => props.onConfirm(tx, tx.categoryId!, false)}
+              >
+                Confirm
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                aria-label={`Change category for ${tx.name}`}
+                onClick={() => props.onOpen(true)}
+              >
+                Change
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="sm"
+              variant="secondary"
+              aria-label={`Choose a category for ${tx.name}`}
+              onClick={() => props.onOpen(true)}
+            >
+              Choose category
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="fnm-block fnm-block--tight">
       <Select
         aria-label={`Category for ${tx.name}`}
         value={categoryId}
+        autoFocus
         onChange={(event: { target: { value: string } }) => setCategoryId(event.target.value)}
       >
         <option value="" disabled>
@@ -157,13 +204,18 @@ function LookControls(props: {
           checked={makeRule}
           onChange={setMakeRule}
         />
-        <Button
-          size="sm"
-          disabled={categoryId === ""}
-          onClick={() => props.onConfirm(tx, categoryId, makeRule)}
-        >
-          Confirm
-        </Button>
+        <div className="fnm-chips">
+          <Button
+            size="sm"
+            disabled={categoryId === ""}
+            onClick={() => props.onConfirm(tx, categoryId, makeRule)}
+          >
+            Confirm
+          </Button>
+          <Button size="sm" variant="secondary" onClick={() => props.onOpen(false)}>
+            Cancel
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -283,7 +335,16 @@ function CategoryCell(props: { tx: Tx; ctx: RowContext; look: boolean }): ReactN
   }
   if (tx.shared) return <span>{ctx.categoryName(tx)}</span>;
   if (props.look) {
-    return <LookControls tx={tx} categories={ctx.categories} onConfirm={ctx.onConfirm} />;
+    return (
+      <LookControls
+        tx={tx}
+        categories={ctx.categories}
+        categoryName={ctx.categoryName(tx)}
+        open={ctx.working === tx.id}
+        onOpen={(open) => ctx.onWork(open ? tx.id : null)}
+        onConfirm={ctx.onConfirm}
+      />
+    );
   }
   return (
     <ChangeCategory
@@ -374,7 +435,7 @@ export function LedgerTable(props: { rows: Tx[]; ctx: RowContext }): ReactNodeLi
               <td>{shortDayLabel(tx.date)}</td>
               <td>
                 <PayeeButton tx={tx} ctx={ctx} />
-                <RowBadges tx={tx} look={look} />
+                <RowBadges tx={tx} allUncleared={ctx.allUncleared} />
               </td>
               <td>
                 <CategoryCell tx={tx} ctx={ctx} look={look} />
@@ -419,7 +480,7 @@ export function LedgerRows(props: { rows: Tx[]; ctx: RowContext }): ReactNodeLik
                     <div className="jds-table__sub">
                       {shortDayLabel(tx.date)} · {ctx.accountName(tx)}
                     </div>
-                    <RowBadges tx={tx} look={look} />
+                    <RowBadges tx={tx} allUncleared={ctx.allUncleared} />
                     <CategoryCell tx={tx} ctx={ctx} look={look} />
                   </div>
                 </div>

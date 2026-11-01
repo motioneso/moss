@@ -65,16 +65,8 @@ export async function exerciseBulkCategory(
   }
   const confirm = () =>
     review.getByRole("button", { name: "Confirm category change", exact: true }).click();
-  const guard = page.getByRole("dialog", { name: "Confirm Finance action", exact: true });
-  await confirm();
-  await guard.waitFor();
   expect(await rows()).toEqual(original);
-  await guard.getByRole("button", { name: "Cancel", exact: true }).click();
-  await review
-    .getByText("Cancelled. Your selection and category are kept.", { exact: true })
-    .waitFor();
   await confirm();
-  await guard.getByRole("button", { name: "Confirm action", exact: true }).click();
   await review.waitFor({ state: "detached" });
   const strip = (r: Row) => {
     const { writeRevision: _revision, ...rest } = r;
@@ -113,10 +105,6 @@ export async function exerciseBulkCategory(
       .getByRole("button", { name: "Confirm category change", exact: true })
       .click();
     await other
-      .getByRole("dialog", { name: "Confirm Finance action", exact: true })
-      .getByRole("button", { name: "Confirm action", exact: true })
-      .click();
-    await other
       .getByRole("dialog", { name: "Review selected transactions", exact: true })
       .waitFor({ state: "detached" });
   } finally {
@@ -124,7 +112,6 @@ export async function exerciseBulkCategory(
   }
   const competing = await rows();
   await confirm();
-  await guard.getByRole("button", { name: "Confirm action", exact: true }).click();
   await review
     .getByText(
       "A selected record changed. Nothing was saved. Close this review and check saved records before choosing again.",

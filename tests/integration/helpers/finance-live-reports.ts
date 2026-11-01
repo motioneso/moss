@@ -152,10 +152,6 @@ export async function exerciseReportDetails(
       .getByRole("button", { name: "Confirm category change", exact: true })
       .click();
     await edit
-      .getByRole("dialog", { name: "Confirm Finance action", exact: true })
-      .getByRole("button", { name: "Confirm action", exact: true })
-      .click();
-    await edit
       .getByRole("dialog", { name: "Review selected transactions", exact: true })
       .waitFor({ state: "detached" });
   } catch (error) {

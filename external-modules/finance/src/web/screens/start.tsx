@@ -52,7 +52,7 @@ function connectStep(props: StartViewProps): ReactNodeLike {
 
 export function StartView(props: StartViewProps): ReactNodeLike {
   return (
-    <div className="fnm-stack">
+    <div className="fnm-block">
       <Masthead
         tone="field"
         eyebrow="Finance"
@@ -66,21 +66,21 @@ export function StartView(props: StartViewProps): ReactNodeLike {
           statements. No bank keys are needed.
         </p>
         <div>
-          <a className="jds-btn jds-btn--primary" href="/m/finance/accounts">
+          <a className="jds-btn jds-btn--primary" href="/m/finance/accounts?add=account">
             Add a manual account
           </a>
         </div>
       </section>
       <section className="fnm-stack">
-        <SectionHead title="Connect a bank when you are ready" rule />
+        <SectionHead title="Connect a bank later" rule />
         <RowIndex density="compact">
-          <RowIndexItem title="1. Connect a bank" meta={connectStep(props)} />
+          <RowIndexItem title="Connect a bank" meta={connectStep(props)} />
           <RowIndexItem
-            title="2. Moss sorts your spending"
+            title="Moss sorts your spending"
             meta={<Indicator status="idle" label="Next" />}
           />
           <RowIndexItem
-            title="3. Build your budget together"
+            title="Build your budget together"
             meta={<Indicator status="idle" label="Then" />}
           />
         </RowIndex>

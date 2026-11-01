@@ -648,7 +648,7 @@ describe("audited manual transfer corrections", () => {
     } else expect(await reverse(duplicate)).toBe("changed");
     expect([await snapshot(f.from), await snapshot(f.to)]).toEqual(accounts);
     expect(await correctionRows(change.operationId)).toHaveLength(2);
-    const activity = await owner((s) => s.listActivity("2026-10-01", "2026-11-01", 200));
+    const activity = await owner((s) => s.listActivity("2026-10-01", "2100-01-01", 200));
     expect(
       activity.find(
         (a) => a.kind === "transfer.reverse" && a.params.transferId === change.operationId

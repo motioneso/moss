@@ -59,41 +59,17 @@ export async function exercisePendingHandoffReview(
       .getByRole("row")
       .filter({ hasText: handoffPosted.name })
       .filter({ visible: true });
-    await row.getByText("Review needed", { exact: true }).waitFor();
-    await row.getByRole("button", { name: "Confirm", exact: true }).click();
-    const review = page.getByRole("dialog", { name: "Review transaction category", exact: true });
-    await review.getByText("Existing category · Groceries", { exact: true }).waitFor();
-    await review.getByText("$12.00", { exact: true }).waitFor();
-    for (const theme of ["light", "dark", "sage"]) {
-      await page.evaluate((theme) => {
-        document.documentElement.dataset.theme = theme;
-      }, theme);
-      for (const width of [320, 390, 768, 1440]) {
-        await page.setViewportSize({ width, height: 900 });
-        expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
-          false
-        );
-        expect(await review.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(false);
-        const footer = (await review.locator(".jds-dialog__foot").boundingBox())!;
-        expect(footer.y + footer.height).toBeLessThanOrEqual(900);
-        if (artifacts)
-          await page.screenshot({
-            path: join(resolve(artifacts), `finance-pending-settlement-${theme}-${width}.png`)
-          });
-      }
-    }
-    const confirm = () =>
-      review.getByRole("button", { name: "Confirm category", exact: true }).click();
-    const guard = page.getByRole("dialog", { name: "Confirm Finance action", exact: true });
-    await confirm();
-    await guard.getByRole("button", { name: "Cancel", exact: true }).click();
-    await review
-      .getByText("Cancelled. Your selection and category are kept.", { exact: true })
+    await row.getByRole("button", { name: /^Confirm .* for /, exact: false }).click();
+    await page
+      .getByText(`Confirmed ${handoffPosted.name} as Groceries.`, { exact: true })
+      .first()
       .waitFor();
-    expect(await saved()).toEqual(settled);
-    await confirm();
-    await guard.getByRole("button", { name: "Confirm action", exact: true }).click();
-    await review.waitFor({ state: "detached" });
+    expect(await page.getByRole("dialog").count()).toBe(0);
+    if (artifacts)
+      await page.screenshot({
+        path: join(resolve(artifacts), "finance-pending-settlement-confirmed.png")
+      });
+    await expect.poll(async () => (await saved()).reviewState).toBe("confirmed");
     const confirmed = await saved();
     expect(confirmed).toEqual({
       ...settled,
