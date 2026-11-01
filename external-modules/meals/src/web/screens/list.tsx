@@ -214,13 +214,16 @@ function List(props: {
     input: Record<string, unknown>,
     toastFor?: (result: T) => Toast | null
   ): Promise<boolean> {
+    // meals.list.build returns the list itself; the other writes wrap it as { list }.
+
     if (writes === null || busy) return false;
     setBusy(true);
     setFailed(false);
     const outcome = await writes.invoke(name, input);
     setBusy(false);
     if (outcome.kind === "succeeded") {
-      const result = outcome.result as T;
+      const raw = outcome.result as T | ShoppingListView;
+      const result = ("list" in raw ? raw : { list: raw }) as T;
       props.apply(result.list);
       if (toastFor) setToast(toastFor(result));
       return true;

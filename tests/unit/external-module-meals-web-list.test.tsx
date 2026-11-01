@@ -171,4 +171,42 @@ describe("Shopping list with a tools handle", () => {
     expect(text(renderer)).toContain("Nothing to buy");
     expect(buttons(renderer, "Add item").length).toBeGreaterThan(0);
   });
+
+  it("builds from the plan and shows the list the build returns", async () => {
+    current = { ...list([]), planId: null };
+    const readyPlan = {
+      planId: "p1",
+      startDate: "2026-11-02",
+      dayCount: 1,
+      pantryMode: "prefer",
+      state: "active",
+      pausedReason: null,
+      progress: { ready: 1, total: 1 },
+      days: [
+        {
+          dayId: "d1",
+          date: "2026-11-02",
+          status: "ready",
+          failureReason: null,
+          cookTimeLimitMinutes: null,
+          dayFit: [],
+          meals: [{ mealId: "m1", status: "ready" }]
+        }
+      ]
+    };
+    mockReadTool.mockImplementation(async (name: string) => {
+      if (name === "meals.kitchen.get") return { kitchenId: "k", members: [], slotRules: [] };
+      if (name === "meals.plan.current") return { plan: readyPlan };
+      if (name === "meals.list.get") return current;
+      throw new Error(`unexpected tool ${name}`);
+    });
+    // The build tool returns the list itself, not { list }.
+    const invoke = vi.fn(async () => ({ status: "succeeded", result: list([line()]) }));
+    const renderer = await render({ tools: { invoke } });
+    await act(async () => {
+      buttons(renderer, "Build from the plan")[0]!.props.onClick();
+    });
+    expect(invoke).toHaveBeenCalledWith("meals.list.build", { planId: "p1" });
+    expect(text(renderer)).toContain("carrot");
+  });
 });
