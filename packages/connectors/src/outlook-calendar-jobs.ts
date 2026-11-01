@@ -37,6 +37,7 @@ export type OutlookCalendarState =
   | "stale"
   | "sign-in-needed"
   | "source-changed"
+  | "settings-not-found"
   | "disconnected";
 export interface OutlookCalendarHealth {
   readonly state: OutlookCalendarState;
@@ -60,6 +61,7 @@ export function readOutlookHealth(value: unknown): OutlookCalendarHealth {
       "stale",
       "sign-in-needed",
       "source-changed",
+      "settings-not-found",
       "disconnected"
     ].includes(v.state)
   )

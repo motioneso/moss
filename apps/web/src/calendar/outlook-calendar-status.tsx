@@ -13,6 +13,8 @@ const messages = {
   stale: "Out of date. Retry sync.",
   "sign-in-needed": "Outlook sign-in required. Sign in to the dedicated browser, then retry.",
   "source-changed": "Needs repair. Sync paused.",
+  "settings-not-found":
+    "Sync paused. Moss could not find Outlook's Settings button, even under the three-dot menu. Open the calendar in the dedicated browser, then retry.",
   disconnected: "Calendar updates paused. Cached events retained."
 };
 export function OutlookCalendarStatusPanel({ settings = false }: { readonly settings?: boolean }) {
@@ -75,7 +77,7 @@ export function OutlookCalendarStatusPanel({ settings = false }: { readonly sett
               status={
                 s.state === "current"
                   ? "ready"
-                  : s.state === "source-changed"
+                  : s.state === "source-changed" || s.state === "settings-not-found"
                     ? "error"
                     : s.state === "collecting" || s.state === "disconnected"
                       ? "idle"

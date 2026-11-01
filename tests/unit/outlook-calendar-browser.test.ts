@@ -10,7 +10,13 @@ import { collectOutlookCalendar } from "../../packages/connectors/src/outlook-ca
 
 // Invented rendered browser observations. Keep the displayed week between CDP connections,
 // just as the dedicated browser does between scheduled refreshes.
-function calendarBrowser(secondary = false, shared = false) {
+type SettingsLayout = "direct" | "late-direct" | "menu" | "empty-menu" | "bare";
+
+function calendarBrowser(secondary = false, shared = false, layout: SettingsLayout = "direct") {
+  let menuOpen = false;
+  const clicked: string[] = [];
+  const settingsVisible = () =>
+    layout === "direct" || layout === "late-direct" || (layout === "menu" && menuOpen);
   const group = document.createElement("li");
   group.innerHTML = `<button><span>${shared ? "People’s calendars" : "My calendars"}</span></button><div><button role="option" aria-selected="true"><span>Calendar</span></button><button aria-label="More options"></button></div>`;
   const selected = group.querySelector('[role="option"]')!;
@@ -23,8 +29,18 @@ function calendarBrowser(secondary = false, shared = false) {
       first: () => control,
       last: () => control,
       locator: (child: string) => locator(child),
-      waitFor: async () => undefined,
-      isVisible: async () => false,
+      getByRole: (_role: string, options?: { name: string }) => locator(options?.name ?? "menu"),
+      or: () => control,
+      waitFor: async () => {
+        if (name === "Settings" && !settingsVisible()) throw new Error("timeout");
+        if (name === "Access additional features" && layout === "bare") throw new Error("timeout");
+      },
+      isVisible: async () =>
+        name === "Settings"
+          ? layout === "direct"
+          : name === "Access additional features"
+            ? layout !== "direct" && layout !== "bare"
+            : false,
       count: async () => (name.includes("main") || name.includes('aria-selected="true"') ? 1 : 0),
       allInnerTexts: async () =>
         name === '[role="menuitem"]'
@@ -43,6 +59,10 @@ function calendarBrowser(secondary = false, shared = false) {
       getAttribute: async () =>
         `${monthDay(date(week))} – ${monthDay(new Date(date(week + 1).getTime() - 86400000))}, 2026, Jump to a specific date or date range.`,
       evaluate: async (fn: (element: Element) => unknown) => {
+        if (name === "Access additional features") menuOpen = true;
+        if (name === "menu") menuOpen = false;
+        if (name === "Settings" && layout === "menu") menuOpen = false;
+        if (name === "Settings" || name === "Access additional features") clicked.push(name);
         if (name.includes("Go to previous week")) week--;
         if (name.includes("Go to next week")) week++;
         if (name.includes('aria-selected="true"')) return fn(selected);
@@ -73,7 +93,7 @@ function calendarBrowser(secondary = false, shared = false) {
       })
     })
   };
-  return { contexts: () => [{ pages: () => [page] }], close: async () => undefined };
+  return { clicked, contexts: () => [{ pages: () => [page] }], close: async () => undefined };
 }
 
 describe("Outlook browser refresh navigation", () => {
@@ -101,4 +121,39 @@ describe("Outlook browser refresh navigation", () => {
       expect(scan.windowEnd).toBe("2026-11-21");
     }
   });
+  const binding = { endpoint: "http://127.0.0.1:5185", accountAddress: "invented@example.test" };
+  const now = new Date("2026-10-21T12:00:00.000Z");
+
+  it("opens Settings directly when the button is visible", async () => {
+    const browser = calendarBrowser(false, false, "direct");
+    transport.connect.mockResolvedValue(browser);
+    expect((await collectOutlookCalendar(binding, now)).complete).toBe(true);
+    expect(browser.clicked).not.toContain("Access additional features");
+    expect(browser.clicked).toContain("Settings");
+  });
+  it("waits for a Settings button that is still painting before using the menu", async () => {
+    // isVisible is false at first glance; waitFor resolves once the button appears.
+    const browser = calendarBrowser(false, false, "late-direct");
+    transport.connect.mockResolvedValue(browser);
+    expect((await collectOutlookCalendar(binding, now)).complete).toBe(true);
+    expect(browser.clicked).not.toContain("Access additional features");
+  });
+  it("opens Settings through the additional features menu when it is hidden there", async () => {
+    const browser = calendarBrowser(false, false, "menu");
+    transport.connect.mockResolvedValue(browser);
+    expect((await collectOutlookCalendar(binding, now)).complete).toBe(true);
+    expect(browser.clicked).toEqual([
+      ...Array(4).fill(["Access additional features", "Settings"]).flat()
+    ]);
+  });
+  it.each(["empty-menu", "bare"] as const)(
+    "pauses with a specific reason when Settings is nowhere (%s)",
+    async (layout) => {
+      transport.connect.mockResolvedValue(calendarBrowser(false, false, layout));
+      await expect(collectOutlookCalendar(binding, now)).rejects.toMatchObject({
+        code: "settings-not-found",
+        stage: "account"
+      });
+    }
+  );
 });
