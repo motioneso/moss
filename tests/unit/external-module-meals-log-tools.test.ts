@@ -79,6 +79,16 @@ describe("meals.log.add", () => {
     expect(r.store.entries.size).toBe(1);
   });
 
+  it("keeps the saved entry when the queue throws, so the caller cannot log it twice", async () => {
+    const r = rig();
+    r.jobs.enqueue = async () => {
+      throw new Error("queue down");
+    };
+    const { entry } = await logAdd(r.deps, { description: "oatmeal", idempotencyKey: "k1" });
+    expect(entry.estimateState).toBe("pending");
+    expect(r.store.entries.size).toBe(1);
+  });
+
   it("files the entry under the day in the user's own zone, which outranks the model's", async () => {
     const r = rig({ localTimezone: "America/Los_Angeles" });
     const { entry } = await logAdd(r.deps, {

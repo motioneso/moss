@@ -50,7 +50,11 @@ export function LogScreen(props: {
   hostActions: HostActions;
 }): ReactNodeLike {
   const { state } = props;
-  const nav = <DayNav localDate={props.localDate} onDate={props.onDate} />;
+  const nav = (
+    <div className="mls-planbar">
+      <DayNav localDate={props.localDate} onDate={props.onDate} />
+    </div>
+  );
   if (state.kind === "loading") {
     return (
       <div className="mls-stack">
@@ -79,13 +83,13 @@ export function LogScreen(props: {
       </div>
     );
   }
-  return <Day {...props} day={state.day} nav={nav} />;
+  return <Day {...props} day={state.day} />;
 }
 
 function DayNav(props: { localDate: string; onDate: (localDate: string) => void }): ReactNodeLike {
   const today = todayIso();
   return (
-    <div className="mls-planbar">
+    <div className="mls-row">
       <div className="mls-row">
         <Button
           variant="quiet"
@@ -258,7 +262,7 @@ function EntryRow(props: {
 
 function Day(props: {
   day: LogListResult;
-  nav: ReactNodeLike;
+  onDate: (localDate: string) => void;
   localDate: string;
   reload: () => void;
   writes: MealsWrites | null;
@@ -312,7 +316,7 @@ function Day(props: {
   return (
     <div className="mls-stack">
       <div className="mls-planbar">
-        {props.nav}
+        <DayNav localDate={props.localDate} onDate={props.onDate} />
         <div className="mls-row mls-hide-phone">{addButton}</div>
       </div>
       {failed ? (

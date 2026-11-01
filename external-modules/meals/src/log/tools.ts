@@ -197,14 +197,19 @@ export async function logAdd(deps: LogDeps, input: Input): Promise<LogEntryResul
   });
 
   // A retry returns the existing entry and queues nothing, so one entry never gets two estimates.
-  // A busy queue leaves the entry pending, and the screen offers a retry.
+  // The entry is already saved, so a queue that is busy or down leaves it pending for a retry.
+  // Failing the call here would invite the caller to log the same meal twice.
   if (created) {
-    await deps.jobs.enqueue({
-      queue: LOG_ESTIMATE_QUEUE,
-      jobKind: LOG_ESTIMATE_JOB_KIND,
-      idempotencyKey: logEstimateKey(entry.entryId, entry.estimateRevision),
-      params: { entryId: entry.entryId, revision: entry.estimateRevision }
-    });
+    try {
+      await deps.jobs.enqueue({
+        queue: LOG_ESTIMATE_QUEUE,
+        jobKind: LOG_ESTIMATE_JOB_KIND,
+        idempotencyKey: logEstimateKey(entry.entryId, entry.estimateRevision),
+        params: { entryId: entry.entryId, revision: entry.estimateRevision }
+      });
+    } catch {
+      // Left pending on purpose.
+    }
   }
   return { entry };
 }
