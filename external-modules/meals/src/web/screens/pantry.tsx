@@ -286,6 +286,8 @@ function Pantry(props: {
         </>
       )}
 
+      {toast !== null ? <div className="mls-toast-room" aria-hidden="true" /> : null}
+
       {toast !== null ? (
         <div className="jds-toast mls-toast" role="status">
           <div className="jds-toast__body">

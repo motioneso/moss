@@ -64,6 +64,7 @@ export const MODULE_STYLES = `
 .mls-form { display: flex; flex-direction: column; gap: var(--space-4); }
 .mls-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
 .mls-sticky { display: none; }
+.mls-toast-room { display: none; }
 .mls-toast {
   position: fixed; bottom: var(--space-6); left: 50%; transform: translateX(-50%);
   z-index: 30; align-items: center; justify-content: space-between;
@@ -107,6 +108,9 @@ export const MODULE_STYLES = `
   }
   .mls-sticky > * { flex: 1; }
   .mls-toast { bottom: 88px; width: calc(100% - 2 * var(--space-4)); }
+  .mls-toast-room { display: block; height: 11rem; flex-shrink: 0; }
+  .mls-tabs .jds-segmented { display: flex; width: 100%; }
+  .mls-tabs .jds-segmented__opt { flex: 1 1 auto; padding-inline: var(--space-2); }
   .mls-slots { grid-template-columns: minmax(0, 1fr); }
   .mls-ingredient { grid-template-columns: 4.5rem minmax(0, 1fr); }
 }
