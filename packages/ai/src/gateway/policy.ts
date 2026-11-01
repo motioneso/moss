@@ -83,7 +83,7 @@ export async function resolvePolicy(
  * Whether unattended mode may run this tool with no card: only when a person
  * could have promoted the tool's family to run automatically (#2418, #2419).
  * Reads off the family's allowed tiers, never the stored tier, and fails closed —
- * installed-module tools whose family allows only always_confirm, destructive tools, outbound tools, a declared family that is missing or unreadable, or a non-auto tool
+ * installed-module tools whose family allows only always_confirm, destructive tools, outbound tools, tools that declare `confirmUnderYolo`, a declared family that is missing or unreadable, or a non-auto tool
  * means the card. An external tool that declares no family runs. A server-resolved ordinary app write needs no family promotion;
  * its route-level authorization has already been checked before reaching this helper.
  */
@@ -94,6 +94,7 @@ export async function familyAllowsAutoRun(
   perCallResolved = false
 ): Promise<boolean> {
   if (tool.risk === "destructive") return false;
+  if (tool.confirmUnderYolo === true) return false;
   const familyId = tool.actionFamilyId;
   if (tool.isExternal === true) {
     if (!familyId) return true;
