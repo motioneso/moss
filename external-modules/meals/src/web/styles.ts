@@ -12,7 +12,7 @@ export const MODULE_STYLES = `
 .mls-stack { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
 .mls-stack--tight { gap: var(--space-3); }
 .mls-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
-.mls-row > h3 { margin: 0; overflow-wrap: anywhere; }
+.mls-row > h3 { margin: 0; width: auto; overflow-wrap: anywhere; }
 .mls-members, .mls-table { list-style: none; margin: 0; padding: 0; }
 .mls-member {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-4);
