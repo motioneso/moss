@@ -5,17 +5,17 @@ Only pass/fail, error codes and counts are recorded. No titles, senders, address
 
 ## Results so far
 
-| Question                        | Result                                                                                                                                 |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Sign-in through the viewer      | Worked. Microsoft accepted the containerised headless Chromium.                                                                        |
-| MFA method                      | Not yet recorded (coordinator is asking Ben).                                                                                          |
-| Headless accepted               | Yes.                                                                                                                                   |
-| Sandbox                         | "Adequately sandboxed". Namespace sandbox, PID and network namespaces, seccomp-BPF and TSYNC all active. Yama (non-broker) not active. |
-| Full scan over the relayed pipe | Pass. 6 weekly views, complete, 41 events (count only).                                                                                |
-| Inbox opens in the container    | Pass. 20 messages counted.                                                                                                             |
-| Inbox still reachable at day 7  | Pending.                                                                                                                               |
-| First failed scan hour          | None recorded yet by the hourly timer (first fire 2026-11-01T05:00Z).                                                                  |
-| Re-sign-in needed               | None since the one sign-in.                                                                                                            |
+| Question                        | Result                                                                                                                                  |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Sign-in through the viewer      | Worked. Microsoft accepted the containerised headless Chromium.                                                                         |
+| MFA method                      | No second step was prompted at first sign-in. A later challenge (new location, token expiry) is untested and may need the viewer again. |
+| Headless accepted               | Yes.                                                                                                                                    |
+| Sandbox                         | "Adequately sandboxed". Namespace sandbox, PID and network namespaces, seccomp-BPF and TSYNC all active. Yama (non-broker) not active.  |
+| Full scan over the relayed pipe | Pass. 6 weekly views, complete, 41 events (count only).                                                                                 |
+| Inbox opens in the container    | Pass. 20 messages counted.                                                                                                              |
+| Inbox still reachable at day 7  | Pending.                                                                                                                                |
+| First failed scan hour          | None recorded yet by the hourly timer (first fire 2026-11-01T05:00Z).                                                                   |
+| Re-sign-in needed               | None since the one sign-in.                                                                                                             |
 
 ## Findings that change the build
 
