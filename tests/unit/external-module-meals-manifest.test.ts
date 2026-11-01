@@ -104,6 +104,7 @@ const PLAN: Required<PlanView> = {
   planId: "p",
   startDate: "2026-11-02",
   dayCount: 7,
+  replaceable: 2,
   pantryMode: "prefer",
   state: "paused",
   pausedReason: "hourly",

@@ -318,7 +318,7 @@ export class FakePlanStore implements PlanStore {
   async claimSwapChoice(choiceId: string, generation: number) {
     const choice = this.swapChoices.get(choiceId);
     if (!choice || choice.generation !== generation || choice.status !== "pending") return false;
-    choice.status = "writing";
+    Object.assign(choice, { status: "writing" });
     return true;
   }
 
@@ -336,7 +336,7 @@ export class FakePlanStore implements PlanStore {
     const choice = this.swapChoices.get(choiceId);
     if (!choice || choice.generation !== generation) return false;
     if (choice.status !== "pending" && choice.status !== "writing") return false;
-    choice.status = "failed";
+    Object.assign(choice, { status: "failed" });
     return true;
   }
 
