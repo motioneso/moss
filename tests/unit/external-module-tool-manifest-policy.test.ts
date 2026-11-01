@@ -63,6 +63,24 @@ describe("external tool manifest policy mapping (#1246)", () => {
     });
   });
 
+  it("copies confirmUnderYolo into the live tool only when declared true", () => {
+    const withFlag = {
+      ...discovery,
+      manifest: {
+        ...discovery.manifest,
+        assistantTools: discovery.manifest.assistantTools!.map((tool) => ({
+          ...tool,
+          confirmUnderYolo: true
+        }))
+      }
+    };
+    const [flagged] = createExternalToolManifests([withFlag as never], invoke);
+    const [plain] = createExternalToolManifests([discovery], invoke);
+
+    expect(flagged?.assistantTools?.[0]?.confirmUnderYolo).toBe(true);
+    expect(plain?.assistantTools?.[0]).not.toHaveProperty("confirmUnderYolo");
+  });
+
   it("confirms only the declared exceptional value", async () => {
     const [manifest] = createExternalToolManifests([discovery], invoke);
     const requiresConfirmation = manifest?.assistantTools?.[0]?.requiresConfirmation;

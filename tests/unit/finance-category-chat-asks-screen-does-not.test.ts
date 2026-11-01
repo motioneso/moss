@@ -24,6 +24,10 @@ vi.mock("@moss/settings", async (importOriginal) => ({
 const ORIGIN = "http://moss.test";
 const USER = "00000000-0000-4000-8000-0000000000a1";
 const TOOLS = ["finance.transactions.confirm", "finance.transactions.bulk-category"] as const;
+const CATEGORIZE_TOOLS = [
+  "finance.transaction.categorize",
+  "finance.transaction.categorize-new"
+] as const;
 
 type Declared = {
   name: string;
@@ -93,7 +97,7 @@ describe("finance category changes: chat asks, screen click does not", () => {
   });
 
   // YOLO runs a write when familyAllowsAutoRun says yes (#3417), so this is the YOLO gate.
-  it.each(TOOLS)("YOLO does not run %s without asking", async (name) => {
+  it.each([...TOOLS, ...CATEGORIZE_TOOLS])("YOLO does not run %s without asking", async (name) => {
     expect(await familyAllowsAutoRun(shippedTool(name), "finance", promotedLookup)).toBe(false);
   });
 

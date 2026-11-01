@@ -79,7 +79,7 @@
       {
         "id": "finance.transactions",
         "label": "Transactions",
-        "description": "One toolbar holds All or Needs a look, month arrows, payee/notes search, Filters and Export. Rows show date, payee, category, account and amount; badges appear only for review, pending, uncleared, household, possible duplicate and unbalanced splits. Confirmed rows change category from a quiet picker. Tick rows, or the header box for every editable loaded row, up to 200; a bar pinned to the bottom then offers one reviewed category change. Payees open captured facts, Split or Edit split, and owned notes; household details omit notes. Edit private note reads a fresh SQL version, then host-confirms saving or clearing up to 4,000 bytes without changing money, categories, links or reconciliation. KV/shared rows stay read only. Moss chat always asks before changing categories, even in YOLO mode. Changed or uncertain saves keep copyable drafts. Captured category edits and audited inverse transfer corrections await host approval; stale/duplicate corrections refuse.",
+        "description": "One toolbar holds All or Needs a look, month arrows, payee/notes search, Filters and Export. Rows show date, payee, category, account and amount; badges appear only for review, pending, uncleared, household, possible duplicate and unbalanced splits. Confirmed rows change category from a quiet picker. Tick rows, or the header box for every editable loaded row, up to 200; a bar pinned to the bottom then offers one reviewed category change. Payees open captured facts, Split or Edit split, and owned notes; household details omit notes. Edit private note reads a fresh SQL version, then host-confirms saving or clearing up to 4,000 bytes without changing money, categories, links or reconciliation. KV/shared rows stay read only. Moss chat always asks before changing categories, even in YOLO mode. Uncertain saves keep copyable drafts. Captured category edits and audited inverse transfer corrections await host approval; stale/duplicate corrections refuse. Busy/error states preserve filters.",
         "path": "/transactions"
       },
       {
@@ -589,6 +589,7 @@
       },
       "handler": "transaction.categorize",
       "actionFamilyId": "sorting",
+      "confirmUnderYolo": true,
       "executionPolicy": "auto"
     },
     {
@@ -614,6 +615,7 @@
       },
       "handler": "transaction.categorize-new",
       "actionFamilyId": "sorting_new",
+      "confirmUnderYolo": true,
       "executionPolicy": "auto"
     },
     {
