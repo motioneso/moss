@@ -12,11 +12,13 @@ import type {
   PlanDayView,
   PlannedMealView,
   PlanView,
-  RecipeView
+  RecipeView,
+  SwapChoiceView
 } from "../contracts.js";
-import { calorieFit, mealShareKcal } from "../domain/targets.js";
+import { isReplaceable } from "../domain/regenerate.js";
+import { calorieFit, mealShareKcal, portionFor } from "../domain/targets.js";
 import { markKey, type Marks } from "../store/cooking-port.js";
-import type { DayRow, MealRow, PlanRow, RecipeRow } from "../store/plan-port.js";
+import type { DayRow, MealRow, PlanRow, RecipeRow, SwapChoiceRow } from "../store/plan-port.js";
 
 const REMOVED_MEMBER = "Removed member";
 
@@ -134,6 +136,7 @@ export function planView(
     state: plan.state,
     pausedReason: plan.pausedReason,
     progress: { ready: days.filter((day) => day.status === "ready").length, total: days.length },
+    replaceable: meals.filter(isReplaceable).length,
     days: dayViews
   };
 }
@@ -147,7 +150,8 @@ export function recipeView(
   meal: MealRow,
   recipe: RecipeRow | undefined,
   kitchen: KitchenView,
-  marks: Marks = NO_MARKS
+  marks: Marks = NO_MARKS,
+  swapChoices: readonly SwapChoiceView[] = []
 ): RecipeView {
   const view = mealView(meal, recipe, membersById(kitchen), marks);
   const scale = recipe ? view.servings / recipe.baseServings : 1;
@@ -168,6 +172,54 @@ export function recipeView(
     servingsOverride: meal.servingsOverride,
     steps: recipe?.steps ?? [],
     ingredients,
-    swapChoices: []
+    swapChoices
   };
+}
+
+/** Eater rows for a swap choice, sized from the choice's own calories. A shown choice passed Safety. */
+export function eatersForRecipe(
+  meal: MealRow,
+  recipe: RecipeRow,
+  members: Map<string, MemberView>
+): MealRow["eaters"] {
+  return meal.eaters.map((eater) => {
+    const person = members.get(eater.memberId);
+    const share = person ? mealShareKcal(person, meal.slotName) : null;
+    const portion = portionFor(share, recipe.kcalPerServing);
+    return {
+      memberId: eater.memberId,
+      portion,
+      estimatedKcal:
+        recipe.kcalPerServing === null ? null : Math.round(recipe.kcalPerServing * portion),
+      safety: "pass" as const,
+      safetyReason: null
+    };
+  });
+}
+
+export function swapChoiceViews(
+  meal: MealRow,
+  choices: readonly SwapChoiceRow[],
+  recipes: readonly RecipeRow[],
+  kitchen: KitchenView
+): SwapChoiceView[] {
+  const members = membersById(kitchen);
+  const recipeById = new Map(recipes.map((recipe) => [recipe.recipeId, recipe]));
+  return [...choices]
+    .sort((a, b) => a.position - b.position)
+    .map((choice) => {
+      const recipe = choice.recipeId ? recipeById.get(choice.recipeId) : undefined;
+      const ready = choice.status === "ready" && recipe !== undefined;
+      return {
+        choiceId: choice.choiceId,
+        status: choice.status,
+        title: recipe?.title ?? null,
+        cookMinutes: recipe?.cookMinutes ?? null,
+        eaters: ready
+          ? eatersForRecipe(meal, recipe, members).map((eater) =>
+              eaterView(eater, meal.slotName, members, recipe?.recipeId ?? null, NO_MARKS)
+            )
+          : []
+      };
+    });
 }

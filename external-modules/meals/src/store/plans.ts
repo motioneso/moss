@@ -16,7 +16,8 @@ import type {
   PlanRow,
   PlanState,
   PlanStore,
-  RecipeRow
+  RecipeRow,
+  SwapChoiceRow
 } from "./plan-port.js";
 import type { MealsDb } from "./sql.js";
 
@@ -335,6 +336,175 @@ export function sqlPlanStore(db: MealsDb): PlanStore {
         [mealId, generation, failureReason, attempts, JSON.stringify(verdicts)]
       );
       return row?.failed === true;
+    },
+
+    async setMealLocked(mealId, locked) {
+      const { rows } = await db.query(
+        "UPDATE app.meals_planned_meals SET locked = $2, updated_at = now() " +
+          "WHERE meal_id = $1 AND kind = 'recipe' AND cooked_at IS NULL RETURNING meal_id",
+        [mealId, locked]
+      );
+      return rows.length > 0;
+    },
+
+    async resetMeals(mealIds) {
+      if (mealIds.length === 0) return 0;
+      const row = await one<{ count: number }>(
+        "WITH m AS (UPDATE app.meals_planned_meals SET status = 'pending', failure_reason = NULL, " +
+          "attempts = 0, updated_at = now() WHERE meal_id = ANY($1::uuid[]) AND kind = 'recipe' " +
+          "AND NOT locked AND cooked_at IS NULL AND status IN ('ready', 'failed') " +
+          "RETURNING meal_id), " +
+          "c AS (DELETE FROM app.meals_swap_choices WHERE meal_id IN (SELECT meal_id FROM m) " +
+          "RETURNING 1) " +
+          "SELECT count(*)::int AS count FROM m",
+        [[...mealIds]]
+      );
+      return row?.count ?? 0;
+    },
+
+    async startMealJob(mealId) {
+      const row = await one<{ generation: number }>(
+        "UPDATE app.meals_planned_meals SET job_generation = job_generation + 1, " +
+          "updated_at = now() WHERE meal_id = $1 RETURNING job_generation AS generation",
+        [mealId]
+      );
+      return row?.generation ?? null;
+    },
+
+    async replaceSwapChoices(mealId, kitchenId, generation, choices) {
+      const rows = choices.map((choice) => ({
+        choice_id: choice.choiceId,
+        position: choice.position
+      }));
+      await db.query(
+        "WITH d AS (DELETE FROM app.meals_swap_choices WHERE meal_id = $1 RETURNING 1) " +
+          "INSERT INTO app.meals_swap_choices (owner_user_id, kitchen_id, meal_id, choice_id, " +
+          "position, generation) SELECT app.current_actor_user_id(), $2, $1, x.choice_id, " +
+          "x.position, $3 FROM jsonb_to_recordset($4::jsonb) AS x(choice_id uuid, " +
+          "position smallint) WHERE EXISTS (SELECT 1 FROM app.meals_planned_meals " +
+          "WHERE meal_id = $1)",
+        [mealId, kitchenId, generation, JSON.stringify(rows)]
+      );
+    },
+
+    async listSwapChoices(mealId) {
+      const { rows } = await db.query<SwapChoiceRow>(
+        'SELECT choice_id AS "choiceId", position, status, recipe_id AS "recipeId", generation ' +
+          "FROM app.meals_swap_choices WHERE meal_id = $1 ORDER BY position",
+        [mealId]
+      );
+      return rows;
+    },
+
+    async claimSwapChoice(choiceId, generation) {
+      const { rows } = await db.query(
+        "UPDATE app.meals_swap_choices SET status = 'writing', updated_at = now() " +
+          "WHERE choice_id = $1 AND generation = $2 AND status = 'pending' RETURNING choice_id",
+        [choiceId, generation]
+      );
+      return rows.length > 0;
+    },
+
+    async saveChoiceReady(input) {
+      const { recipe } = input;
+      const ingredients = recipe.ingredients.map((line, position) => ({
+        position,
+        original_text: line.originalText,
+        name: line.name,
+        name_key: nameKey(line.name),
+        quantity: line.quantity,
+        unit: line.unit,
+        store_section: line.section,
+        check_label: line.checkLabel
+      }));
+      const row = await one<{ saved: boolean }>(
+        "WITH c AS (UPDATE app.meals_swap_choices SET status = 'ready', recipe_id = $3, " +
+          "updated_at = now() WHERE choice_id = $1 AND generation = $2 AND status = 'writing' " +
+          "RETURNING choice_id), " +
+          "r AS (INSERT INTO app.meals_recipes (owner_user_id, kitchen_id, recipe_id, title, " +
+          "title_key, steps, cook_minutes, base_servings, kcal_per_serving, source) " +
+          "SELECT app.current_actor_user_id(), $4, $3, $5, $6, $7::jsonb, $8, $9, $10, " +
+          "'generated' FROM c RETURNING 1), " +
+          "i AS (INSERT INTO app.meals_recipe_ingredients (owner_user_id, kitchen_id, recipe_id, " +
+          "position, original_text, name, name_key, quantity, unit, store_section, check_label) " +
+          "SELECT app.current_actor_user_id(), $4, $3, x.position, x.original_text, x.name, " +
+          "x.name_key, x.quantity, x.unit, x.store_section, x.check_label FROM c, " +
+          "jsonb_to_recordset($11::jsonb) AS x(position smallint, original_text text, name text, " +
+          "name_key text, quantity numeric, unit text, store_section text, check_label boolean) " +
+          "RETURNING 1) " +
+          "SELECT EXISTS (SELECT 1 FROM c) AS saved",
+        [
+          input.choiceId,
+          input.generation,
+          recipe.recipeId,
+          input.kitchenId,
+          recipe.title,
+          recipe.titleKey,
+          JSON.stringify(recipe.steps),
+          recipe.cookMinutes,
+          recipe.baseServings,
+          recipe.kcalPerServing,
+          JSON.stringify(ingredients)
+        ]
+      );
+      return row?.saved === true;
+    },
+
+    async failChoice(choiceId, generation) {
+      const { rows } = await db.query(
+        "UPDATE app.meals_swap_choices SET status = 'failed', updated_at = now() " +
+          "WHERE choice_id = $1 AND generation = $2 AND status IN ('pending', 'writing') " +
+          "RETURNING choice_id",
+        [choiceId, generation]
+      );
+      return rows.length > 0;
+    },
+
+    async chooseSwap(input) {
+      const eaters = input.eaters.map((eater) => ({
+        member_id: eater.memberId,
+        portion: eater.portion,
+        estimated_kcal: eater.estimatedKcal,
+        safety: eater.safety,
+        safety_reason: eater.safetyReason
+      }));
+      const row = await one<{ chosen: boolean }>(
+        "WITH c AS (SELECT recipe_id FROM app.meals_swap_choices WHERE choice_id = $2 " +
+          "AND meal_id = $1 AND status = 'ready' AND recipe_id IS NOT NULL), " +
+          "m AS (UPDATE app.meals_planned_meals SET recipe_id = (SELECT recipe_id FROM c), " +
+          "status = 'ready', failure_reason = NULL, attempts = 0, updated_at = now() " +
+          "WHERE meal_id = $1 AND kind = 'recipe' AND cooked_at IS NULL " +
+          "AND status IN ('ready', 'failed') AND EXISTS (SELECT 1 FROM c) RETURNING meal_id), " +
+          "e AS (UPDATE app.meals_planned_meal_eaters t SET portion = x.portion, " +
+          "estimated_kcal = x.estimated_kcal, safety = x.safety, safety_reason = x.safety_reason, " +
+          "updated_at = now() FROM m, jsonb_to_recordset($3::jsonb) AS x(member_id uuid, " +
+          "portion numeric, estimated_kcal integer, safety text, safety_reason text) " +
+          "WHERE t.meal_id = m.meal_id AND t.member_id = x.member_id RETURNING 1), " +
+          "d AS (DELETE FROM app.meals_swap_choices WHERE meal_id IN (SELECT meal_id FROM m) " +
+          "RETURNING 1) " +
+          "SELECT EXISTS (SELECT 1 FROM m) AS chosen",
+        [input.mealId, input.choiceId, JSON.stringify(eaters)]
+      );
+      return row?.chosen === true;
+    },
+
+    async saveEaterVerdicts(input) {
+      const verdicts = input.eaters.map((eater) => ({
+        member_id: eater.memberId,
+        safety: eater.safety,
+        safety_reason: eater.safetyReason
+      }));
+      const row = await one<{ saved: boolean }>(
+        "WITH m AS (SELECT meal_id FROM app.meals_planned_meals " +
+          "WHERE meal_id = $1 AND job_generation = $2 AND recipe_id = $3), " +
+          "u AS (UPDATE app.meals_planned_meal_eaters t SET safety = x.safety, " +
+          "safety_reason = x.safety_reason, updated_at = now() " +
+          "FROM m, jsonb_to_recordset($4::jsonb) AS x(member_id uuid, safety text, safety_reason text) " +
+          "WHERE t.meal_id = m.meal_id AND t.member_id = x.member_id RETURNING 1) " +
+          "SELECT EXISTS (SELECT 1 FROM m) AS saved",
+        [input.mealId, input.generation, input.recipeId, JSON.stringify(verdicts)]
+      );
+      return row?.saved === true;
     },
 
     async getRecipes(recipeIds) {

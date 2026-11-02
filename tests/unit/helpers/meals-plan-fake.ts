@@ -10,9 +10,11 @@ import type {
   DayRow,
   MealRow,
   NewPlan,
+  NewSwapChoice,
   PlanRow,
   PlanStore,
-  RecipeRow
+  RecipeRow,
+  SwapChoiceRow
 } from "../../../external-modules/meals/src/store/plan-port.js";
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
@@ -22,6 +24,8 @@ export class FakePlanStore implements PlanStore {
   readonly days = new Map<string, Mutable<DayRow>>();
   readonly meals = new Map<string, Mutable<MealRow>>();
   readonly recipes = new Map<string, RecipeRow & { kitchenId: string }>();
+  readonly swapChoices = new Map<string, SwapChoiceRow & { mealId: string }>();
+  readonly jobGenerations = new Map<string, number>();
   /** Meal ids in the order they were saved ready, to prove meals are saved one by one. */
   readonly readyLog: string[] = [];
   /** Runs before each claimMeal, so a test can flip state between meals. */
@@ -251,6 +255,124 @@ export class FakePlanStore implements PlanStore {
     if (!meal || meal.generation !== generation || meal.status !== "writing") return false;
     Object.assign(meal, { status: "failed", failureReason, attempts });
     if (eaters) meal.eaters = eaters.map((eater) => ({ ...eater }));
+    return true;
+  }
+
+  async setMealLocked(mealId: string, locked: boolean) {
+    const meal = this.meals.get(mealId);
+    if (!meal || meal.kind !== "recipe" || meal.cookedAt !== null) return false;
+    meal.locked = locked;
+    return true;
+  }
+
+  async resetMeals(mealIds: readonly string[]) {
+    let count = 0;
+    for (const mealId of mealIds) {
+      const meal = this.meals.get(mealId);
+      if (!meal || meal.kind !== "recipe" || meal.locked || meal.cookedAt !== null) continue;
+      if (meal.status !== "ready" && meal.status !== "failed") continue;
+      Object.assign(meal, { status: "pending", failureReason: null, attempts: 0 });
+      for (const [choiceId, choice] of this.swapChoices) {
+        if (choice.mealId === mealId) this.swapChoices.delete(choiceId);
+      }
+      count += 1;
+    }
+    return count;
+  }
+
+  async startMealJob(mealId: string) {
+    if (!this.meals.has(mealId)) return null;
+    const next = (this.jobGenerations.get(mealId) ?? 0) + 1;
+    this.jobGenerations.set(mealId, next);
+    return next;
+  }
+
+  async replaceSwapChoices(
+    mealId: string,
+    _kitchenId: string,
+    generation: number,
+    choices: readonly NewSwapChoice[]
+  ) {
+    for (const [choiceId, choice] of this.swapChoices) {
+      if (choice.mealId === mealId) this.swapChoices.delete(choiceId);
+    }
+    for (const choice of choices) {
+      this.swapChoices.set(choice.choiceId, {
+        mealId,
+        choiceId: choice.choiceId,
+        position: choice.position,
+        status: "pending",
+        recipeId: null,
+        generation
+      });
+    }
+  }
+
+  async listSwapChoices(mealId: string) {
+    return [...this.swapChoices.values()]
+      .filter((choice) => choice.mealId === mealId)
+      .sort((a, b) => a.position - b.position)
+      .map(({ mealId: _mealId, ...row }) => row);
+  }
+
+  async claimSwapChoice(choiceId: string, generation: number) {
+    const choice = this.swapChoices.get(choiceId);
+    if (!choice || choice.generation !== generation || choice.status !== "pending") return false;
+    Object.assign(choice, { status: "writing" });
+    return true;
+  }
+
+  async saveChoiceReady(input: Parameters<PlanStore["saveChoiceReady"]>[0]) {
+    const choice = this.swapChoices.get(input.choiceId);
+    if (!choice || choice.generation !== input.generation || choice.status !== "writing") {
+      return false;
+    }
+    this.recipes.set(input.recipe.recipeId, { ...input.recipe, kitchenId: input.kitchenId });
+    Object.assign(choice, { status: "ready", recipeId: input.recipe.recipeId });
+    return true;
+  }
+
+  async failChoice(choiceId: string, generation: number) {
+    const choice = this.swapChoices.get(choiceId);
+    if (!choice || choice.generation !== generation) return false;
+    if (choice.status !== "pending" && choice.status !== "writing") return false;
+    Object.assign(choice, { status: "failed" });
+    return true;
+  }
+
+  async chooseSwap(input: Parameters<PlanStore["chooseSwap"]>[0]) {
+    const choice = this.swapChoices.get(input.choiceId);
+    const meal = this.meals.get(input.mealId);
+    if (!choice || choice.mealId !== input.mealId || choice.status !== "ready") return false;
+    if (!meal || meal.kind !== "recipe" || meal.cookedAt !== null) return false;
+    if (meal.status !== "ready" && meal.status !== "failed") return false;
+    Object.assign(meal, {
+      recipeId: choice.recipeId,
+      status: "ready",
+      failureReason: null,
+      attempts: 0,
+      eaters: input.eaters.map((eater) => ({ ...eater }))
+    });
+    for (const [choiceId, other] of this.swapChoices) {
+      if (other.mealId === input.mealId) this.swapChoices.delete(choiceId);
+    }
+    return true;
+  }
+
+  async saveEaterVerdicts(input: {
+    mealId: string;
+    generation: number;
+    recipeId: string;
+    eaters: readonly MealRow["eaters"][number][];
+  }) {
+    const meal = this.meals.get(input.mealId);
+    if (!meal) return false;
+    if ((this.jobGenerations.get(input.mealId) ?? 0) !== input.generation) return false;
+    if (meal.recipeId !== input.recipeId) return false;
+    for (const verdict of input.eaters) {
+      const row = meal.eaters.find((eater) => eater.memberId === verdict.memberId);
+      if (row) Object.assign(row, { safety: verdict.safety, safetyReason: verdict.safetyReason });
+    }
     return true;
   }
 

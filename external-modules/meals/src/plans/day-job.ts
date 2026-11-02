@@ -4,27 +4,19 @@
 // then enqueues the next pending day while the plan is active (spec correction C1).
 
 import type { AiFailure } from "../ai/port.js";
-import { buildRecipePrompt, parseRecipe, RECIPE_SCHEMA, type RecipeDraft } from "../ai/recipe.js";
-import { buildSafetyPrompt, parseSafety, SAFETY_SCHEMA } from "../ai/safety.js";
 import type { GenerationFailure, KitchenView, MemberView } from "../contracts.js";
-import { offPantry, type PantryInput } from "../domain/pantry.js";
-import { isRepeat, titleKey } from "../domain/repeats.js";
-import {
-  applyBrandRule,
-  deterministicSafety,
-  mergeSafety,
-  type SafetyVerdict
-} from "../domain/safety.js";
+import type { PantryInput } from "../domain/pantry.js";
+import { titleKey } from "../domain/repeats.js";
+import type { SafetyVerdict } from "../domain/safety.js";
 import { addDays } from "../domain/skeleton.js";
 import { mealShareKcal, portionFor } from "../domain/targets.js";
 import { estimateKcalPerServing } from "../estimator/recipe-kcal.js";
 import type { Veto } from "../store/cooking-port.js";
 import type { DayRow, MealEaterRow, MealRow, PlanRow } from "../store/plan-port.js";
 import type { PlanDeps } from "./deps.js";
+import { draftSafeRecipe } from "./draft.js";
 import { enqueueDay } from "./tools.js";
 
-/** The first attempt plus two regenerations. */
-const MAX_ATTEMPTS = 3;
 const NO_REPEAT_DAYS = 7;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -68,11 +60,6 @@ interface DayContext {
   readonly pantry: PantryInput | null;
 }
 
-function pantryText(item: PantryInput["stock"][number]): string {
-  if (item.quantity === null) return item.name;
-  return `${item.name} (${item.quantity}${item.unit ? ` ${item.unit}` : ""})`;
-}
-
 function verdictRow(eater: MealEaterRow, verdict: SafetyVerdict): MealEaterRow {
   return {
     ...eater,
@@ -87,8 +74,9 @@ async function writeMeal(context: DayContext, meal: MealRow): Promise<MealOutcom
   const people: (MemberView | undefined)[] = meal.eaters.map((eater) =>
     members.get(eater.memberId)
   );
-  const restrictionsOf = (index: number) => people[index]?.restrictions ?? [];
 
+  // A one-star recipe is avoided for the people who eat this meal, unless the plan's own request
+  // text names that dish (S10 vetoes, kept through S7's shared drafting path).
   const eaterIds = new Set(meal.eaters.map((eater) => eater.memberId));
   const asked = titleKey(plan.requestText ?? "");
   const vetoed = context.vetoes.filter(
@@ -99,137 +87,60 @@ async function writeMeal(context: DayContext, meal: MealRow): Promise<MealOutcom
   const vetoedKeys = new Set(vetoed.map((veto) => veto.titleKey));
   const avoidTitles = [...context.avoidTitles, ...vetoed.map((veto) => veto.title)];
 
-  let attempts = 0;
-  let lastVerdicts: readonly SafetyVerdict[] | null = null;
-  let lastRejection: "safety" | "pantry" | "veto" = "safety";
-  const fail = async (reason: GenerationFailure): Promise<MealOutcome> => {
-    const eaters = lastVerdicts
-      ? meal.eaters.map((eater, index) => verdictRow(eater, lastVerdicts![index]!))
+  const result = await draftSafeRecipe({
+    deps,
+    plan,
+    kitchen,
+    slotName: meal.slotName,
+    date: day.date,
+    people,
+    cookTimeLimitMinutes: day.cookTimeLimitMinutes,
+    avoidTitles,
+    recentKeys: context.recentKeys,
+    vetoedKeys,
+    pantry: context.pantry
+  });
+  if (!result.ok) {
+    const verdicts = result.verdicts;
+    const eaters = verdicts
+      ? meal.eaters.map((eater, index) => verdictRow(eater, verdicts[index]!))
       : undefined;
-    await deps.store.failMeal(meal.mealId, generation, reason, attempts, eaters);
-    return reason === "safety_cap"
+    await deps.store.failMeal(meal.mealId, generation, result.reason, result.attempts, eaters);
+    return result.reason === "safety_cap"
       ? { kind: "safety_cap" }
-      : { kind: "ai_error", error: reason as AiFailure };
-  };
-
-  while (attempts < MAX_ATTEMPTS) {
-    attempts += 1;
-    const written = await deps.ai.generateStructured({
-      schema: RECIPE_SCHEMA,
-      prompt: buildRecipePrompt({
-        slotName: meal.slotName,
-        date: day.date,
-        eaters: people.map((person) => ({
-          shareKcal: person ? mealShareKcal(person, meal.slotName) : null,
-          restrictions: person?.restrictions ?? [],
-          preferences: person?.preferences ?? []
-        })),
-        cookTimeLimitMinutes: day.cookTimeLimitMinutes,
-        requestText: plan.requestText,
-        avoidTitles,
-        unitsSystem: kitchen.unitsSystem,
-        ...(context.pantry !== null && context.pantry.mode !== "ignore"
-          ? {
-              pantry: {
-                mode: context.pantry.mode,
-                items: context.pantry.stock.map(pantryText),
-                staples: context.pantry.staples
-              }
-            }
-          : {})
-      }),
-      tierHint: "reasoning"
-    });
-    if (!written.ok) return fail(written.error);
-    let draft: RecipeDraft;
-    try {
-      draft = parseRecipe(written.object, { cookTimeLimitMinutes: day.cookTimeLimitMinutes });
-    } catch {
-      return fail("validation_failed");
-    }
-    draft = { ...draft, ingredients: applyBrandRule(draft.ingredients) };
-
-    const key = titleKey(draft.title);
-    if (!plan.allowRepeats && isRepeat(key, context.recentKeys)) continue;
-    if (vetoedKeys.has(key)) {
-      lastRejection = "veto";
-      continue;
-    }
-
-    // Cook only from on hand: a recipe that needs anything else is rejected and rewritten.
-    if (
-      context.pantry?.mode === "only" &&
-      offPantry(draft.ingredients, context.pantry).length > 0
-    ) {
-      lastRejection = "pantry";
-      continue;
-    }
-
-    const ruleVerdicts = meal.eaters.map((_, index) =>
-      deterministicSafety(draft.ingredients, restrictionsOf(index))
-    );
-    if (ruleVerdicts.some((verdict) => verdict.verdict === "fail")) {
-      lastVerdicts = ruleVerdicts;
-      lastRejection = "safety";
-      continue;
-    }
-
-    const judged = await deps.ai.generateStructured({
-      schema: SAFETY_SCHEMA,
-      prompt: buildSafetyPrompt(
-        draft,
-        meal.eaters.map((_, index) => ({ restrictions: restrictionsOf(index) }))
-      ),
-      tierHint: "reasoning"
-    });
-    if (!judged.ok) return fail(judged.error);
-    let modelVerdicts;
-    try {
-      modelVerdicts = parseSafety(judged.object, meal.eaters.length);
-    } catch {
-      return fail("validation_failed");
-    }
-    const merged = ruleVerdicts.map((verdict, index) =>
-      mergeSafety(verdict, modelVerdicts[index] ?? null)
-    );
-    if (merged.some((verdict) => verdict.verdict === "fail")) {
-      lastVerdicts = merged;
-      lastRejection = "safety";
-      continue;
-    }
-
-    const kcalPerServing = await estimateKcalPerServing(deps.ai, draft);
-    const eaters = meal.eaters.map((eater, index) => {
-      const person = people[index];
-      const share = person ? mealShareKcal(person, meal.slotName) : null;
-      const portion = portionFor(share, kcalPerServing);
-      return {
-        ...verdictRow(eater, merged[index]!),
-        portion,
-        estimatedKcal: kcalPerServing === null ? null : Math.round(kcalPerServing * portion)
-      };
-    });
-    const saved = await deps.store.saveMealReady({
-      mealId: meal.mealId,
-      generation,
-      attempts,
-      kitchenId: plan.kitchenId,
-      recipe: {
-        recipeId: deps.newId(),
-        title: draft.title,
-        titleKey: key,
-        steps: draft.steps,
-        cookMinutes: draft.cookMinutes,
-        baseServings: draft.baseServings,
-        kcalPerServing,
-        ingredients: draft.ingredients
-      },
-      eaters
-    });
-    return saved ? { kind: "ready", title: draft.title, titleKey: key } : { kind: "lost" };
+      : { kind: "ai_error", error: result.reason as AiFailure };
   }
-  // Running out of tries on the Pantry or one-star rules is not a Never serve problem.
-  return fail(lastRejection !== "safety" ? "validation_failed" : "safety_cap");
+
+  const { draft, key } = result;
+  const kcalPerServing = await estimateKcalPerServing(deps.ai, draft);
+  const eaters = meal.eaters.map((eater, index) => {
+    const person = people[index];
+    const share = person ? mealShareKcal(person, meal.slotName) : null;
+    const portion = portionFor(share, kcalPerServing);
+    return {
+      ...verdictRow(eater, result.verdicts[index]!),
+      portion,
+      estimatedKcal: kcalPerServing === null ? null : Math.round(kcalPerServing * portion)
+    };
+  });
+  const saved = await deps.store.saveMealReady({
+    mealId: meal.mealId,
+    generation,
+    attempts: result.attempts,
+    kitchenId: plan.kitchenId,
+    recipe: {
+      recipeId: deps.newId(),
+      title: draft.title,
+      titleKey: key,
+      steps: draft.steps,
+      cookMinutes: draft.cookMinutes,
+      baseServings: draft.baseServings,
+      kcalPerServing,
+      ingredients: draft.ingredients
+    },
+    eaters
+  });
+  return saved ? { kind: "ready", title: draft.title, titleKey: key } : { kind: "lost" };
 }
 
 /** Writes every unfinished meal. Returns the day's failure, or the reason it stopped early. */
@@ -263,7 +174,10 @@ async function writeDay(
   return { kind: "done", failure };
 }
 
-async function readPantryInput(deps: PlanDeps, mode: PantryInput["mode"]): Promise<PantryInput> {
+export async function readPantryInput(
+  deps: PlanDeps,
+  mode: PantryInput["mode"]
+): Promise<PantryInput> {
   const [items, staples] = await Promise.all([
     deps.pantry!.readItems(),
     deps.pantry!.readStaples()
@@ -293,6 +207,13 @@ export async function runPlanDay(
       ? []
       : await deps.store.recentTitles(plan.kitchenId, addDays(day.date, -NO_REPEAT_DAYS), day.date);
     const vetoes = (await deps.vetoes?.(kitchen.members.map((person) => person.memberId))) ?? [];
+    // A regenerated meal keeps its old recipe until the new one is saved. Writing the same dish
+    // again would make Regenerate look like it did nothing.
+    const replacedIds = (await deps.store.listDayMeals(dayId)).flatMap((meal) =>
+      meal.recipeId !== null && meal.status !== "ready" ? [meal.recipeId] : []
+    );
+    const replaced = replacedIds.length > 0 ? await deps.store.getRecipes(replacedIds) : [];
+    const avoid = [...recent, ...replaced];
     const pantry =
       deps.pantry !== undefined && plan.pantryMode !== "ignore"
         ? await readPantryInput(deps, plan.pantryMode)
@@ -304,8 +225,8 @@ export async function runPlanDay(
       day,
       generation,
       kitchen,
-      avoidTitles: recent.map((entry) => entry.title),
-      recentKeys: new Set(recent.map((entry) => entry.titleKey)),
+      avoidTitles: avoid.map((entry) => entry.title),
+      recentKeys: new Set(avoid.map((entry) => entry.titleKey)),
       vetoes
     });
     if (outcome.kind === "stale") return { status: "stale" };

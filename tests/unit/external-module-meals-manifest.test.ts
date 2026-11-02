@@ -104,6 +104,7 @@ const PLAN: Required<PlanView> = {
   planId: "p",
   startDate: "2026-11-02",
   dayCount: 7,
+  replaceable: 2,
   pantryMode: "prefer",
   state: "paused",
   pausedReason: "hourly",
@@ -257,7 +258,7 @@ describe("meals manifest", () => {
     expect(result.ok, JSON.stringify(!result.ok ? result.errors : [])).toBe(true);
   });
 
-  it("declares the S1 to S6 tools with their risks and handlers", () => {
+  it("declares the S1 to S7 tools with their risks and handlers", () => {
     const tools = loadManifest().assistantTools as Array<Record<string, unknown>>;
     expect(tools.map((entry) => [entry.name, entry.risk, entry.handler])).toEqual([
       ["meals.kitchen.get", "read", "kitchen.get"],
@@ -274,6 +275,8 @@ describe("meals manifest", () => {
       ["meals.meal.servings", "write", "meal.servings"],
       ["meals.meal.rate", "write", "meal.rate"],
       ["meals.favourites.edit", "write", "favourites.edit"],
+      ["meals.meal.edit", "write", "meal.edit"],
+      ["meals.meal.swap", "write", "meal.swap"],
       ["meals.list.get", "read", "list.get"],
       ["meals.list.build", "write", "list.build"],
       ["meals.list.edit", "write", "list.edit"],
@@ -351,11 +354,26 @@ describe("meals manifest", () => {
             revision: { type: "integer", min: 1, max: 1000000 }
           }
         }
+      },
+      {
+        name: "meals.meal-job",
+        handler: "meal.job",
+        retryLimit: 1,
+        allowModuleEnqueue: true,
+        timeoutMs: 600000,
+        paramsSchema: {
+          type: "object",
+          fields: {
+            mealId: { type: "uuid" },
+            generation: { type: "integer", min: 1, max: 100000 },
+            mode: { type: "enum", values: ["swap_choices", "quick_swap", "safety_recheck"] }
+          }
+        }
       }
     ]);
   });
 
-  it("owns exactly the S1 to S6 tables", () => {
+  it("owns exactly the S1 to S7 tables", () => {
     expect(loadManifest().database).toEqual({
       ownedTables: [
         "app.meals_kitchens",
@@ -376,7 +394,8 @@ describe("meals manifest", () => {
         "app.meals_log_estimates",
         "app.meals_log_estimate_items",
         "app.meals_ratings",
-        "app.meals_favourites"
+        "app.meals_favourites",
+        "app.meals_swap_choices"
       ]
     });
   });
@@ -437,9 +456,14 @@ describe("meals manifest", () => {
         ["meals.list", "/list"],
         ["meals.log", "/log"],
         ["meals.recipe", "/recipe"],
+        ["meals.swap", "/plan/swap"],
+        ["meals.plan-new", "/plan/new"],
         ["meals.household", "/household"],
         ["meals.settings", "/settings"]
       ])
+    );
+    expect(appMap.features.map((feature) => feature.id)).toEqual(
+      expect.arrayContaining(["meals.lock-regenerate", "meals.swap-choices"])
     );
     expect(appMap.features.map((feature) => feature.id)).toContain("meals.chat-household");
     expect(appMap.features.map((feature) => feature.id)).toContain("meals.chat-list");

@@ -39,6 +39,8 @@ import { pantryEdit, pantryGet } from "../pantry/tools.js";
 import type { PantryDeps } from "../pantry/tools.js";
 import { runPlanDay } from "../plans/day-job.js";
 import type { PlanDeps } from "../plans/deps.js";
+import { runMealJob } from "../plans/meal-job.js";
+import { mealEdit, mealSwap } from "../plans/meal-tools.js";
 import {
   mealGet,
   planControl,
@@ -181,6 +183,8 @@ export const HANDLERS: Readonly<Record<string, Handler>> = {
   "meal.servings": cooking(mealServings),
   "meal.rate": cooking(mealRate),
   "favourites.edit": cooking(favouritesEdit),
+  "meal.edit": plan(mealEdit),
+  "meal.swap": plan(mealSwap),
   "list.get": list(listGet),
   "list.build": list(listBuild),
   "list.edit": list(listEdit),
@@ -196,5 +200,6 @@ export const HANDLERS: Readonly<Record<string, Handler>> = {
   "log.reestimate": logTool(logReestimate),
   "log.delete": logTool(logDelete),
   "log.estimate": (ctx) => runLogEstimate(logJobDeps(ctx), jobParams(ctx.input)),
-  "plan.day": (ctx) => runPlanDay(planDeps(ctx), jobParams(ctx.input))
+  "plan.day": (ctx) => runPlanDay(planDeps(ctx), jobParams(ctx.input)),
+  "meal.job": (ctx) => runMealJob(planDeps(ctx), jobParams(ctx.input))
 };
