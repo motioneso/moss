@@ -87,7 +87,7 @@ export function bindWrites(props: Readonly<Record<string, unknown>>): MealsWrite
  * The message for an outcome that needs one. Success and a person's own cancel return null.
  * Each of the other four outcomes says something different, because the next step differs.
  */
-export function noticeFor(outcome: Pick<MealsWriteOutcome, "kind">): string | null {
+export function noticeFor(outcome: { readonly kind: MealsWriteOutcome["kind"] }): string | null {
   switch (outcome.kind) {
     case "succeeded":
     case "cancelled":

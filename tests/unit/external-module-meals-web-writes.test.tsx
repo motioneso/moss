@@ -111,7 +111,7 @@ describe("the write adapter", () => {
     ];
     expect(new Set(messages).size).toBe(4);
     for (const m of messages) expect(m).toBeTruthy();
-    expect(noticeFor({ kind: "succeeded", result: {} })).toBeNull();
+    expect(noticeFor({ kind: "succeeded" })).toBeNull();
     expect(noticeFor({ kind: "cancelled" })).toBeNull();
   });
 });
