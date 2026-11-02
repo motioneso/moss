@@ -110,6 +110,44 @@ async function openMeals(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/m\/meals/);
 }
 
+/**
+ * Waits for the plan to render. The stack restarts its app while the model is pinned and while a
+ * module is enabled, so a load can land mid-restart and show the page's own recovery; pressing
+ * that recovery's Try again is the real page's retry, not a stub.
+ */
+async function settlePlan(page: Page): Promise<void> {
+  const ready = page
+    .locator("section.mls-day")
+    .first()
+    .or(page.getByText("Plan your first week", { exact: true }))
+    .or(page.getByText("Writing your plan", { exact: true }));
+  const retry = page.getByRole("button", { name: "Try again", exact: true });
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    if (
+      await ready
+        .first()
+        .isVisible()
+        .catch(() => false)
+    )
+      return;
+    if (await retry.isVisible().catch(() => false)) await press(page, retry);
+    await page.waitForTimeout(2_000);
+  }
+  await expect(ready.first()).toBeVisible({ timeout: 60_000 });
+}
+
+/** Waits for a recipe to render, retrying the page's own recovery once if a load was cut short. */
+async function settleRecipe(page: Page): Promise<void> {
+  const ready = page.getByText(/Still to buy:|Nothing still to buy/, { exact: false }).first();
+  const retry = page.getByRole("button", { name: "Try again", exact: true });
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    if (await ready.isVisible().catch(() => false)) return;
+    if (await retry.isVisible().catch(() => false)) await press(page, retry);
+    await page.waitForTimeout(2_000);
+  }
+  await expect(ready).toBeVisible({ timeout: 60_000 });
+}
+
 /** Switches the instance's colour mode the way a person does, then lands back on the plan. */
 async function setColorMode(page: Page, mode: "Light" | "Dark"): Promise<void> {
   await page.goto("/m/meals");
@@ -132,9 +170,7 @@ async function setColorMode(page: Page, mode: "Light" | "Dark"): Promise<void> {
   );
   await expect(page.locator("html")).toHaveAttribute("data-color-mode", mode.toLowerCase());
   await page.goto("/m/meals");
-  await expect(page.locator("section.mls-day, .jds-empty, .jds-recovery").first()).toBeVisible({
-    timeout: 60_000
-  });
+  await settlePlan(page);
 }
 
 /** True when nothing on the page sticks out sideways at either proof width. */
@@ -302,9 +338,8 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
   let before: readonly (readonly MealRow[])[];
   await test.step("the empty plan reads clean in light and dark", async () => {
     await openMeals(page);
-    await expect(page.getByText("Plan your first week", { exact: true })).toBeVisible({
-      timeout: 60_000
-    });
+    await settlePlan(page);
+    await expect(page.getByText("Plan your first week", { exact: true })).toBeVisible();
     await shot(page, "01-empty-light");
     await setColorMode(page, "Dark");
     await expect(page.getByText("Plan your first week", { exact: true })).toBeVisible();
@@ -324,9 +359,8 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
       .fill("Simple weeknight dinners and easy breakfasts.");
     await press(page, page.getByRole("button", { name: "Start the plan", exact: true }));
     await expect(page).toHaveURL(/\/m\/meals\/?$/);
-    await expect(page.getByText("Writing your plan", { exact: true })).toBeVisible({
-      timeout: 60_000
-    });
+    await settlePlan(page);
+    await expect(page.getByText("Writing your plan", { exact: true })).toBeVisible();
     await shot(page, "02-writing-light");
     await setColorMode(page, "Dark");
     if (await page.getByText("Writing your plan", { exact: true }).isVisible()) {
@@ -364,6 +398,7 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
     await expect(dialog).toBeVisible();
     await shot(page, "04-replan-confirm-light");
     await press(page, dialog.getByRole("button", { name: "Re-plan", exact: true }));
+    await settlePlan(page);
     await waitForPlanSettled(page);
 
     const after = await readDays(page);
@@ -435,11 +470,7 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
         .last()
         .locator("a.mls-meal__title")
     );
-    await expect(
-      page.getByText(/Still to buy:|Nothing still to buy/, { exact: false })
-    ).toBeVisible({
-      timeout: 60_000
-    });
+    await settleRecipe(page);
     const recipeUrl = page.url();
     const longest = await page
       .locator(".mls-step, .mls-ingredient__name, .mls-meal__title")
@@ -455,9 +486,7 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
 
     await setColorMode(page, "Dark");
     await page.goto(recipeUrl);
-    await expect(
-      page.getByText(/Still to buy:|Nothing still to buy/, { exact: false })
-    ).toBeVisible({ timeout: 60_000 });
+    await settleRecipe(page);
     await shot(page, "07-recipe-dark");
     expect(await noSidewaysScroll(page)).toBe(true);
     await setColorMode(page, "Light");
@@ -468,6 +497,7 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
     /** Asks for a swap no kitchen could do, which the page refuses on its own. */
     async function refusedSwap(mode: "Light" | "Dark"): Promise<void> {
       await page.goto("/m/meals");
+      await settlePlan(page);
       await expect(page.locator("section.mls-day").first()).toBeVisible({ timeout: 60_000 });
       const dinner = page.locator("section.mls-day").nth(1).locator("article.mls-meal").last();
       await press(page, dinner.getByRole("button", { name: "Quick swap", exact: true }));
