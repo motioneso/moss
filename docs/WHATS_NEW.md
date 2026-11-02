@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-11-02
+
+#### Added
+
+- **Meals.** Plan your household's meals for the week, get a shopping list built from the plan, keep track of what's in your kitchen, and log what you eat. Meals replaces Food for new installs, and Food keeps working where it is installed. [PR #3949](https://github.com/motioneso/moss/pull/3949)
+
 ### 2026-11-01
 
 #### Added
