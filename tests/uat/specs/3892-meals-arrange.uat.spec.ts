@@ -11,8 +11,8 @@
 // Instance modules, the same path an operator uses. Generation calls a real model: the
 // provisioner copies the operator's own saved sign-in into the stack
 // (tests/uat/real-chat-env.ts) and this spec pins the cheapest chat+json model. Nothing here
-// intercepts, stubs or rewrites a response. The second household member is added through the
-// module's own tool route, the same route chat uses.
+// intercepts, stubs or rewrites a response. The second household member is added by asking
+// Moss in chat, the way a person would.
 //
 // Screenshots are written only when MEALS_S8_SHOT_DIR is set, at 1280 and 390 wide.
 import { execFileSync } from "node:child_process";
@@ -22,7 +22,31 @@ import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
 import { buildUatComposeArgs, restartUatStack } from "../provisioner.js";
-import { bringUpRealChatModel, signInUatAdmin } from "./real-chat-signin.js";
+import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { bringUpRealChatModel, requireUatBaseURL } from "./real-chat-signin.js";
+import { gotoUatPage } from "./uat-page-load.js";
+
+/**
+ * Signs in through the real form. The shared helper's button click never sees the button as
+ * stable on this box (an untouched spec fails the same way), so the form is submitted with
+ * the keyboard instead. Same form, same credentials, same session.
+ */
+async function signIn(page: Page): Promise<void> {
+  await gotoUatPage(page, requireUatBaseURL(), page.getByLabel("Email"));
+  await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
+  await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
+  await page.getByLabel("Password").press("Enter");
+  const skipSetup = page.getByRole("button", { name: "Skip setup" });
+  const userMenu = page.getByRole("button", { name: /^Account menu(?:,|$)/ });
+  await expect(skipSetup.or(userMenu).first()).toBeVisible({ timeout: 60_000 });
+  if (await skipSetup.isVisible()) {
+    await skipSetup.click({ force: true });
+    const skipAnyway = page.getByRole("button", { name: "Skip anyway" });
+    await expect(skipAnyway.or(userMenu).first()).toBeVisible({ timeout: 60_000 });
+    if (await skipAnyway.isVisible()) await skipAnyway.click({ force: true });
+  }
+  await expect(userMenu).toBeVisible({ timeout: 60_000 });
+}
 
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
@@ -149,7 +173,7 @@ test("arranging the week runs through the real Meals page on generated data", as
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
   await test.step("the seeded owner signs in through the real sign-in form", async () => {
-    await signInUatAdmin(page);
+    await signIn(page);
     await page.reload();
     await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible();
     say("owner signin=real-form session=persisted");
@@ -201,11 +225,34 @@ test("arranging the week runs through the real Meals page on generated data", as
 
   let plan: PlanRead;
   await test.step("Sam joins the household and a 3-day plan is written by the real model", async () => {
-    await invokeTool(page, "meals.household.save", {
-      name: "Sam",
-      mealPattern: ["lunch", "dinner"]
-    });
+    // Household changes go through chat by design, so Sam is added by asking Moss.
     await openMeals(page);
+    await page.getByRole("button", { name: "Household", exact: true }).click();
+    await page.getByRole("button", { name: "Ask Moss", exact: true }).click();
+    const drawer = page.getByRole("dialog", { name: "Chat with Moss", exact: true });
+    await expect(drawer).toBeVisible();
+    await drawer
+      .getByLabel("Message Moss")
+      .fill("Add Sam to my household. Sam eats lunch and dinner every day.");
+    await drawer.getByRole("button", { name: "Send", exact: true }).click();
+    await expect
+      .poll(
+        async () => {
+          const approve = drawer.getByRole("button", { name: /^(Approve|Allow)/ }).first();
+          if (await approve.isVisible().catch(() => false)) await approve.click();
+          const kitchen = await invokeTool<{ members: readonly { name: string }[] }>(
+            page,
+            "meals.kitchen.get",
+            {}
+          );
+          return kitchen.members.map((member) => member.name).join(",");
+        },
+        { timeout: 5 * 60_000, intervals: [2_000, 5_000] }
+      )
+      .toContain("Sam");
+    await drawer.getByRole("button", { name: "Close chat", exact: true }).click();
+    say("household Sam added through chat");
+    await page.getByRole("button", { name: "Plan", exact: true }).click();
     await expect(page.getByText("Plan your first week", { exact: true })).toBeVisible({
       timeout: 60_000
     });
