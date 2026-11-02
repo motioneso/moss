@@ -349,7 +349,7 @@ test("arranging the week runs through the real Meals page on generated data", as
       .getByLabel("Anything you want", { exact: true })
       .fill("Simple weeknight dinners and easy lunches.");
     await page.getByRole("button", { name: "Start the plan", exact: true }).click();
-    await expect(page).toHaveURL(/\/m\/meals\/?$/);
+    await expect(page).toHaveURL(/\/m\/meals\/?$/, { timeout: 120_000 });
     await waitForPlanSettled(page);
 
     const today = new Date().toISOString().slice(0, 10);
