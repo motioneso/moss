@@ -265,6 +265,137 @@ export class FakePlanStore implements PlanStore {
     return true;
   }
 
+  async moveMeal(input: Parameters<PlanStore["moveMeal"]>[0]) {
+    const meal = this.meals.get(input.mealId);
+    if (!meal || meal.cookedAt !== null || meal.status === "writing") return false;
+    Object.assign(meal, {
+      dayId: input.dayId,
+      slotName: input.slotName,
+      slotPosition: input.slotPosition
+    });
+    return true;
+  }
+
+  async setMealEaters(input: Parameters<PlanStore["setMealEaters"]>[0]) {
+    const meal = this.meals.get(input.mealId);
+    if (!meal || meal.kind !== "recipe" || meal.cookedAt !== null) return false;
+    if (meal.status !== "ready" && meal.status !== "failed") return false;
+    meal.servingsOverride = null;
+    meal.eaters = input.eaters.map((eater) => ({ ...eater }));
+    return true;
+  }
+
+  async setMealText(mealId: string, text: string) {
+    const meal = this.meals.get(mealId);
+    if (!meal || meal.cookedAt !== null || meal.status === "writing") return false;
+    Object.assign(meal, {
+      kind: "text" as const,
+      plainText: text,
+      recipeId: null,
+      locked: false,
+      servingsOverride: null,
+      status: "ready" as const,
+      failureReason: null
+    });
+    return true;
+  }
+
+  async clearMealText(mealId: string) {
+    const meal = this.meals.get(mealId);
+    if (!meal || meal.kind !== "text" || meal.cookedAt !== null) return false;
+    Object.assign(meal, {
+      kind: "recipe" as const,
+      plainText: null,
+      status: "pending" as const,
+      failureReason: null
+    });
+    return true;
+  }
+
+  async addOneOffMeal(input: Parameters<PlanStore["addOneOffMeal"]>[0]) {
+    if (!this.days.has(input.dayId)) return false;
+    this.meals.set(input.mealId, {
+      mealId: input.mealId,
+      dayId: input.dayId,
+      slotName: input.slotName,
+      slotPosition: input.slotPosition,
+      kind: "recipe",
+      sharing: "solo",
+      status: "pending",
+      failureReason: null,
+      locked: false,
+      oneOffFor: input.memberId,
+      favouriteOf: null,
+      servingsOverride: null,
+      recipeId: null,
+      plainText: null,
+      cookedAt: null,
+      attempts: 0,
+      generation: 0,
+      eaters: [
+        {
+          memberId: input.memberId,
+          portion: 1,
+          estimatedKcal: null,
+          safety: "pending",
+          safetyReason: null
+        }
+      ]
+    });
+    return true;
+  }
+
+  async setDayCookLimit(dayId: string, minutes: number | null) {
+    const day = this.days.get(dayId);
+    if (!day) return false;
+    day.cookTimeLimitMinutes = minutes;
+    return true;
+  }
+
+  async setDaySharing(dayId: string, _slotName: string, _sharing: "shared" | "solo") {
+    return this.days.has(dayId);
+  }
+
+  async splitMeal(input: Parameters<PlanStore["splitMeal"]>[0]) {
+    const meal = this.meals.get(input.mealId);
+    if (!meal || meal.sharing !== "shared" || meal.cookedAt !== null) return false;
+    if (meal.status === "writing") return false;
+    const [first, ...rest] = meal.eaters;
+    if (!first) return false;
+    for (const copy of input.copies) {
+      const eater = rest.find((entry) => entry.memberId === copy.memberId);
+      if (!eater) return false;
+      this.meals.set(copy.mealId, {
+        ...meal,
+        mealId: copy.mealId,
+        sharing: "solo",
+        servingsOverride: null,
+        eaters: [{ ...eater }]
+      });
+    }
+    meal.sharing = "solo";
+    meal.servingsOverride = null;
+    meal.eaters = [{ ...first }];
+    return true;
+  }
+
+  async mergeSlotMeals(input: Parameters<PlanStore["mergeSlotMeals"]>[0]) {
+    const slot = [...this.meals.values()].filter(
+      (meal) => meal.dayId === input.dayId && meal.slotName === input.slotName
+    );
+    if (slot.length === 0) return false;
+    if (slot.some((meal) => meal.cookedAt !== null || meal.status === "writing")) return false;
+    const kept = this.meals.get(input.keepMealId);
+    if (!kept) return false;
+    kept.sharing = "shared";
+    kept.servingsOverride = null;
+    kept.eaters = input.eaters.map((eater) => ({ ...eater }));
+    for (const meal of slot) {
+      if (meal.mealId !== input.keepMealId) this.meals.delete(meal.mealId);
+    }
+    return true;
+  }
+
   async resetMeals(mealIds: readonly string[]) {
     let count = 0;
     for (const mealId of mealIds) {

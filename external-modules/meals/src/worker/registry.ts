@@ -37,6 +37,7 @@ import {
 } from "../cooking/tools.js";
 import { pantryEdit, pantryGet } from "../pantry/tools.js";
 import type { PantryDeps } from "../pantry/tools.js";
+import { dayEdit } from "../plans/day-tools.js";
 import { runPlanDay } from "../plans/day-job.js";
 import type { PlanDeps } from "../plans/deps.js";
 import { runMealJob } from "../plans/meal-job.js";
@@ -185,6 +186,7 @@ export const HANDLERS: Readonly<Record<string, Handler>> = {
   "favourites.edit": cooking(favouritesEdit),
   "meal.edit": plan(mealEdit),
   "meal.swap": plan(mealSwap),
+  "day.edit": plan(dayEdit),
   "list.get": list(listGet),
   "list.build": list(listBuild),
   "list.edit": list(listEdit),

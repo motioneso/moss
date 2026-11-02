@@ -14,6 +14,7 @@ export type MealsWriteToolName =
   | "meals.favourites.edit"
   | "meals.meal.edit"
   | "meals.meal.swap"
+  | "meals.day.edit"
   | "meals.list.build"
   | "meals.list.edit"
   | "meals.list.bought"

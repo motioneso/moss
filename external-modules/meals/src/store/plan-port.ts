@@ -196,6 +196,67 @@ export interface PlanStore {
   /** Locks or unlocks a recipe meal that has not been cooked. False when the meal does not qualify. */
   setMealLocked(mealId: string, locked: boolean): Promise<boolean>;
   /**
+   * Moves a meal that has not been cooked and is not being written to a day and slot.
+   * False when the meal does not qualify.
+   */
+  moveMeal(input: {
+    readonly mealId: string;
+    readonly dayId: string;
+    readonly slotName: string;
+    readonly slotPosition: number;
+  }): Promise<boolean>;
+  /**
+   * Replaces who eats a recipe meal and clears any servings override, so servings follow the
+   * eaters again. False unless the meal is a written or failed recipe meal that is not cooked.
+   */
+  setMealEaters(input: {
+    readonly mealId: string;
+    readonly eaters: readonly MealEaterRow[];
+  }): Promise<boolean>;
+  /**
+   * Turns a meal that has not been cooked and is not being written into a plain-text slot.
+   * The recipe is dropped, so the slot never reaches the shopping list. False when the meal
+   * does not qualify.
+   */
+  setMealText(mealId: string, text: string): Promise<boolean>;
+  /**
+   * Turns a plain-text slot back into a recipe meal waiting to be written.
+   * False unless the meal is text and has not been cooked.
+   */
+  clearMealText(mealId: string): Promise<boolean>;
+  /** Adds one pending Solo recipe meal for one member, with that member as its only eater. */
+  addOneOffMeal(input: {
+    readonly mealId: string;
+    readonly kitchenId: string;
+    readonly dayId: string;
+    readonly slotName: string;
+    readonly slotPosition: number;
+    readonly memberId: string;
+  }): Promise<boolean>;
+  /** Sets or clears a day's cook-time limit. False for a missing day. */
+  setDayCookLimit(dayId: string, minutes: number | null): Promise<boolean>;
+  /** Records a day's Shared or Solo override for one slot. False for a missing day. */
+  setDaySharing(dayId: string, slotName: string, sharing: Sharing): Promise<boolean>;
+  /**
+   * Splits one shared meal into one Solo meal per eater. The meal keeps its first eater and
+   * each copy gets one of the rest, with the same recipe and state. False when the meal is
+   * cooked, being written or not shared.
+   */
+  splitMeal(input: {
+    readonly mealId: string;
+    readonly copies: readonly { readonly mealId: string; readonly memberId: string }[];
+  }): Promise<boolean>;
+  /**
+   * Joins every meal of one slot on one day into the kept meal with the given eaters and
+   * deletes the rest. False when any meal of the slot is cooked or being written.
+   */
+  mergeSlotMeals(input: {
+    readonly dayId: string;
+    readonly slotName: string;
+    readonly keepMealId: string;
+    readonly eaters: readonly MealEaterRow[];
+  }): Promise<boolean>;
+  /**
    * Sets the replaceable meals among `mealIds` (see domain/regenerate) back to pending and
    * deletes their swap choices. Returns how many meals it reset. Their recipes stay stored.
    */

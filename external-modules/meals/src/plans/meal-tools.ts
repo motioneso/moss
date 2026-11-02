@@ -4,8 +4,10 @@
 // Regenerate. A swap asks for three choices, written by a job, and Choose puts one on the meal.
 
 import type { RecipeView } from "../contracts.js";
+import { mealShareKcal, portionFor } from "../domain/targets.js";
 import type { MealRow } from "../store/plan-port.js";
 import { MEAL_JOB_KIND, MEAL_JOB_QUEUE, mealJobKey, type PlanDeps } from "./deps.js";
+import { enqueueSafetyRecheck } from "./meal-job.js";
 import { loadRecipe, PlanInputError, requireString } from "./tools.js";
 import { eatersForRecipe, membersById } from "./view.js";
 
@@ -27,13 +29,111 @@ function requireSwappable(meal: MealRow): void {
   }
 }
 
+function optionalSlotName(input: Input): string | null {
+  const value = input["targetSlotName"];
+  if (value === undefined || value === null) return null;
+  return requireString(input, "targetSlotName", 40);
+}
+
+async function moveMeal(deps: PlanDeps, meal: MealRow & { planId: string }, input: Input) {
+  if (meal.cookedAt !== null) throw new PlanInputError("A cooked meal cannot be moved");
+  if (meal.status === "writing") {
+    throw new PlanInputError("Wait for this meal to finish writing before moving it");
+  }
+  const days = await deps.store.listDays(meal.planId);
+  const targetDayId = input["targetDayId"];
+  const targetDate = input["targetDate"];
+  const target =
+    typeof targetDayId === "string"
+      ? days.find((day) => day.dayId === targetDayId)
+      : typeof targetDate === "string"
+        ? days.find((day) => day.date === targetDate)
+        : undefined;
+  if (target === undefined) {
+    throw new PlanInputError(
+      typeof targetDayId === "string" || typeof targetDate === "string"
+        ? "That day is in another plan"
+        : "Give targetDayId or targetDate"
+    );
+  }
+  const slotName = optionalSlotName(input) ?? meal.slotName;
+  const targetMeals = await deps.store.listDayMeals(target.dayId);
+  const slotPosition =
+    targetMeals.find((entry) => entry.slotName === slotName)?.slotPosition ??
+    targetMeals.reduce((max, entry) => Math.max(max, entry.slotPosition), -1) + 1;
+  if (
+    !(await deps.store.moveMeal({
+      mealId: meal.mealId,
+      dayId: target.dayId,
+      slotName,
+      slotPosition
+    }))
+  ) {
+    throw new PlanInputError("A cooked meal cannot be moved");
+  }
+  await deps.onPlanChange?.(meal.planId, "written");
+}
+
+async function setEaters(deps: PlanDeps, meal: MealRow & { planId: string }, input: Input) {
+  if (meal.kind !== "recipe" || meal.recipeId === null) {
+    throw new PlanInputError("Only a recipe meal has eaters to change");
+  }
+  if (meal.cookedAt !== null) throw new PlanInputError("A cooked meal's eaters cannot change");
+  if (meal.status !== "ready" && meal.status !== "failed") {
+    throw new PlanInputError("Wait for this meal to finish writing before changing its eaters");
+  }
+  const raw = input["eaterIds"];
+  if (
+    !Array.isArray(raw) ||
+    raw.length === 0 ||
+    raw.length > 40 ||
+    raw.some((id) => typeof id !== "string")
+  ) {
+    throw new PlanInputError("eaterIds must name at least one person");
+  }
+  const kitchen = await deps.kitchen();
+  const members = membersById(kitchen);
+  const eaterIds = [...new Set(raw as string[])];
+  for (const id of eaterIds) {
+    if (!members.has(id)) throw new PlanInputError("That person is not in the household");
+  }
+  const [recipe] = await deps.store.getRecipes([meal.recipeId]);
+  if (recipe === undefined) throw new PlanInputError("That meal has no recipe yet");
+  const eaters = eaterIds.map((memberId) => {
+    const person = members.get(memberId)!;
+    const portion = portionFor(mealShareKcal(person, meal.slotName), recipe.kcalPerServing);
+    return {
+      memberId,
+      portion,
+      estimatedKcal:
+        recipe.kcalPerServing === null ? null : Math.round(recipe.kcalPerServing * portion),
+      safety: "pending" as const,
+      safetyReason: null
+    };
+  });
+  if (!(await deps.store.setMealEaters({ mealId: meal.mealId, eaters }))) {
+    throw new PlanInputError("That meal's eaters cannot change");
+  }
+  // The new eaters have no Safety verdicts yet. The re-check job runs Safety for them.
+  await enqueueSafetyRecheck(deps, meal.mealId);
+  await deps.onPlanChange?.(meal.planId, "written");
+}
+
 export async function mealEdit(deps: PlanDeps, input: Input): Promise<RecipeView> {
   const mealId = requireString(input, "mealId", 64);
   const action = input["action"];
-  if (action !== "lock" && action !== "unlock") {
-    throw new PlanInputError("action must be lock or unlock");
+  if (action !== "lock" && action !== "unlock" && action !== "move" && action !== "set_eaters") {
+    throw new PlanInputError("action must be lock, unlock, move or set_eaters");
   }
   const meal = await requireMeal(deps, mealId);
+  if (action === "move") {
+    await moveMeal(deps, meal, input);
+    return loadRecipe(deps, mealId);
+  }
+  if (action === "set_eaters") {
+    await setEaters(deps, meal, input);
+    return loadRecipe(deps, mealId);
+  }
   if (action === "lock" && (meal.kind !== "recipe" || meal.status !== "ready")) {
     throw new PlanInputError("Only a written recipe meal can be locked");
   }
