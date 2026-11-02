@@ -534,6 +534,8 @@ test("arranging the week runs through the real Meals page on generated data", as
       "Eating out at the little Vietnamese place on the corner with Sam and the neighbours, then " +
       "ice cream by the river if the weather holds and nobody is too tired to walk back home " +
       "tonight, before bedtime.";
+    await openMeals(page);
+    await waitForPlanSettled(page);
     const read = await invokeTool<PlanRead>(page, "meals.plan.get", { planId: plan.planId });
     const breakfast = read.days[0]!.meals.find((meal) => meal.slotName === "breakfast")!;
     await daySection(page, 0)
