@@ -213,6 +213,25 @@ async function readDays(page: Page): Promise<readonly (readonly MealRow[])[]> {
   );
 }
 
+/**
+ * The plan's day statuses from the module's own read route: "writing" until every day is written
+ * again, "ready" before and after, "failed" when a day gave up. One call per poll, so watching a
+ * write does not load the instance's connection pool.
+ */
+async function readPlanStatus(page: Page): Promise<"ready" | "writing" | "failed"> {
+  const response = await page.request.post(
+    `/api/ai/assistant-tools/${encodeURIComponent("meals.plan.current")}/invoke`,
+    { data: { input: { date: await page.evaluate(() => new Date().toISOString().slice(0, 10)) } } }
+  );
+  if (!response.ok()) return "writing";
+  const body = (await response.json()) as {
+    invocation?: { result?: { plan?: { days?: readonly { status: string }[] } | null } };
+  };
+  const days = body.invocation?.result?.plan?.days ?? [];
+  if (days.some((day) => day.status === "failed")) return "failed";
+  return days.length > 0 && days.every((day) => day.status === "ready") ? "ready" : "writing";
+}
+
 /** The household's usual time per slot, straight from the module's own read route. */
 async function readSlotTimes(page: Page): Promise<Readonly<Record<string, string | null>>> {
   const response = await page.request.post(
@@ -437,23 +456,17 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
     await press(page, dialog.getByRole("button", { name: "Re-plan", exact: true }));
 
     // The page keeps showing the finished plan for a moment after the write lands, so the
-    // re-plan is followed through the module's own read route instead of the DOM.
+    // re-plan is followed through the module's own read route instead of the DOM: first the
+    // write has to start, then every day has to come back written.
     await expect
-      .poll(
-        async () => {
-          const reads = await Promise.all(rewrites.map((meal) => readRecipe(page, meal.id)));
-          if (reads.some((read) => read.meal.status === "failed")) return "failed";
-          const rewritten = reads.filter(
-            (read, index) => read.recipeId !== recipesBefore.get(rewrites[index]!.id)
-          ).length;
-          const writing = reads.some(
-            (read) => read.meal.status !== "ready" && read.meal.status !== "failed"
-          );
-          return writing ? "writing" : `${rewritten}/${rewrites.length}`;
-        },
-        { timeout: PLAN_WRITE_TIMEOUT_MS, intervals: [5_000, 10_000] }
-      )
-      .toBe(`${rewrites.length}/${rewrites.length}`);
+      .poll(async () => readPlanStatus(page), { timeout: 300_000, intervals: [2_000, 5_000] })
+      .toBe("writing");
+    await expect
+      .poll(async () => readPlanStatus(page), {
+        timeout: PLAN_WRITE_TIMEOUT_MS,
+        intervals: [10_000, 15_000, 20_000]
+      })
+      .toBe("ready");
 
     await settlePlan(page);
     await waitForPlanSettled(page);
