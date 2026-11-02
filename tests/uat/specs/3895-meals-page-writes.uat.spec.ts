@@ -313,6 +313,15 @@ test("every Meals page control works through the real page", async ({ page }) =>
     await expect(dialog).toBeHidden({ timeout: 30_000 });
   };
 
+  const addListItem = async (name: string): Promise<void> => {
+    await press(page, page.getByRole("button", { name: "Add item", exact: true }).first());
+    const dialog = page.getByRole("dialog", { name: "Add to the list" });
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel("Item", { exact: true }).fill(name);
+    await press(page, dialog.getByRole("button", { name: "Add", exact: true }));
+    await expect(dialog).toBeHidden({ timeout: 30_000 });
+  };
+
   await test.step("Household: add a person from the page", async () => {
     await goto("/household");
     await expect(page.getByRole("button", { name: "Add person", exact: true })).toBeVisible({
@@ -427,7 +436,11 @@ test("every Meals page control works through the real page", async ({ page }) =>
 
   await test.step("Undo toasts on the list and the Pantry, light", async () => {
     await goto("/list");
-    const removeLine = page.getByRole("button", { name: /^Remove / }).first();
+    await expect(page.getByRole("button", { name: "Add item", exact: true }).first()).toBeVisible({
+      timeout: 60_000
+    });
+    await addListItem("Oat milk");
+    const removeLine = page.getByRole("button", { name: "Remove Oat milk", exact: true });
     await expect(removeLine).toBeVisible({ timeout: 60_000 });
     await expect(removeLine).toBeEnabled({ timeout: 30_000 });
     await press(page, removeLine);
@@ -509,7 +522,8 @@ test("every Meals page control works through the real page", async ({ page }) =>
     await page.keyboard.press("Escape");
     await press(page, page.getByRole("button", { name: "Clear list", exact: true }).first());
     await confirmHost("Cancel", "-dark");
-    const removeDark = page.getByRole("button", { name: /^Remove / }).first();
+    await addListItem("Rye bread");
+    const removeDark = page.getByRole("button", { name: "Remove Rye bread", exact: true });
     await expect(removeDark).toBeEnabled({ timeout: 30_000 });
     await press(page, removeDark);
     const undoDark = page.getByRole("button", { name: "Undo", exact: true });
