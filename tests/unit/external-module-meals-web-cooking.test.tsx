@@ -152,7 +152,6 @@ describe("Recipe cooking controls", () => {
 });
 
 const OUTCOMES = ["rejected", "invalid_input", "saved", "failed"] as const;
-const failingWith = (status: string) => vi.fn(async () => ({ status }));
 const shownMessage = (renderer: ReactTestRenderer, kind: (typeof OUTCOMES)[number]) => {
   expect(flatten(renderer.toJSON()).replace(/\s+/g, " ")).toContain(noticeFor({ kind } as never)!);
   expect(flatten(renderer.toJSON()).replace(/\s+/g, " ")).not.toContain("That did not go through");
