@@ -370,14 +370,19 @@ export function sqlPlanStore(db: MealsDb): PlanStore {
           "updated_at = now() WHERE meal_id = $1 AND kind = 'recipe' AND cooked_at IS NULL " +
           "AND status IN ('ready', 'failed') RETURNING meal_id), " +
           "d AS (DELETE FROM app.meals_planned_meal_eaters WHERE meal_id IN " +
-          "(SELECT meal_id FROM m) RETURNING 1), " +
+          "(SELECT meal_id FROM m) AND member_id NOT IN (SELECT (x->>'member_id')::uuid " +
+          "FROM jsonb_array_elements($2::jsonb) AS x) RETURNING 1), " +
           "e AS (INSERT INTO app.meals_planned_meal_eaters (owner_user_id, kitchen_id, meal_id, " +
           "member_id, portion, estimated_kcal, safety, safety_reason) " +
           "SELECT app.current_actor_user_id(), meal.kitchen_id, meal.meal_id, x.member_id, " +
           "x.portion, x.estimated_kcal, x.safety, x.safety_reason FROM m " +
-          "JOIN app.meals_planned_meals meal ON meal.meal_id = m.meal_id, " +
-          "jsonb_to_recordset($2::jsonb) AS x(member_id uuid, portion numeric, " +
-          "estimated_kcal integer, safety text, safety_reason text) RETURNING 1) " +
+          "JOIN app.meals_planned_meals meal ON meal.meal_id = m.meal_id " +
+          "JOIN jsonb_to_recordset($2::jsonb) AS x(member_id uuid, portion numeric, " +
+          "estimated_kcal integer, safety text, safety_reason text) ON true " +
+          "ON CONFLICT (owner_user_id, meal_id, member_id) DO UPDATE SET " +
+          "portion = EXCLUDED.portion, estimated_kcal = EXCLUDED.estimated_kcal, " +
+          "safety = EXCLUDED.safety, safety_reason = EXCLUDED.safety_reason, " +
+          "updated_at = now() RETURNING 1) " +
           "SELECT EXISTS (SELECT 1 FROM m) AS saved",
         [input.mealId, JSON.stringify(eaters)]
       );
@@ -469,8 +474,8 @@ export function sqlPlanStore(db: MealsDb): PlanStore {
           "e AS (INSERT INTO app.meals_planned_meal_eaters (owner_user_id, kitchen_id, meal_id, " +
           "member_id, portion, estimated_kcal, safety, safety_reason) " +
           "SELECT s.owner_user_id, s.kitchen_id, x.meal_id, x.member_id, eater.portion, " +
-          "eater.estimated_kcal, eater.safety, eater.safety_reason FROM src s, " +
-          "jsonb_to_recordset($2::jsonb) AS x(meal_id uuid, member_id uuid) " +
+          "eater.estimated_kcal, eater.safety, eater.safety_reason FROM src s " +
+          "JOIN jsonb_to_recordset($2::jsonb) AS x(meal_id uuid, member_id uuid) ON true " +
           "JOIN app.meals_planned_meal_eaters eater ON eater.meal_id = s.meal_id " +
           "AND eater.member_id = x.member_id RETURNING 1) " +
           "SELECT EXISTS (SELECT 1 FROM own) AS split",
@@ -497,14 +502,19 @@ export function sqlPlanStore(db: MealsDb): PlanStore {
           "servings_override = NULL, updated_at = now() WHERE meal_id = $3 " +
           "AND EXISTS (SELECT 1 FROM guard) RETURNING meal_id), " +
           "d AS (DELETE FROM app.meals_planned_meal_eaters WHERE meal_id IN " +
-          "(SELECT meal_id FROM kept) RETURNING 1), " +
+          "(SELECT meal_id FROM kept) AND member_id NOT IN (SELECT (x->>'member_id')::uuid " +
+          "FROM jsonb_array_elements($4::jsonb) AS x) RETURNING 1), " +
           "e AS (INSERT INTO app.meals_planned_meal_eaters (owner_user_id, kitchen_id, meal_id, " +
           "member_id, portion, estimated_kcal, safety, safety_reason) " +
           "SELECT app.current_actor_user_id(), meal.kitchen_id, meal.meal_id, x.member_id, " +
           "x.portion, x.estimated_kcal, x.safety, x.safety_reason FROM kept " +
-          "JOIN app.meals_planned_meals meal ON meal.meal_id = kept.meal_id, " +
-          "jsonb_to_recordset($4::jsonb) AS x(member_id uuid, portion numeric, " +
-          "estimated_kcal integer, safety text, safety_reason text) RETURNING 1), " +
+          "JOIN app.meals_planned_meals meal ON meal.meal_id = kept.meal_id " +
+          "JOIN jsonb_to_recordset($4::jsonb) AS x(member_id uuid, portion numeric, " +
+          "estimated_kcal integer, safety text, safety_reason text) ON true " +
+          "ON CONFLICT (owner_user_id, meal_id, member_id) DO UPDATE SET " +
+          "portion = EXCLUDED.portion, estimated_kcal = EXCLUDED.estimated_kcal, " +
+          "safety = EXCLUDED.safety, safety_reason = EXCLUDED.safety_reason, " +
+          "updated_at = now() RETURNING 1), " +
           "gone AS (DELETE FROM app.meals_planned_meals WHERE day_id = $1 AND slot_name = $2 " +
           "AND meal_id <> $3 AND EXISTS (SELECT 1 FROM kept) RETURNING 1) " +
           "SELECT EXISTS (SELECT 1 FROM kept) AS merged",
