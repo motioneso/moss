@@ -15,7 +15,7 @@
 //
 // Screenshots are written only when MEALS_S7_SHOT_DIR is set, at 1280 and 390 wide.
 import { execFileSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
@@ -28,6 +28,12 @@ export const uatLevel = { level: "solo-admin", without: [] } as const;
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
 const SHOT_DIR = process.env.MEALS_S7_SHOT_DIR ?? "";
+/** The version this working tree built, so a stale copy on the instance cannot pass. */
+const MODULE_VERSION = (
+  JSON.parse(readFileSync("external-modules/meals/jarvis.module.json", "utf8")) as {
+    version: string;
+  }
+).version;
 const PLAN_DAYS = 3;
 const MODULE_BUILD_TIMEOUT_MS = 180_000;
 const PLAN_WRITE_TIMEOUT_MS = 20 * 60_000;
@@ -233,7 +239,7 @@ test("lock, regenerate and swap choices run through the real Meals page on gener
       .locator(".set-row")
       .filter({ has: page.getByRole("checkbox", { name: "Enable Meals", exact: true }) });
     await expect(mealsRow).toBeVisible();
-    await expect(mealsRow.locator(".set-row__desc")).toContainText("v0.5.0");
+    await expect(mealsRow.locator(".set-row__desc")).toContainText(`v${MODULE_VERSION}`);
     const enable = mealsRow.getByRole("checkbox", { name: "Enable Meals", exact: true });
     await expect(mealsRow.locator("label.jds-switch")).toBeVisible();
     if (!(await enable.isChecked())) await mealsRow.locator("label.jds-switch").click();
@@ -246,7 +252,9 @@ test("lock, regenerate and swap choices run through the real Meals page on gener
     await expect(
       page.locator('nav[aria-label="Main"]').getByRole("link", { name: "Meals", exact: true })
     ).toBeVisible({ timeout: 60_000 });
-    say("module=meals version=0.5.0 source=local-build enabled=real-admin-ui restart=verified");
+    say(
+      `module=meals version=${MODULE_VERSION} source=local-build enabled=real-admin-ui restart=verified`
+    );
   });
 
   await test.step("a real model provider is installed, logged in and pinned", async () => {
@@ -405,6 +413,11 @@ test("lock, regenerate and swap choices run through the real Meals page on gener
   });
 
   await test.step("list lines are ticked, one day regenerates and the ticks survive", async () => {
+    // Which meals feed the first day is read while the Plan tab is showing: the list tab has no
+    // day sections at all.
+    await page.getByRole("button", { name: "Plan", exact: true }).click();
+    await expect(page.locator("section.mls-day").first()).toBeVisible({ timeout: 60_000 });
+    const firstDayTitles = (await readDays(page))[0]!.meals.map((meal) => meal.title);
     await page.getByRole("button", { name: "Shopping list", exact: true }).click();
     const firstLine = page.locator("li.mls-line").first();
     const build = page.getByRole("button", { name: "Build from the plan", exact: true });
@@ -423,7 +436,6 @@ test("lock, regenerate and swap choices run through the real Meals page on gener
 
     // Regenerate the first day later, so tick lines that no first-day meal feeds: those are the
     // lines a rebuild can legitimately keep. Their ticks must survive it.
-    const firstDayTitles = (await readDays(page))[0]!.meals.map((meal) => meal.title);
     const seenNames = new Set<string>();
     const candidates = beforeLines.filter((line) => {
       if (seenNames.has(line.name)) return false;
