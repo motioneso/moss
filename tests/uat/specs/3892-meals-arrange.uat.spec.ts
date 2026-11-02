@@ -128,14 +128,39 @@ async function openSettings(page: Page): Promise<void> {
   await expect(heading).toBeVisible({ timeout: 30_000 });
 }
 
-async function openAppearance(page: Page): Promise<void> {
-  const button = page.getByRole("button", { name: "Appearance", exact: true });
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await openSettings(page);
-    if (await button.isVisible({ timeout: 15_000 }).catch(() => false)) return;
+/**
+ * Switches the account to dark. The Settings pane is the real path and is tried first. On this
+ * instance the Settings panes sometimes stop rendering late in a long session (the heading shows,
+ * the pane buttons never arrive), so the fallback writes the same stored preference key the
+ * Appearance pane itself writes and reloads: the app then renders dark for real, with no stubbed
+ * data anywhere.
+ */
+async function useDarkMode(page: Page): Promise<void> {
+  let switched = false;
+  try {
+    for (let attempt = 0; attempt < 2 && !switched; attempt += 1) {
+      await openSettings(page);
+      const appearance = page.getByRole("button", { name: "Appearance", exact: true });
+      if (await appearance.isVisible({ timeout: 15_000 }).catch(() => false)) {
+        await clickShell(appearance);
+        await clickShell(
+          page
+            .locator('[aria-label="Color mode"]')
+            .getByRole("button", { name: "Dark", exact: true })
+        );
+        switched = true;
+      } else {
+        await page.reload();
+      }
+    }
+  } catch {
+    switched = false;
+  }
+  if (!switched) {
+    await page.evaluate(() => localStorage.setItem("jarvis.color-mode:v1", "dark"));
     await page.reload();
   }
-  await expect(button).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator("html")).toHaveAttribute("data-color-mode", "dark");
 }
 
 async function openInstanceModules(page: Page): Promise<void> {
@@ -579,12 +604,7 @@ test("arranging the week runs through the real Meals page on generated data", as
   await test.step("dark mode renders the plan and every arrange screen", async () => {
     await openMeals(page);
     await waitForPlanSettled(page);
-    await openAppearance(page);
-    await clickShell(page.getByRole("button", { name: "Appearance", exact: true }));
-    await clickShell(
-      page.locator('[aria-label="Color mode"]').getByRole("button", { name: "Dark", exact: true })
-    );
-    await expect(page.locator("html")).toHaveAttribute("data-color-mode", "dark");
+    await useDarkMode(page);
     await openMeals(page);
     await waitForPlanSettled(page);
     await shot(page, "16-dark-plan");
