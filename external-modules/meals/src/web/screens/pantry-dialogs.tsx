@@ -130,7 +130,7 @@ export function ItemDialog(props: {
 export function StaplesDialog(props: {
   staples: readonly StapleView[];
   busy: boolean;
-  failed: boolean;
+  failed: string | null;
   onClose: () => void;
   onAdd: (name: string) => Promise<boolean>;
   onRemove: (staple: StapleView) => void;
@@ -193,9 +193,9 @@ export function StaplesDialog(props: {
             Add
           </Button>
         </div>
-        {props.failed ? (
+        {props.failed !== null ? (
           <p className="jds-hint jds-hint--error" role="alert">
-            That did not go through. Try again.
+            {props.failed}
           </p>
         ) : null}
       </div>

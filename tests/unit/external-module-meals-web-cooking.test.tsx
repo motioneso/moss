@@ -12,6 +12,7 @@ vi.mock("../../external-modules/meals/src/web/api", () => ({ readTool: mockReadT
 
 import type { RecipeView } from "../../external-modules/meals/src/contracts";
 import { Root } from "../../external-modules/meals/src/web/root";
+import { noticeFor } from "../../external-modules/meals/src/web/writes";
 
 const recipe = (cookedAt: string | null = null): RecipeView => ({
   meal: {
@@ -41,7 +42,8 @@ const recipe = (cookedAt: string | null = null): RecipeView => ({
       }
     ],
     checkLabelCount: 0,
-    cookedAt
+    cookedAt,
+    quickMaxMinutes: null
   },
   recipeId: "r1",
   baseServings: 2,
@@ -146,5 +148,22 @@ describe("Recipe cooking controls", () => {
       await button(renderer, "Undo")[0]!.props.onClick();
     });
     expect(invoke).toHaveBeenLastCalledWith("meals.undo", { actionId: "a1" });
+  });
+});
+
+const OUTCOMES = ["rejected", "invalid_input", "saved", "failed"] as const;
+const shownMessage = (renderer: ReactTestRenderer, kind: (typeof OUTCOMES)[number]) => {
+  expect(flatten(renderer.toJSON()).replace(/\s+/g, " ")).toContain(noticeFor({ kind } as never)!);
+  expect(flatten(renderer.toJSON()).replace(/\s+/g, " ")).not.toContain("That did not go through");
+};
+
+describe("outcome messages", () => {
+  it.each(OUTCOMES)("the recipe shows its own message for %s", async (kind) => {
+    invoke.mockResolvedValue({ status: kind });
+    const renderer = await render(true);
+    await act(async () => {
+      await button(renderer, "More servings")[0]!.props.onClick();
+    });
+    shownMessage(renderer, kind);
   });
 });

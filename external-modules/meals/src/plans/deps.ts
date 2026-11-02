@@ -36,6 +36,10 @@ export interface PlanDeps {
   readonly ai: MealsAi;
   readonly jobs: PlanJobs;
   readonly newId: () => string;
+  /** The worker clock. Tests set it, live code uses the real clock. */
+  readonly now?: () => Date;
+  /** The user's own time zone from the worker context, when the host provides one. */
+  readonly localTimezone?: string;
   /**
    * Called after a plan's meals change (a day finished writing) and just before a plan is
    * deleted, so a shopping list tied to the plan can rebuild. Absent in tests that ignore lists.

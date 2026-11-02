@@ -63,6 +63,7 @@ export interface MealRow {
   readonly cookedAt: string | null;
   readonly attempts: number;
   readonly generation: number;
+  readonly quickMaxMinutes: number | null;
   readonly eaters: readonly MealEaterRow[];
 }
 
@@ -147,6 +148,8 @@ export interface PlanStore {
    */
   findCurrentPlan(date: string): Promise<string | null>;
   setPlanState(planId: string, state: PlanState, pausedReason: EnqueueLimit | null): Promise<void>;
+  /** Changes the plan's Pantry mode. A re-plan uses it to force prefer on hand. */
+  setPlanPantryMode(planId: string, mode: PantryMode): Promise<void>;
   deletePlan(planId: string): Promise<boolean>;
 
   /** Every day of the plan in date order. */
@@ -196,6 +199,67 @@ export interface PlanStore {
   /** Locks or unlocks a recipe meal that has not been cooked. False when the meal does not qualify. */
   setMealLocked(mealId: string, locked: boolean): Promise<boolean>;
   /**
+   * Moves a meal that has not been cooked and is not being written to a day and slot.
+   * False when the meal does not qualify.
+   */
+  moveMeal(input: {
+    readonly mealId: string;
+    readonly dayId: string;
+    readonly slotName: string;
+    readonly slotPosition: number;
+  }): Promise<boolean>;
+  /**
+   * Replaces who eats a recipe meal and clears any servings override, so servings follow the
+   * eaters again. False unless the meal is a written or failed recipe meal that is not cooked.
+   */
+  setMealEaters(input: {
+    readonly mealId: string;
+    readonly eaters: readonly MealEaterRow[];
+  }): Promise<boolean>;
+  /**
+   * Turns a meal that has not been cooked and is not being written into a plain-text slot.
+   * The recipe is dropped, so the slot never reaches the shopping list. False when the meal
+   * does not qualify.
+   */
+  setMealText(mealId: string, text: string): Promise<boolean>;
+  /**
+   * Turns a plain-text slot back into a recipe meal waiting to be written.
+   * False unless the meal is text and has not been cooked.
+   */
+  clearMealText(mealId: string): Promise<boolean>;
+  /** Adds one pending Solo recipe meal for one member, with that member as its only eater. */
+  addOneOffMeal(input: {
+    readonly mealId: string;
+    readonly kitchenId: string;
+    readonly dayId: string;
+    readonly slotName: string;
+    readonly slotPosition: number;
+    readonly memberId: string;
+  }): Promise<boolean>;
+  /** Sets or clears a day's cook-time limit. False for a missing day. */
+  setDayCookLimit(dayId: string, minutes: number | null): Promise<boolean>;
+  /** Records a day's Shared or Solo override for one slot. False for a missing day. */
+  setDaySharing(dayId: string, slotName: string, sharing: Sharing): Promise<boolean>;
+  /**
+   * Splits one shared meal into one Solo meal per eater. The meal keeps its first eater and
+   * each copy gets one of the rest, with the same recipe and state. False when the meal is
+   * cooked, being written or not shared.
+   */
+  splitMeal(input: {
+    readonly mealId: string;
+    readonly copies: readonly { readonly mealId: string; readonly memberId: string }[];
+  }): Promise<boolean>;
+  /**
+   * Joins every meal of one slot on one day into the kept meal with the given eaters and
+   * deletes the rest. False when any meal of the slot is cooked or being written.
+   */
+  mergeSlotMeals(input: {
+    readonly dayId: string;
+    readonly slotName: string;
+    readonly keepMealId: string;
+    readonly eaters: readonly MealEaterRow[];
+  }): Promise<boolean>;
+  /**
    * Sets the replaceable meals among `mealIds` (see domain/regenerate) back to pending and
    * deletes their swap choices. Returns how many meals it reset. Their recipes stay stored.
    */
@@ -242,6 +306,34 @@ export interface PlanStore {
     readonly recipeId: string;
     readonly eaters: readonly MealEaterRow[];
   }): Promise<boolean>;
+
+  /**
+   * Stores the quick swap cap on the meal and raises its job counter. Returns the new
+   * generation, or null for a missing meal.
+   */
+  startQuickSwap(mealId: string, maxMinutes: number): Promise<number | null>;
+  /** Sets a ready or failed recipe meal to writing when its job generation still matches. */
+  claimQuickSwap(mealId: string, generation: number): Promise<boolean>;
+  /**
+   * Saves the quick swap recipe onto its meal when the job generation still matches and the
+   * meal is writing. False means a newer job owns the meal and this one writes nothing.
+   */
+  saveQuickSwap(input: {
+    readonly mealId: string;
+    readonly generation: number;
+    readonly kitchenId: string;
+    readonly recipe: ReadyMeal["recipe"];
+    readonly eaters: readonly MealEaterRow[];
+    readonly attempts: number;
+  }): Promise<boolean>;
+  /** Marks a writing quick swap meal failed, when its job generation still matches. */
+  failQuickSwap(
+    mealId: string,
+    generation: number,
+    failureReason: GenerationFailure,
+    attempts: number,
+    eaters?: readonly MealEaterRow[]
+  ): Promise<boolean>;
 
   getRecipes(recipeIds: readonly string[]): Promise<readonly RecipeRow[]>;
   /** Titles of ready meals in the kitchen on days from `from` to `to`, inclusive. */

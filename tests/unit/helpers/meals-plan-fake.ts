@@ -79,6 +79,7 @@ export class FakePlanStore implements PlanStore {
         cookedAt: null,
         attempts: 0,
         generation: 0,
+        quickMaxMinutes: null,
         eaters: meal.eaterIds.map((memberId) => ({
           memberId,
           portion: 1,
@@ -132,6 +133,11 @@ export class FakePlanStore implements PlanStore {
   ) {
     const plan = this.plans.get(planId);
     if (plan) Object.assign(plan, { state, pausedReason });
+  }
+
+  async setPlanPantryMode(planId: string, mode: PlanRow["pantryMode"]) {
+    const plan = this.plans.get(planId);
+    if (plan) plan.pantryMode = mode;
   }
 
   async deletePlan(planId: string) {
@@ -265,6 +271,141 @@ export class FakePlanStore implements PlanStore {
     return true;
   }
 
+  async moveMeal(input: Parameters<PlanStore["moveMeal"]>[0]) {
+    const meal = this.meals.get(input.mealId);
+    if (!meal || meal.cookedAt !== null || meal.status === "writing") return false;
+    Object.assign(meal, {
+      dayId: input.dayId,
+      slotName: input.slotName,
+      slotPosition: input.slotPosition
+    });
+    return true;
+  }
+
+  async setMealEaters(input: Parameters<PlanStore["setMealEaters"]>[0]) {
+    const meal = this.meals.get(input.mealId);
+    if (!meal || meal.kind !== "recipe" || meal.cookedAt !== null) return false;
+    if (meal.status !== "ready" && meal.status !== "failed") return false;
+    meal.servingsOverride = null;
+    meal.eaters = input.eaters.map((eater) => ({ ...eater }));
+    return true;
+  }
+
+  async setMealText(mealId: string, text: string) {
+    const meal = this.meals.get(mealId);
+    if (!meal || meal.cookedAt !== null || meal.status === "writing") return false;
+    Object.assign(meal, {
+      kind: "text" as const,
+      plainText: text,
+      recipeId: null,
+      locked: false,
+      servingsOverride: null,
+      status: "ready" as const,
+      failureReason: null
+    });
+    return true;
+  }
+
+  async clearMealText(mealId: string) {
+    const meal = this.meals.get(mealId);
+    if (!meal || meal.kind !== "text" || meal.cookedAt !== null) return false;
+    Object.assign(meal, {
+      kind: "recipe" as const,
+      plainText: null,
+      status: "pending" as const,
+      failureReason: null
+    });
+    return true;
+  }
+
+  async addOneOffMeal(input: Parameters<PlanStore["addOneOffMeal"]>[0]) {
+    if (!this.days.has(input.dayId)) return false;
+    this.meals.set(input.mealId, {
+      mealId: input.mealId,
+      dayId: input.dayId,
+      slotName: input.slotName,
+      slotPosition: input.slotPosition,
+      kind: "recipe",
+      sharing: "solo",
+      status: "pending",
+      failureReason: null,
+      locked: false,
+      oneOffFor: input.memberId,
+      favouriteOf: null,
+      servingsOverride: null,
+      recipeId: null,
+      plainText: null,
+      cookedAt: null,
+      quickMaxMinutes: null,
+      attempts: 0,
+      generation: 0,
+      eaters: [
+        {
+          memberId: input.memberId,
+          portion: 1,
+          estimatedKcal: null,
+          safety: "pending",
+          safetyReason: null
+        }
+      ]
+    });
+    return true;
+  }
+
+  async setDayCookLimit(dayId: string, minutes: number | null) {
+    const day = this.days.get(dayId);
+    if (!day) return false;
+    day.cookTimeLimitMinutes = minutes;
+    return true;
+  }
+
+  async setDaySharing(dayId: string, _slotName: string, _sharing: "shared" | "solo") {
+    return this.days.has(dayId);
+  }
+
+  async splitMeal(input: Parameters<PlanStore["splitMeal"]>[0]) {
+    const meal = this.meals.get(input.mealId);
+    if (!meal || meal.sharing !== "shared" || meal.cookedAt !== null) return false;
+    if (meal.status === "writing") return false;
+    const [first, ...rest] = meal.eaters;
+    if (!first) return false;
+    for (const copy of input.copies) {
+      const eater = rest.find((entry) => entry.memberId === copy.memberId);
+      if (!eater) return false;
+      this.meals.set(copy.mealId, {
+        ...meal,
+        mealId: copy.mealId,
+        sharing: "solo",
+        servingsOverride: null,
+        eaters: [{ ...eater }]
+      });
+    }
+    meal.sharing = "solo";
+    meal.servingsOverride = null;
+    meal.eaters = [{ ...first }];
+    return true;
+  }
+
+  async mergeSlotMeals(input: Parameters<PlanStore["mergeSlotMeals"]>[0]) {
+    const slot = [...this.meals.values()].filter(
+      (meal) => meal.dayId === input.dayId && meal.slotName === input.slotName
+    );
+    if (slot.length === 0) return false;
+    if (slot.some((meal) => meal.cookedAt !== null || meal.status === "writing")) return false;
+    const kept = this.meals.get(input.keepMealId);
+    if (!kept) return false;
+    kept.sharing = "shared";
+    kept.servingsOverride = null;
+    kept.eaters = input.eaters.map((eater) => ({ ...eater }));
+    for (const meal of slot) {
+      if (meal.mealId === input.keepMealId) continue;
+      // A One-off meal is one person's own meal and stays out of the slot's sharing.
+      if (meal.oneOffFor !== null) continue;
+      this.meals.delete(meal.mealId);
+    }
+    return true;
+  }
+
   async resetMeals(mealIds: readonly string[]) {
     let count = 0;
     for (const mealId of mealIds) {
@@ -376,6 +517,55 @@ export class FakePlanStore implements PlanStore {
     return true;
   }
 
+  async startQuickSwap(mealId: string, maxMinutes: number) {
+    const meal = this.meals.get(mealId);
+    if (!meal) return null;
+    meal.quickMaxMinutes = maxMinutes;
+    const next = (this.jobGenerations.get(mealId) ?? 0) + 1;
+    this.jobGenerations.set(mealId, next);
+    return next;
+  }
+
+  async claimQuickSwap(mealId: string, generation: number) {
+    const meal = this.meals.get(mealId);
+    if (!meal || (this.jobGenerations.get(mealId) ?? 0) !== generation) return false;
+    if (meal.kind !== "recipe" || meal.cookedAt !== null) return false;
+    if (meal.status !== "ready" && meal.status !== "failed") return false;
+    Object.assign(meal, { status: "writing", failureReason: null });
+    return true;
+  }
+
+  async saveQuickSwap(input: Parameters<PlanStore["saveQuickSwap"]>[0]) {
+    const meal = this.meals.get(input.mealId);
+    if (!meal || (this.jobGenerations.get(input.mealId) ?? 0) !== input.generation) return false;
+    if (meal.status !== "writing") return false;
+    this.recipes.set(input.recipe.recipeId, { ...input.recipe, kitchenId: input.kitchenId });
+    Object.assign(meal, {
+      status: "ready",
+      failureReason: null,
+      recipeId: input.recipe.recipeId,
+      attempts: input.attempts,
+      eaters: input.eaters.map((eater) => ({ ...eater }))
+    });
+    this.readyLog.push(input.mealId);
+    return true;
+  }
+
+  async failQuickSwap(
+    mealId: string,
+    generation: number,
+    failureReason: NonNullable<MealRow["failureReason"]>,
+    attempts: number,
+    eaters?: readonly MealRow["eaters"][number][]
+  ) {
+    const meal = this.meals.get(mealId);
+    if (!meal || (this.jobGenerations.get(mealId) ?? 0) !== generation) return false;
+    if (meal.status !== "writing") return false;
+    Object.assign(meal, { status: "failed", failureReason, attempts });
+    if (eaters) meal.eaters = eaters.map((eater) => ({ ...eater }));
+    return true;
+  }
+
   async getRecipes(recipeIds: readonly string[]) {
     return recipeIds.flatMap((id) => {
       const recipe = this.recipes.get(id);
@@ -401,6 +591,7 @@ export type AiCallKind = "recipe" | "safety" | "estimate";
 export interface AiCall {
   readonly kind: AiCallKind;
   readonly tierHint: string | undefined;
+  readonly prompt: string;
 }
 
 /** Answers each call kind from its own queue; an empty queue repeats the last answer. */
@@ -430,7 +621,7 @@ export class ScriptedAi implements MealsAi {
     tierHint?: "reasoning" | "interactive" | "economy";
   }) {
     const kind = kindOf(input.schema);
-    this.calls.push({ kind, tierHint: input.tierHint });
+    this.calls.push({ kind, tierHint: input.tierHint, prompt: input.prompt });
     const queue = this.queues.get(kind) ?? [];
     const answer = queue.length > 0 ? queue.shift() : this.fallback.get(kind);
     if (answer instanceof AiError) return { ok: false as const, error: answer.kind };

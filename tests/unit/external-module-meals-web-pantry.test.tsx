@@ -11,6 +11,7 @@ vi.mock("../../external-modules/meals/src/web/api", () => ({ readTool: mockReadT
 
 import type { PantryView } from "../../external-modules/meals/src/contracts";
 import { Root } from "../../external-modules/meals/src/web/root";
+import { noticeFor } from "../../external-modules/meals/src/web/writes";
 
 const pantry = (overrides: Partial<PantryView> = {}): PantryView => ({
   items: [
@@ -215,5 +216,22 @@ describe("Pantry with a tools handle", () => {
       target: "staple",
       stapleId: "s1"
     });
+  });
+});
+
+const OUTCOMES = ["rejected", "invalid_input", "saved", "failed"] as const;
+const failingWith = (status: string) => vi.fn(async () => ({ status }));
+const shownMessage = (renderer: ReactTestRenderer, kind: (typeof OUTCOMES)[number]) => {
+  expect(text(renderer)).toContain(noticeFor({ kind } as never)!);
+  expect(text(renderer)).not.toContain("That did not go through");
+};
+
+describe("outcome messages", () => {
+  it.each(OUTCOMES)("the Pantry shows its own message for %s", async (kind) => {
+    const renderer = await render({ tools: { invoke: failingWith(kind) } });
+    await act(async () => {
+      buttons(renderer, "Remove Basmati rice")[0]!.props.onClick();
+    });
+    shownMessage(renderer, kind);
   });
 });

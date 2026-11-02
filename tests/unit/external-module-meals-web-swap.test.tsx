@@ -11,6 +11,7 @@ vi.mock("../../external-modules/meals/src/web/api", () => ({ readTool: mockReadT
 
 import { todayIso } from "../../external-modules/meals/src/web/format";
 import { Root } from "../../external-modules/meals/src/web/root";
+import { noticeFor } from "../../external-modules/meals/src/web/writes";
 
 const eater = {
   memberId: "m1",
@@ -38,6 +39,7 @@ const meal = (overrides: Record<string, unknown> = {}) => ({
   eaters: [eater],
   checkLabelCount: 0,
   cookedAt: null,
+  quickMaxMinutes: null,
   ...overrides
 });
 
@@ -113,6 +115,13 @@ const buttons = (renderer: ReactTestRenderer, label: string) =>
   );
 
 const okInvoke = () => vi.fn(async () => ({ status: "succeeded", result: {} }));
+
+const OUTCOMES = ["rejected", "invalid_input", "saved", "failed"] as const;
+const failingWith = (status: string) => vi.fn(async () => ({ status }));
+const shownMessage = (renderer: ReactTestRenderer, kind: (typeof OUTCOMES)[number]) => {
+  expect(text(renderer)).toContain(noticeFor({ kind } as never)!);
+  expect(text(renderer)).not.toContain("That did not go through");
+};
 
 describe("Plan tab controls", () => {
   it("hides lock, swap and regenerate without a tools handle", async () => {
@@ -199,6 +208,44 @@ describe("Plan tab controls", () => {
       dayId: "d1"
     });
   });
+
+  it("hides quick swap and re-plan without a tools handle", async () => {
+    const renderer = await render("/m/meals");
+    expect(buttons(renderer, "Quick swap")).toHaveLength(0);
+    expect(buttons(renderer, "Re-plan the rest of the week")).toHaveLength(0);
+  });
+
+  it("confirms before re-planning and sends the browser zone", async () => {
+    const invoke = okInvoke();
+    const renderer = await render("/m/meals", { tools: { invoke } });
+    await act(async () => {
+      buttons(renderer, "Re-plan the rest of the week")[0]!.props.onClick();
+    });
+    expect(invoke).not.toHaveBeenCalled();
+    await act(async () => {
+      buttons(renderer, "Re-plan")[0]!.props.onClick();
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "meals.plan.control",
+      expect.objectContaining({ action: "replan", planId: "p1", timeZone: expect.any(String) })
+    );
+  });
+
+  it("quick swaps with the minutes from the dialog", async () => {
+    const invoke = okInvoke();
+    const renderer = await render("/m/meals", { tools: { invoke } });
+    await act(async () => {
+      buttons(renderer, "Quick swap")[0]!.props.onClick();
+    });
+    await act(async () => {
+      buttons(renderer, "Swap it")[0]!.props.onClick();
+    });
+    expect(invoke).toHaveBeenCalledWith("meals.meal.swap", {
+      mealId: "meal1",
+      action: "quick",
+      maxMinutes: 15
+    });
+  });
 });
 
 describe("Swap screen", () => {
@@ -219,6 +266,17 @@ describe("Swap screen", () => {
       }))
     });
   };
+
+  it.each(OUTCOMES)("the choices screen shows its own message for %s", async (kind) => {
+    withChoices(["ready", "ready", "ready"]);
+    const renderer = await render("/m/meals/plan/swap/meal1", {
+      tools: { invoke: failingWith(kind) }
+    });
+    await act(async () => {
+      buttons(renderer, "Choose")[0]!.props.onClick();
+    });
+    shownMessage(renderer, kind);
+  });
 
   it("shows a ready choice and chooses it", async () => {
     withChoices(["ready", "failed", "writing"]);
@@ -291,5 +349,15 @@ describe("New plan screen", () => {
     });
     expect(invoke).not.toHaveBeenCalled();
     expect(text(renderer)).toContain("Days must be 1 to 28.");
+  });
+});
+
+describe("outcome messages", () => {
+  it.each(OUTCOMES)("the Plan tab shows its own message for %s", async (kind) => {
+    const renderer = await render("/m/meals", { tools: { invoke: failingWith(kind) } });
+    await act(async () => {
+      buttons(renderer, "Lock")[0]!.props.onClick();
+    });
+    shownMessage(renderer, kind);
   });
 });

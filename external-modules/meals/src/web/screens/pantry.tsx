@@ -23,7 +23,7 @@ import { amountText } from "../format";
 import type { PantryState } from "../pantry";
 import { navigate } from "../router";
 import type { HostActions } from "../root";
-import type { MealsWrites } from "../writes";
+import { noticeFor, type MealsWrites } from "../writes";
 import { ItemDialog, StaplesDialog } from "./pantry-dialogs";
 
 const TOAST_MS = 8000;
@@ -130,7 +130,7 @@ function Pantry(props: {
   const { pantry, writes } = props;
   const [dialog, setDialog] = useState<Dialog>(null);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [find, setFind] = useState("");
 
@@ -146,7 +146,7 @@ function Pantry(props: {
   ): Promise<boolean> {
     if (writes === null || busy) return false;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     const outcome = await writes.invoke("meals.pantry.edit", input);
     setBusy(false);
     if (outcome.kind === "succeeded") {
@@ -155,7 +155,7 @@ function Pantry(props: {
       if (toastFor) setToast(toastFor(result));
       return true;
     }
-    if (outcome.kind !== "cancelled") setFailed(true);
+    if (outcome.kind !== "cancelled") setFailed(noticeFor(outcome));
     return false;
   }
 
@@ -172,7 +172,7 @@ function Pantry(props: {
     setToast(null);
     const outcome = await writes.invoke("meals.undo", { actionId: token.actionId });
     props.reload();
-    if (outcome.kind !== "succeeded" && outcome.kind !== "cancelled") setFailed(true);
+    if (outcome.kind !== "succeeded" && outcome.kind !== "cancelled") setFailed(noticeFor(outcome));
   }
 
   const needle = find.trim().toLowerCase();
@@ -250,9 +250,9 @@ function Pantry(props: {
             </div>
             <div className="mls-row mls-hide-phone">{addButton}</div>
           </div>
-          {failed ? (
+          {failed !== null ? (
             <p className="jds-caption" role="alert">
-              That did not go through. Try again.
+              {failed}
             </p>
           ) : null}
           <div className="mls-grid">

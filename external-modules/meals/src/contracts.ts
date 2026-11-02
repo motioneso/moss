@@ -93,6 +93,8 @@ export interface PlannedMealView {
   readonly eaters: readonly EaterView[];
   readonly checkLabelCount: number;
   readonly cookedAt: string | null;
+  /** Minutes cap asked for by a quick swap, or null when the meal was not quick swapped. */
+  readonly quickMaxMinutes: number | null;
 }
 export interface PlanDayView {
   readonly dayId: string;

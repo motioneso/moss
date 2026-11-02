@@ -25,7 +25,7 @@ import type {
 import { amountText } from "../format";
 import { useWakeLock, type ListState } from "../list";
 import type { HostActions } from "../root";
-import type { MealsWrites } from "../writes";
+import { noticeFor, type MealsWrites } from "../writes";
 import {
   AddLineDialog,
   BoughtDialog,
@@ -189,7 +189,7 @@ function List(props: {
   const { list, writes, plan } = props;
   const [dialog, setDialog] = useState<Dialog>(null);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
 
   useWakeLock(true);
@@ -219,7 +219,7 @@ function List(props: {
 
     if (writes === null || busy) return false;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     const outcome = await writes.invoke(name, input);
     setBusy(false);
     if (outcome.kind === "succeeded") {
@@ -229,7 +229,7 @@ function List(props: {
       if (toastFor) setToast(toastFor(result));
       return true;
     }
-    if (outcome.kind !== "cancelled") setFailed(true);
+    if (outcome.kind !== "cancelled") setFailed(noticeFor(outcome));
     return false;
   }
 
@@ -244,6 +244,16 @@ function List(props: {
     );
     if (done) setDialog(null);
   };
+
+  async function clearList() {
+    if (writes === null || busy) return;
+    setBusy(true);
+    setFailed(null);
+    const outcome = await writes.invoke("meals.list.clear", { listId: list.listId });
+    setBusy(false);
+    setFailed(noticeFor(outcome));
+    props.reload();
+  }
 
   const build = () => {
     if (plan !== null) void run("meals.list.build", { planId: plan.planId });
@@ -263,7 +273,7 @@ function List(props: {
         });
       }
     } else if (outcome.kind !== "cancelled") {
-      setFailed(true);
+      setFailed(noticeFor(outcome));
     }
   }
 
@@ -307,6 +317,13 @@ function List(props: {
         <Button variant="secondary" onClick={() => setDialog({ kind: "add" })}>
           Add item
         </Button>
+        <Button
+          variant="quiet"
+          disabled={busy || list.lines.length === 0}
+          onClick={() => void clearList()}
+        >
+          Clear list
+        </Button>
         <Button disabled={busy || open.length === 0} onClick={() => setDialog({ kind: "bought" })}>
           {ticked.length > 0 ? `Bought (${ticked.length})` : "Bought"}
         </Button>
@@ -343,9 +360,9 @@ function List(props: {
             </div>
             <div className="mls-row mls-hide-phone">{controls}</div>
           </div>
-          {failed ? (
+          {failed !== null ? (
             <p className="jds-caption" role="alert">
-              That did not go through. Try again.
+              {failed}
             </p>
           ) : null}
           <div className="mls-stack">

@@ -288,7 +288,8 @@ so that project can use them.
 46. As a user, I want the Shopping list to update when the plan changes, so that it never goes
     stale.
     46a. As a user, I want to re-plan the days that have not happened yet mid-week, leaving past days
-    alone, so that the plan recovers when the week goes off course.
+    alone, so that the plan recovers when the week goes off course. A day already under way counts
+    as still to come until that meal's usual time has passed.
     46b. As a user, I want a mid-week re-plan to favour what is in the Pantry now, so that food bought
     for skipped meals gets used.
     46c. As a user, I want to tell Moss something like "I don't have much energy tonight, I need a

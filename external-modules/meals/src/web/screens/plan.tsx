@@ -7,6 +7,8 @@ import {
   Button,
   Dialog,
   EmptyState,
+  Field,
+  FormLabel,
   Masthead,
   useState,
   type ReactNodeLike
@@ -16,9 +18,9 @@ import type { PantryMode, PlanView, PlannedMealView } from "../../contracts";
 import { dateRange, todayIso } from "../format";
 import { navigate } from "../router";
 import { isWriting, type PlanState } from "../plan";
-import type { MealsWrites } from "../writes";
+import { noticeFor, type MealsWrites } from "../writes";
 import type { HostActions } from "../root";
-import { DaySection, type MealActions } from "./plan-day";
+import { DaySection, type DayActions, type MealActions } from "./plan-day";
 
 export const PANTRY_LABEL: Record<PantryMode, string> = {
   ignore: "Ignore the Pantry",
@@ -105,8 +107,11 @@ function Plan(props: {
   const { plan, writes } = props;
   const today = todayIso();
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [confirmingReplan, setConfirmingReplan] = useState(false);
+  const [quickMeal, setQuickMeal] = useState<PlannedMealView | null>(null);
+  const [quickMinutes, setQuickMinutes] = useState("15");
   const writing = isWriting(plan);
   const last = plan.days[plan.days.length - 1]?.date ?? plan.startDate;
   const range = dateRange(plan.startDate, last);
@@ -118,34 +123,74 @@ function Plan(props: {
   async function control(input: Record<string, unknown>) {
     if (writes === null || busy) return;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     const outcome = await writes.invoke("meals.plan.control", { planId: plan.planId, ...input });
     setBusy(false);
-    if (outcome.kind === "failed" || outcome.kind === "rejected") setFailed(true);
+    setFailed(noticeFor(outcome));
     props.reload();
   }
 
   async function editMeal(meal: PlannedMealView, action: "lock" | "unlock") {
     if (writes === null || busy) return;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     const outcome = await writes.invoke("meals.meal.edit", { mealId: meal.mealId, action });
     setBusy(false);
-    if (outcome.kind !== "succeeded") setFailed(true);
+    if (outcome.kind !== "succeeded") setFailed(noticeFor(outcome));
+    props.reload();
+  }
+
+  async function deletePlan() {
+    if (writes === null || busy) return;
+    setBusy(true);
+    setFailed(null);
+    const outcome = await writes.invoke("meals.plan.delete", { planId: plan.planId });
+    setBusy(false);
+    setFailed(noticeFor(outcome));
     props.reload();
   }
 
   async function swap(meal: PlannedMealView) {
     if (writes === null || busy) return;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     const outcome = await writes.invoke("meals.meal.swap", {
       mealId: meal.mealId,
       action: "request_choices"
     });
     setBusy(false);
     if (outcome.kind === "succeeded") navigate(`/plan/swap/${meal.mealId}`);
-    else setFailed(true);
+    else setFailed(noticeFor(outcome));
+  }
+
+  async function quickSwap() {
+    if (writes === null || busy || quickMeal === null) return;
+    const maxMinutes = Number(quickMinutes);
+    if (!Number.isInteger(maxMinutes) || maxMinutes < 5 || maxMinutes > 240) {
+      setFailed("Quick swap needs a time between 5 and 240 minutes.");
+      return;
+    }
+    setBusy(true);
+    setFailed(null);
+    const outcome = await writes.invoke("meals.meal.swap", {
+      mealId: quickMeal.mealId,
+      action: "quick",
+      maxMinutes
+    });
+    setBusy(false);
+    setQuickMeal(null);
+    if (outcome.kind !== "succeeded") setFailed(noticeFor(outcome));
+    props.reload();
+  }
+
+  async function dayEdit(input: Record<string, unknown>) {
+    if (writes === null || busy) return;
+    setBusy(true);
+    setFailed(null);
+    const outcome = await writes.invoke("meals.day.edit", input);
+    setBusy(false);
+    if (outcome.kind !== "succeeded") setFailed(noticeFor(outcome));
+    props.reload();
   }
 
   const actions: MealActions | null =
@@ -156,9 +201,29 @@ function Plan(props: {
           lock: (meal) => editMeal(meal, "lock"),
           unlock: (meal) => editMeal(meal, "unlock"),
           swap,
+          quickSwap: (meal) => {
+            setQuickMinutes("15");
+            setQuickMeal(meal);
+          },
+          move: (meal) => navigate(`/plan/move/${meal.mealId}`),
+          eaters: (meal) => navigate(`/plan/eaters/${meal.mealId}`),
+          text: (meal) => navigate(`/plan/text/${meal.mealId}`),
           regenerateMeal: (meal) => control({ action: "regenerate", mealId: meal.mealId }),
           regenerateDay: (target) => control({ action: "regenerate", dayId: target.dayId })
         };
+  const dayActions: DayActions | null =
+    writes === null
+      ? null
+      : {
+          busy,
+          cookLimit: (target, minutes) =>
+            dayEdit({ dayId: target.dayId, action: "set_cook_limit", minutes }),
+          sharing: (target, slotName, sharing) =>
+            dayEdit({ dayId: target.dayId, action: "set_sharing", slotName, sharing }),
+          oneOff: (target, slotName, memberId) =>
+            dayEdit({ dayId: target.dayId, action: "add_one_off", slotName, memberId })
+        };
+  const hasDaysToCome = plan.days.some((day) => day.date >= today);
   const lockedCount = plan.days.reduce(
     (sum, day) => sum + day.meals.filter((meal) => meal.locked).length,
     0
@@ -200,8 +265,21 @@ function Plan(props: {
                 Regenerate
               </Button>
             ) : null}
+            {hasDaysToCome ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={busy}
+                onClick={() => setConfirmingReplan(true)}
+              >
+                Re-plan the rest of the week
+              </Button>
+            ) : null}
             <Button variant="quiet" size="sm" onClick={() => navigate("/plan/new")}>
               New plan
+            </Button>
+            <Button variant="quiet" size="sm" disabled={busy} onClick={() => void deletePlan()}>
+              Delete plan
             </Button>
           </div>
         ) : null}
@@ -264,9 +342,9 @@ function Plan(props: {
           </div>
         </div>
       ) : null}
-      {failed ? (
+      {failed !== null ? (
         <p className="jds-caption" role="alert">
-          That did not go through. Try again.
+          {failed}
         </p>
       ) : null}
 
@@ -283,6 +361,7 @@ function Plan(props: {
               writes !== null ? () => control({ action: "retry_day", dayId: day.dayId }) : null
             }
             actions={actions}
+            dayActions={dayActions}
           />
         ))}
       </div>
@@ -314,6 +393,73 @@ function Plan(props: {
               ? ` ${lockedCount === 1 ? "1 locked meal stays" : `${lockedCount} locked meals stay`}.`
               : ""}
           </p>
+        </Dialog>
+      ) : null}
+      {confirmingReplan ? (
+        <Dialog
+          title="Re-plan the rest of the week"
+          onClose={() => setConfirmingReplan(false)}
+          closeLabel="Close"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setConfirmingReplan(false)}>
+                Cancel
+              </Button>
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  setConfirmingReplan(false);
+                  control({
+                    action: "replan",
+                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                  });
+                }}
+              >
+                Re-plan
+              </Button>
+            </>
+          }
+        >
+          <p>
+            Moss writes the days still to come again, using what is in the Pantry now. Days already
+            written stay.
+            {lockedCount > 0
+              ? ` ${lockedCount === 1 ? "1 locked meal stays" : `${lockedCount} locked meals stay`}.`
+              : ""}
+          </p>
+        </Dialog>
+      ) : null}
+      {quickMeal !== null ? (
+        <Dialog
+          title="Quick swap"
+          onClose={() => setQuickMeal(null)}
+          closeLabel="Close"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setQuickMeal(null)}>
+                Cancel
+              </Button>
+              <Button disabled={busy} onClick={quickSwap}>
+                Swap it
+              </Button>
+            </>
+          }
+        >
+          <Field>
+            <FormLabel htmlFor="mls-quick-minutes">Ready in at most, minutes</FormLabel>
+            <input
+              id="mls-quick-minutes"
+              type="number"
+              min={5}
+              max={240}
+              className="jds-input"
+              value={quickMinutes}
+              onChange={(event: { target: { value: string } }) =>
+                setQuickMinutes(event.target.value)
+              }
+            />
+          </Field>
+          <p>Moss prefers what is on hand. The new recipe shows what is still to buy.</p>
         </Dialog>
       ) : null}
     </div>

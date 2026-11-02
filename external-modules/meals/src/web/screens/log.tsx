@@ -19,7 +19,7 @@ import {
   timeValue
 } from "../log-format";
 import type { HostActions } from "../root";
-import type { MealsWrites } from "../writes";
+import { noticeFor, type MealsWrites } from "../writes";
 import { AddMealDialog, EditMealDialog } from "./log-dialogs";
 
 type Dialog = { kind: "add" } | { kind: "edit"; entry: LogEntryView } | null;
@@ -271,7 +271,7 @@ function Day(props: {
   const { day, writes } = props;
   const [dialog, setDialog] = useState<Dialog>(null);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
   async function run(
     name: "meals.log.add" | "meals.log.correct" | "meals.log.delete" | "meals.log.reestimate",
@@ -279,14 +279,14 @@ function Day(props: {
   ): Promise<boolean> {
     if (writes === null || busy) return false;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     const outcome = await writes.invoke(name, input);
     setBusy(false);
     if (outcome.kind === "succeeded") {
       props.reload();
       return true;
     }
-    if (outcome.kind !== "cancelled") setFailed(true);
+    if (outcome.kind !== "cancelled") setFailed(noticeFor(outcome));
     return false;
   }
 
@@ -318,9 +318,9 @@ function Day(props: {
         <DayNav localDate={props.localDate} onDate={props.onDate} />
         <div className="mls-row mls-hide-phone">{addButton}</div>
       </div>
-      {failed ? (
+      {failed !== null ? (
         <p className="jds-caption" role="alert">
-          That did not go through. Try again.
+          {failed}
         </p>
       ) : null}
       {day.entries.length === 0 ? (
