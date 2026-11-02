@@ -69,9 +69,17 @@ async function shot(page: Page, name: string): Promise<void> {
     [390, 844]
   ] as const) {
     await page.setViewportSize({ width, height });
-    const { data } = await cdp.send("Page.captureScreenshot", { format: "png" });
-    writeFileSync(join(SHOT_DIR, `${name}-${width}.png`), Buffer.from(data, "base64"));
+    const captured = await Promise.race([
+      cdp.send("Page.captureScreenshot", { format: "png" }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 20_000))
+    ]);
+    if (captured === null) {
+      say(`shot ${name}-${width} did not come back in 20 s`);
+      continue;
+    }
+    writeFileSync(join(SHOT_DIR, `${name}-${width}.png`), Buffer.from(captured.data, "base64"));
   }
+  await cdp.detach().catch(() => undefined);
   await page.setViewportSize({ width: 1280, height: 900 });
 }
 
@@ -94,6 +102,38 @@ async function openMeals(page: Page): Promise<void> {
     page.locator('nav[aria-label="Main"]').getByRole("link", { name: "Meals", exact: true })
   );
   await expect(page).toHaveURL(/\/m\/meals/);
+}
+
+/** Switches the instance's colour mode the way a person does, then lands back on the plan. */
+async function setColorMode(page: Page, mode: "Light" | "Dark"): Promise<void> {
+  await page.goto("/m/meals");
+  await openSettings(page);
+  await press(page, page.getByRole("button", { name: "Appearance", exact: true }));
+  await press(
+    page,
+    page
+      .getByRole("group", { name: "Color mode", exact: true })
+      .getByRole("button", { name: mode, exact: true })
+  );
+  await expect(page.locator("html")).toHaveAttribute("data-color-mode", mode.toLowerCase());
+  await page.goto("/m/meals");
+  await expect(page.locator("section.mls-day, .jds-empty, .jds-recovery").first()).toBeVisible({
+    timeout: 60_000
+  });
+}
+
+/** True when nothing on the page sticks out sideways at either proof width. */
+async function noSidewaysScroll(page: Page): Promise<boolean> {
+  let okay = true;
+  for (const [width, height] of [
+    [1280, 900],
+    [390, 844]
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    okay = okay && (await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  return okay;
 }
 
 interface MealRow {
@@ -245,12 +285,22 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
   });
 
   let before: readonly (readonly MealRow[])[];
-  await test.step("a 3-day plan starting yesterday is written by the real model", async () => {
+  await test.step("the empty plan reads clean in light and dark", async () => {
     await openMeals(page);
     await expect(page.getByText("Plan your first week", { exact: true })).toBeVisible({
       timeout: 60_000
     });
-    await shot(page, "01-empty");
+    await shot(page, "01-empty-light");
+    await setColorMode(page, "Dark");
+    await expect(page.getByText("Plan your first week", { exact: true })).toBeVisible();
+    await shot(page, "01-empty-dark");
+    await setColorMode(page, "Light");
+    await expect(page.getByText("Plan your first week", { exact: true })).toBeVisible();
+    expect(await noSidewaysScroll(page)).toBe(true);
+    say("visual empty=light,dark widths=1280,390 sidewaysScroll=no");
+  });
+
+  await test.step("a 3-day plan starting yesterday is written by the real model", async () => {
     await press(page, page.getByRole("button", { name: "Start a plan", exact: true }));
     await page.getByLabel("First day", { exact: true }).fill(isoPlus(-1));
     await page.getByLabel("Days", { exact: true }).fill("3");
@@ -259,13 +309,31 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
       .fill("Simple weeknight dinners and easy breakfasts.");
     await press(page, page.getByRole("button", { name: "Start the plan", exact: true }));
     await expect(page).toHaveURL(/\/m\/meals\/?$/);
-    await shot(page, "02-writing");
+    await expect(page.getByText("Writing your plan", { exact: true })).toBeVisible({
+      timeout: 60_000
+    });
+    await shot(page, "02-writing-light");
+    await setColorMode(page, "Dark");
+    if (await page.getByText("Writing your plan", { exact: true }).isVisible()) {
+      await shot(page, "02-writing-dark");
+      say("visual loading=light,dark widths=1280,390");
+    } else {
+      say("visual loading=light only: the plan settled before dark was applied");
+    }
+    await setColorMode(page, "Light");
     await waitForPlanSettled(page);
     before = await readDays(page);
     expect(before.length).toBe(3);
     for (const day of before) expect(day.length).toBe(3);
     say(`plan days=3 meals=${before.flat().length} firstDay=${isoPlus(-1)}`);
-    await shot(page, "03-plan-written");
+    await shot(page, "03-plan-light");
+    await setColorMode(page, "Dark");
+    await expect(page.locator("section.mls-day").first()).toBeVisible({ timeout: 60_000 });
+    await shot(page, "03-plan-dark");
+    expect(await noSidewaysScroll(page)).toBe(true);
+    await setColorMode(page, "Light");
+    await expect(page.locator("section.mls-day").first()).toBeVisible({ timeout: 60_000 });
+    say("visual plan=light,dark widths=1280,390 sidewaysScroll=no");
   });
 
   await test.step("re-plan keeps the past day and rewrites today and tomorrow", async () => {
@@ -279,6 +347,7 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
     );
     const dialog = page.getByRole("dialog", { name: "Re-plan the rest of the week" });
     await expect(dialog).toBeVisible();
+    await shot(page, "04-replan-confirm-light");
     await press(page, dialog.getByRole("button", { name: "Re-plan", exact: true }));
     await waitForPlanSettled(page);
 
@@ -298,7 +367,14 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
       rewritten += 1;
     }
     say(`replan pastDayKept=${after[0]!.length} rewritten=${rewritten}`);
-    await shot(page, "04-replanned");
+    await shot(page, "05-replanned-light");
+    await setColorMode(page, "Dark");
+    await expect(page.locator("section.mls-day").first()).toBeVisible({ timeout: 60_000 });
+    await shot(page, "05-replanned-dark");
+    expect(await noSidewaysScroll(page)).toBe(true);
+    await setColorMode(page, "Light");
+    await expect(page.locator("section.mls-day").first()).toBeVisible({ timeout: 60_000 });
+    say("visual replanned=light,dark widths=1280,390 sidewaysScroll=no");
   });
 
   await test.step("quick swap makes tonight's dinner a 15-minute meal", async () => {
@@ -310,6 +386,7 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
     const dialog = page.getByRole("dialog", { name: "Quick swap" });
     await expect(dialog).toBeVisible();
     await expect(page.getByLabel("Ready in at most, minutes", { exact: true })).toHaveValue("15");
+    await shot(page, "06-quickswap-confirm-light");
     await press(page, dialog.getByRole("button", { name: "Swap it", exact: true }));
 
     await expect
@@ -348,28 +425,67 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
     ).toBeVisible({
       timeout: 60_000
     });
-    await shot(page, "05-quick-recipe");
+    const recipeUrl = page.url();
+    const longest = await page
+      .locator(".mls-step, .mls-ingredient__name, .mls-meal__title")
+      .evaluateAll((nodes) =>
+        Math.max(0, ...nodes.map((node) => (node.textContent ?? "").trim().length))
+      );
+    // Long text: a real model's method and ingredient lines run past a phone's width, so the
+    // recipe is where wrapping gets exercised at 390.
+    expect(longest, "the recipe carries a long line of text").toBeGreaterThanOrEqual(30);
+    await shot(page, "07-recipe-light");
+    expect(await noSidewaysScroll(page)).toBe(true);
+    say(`visual recipe=light widths=1280,390 sidewaysScroll=no longestLine=${longest}`);
+
+    await setColorMode(page, "Dark");
+    await page.goto(recipeUrl);
+    await expect(
+      page.getByText(/Still to buy:|Nothing still to buy/, { exact: false })
+    ).toBeVisible({ timeout: 60_000 });
+    await shot(page, "07-recipe-dark");
+    expect(await noSidewaysScroll(page)).toBe(true);
+    await setColorMode(page, "Light");
+    say("visual recipe=light,dark widths=1280,390 sidewaysScroll=no");
   });
 
-  await test.step("the plan reads clean in dark mode at both widths", async () => {
-    await page.goto("/m/meals");
-    await expect(page.locator("section.mls-day").first()).toBeVisible({ timeout: 60_000 });
-    await openSettings(page);
-    await press(page, page.getByRole("button", { name: "Appearance", exact: true }));
-    await press(
-      page,
-      page
-        .getByRole("group", { name: "Color mode", exact: true })
-        .getByRole("button", { name: "Dark", exact: true })
-    );
-    await expect(page.locator("html")).toHaveAttribute("data-color-mode", "dark");
-    await page.goto("/m/meals");
-    await expect(page.locator("section.mls-day").first()).toBeVisible({ timeout: 60_000 });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-      true
-    );
-    await shot(page, "06-plan-dark");
-    say("visual dark=yes widths=1280,390 sidewaysScroll=no");
+  await test.step("the error states read clean in light and dark", async () => {
+    /** Asks for a swap no kitchen could do, which the page refuses on its own. */
+    async function refusedSwap(mode: "Light" | "Dark"): Promise<void> {
+      await page.goto("/m/meals");
+      await expect(page.locator("section.mls-day").first()).toBeVisible({ timeout: 60_000 });
+      const dinner = page.locator("section.mls-day").nth(1).locator("article.mls-meal").last();
+      await press(page, dinner.getByRole("button", { name: "Quick swap", exact: true }));
+      const dialog = page.getByRole("dialog", { name: "Quick swap" });
+      await expect(dialog).toBeVisible();
+      await page.getByLabel("Ready in at most, minutes", { exact: true }).fill("900");
+      await press(page, dialog.getByRole("button", { name: "Swap it", exact: true }));
+      await press(page, dialog.getByRole("button", { name: "Cancel", exact: true }));
+      await expect(
+        page.getByRole("alert").filter({ hasText: "That did not go through" })
+      ).toBeVisible();
+      await shot(page, `08-error-${mode.toLowerCase()}`);
+      expect(await noSidewaysScroll(page)).toBe(true);
+    }
+
+    await refusedSwap("Light");
+    await setColorMode(page, "Dark");
+    await refusedSwap("Dark");
+
+    const missingRecipe = "/m/meals/recipe/00000000-0000-4000-8000-000000000000";
+    await page.goto(missingRecipe);
+    await expect(page.getByText("Couldn't load this recipe", { exact: true })).toBeVisible({
+      timeout: 60_000
+    });
+    await shot(page, "09-recipe-error-dark");
+    await setColorMode(page, "Light");
+    await page.goto(missingRecipe);
+    await expect(page.getByText("Couldn't load this recipe", { exact: true })).toBeVisible({
+      timeout: 60_000
+    });
+    await shot(page, "09-recipe-error-light");
+    expect(await noSidewaysScroll(page)).toBe(true);
+    say("visual error=light,dark widths=1280,390 sidewaysScroll=no");
   });
 
   expect(pageErrors, `page errors: ${pageErrors.join(" | ")}`).toEqual([]);

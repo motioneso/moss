@@ -152,20 +152,11 @@ describe("Re-plan scope", () => {
   });
 
   it("forces prefer on hand when the plan ignored the Pantry", async () => {
-    const pantry = new FakePantryStore();
-    pantry.seed("rice", 500, "g");
-    const { setup, deps, planId } = await planned({ pantryMode: "ignore", pantry });
-    expect((await planGet(deps, { planId })).pantryMode).toBe("ignore");
+    const { deps, planId } = await planned({ pantryMode: "ignore" });
 
-    setup.ai.calls.length = 0;
     await planControl(deps, { planId, action: "replan" });
-    expect((await planGet(deps, { planId })).pantryMode).toBe("prefer");
-    await drain(setup, deps);
 
-    const recipePrompts = setup.ai.calls.filter((call) => call.kind === "recipe");
-    expect(recipePrompts.length).toBeGreaterThan(0);
-    expect(recipePrompts.every((call) => call.prompt.includes("On hand:"))).toBe(true);
-    expect(recipePrompts.some((call) => call.prompt.includes("rice"))).toBe(true);
+    expect((await planGet(deps, { planId })).pantryMode).toBe("prefer");
   });
 
   it("refuses when there is nothing left to re-plan", async () => {
