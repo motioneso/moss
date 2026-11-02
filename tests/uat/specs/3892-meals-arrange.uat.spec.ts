@@ -536,8 +536,9 @@ test("arranging the week runs through the real Meals page on generated data", as
       "tonight, before bedtime.";
     const read = await invokeTool<PlanRead>(page, "meals.plan.get", { planId: plan.planId });
     const breakfast = read.days[0]!.meals.find((meal) => meal.slotName === "breakfast")!;
-    const before = await readMeal(page, breakfast.mealId);
-    await mealArticle(page, 0, before.meal.title!)
+    await daySection(page, 0)
+      .locator("article.mls-meal")
+      .first()
       .getByRole("button", { name: "Text", exact: true })
       .click();
     await expect(page).toHaveURL(new RegExp(`/m/meals/plan/text/${breakfast.mealId}`));
