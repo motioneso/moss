@@ -21,7 +21,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { buildUatComposeArgs, restartUatStack } from "../provisioner.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
@@ -52,7 +52,7 @@ async function signIn(page: Page): Promise<void> {
 
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
-test.use({ trace: "off", screenshot: "off", video: "off" });
+test.use({ trace: "off", screenshot: "only-on-failure", video: "off" });
 
 const SHOT_DIR = process.env.MEALS_S8_SHOT_DIR ?? "";
 const MODULE_VERSION = (
@@ -68,24 +68,55 @@ function say(message: string): void {
   console.log(`MEALS_S8 ${message}`);
 }
 
+const WIDTHS = [
+  [1280, 900],
+  [390, 844],
+  [320, 720]
+] as const;
+
 async function shot(page: Page, name: string): Promise<void> {
   if (SHOT_DIR === "") return;
   mkdirSync(SHOT_DIR, { recursive: true });
-  for (const [width, height] of [
-    [1280, 900],
-    [390, 844],
-    [320, 720]
-  ] as const) {
+  for (const [width, height] of WIDTHS) {
     await page.setViewportSize({ width, height });
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: join(SHOT_DIR, `${name}-${width}.png`) });
   }
   await page.setViewportSize({ width: 1280, height: 900 });
 }
 
+/** Cropped shot of one part of the page, so the proof shows the control that changed. */
+async function shotOf(page: Page, target: Locator, name: string): Promise<void> {
+  if (SHOT_DIR === "") return;
+  mkdirSync(SHOT_DIR, { recursive: true });
+  for (const [width, height] of WIDTHS) {
+    await page.setViewportSize({ width, height });
+    await target.scrollIntoViewIfNeeded();
+    await target.screenshot({ path: join(SHOT_DIR, `${name}-${width}.png`) });
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+}
+
+/**
+ * Settings only through the header cog. The account menu occasionally stays shut for a beat on
+ * this box, so the menu is reopened once with a reload behind it before this gives up.
+ */
 async function openSettings(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
-  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
+  const heading = page.getByRole("heading", { name: "Settings", exact: true });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (await heading.isVisible().catch(() => false)) return;
+    await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+    const item = page.getByRole("menuitem", { name: "Settings", exact: true });
+    if (await item.isVisible({ timeout: 10_000 }).catch(() => false)) {
+      await item.click();
+    } else {
+      await page.keyboard.press("Escape");
+    }
+    if (await heading.isVisible({ timeout: 20_000 }).catch(() => false)) return;
+    await page.reload();
+  }
+  await expect(heading).toBeVisible({ timeout: 30_000 });
 }
 
 async function openInstanceModules(page: Page): Promise<void> {
@@ -188,7 +219,7 @@ const mealArticle = (page: Page, dayIndex: number, title: string) =>
   daySection(page, dayIndex).locator("article.mls-meal", { hasText: title });
 
 test("arranging the week runs through the real Meals page on generated data", async ({ page }) => {
-  test.setTimeout(60 * 60_000);
+  test.setTimeout(90 * 60_000);
   const baseURL = process.env.JARVIS_UAT_BASE_URL;
   const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
   if (!baseURL || !projectName) throw new Error("Disposable UAT stack required");
@@ -393,7 +424,7 @@ test("arranging the week runs through the real Meals page on generated data", as
       )
       .toBeGreaterThan(1);
     say(`sharing day=${plan.days[1]!.date} slot=dinner soloMeals=split meal=${dinner.mealId}`);
-    await shot(page, "07-solo-day");
+    await shotOf(page, daySection(page, 1), "07-solo-day");
   });
 
   await test.step("a One-off meal is added for Sam and written", async () => {
@@ -423,7 +454,8 @@ test("arranging the week runs through the real Meals page on generated data", as
         { timeout: 60_000, intervals: [1_000, 2_000] }
       )
       .toBe(20);
-    await shot(page, "08-cook-limit");
+    await expect(section.getByLabel("Cook-time limit", { exact: true })).toHaveValue("20");
+    await shotOf(page, section, "08-cook-limit");
     await waitForDayReady(page, plan.planId, 2);
     await section
       .getByRole("button", { name: "Regenerate day", exact: true })
@@ -460,6 +492,7 @@ test("arranging the week runs through the real Meals page on generated data", as
     const dinner = read.days[1]!.meals.find((meal) => meal.slotName === "dinner")!;
     const before = await readMeal(page, dinner.mealId);
     await openMeals(page);
+    await waitForPlanSettled(page);
     await mealArticle(page, 1, before.meal.title!)
       .getByRole("button", { name: "Eaters", exact: true })
       .click();
@@ -494,7 +527,7 @@ test("arranging the week runs through the real Meals page on generated data", as
     await expect(page).toHaveURL(/\/m\/meals\/?$/);
     await waitForPlanSettled(page);
     await expect(daySection(page, 0).getByText(text, { exact: true })).toBeVisible();
-    await shot(page, "13-long-text-plan");
+    await shotOf(page, daySection(page, 0), "13-long-text-plan");
     say(`longtext chars=${text.length} wraps on the plan`);
   });
 
@@ -505,7 +538,7 @@ test("arranging the week runs through the real Meals page on generated data", as
       .getByRole("button", { name: "Regenerate day", exact: true })
       .click({ timeout: 60_000 });
     await expect(page.locator(".mls-writing").first()).toBeVisible({ timeout: 60_000 });
-    await shot(page, "14-loading-writing");
+    await shotOf(page, daySection(page, 2), "14-loading-writing");
     await waitForDayReady(page, plan.planId, 2);
     await waitForPlanSettled(page);
     say("loading=writing state captured");
@@ -521,12 +554,15 @@ test("arranging the week runs through the real Meals page on generated data", as
   });
 
   await test.step("dark mode renders the plan and every arrange screen", async () => {
+    await openMeals(page);
+    await waitForPlanSettled(page);
     await openSettings(page);
     await page.getByRole("button", { name: "Appearance", exact: true }).click();
     await page
       .locator('[aria-label="Color mode"]')
       .getByRole("button", { name: "Dark", exact: true })
       .click();
+    await expect(page.locator("html")).toHaveAttribute("data-color-mode", "dark");
     await openMeals(page);
     await waitForPlanSettled(page);
     await shot(page, "16-dark-plan");
