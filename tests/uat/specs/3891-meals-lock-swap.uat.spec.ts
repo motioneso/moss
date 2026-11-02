@@ -123,7 +123,7 @@ async function readLines(page: Page): Promise<LineRow[]> {
       sources: [...node.querySelectorAll(".jds-caption")]
         .map((caption) => (caption.textContent ?? "").trim())
         .join(" | "),
-      checked: node.querySelector('input[type="checkbox"]')?.checked ?? false
+      checked: node.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked ?? false
     }))
   );
 }
@@ -172,6 +172,7 @@ async function lockFirstMealOfDay(page: Page, dayIndex: number): Promise<string>
 
 interface RecipeRead {
   readonly recipeId: string | null;
+  readonly meal: { readonly title: string };
   readonly swapChoices: readonly {
     readonly choiceId: string;
     readonly status: string;
