@@ -26,6 +26,8 @@ const eater = (overrides: Partial<EaterView> = {}): EaterView => ({
   safety: "pass",
   safetyReason: null,
   fit: { targetKcal: 700, estimatedKcal: 640, band: "on", differenceKcal: -60 },
+  rating: null,
+  favourite: false,
   ...overrides
 });
 

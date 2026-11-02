@@ -118,7 +118,7 @@ function unsavedSelf(memberId: string): MemberRow {
   };
 }
 
-function toMember(row: MemberRow): MemberView {
+function toMember(row: MemberRow, favouriteRecipeIds: readonly string[] = []): MemberView {
   return {
     memberId: row.member_id,
     name: row.name,
@@ -133,8 +133,7 @@ function toMember(row: MemberRow): MemberView {
     mealPattern: row.meal_pattern,
     restrictions: row.restrictions,
     preferences: row.preferences,
-    // Favourites arrive with recipes in S10.
-    favouriteRecipeIds: []
+    favouriteRecipeIds
   };
 }
 
@@ -203,11 +202,20 @@ export function sqlStore(db: MealsDb): MealsStore {
             [kitchenId]
           );
 
+    const { rows: favourites } =
+      kitchen === null
+        ? { rows: [] as { member_id: string; recipe_id: string }[] }
+        : await db.query<{ member_id: string; recipe_id: string }>(
+            "SELECT member_id, recipe_id FROM app.meals_favourites ORDER BY created_at, recipe_id"
+          );
+    const favouritesOf = (memberId: string) =>
+      favourites.filter((row) => row.member_id === memberId).map((row) => row.recipe_id);
+
     return {
       kitchenId,
       unitsSystem: kitchen?.units_system ?? DEFAULT_UNITS,
       defaultPantryMode: kitchen?.default_pantry_mode ?? DEFAULT_PANTRY_MODE,
-      members: members.map(toMember),
+      members: members.map((row) => toMember(row, favouritesOf(row.member_id))),
       slotRules: rules.map((rule) => ({
         slotName: rule.slot_name,
         soloWeekdays: rule.solo_weekdays,

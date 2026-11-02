@@ -15,14 +15,19 @@ import type {
   RecipeView
 } from "../contracts.js";
 import { calorieFit, mealShareKcal } from "../domain/targets.js";
+import { markKey, type Marks } from "../store/cooking-port.js";
 import type { DayRow, MealRow, PlanRow, RecipeRow } from "../store/plan-port.js";
 
 const REMOVED_MEMBER = "Removed member";
 
+const NO_MARKS: Marks = { ratings: new Map(), favourites: new Set() };
+
 function eaterView(
   eater: MealRow["eaters"][number],
   slotName: string,
-  members: Map<string, MemberView>
+  members: Map<string, MemberView>,
+  recipeId: string | null,
+  marks: Marks
 ): EaterView {
   const person = members.get(eater.memberId);
   const share = person ? mealShareKcal(person, slotName) : null;
@@ -33,16 +38,23 @@ function eaterView(
     safety: eater.safety,
     safetyReason: eater.safetyReason,
     fit:
-      share !== null && eater.estimatedKcal !== null ? calorieFit(share, eater.estimatedKcal) : null
+      share !== null && eater.estimatedKcal !== null
+        ? calorieFit(share, eater.estimatedKcal)
+        : null,
+    rating: recipeId ? (marks.ratings.get(markKey(eater.memberId, recipeId)) ?? null) : null,
+    favourite: recipeId ? marks.favourites.has(markKey(eater.memberId, recipeId)) : false
   };
 }
 
 export function mealView(
   meal: MealRow,
   recipe: RecipeRow | undefined,
-  members: Map<string, MemberView>
+  members: Map<string, MemberView>,
+  marks: Marks = NO_MARKS
 ): PlannedMealView {
-  const eaters = meal.eaters.map((eater) => eaterView(eater, meal.slotName, members));
+  const eaters = meal.eaters.map((eater) =>
+    eaterView(eater, meal.slotName, members, meal.recipeId, marks)
+  );
   const servings = meal.servingsOverride ?? eaters.reduce((sum, eater) => sum + eater.portion, 0);
   return {
     mealId: meal.mealId,
@@ -93,7 +105,8 @@ export function planView(
   days: readonly DayRow[],
   meals: readonly MealRow[],
   recipes: readonly RecipeRow[],
-  kitchen: KitchenView
+  kitchen: KitchenView,
+  marks: Marks = NO_MARKS
 ): PlanView {
   const members = membersById(kitchen);
   const recipeById = new Map(recipes.map((recipe) => [recipe.recipeId, recipe]));
@@ -101,7 +114,7 @@ export function planView(
     const dayMeals = meals
       .filter((meal) => meal.dayId === day.dayId)
       .map((meal) =>
-        mealView(meal, meal.recipeId ? recipeById.get(meal.recipeId) : undefined, members)
+        mealView(meal, meal.recipeId ? recipeById.get(meal.recipeId) : undefined, members, marks)
       );
     return {
       dayId: day.dayId,
@@ -133,9 +146,10 @@ function formatAmount(quantity: number, unit: string | null): string {
 export function recipeView(
   meal: MealRow,
   recipe: RecipeRow | undefined,
-  kitchen: KitchenView
+  kitchen: KitchenView,
+  marks: Marks = NO_MARKS
 ): RecipeView {
-  const view = mealView(meal, recipe, membersById(kitchen));
+  const view = mealView(meal, recipe, membersById(kitchen), marks);
   const scale = recipe ? view.servings / recipe.baseServings : 1;
   const ingredients: IngredientView[] = (recipe?.ingredients ?? []).map((line) => ({
     originalText: line.originalText,

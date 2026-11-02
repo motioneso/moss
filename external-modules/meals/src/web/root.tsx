@@ -131,7 +131,7 @@ export function Root(props: Readonly<Record<string, unknown>>): ReactNodeLike {
         />
       </div>
       {recipeId !== null ? (
-        <RecipeScreen mealId={recipeId} />
+        <RecipeScreen mealId={recipeId} writes={writes} />
       ) : area?.value === "household" ? (
         <HouseholdScreen state={state} reload={reload} writes={writes} hostActions={hostActions} />
       ) : (area ?? AREAS[0]!).value === "plan" ? (

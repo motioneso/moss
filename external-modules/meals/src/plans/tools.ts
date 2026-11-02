@@ -55,14 +55,15 @@ function parseMealTypes(value: unknown): readonly string[] | undefined {
 }
 
 async function loadView(deps: PlanDeps, plan: PlanRow): Promise<PlanView> {
-  const [days, meals, kitchen] = await Promise.all([
+  const [days, meals, kitchen, marks] = await Promise.all([
     deps.store.listDays(plan.planId),
     deps.store.listMeals(plan.planId),
-    deps.kitchen()
+    deps.kitchen(),
+    deps.marks?.()
   ]);
   const recipeIds = meals.flatMap((meal) => (meal.recipeId ? [meal.recipeId] : []));
   const recipes = recipeIds.length > 0 ? await deps.store.getRecipes(recipeIds) : [];
-  return planView(plan, days, meals, recipes, kitchen);
+  return planView(plan, days, meals, recipes, kitchen, marks);
 }
 
 async function requirePlan(deps: PlanDeps, planId: string): Promise<PlanRow> {
@@ -213,9 +214,10 @@ export async function planDelete(
 export async function mealGet(deps: PlanDeps, input: Input): Promise<RecipeView> {
   const meal = await deps.store.getMeal(requireString(input, "mealId", 64));
   if (meal === null) throw new PlanInputError("No meal with that id");
-  const [recipes, kitchen] = await Promise.all([
+  const [recipes, kitchen, marks] = await Promise.all([
     meal.recipeId ? deps.store.getRecipes([meal.recipeId]) : Promise.resolve([]),
-    deps.kitchen()
+    deps.kitchen(),
+    deps.marks?.()
   ]);
-  return recipeView(meal, recipes[0], kitchen);
+  return recipeView(meal, recipes[0], kitchen, marks);
 }

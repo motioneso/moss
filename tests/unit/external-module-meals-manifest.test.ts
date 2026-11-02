@@ -78,7 +78,9 @@ const EATER: Required<EaterView> = {
   portion: 1.5,
   safety: "fail",
   safetyReason: "peanuts",
-  fit: FIT
+  fit: FIT,
+  rating: 4,
+  favourite: true
 };
 const MEAL: Required<PlannedMealView> = {
   mealId: "meal",
@@ -268,6 +270,10 @@ describe("meals manifest", () => {
       ["meals.plan.control", "write", "plan.control"],
       ["meals.plan.delete", "destructive", "plan.delete"],
       ["meals.meal.get", "read", "meal.get"],
+      ["meals.meal.cooked", "write", "meal.cooked"],
+      ["meals.meal.servings", "write", "meal.servings"],
+      ["meals.meal.rate", "write", "meal.rate"],
+      ["meals.favourites.edit", "write", "favourites.edit"],
       ["meals.list.get", "read", "list.get"],
       ["meals.list.build", "write", "list.build"],
       ["meals.list.edit", "write", "list.edit"],
@@ -368,7 +374,9 @@ describe("meals manifest", () => {
         "app.meals_staples",
         "app.meals_log_entries",
         "app.meals_log_estimates",
-        "app.meals_log_estimate_items"
+        "app.meals_log_estimate_items",
+        "app.meals_ratings",
+        "app.meals_favourites"
       ]
     });
   });
@@ -384,6 +392,8 @@ describe("meals manifest", () => {
     ["meals.plan.control", PLAN],
     ["meals.plan.delete", { deleted: true }],
     ["meals.meal.get", RECIPE],
+    ["meals.meal.servings", RECIPE],
+    ["meals.meal.rate", RECIPE],
     ["meals.list.get", LIST],
     ["meals.list.build", LIST],
     ["meals.list.edit", { list: LIST, undo: UNDO }],
