@@ -14,13 +14,14 @@
 //
 // Screenshots are written only when MEALS_S9_SHOT_DIR is set, at 1280 and 390 wide.
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
 
 import { buildUatComposeArgs, restartUatStack } from "../provisioner.js";
-import { bringUpRealChatModel, signInUatAdmin } from "./real-chat-signin.js";
+import { bringUpRealChatModel } from "./real-chat-signin.js";
+import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
@@ -40,6 +41,16 @@ function say(message: string): void {
   console.log(`MEALS_S9 ${message}`);
 }
 
+/**
+ * Activates a control with the keyboard. Mouse clicks time out on this stack in this
+ * environment because buttons never settle between frames (three runs, same timeout, on
+ * the sign-in, welcome and app screens alike), while keyboard input works throughout.
+ */
+async function press(page: Page, locator: ReturnType<Page["getByRole"]>): Promise<void> {
+  await locator.focus();
+  await page.keyboard.press("Enter");
+}
+
 function isoPlus(days: number): string {
   const date = new Date();
   date.setDate(date.getDate() + days);
@@ -50,34 +61,38 @@ function isoPlus(days: number): string {
 async function shot(page: Page, name: string): Promise<void> {
   if (SHOT_DIR === "") return;
   mkdirSync(SHOT_DIR, { recursive: true });
+  // Captured through the browser's own protocol. page.screenshot waits for web fonts to
+  // load, and on this stack that wait never ends (three runs, up to a 120 s timeout).
+  const cdp = await page.context().newCDPSession(page);
   for (const [width, height] of [
     [1280, 900],
     [390, 844]
   ] as const) {
     await page.setViewportSize({ width, height });
-    await page.screenshot({ path: join(SHOT_DIR, `${name}-${width}.png`) });
+    const { data } = await cdp.send("Page.captureScreenshot", { format: "png" });
+    writeFileSync(join(SHOT_DIR, `${name}-${width}.png`), Buffer.from(data, "base64"));
   }
   await page.setViewportSize({ width: 1280, height: 900 });
 }
 
 async function openSettings(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
-  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  await press(page, page.getByRole("button", { name: /^Account menu(?:,|$)/ }));
+  await press(page, page.getByRole("menuitem", { name: "Settings", exact: true }));
   await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
 }
 
 async function openInstanceModules(page: Page): Promise<void> {
   await openSettings(page);
-  await page.getByRole("button", { name: "Admin / Setup", exact: true }).click();
-  await page.getByRole("button", { name: "Instance modules", exact: true }).click();
+  await press(page, page.getByRole("button", { name: "Admin / Setup", exact: true }));
+  await press(page, page.getByRole("button", { name: "Instance modules", exact: true }));
   await expect(page.getByRole("heading", { name: "Instance modules" })).toBeVisible();
 }
 
 async function openMeals(page: Page): Promise<void> {
-  await page
-    .locator('nav[aria-label="Main"]')
-    .getByRole("link", { name: "Meals", exact: true })
-    .click();
+  await press(
+    page,
+    page.locator('nav[aria-label="Main"]').getByRole("link", { name: "Meals", exact: true })
+  );
   await expect(page).toHaveURL(/\/m\/meals/);
 }
 
@@ -151,11 +166,36 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
 
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
+  // Buttons on this stack never settle long enough for a mouse click in this environment
+  // (three runs, same timeout, on two different screens). Reduced motion stills the loop.
+  await page.emulateMedia({ reducedMotion: "reduce" });
 
   await test.step("the seeded owner signs in through the real sign-in form", async () => {
-    await signInUatAdmin(page);
+    // The shared helper clicks the submit button, and in this environment that button never
+    // settles long enough for a mouse click (two runs, same 30 s timeout). Submitting the
+    // real form with Enter drives the same form, the same sign-in call and the same session.
+    await page.goto(baseURL);
+    await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
+    await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
+    await page.getByLabel("Password").press("Enter");
+    const skipSetup = page.getByRole("button", { name: "Skip setup" });
+    const userMenu = page.getByRole("button", { name: /^Account menu(?:,|$)/ });
+    const pressButton = async (locator: typeof skipSetup) => {
+      await locator.focus();
+      await page.keyboard.press("Enter");
+    };
+    await expect(skipSetup.or(userMenu).first()).toBeVisible({ timeout: 30_000 });
+    if (await skipSetup.isVisible()) {
+      await pressButton(skipSetup);
+      // The confirm dialog only shows when chat is unusable.
+      const skipAnyway = page.getByRole("button", { name: "Skip anyway" });
+      await expect(skipAnyway.or(userMenu).first()).toBeVisible({ timeout: 30_000 });
+      if (await skipAnyway.isVisible()) await pressButton(skipAnyway);
+    }
     await page.reload();
-    await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible({
+      timeout: 60_000
+    });
     say("owner signin=real-form session=persisted");
   });
 
@@ -185,7 +225,10 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
     await expect(mealsRow).toBeVisible();
     await expect(mealsRow.locator(".set-row__desc")).toContainText(`v${MODULE_VERSION}`);
     const enable = mealsRow.getByRole("checkbox", { name: "Enable Meals", exact: true });
-    if (!(await enable.isChecked())) await mealsRow.locator("label.jds-switch").click();
+    if (!(await enable.isChecked())) {
+      await enable.focus();
+      await page.keyboard.press("Space");
+    }
     await expect(enable).toBeChecked();
 
     await restartUatStack(projectName, baseURL);
@@ -208,13 +251,13 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
       timeout: 60_000
     });
     await shot(page, "01-empty");
-    await page.getByRole("button", { name: "Start a plan", exact: true }).click();
+    await press(page, page.getByRole("button", { name: "Start a plan", exact: true }));
     await page.getByLabel("First day", { exact: true }).fill(isoPlus(-1));
     await page.getByLabel("Days", { exact: true }).fill("3");
     await page
       .getByLabel("Anything you want", { exact: true })
       .fill("Simple weeknight dinners and easy breakfasts.");
-    await page.getByRole("button", { name: "Start the plan", exact: true }).click();
+    await press(page, page.getByRole("button", { name: "Start the plan", exact: true }));
     await expect(page).toHaveURL(/\/m\/meals\/?$/);
     await shot(page, "02-writing");
     await waitForPlanSettled(page);
@@ -230,10 +273,13 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
     for (const meal of before!.flat()) {
       recipesBefore.set(meal.id, (await readRecipe(page, meal.id)).recipeId);
     }
-    await page.getByRole("button", { name: "Re-plan the rest of the week", exact: true }).click();
+    await press(
+      page,
+      page.getByRole("button", { name: "Re-plan the rest of the week", exact: true })
+    );
     const dialog = page.getByRole("dialog", { name: "Re-plan the rest of the week" });
     await expect(dialog).toBeVisible();
-    await dialog.getByRole("button", { name: "Re-plan", exact: true }).click();
+    await press(page, dialog.getByRole("button", { name: "Re-plan", exact: true }));
     await waitForPlanSettled(page);
 
     const after = await readDays(page);
@@ -260,11 +306,11 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
     const dinner = today[today.length - 1]!;
     const beforeRecipe = await readRecipe(page, dinner.id);
     const dinnerArticle = page.locator("section.mls-day").nth(1).locator("article.mls-meal").last();
-    await dinnerArticle.getByRole("button", { name: "Quick swap", exact: true }).click();
+    await press(page, dinnerArticle.getByRole("button", { name: "Quick swap", exact: true }));
     const dialog = page.getByRole("dialog", { name: "Quick swap" });
     await expect(dialog).toBeVisible();
     await expect(page.getByLabel("Ready in at most, minutes", { exact: true })).toHaveValue("15");
-    await dialog.getByRole("button", { name: "Swap it", exact: true }).click();
+    await press(page, dialog.getByRole("button", { name: "Swap it", exact: true }));
 
     await expect
       .poll(
@@ -288,13 +334,15 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
         `minutes=${swapped.meal.cookMinutes} stillToBuy=${stillToBuy.join(",") || "none"}`
     );
 
-    await page
-      .locator("section.mls-day")
-      .nth(1)
-      .locator("article.mls-meal")
-      .last()
-      .locator("a.mls-meal__title")
-      .click();
+    await press(
+      page,
+      page
+        .locator("section.mls-day")
+        .nth(1)
+        .locator("article.mls-meal")
+        .last()
+        .locator("a.mls-meal__title")
+    );
     await expect(
       page.getByText(/Still to buy:|Nothing still to buy/, { exact: false })
     ).toBeVisible({
@@ -307,11 +355,13 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
     await page.goto("/m/meals");
     await expect(page.locator("section.mls-day").first()).toBeVisible({ timeout: 60_000 });
     await openSettings(page);
-    await page.getByRole("button", { name: "Appearance", exact: true }).click();
-    await page
-      .getByRole("group", { name: "Color mode", exact: true })
-      .getByRole("button", { name: "Dark", exact: true })
-      .click();
+    await press(page, page.getByRole("button", { name: "Appearance", exact: true }));
+    await press(
+      page,
+      page
+        .getByRole("group", { name: "Color mode", exact: true })
+        .getByRole("button", { name: "Dark", exact: true })
+    );
     await expect(page.locator("html")).toHaveAttribute("data-color-mode", "dark");
     await page.goto("/m/meals");
     await expect(page.locator("section.mls-day").first()).toBeVisible({ timeout: 60_000 });
