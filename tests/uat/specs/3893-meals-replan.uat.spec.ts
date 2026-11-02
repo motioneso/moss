@@ -190,20 +190,43 @@ async function noSidewaysScroll(page: Page): Promise<boolean> {
 interface MealRow {
   readonly title: string;
   readonly id: string;
+  readonly slot: string;
 }
 
 async function readDays(page: Page): Promise<readonly (readonly MealRow[])[]> {
   return page.locator("section.mls-day").evaluateAll((nodes) =>
     nodes.map((node) =>
-      [...node.querySelectorAll("article.mls-meal")].map((meal) => {
-        const href = meal.querySelector("a.mls-meal__title")?.getAttribute("href") ?? "";
-        return {
-          title: meal.querySelector(".mls-meal__title")?.textContent?.trim() ?? "",
-          id: href.split("/").pop() ?? ""
-        };
+      [...node.querySelectorAll(".mls-slot")].flatMap((slot) => {
+        const slotName = (slot.querySelector(".mls-slot__label")?.textContent ?? "")
+          .trim()
+          .toLowerCase();
+        return [...slot.querySelectorAll("article.mls-meal")].map((meal) => {
+          const href = meal.querySelector("a.mls-meal__title")?.getAttribute("href") ?? "";
+          return {
+            title: meal.querySelector(".mls-meal__title")?.textContent?.trim() ?? "",
+            id: href.split("/").pop() ?? "",
+            slot: slotName
+          };
+        });
       })
     )
   );
+}
+
+/** The household's usual time per slot, straight from the module's own read route. */
+async function readSlotTimes(page: Page): Promise<Readonly<Record<string, string | null>>> {
+  const response = await page.request.post(
+    `/api/ai/assistant-tools/${encodeURIComponent("meals.kitchen.get")}/invoke`,
+    { data: { input: {} } }
+  );
+  expect(response.ok(), `meals.kitchen.get -> ${response.status()}`).toBeTruthy();
+  const body = (await response.json()) as {
+    invocation?: {
+      result?: { slotRules?: readonly { slotName: string; usualTime: string | null }[] };
+    };
+  };
+  const rules = body.invocation?.result?.slotRules ?? [];
+  return Object.fromEntries(rules.map((rule) => [rule.slotName, rule.usualTime]));
 }
 
 interface RecipeRead {
@@ -390,6 +413,20 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
     for (const meal of before!.flat()) {
       recipesBefore.set(meal.id, (await readRecipe(page, meal.id)).recipeId);
     }
+    // The page sends its own zone as the tool input, so today means today where the browser is.
+    const usual = await readSlotTimes(page);
+    const localTime = await page.evaluate(() => new Date().toTimeString().slice(0, 5));
+    const toCome = before!.slice(1).flat();
+    const stays = toCome.filter((meal) => {
+      const usualTime = usual[meal.slot] ?? null;
+      return usualTime !== null && localTime > usualTime;
+    });
+    const rewrites = toCome.filter((meal) => !stays.includes(meal));
+    say(
+      `replan local=${localTime} usualTimes=${JSON.stringify(usual)} ` +
+        `keptToday=${stays.length} rewritten=${rewrites.length}`
+    );
+
     await press(
       page,
       page.getByRole("button", { name: "Re-plan the rest of the week", exact: true })
@@ -398,6 +435,26 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
     await expect(dialog).toBeVisible();
     await shot(page, "04-replan-confirm-light");
     await press(page, dialog.getByRole("button", { name: "Re-plan", exact: true }));
+
+    // The page keeps showing the finished plan for a moment after the write lands, so the
+    // re-plan is followed through the module's own read route instead of the DOM.
+    await expect
+      .poll(
+        async () => {
+          const reads = await Promise.all(rewrites.map((meal) => readRecipe(page, meal.id)));
+          if (reads.some((read) => read.meal.status === "failed")) return "failed";
+          const rewritten = reads.filter(
+            (read, index) => read.recipeId !== recipesBefore.get(rewrites[index]!.id)
+          ).length;
+          const writing = reads.some(
+            (read) => read.meal.status !== "ready" && read.meal.status !== "failed"
+          );
+          return writing ? "writing" : `${rewritten}/${rewrites.length}`;
+        },
+        { timeout: PLAN_WRITE_TIMEOUT_MS, intervals: [5_000, 10_000] }
+      )
+      .toBe(`${rewrites.length}/${rewrites.length}`);
+
     await settlePlan(page);
     await waitForPlanSettled(page);
 
@@ -408,15 +465,21 @@ test("re-plan the rest of the week and quick swap tonight through the real Meals
         recipesBefore.get(meal.id)
       );
     }
-    let rewritten = 0;
-    for (const meal of [...after[1]!, ...after[2]!]) {
-      const recipeId = (await readRecipe(page, meal.id)).recipeId;
-      expect(recipeId, `meal "${meal.title}" should have been rewritten`).not.toBe(
-        recipesBefore.get(meal.id)
-      );
-      rewritten += 1;
+    for (const meal of stays) {
+      expect(
+        await readRecipe(page, meal.id).then((read) => read.recipeId),
+        `"${meal.title}" is past its usual time and should keep its recipe`
+      ).toBe(recipesBefore.get(meal.id));
     }
-    say(`replan pastDayKept=${after[0]!.length} rewritten=${rewritten}`);
+    for (const meal of rewrites) {
+      expect(
+        await readRecipe(page, meal.id).then((read) => read.recipeId),
+        `meal "${meal.title}" should have been rewritten`
+      ).not.toBe(recipesBefore.get(meal.id));
+    }
+    say(
+      `replan pastDayKept=${after[0]!.length} keptToday=${stays.length} rewritten=${rewrites.length}`
+    );
     await shot(page, "05-replanned-light");
     await setColorMode(page, "Dark");
     await expect(page.locator("section.mls-day").first()).toBeVisible({ timeout: 60_000 });
