@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-11-01
+
+#### Added
+
+- **Cook, rate and favourite meals.** On a recipe you can change the servings, mark the meal cooked so the Pantry updates (with Undo), rate it for each person, and mark it as a favourite. [PR #3942](https://github.com/motioneso/moss/pull/3942)
+
 ### 2026-10-31
 
 #### Added
