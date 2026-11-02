@@ -61,14 +61,20 @@ function isoPlus(days: number): string {
 async function shot(page: Page, name: string): Promise<void> {
   if (SHOT_DIR === "") return;
   mkdirSync(SHOT_DIR, { recursive: true });
-  // Captured through the browser's own protocol. page.screenshot waits for web fonts to
-  // load, and on this stack that wait never ends (three runs, up to a 120 s timeout).
-  const cdp = await page.context().newCDPSession(page);
+  // Chromium on this host never returns a frame, through page.screenshot or the browser
+  // protocol alike (both hang, even on a data: URL), so Chromium captures go through the
+  // protocol with a ceiling and every other engine uses the plain screenshot.
+  const chromium = page.context().browser()?.browserType().name() === "chromium";
+  const cdp = chromium ? await page.context().newCDPSession(page) : null;
   for (const [width, height] of [
     [1280, 900],
     [390, 844]
   ] as const) {
     await page.setViewportSize({ width, height });
+    if (cdp === null) {
+      await page.screenshot({ path: join(SHOT_DIR, `${name}-${width}.png`), timeout: 20_000 });
+      continue;
+    }
     const captured = await Promise.race([
       cdp.send("Page.captureScreenshot", { format: "png" }),
       new Promise<null>((resolve) => setTimeout(() => resolve(null), 20_000))
@@ -79,7 +85,7 @@ async function shot(page: Page, name: string): Promise<void> {
     }
     writeFileSync(join(SHOT_DIR, `${name}-${width}.png`), Buffer.from(captured.data, "base64"));
   }
-  await cdp.detach().catch(() => undefined);
+  if (cdp !== null) await cdp.detach().catch(() => undefined);
   await page.setViewportSize({ width: 1280, height: 900 });
 }
 
