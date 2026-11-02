@@ -465,6 +465,7 @@ test("every Meals page control works through the real page", async ({ page }) =>
     await press(page, clear);
     await confirmHost("Cancel");
     await expect(page.getByText("Nothing to buy")).toBeHidden();
+    await expect(clear).toBeEnabled({ timeout: 30_000 });
     await press(page, clear);
     await confirmHost("Confirm action");
     await expect(page.getByText("Nothing to buy", { exact: true })).toBeVisible({
