@@ -9,6 +9,8 @@ import {
   Eyebrow,
   Indicator,
   SectionHead,
+  Select,
+  useState,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 
@@ -95,13 +97,39 @@ export interface MealActions {
   lock(meal: PlannedMealView): void;
   unlock(meal: PlannedMealView): void;
   swap(meal: PlannedMealView): void;
+  move(meal: PlannedMealView): void;
+  eaters(meal: PlannedMealView): void;
+  text(meal: PlannedMealView): void;
   regenerateMeal(meal: PlannedMealView): void;
   regenerateDay(day: PlanDayView): void;
 }
 
+/** What a day's arrange controls do. Null hides them (no write handle). */
+export interface DayActions {
+  readonly busy: boolean;
+  cookLimit(day: PlanDayView, minutes: number | null): void;
+  sharing(day: PlanDayView, slotName: string, sharing: "shared" | "solo"): void;
+  oneOff(day: PlanDayView, slotName: string, memberId: string): void;
+}
+
 function MealTools(props: { meal: PlannedMealView; actions: MealActions }): ReactNodeLike | null {
   const { meal, actions } = props;
-  if (meal.kind !== "recipe" || meal.cookedAt !== null) return null;
+  if (meal.cookedAt !== null) return null;
+  if (meal.kind === "text") {
+    return (
+      <div className="mls-meal__tools">
+        <Button
+          variant="quiet"
+          size="sm"
+          disabled={actions.busy}
+          onClick={() => actions.text(meal)}
+        >
+          Text
+        </Button>
+      </div>
+    );
+  }
+  if (meal.kind !== "recipe") return null;
   return (
     <div className="mls-meal__tools">
       <Button
@@ -114,6 +142,20 @@ function MealTools(props: { meal: PlannedMealView; actions: MealActions }): Reac
       </Button>
       <Button variant="quiet" size="sm" disabled={actions.busy} onClick={() => actions.swap(meal)}>
         Swap
+      </Button>
+      <Button variant="quiet" size="sm" disabled={actions.busy} onClick={() => actions.move(meal)}>
+        Move
+      </Button>
+      <Button
+        variant="quiet"
+        size="sm"
+        disabled={actions.busy}
+        onClick={() => actions.eaters(meal)}
+      >
+        Eaters
+      </Button>
+      <Button variant="quiet" size="sm" disabled={actions.busy} onClick={() => actions.text(meal)}>
+        Text
       </Button>
       {isReplaceable(meal) ? (
         <Button
@@ -219,6 +261,78 @@ function slotGroups(meals: readonly PlannedMealView[]): [string, PlannedMealView
   return [...groups.entries()];
 }
 
+const COOK_LIMITS = [15, 20, 30, 45, 60, 90, 120] as const;
+
+function DayTools(props: { day: PlanDayView; actions: DayActions }): ReactNodeLike {
+  const { day, actions } = props;
+  const people = new Map<string, string>();
+  for (const meal of day.meals) {
+    for (const eater of meal.eaters) people.set(eater.memberId, eater.name);
+  }
+  const slots = [...new Set(day.meals.map((meal) => meal.slotName))];
+  const [slot, setSlot] = useState(slots[0] ?? "dinner");
+  const [member, setMember] = useState([...people.keys()][0] ?? "");
+  return (
+    <div className="mls-row">
+      <Select
+        aria-label="Cook-time limit"
+        value={day.cookTimeLimitMinutes === null ? "" : String(day.cookTimeLimitMinutes)}
+        disabled={actions.busy}
+        onChange={(event: { target: { value: string } }) =>
+          actions.cookLimit(day, event.target.value === "" ? null : Number(event.target.value))
+        }
+      >
+        <option value="">No cook-time limit</option>
+        {COOK_LIMITS.map((minutes) => (
+          <option key={minutes} value={minutes}>
+            {minutes} min limit
+          </option>
+        ))}
+        {day.cookTimeLimitMinutes !== null &&
+        !(COOK_LIMITS as readonly number[]).includes(day.cookTimeLimitMinutes) ? (
+          <option value={day.cookTimeLimitMinutes}>{day.cookTimeLimitMinutes} min limit</option>
+        ) : null}
+      </Select>
+      {slots.length > 0 && people.size > 0 ? (
+        <>
+          <Select
+            aria-label="One-off meal slot"
+            value={slot}
+            disabled={actions.busy}
+            onChange={(event: { target: { value: string } }) => setSlot(event.target.value)}
+          >
+            {slots.map((name) => (
+              <option key={name} value={name}>
+                {titleCase(name)}
+              </option>
+            ))}
+          </Select>
+          <Select
+            aria-label="One-off meal for"
+            value={member}
+            disabled={actions.busy}
+            onChange={(event: { target: { value: string } }) => setMember(event.target.value)}
+          >
+            {[...people.entries()].map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </Select>
+          <Button
+            variant="quiet"
+            size="sm"
+            disabled={actions.busy || member === ""}
+            onClick={() => actions.oneOff(day, slot, member)}
+          >
+            Add One-off
+          </Button>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export function DaySection(props: {
   day: PlanDayView;
   index: number;
@@ -227,6 +341,7 @@ export function DaySection(props: {
   showSharing: boolean;
   onRetry: (() => void) | null;
   actions: MealActions | null;
+  dayActions?: DayActions | null;
 }): ReactNodeLike {
   const { day, today } = props;
   const isToday = day.date === today;
@@ -317,6 +432,7 @@ export function DaySection(props: {
           ))}
         </div>
       ) : null}
+      {props.dayActions ? <DayTools day={day} actions={props.dayActions} /> : null}
       {groups.length > 0 ? (
         <div
           className="mls-slots"
@@ -330,6 +446,22 @@ export function DaySection(props: {
                   <span className="jds-caption">
                     {meals.length > 1 || meals[0]?.sharing === "solo" ? "Solo" : "Shared"}
                   </span>
+                ) : null}
+                {props.dayActions ? (
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    disabled={props.dayActions.busy}
+                    onClick={() =>
+                      props.dayActions!.sharing(
+                        day,
+                        slot,
+                        meals.length > 1 || meals[0]?.sharing === "solo" ? "shared" : "solo"
+                      )
+                    }
+                  >
+                    {meals.length > 1 || meals[0]?.sharing === "solo" ? "Make Shared" : "Make Solo"}
+                  </Button>
                 ) : null}
               </div>
               {meals.map((meal) => (

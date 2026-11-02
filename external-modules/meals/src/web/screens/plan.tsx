@@ -18,7 +18,7 @@ import { navigate } from "../router";
 import { isWriting, type PlanState } from "../plan";
 import type { MealsWrites } from "../writes";
 import type { HostActions } from "../root";
-import { DaySection, type MealActions } from "./plan-day";
+import { DaySection, type DayActions, type MealActions } from "./plan-day";
 
 export const PANTRY_LABEL: Record<PantryMode, string> = {
   ignore: "Ignore the Pantry",
@@ -148,6 +148,16 @@ function Plan(props: {
     else setFailed(true);
   }
 
+  async function dayEdit(input: Record<string, unknown>) {
+    if (writes === null || busy) return;
+    setBusy(true);
+    setFailed(false);
+    const outcome = await writes.invoke("meals.day.edit", input);
+    setBusy(false);
+    if (outcome.kind !== "succeeded") setFailed(true);
+    props.reload();
+  }
+
   const actions: MealActions | null =
     writes === null
       ? null
@@ -156,8 +166,23 @@ function Plan(props: {
           lock: (meal) => editMeal(meal, "lock"),
           unlock: (meal) => editMeal(meal, "unlock"),
           swap,
+          move: (meal) => navigate(`/plan/move/${meal.mealId}`),
+          eaters: (meal) => navigate(`/plan/eaters/${meal.mealId}`),
+          text: (meal) => navigate(`/plan/text/${meal.mealId}`),
           regenerateMeal: (meal) => control({ action: "regenerate", mealId: meal.mealId }),
           regenerateDay: (target) => control({ action: "regenerate", dayId: target.dayId })
+        };
+  const dayActions: DayActions | null =
+    writes === null
+      ? null
+      : {
+          busy,
+          cookLimit: (target, minutes) =>
+            dayEdit({ dayId: target.dayId, action: "set_cook_limit", minutes }),
+          sharing: (target, slotName, sharing) =>
+            dayEdit({ dayId: target.dayId, action: "set_sharing", slotName, sharing }),
+          oneOff: (target, slotName, memberId) =>
+            dayEdit({ dayId: target.dayId, action: "add_one_off", slotName, memberId })
         };
   const lockedCount = plan.days.reduce(
     (sum, day) => sum + day.meals.filter((meal) => meal.locked).length,
@@ -283,6 +308,7 @@ function Plan(props: {
               writes !== null ? () => control({ action: "retry_day", dayId: day.dayId }) : null
             }
             actions={actions}
+            dayActions={dayActions}
           />
         ))}
       </div>

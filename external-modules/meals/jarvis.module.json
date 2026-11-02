@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "meals",
   "name": "Meals",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": {
@@ -191,6 +191,24 @@
         "label": "New plan",
         "path": "/plan/new",
         "description": "Start a meal plan: the first day, how many days, the Pantry mode and an optional note about what you want. Moss then writes the days one by one on the Plan tab."
+      },
+      {
+        "id": "meals.move",
+        "label": "Move a meal",
+        "path": "/plan/move",
+        "description": "Move one meal to another day or slot in the same plan. Opened from Move on a meal in the Plan tab. The shopping list rebuilds and keeps its ticks."
+      },
+      {
+        "id": "meals.eaters",
+        "label": "Who eats this",
+        "path": "/plan/eaters",
+        "description": "Change who eats one meal. Servings follow the new eaters, and Safety runs again for them. Opened from Eaters on a meal in the Plan tab."
+      },
+      {
+        "id": "meals.text",
+        "label": "Text for a meal",
+        "path": "/plan/text",
+        "description": "Set a meal slot to plain text such as eating out or leftovers, so Moss plans nothing and nothing reaches the shopping list, or clear the text so Moss writes the meal again. Opened from Text on a meal in the Plan tab."
       }
     ],
     "features": [
@@ -241,6 +259,10 @@
       {
         "id": "meals.swap-choices",
         "description": "Swap a meal: ask for three replacement recipes, each checked for Safety first, and choose one. A dish someone eating the meal rated one star is not offered. Moss can start and finish a swap from chat."
+      },
+      {
+        "id": "meals.arrange",
+        "description": "Arrange the week: move a meal to another day or slot, change who eats a meal (Safety runs again and servings follow), set a slot to plain text such as eating out, give one person a One-off meal, set a cook-time limit for a night, or make one slot Shared or Solo for a single day. Ask Moss, or use Move, Eaters and Text on a meal in the Plan tab."
       }
     ]
   },
@@ -5149,8 +5171,8 @@
     {
       "name": "meals.meal.edit",
       "permissionId": "meals.meal.edit",
-      "description": "Lock or unlock one written recipe meal. A locked meal stays through every Regenerate. Cooked meals and text meals cannot be locked.",
-      "actionLabel": "Lock or unlock a meal",
+      "description": "Lock or unlock one written recipe meal, move a meal to another day or slot in the same plan, or change who eats it. A locked meal stays through every Regenerate. Cooked meals and text meals cannot be locked, and a cooked meal cannot be moved. Moving takes targetDayId or targetDate, and targetSlotName when the meal also changes slot. Changing eaters takes eaterIds: servings follow the new eaters and Safety runs again for them before the meal shows as checked.",
+      "actionLabel": "Lock, move or change who eats a meal",
       "risk": "write",
       "actionFamilyId": "meal_planning",
       "executionPolicy": "auto",
@@ -5168,7 +5190,31 @@
           },
           "action": {
             "type": "string",
-            "enum": ["lock", "unlock"]
+            "enum": ["lock", "unlock", "move", "set_eaters"]
+          },
+          "targetDayId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "targetDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "targetSlotName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "eaterIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 40,
+            "items": {
+              "type": "string",
+              "minLength": 36,
+              "maxLength": 36
+            }
           }
         }
       },
@@ -5950,6 +5996,430 @@
                           }
                         ]
                       }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.day.edit",
+      "permissionId": "meals.day.edit",
+      "description": "Arrange one day of a plan. set_text turns a meal (mealId, text) into a plain-text slot such as eating out, which never reaches the shopping list; clear_text turns it back into a meal Moss writes. add_one_off adds a Solo meal for one person (dayId or planId and date, slotName, memberId). set_cook_limit sets a night's cook-time limit in minutes (minutes, 5 to 240, or null to clear), and Regenerate then writes inside it. set_sharing makes one slot Shared or Solo for that day only (slotName, sharing); Solo writes one meal per eater.",
+      "actionLabel": "Arrange one day of the plan",
+      "risk": "write",
+      "actionFamilyId": "meal_planning",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "handler": "day.edit",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action"],
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": ["set_text", "clear_text", "add_one_off", "set_cook_limit", "set_sharing"]
+          },
+          "planId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "dayId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "mealId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "slotName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "memberId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 5,
+                "maximum": 240
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sharing": {
+            "type": "string",
+            "enum": ["shared", "solo"]
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "dayId",
+          "date",
+          "status",
+          "failureReason",
+          "cookTimeLimitMinutes",
+          "meals",
+          "dayFit"
+        ],
+        "properties": {
+          "dayId": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "failureReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cookTimeLimitMinutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "meals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "mealId",
+                "slotName",
+                "kind",
+                "sharing",
+                "status",
+                "failureReason",
+                "locked",
+                "oneOffFor",
+                "favouriteOf",
+                "title",
+                "plainText",
+                "cookMinutes",
+                "servings",
+                "eaters",
+                "checkLabelCount",
+                "cookedAt"
+              ],
+              "properties": {
+                "mealId": {
+                  "type": "string"
+                },
+                "slotName": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "sharing": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "failureReason": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "locked": {
+                  "type": "boolean"
+                },
+                "oneOffFor": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "favouriteOf": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "title": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "plainText": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "cookMinutes": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "servings": {
+                  "type": "number"
+                },
+                "eaters": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "memberId",
+                      "name",
+                      "portion",
+                      "safety",
+                      "safetyReason",
+                      "fit",
+                      "rating",
+                      "favourite"
+                    ],
+                    "properties": {
+                      "memberId": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "portion": {
+                        "type": "number"
+                      },
+                      "safety": {
+                        "type": "string"
+                      },
+                      "safetyReason": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fit": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                            "properties": {
+                              "targetKcal": {
+                                "type": "integer"
+                              },
+                              "estimatedKcal": {
+                                "type": "integer"
+                              },
+                              "band": {
+                                "type": "string"
+                              },
+                              "differenceKcal": {
+                                "type": "integer"
+                              }
+                            }
+                          },
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "object",
+                            "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                            "properties": {
+                              "targetKcal": {
+                                "type": "integer"
+                              },
+                              "estimatedKcal": {
+                                "type": "integer"
+                              },
+                              "band": {
+                                "type": "string"
+                              },
+                              "differenceKcal": {
+                                "type": "integer"
+                              }
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "rating": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "favourite": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                },
+                "checkLabelCount": {
+                  "type": "integer"
+                },
+                "cookedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "dayFit": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["memberId", "fit"],
+              "properties": {
+                "memberId": {
+                  "type": "string"
+                },
+                "fit": {
+                  "type": "object",
+                  "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                  "properties": {
+                    "targetKcal": {
+                      "type": "integer"
+                    },
+                    "estimatedKcal": {
+                      "type": "integer"
+                    },
+                    "band": {
+                      "type": "string"
+                    },
+                    "differenceKcal": {
+                      "type": "integer"
                     }
                   }
                 }

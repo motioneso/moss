@@ -10,6 +10,7 @@ import { useShoppingList } from "./list";
 import { usePantry } from "./pantry";
 import { usePlan } from "./plan";
 import { navigate, useModulePath } from "./router";
+import { EatersScreen, MoveScreen, TextScreen } from "./screens/arrange";
 import { HouseholdScreen } from "./screens/household";
 import { ListScreen } from "./screens/list";
 import { LogScreen } from "./screens/log";
@@ -109,10 +110,18 @@ export function Root(props: Readonly<Record<string, unknown>>): ReactNodeLike {
   const { state, reload } = useKitchen();
   const recipeId = path.startsWith("/recipe/") ? path.slice("/recipe/".length) : null;
   const swapId = path.startsWith("/plan/swap/") ? path.slice("/plan/swap/".length) : null;
+  const moveId = path.startsWith("/plan/move/") ? path.slice("/plan/move/".length) : null;
+  const eatersId = path.startsWith("/plan/eaters/") ? path.slice("/plan/eaters/".length) : null;
+  const textId = path.startsWith("/plan/text/") ? path.slice("/plan/text/".length) : null;
   const planNew = path === "/plan/new";
   const staplesOpen = path === "/pantry/staples";
   const area =
-    recipeId !== null || swapId !== null || planNew
+    recipeId !== null ||
+    swapId !== null ||
+    moveId !== null ||
+    eatersId !== null ||
+    textId !== null ||
+    planNew
       ? AREAS[0]
       : AREAS.find((entry) => entry.path === (staplesOpen ? "/pantry" : path));
 
@@ -138,6 +147,12 @@ export function Root(props: Readonly<Record<string, unknown>>): ReactNodeLike {
         <RecipeScreen mealId={recipeId} writes={writes} />
       ) : swapId !== null ? (
         <SwapScreen mealId={swapId} writes={writes} />
+      ) : moveId !== null ? (
+        <MoveScreen mealId={moveId} writes={writes} />
+      ) : eatersId !== null ? (
+        <EatersScreen mealId={eatersId} writes={writes} />
+      ) : textId !== null ? (
+        <TextScreen mealId={textId} writes={writes} />
       ) : planNew ? (
         <PlanNewScreen
           writes={writes}

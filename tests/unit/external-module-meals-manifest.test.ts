@@ -277,6 +277,7 @@ describe("meals manifest", () => {
       ["meals.favourites.edit", "write", "favourites.edit"],
       ["meals.meal.edit", "write", "meal.edit"],
       ["meals.meal.swap", "write", "meal.swap"],
+      ["meals.day.edit", "write", "day.edit"],
       ["meals.list.get", "read", "list.get"],
       ["meals.list.build", "write", "list.build"],
       ["meals.list.edit", "write", "list.edit"],
@@ -411,6 +412,7 @@ describe("meals manifest", () => {
     ["meals.plan.control", PLAN],
     ["meals.plan.delete", { deleted: true }],
     ["meals.meal.get", RECIPE],
+    ["meals.day.edit", PLAN.days[0]!],
     ["meals.meal.servings", RECIPE],
     ["meals.meal.rate", RECIPE],
     ["meals.list.get", LIST],
@@ -463,7 +465,14 @@ describe("meals manifest", () => {
       ])
     );
     expect(appMap.features.map((feature) => feature.id)).toEqual(
-      expect.arrayContaining(["meals.lock-regenerate", "meals.swap-choices"])
+      expect.arrayContaining(["meals.lock-regenerate", "meals.swap-choices", "meals.arrange"])
+    );
+    expect(appMap.screens.map((screen) => [screen.id, screen.path])).toEqual(
+      expect.arrayContaining([
+        ["meals.move", "/plan/move"],
+        ["meals.eaters", "/plan/eaters"],
+        ["meals.text", "/plan/text"]
+      ])
     );
     expect(appMap.features.map((feature) => feature.id)).toContain("meals.chat-household");
     expect(appMap.features.map((feature) => feature.id)).toContain("meals.chat-list");
