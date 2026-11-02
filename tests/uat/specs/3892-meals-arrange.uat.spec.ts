@@ -157,7 +157,9 @@ async function useDarkMode(page: Page): Promise<void> {
     switched = false;
   }
   if (!switched) {
-    await page.evaluate(() => localStorage.setItem("jarvis.color-mode:v1", "dark"));
+    // The same request the Appearance pane's Color mode control sends for this account.
+    const saved = await page.request.put("/api/me/themes/mode", { data: { mode: "dark" } });
+    expect(saved.ok(), `set colour mode -> ${saved.status()}`).toBeTruthy();
     await page.reload();
   }
   await expect(page.locator("html")).toHaveAttribute("data-color-mode", "dark");
