@@ -119,6 +119,16 @@ async function openSettings(page: Page): Promise<void> {
   await expect(heading).toBeVisible({ timeout: 30_000 });
 }
 
+async function openAppearance(page: Page): Promise<void> {
+  const button = page.getByRole("button", { name: "Appearance", exact: true });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await openSettings(page);
+    if (await button.isVisible({ timeout: 15_000 }).catch(() => false)) return;
+    await page.reload();
+  }
+  await expect(button).toBeVisible({ timeout: 30_000 });
+}
+
 async function openInstanceModules(page: Page): Promise<void> {
   await openSettings(page);
   await page.getByRole("button", { name: "Admin / Setup", exact: true }).click();
@@ -556,7 +566,7 @@ test("arranging the week runs through the real Meals page on generated data", as
   await test.step("dark mode renders the plan and every arrange screen", async () => {
     await openMeals(page);
     await waitForPlanSettled(page);
-    await openSettings(page);
+    await openAppearance(page);
     await page.getByRole("button", { name: "Appearance", exact: true }).click();
     await page
       .locator('[aria-label="Color mode"]')
