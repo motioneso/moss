@@ -15,7 +15,7 @@ import {
 
 import type { KitchenView, PantryMode, UnitsSystem } from "../../contracts";
 import type { KitchenState } from "../kitchen";
-import type { MealsWrites } from "../writes";
+import { noticeFor, type MealsWrites } from "../writes";
 
 const UNITS: ReadonlyArray<{ value: UnitsSystem; label: string }> = [
   { value: "us", label: "US" },
@@ -61,16 +61,16 @@ function Settings(props: {
 }): ReactNodeLike {
   const { kitchen, writes } = props;
   const [saving, setSaving] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
   async function save(patch: Record<string, unknown>) {
     if (writes === null) return;
     setSaving(true);
-    setFailed(false);
+    setFailed(null);
     const outcome = await writes.invoke("meals.kitchen.save", patch);
     setSaving(false);
     if (outcome.kind === "succeeded") props.reload();
-    else if (outcome.kind !== "cancelled") setFailed(true);
+    else if (outcome.kind !== "cancelled") setFailed(noticeFor(outcome));
   }
 
   const units = UNITS.find((option) => option.value === kitchen.unitsSystem)!;
@@ -78,9 +78,9 @@ function Settings(props: {
 
   return (
     <div className="mls-stack">
-      {failed ? (
+      {failed !== null ? (
         <p className="jds-caption" role="alert">
-          Couldn't save that change
+          {failed}
         </p>
       ) : null}
       <section className="mls-stack mls-stack--tight">

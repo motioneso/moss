@@ -16,7 +16,7 @@ import {
 import type { PantryMode } from "../../contracts";
 import { todayIso } from "../format";
 import { navigate } from "../router";
-import type { MealsWrites } from "../writes";
+import { noticeFor, type MealsWrites } from "../writes";
 import { PANTRY_LABEL } from "./plan";
 
 const MAX_DAYS = 28;
@@ -55,7 +55,7 @@ export function PlanNewScreen(props: {
       ...(note.trim() === "" ? {} : { requestText: note.trim() })
     });
     setBusy(false);
-    if (outcome.kind !== "succeeded") return setProblem("That did not go through. Try again.");
+    if (outcome.kind !== "succeeded") return setProblem(noticeFor(outcome));
     props.reload();
     navigate("/");
     return undefined;

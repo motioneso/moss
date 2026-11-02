@@ -16,7 +16,7 @@ import {
 import type { RecipeView, SwapChoiceView } from "../../contracts";
 import { readTool } from "../api";
 import { navigate } from "../router";
-import type { MealsWrites } from "../writes";
+import { noticeFor, type MealsWrites } from "../writes";
 
 const POLL_MS = 3000;
 
@@ -112,7 +112,7 @@ function Choice(props: {
 export function SwapScreen(props: { mealId: string; writes: MealsWrites | null }): ReactNodeLike {
   const { state, reload } = useSwap(props.mealId);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
   if (state.kind === "loading") {
     return (
@@ -143,10 +143,10 @@ export function SwapScreen(props: { mealId: string; writes: MealsWrites | null }
   async function run(input: Record<string, unknown>): Promise<boolean> {
     if (writes === null || busy) return false;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     const outcome = await writes.invoke("meals.meal.swap", { mealId: props.mealId, ...input });
     setBusy(false);
-    if (outcome.kind !== "succeeded") setFailed(true);
+    if (outcome.kind !== "succeeded") setFailed(noticeFor(outcome));
     reload();
     return outcome.kind === "succeeded";
   }
@@ -177,9 +177,9 @@ export function SwapScreen(props: { mealId: string; writes: MealsWrites | null }
           ))}
         </ul>
       ) : null}
-      {failed ? (
+      {failed !== null ? (
         <p className="jds-caption" role="alert">
-          That did not go through. Try again.
+          {failed}
         </p>
       ) : null}
       {writes !== null && !recipe.swapChoices.some(waiting) ? (

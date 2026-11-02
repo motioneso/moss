@@ -15,6 +15,7 @@ import { todayIso } from "../../external-modules/meals/src/web/format";
 import type { PlanView } from "../../external-modules/meals/src/contracts";
 import { isWriting } from "../../external-modules/meals/src/web/plan";
 import { Root } from "../../external-modules/meals/src/web/root";
+import { noticeFor } from "../../external-modules/meals/src/web/writes";
 
 const eater = (id: string, name: string) => ({
   memberId: id,
@@ -252,5 +253,71 @@ describe("Text screen", () => {
       action: "set_text",
       text: "eating out"
     });
+  });
+});
+
+const OUTCOMES = ["rejected", "invalid_input", "saved", "failed"] as const;
+const failingWith = (status: string) => vi.fn(async () => ({ status }));
+const shownMessage = (renderer: ReactTestRenderer, kind: (typeof OUTCOMES)[number]) => {
+  expect(text(renderer)).toContain(noticeFor({ kind } as never)!);
+  expect(text(renderer)).not.toContain("That did not go through");
+};
+
+describe("outcome messages", () => {
+  it.each(OUTCOMES)("the Plan tab day control shows its own message for %s", async (kind) => {
+    const renderer = await render("/m/meals", { tools: { invoke: failingWith(kind) } });
+    const select = renderer.root.findAll(
+      (node) => node.type === "select" && node.props["aria-label"] === "Cook-time limit"
+    )[0]!;
+    await act(async () => {
+      select.props.onChange({ target: { value: "20" } });
+    });
+    shownMessage(renderer, kind);
+  });
+
+  it.each(OUTCOMES)("the Move screen shows its own message for %s", async (kind) => {
+    const renderer = await render("/m/meals/plan/move/meal1", {
+      tools: { invoke: failingWith(kind) }
+    });
+    await act(async () => {
+      renderer.root
+        .findAll((node) => node.type === "button" && node.props["data-day-id"] === "d2")[0]!
+        .props.onClick();
+    });
+    await act(async () => {
+      buttons(renderer, "Move meal")[0]!.props.onClick();
+    });
+    shownMessage(renderer, kind);
+  });
+
+  it.each(OUTCOMES)("the Eaters screen shows its own message for %s", async (kind) => {
+    const renderer = await render("/m/meals/plan/eaters/meal1", {
+      tools: { invoke: failingWith(kind) }
+    });
+    const boxes = renderer.root.findAll(
+      (node) => node.type === "input" && node.props.type === "checkbox"
+    );
+    await act(async () => {
+      boxes[1]!.props.onChange({ target: { checked: false } });
+    });
+    await act(async () => {
+      buttons(renderer, "Save eaters")[0]!.props.onClick();
+    });
+    shownMessage(renderer, kind);
+  });
+
+  it.each(OUTCOMES)("the Text screen shows its own message for %s", async (kind) => {
+    const renderer = await render("/m/meals/plan/text/meal1", {
+      tools: { invoke: failingWith(kind) }
+    });
+    await act(async () => {
+      renderer.root
+        .find((node) => node.type === "input" && node.props["aria-label"] === "Text for this meal")
+        .props.onChange({ target: { value: "eating out" } });
+    });
+    await act(async () => {
+      buttons(renderer, "Save text")[0]!.props.onClick();
+    });
+    shownMessage(renderer, kind);
   });
 });

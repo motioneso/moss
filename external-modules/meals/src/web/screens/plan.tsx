@@ -18,7 +18,7 @@ import type { PantryMode, PlanView, PlannedMealView } from "../../contracts";
 import { dateRange, todayIso } from "../format";
 import { navigate } from "../router";
 import { isWriting, type PlanState } from "../plan";
-import type { MealsWrites } from "../writes";
+import { noticeFor, type MealsWrites } from "../writes";
 import type { HostActions } from "../root";
 import { DaySection, type DayActions, type MealActions } from "./plan-day";
 
@@ -107,7 +107,7 @@ function Plan(props: {
   const { plan, writes } = props;
   const today = todayIso();
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [confirmingReplan, setConfirmingReplan] = useState(false);
   const [quickMeal, setQuickMeal] = useState<PlannedMealView | null>(null);
@@ -123,45 +123,55 @@ function Plan(props: {
   async function control(input: Record<string, unknown>) {
     if (writes === null || busy) return;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     const outcome = await writes.invoke("meals.plan.control", { planId: plan.planId, ...input });
     setBusy(false);
-    if (outcome.kind === "failed" || outcome.kind === "rejected") setFailed(true);
+    setFailed(noticeFor(outcome));
     props.reload();
   }
 
   async function editMeal(meal: PlannedMealView, action: "lock" | "unlock") {
     if (writes === null || busy) return;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     const outcome = await writes.invoke("meals.meal.edit", { mealId: meal.mealId, action });
     setBusy(false);
-    if (outcome.kind !== "succeeded") setFailed(true);
+    if (outcome.kind !== "succeeded") setFailed(noticeFor(outcome));
+    props.reload();
+  }
+
+  async function deletePlan() {
+    if (writes === null || busy) return;
+    setBusy(true);
+    setFailed(null);
+    const outcome = await writes.invoke("meals.plan.delete", { planId: plan.planId });
+    setBusy(false);
+    setFailed(noticeFor(outcome));
     props.reload();
   }
 
   async function swap(meal: PlannedMealView) {
     if (writes === null || busy) return;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     const outcome = await writes.invoke("meals.meal.swap", {
       mealId: meal.mealId,
       action: "request_choices"
     });
     setBusy(false);
     if (outcome.kind === "succeeded") navigate(`/plan/swap/${meal.mealId}`);
-    else setFailed(true);
+    else setFailed(noticeFor(outcome));
   }
 
   async function quickSwap() {
     if (writes === null || busy || quickMeal === null) return;
     const maxMinutes = Number(quickMinutes);
     if (!Number.isInteger(maxMinutes) || maxMinutes < 5 || maxMinutes > 240) {
-      setFailed(true);
+      setFailed("Quick swap needs a time between 5 and 240 minutes.");
       return;
     }
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     const outcome = await writes.invoke("meals.meal.swap", {
       mealId: quickMeal.mealId,
       action: "quick",
@@ -169,17 +179,17 @@ function Plan(props: {
     });
     setBusy(false);
     setQuickMeal(null);
-    if (outcome.kind !== "succeeded") setFailed(true);
+    if (outcome.kind !== "succeeded") setFailed(noticeFor(outcome));
     props.reload();
   }
 
   async function dayEdit(input: Record<string, unknown>) {
     if (writes === null || busy) return;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     const outcome = await writes.invoke("meals.day.edit", input);
     setBusy(false);
-    if (outcome.kind !== "succeeded") setFailed(true);
+    if (outcome.kind !== "succeeded") setFailed(noticeFor(outcome));
     props.reload();
   }
 
@@ -268,6 +278,9 @@ function Plan(props: {
             <Button variant="quiet" size="sm" onClick={() => navigate("/plan/new")}>
               New plan
             </Button>
+            <Button variant="quiet" size="sm" disabled={busy} onClick={() => void deletePlan()}>
+              Delete plan
+            </Button>
           </div>
         ) : null}
         {writing ? (
@@ -329,9 +342,9 @@ function Plan(props: {
           </div>
         </div>
       ) : null}
-      {failed ? (
+      {failed !== null ? (
         <p className="jds-caption" role="alert">
-          That did not go through. Try again.
+          {failed}
         </p>
       ) : null}
 
