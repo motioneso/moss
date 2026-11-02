@@ -114,6 +114,15 @@ async function openMeals(page: Page): Promise<void> {
 async function setColorMode(page: Page, mode: "Light" | "Dark"): Promise<void> {
   await page.goto("/m/meals");
   await openSettings(page);
+  // Settings remembers the last mode it was used in, and the module step leaves it on
+  // Admin / Setup, where Appearance is not listed.
+  await press(
+    page,
+    page.getByRole("group", { name: "Settings mode", exact: true }).getByRole("button", {
+      name: "Personal",
+      exact: true
+    })
+  );
   await press(page, page.getByRole("button", { name: "Appearance", exact: true }));
   await press(
     page,
