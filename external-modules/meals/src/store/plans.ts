@@ -47,6 +47,7 @@ const MEAL_COLUMNS =
   'm.favourite_of AS "favouriteOf", m.servings_override::float8 AS "servingsOverride", ' +
   'm.recipe_id AS "recipeId", m.plain_text AS "plainText", ' +
   "to_json(m.cooked_at) #>> '{}' AS \"cookedAt\", m.attempts, m.generation, " +
+  'm.quick_max_minutes AS "quickMaxMinutes", ' +
   "coalesce((SELECT jsonb_agg(jsonb_build_object(" +
   "'memberId', e.member_id, 'portion', e.portion::float8, 'estimatedKcal', e.estimated_kcal, " +
   "'safety', e.safety, 'safetyReason', e.safety_reason) ORDER BY e.created_at, e.member_id) " +
@@ -155,6 +156,13 @@ export function sqlPlanStore(db: MealsDb): PlanStore {
         "UPDATE app.meals_plans SET state = $2, paused_reason = $3, updated_at = now() " +
           "WHERE plan_id = $1",
         [planId, state, pausedReason]
+      );
+    },
+
+    async setPlanPantryMode(planId, mode) {
+      await db.query(
+        "UPDATE app.meals_plans SET pantry_mode = $2, updated_at = now() WHERE plan_id = $1",
+        [planId, mode]
       );
     },
 
@@ -505,6 +513,105 @@ export function sqlPlanStore(db: MealsDb): PlanStore {
         [input.mealId, input.generation, input.recipeId, JSON.stringify(verdicts)]
       );
       return row?.saved === true;
+    },
+
+    async startQuickSwap(mealId, maxMinutes) {
+      const row = await one<{ generation: number }>(
+        "UPDATE app.meals_planned_meals SET job_generation = job_generation + 1, " +
+          "quick_max_minutes = $2, updated_at = now() WHERE meal_id = $1 " +
+          "RETURNING job_generation AS generation",
+        [mealId, maxMinutes]
+      );
+      return row?.generation ?? null;
+    },
+
+    async claimQuickSwap(mealId, generation) {
+      const { rows } = await db.query(
+        "UPDATE app.meals_planned_meals SET status = 'writing', failure_reason = NULL, " +
+          "updated_at = now() WHERE meal_id = $1 AND job_generation = $2 AND kind = 'recipe' " +
+          "AND cooked_at IS NULL AND status IN ('ready', 'failed') RETURNING meal_id",
+        [mealId, generation]
+      );
+      return rows.length > 0;
+    },
+
+    async saveQuickSwap(input) {
+      const { recipe } = input;
+      const ingredients = recipe.ingredients.map((line, position) => ({
+        position,
+        original_text: line.originalText,
+        name: line.name,
+        name_key: nameKey(line.name),
+        quantity: line.quantity,
+        unit: line.unit,
+        store_section: line.section,
+        check_label: line.checkLabel
+      }));
+      const eaters = input.eaters.map((eater) => ({
+        member_id: eater.memberId,
+        portion: eater.portion,
+        estimated_kcal: eater.estimatedKcal,
+        safety: eater.safety,
+        safety_reason: eater.safetyReason
+      }));
+      const row = await one<{ saved: boolean }>(
+        "WITH m AS (UPDATE app.meals_planned_meals SET status = 'ready', failure_reason = NULL, " +
+          "recipe_id = $3, attempts = $4, updated_at = now() " +
+          "WHERE meal_id = $1 AND job_generation = $2 AND status = 'writing' RETURNING meal_id), " +
+          "r AS (INSERT INTO app.meals_recipes (owner_user_id, kitchen_id, recipe_id, title, " +
+          "title_key, steps, cook_minutes, base_servings, kcal_per_serving, source) " +
+          "SELECT app.current_actor_user_id(), $5, $3, $6, $7, $8::jsonb, $9, $10, $11, " +
+          "'generated' FROM m RETURNING 1), " +
+          "i AS (INSERT INTO app.meals_recipe_ingredients (owner_user_id, kitchen_id, recipe_id, " +
+          "position, original_text, name, name_key, quantity, unit, store_section, check_label) " +
+          "SELECT app.current_actor_user_id(), $5, $3, x.position, x.original_text, x.name, " +
+          "x.name_key, x.quantity, x.unit, x.store_section, x.check_label FROM m, " +
+          "jsonb_to_recordset($12::jsonb) AS x(position smallint, original_text text, name text, " +
+          "name_key text, quantity numeric, unit text, store_section text, check_label boolean) " +
+          "RETURNING 1), " +
+          "e AS (UPDATE app.meals_planned_meal_eaters t SET portion = x.portion, " +
+          "estimated_kcal = x.estimated_kcal, safety = x.safety, safety_reason = x.safety_reason, " +
+          "updated_at = now() FROM m, jsonb_to_recordset($13::jsonb) AS x(member_id uuid, " +
+          "portion numeric, estimated_kcal integer, safety text, safety_reason text) " +
+          "WHERE t.meal_id = m.meal_id AND t.member_id = x.member_id RETURNING 1) " +
+          "SELECT EXISTS (SELECT 1 FROM m) AS saved",
+        [
+          input.mealId,
+          input.generation,
+          recipe.recipeId,
+          input.attempts,
+          input.kitchenId,
+          recipe.title,
+          recipe.titleKey,
+          JSON.stringify(recipe.steps),
+          recipe.cookMinutes,
+          recipe.baseServings,
+          recipe.kcalPerServing,
+          JSON.stringify(ingredients),
+          JSON.stringify(eaters)
+        ]
+      );
+      return row?.saved === true;
+    },
+
+    async failQuickSwap(mealId, generation, failureReason, attempts, eaters) {
+      const verdicts = (eaters ?? []).map((eater: MealEaterRow) => ({
+        member_id: eater.memberId,
+        safety: eater.safety,
+        safety_reason: eater.safetyReason
+      }));
+      const row = await one<{ failed: boolean }>(
+        "WITH m AS (UPDATE app.meals_planned_meals SET status = 'failed', failure_reason = $3, " +
+          "attempts = $4, updated_at = now() " +
+          "WHERE meal_id = $1 AND job_generation = $2 AND status = 'writing' RETURNING meal_id), " +
+          "e AS (UPDATE app.meals_planned_meal_eaters t SET safety = x.safety, " +
+          "safety_reason = x.safety_reason, updated_at = now() FROM m, " +
+          "jsonb_to_recordset($5::jsonb) AS x(member_id uuid, safety text, safety_reason text) " +
+          "WHERE t.meal_id = m.meal_id AND t.member_id = x.member_id RETURNING 1) " +
+          "SELECT EXISTS (SELECT 1 FROM m) AS failed",
+        [mealId, generation, failureReason, attempts, JSON.stringify(verdicts)]
+      );
+      return row?.failed === true;
     },
 
     async getRecipes(recipeIds) {

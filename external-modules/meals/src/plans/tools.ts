@@ -5,6 +5,7 @@
 
 import type { PantryMode, PlanView, RecipeView } from "../contracts.js";
 import { isReplaceable } from "../domain/regenerate.js";
+import { missingFor, replanScope } from "../domain/replan.js";
 import { MAX_PLAN_DAYS, parseIsoDate, planSkeleton } from "../domain/skeleton.js";
 import type { DayRow, NewPlan, PlanRow } from "../store/plan-port.js";
 import { PLAN_DAY_JOB_KIND, PLAN_DAY_QUEUE, planDayKey, type PlanDeps } from "./deps.js";
@@ -200,15 +201,43 @@ async function regenerate(deps: PlanDeps, plan: PlanRow, input: Input): Promise<
   }
   const targets = scope.filter(isReplaceable);
   if (targets.length === 0) throw new PlanInputError("There is nothing to replace");
+  await resetAndEnqueue(deps, plan, days, targets);
+}
 
+/** Resets the target meals and queues their days. The first day enqueues; the job chains. */
+async function resetAndEnqueue(
+  deps: PlanDeps,
+  plan: PlanRow,
+  days: readonly DayRow[],
+  targets: readonly { readonly mealId: string; readonly dayId: string }[]
+): Promise<void> {
   await deps.store.resetMeals(targets.map((meal) => meal.mealId));
   await deps.store.setPlanState(plan.planId, "active", null);
   const touched = new Set(targets.map((meal) => meal.dayId));
   const affected = days.filter((day) => touched.has(day.dayId));
-  // The first day enqueues; the day job chains to the rest, which only need to be pending.
   const [first, ...rest] = affected;
   for (const day of rest) await deps.store.bumpDay(day.dayId);
   if (first !== undefined) await enqueueDay(deps, plan.planId, first.dayId);
+}
+
+/**
+ * Re-plans the rest of the week from the Pantry as it is now. Past days, and today's meals
+ * whose usual time has passed, keep what they have. An ignore-mode plan is raised to prefer
+ * on hand, so the new days lean on what the household already has.
+ */
+async function replan(deps: PlanDeps, plan: PlanRow, input: Input): Promise<void> {
+  const [days, meals, kitchen] = await Promise.all([
+    deps.store.listDays(plan.planId),
+    deps.store.listMeals(plan.planId),
+    deps.kitchen()
+  ]);
+  const view = await loadView(deps, plan);
+  const zone = deps.localTimezone ?? optionalString(input, "timeZone") ?? "UTC";
+  const ids = new Set(replanScope(view, deps.now?.() ?? new Date(), zone, kitchen.slotRules));
+  const targets = meals.filter((meal) => ids.has(meal.mealId));
+  if (targets.length === 0) throw new PlanInputError("There is nothing to re-plan");
+  if (plan.pantryMode === "ignore") await deps.store.setPlanPantryMode(plan.planId, "prefer");
+  await resetAndEnqueue(deps, plan, days, targets);
 }
 
 export async function planControl(deps: PlanDeps, input: Input): Promise<PlanView> {
@@ -229,8 +258,10 @@ export async function planControl(deps: PlanDeps, input: Input): Promise<PlanVie
     await enqueueDay(deps, plan.planId, day.dayId);
   } else if (action === "regenerate") {
     await regenerate(deps, plan, input);
+  } else if (action === "replan") {
+    await replan(deps, plan, input);
   } else {
-    throw new PlanInputError("action must be stop, resume, retry_day or regenerate");
+    throw new PlanInputError("action must be stop, resume, retry_day, regenerate or replan");
   }
   return loadView(deps, await requirePlan(deps, plan.planId));
 }
@@ -260,7 +291,23 @@ export async function loadRecipe(deps: PlanDeps, mealId: string): Promise<Recipe
     deps.marks?.()
   ]);
   const own = recipes.find((recipe) => recipe.recipeId === meal.recipeId);
-  return recipeView(meal, own, kitchen, marks, swapChoiceViews(meal, choices, recipes, kitchen));
+  // What this recipe still needs to buy, from the Pantry as it is now. No Pantry store, no marks.
+  let missing: readonly string[] = [];
+  if (own !== undefined && deps.pantry !== undefined) {
+    const [items, staples] = await Promise.all([
+      deps.pantry.readItems(),
+      deps.pantry.readStaples()
+    ]);
+    missing = missingFor(own.ingredients, { items, staples });
+  }
+  return recipeView(
+    meal,
+    own,
+    kitchen,
+    marks,
+    swapChoiceViews(meal, choices, recipes, kitchen),
+    missing
+  );
 }
 
 export async function mealGet(deps: PlanDeps, input: Input): Promise<RecipeView> {

@@ -63,6 +63,7 @@ export interface MealRow {
   readonly cookedAt: string | null;
   readonly attempts: number;
   readonly generation: number;
+  readonly quickMaxMinutes: number | null;
   readonly eaters: readonly MealEaterRow[];
 }
 
@@ -147,6 +148,8 @@ export interface PlanStore {
    */
   findCurrentPlan(date: string): Promise<string | null>;
   setPlanState(planId: string, state: PlanState, pausedReason: EnqueueLimit | null): Promise<void>;
+  /** Changes the plan's Pantry mode. A re-plan uses it to force prefer on hand. */
+  setPlanPantryMode(planId: string, mode: PantryMode): Promise<void>;
   deletePlan(planId: string): Promise<boolean>;
 
   /** Every day of the plan in date order. */
@@ -242,6 +245,34 @@ export interface PlanStore {
     readonly recipeId: string;
     readonly eaters: readonly MealEaterRow[];
   }): Promise<boolean>;
+
+  /**
+   * Stores the quick swap cap on the meal and raises its job counter. Returns the new
+   * generation, or null for a missing meal.
+   */
+  startQuickSwap(mealId: string, maxMinutes: number): Promise<number | null>;
+  /** Sets a ready or failed recipe meal to writing when its job generation still matches. */
+  claimQuickSwap(mealId: string, generation: number): Promise<boolean>;
+  /**
+   * Saves the quick swap recipe onto its meal when the job generation still matches and the
+   * meal is writing. False means a newer job owns the meal and this one writes nothing.
+   */
+  saveQuickSwap(input: {
+    readonly mealId: string;
+    readonly generation: number;
+    readonly kitchenId: string;
+    readonly recipe: ReadyMeal["recipe"];
+    readonly eaters: readonly MealEaterRow[];
+    readonly attempts: number;
+  }): Promise<boolean>;
+  /** Marks a writing quick swap meal failed, when its job generation still matches. */
+  failQuickSwap(
+    mealId: string,
+    generation: number,
+    failureReason: GenerationFailure,
+    attempts: number,
+    eaters?: readonly MealEaterRow[]
+  ): Promise<boolean>;
 
   getRecipes(recipeIds: readonly string[]): Promise<readonly RecipeRow[]>;
   /** Titles of ready meals in the kitchen on days from `from` to `to`, inclusive. */

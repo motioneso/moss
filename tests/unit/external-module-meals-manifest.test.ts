@@ -98,7 +98,8 @@ const MEAL: Required<PlannedMealView> = {
   servings: 2.5,
   eaters: [EATER],
   checkLabelCount: 1,
-  cookedAt: "2026-11-02T18:00:00Z"
+  cookedAt: "2026-11-02T18:00:00Z",
+  quickMaxMinutes: 15
 };
 const PLAN: Required<PlanView> = {
   planId: "p",

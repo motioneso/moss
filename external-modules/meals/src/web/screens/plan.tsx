@@ -7,6 +7,8 @@ import {
   Button,
   Dialog,
   EmptyState,
+  Field,
+  FormLabel,
   Masthead,
   useState,
   type ReactNodeLike
@@ -107,6 +109,9 @@ function Plan(props: {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [confirmingReplan, setConfirmingReplan] = useState(false);
+  const [quickMeal, setQuickMeal] = useState<PlannedMealView | null>(null);
+  const [quickMinutes, setQuickMinutes] = useState("15");
   const writing = isWriting(plan);
   const last = plan.days[plan.days.length - 1]?.date ?? plan.startDate;
   const range = dateRange(plan.startDate, last);
@@ -148,6 +153,26 @@ function Plan(props: {
     else setFailed(true);
   }
 
+  async function quickSwap() {
+    if (writes === null || busy || quickMeal === null) return;
+    const maxMinutes = Number(quickMinutes);
+    if (!Number.isInteger(maxMinutes) || maxMinutes < 5 || maxMinutes > 240) {
+      setFailed(true);
+      return;
+    }
+    setBusy(true);
+    setFailed(false);
+    const outcome = await writes.invoke("meals.meal.swap", {
+      mealId: quickMeal.mealId,
+      action: "quick",
+      maxMinutes
+    });
+    setBusy(false);
+    setQuickMeal(null);
+    if (outcome.kind !== "succeeded") setFailed(true);
+    props.reload();
+  }
+
   const actions: MealActions | null =
     writes === null
       ? null
@@ -156,9 +181,14 @@ function Plan(props: {
           lock: (meal) => editMeal(meal, "lock"),
           unlock: (meal) => editMeal(meal, "unlock"),
           swap,
+          quickSwap: (meal) => {
+            setQuickMinutes("15");
+            setQuickMeal(meal);
+          },
           regenerateMeal: (meal) => control({ action: "regenerate", mealId: meal.mealId }),
           regenerateDay: (target) => control({ action: "regenerate", dayId: target.dayId })
         };
+  const hasDaysToCome = plan.days.some((day) => day.date >= today);
   const lockedCount = plan.days.reduce(
     (sum, day) => sum + day.meals.filter((meal) => meal.locked).length,
     0
@@ -198,6 +228,16 @@ function Plan(props: {
                 onClick={() => setConfirming(true)}
               >
                 Regenerate
+              </Button>
+            ) : null}
+            {hasDaysToCome ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={busy}
+                onClick={() => setConfirmingReplan(true)}
+              >
+                Re-plan the rest of the week
               </Button>
             ) : null}
             <Button variant="quiet" size="sm" onClick={() => navigate("/plan/new")}>
@@ -314,6 +354,73 @@ function Plan(props: {
               ? ` ${lockedCount === 1 ? "1 locked meal stays" : `${lockedCount} locked meals stay`}.`
               : ""}
           </p>
+        </Dialog>
+      ) : null}
+      {confirmingReplan ? (
+        <Dialog
+          title="Re-plan the rest of the week"
+          onClose={() => setConfirmingReplan(false)}
+          closeLabel="Close"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setConfirmingReplan(false)}>
+                Cancel
+              </Button>
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  setConfirmingReplan(false);
+                  control({
+                    action: "replan",
+                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                  });
+                }}
+              >
+                Re-plan
+              </Button>
+            </>
+          }
+        >
+          <p>
+            Moss writes the days still to come again, using what is in the Pantry now. Days already
+            written stay.
+            {lockedCount > 0
+              ? ` ${lockedCount === 1 ? "1 locked meal stays" : `${lockedCount} locked meals stay`}.`
+              : ""}
+          </p>
+        </Dialog>
+      ) : null}
+      {quickMeal !== null ? (
+        <Dialog
+          title="Quick swap"
+          onClose={() => setQuickMeal(null)}
+          closeLabel="Close"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setQuickMeal(null)}>
+                Cancel
+              </Button>
+              <Button disabled={busy} onClick={quickSwap}>
+                Swap it
+              </Button>
+            </>
+          }
+        >
+          <Field>
+            <FormLabel htmlFor="mls-quick-minutes">Ready in at most, minutes</FormLabel>
+            <input
+              id="mls-quick-minutes"
+              type="number"
+              min={5}
+              max={240}
+              className="jds-input"
+              value={quickMinutes}
+              onChange={(event: { target: { value: string } }) =>
+                setQuickMinutes(event.target.value)
+              }
+            />
+          </Field>
+          <p>Moss prefers what is on hand. The new recipe shows what is still to buy.</p>
         </Dialog>
       ) : null}
     </div>

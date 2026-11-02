@@ -134,6 +134,19 @@ export function RecipeScreen(props: { mealId: string; writes: MealsWrites | null
       <div className="mls-grid">
         <section className="mls-stack">
           <SectionHead number="01" title="Ingredients" rule />
+          {recipe.ingredients.some((line) => line.missing) ? (
+            <p className="jds-caption" role="status">
+              Still to buy:{" "}
+              {recipe.ingredients
+                .filter((line) => line.missing)
+                .map((line) => line.name)
+                .join(", ")}
+            </p>
+          ) : meal.quickMaxMinutes !== null ? (
+            <p className="jds-caption" role="status">
+              Nothing still to buy. Everything is on hand.
+            </p>
+          ) : null}
           <ul className="mls-ingredients">
             {recipe.ingredients.map((line, index) => (
               <li className="mls-ingredient" key={`${line.name}-${index}`}>

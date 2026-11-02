@@ -95,6 +95,7 @@ export interface MealActions {
   lock(meal: PlannedMealView): void;
   unlock(meal: PlannedMealView): void;
   swap(meal: PlannedMealView): void;
+  quickSwap(meal: PlannedMealView): void;
   regenerateMeal(meal: PlannedMealView): void;
   regenerateDay(day: PlanDayView): void;
 }
@@ -114,6 +115,14 @@ function MealTools(props: { meal: PlannedMealView; actions: MealActions }): Reac
       </Button>
       <Button variant="quiet" size="sm" disabled={actions.busy} onClick={() => actions.swap(meal)}>
         Swap
+      </Button>
+      <Button
+        variant="quiet"
+        size="sm"
+        disabled={actions.busy}
+        onClick={() => actions.quickSwap(meal)}
+      >
+        Quick swap
       </Button>
       {isReplaceable(meal) ? (
         <Button

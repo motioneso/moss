@@ -38,6 +38,8 @@ export interface DraftRequest {
   readonly vetoedKeys?: ReadonlySet<string>;
   /** Null when the plan ignores the Pantry or there is no Pantry store. */
   readonly pantry: PantryInput | null;
+  /** Model tier for this draft. Quick swaps ask for the interactive tier. Default reasoning. */
+  readonly tierHint?: "reasoning" | "interactive";
 }
 
 export type DraftResult =
@@ -72,7 +74,8 @@ export type SafetyResult =
 export async function checkSafety(
   deps: PlanDeps,
   draft: RecipeDraft,
-  restrictions: readonly (readonly string[])[]
+  restrictions: readonly (readonly string[])[],
+  tierHint: "reasoning" | "interactive" = "reasoning"
 ): Promise<SafetyResult> {
   const ruleVerdicts = restrictions.map((list) => deterministicSafety(draft.ingredients, list));
   if (ruleVerdicts.some((verdict) => verdict.verdict === "fail")) {
@@ -84,7 +87,7 @@ export async function checkSafety(
       draft,
       restrictions.map((list) => ({ restrictions: list }))
     ),
-    tierHint: "reasoning"
+    tierHint
   });
   if (!judged.ok) return { kind: "error", reason: judged.error };
   let modelVerdicts;
@@ -141,7 +144,7 @@ export async function draftSafeRecipe(request: DraftRequest): Promise<DraftResul
             }
           : {})
       }),
-      tierHint: "reasoning"
+      tierHint: request.tierHint ?? "reasoning"
     });
     if (!written.ok) return fail(written.error);
     let draft: RecipeDraft;
@@ -165,7 +168,7 @@ export async function draftSafeRecipe(request: DraftRequest): Promise<DraftResul
       continue;
     }
 
-    const checked = await checkSafety(deps, draft, restrictions);
+    const checked = await checkSafety(deps, draft, restrictions, request.tierHint ?? "reasoning");
     if (checked.kind === "error") return fail(checked.reason);
     if (checked.verdicts.some((verdict) => verdict.verdict === "fail")) {
       lastVerdicts = checked.verdicts;

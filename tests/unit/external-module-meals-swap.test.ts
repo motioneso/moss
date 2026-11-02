@@ -411,11 +411,11 @@ describe("Meal job", () => {
     expect(outcome).toEqual({ status: "stale" });
   });
 
-  it("rejects quick_swap until S9 and bad params", async () => {
+  it("runs quick_swap once S9 lands and still rejects bad params", async () => {
     const { setup, meals } = await planned(1);
     const params = { mealId: meals[0]!.mealId, generation: 1 };
     await expect(runMealJob(setup.deps, { ...params, mode: "quick_swap" })).rejects.toThrow(
-      "not available"
+      "no time cap"
     );
     await expect(runMealJob(setup.deps, { ...params, mode: "nope" })).rejects.toThrow("bad mode");
     await expect(

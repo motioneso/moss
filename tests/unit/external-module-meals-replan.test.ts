@@ -274,8 +274,7 @@ describe("missingFor", () => {
       ],
       staples: [{ stapleId: "s1", name: "salt" }]
     };
-    expect(missingFor([{ name: "rice" }, { name: "salt" }, { name: "carrots" }], pantry)).toEqual([
-      "carrots"
-    ]);
+    const line = (name: string) => ({ name, quantity: null, unit: null });
+    expect(missingFor([line("rice"), line("salt"), line("carrots")], pantry)).toEqual(["carrots"]);
   });
 });

@@ -74,7 +74,8 @@ export function mealView(
     servings,
     eaters,
     checkLabelCount: recipe?.ingredients.filter((line) => line.checkLabel).length ?? 0,
-    cookedAt: meal.cookedAt
+    cookedAt: meal.cookedAt,
+    quickMaxMinutes: meal.quickMaxMinutes
   };
 }
 
@@ -151,10 +152,12 @@ export function recipeView(
   recipe: RecipeRow | undefined,
   kitchen: KitchenView,
   marks: Marks = NO_MARKS,
-  swapChoices: readonly SwapChoiceView[] = []
+  swapChoices: readonly SwapChoiceView[] = [],
+  missingNames: readonly string[] = []
 ): RecipeView {
   const view = mealView(meal, recipe, membersById(kitchen), marks);
   const scale = recipe ? view.servings / recipe.baseServings : 1;
+  const missing = new Set(missingNames);
   const ingredients: IngredientView[] = (recipe?.ingredients ?? []).map((line) => ({
     originalText: line.originalText,
     name: line.name,
@@ -163,7 +166,7 @@ export function recipeView(
     display: line.quantity === null ? null : formatAmount(line.quantity * scale, line.unit),
     section: line.section,
     checkLabel: line.checkLabel,
-    missing: false
+    missing: missing.has(line.name)
   }));
   return {
     meal: view,
