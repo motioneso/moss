@@ -61,6 +61,9 @@ const MODULE_VERSION = (
   }
 ).version;
 const PLAN_DAYS = 3;
+/** The definition of done's long member name, at the 80-character limit. */
+const LONG_NAME =
+  "Alexandria-Cassandra Montgomery-Worthington the Third of Ashgrove Park Estate II";
 const MODULE_BUILD_TIMEOUT_MS = 180_000;
 const PLAN_WRITE_TIMEOUT_MS = 20 * 60_000;
 
@@ -300,8 +303,11 @@ test("arranging the week runs through the real Meals page on generated data", as
   });
 
   let plan: PlanRead;
-  await test.step("Sam joins the household and a 3-day plan is written by the real model", async () => {
-    // Household changes go through chat by design, so Sam is added by asking Moss.
+  await test.step("Sam and an 80-character name join, and a 3-day plan is written", async () => {
+    // Household changes go through chat by design, so both people are added by asking Moss. The
+    // long name has to be in the household before the plan is written: adding someone to a
+    // written plan re-checks Safety on every meal they now eat, which is minutes of work and not
+    // what this step is proving.
     await openMeals(page);
     await page.getByRole("button", { name: "Household", exact: true }).click();
     await page.getByRole("button", { name: "Ask Moss", exact: true }).click();
@@ -309,7 +315,11 @@ test("arranging the week runs through the real Meals page on generated data", as
     await expect(drawer).toBeVisible();
     await drawer
       .getByLabel("Message Moss")
-      .fill("Add Sam to my household. Sam eats lunch and dinner every day.");
+      .fill(
+        "Add Sam to my household. Sam eats lunch and dinner every day. Also add a household " +
+          `member named exactly "${LONG_NAME}", who eats lunch and dinner, has no ` +
+          "restrictions and dislikes nothing."
+      );
     await drawer.getByRole("button", { name: "Send", exact: true }).click();
     await expect
       .poll(
@@ -321,13 +331,13 @@ test("arranging the week runs through the real Meals page on generated data", as
             "meals.kitchen.get",
             {}
           );
-          return kitchen.members.map((member) => member.name).join(",");
+          return kitchen.members.map((member) => member.name);
         },
-        { timeout: 5 * 60_000, intervals: [2_000, 5_000] }
+        { timeout: 8 * 60_000, intervals: [2_000, 5_000] }
       )
-      .toContain("Sam");
+      .toEqual(expect.arrayContaining([LONG_NAME, "Sam"]));
     await drawer.getByRole("button", { name: "Close chat", exact: true }).click();
-    say("household Sam added through chat");
+    say(`household Sam and longname chars=${LONG_NAME.length} added through chat`);
     await page.getByRole("button", { name: "Plan", exact: true }).click();
     await expect(page.getByText("Plan your first week", { exact: true })).toBeVisible({
       timeout: 60_000
@@ -397,13 +407,14 @@ test("arranging the week runs through the real Meals page on generated data", as
   await test.step("who eats a dinner changes, servings follow and Safety runs again", async () => {
     const dinner = plan.days[2]!.meals.find((meal) => meal.slotName === "dinner")!;
     const before = await readMeal(page, dinner.mealId);
-    expect(before.meal.eaters.length).toBe(2);
+    expect(before.meal.eaters.length).toBe(3);
     await mealArticle(page, 2, before.meal.title!)
       .getByRole("button", { name: "Eaters", exact: true })
       .click();
     await expect(page).toHaveURL(new RegExp(`/m/meals/plan/eaters/${dinner.mealId}`));
     await shot(page, "06-eaters-screen");
     await page.getByRole("checkbox", { name: "Sam", exact: true }).click();
+    await page.getByRole("checkbox", { name: LONG_NAME, exact: true }).click();
     await page.getByRole("button", { name: "Save eaters", exact: true }).click();
     await expect(page).toHaveURL(/\/m\/meals\/?$/);
     await expect
@@ -502,59 +513,20 @@ test("arranging the week runs through the real Meals page on generated data", as
     await shot(page, "09-after-limit-regenerate");
   });
 
-  await test.step("a long name and a 200-character slot fit on the plan and its screens", async () => {
-    // Household changes go through chat by design, so the long name arrives the way a person
-    // would add someone: by asking Moss. The direct tool route is refused for writes (403).
-    const longName =
-      "Alexandria-Cassandra Montgomery-Worthington the Third of Ashgrove Park Estate II";
+  await test.step("the 80-character name fits on the plan and the eaters screen", async () => {
     await openMeals(page);
-    await page.getByRole("button", { name: "Household", exact: true }).click();
-    await page.getByRole("button", { name: "Ask Moss", exact: true }).click();
-    const drawer = page.getByRole("dialog", { name: "Chat with Moss", exact: true });
-    await expect(drawer).toBeVisible();
-    await drawer
-      .getByLabel("Message Moss")
-      .fill(
-        `Add a household member named exactly "${longName}". They eat lunch and dinner, no ` +
-          "restrictions and nothing they dislike."
-      );
-    await drawer.getByRole("button", { name: "Send", exact: true }).click();
-    await expect
-      .poll(
-        async () => {
-          const approve = drawer.getByRole("button", { name: /^(Approve|Allow)/ }).first();
-          if (await approve.isVisible().catch(() => false)) await approve.click();
-          const kitchen = await invokeTool<{ members: readonly { name: string }[] }>(
-            page,
-            "meals.kitchen.get",
-            {}
-          );
-          return kitchen.members.map((member) => member.name).join("|");
-        },
-        { timeout: 5 * 60_000, intervals: [2_000, 5_000] }
-      )
-      .toContain(longName);
-    await drawer.getByRole("button", { name: "Close chat", exact: true }).click();
-    say(`longname chars=${longName.length} added through chat`);
-
-    await page.getByRole("button", { name: "Plan", exact: true }).click();
     await waitForPlanSettled(page);
     const read = await invokeTool<PlanRead>(page, "meals.plan.get", { planId: plan.planId });
     const dinner = read.days[1]!.meals.find((meal) => meal.slotName === "dinner")!;
+    await shotOf(page, daySection(page, 1), "10-long-name-plan");
     await mealCard(page, 1, dinner.mealId)
       .getByRole("button", { name: "Eaters", exact: true })
       .click();
     await expect(page).toHaveURL(new RegExp(`/m/meals/plan/eaters/${dinner.mealId}`));
-    const longEater = page.getByRole("checkbox", { name: longName, exact: true });
+    const longEater = page.getByRole("checkbox", { name: LONG_NAME, exact: true });
     await expect(longEater).toBeVisible({ timeout: 60_000 });
-    await longEater.click();
     await shot(page, "11-long-name-eaters");
-    await page.getByRole("button", { name: "Save eaters", exact: true }).click();
-    await expect(page).toHaveURL(/\/m\/meals\/?$/);
-    await waitForPlanSettled(page);
-    const after = await readMeal(page, dinner.mealId);
-    expect(after.meal.eaters.map((eater) => eater.name)).toContain(longName);
-    say("longname shown on the plan and the eaters screen");
+    say("longname on the plan and the eaters screen");
   });
 
   await test.step("a 200-character text slot wraps on the plan", async () => {

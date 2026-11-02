@@ -12,7 +12,8 @@ vi.mock("../../external-modules/meals/src/web/api", () => ({ readTool: mockReadT
 
 import { addDays } from "../../external-modules/meals/src/domain/skeleton";
 import { todayIso } from "../../external-modules/meals/src/web/format";
-import { isWriting, type PlanView } from "../../external-modules/meals/src/web/plan";
+import type { PlanView } from "../../external-modules/meals/src/contracts";
+import { isWriting } from "../../external-modules/meals/src/web/plan";
 import { Root } from "../../external-modules/meals/src/web/root";
 
 const eater = (id: string, name: string) => ({
