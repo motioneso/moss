@@ -96,14 +96,6 @@ async function openInstanceModules(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { name: "Instance modules" })).toBeVisible();
 }
 
-async function openMeals(page: Page): Promise<void> {
-  await press(
-    page,
-    page.locator('nav[aria-label="Main"]').getByRole("link", { name: "Meals", exact: true })
-  );
-  await expect(page).toHaveURL(/\/m\/meals/);
-}
-
 /**
  * Waits for the plan to render. The stack restarts its app while the model is pinned and while a
  * module is enabled, so a load can land mid-restart and show the page's own recovery; pressing
@@ -205,65 +197,6 @@ async function readDays(page: Page): Promise<readonly (readonly MealRow[])[]> {
       })
     )
   );
-}
-
-/**
- * The plan's day statuses from the module's own read route: "writing" until every day is written
- * again, "ready" before and after, "failed" when a day gave up. One call per poll, so watching a
- * write does not load the instance's connection pool.
- */
-async function readPlanStatus(page: Page): Promise<"ready" | "writing" | "failed"> {
-  const response = await page.request.post(
-    `/api/ai/assistant-tools/${encodeURIComponent("meals.plan.current")}/invoke`,
-    { data: { input: { date: await page.evaluate(() => new Date().toISOString().slice(0, 10)) } } }
-  );
-  if (!response.ok()) return "writing";
-  const body = (await response.json()) as {
-    invocation?: { result?: { plan?: { days?: readonly { status: string }[] } | null } };
-  };
-  const days = body.invocation?.result?.plan?.days ?? [];
-  if (days.some((day) => day.status === "failed")) return "failed";
-  return days.length > 0 && days.every((day) => day.status === "ready") ? "ready" : "writing";
-}
-
-/** The household's usual time per slot, straight from the module's own read route. */
-async function readSlotTimes(page: Page): Promise<Readonly<Record<string, string | null>>> {
-  const response = await page.request.post(
-    `/api/ai/assistant-tools/${encodeURIComponent("meals.kitchen.get")}/invoke`,
-    { data: { input: {} } }
-  );
-  expect(response.ok(), `meals.kitchen.get -> ${response.status()}`).toBeTruthy();
-  const body = (await response.json()) as {
-    invocation?: {
-      result?: { slotRules?: readonly { slotName: string; usualTime: string | null }[] };
-    };
-  };
-  const rules = body.invocation?.result?.slotRules ?? [];
-  return Object.fromEntries(rules.map((rule) => [rule.slotName, rule.usualTime]));
-}
-
-interface RecipeRead {
-  readonly recipeId: string | null;
-  readonly meal: {
-    readonly title: string | null;
-    readonly status: string;
-    readonly cookMinutes: number | null;
-    readonly quickMaxMinutes: number | null;
-  };
-  readonly ingredients: readonly { readonly name: string; readonly missing: boolean }[];
-}
-
-async function readRecipe(page: Page, mealId: string): Promise<RecipeRead> {
-  const response = await page.request.post(
-    `/api/ai/assistant-tools/${encodeURIComponent("meals.meal.get")}/invoke`,
-    { data: { input: { mealId } } }
-  );
-  expect(response.ok(), `meals.meal.get -> ${response.status()}`).toBeTruthy();
-  const body = (await response.json()) as {
-    invocation?: { status?: string; result?: RecipeRead };
-  };
-  expect(body.invocation?.status, "meals.meal.get should succeed").toBe("succeeded");
-  return body.invocation!.result!;
 }
 
 async function waitForPlanSettled(page: Page): Promise<void> {
