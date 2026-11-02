@@ -398,7 +398,10 @@ export class FakePlanStore implements PlanStore {
     kept.servingsOverride = null;
     kept.eaters = input.eaters.map((eater) => ({ ...eater }));
     for (const meal of slot) {
-      if (meal.mealId !== input.keepMealId) this.meals.delete(meal.mealId);
+      if (meal.mealId === input.keepMealId) continue;
+      // A One-off meal is one person's own meal and stays out of the slot's sharing.
+      if (meal.oneOffFor !== null) continue;
+      this.meals.delete(meal.mealId);
     }
     return true;
   }

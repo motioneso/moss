@@ -202,6 +202,19 @@ describe("Change eaters", () => {
 });
 
 describe("Plain text slots", () => {
+  it("refuses to turn a locked meal into text, so its recipe is never dropped", async () => {
+    const { setup, meals } = await planned(1);
+    const dinner = meals.find((entry) => entry.slotName === "dinner")!;
+    await mealEdit(setup.deps, { mealId: dinner.mealId, action: "lock" });
+    await expect(
+      dayEdit(setup.deps, { mealId: dinner.mealId, action: "set_text", text: "eating out" })
+    ).rejects.toThrow(/unlock/i);
+    const view = await mealGet(setup.deps, { mealId: dinner.mealId });
+    expect(view.meal.kind).toBe("recipe");
+    expect(view.meal.locked).toBe(true);
+    expect(view.recipeId).not.toBeNull();
+  });
+
   it("turns a meal into text that never reaches the shopping list, and back again", async () => {
     const { setup, planId, meals } = await planned(2);
     const meal = meals.find((entry) => entry.slotName === "lunch")!;
@@ -325,6 +338,59 @@ describe("Shared or Solo for one day", () => {
     expect(dinners[0]?.eaters.map((eater) => eater.memberId).sort()).toEqual(
       [sam.memberId, you.memberId].sort()
     );
+  });
+
+  it("a Shared merge sends every merged eater back through Safety", async () => {
+    // Each Solo copy's verdict was judged against its own recipe. The merged meal keeps one
+    // recipe, so no verdict from before the merge can stand.
+    const { setup, days } = await planned(1);
+    await dayEdit(setup.deps, {
+      dayId: days[0]!.dayId,
+      action: "set_sharing",
+      slotName: "dinner",
+      sharing: "solo"
+    });
+    setup.jobs.calls.length = 0;
+    const day = await dayEdit(setup.deps, {
+      dayId: days[0]!.dayId,
+      action: "set_sharing",
+      slotName: "dinner",
+      sharing: "shared"
+    });
+    const merged = day.meals.filter((entry) => entry.slotName === "dinner");
+    expect(merged).toHaveLength(1);
+    for (const eater of merged[0]!.eaters) expect(eater.safety).toBe("pending");
+    const queued = setup.jobs.calls
+      .filter((call) => call.queue === MEAL_JOB_QUEUE)
+      .map((call) => call.params["mode"]);
+    expect(queued).toContain("safety_recheck");
+    await drain(setup);
+    const after = await mealGet(setup.deps, { mealId: merged[0]!.mealId });
+    expect(after.meal.eaters).toHaveLength(2);
+    for (const eater of after.meal.eaters) expect(eater.safety).toBe("pass");
+  });
+
+  it("a Shared override leaves a One-off meal in that slot alone", async () => {
+    const { setup, days } = await planned(1);
+    const added = await dayEdit(setup.deps, {
+      dayId: days[0]!.dayId,
+      action: "add_one_off",
+      slotName: "dinner",
+      memberId: sam.memberId
+    });
+    const oneOff = added.meals.find((entry) => entry.oneOffFor === sam.memberId)!;
+    await drain(setup);
+    const day = await dayEdit(setup.deps, {
+      dayId: days[0]!.dayId,
+      action: "set_sharing",
+      slotName: "dinner",
+      sharing: "shared"
+    });
+    const dinners = day.meals.filter((entry) => entry.slotName === "dinner");
+    const kept = dinners.find((entry) => entry.mealId === oneOff.mealId);
+    expect(kept, "the One-off dinner survives the merge").toBeDefined();
+    expect(kept?.oneOffFor).toBe(sam.memberId);
+    expect(kept?.eaters.map((eater) => eater.memberId)).toEqual([sam.memberId]);
   });
 });
 

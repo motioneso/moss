@@ -524,7 +524,8 @@ export function sqlPlanStore(db: MealsDb): PlanStore {
           "safety = EXCLUDED.safety, safety_reason = EXCLUDED.safety_reason, " +
           "updated_at = now() RETURNING 1), " +
           "gone AS (DELETE FROM app.meals_planned_meals WHERE day_id = $1 AND slot_name = $2 " +
-          "AND meal_id <> $3 AND EXISTS (SELECT 1 FROM kept) RETURNING 1) " +
+          "AND meal_id <> $3 AND one_off_for IS NULL AND EXISTS (SELECT 1 FROM kept) " +
+          "RETURNING 1) " +
           "SELECT EXISTS (SELECT 1 FROM kept) AS merged",
         [input.dayId, input.slotName, input.keepMealId, JSON.stringify(eaters)]
       );

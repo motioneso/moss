@@ -5,6 +5,7 @@
 
 import type { PlanDayView, Sharing } from "../contracts.js";
 import type { DayRow } from "../store/plan-port.js";
+import { enqueueSafetyRecheck } from "./meal-job.js";
 import type { PlanDeps } from "./deps.js";
 import { enqueueDay, findDay, planGet, PlanInputError, requireString } from "./tools.js";
 
@@ -34,11 +35,14 @@ function requireSlotName(input: Input): string {
   return requireString(input, "slotName", 40);
 }
 
-async function setText(deps: PlanDeps, input: Input): Promise<PlanDayView> {
+export async function setText(deps: PlanDeps, input: Input): Promise<PlanDayView> {
   const mealId = requireString(input, "mealId", 64);
   const text = requireString(input, "text", 200);
   const meal = await deps.store.getMeal(mealId);
   if (meal === null) throw new PlanInputError("No meal with that id");
+  if (meal.locked) {
+    throw new PlanInputError("Unlock that meal first. A text slot would drop its recipe");
+  }
   if (meal.cookedAt !== null) throw new PlanInputError("A cooked meal cannot become text");
   if (!(await deps.store.setMealText(mealId, text))) {
     throw new PlanInputError("Wait for this meal to finish writing before changing it to text");
@@ -129,19 +133,34 @@ async function setSharing(deps: PlanDeps, input: Input): Promise<PlanDayView> {
       }
     }
   } else if (meals.some((meal) => meal.sharing === "solo")) {
-    const eaters = new Map<string, (typeof meals)[number]["eaters"][number]>();
-    for (const meal of meals) {
-      for (const eater of meal.eaters) {
-        if (!eaters.has(eater.memberId)) eaters.set(eater.memberId, eater);
+    // A One-off meal is one person's own dinner, not part of the slot's sharing: the merge
+    // leaves it alone, and only the ordinary meals of the slot are joined.
+    const mergeable = meals.filter((meal) => meal.oneOffFor === null);
+    const keeper = mergeable[0];
+    if (keeper !== undefined && mergeable.length > 1) {
+      const eaters = new Map<string, (typeof meals)[number]["eaters"][number]>();
+      for (const meal of mergeable) {
+        for (const eater of meal.eaters) {
+          if (!eaters.has(eater.memberId)) eaters.set(eater.memberId, eater);
+        }
       }
+      // Each verdict in hand was judged against that meal's own recipe, and the kept meal now
+      // has a different one. They all go back to pending and Safety runs again for the recipe
+      // that survived, the same way changing eaters does.
+      const pending = [...eaters.values()].map((eater) => ({
+        ...eater,
+        safety: "pending" as const,
+        safetyReason: null
+      }));
+      const kept = await deps.store.mergeSlotMeals({
+        dayId: day.dayId,
+        slotName,
+        keepMealId: keeper.mealId,
+        eaters: pending
+      });
+      if (!kept) throw new PlanInputError("That slot's sharing cannot change");
+      await enqueueSafetyRecheck(deps, keeper.mealId);
     }
-    const kept = await deps.store.mergeSlotMeals({
-      dayId: day.dayId,
-      slotName,
-      keepMealId: meals[0]!.mealId,
-      eaters: [...eaters.values()]
-    });
-    if (!kept) throw new PlanInputError("That slot's sharing cannot change");
   }
   await deps.onPlanChange?.(day.planId, "written");
   return dayView(deps, day.planId, day.dayId);

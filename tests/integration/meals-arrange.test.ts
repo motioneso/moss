@@ -210,6 +210,54 @@ describe("meals arrange store (S8 #3892)", () => {
     });
   });
 
+  it("keeps a One-off meal out of a Shared merge", async () => {
+    const seeded = await seed(ids.userA, 4000);
+    const oneOffId = uuid(4900);
+    await asActor(ids.userA, async ({ plans }) => {
+      expect(
+        await plans.addOneOffMeal({
+          mealId: oneOffId,
+          kitchenId: seeded.kitchenId,
+          dayId: seeded.dayIds[0]!,
+          slotName: "dinner",
+          slotPosition: 0,
+          memberId: seeded.sam
+        })
+      ).toBe(true);
+      expect(await plans.setDaySharing(seeded.dayIds[0]!, "dinner", "solo")).toBe(true);
+      expect(
+        await plans.splitMeal({
+          mealId: seeded.mealIds[0]!,
+          copies: [{ mealId: uuid(4901), memberId: seeded.sam }]
+        })
+      ).toBe(true);
+      expect(
+        await plans.mergeSlotMeals({
+          dayId: seeded.dayIds[0]!,
+          slotName: "dinner",
+          keepMealId: seeded.mealIds[0]!,
+          eaters: [seeded.self, seeded.sam].map((memberId) => ({
+            memberId,
+            portion: 1,
+            estimatedKcal: 400,
+            safety: "pending" as const,
+            safetyReason: null
+          }))
+        })
+      ).toBe(true);
+      const dinners = (await plans.listDayMeals(seeded.dayIds[0]!)).filter(
+        (meal) => meal.slotName === "dinner"
+      );
+      const oneOff = dinners.find((meal) => meal.mealId === oneOffId);
+      expect(oneOff, "the One-off dinner survives").toBeDefined();
+      expect(oneOff?.oneOffFor).toBe(seeded.sam);
+      expect(oneOff?.eaters.map((eater) => eater.memberId)).toEqual([seeded.sam]);
+      const kept = dinners.find((meal) => meal.mealId === seeded.mealIds[0]);
+      expect(kept?.sharing).toBe("shared");
+      for (const eater of kept!.eaters) expect(eater.safety).toBe("pending");
+    });
+  });
+
   it("keeps another owner's meals out of reach", async () => {
     const seeded = await seed(ids.userA, 3000);
     await asActor(ids.userB, async ({ plans }) => {
