@@ -1,0 +1,390 @@
+// tests/uat/specs/3892-meals-arrange.uat.spec.ts
+//
+// #3892 Meals slice 8 live-path proof: move a dinner to another day, make a lunch "eating
+// out", set a 20-minute limit on the last day and regenerate it, change who eats a meal,
+// make one dinner Solo for a day, and add a One-off meal.
+//
+// Everything runs through the real Meals page on a disposable prod-shaped stack, signed in as
+// the harness's seeded owner through the real sign-in form. Meals is an unlisted external
+// module, so this spec builds it from this working tree, drops it on the instance's module
+// disk, restarts so the boot scan sees it, and enables it through Settings -> Admin / Setup ->
+// Instance modules, the same path an operator uses. Generation calls a real model: the
+// provisioner copies the operator's own saved sign-in into the stack
+// (tests/uat/real-chat-env.ts) and this spec pins the cheapest chat+json model. Nothing here
+// intercepts, stubs or rewrites a response. The second household member is added through the
+// module's own tool route, the same route chat uses.
+//
+// Screenshots are written only when MEALS_S8_SHOT_DIR is set, at 1280 and 390 wide.
+import { execFileSync } from "node:child_process";
+import { mkdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { expect, test, type Page } from "@playwright/test";
+
+import { buildUatComposeArgs, restartUatStack } from "../provisioner.js";
+import { bringUpRealChatModel, signInUatAdmin } from "./real-chat-signin.js";
+
+export const uatLevel = { level: "solo-admin", without: [] } as const;
+
+test.use({ trace: "off", screenshot: "off", video: "off" });
+
+const SHOT_DIR = process.env.MEALS_S8_SHOT_DIR ?? "";
+const MODULE_VERSION = (
+  JSON.parse(readFileSync("external-modules/meals/jarvis.module.json", "utf8")) as {
+    version: string;
+  }
+).version;
+const PLAN_DAYS = 3;
+const MODULE_BUILD_TIMEOUT_MS = 180_000;
+const PLAN_WRITE_TIMEOUT_MS = 20 * 60_000;
+
+function say(message: string): void {
+  console.log(`MEALS_S8 ${message}`);
+}
+
+async function shot(page: Page, name: string): Promise<void> {
+  if (SHOT_DIR === "") return;
+  mkdirSync(SHOT_DIR, { recursive: true });
+  for (const [width, height] of [
+    [1280, 900],
+    [390, 844]
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: join(SHOT_DIR, `${name}-${width}.png`) });
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+}
+
+async function openSettings(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
+}
+
+async function openInstanceModules(page: Page): Promise<void> {
+  await openSettings(page);
+  await page.getByRole("button", { name: "Admin / Setup", exact: true }).click();
+  await page.getByRole("button", { name: "Instance modules", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Instance modules" })).toBeVisible();
+}
+
+async function openMeals(page: Page): Promise<void> {
+  await page
+    .locator('nav[aria-label="Main"]')
+    .getByRole("link", { name: "Meals", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/m\/meals/);
+}
+
+interface MealRead {
+  readonly meal: {
+    readonly title: string | null;
+    readonly kind: string;
+    readonly status: string;
+    readonly plainText: string | null;
+    readonly cookMinutes: number | null;
+    readonly servings: number;
+    readonly eaters: readonly {
+      readonly memberId: string;
+      readonly name: string;
+      readonly safety: string;
+    }[];
+  };
+  readonly recipeId: string | null;
+}
+
+async function invokeTool<T>(page: Page, name: string, input: unknown): Promise<T> {
+  const response = await page.request.post(
+    `/api/ai/assistant-tools/${encodeURIComponent(name)}/invoke`,
+    { data: { input } }
+  );
+  expect(response.ok(), `${name} -> ${response.status()}`).toBeTruthy();
+  const body = (await response.json()) as {
+    invocation?: { status?: string; result?: T };
+  };
+  expect(body.invocation?.status, `${name} should succeed`).toBe("succeeded");
+  return body.invocation!.result!;
+}
+
+const readMeal = (page: Page, mealId: string) =>
+  invokeTool<MealRead>(page, "meals.meal.get", { mealId });
+
+interface PlanRead {
+  readonly planId: string;
+  readonly days: readonly {
+    readonly dayId: string;
+    readonly date: string;
+    readonly meals: readonly { readonly mealId: string; readonly slotName: string }[];
+  }[];
+}
+
+async function waitForPlanSettled(page: Page): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const regenerate = await page
+          .locator(".mls-planbar")
+          .getByRole("button", { name: "Regenerate", exact: true })
+          .count();
+        const stillWriting = await page.locator(".mls-writing").count();
+        const writingBanner = await page.getByText("Writing your plan", { exact: true }).count();
+        return regenerate > 0 && stillWriting === 0 && writingBanner === 0 ? "settled" : "busy";
+      },
+      { timeout: PLAN_WRITE_TIMEOUT_MS, intervals: [1_000, 2_000, 5_000] }
+    )
+    .toBe("settled");
+}
+
+const daySection = (page: Page, index: number) => page.locator("section.mls-day").nth(index);
+const mealArticle = (page: Page, dayIndex: number, title: string) =>
+  daySection(page, dayIndex).locator("article.mls-meal", { hasText: title });
+
+test("arranging the week runs through the real Meals page on generated data", async ({ page }) => {
+  test.setTimeout(60 * 60_000);
+  const baseURL = process.env.JARVIS_UAT_BASE_URL;
+  const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
+  if (!baseURL || !projectName) throw new Error("Disposable UAT stack required");
+
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
+  await test.step("the seeded owner signs in through the real sign-in form", async () => {
+    await signInUatAdmin(page);
+    await page.reload();
+    await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible();
+    say("owner signin=real-form session=persisted");
+  });
+
+  await test.step("Meals is built from this tree, dropped on the stack and enabled in Settings", async () => {
+    execFileSync("pnpm", ["build:external:meals"], {
+      stdio: "pipe",
+      timeout: MODULE_BUILD_TIMEOUT_MS
+    });
+    execFileSync(
+      "docker",
+      buildUatComposeArgs(projectName, [
+        "cp",
+        "external-modules/meals",
+        "jarv1s:/data/modules/meals"
+      ]),
+      { stdio: "pipe" }
+    );
+    await restartUatStack(projectName, baseURL);
+    await page.reload();
+    await openInstanceModules(page);
+
+    const externalCard = page.locator(".pane__card", { hasText: "External modules" });
+    await expect(externalCard).toBeVisible();
+    const mealsRow = externalCard
+      .locator(".set-row")
+      .filter({ has: page.getByRole("checkbox", { name: "Enable Meals", exact: true }) });
+    await expect(mealsRow).toBeVisible();
+    await expect(mealsRow.locator(".set-row__desc")).toContainText(`v${MODULE_VERSION}`);
+    const enable = mealsRow.getByRole("checkbox", { name: "Enable Meals", exact: true });
+    if (!(await enable.isChecked())) await mealsRow.locator("label.jds-switch").click();
+    await expect(enable).toBeChecked();
+
+    await restartUatStack(projectName, baseURL);
+    await page.reload();
+    await expect(
+      page.locator('nav[aria-label="Main"]').getByRole("link", { name: "Meals", exact: true })
+    ).toBeVisible({ timeout: 60_000 });
+    say(`module=meals version=${MODULE_VERSION} source=local-build enabled=real-admin-ui`);
+  });
+
+  await test.step("a real model provider is installed, logged in and pinned", async () => {
+    const model = await bringUpRealChatModel(page);
+    say(
+      `model=${model.id} providerModel=${model.providerModelId} tier=${model.tier} pinned=admin-pin`
+    );
+  });
+
+  let plan: PlanRead;
+  await test.step("Sam joins the household and a 3-day plan is written by the real model", async () => {
+    await invokeTool(page, "meals.household.save", {
+      name: "Sam",
+      mealPattern: ["lunch", "dinner"]
+    });
+    await openMeals(page);
+    await expect(page.getByText("Plan your first week", { exact: true })).toBeVisible({
+      timeout: 60_000
+    });
+    await shot(page, "01-empty-plan");
+    await page.getByRole("button", { name: "Start a plan", exact: true }).click();
+    await page.getByLabel("Days", { exact: true }).fill(String(PLAN_DAYS));
+    await page
+      .getByLabel("Anything you want", { exact: true })
+      .fill("Simple weeknight dinners and easy lunches.");
+    await page.getByRole("button", { name: "Start the plan", exact: true }).click();
+    await expect(page).toHaveURL(/\/m\/meals\/?$/);
+    await waitForPlanSettled(page);
+
+    const today = new Date().toISOString().slice(0, 10);
+    plan = await invokeTool<PlanRead>(page, "meals.plan.current", { date: today }).then(
+      (result) => (result as unknown as { plan: PlanRead }).plan
+    );
+    expect(plan.days).toHaveLength(PLAN_DAYS);
+    say(`plan days=${plan.days.length} dates=${plan.days.map((day) => day.date).join(",")}`);
+    await shot(page, "02-plan-written");
+  });
+
+  await test.step("a dinner moves to the last day through the Move screen", async () => {
+    const firstDay = plan.days[0]!;
+    const dinner = firstDay.meals.find((meal) => meal.slotName === "dinner")!;
+    const before = await readMeal(page, dinner.mealId);
+    const title = before.meal.title!;
+    await mealArticle(page, 0, title).getByRole("button", { name: "Move", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/m/meals/plan/move/${dinner.mealId}`));
+    await expect(page.getByText(title, { exact: true }).first()).toBeVisible();
+    await shot(page, "03-move-screen");
+    await page.locator(`button[data-day-id="${plan.days[2]!.dayId}"]`).click();
+    await page.getByRole("button", { name: "Move meal", exact: true }).click();
+    await expect(page).toHaveURL(/\/m\/meals\/?$/);
+    await waitForPlanSettled(page);
+    const movedDay = await invokeTool<PlanRead>(page, "meals.plan.get", {
+      planId: plan.planId
+    });
+    const onLast = movedDay.days[2]!.meals.some((meal) => meal.mealId === dinner.mealId);
+    const onFirst = movedDay.days[0]!.meals.some((meal) => meal.mealId === dinner.mealId);
+    expect(onLast, "the moved dinner is on the last day").toBe(true);
+    expect(onFirst, "the moved dinner left the first day").toBe(false);
+    say(`move meal="${title}" from=${firstDay.date} to=${plan.days[2]!.date} ok=yes`);
+    await shot(page, "04-after-move");
+  });
+
+  await test.step("a lunch becomes eating out and never reaches the list", async () => {
+    const lunch = plan.days[0]!.meals.find((meal) => meal.slotName === "lunch")!;
+    const before = await readMeal(page, lunch.mealId);
+    await mealArticle(page, 0, before.meal.title!)
+      .getByRole("button", { name: "Text", exact: true })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`/m/meals/plan/text/${lunch.mealId}`));
+    await page.getByLabel("Text for this meal", { exact: true }).fill("eating out");
+    await shot(page, "05-text-screen");
+    await page.getByRole("button", { name: "Save text", exact: true }).click();
+    await expect(page).toHaveURL(/\/m\/meals\/?$/);
+    await waitForPlanSettled(page);
+    await expect(daySection(page, 0).getByText("eating out", { exact: true })).toBeVisible();
+    const after = await readMeal(page, lunch.mealId);
+    expect(after.meal.kind).toBe("text");
+    expect(after.recipeId).toBeNull();
+    say(`text meal="${before.meal.title}" now="eating out" recipe=none`);
+  });
+
+  await test.step("who eats a dinner changes, servings follow and Safety runs again", async () => {
+    const dinner = plan.days[2]!.meals.find((meal) => meal.slotName === "dinner")!;
+    const before = await readMeal(page, dinner.mealId);
+    expect(before.meal.eaters.length).toBe(2);
+    await mealArticle(page, 2, before.meal.title!)
+      .getByRole("button", { name: "Eaters", exact: true })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`/m/meals/plan/eaters/${dinner.mealId}`));
+    await shot(page, "06-eaters-screen");
+    await page.getByRole("checkbox", { name: "Sam", exact: true }).click();
+    await page.getByRole("button", { name: "Save eaters", exact: true }).click();
+    await expect(page).toHaveURL(/\/m\/meals\/?$/);
+    await expect
+      .poll(
+        async () => {
+          const read = await readMeal(page, dinner.mealId);
+          return read.meal.eaters.every((eater) => eater.safety !== "pending")
+            ? read.meal.eaters.map((eater) => eater.name).join(",")
+            : "pending";
+        },
+        { timeout: 5 * 60_000, intervals: [2_000, 5_000] }
+      )
+      .toBe("You");
+    const after = await readMeal(page, dinner.mealId);
+    expect(after.meal.servings).toBeLessThan(before.meal.servings);
+    say(
+      `eaters meal="${before.meal.title}" now=${after.meal.eaters.map((e) => e.name).join(",")} ` +
+        `servings=${before.meal.servings}->${after.meal.servings} safety=${after.meal.eaters[0]!.safety}`
+    );
+  });
+
+  await test.step("one dinner goes Solo for that day only", async () => {
+    const dinner = plan.days[1]!.meals.find((meal) => meal.slotName === "dinner")!;
+    const section = daySection(page, 1);
+    await section
+      .locator(".mls-slot")
+      .last()
+      .getByRole("button", { name: "Make Solo", exact: true })
+      .click();
+    await expect
+      .poll(
+        async () => {
+          const read = await invokeTool<PlanRead>(page, "meals.plan.get", {
+            planId: plan.planId
+          });
+          return read.days[1]!.meals.filter((meal) => meal.slotName === "dinner").length;
+        },
+        { timeout: 60_000, intervals: [1_000, 2_000] }
+      )
+      .toBeGreaterThan(1);
+    say(`sharing day=${plan.days[1]!.date} slot=dinner soloMeals=split meal=${dinner.mealId}`);
+    await shot(page, "07-solo-day");
+  });
+
+  await test.step("a One-off meal is added for Sam and written", async () => {
+    const section = daySection(page, 2);
+    await section.getByLabel("One-off meal slot", { exact: true }).selectOption("dinner");
+    await section.getByLabel("One-off meal for", { exact: true }).selectOption({ label: "Sam" });
+    await section.getByRole("button", { name: "Add One-off", exact: true }).click();
+    await waitForPlanSettled(page);
+    const read = await invokeTool<PlanRead>(page, "meals.plan.get", { planId: plan.planId });
+    const dinners = read.days[2]!.meals.filter((meal) => meal.slotName === "dinner");
+    expect(dinners.length).toBeGreaterThan(1);
+    say(`oneoff day=${plan.days[2]!.date} slot=dinner dinners=${dinners.length}`);
+  });
+
+  await test.step("a 20-minute limit on the last day, then that day regenerates inside it", async () => {
+    const section = daySection(page, 2);
+    await section.getByLabel("Cook-time limit", { exact: true }).selectOption("20");
+    await expect
+      .poll(
+        async () => {
+          const read = await invokeTool<{
+            days: readonly { cookTimeLimitMinutes: number | null }[];
+          }>(page, "meals.plan.get", { planId: plan.planId });
+          return read.days[2]!.cookTimeLimitMinutes;
+        },
+        { timeout: 60_000, intervals: [1_000, 2_000] }
+      )
+      .toBe(20);
+    await shot(page, "08-cook-limit");
+    await section.getByRole("button", { name: "Regenerate day", exact: true }).click();
+    await waitForPlanSettled(page);
+    const read = await invokeTool<PlanRead>(page, "meals.plan.get", { planId: plan.planId });
+    const meals = read.days[2]!.meals;
+    const cooks: number[] = [];
+    for (const meal of meals) {
+      const detail = await readMeal(page, meal.mealId);
+      if (
+        detail.meal.kind === "recipe" &&
+        detail.meal.status === "ready" &&
+        detail.meal.cookMinutes !== null
+      ) {
+        cooks.push(detail.meal.cookMinutes);
+      }
+    }
+    expect(cooks.length).toBeGreaterThan(0);
+    for (const minutes of cooks) expect(minutes).toBeLessThanOrEqual(20);
+    say(`cooklimit day=${plan.days[2]!.date} limit=20 cookMinutes=${cooks.join(",")}`);
+    await shot(page, "09-after-limit-regenerate");
+  });
+
+  await test.step("dark mode renders the arranged week", async () => {
+    await openSettings(page);
+    await page.getByRole("button", { name: "Appearance", exact: true }).click();
+    await page
+      .locator('[aria-label="Color mode"]')
+      .getByRole("button", { name: "Dark", exact: true })
+      .click();
+    await openMeals(page);
+    await waitForPlanSettled(page);
+    await shot(page, "10-dark-plan");
+    say("visual dark=shown light=shown widths=1280,390");
+  });
+
+  expect(pageErrors, `page errors: ${pageErrors.join(" | ")}`).toEqual([]);
+});
