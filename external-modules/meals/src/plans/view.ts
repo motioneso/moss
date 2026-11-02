@@ -18,13 +18,7 @@ import type {
 import { isReplaceable } from "../domain/regenerate.js";
 import { calorieFit, mealShareKcal, portionFor } from "../domain/targets.js";
 import { markKey, type Marks } from "../store/cooking-port.js";
-import type {
-  DayRow,
-  MealRow,
-  PlanRow,
-  RecipeRow,
-  SwapChoiceRow
-} from "../store/plan-port.js";
+import type { DayRow, MealRow, PlanRow, RecipeRow, SwapChoiceRow } from "../store/plan-port.js";
 
 const REMOVED_MEMBER = "Removed member";
 
@@ -223,7 +217,7 @@ export function swapChoiceViews(
         cookMinutes: recipe?.cookMinutes ?? null,
         eaters: ready
           ? eatersForRecipe(meal, recipe, members).map((eater) =>
-              eaterView(eater, meal.slotName, members)
+              eaterView(eater, meal.slotName, members, recipe?.recipeId ?? null, NO_MARKS)
             )
           : []
       };
