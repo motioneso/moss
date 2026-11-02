@@ -15,6 +15,7 @@ import type {
   NutrientsView
 } from "../../external-modules/meals/src/contracts";
 import { Root } from "../../external-modules/meals/src/web/root";
+import { noticeFor } from "../../external-modules/meals/src/web/writes";
 
 const nutrients = (caloriesKcal: number | null, proteinG: number | null): NutrientsView => ({
   caloriesKcal,
@@ -320,5 +321,31 @@ describe("Log with a tools handle", () => {
       buttons(renderer, "Retry Two eggs on toast")[0]!.props.onClick();
     });
     expect(invoke).toHaveBeenCalledWith("meals.log.reestimate", { entryId: "e1" });
+  });
+});
+
+const OUTCOMES = ["rejected", "invalid_input", "saved", "failed"] as const;
+const failingWith = (status: string) => vi.fn(async () => ({ status }));
+const shownMessage = (renderer: ReactTestRenderer, kind: (typeof OUTCOMES)[number]) => {
+  expect(text(renderer)).toContain(noticeFor({ kind } as never)!);
+  expect(text(renderer)).not.toContain("That did not go through");
+};
+
+describe("outcome messages", () => {
+  it.each(OUTCOMES)("the Log shows its own message for %s", async (kind) => {
+    const renderer = await render({ tools: { invoke: failingWith(kind) } });
+    await act(async () => {
+      buttons(renderer, "Log a meal")[0]!.props.onClick();
+    });
+    const field = renderer.root.find(
+      (node) => node.type === "input" && node.props.placeholder === "Two eggs on toast"
+    );
+    await act(async () => {
+      field.props.onChange({ target: { value: "Oatmeal" } });
+    });
+    await act(async () => {
+      buttons(renderer, "Log").at(-1)!.props.onClick();
+    });
+    shownMessage(renderer, kind);
   });
 });

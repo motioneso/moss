@@ -11,6 +11,7 @@ vi.mock("../../external-modules/meals/src/web/api", () => ({ readTool: mockReadT
 
 import { todayIso } from "../../external-modules/meals/src/web/format";
 import { Root } from "../../external-modules/meals/src/web/root";
+import { noticeFor } from "../../external-modules/meals/src/web/writes";
 
 const eater = {
   memberId: "m1",
@@ -114,6 +115,13 @@ const buttons = (renderer: ReactTestRenderer, label: string) =>
   );
 
 const okInvoke = () => vi.fn(async () => ({ status: "succeeded", result: {} }));
+
+const OUTCOMES = ["rejected", "invalid_input", "saved", "failed"] as const;
+const failingWith = (status: string) => vi.fn(async () => ({ status }));
+const shownMessage = (renderer: ReactTestRenderer, kind: (typeof OUTCOMES)[number]) => {
+  expect(text(renderer)).toContain(noticeFor({ kind } as never)!);
+  expect(text(renderer)).not.toContain("That did not go through");
+};
 
 describe("Plan tab controls", () => {
   it("hides lock, swap and regenerate without a tools handle", async () => {
@@ -259,6 +267,17 @@ describe("Swap screen", () => {
     });
   };
 
+  it.each(OUTCOMES)("the choices screen shows its own message for %s", async (kind) => {
+    withChoices(["ready", "ready", "ready"]);
+    const renderer = await render("/m/meals/plan/swap/meal1", {
+      tools: { invoke: failingWith(kind) }
+    });
+    await act(async () => {
+      buttons(renderer, "Choose")[0]!.props.onClick();
+    });
+    shownMessage(renderer, kind);
+  });
+
   it("shows a ready choice and chooses it", async () => {
     withChoices(["ready", "failed", "writing"]);
     const invoke = okInvoke();
@@ -330,5 +349,15 @@ describe("New plan screen", () => {
     });
     expect(invoke).not.toHaveBeenCalled();
     expect(text(renderer)).toContain("Days must be 1 to 28.");
+  });
+});
+
+describe("outcome messages", () => {
+  it.each(OUTCOMES)("the Plan tab shows its own message for %s", async (kind) => {
+    const renderer = await render("/m/meals", { tools: { invoke: failingWith(kind) } });
+    await act(async () => {
+      buttons(renderer, "Lock")[0]!.props.onClick();
+    });
+    shownMessage(renderer, kind);
   });
 });

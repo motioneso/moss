@@ -236,3 +236,134 @@ describe("household controls", () => {
     expect(text(renderer)).toContain("Enter a name first");
   });
 });
+
+describe("cancelled destructive actions", () => {
+  it("Clear list shows no message and reloads the list when the person cancels", async () => {
+    const invoke = vi.fn(async () => ({ status: "cancelled" }));
+    const renderer = await render("/m/meals/list", { tools: { invoke } });
+    const before = mockReadTool.mock.calls.filter(([name]) => name === "meals.list.get").length;
+    await act(async () => {
+      buttons(renderer, "Clear list")[0]!.props.onClick();
+    });
+    expect(invoke).toHaveBeenCalledWith("meals.list.clear", { listId: "list1" });
+    expect(renderer.root.findAll((n) => n.props.role === "alert")).toEqual([]);
+    expect(mockReadTool.mock.calls.filter(([name]) => name === "meals.list.get").length).toBe(
+      before + 1
+    );
+    expect(buttons(renderer, "Clear list").length).toBeGreaterThan(0);
+  });
+
+  it("Delete plan shows no message and reloads the plan when the person cancels", async () => {
+    const invoke = vi.fn(async () => ({ status: "cancelled" }));
+    const renderer = await render("/m/meals", { tools: { invoke } });
+    const before = mockReadTool.mock.calls.filter(([name]) => name === "meals.plan.current").length;
+    await act(async () => {
+      buttons(renderer, "Delete plan")[0]!.props.onClick();
+    });
+    expect(invoke).toHaveBeenCalledWith("meals.plan.delete", { planId: "p1" });
+    expect(renderer.root.findAll((n) => n.props.role === "alert")).toEqual([]);
+    expect(mockReadTool.mock.calls.filter(([name]) => name === "meals.plan.current").length).toBe(
+      before + 1
+    );
+    expect(buttons(renderer, "Delete plan").length).toBeGreaterThan(0);
+  });
+});
+
+describe("outcome messages on the other screens", () => {
+  const OUTCOMES = ["rejected", "invalid_input", "saved", "failed"] as const;
+  const failingWith = (status: string) => vi.fn(async () => ({ status }));
+  const shown = (renderer: ReactTestRenderer, kind: (typeof OUTCOMES)[number]) => {
+    expect(text(renderer)).toContain(noticeFor({ kind } as never)!);
+    expect(text(renderer)).not.toContain("That did not go through");
+  };
+  const two = {
+    kitchenId: "k",
+    unitsSystem: "metric",
+    defaultPantryMode: "prefer",
+    members: [
+      {
+        memberId: "m1",
+        name: "You",
+        isSelf: true,
+        linkedAccountEmail: null,
+        calorieTarget: null,
+        macroTargets: { proteinG: null, carbG: null, fatG: null },
+        mealPattern: ["dinner"],
+        restrictions: [],
+        preferences: [],
+        favouriteRecipeIds: []
+      },
+      {
+        memberId: "m2",
+        name: "Sam",
+        isSelf: false,
+        linkedAccountEmail: null,
+        calorieTarget: null,
+        macroTargets: { proteinG: null, carbG: null, fatG: null },
+        mealPattern: ["dinner"],
+        restrictions: [],
+        preferences: [],
+        favouriteRecipeIds: []
+      }
+    ],
+    slotRules: []
+  };
+  beforeEach(() => {
+    mockReadTool.mockImplementation(async (name: string) =>
+      name === "meals.kitchen.get" ? two : { plan: null }
+    );
+  });
+
+  it.each(OUTCOMES)("Delete plan shows its own message for %s", async (kind) => {
+    mockReadTool.mockImplementation(async (name: string) => {
+      if (name === "meals.kitchen.get") return two;
+      if (name === "meals.plan.current") return { plan: PLAN };
+      throw new Error(`unexpected tool ${name}`);
+    });
+    const renderer = await render("/m/meals", { tools: { invoke: failingWith(kind) } });
+    await act(async () => {
+      buttons(renderer, "Delete plan")[0]!.props.onClick();
+    });
+    shown(renderer, kind);
+  });
+
+  it.each(OUTCOMES)("Remove person shows its own message for %s", async (kind) => {
+    const renderer = await render("/m/meals/household", { tools: { invoke: failingWith(kind) } });
+    await act(async () => {
+      buttons(renderer, "Remove Sam")[0]!.props.onClick();
+    });
+    shown(renderer, kind);
+  });
+
+  it.each(OUTCOMES)("Add person shows its own message for %s", async (kind) => {
+    const renderer = await render("/m/meals/household", { tools: { invoke: failingWith(kind) } });
+    await act(async () => {
+      buttons(renderer, "Add person")[0]!.props.onClick();
+    });
+    await act(async () => {
+      renderer.root
+        .find((n) => n.type === "input" && n.props["aria-label"] === "Name")
+        .props.onChange({ target: { value: "Pat" } });
+    });
+    await act(async () => {
+      buttons(renderer, "Save")[0]!.props.onClick();
+    });
+    shown(renderer, kind);
+  });
+
+  it.each(OUTCOMES)("Settings shows its own message for %s", async (kind) => {
+    const renderer = await render("/m/meals/settings", { tools: { invoke: failingWith(kind) } });
+    await act(async () => {
+      renderer.root.find((n) => n.props.ariaLabel === "Units").props.onChange("us");
+    });
+    shown(renderer, kind);
+  });
+
+  it.each(OUTCOMES)("Start a plan shows its own message for %s", async (kind) => {
+    const renderer = await render("/m/meals/plan/new", { tools: { invoke: failingWith(kind) } });
+    await act(async () => {
+      buttons(renderer, "Start the plan")[0]!.props.onClick();
+    });
+    shown(renderer, kind);
+  });
+});

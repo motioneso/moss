@@ -135,13 +135,13 @@
       {
         "id": "meals.plan",
         "label": "Meals",
-        "description": "The Meals page, with tabs for Plan, Shopping list, Pantry, Household and Log. Plan shows the meal plan day by day as Moss writes it, with tonight's dinner on top, an empty state until a plan exists, and controls to stop, resume, regenerate, re-plan, start a new plan or Delete plan, which asks first.",
+        "description": "The Meals page, with tabs for Plan, Shopping list, Pantry, Household and Log. Plan shows the meal plan day by day as Moss writes it, with tonight's dinner on top, an empty state until a plan exists, and controls to stop, resume, regenerate, re-plan, start a new plan or Delete plan, which asks first and cannot be undone.",
         "path": "/"
       },
       {
         "id": "meals.list",
         "label": "Shopping list",
-        "description": "The shopping list by store section, with amounts to buy, where each line came from, the plan's Pantry mode, a You have this group for what the Pantry covers, Bought, and Clear list, which asks first.",
+        "description": "The shopping list by store section, with amounts to buy, where each line came from, the plan's Pantry mode, a You have this group for what the Pantry covers, Bought, and Clear list, which asks first and cannot be undone. Removing a line you added offers Undo.",
         "path": "/list"
       },
       {
@@ -165,7 +165,7 @@
       {
         "id": "meals.household",
         "label": "Household",
-        "description": "Who eats, each person's meals of the day, Never serve list, preferences and optional calorie target. Add person and Edit open a form; Remove asks first.",
+        "description": "Who eats, each person's meals of the day, Never serve list, preferences and optional calorie target. Add person and Edit open a form; Remove asks first and cannot be undone.",
         "path": "/household"
       },
       {
@@ -178,7 +178,7 @@
         "id": "meals.log",
         "label": "Log",
         "path": "/log",
-        "description": "What you ate on a day, with calories and macros against your daily target. Log a meal by typing it, correct or delete an entry, and retry an estimate that is stuck."
+        "description": "What you ate on a day, with calories and macros against your daily target. Log a meal by typing it, correct or delete an entry (delete asks first and cannot be undone), and retry an estimate that is stuck."
       },
       {
         "id": "meals.swap",
@@ -274,7 +274,7 @@
       },
       {
         "id": "meals.page-writes",
-        "description": "Every Meals screen changes things directly: tick and mark Bought, edit the Pantry, log and correct meals, rate, mark cooked, lock, swap and arrange. Deleting a plan, removing a person, clearing the shopping list or deleting a logged meal asks first. A change that did not go through says which kind of problem it was: not accepted, not valid, saved but not shown yet, or not confirmed."
+        "description": "Every Meals screen changes things directly: tick and mark Bought, edit the Pantry, log and correct meals, rate, mark cooked, lock, swap and arrange. Deleting a plan, removing a person, clearing the shopping list or deleting a logged meal asks first and offers no Undo. Removals that can be undone (shopping lines you added, Pantry items, Bought, Mark cooked) show an Undo button instead. A change that did not go through says which kind of problem it was: not accepted, not valid, saved but not shown yet, or not confirmed."
       }
     ]
   },
