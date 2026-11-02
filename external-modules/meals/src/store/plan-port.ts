@@ -231,8 +231,17 @@ export interface PlanStore {
     readonly choiceId: string;
     readonly eaters: readonly MealEaterRow[];
   }): Promise<boolean>;
-  /** Overwrites the Safety verdict of each listed eater. */
-  saveEaterVerdicts(mealId: string, eaters: readonly MealEaterRow[]): Promise<void>;
+  /**
+   * Overwrites each listed eater's Safety verdict, but only while the meal's job generation and
+   * recipe still match the ones the check ran against. False means the job went stale and wrote
+   * nothing, so an old queued re-check cannot overwrite newer verdicts.
+   */
+  saveEaterVerdicts(input: {
+    readonly mealId: string;
+    readonly generation: number;
+    readonly recipeId: string;
+    readonly eaters: readonly MealEaterRow[];
+  }): Promise<boolean>;
 
   getRecipes(recipeIds: readonly string[]): Promise<readonly RecipeRow[]>;
   /** Titles of ready meals in the kitchen on days from `from` to `to`, inclusive. */

@@ -892,18 +892,40 @@ describe("lock, regenerate and swap (S7 #3891)", () => {
     });
   });
 
-  it("saves new Safety verdicts for current eaters", async () => {
+  it("saves new Safety verdicts for current eaters, but not for a stale generation", async () => {
     const seeded = await readyMeal(7500, "s7-verdict");
     await asPlanActor(ids.userA, async (plans) => {
-      await plans.saveEaterVerdicts(seeded.mealId, [
-        {
-          memberId: seeded.self,
-          portion: 1,
-          estimatedKcal: 500,
-          safety: "fail",
-          safetyReason: "peanut"
-        }
-      ]);
+      const generation = (await plans.startMealJob(seeded.mealId))!;
+      const verdict = {
+        memberId: seeded.self,
+        portion: 1,
+        estimatedKcal: 500,
+        safety: "fail" as const,
+        safetyReason: "peanut"
+      };
+      const meal = (await plans.getMeal(seeded.mealId))!;
+      // A newer job raised the generation after this verdict was computed.
+      await plans.startMealJob(seeded.mealId);
+      expect(
+        await plans.saveEaterVerdicts({
+          mealId: seeded.mealId,
+          generation,
+          recipeId: meal.recipeId!,
+          eaters: [verdict]
+        })
+      ).toBe(false);
+      expect((await plans.getMeal(seeded.mealId))!.eaters[0]).toMatchObject({ safety: "pass" });
+
+      // The current generation still saves.
+      const current = (await plans.startMealJob(seeded.mealId))!;
+      expect(
+        await plans.saveEaterVerdicts({
+          mealId: seeded.mealId,
+          generation: current,
+          recipeId: meal.recipeId!,
+          eaters: [verdict]
+        })
+      ).toBe(true);
       expect((await plans.getMeal(seeded.mealId))!.eaters[0]).toMatchObject({
         safety: "fail",
         safetyReason: "peanut"

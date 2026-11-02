@@ -9,6 +9,7 @@ import { runPlanDay } from "../../external-modules/meals/src/plans/day-job.js";
 import { MEAL_JOB_QUEUE, type PlanDeps } from "../../external-modules/meals/src/plans/deps.js";
 import { runMealJob } from "../../external-modules/meals/src/plans/meal-job.js";
 import { mealEdit, mealSwap } from "../../external-modules/meals/src/plans/meal-tools.js";
+import { titleKey } from "../../external-modules/meals/src/domain/repeats.js";
 import {
   mealGet,
   planControl,
@@ -201,6 +202,46 @@ describe("Swap", () => {
     expect(plan.planId).toBeTruthy();
   });
 
+  it("never offers a dish someone eating the meal rated one star", async () => {
+    const { setup, meals, planId } = await planned(1);
+    // Repeats allowed, so only the one-star rule can keep the dish out.
+    setup.store.plans.get(planId)!.allowRepeats = true;
+    const meal = meals[0]!;
+    const vetoed = "Satay";
+    const deps: PlanDeps = {
+      ...setup.deps,
+      vetoes: async () => [{ memberId: you.memberId, title: vetoed, titleKey: titleKey(vetoed) }]
+    };
+    // The model answers with the one-star dish once, then something else.
+    setup.ai.script("recipe", recipeAnswer({ title: vetoed }));
+    await mealSwap(deps, { mealId: meal.mealId, action: "request_choices" });
+    await drain(setup, deps);
+
+    const view = await mealGet(deps, { mealId: meal.mealId });
+    expect(view.swapChoices).toHaveLength(3);
+    expect(view.swapChoices.map((choice) => choice.status)).toEqual(["ready", "ready", "ready"]);
+    for (const choice of view.swapChoices) expect(choice.title).not.toBe(vetoed);
+  });
+
+  it("still offers a one-star dish when the plan's own request names it", async () => {
+    const { setup, meals, planId } = await planned(1);
+    const meal = meals[0]!;
+    const plan = setup.store.plans.get(planId)!;
+    plan.allowRepeats = true;
+    plan.requestText = "satay night please";
+    const vetoed = "Satay";
+    const deps: PlanDeps = {
+      ...setup.deps,
+      vetoes: async () => [{ memberId: you.memberId, title: vetoed, titleKey: titleKey(vetoed) }]
+    };
+    setup.ai.script("recipe", recipeAnswer({ title: vetoed }));
+    await mealSwap(deps, { mealId: meal.mealId, action: "request_choices" });
+    await drain(setup, deps);
+
+    const view = await mealGet(deps, { mealId: meal.mealId });
+    expect(view.swapChoices[0]?.title).toBe(vetoed);
+  });
+
   it("marks a choice failed when it cannot pass Safety", async () => {
     const { setup, meals } = await planned(1);
     const ai = setup.ai;
@@ -308,9 +349,10 @@ describe("Meal job", () => {
 
     const allergic = member({ ...sam, restrictions: ["peanut"] });
     const deps: PlanDeps = { ...setup.deps, kitchen: async () => kitchenOf([you, allergic]) };
+    const generation = (await setup.store.startMealJob(meal.mealId))!;
     const outcome = await runMealJob(deps, {
       mealId: meal.mealId,
-      generation: 1,
+      generation,
       mode: "safety_recheck"
     });
     expect(outcome).toEqual({ status: "done", mode: "safety_recheck" });
@@ -318,6 +360,55 @@ describe("Meal job", () => {
     expect(byId.get(you.memberId)?.safety).toBe("pass");
     expect(byId.get(sam.memberId)?.safety).toBe("fail");
     expect(byId.get(sam.memberId)?.safetyReason).toBeTruthy();
+  });
+
+  it("treats a re-check for an old generation as stale and writes no verdicts", async () => {
+    const ai = new ScriptedAi()
+      .always("recipe", recipeAnswer({ lines: ["2 tbsp peanut butter"] }))
+      .always("safety", safetyPass(2))
+      .always("estimate", ESTIMATE_800);
+    const { setup, meals } = await planned(1, ai);
+    const meal = meals[0]!;
+
+    // An old re-check is queued (generation 1), then a newer job raises the meal's generation to 2.
+    const stale = (await setup.store.startMealJob(meal.mealId))!;
+    await setup.store.startMealJob(meal.mealId);
+
+    const allergic = member({ ...sam, restrictions: ["peanut"] });
+    const deps: PlanDeps = { ...setup.deps, kitchen: async () => kitchenOf([you, allergic]) };
+    const outcome = await runMealJob(deps, {
+      mealId: meal.mealId,
+      generation: stale,
+      mode: "safety_recheck"
+    });
+    expect(outcome).toEqual({ status: "stale" });
+    // The newer verdicts stand: Sam is still a pass, not the old job's peanut failure.
+    expect(meal.eaters.find((eater) => eater.memberId === sam.memberId)?.safety).toBe("pass");
+  });
+
+  it("treats a re-check as stale when the meal's recipe changed under it", async () => {
+    const ai = new ScriptedAi()
+      .always("recipe", recipeAnswer())
+      .always("safety", safetyPass(2))
+      .always("estimate", ESTIMATE_800);
+    const { setup, meals } = await planned(2, ai);
+    const meal = meals[0]!;
+    const generation = (await setup.store.startMealJob(meal.mealId))!;
+    // Regenerate replaces the meal's recipe while the queued re-check is running.
+    const replacement = meals[1]!.recipeId!;
+    const readRecipes = setup.store.getRecipes.bind(setup.store);
+    setup.store.getRecipes = async (ids) => {
+      const rows = await readRecipes(ids);
+      meal.recipeId = replacement;
+      return rows;
+    };
+
+    const outcome = await runMealJob(setup.deps, {
+      mealId: meal.mealId,
+      generation,
+      mode: "safety_recheck"
+    });
+    expect(outcome).toEqual({ status: "stale" });
   });
 
   it("rejects quick_swap until S9 and bad params", async () => {

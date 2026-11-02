@@ -359,13 +359,21 @@ export class FakePlanStore implements PlanStore {
     return true;
   }
 
-  async saveEaterVerdicts(mealId: string, eaters: readonly MealRow["eaters"][number][]) {
-    const meal = this.meals.get(mealId);
-    if (!meal) return;
-    for (const verdict of eaters) {
+  async saveEaterVerdicts(input: {
+    mealId: string;
+    generation: number;
+    recipeId: string;
+    eaters: readonly MealRow["eaters"][number][];
+  }) {
+    const meal = this.meals.get(input.mealId);
+    if (!meal) return false;
+    if ((this.jobGenerations.get(input.mealId) ?? 0) !== input.generation) return false;
+    if (meal.recipeId !== input.recipeId) return false;
+    for (const verdict of input.eaters) {
       const row = meal.eaters.find((eater) => eater.memberId === verdict.memberId);
       if (row) Object.assign(row, { safety: verdict.safety, safetyReason: verdict.safetyReason });
     }
+    return true;
   }
 
   async getRecipes(recipeIds: readonly string[]) {

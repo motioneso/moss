@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "meals",
   "name": "Meals",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": {
@@ -184,7 +184,7 @@
         "id": "meals.swap",
         "label": "Swap a meal",
         "path": "/plan/swap",
-        "description": "Three replacement recipes for one meal, each already checked for Safety against who eats it. Choose one to replace the meal; the shopping list rebuilds and keeps its ticks. Opened from Swap on a meal in the Plan tab."
+        "description": "Three replacement recipes for one meal, each already checked for Safety against who eats it and never a dish one of them rated one star. Choose one to replace the meal; the shopping list rebuilds and keeps its ticks. Opened from Swap on a meal in the Plan tab."
       },
       {
         "id": "meals.plan-new",
@@ -240,7 +240,7 @@
       },
       {
         "id": "meals.swap-choices",
-        "description": "Swap a meal: ask for three replacement recipes, each checked for Safety first, and choose one. Moss can start and finish a swap from chat."
+        "description": "Swap a meal: ask for three replacement recipes, each checked for Safety first, and choose one. A dish someone eating the meal rated one star is not offered. Moss can start and finish a swap from chat."
       }
     ]
   },

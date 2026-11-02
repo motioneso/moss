@@ -260,13 +260,7 @@ export async function loadRecipe(deps: PlanDeps, mealId: string): Promise<Recipe
     deps.marks?.()
   ]);
   const own = recipes.find((recipe) => recipe.recipeId === meal.recipeId);
-  return recipeView(
-    meal,
-    own,
-    kitchen,
-    marks,
-    swapChoiceViews(meal, choices, recipes, kitchen)
-  );
+  return recipeView(meal, own, kitchen, marks, swapChoiceViews(meal, choices, recipes, kitchen));
 }
 
 export async function mealGet(deps: PlanDeps, input: Input): Promise<RecipeView> {

@@ -488,19 +488,23 @@ export function sqlPlanStore(db: MealsDb): PlanStore {
       return row?.chosen === true;
     },
 
-    async saveEaterVerdicts(mealId, eaters) {
-      const verdicts = eaters.map((eater) => ({
+    async saveEaterVerdicts(input) {
+      const verdicts = input.eaters.map((eater) => ({
         member_id: eater.memberId,
         safety: eater.safety,
         safety_reason: eater.safetyReason
       }));
-      await db.query(
-        "UPDATE app.meals_planned_meal_eaters t SET safety = x.safety, " +
+      const row = await one<{ saved: boolean }>(
+        "WITH m AS (SELECT meal_id FROM app.meals_planned_meals " +
+          "WHERE meal_id = $1 AND job_generation = $2 AND recipe_id = $3), " +
+          "u AS (UPDATE app.meals_planned_meal_eaters t SET safety = x.safety, " +
           "safety_reason = x.safety_reason, updated_at = now() " +
-          "FROM jsonb_to_recordset($2::jsonb) AS x(member_id uuid, safety text, safety_reason text) " +
-          "WHERE t.meal_id = $1 AND t.member_id = x.member_id",
-        [mealId, JSON.stringify(verdicts)]
+          "FROM m, jsonb_to_recordset($4::jsonb) AS x(member_id uuid, safety text, safety_reason text) " +
+          "WHERE t.meal_id = m.meal_id AND t.member_id = x.member_id RETURNING 1) " +
+          "SELECT EXISTS (SELECT 1 FROM m) AS saved",
+        [input.mealId, input.generation, input.recipeId, JSON.stringify(verdicts)]
       );
+      return row?.saved === true;
     },
 
     async getRecipes(recipeIds) {

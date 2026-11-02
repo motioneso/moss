@@ -6,6 +6,7 @@
 
 import type { MemberView } from "../contracts.js";
 import type { RecipeDraft } from "../ai/recipe.js";
+import { titleKey } from "../domain/repeats.js";
 import { addDays } from "../domain/skeleton.js";
 import { estimateKcalPerServing } from "../estimator/recipe-kcal.js";
 import type { MealEaterRow } from "../store/plan-port.js";
@@ -68,11 +69,26 @@ async function swapChoices(deps: PlanDeps, params: MealJobParams): Promise<MealJ
   const people: (MemberView | undefined)[] = meal.eaters.map((eater) =>
     members.get(eater.memberId)
   );
+  // The same one-star rule the day job applies: a dish anyone eating this meal rated one star is
+  // not offered, unless the plan's own request text names it. A swap must never surface it either.
+  const vetoes = (await deps.vetoes?.(kitchen.members.map((person) => person.memberId))) ?? [];
+  const eaterIds = new Set(meal.eaters.map((eater) => eater.memberId));
+  const asked = titleKey(plan.requestText ?? "");
+  const vetoed = vetoes.filter(
+    (veto) =>
+      eaterIds.has(veto.memberId) &&
+      !(veto.titleKey !== "" && ` ${asked} `.includes(` ${veto.titleKey} `))
+  );
+  const vetoedKeys = new Set(vetoed.map((veto) => veto.titleKey));
   const recent = plan.allowRepeats
     ? []
     : await deps.store.recentTitles(plan.kitchenId, addDays(day.date, -NO_REPEAT_DAYS), day.date);
   const current = meal.recipeId ? await deps.store.getRecipes([meal.recipeId]) : [];
-  const avoid = [...recent, ...current];
+  const avoid = [
+    ...recent,
+    ...current,
+    ...vetoed.map((veto) => ({ title: veto.title, titleKey: veto.titleKey }))
+  ];
   const avoidTitles = avoid.map((entry) => entry.title);
   const recentKeys = new Set(avoid.map((entry) => entry.titleKey));
   const pantry =
@@ -93,6 +109,7 @@ async function swapChoices(deps: PlanDeps, params: MealJobParams): Promise<MealJ
       cookTimeLimitMinutes: day.cookTimeLimitMinutes,
       avoidTitles,
       recentKeys,
+      vetoedKeys,
       pantry
     });
     if (!result.ok) {
@@ -128,7 +145,9 @@ async function swapChoices(deps: PlanDeps, params: MealJobParams): Promise<MealJ
 async function safetyRecheck(deps: PlanDeps, params: MealJobParams): Promise<MealJobOutcome> {
   const meal = await deps.store.getMeal(params.mealId);
   if (meal === null || meal.recipeId === null) return { status: "missing" };
-  const [recipe] = await deps.store.getRecipes([meal.recipeId]);
+  // The recipe this check runs against, kept so the save can refuse if it was replaced meanwhile.
+  const recipeId = meal.recipeId;
+  const [recipe] = await deps.store.getRecipes([recipeId]);
   if (recipe === undefined) return { status: "missing" };
   const kitchen = await deps.kitchen();
   const members = new Map(kitchen.members.map((person) => [person.memberId, person]));
@@ -151,8 +170,15 @@ async function safetyRecheck(deps: PlanDeps, params: MealJobParams): Promise<Mea
       safetyReason: verdict.verdict === "fail" ? verdict.reason : null
     };
   });
-  await deps.store.saveEaterVerdicts(meal.mealId, eaters);
-  return { status: "done", mode: "safety_recheck" };
+  // A re-check queued before a newer job, or before this meal's recipe was rewritten, must not
+  // overwrite the newer verdicts: the save only lands while the generation and recipe still match.
+  const saved = await deps.store.saveEaterVerdicts({
+    mealId: meal.mealId,
+    generation: params.generation,
+    recipeId,
+    eaters
+  });
+  return saved ? { status: "done", mode: "safety_recheck" } : { status: "stale" };
 }
 
 export async function runMealJob(
