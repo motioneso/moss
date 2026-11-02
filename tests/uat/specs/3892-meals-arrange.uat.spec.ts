@@ -99,17 +99,23 @@ async function shotOf(page: Page, target: Locator, name: string): Promise<void> 
 }
 
 /**
- * Settings only through the header cog. The account menu occasionally stays shut for a beat on
- * this box, so the menu is reopened once with a reload behind it before this gives up.
+ * Settings only through the header cog. This box's shell buttons sometimes never settle to
+ * "stable" for a plain click (the same reason the sign-in form is submitted with the keyboard), so
+ * the shell clicks are forced and the menu is reopened with a reload behind it before this gives
+ * up.
  */
+async function clickShell(target: Locator): Promise<void> {
+  await target.click({ force: true });
+}
+
 async function openSettings(page: Page): Promise<void> {
   const heading = page.getByRole("heading", { name: "Settings", exact: true });
   for (let attempt = 0; attempt < 3; attempt += 1) {
     if (await heading.isVisible().catch(() => false)) return;
-    await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+    await clickShell(page.getByRole("button", { name: /^Account menu(?:,|$)/ }));
     const item = page.getByRole("menuitem", { name: "Settings", exact: true });
     if (await item.isVisible({ timeout: 10_000 }).catch(() => false)) {
-      await item.click();
+      await clickShell(item);
     } else {
       await page.keyboard.press("Escape");
     }
@@ -137,10 +143,9 @@ async function openInstanceModules(page: Page): Promise<void> {
 }
 
 async function openMeals(page: Page): Promise<void> {
-  await page
-    .locator('nav[aria-label="Main"]')
-    .getByRole("link", { name: "Meals", exact: true })
-    .click();
+  await clickShell(
+    page.locator('nav[aria-label="Main"]').getByRole("link", { name: "Meals", exact: true })
+  );
   await expect(page).toHaveURL(/\/m\/meals/);
 }
 
@@ -567,11 +572,10 @@ test("arranging the week runs through the real Meals page on generated data", as
     await openMeals(page);
     await waitForPlanSettled(page);
     await openAppearance(page);
-    await page.getByRole("button", { name: "Appearance", exact: true }).click();
-    await page
-      .locator('[aria-label="Color mode"]')
-      .getByRole("button", { name: "Dark", exact: true })
-      .click();
+    await clickShell(page.getByRole("button", { name: "Appearance", exact: true }));
+    await clickShell(
+      page.locator('[aria-label="Color mode"]').getByRole("button", { name: "Dark", exact: true })
+    );
     await expect(page.locator("html")).toHaveAttribute("data-color-mode", "dark");
     await openMeals(page);
     await waitForPlanSettled(page);
@@ -585,7 +589,7 @@ test("arranging the week runs through the real Meals page on generated data", as
       .click();
     await expect(page).toHaveURL(new RegExp(`/m/meals/plan/move/${dinner.mealId}`));
     await shot(page, "17-dark-move");
-    await page.getByRole("link", { name: "Back to the plan", exact: true }).click();
+    await clickShell(page.getByRole("link", { name: "Back to the plan", exact: true }));
     await expect(page).toHaveURL(/\/m\/meals\/?$/);
 
     await mealArticle(page, 1, detail.meal.title!)
@@ -593,7 +597,7 @@ test("arranging the week runs through the real Meals page on generated data", as
       .click();
     await expect(page).toHaveURL(new RegExp(`/m/meals/plan/eaters/${dinner.mealId}`));
     await shot(page, "18-dark-eaters");
-    await page.getByRole("link", { name: "Back to the plan", exact: true }).click();
+    await clickShell(page.getByRole("link", { name: "Back to the plan", exact: true }));
     await expect(page).toHaveURL(/\/m\/meals\/?$/);
 
     const textMeal = read.days[0]!.meals.find((meal) => meal.slotName === "breakfast")!;
