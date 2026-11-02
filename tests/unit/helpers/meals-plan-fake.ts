@@ -336,6 +336,7 @@ export class FakePlanStore implements PlanStore {
       recipeId: null,
       plainText: null,
       cookedAt: null,
+      quickMaxMinutes: null,
       attempts: 0,
       generation: 0,
       eaters: [
