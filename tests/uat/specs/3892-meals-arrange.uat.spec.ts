@@ -14,7 +14,9 @@
 // intercepts, stubs or rewrites a response. The second household member is added by asking
 // Moss in chat, the way a person would.
 //
-// Screenshots are written only when MEALS_S8_SHOT_DIR is set, at 1280 and 390 wide.
+// Screenshots are written only when MEALS_S8_SHOT_DIR is set, at 1280, 390 and 320 wide, in light
+// and dark, through the empty, loading, error and long-text states the plan's definition of done
+// asks for.
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -71,7 +73,8 @@ async function shot(page: Page, name: string): Promise<void> {
   mkdirSync(SHOT_DIR, { recursive: true });
   for (const [width, height] of [
     [1280, 900],
-    [390, 844]
+    [390, 844],
+    [320, 720]
   ] as const) {
     await page.setViewportSize({ width, height });
     await page.screenshot({ path: join(SHOT_DIR, `${name}-${width}.png`) });
@@ -446,7 +449,78 @@ test("arranging the week runs through the real Meals page on generated data", as
     await shot(page, "09-after-limit-regenerate");
   });
 
-  await test.step("dark mode renders the arranged week", async () => {
+  await test.step("a long name and a 200-character slot fit on the plan and its screens", async () => {
+    const longName =
+      "Alexandria-Cassandra Montgomery-Worthington the Third of Ashgrove Park Estate II";
+    await invokeTool(page, "meals.household.save", {
+      name: longName,
+      mealPattern: ["lunch", "dinner"]
+    });
+    const read = await invokeTool<PlanRead>(page, "meals.plan.get", { planId: plan.planId });
+    const dinner = read.days[1]!.meals.find((meal) => meal.slotName === "dinner")!;
+    const before = await readMeal(page, dinner.mealId);
+    await openMeals(page);
+    await mealArticle(page, 1, before.meal.title!)
+      .getByRole("button", { name: "Eaters", exact: true })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`/m/meals/plan/eaters/${dinner.mealId}`));
+    const longEater = page.getByRole("checkbox", { name: longName, exact: true });
+    await expect(longEater).toBeVisible({ timeout: 60_000 });
+    await longEater.click();
+    await shot(page, "11-long-name-eaters");
+    await page.getByRole("button", { name: "Save eaters", exact: true }).click();
+    await expect(page).toHaveURL(/\/m\/meals\/?$/);
+    await waitForPlanSettled(page);
+    const after = await readMeal(page, dinner.mealId);
+    expect(after.meal.eaters.map((eater) => eater.name)).toContain(longName);
+    say(`longname chars=${longName.length} on the plan and the eaters screen`);
+  });
+
+  await test.step("a 200-character text slot wraps on the plan", async () => {
+    const text =
+      "Eating out at the little Vietnamese place on the corner with Sam and the neighbours, then " +
+      "ice cream by the river if the weather holds and nobody is too tired to walk back home " +
+      "tonight, before bedtime.";
+    const read = await invokeTool<PlanRead>(page, "meals.plan.get", { planId: plan.planId });
+    const breakfast = read.days[0]!.meals.find((meal) => meal.slotName === "breakfast")!;
+    const before = await readMeal(page, breakfast.mealId);
+    await mealArticle(page, 0, before.meal.title!)
+      .getByRole("button", { name: "Text", exact: true })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`/m/meals/plan/text/${breakfast.mealId}`));
+    await page.getByLabel("Text for this meal", { exact: true }).fill(text);
+    await shot(page, "12-long-text-slot");
+    await page.getByRole("button", { name: "Save text", exact: true }).click();
+    await expect(page).toHaveURL(/\/m\/meals\/?$/);
+    await waitForPlanSettled(page);
+    await expect(daySection(page, 0).getByText(text, { exact: true })).toBeVisible();
+    await shot(page, "13-long-text-plan");
+    say(`longtext chars=${text.length} wraps on the plan`);
+  });
+
+  await test.step("the plan shows its writing state while a day regenerates", async () => {
+    await openMeals(page);
+    await waitForPlanSettled(page);
+    await daySection(page, 2)
+      .getByRole("button", { name: "Regenerate day", exact: true })
+      .click({ timeout: 60_000 });
+    await expect(page.locator(".mls-writing").first()).toBeVisible({ timeout: 60_000 });
+    await shot(page, "14-loading-writing");
+    await waitForDayReady(page, plan.planId, 2);
+    await waitForPlanSettled(page);
+    say("loading=writing state captured");
+  });
+
+  await test.step("a missing meal shows the error screen", async () => {
+    await page.goto(`${baseURL}/m/meals/plan/move/00000000-0000-4000-8000-000000000000`);
+    await expect(page.getByText("Couldn't load this meal", { exact: true })).toBeVisible({
+      timeout: 60_000
+    });
+    await shot(page, "15-error-meal");
+    say("error state=shown");
+  });
+
+  await test.step("dark mode renders the plan and every arrange screen", async () => {
     await openSettings(page);
     await page.getByRole("button", { name: "Appearance", exact: true }).click();
     await page
@@ -455,8 +529,37 @@ test("arranging the week runs through the real Meals page on generated data", as
       .click();
     await openMeals(page);
     await waitForPlanSettled(page);
-    await shot(page, "10-dark-plan");
-    say("visual dark=shown light=shown widths=1280,390");
+    await shot(page, "16-dark-plan");
+
+    const read = await invokeTool<PlanRead>(page, "meals.plan.get", { planId: plan.planId });
+    const dinner = read.days[1]!.meals.find((meal) => meal.slotName === "dinner")!;
+    const detail = await readMeal(page, dinner.mealId);
+    await mealArticle(page, 1, detail.meal.title!)
+      .getByRole("button", { name: "Move", exact: true })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`/m/meals/plan/move/${dinner.mealId}`));
+    await shot(page, "17-dark-move");
+    await page.getByRole("link", { name: "Back to the plan", exact: true }).click();
+    await expect(page).toHaveURL(/\/m\/meals\/?$/);
+
+    await mealArticle(page, 1, detail.meal.title!)
+      .getByRole("button", { name: "Eaters", exact: true })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`/m/meals/plan/eaters/${dinner.mealId}`));
+    await shot(page, "18-dark-eaters");
+    await page.getByRole("link", { name: "Back to the plan", exact: true }).click();
+    await expect(page).toHaveURL(/\/m\/meals\/?$/);
+
+    const textMeal = read.days[0]!.meals.find((meal) => meal.slotName === "breakfast")!;
+    const textDetail = await readMeal(page, textMeal.mealId);
+    await mealArticle(page, 0, textDetail.meal.title ?? textDetail.meal.plainText!)
+      .getByRole("button", { name: "Text", exact: true })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`/m/meals/plan/text/${textMeal.mealId}`));
+    await shot(page, "19-dark-text");
+    say(
+      "visual light=shown dark=shown widths=1280,390,320 " + "states=empty,loading,error,long text"
+    );
   });
 
   expect(pageErrors, `page errors: ${pageErrors.join(" | ")}`).toEqual([]);
