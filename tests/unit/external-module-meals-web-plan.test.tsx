@@ -70,6 +70,7 @@ const plan = (overrides: Partial<PlanView> = {}): PlanView => ({
   state: "active",
   pausedReason: null,
   progress: { ready: 1, total: 1 },
+  replaceable: 1,
   days: [day()],
   ...overrides
 });

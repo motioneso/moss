@@ -52,7 +52,8 @@ const ownedTables = [
   "app.meals_log_estimates",
   "app.meals_log_estimate_items",
   "app.meals_ratings",
-  "app.meals_favourites"
+  "app.meals_favourites",
+  "app.meals_swap_choices"
 ];
 const bare = (table: string) => table.replace(/^app\./, "");
 
@@ -139,7 +140,7 @@ afterAll(async () => {
 
 describe("meals tables (S1 #3885)", () => {
   it("installs every migration with FORCE RLS on every table, and re-runs as a no-op", async () => {
-    expect(installedCount).toBe(24);
+    expect(installedCount).toBe(26);
     const client = new Client({ connectionString: connectionStrings.bootstrap });
     await client.connect();
     try {
@@ -751,6 +752,204 @@ describe("meal log (S6 #3890)", () => {
         const left = await client.query(`SELECT 1 FROM app.${table}`);
         expect(left.rowCount).toBe(0);
       }
+    });
+  });
+});
+
+describe("lock, regenerate and swap (S7 #3891)", () => {
+  const recipe = (n: number, title: string) => ({
+    recipeId: uuid(n),
+    title,
+    titleKey: title.toLowerCase(),
+    steps: ["Cook."],
+    cookMinutes: 20,
+    baseServings: 2,
+    kcalPerServing: 500,
+    ingredients: [
+      {
+        originalText: "1 cup rice",
+        name: "Rice",
+        quantity: 1,
+        unit: "cup",
+        section: "pantry" as const,
+        checkLabel: false
+      }
+    ]
+  });
+
+  async function readyMeal(base: number, key: string) {
+    const seeded = await seedPlan(ids.userA, base, key);
+    const dayId = seeded.days[0]!.dayId;
+    const mealId = uuid(base + 10);
+    await asPlanActor(ids.userA, async (plans) => {
+      const generation = (await plans.bumpDay(dayId))!;
+      await plans.claimDay(dayId, generation);
+      await plans.claimMeal(mealId, dayId, generation);
+      await plans.saveMealReady({
+        mealId,
+        generation,
+        attempts: 1,
+        kitchenId: seeded.kitchenId,
+        recipe: recipe(base + 100, `Original ${base}`),
+        eaters: [
+          {
+            memberId: seeded.self,
+            portion: 1,
+            estimatedKcal: 500,
+            safety: "pass",
+            safetyReason: null
+          }
+        ]
+      });
+    });
+    return { ...seeded, mealId, originalRecipeId: uuid(base + 100) };
+  }
+
+  it("locks a meal and resets only the replaceable ones", async () => {
+    const seeded = await readyMeal(7000, "s7-lock");
+    await asPlanActor(ids.userA, async (plans) => {
+      expect(await plans.setMealLocked(seeded.mealId, true)).toBe(true);
+      expect((await plans.getMeal(seeded.mealId))!.locked).toBe(true);
+      expect(await plans.resetMeals([seeded.mealId])).toBe(0);
+      expect((await plans.getMeal(seeded.mealId))!.status).toBe("ready");
+
+      await plans.setMealLocked(seeded.mealId, false);
+      expect(await plans.resetMeals([seeded.mealId])).toBe(1);
+      const meal = (await plans.getMeal(seeded.mealId))!;
+      expect(meal.status).toBe("pending");
+      expect(meal.recipeId).toBe(seeded.originalRecipeId);
+    });
+  });
+
+  it("stores three choices and puts the chosen one on the meal", async () => {
+    const seeded = await readyMeal(7200, "s7-swap");
+    await asPlanActor(ids.userA, async (plans) => {
+      const generation = (await plans.startMealJob(seeded.mealId))!;
+      expect(generation).toBe(1);
+      const choices = [1, 2, 3].map((position) => ({
+        choiceId: uuid(7200 + 20 + position),
+        position
+      }));
+      await plans.replaceSwapChoices(seeded.mealId, seeded.kitchenId, generation, choices);
+      expect((await plans.listSwapChoices(seeded.mealId)).map((row) => row.status)).toEqual([
+        "pending",
+        "pending",
+        "pending"
+      ]);
+
+      const first = choices[0]!.choiceId;
+      expect(await plans.claimSwapChoice(first, generation + 1)).toBe(false);
+      expect(await plans.claimSwapChoice(first, generation)).toBe(true);
+      const saved = {
+        choiceId: first,
+        kitchenId: seeded.kitchenId,
+        recipe: recipe(7390, "Swapped In")
+      };
+      expect(await plans.saveChoiceReady({ ...saved, generation: generation + 1 })).toBe(false);
+      expect(await plans.saveChoiceReady({ ...saved, generation })).toBe(true);
+      expect(await plans.claimSwapChoice(choices[1]!.choiceId, generation)).toBe(true);
+      expect(await plans.failChoice(choices[1]!.choiceId, generation)).toBe(true);
+
+      const eaters = [
+        {
+          memberId: seeded.self,
+          portion: 1,
+          estimatedKcal: 500,
+          safety: "pass" as const,
+          safetyReason: null
+        }
+      ];
+      // A pending or failed choice cannot be chosen.
+      expect(
+        await plans.chooseSwap({ mealId: seeded.mealId, choiceId: choices[2]!.choiceId, eaters })
+      ).toBe(false);
+      expect(
+        await plans.chooseSwap({ mealId: seeded.mealId, choiceId: choices[1]!.choiceId, eaters })
+      ).toBe(false);
+      expect(await plans.chooseSwap({ mealId: seeded.mealId, choiceId: first, eaters })).toBe(true);
+
+      const meal = (await plans.getMeal(seeded.mealId))!;
+      expect(meal).toMatchObject({ recipeId: uuid(7390), status: "ready" });
+      expect(await plans.listSwapChoices(seeded.mealId)).toEqual([]);
+    });
+  });
+
+  it("counts a new generation for each job and replaces the old choices", async () => {
+    const seeded = await readyMeal(7400, "s7-gen");
+    await asPlanActor(ids.userA, async (plans) => {
+      expect(await plans.startMealJob(seeded.mealId)).toBe(1);
+      expect(await plans.startMealJob(seeded.mealId)).toBe(2);
+      expect(await plans.startMealJob(uuid(7499))).toBeNull();
+      await plans.replaceSwapChoices(seeded.mealId, seeded.kitchenId, 1, [
+        { choiceId: uuid(7421), position: 1 }
+      ]);
+      await plans.replaceSwapChoices(seeded.mealId, seeded.kitchenId, 2, [
+        { choiceId: uuid(7431), position: 1 }
+      ]);
+      expect((await plans.listSwapChoices(seeded.mealId)).map((row) => row.choiceId)).toEqual([
+        uuid(7431)
+      ]);
+    });
+  });
+
+  it("saves new Safety verdicts for current eaters, but not for a stale generation", async () => {
+    const seeded = await readyMeal(7500, "s7-verdict");
+    await asPlanActor(ids.userA, async (plans) => {
+      const generation = (await plans.startMealJob(seeded.mealId))!;
+      const verdict = {
+        memberId: seeded.self,
+        portion: 1,
+        estimatedKcal: 500,
+        safety: "fail" as const,
+        safetyReason: "peanut"
+      };
+      const meal = (await plans.getMeal(seeded.mealId))!;
+      // A newer job raised the generation after this verdict was computed.
+      await plans.startMealJob(seeded.mealId);
+      expect(
+        await plans.saveEaterVerdicts({
+          mealId: seeded.mealId,
+          generation,
+          recipeId: meal.recipeId!,
+          eaters: [verdict]
+        })
+      ).toBe(false);
+      expect((await plans.getMeal(seeded.mealId))!.eaters[0]).toMatchObject({ safety: "pass" });
+
+      // The current generation still saves.
+      const current = (await plans.startMealJob(seeded.mealId))!;
+      expect(
+        await plans.saveEaterVerdicts({
+          mealId: seeded.mealId,
+          generation: current,
+          recipeId: meal.recipeId!,
+          eaters: [verdict]
+        })
+      ).toBe(true);
+      expect((await plans.getMeal(seeded.mealId))!.eaters[0]).toMatchObject({
+        safety: "fail",
+        safetyReason: "peanut"
+      });
+    });
+  });
+
+  it("keeps a second owner away from the first owner's choices", async () => {
+    const seeded = await readyMeal(7600, "s7-private");
+    await asPlanActor(ids.userA, async (plans) => {
+      await plans.replaceSwapChoices(seeded.mealId, seeded.kitchenId, 1, [
+        { choiceId: uuid(7621), position: 1 }
+      ]);
+    });
+    await asPlanActor(ids.userB, async (plans) => {
+      expect(await plans.listSwapChoices(seeded.mealId)).toEqual([]);
+      expect(await plans.claimSwapChoice(uuid(7621), 1)).toBe(false);
+      expect(await plans.failChoice(uuid(7621), 1)).toBe(false);
+      expect(await plans.setMealLocked(seeded.mealId, true)).toBe(false);
+      expect(await plans.resetMeals([seeded.mealId])).toBe(0);
+      expect(await plans.startMealJob(seeded.mealId)).toBeNull();
+    });
+    await asPlanActor(ids.userA, async (plans) => {
+      expect(await plans.listSwapChoices(seeded.mealId)).toHaveLength(1);
     });
   });
 });

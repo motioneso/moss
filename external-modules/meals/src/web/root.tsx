@@ -15,8 +15,10 @@ import { ListScreen } from "./screens/list";
 import { LogScreen } from "./screens/log";
 import { PantryScreen } from "./screens/pantry";
 import { PlanScreen } from "./screens/plan";
+import { PlanNewScreen } from "./screens/plan-new";
 import { RecipeScreen } from "./screens/recipe";
 import { SettingsScreen } from "./screens/settings";
+import { SwapScreen } from "./screens/swap";
 import { bindWrites } from "./writes";
 
 export type HostActions = { openAssistant: (input: { starterPrompt: string }) => void };
@@ -106,9 +108,11 @@ export function Root(props: Readonly<Record<string, unknown>>): ReactNodeLike {
   const path = useModulePath();
   const { state, reload } = useKitchen();
   const recipeId = path.startsWith("/recipe/") ? path.slice("/recipe/".length) : null;
+  const swapId = path.startsWith("/plan/swap/") ? path.slice("/plan/swap/".length) : null;
+  const planNew = path === "/plan/new";
   const staplesOpen = path === "/pantry/staples";
   const area =
-    recipeId !== null
+    recipeId !== null || swapId !== null || planNew
       ? AREAS[0]
       : AREAS.find((entry) => entry.path === (staplesOpen ? "/pantry" : path));
 
@@ -132,6 +136,14 @@ export function Root(props: Readonly<Record<string, unknown>>): ReactNodeLike {
       </div>
       {recipeId !== null ? (
         <RecipeScreen mealId={recipeId} writes={writes} />
+      ) : swapId !== null ? (
+        <SwapScreen mealId={swapId} writes={writes} />
+      ) : planNew ? (
+        <PlanNewScreen
+          writes={writes}
+          reload={reload}
+          defaultPantryMode={state.kind === "ready" ? state.kitchen.defaultPantryMode : "prefer"}
+        />
       ) : area?.value === "household" ? (
         <HouseholdScreen state={state} reload={reload} writes={writes} hostActions={hostActions} />
       ) : (area ?? AREAS[0]!).value === "plan" ? (
