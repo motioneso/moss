@@ -79,6 +79,7 @@ export class FakePlanStore implements PlanStore {
         cookedAt: null,
         attempts: 0,
         generation: 0,
+        quickMaxMinutes: null,
         eaters: meal.eaterIds.map((memberId) => ({
           memberId,
           portion: 1,
@@ -132,6 +133,11 @@ export class FakePlanStore implements PlanStore {
   ) {
     const plan = this.plans.get(planId);
     if (plan) Object.assign(plan, { state, pausedReason });
+  }
+
+  async setPlanPantryMode(planId: string, mode: PlanRow["pantryMode"]) {
+    const plan = this.plans.get(planId);
+    if (plan) plan.pantryMode = mode;
   }
 
   async deletePlan(planId: string) {
@@ -376,6 +382,55 @@ export class FakePlanStore implements PlanStore {
     return true;
   }
 
+  async startQuickSwap(mealId: string, maxMinutes: number) {
+    const meal = this.meals.get(mealId);
+    if (!meal) return null;
+    meal.quickMaxMinutes = maxMinutes;
+    const next = (this.jobGenerations.get(mealId) ?? 0) + 1;
+    this.jobGenerations.set(mealId, next);
+    return next;
+  }
+
+  async claimQuickSwap(mealId: string, generation: number) {
+    const meal = this.meals.get(mealId);
+    if (!meal || (this.jobGenerations.get(mealId) ?? 0) !== generation) return false;
+    if (meal.kind !== "recipe" || meal.cookedAt !== null) return false;
+    if (meal.status !== "ready" && meal.status !== "failed") return false;
+    Object.assign(meal, { status: "writing", failureReason: null });
+    return true;
+  }
+
+  async saveQuickSwap(input: Parameters<PlanStore["saveQuickSwap"]>[0]) {
+    const meal = this.meals.get(input.mealId);
+    if (!meal || (this.jobGenerations.get(input.mealId) ?? 0) !== input.generation) return false;
+    if (meal.status !== "writing") return false;
+    this.recipes.set(input.recipe.recipeId, { ...input.recipe, kitchenId: input.kitchenId });
+    Object.assign(meal, {
+      status: "ready",
+      failureReason: null,
+      recipeId: input.recipe.recipeId,
+      attempts: input.attempts,
+      eaters: input.eaters.map((eater) => ({ ...eater }))
+    });
+    this.readyLog.push(input.mealId);
+    return true;
+  }
+
+  async failQuickSwap(
+    mealId: string,
+    generation: number,
+    failureReason: NonNullable<MealRow["failureReason"]>,
+    attempts: number,
+    eaters?: readonly MealRow["eaters"][number][]
+  ) {
+    const meal = this.meals.get(mealId);
+    if (!meal || (this.jobGenerations.get(mealId) ?? 0) !== generation) return false;
+    if (meal.status !== "writing") return false;
+    Object.assign(meal, { status: "failed", failureReason, attempts });
+    if (eaters) meal.eaters = eaters.map((eater) => ({ ...eater }));
+    return true;
+  }
+
   async getRecipes(recipeIds: readonly string[]) {
     return recipeIds.flatMap((id) => {
       const recipe = this.recipes.get(id);
@@ -401,6 +456,7 @@ export type AiCallKind = "recipe" | "safety" | "estimate";
 export interface AiCall {
   readonly kind: AiCallKind;
   readonly tierHint: string | undefined;
+  readonly prompt: string;
 }
 
 /** Answers each call kind from its own queue; an empty queue repeats the last answer. */
@@ -430,7 +486,7 @@ export class ScriptedAi implements MealsAi {
     tierHint?: "reasoning" | "interactive" | "economy";
   }) {
     const kind = kindOf(input.schema);
-    this.calls.push({ kind, tierHint: input.tierHint });
+    this.calls.push({ kind, tierHint: input.tierHint, prompt: input.prompt });
     const queue = this.queues.get(kind) ?? [];
     const answer = queue.length > 0 ? queue.shift() : this.fallback.get(kind);
     if (answer instanceof AiError) return { ok: false as const, error: answer.kind };

@@ -86,6 +86,33 @@ async function choose(deps: PlanDeps, mealId: string, choiceId: string): Promise
   await deps.onPlanChange?.(meal.planId, "written");
 }
 
+async function quick(deps: PlanDeps, mealId: string, input: Input): Promise<void> {
+  const maxMinutes = input["maxMinutes"];
+  if (
+    typeof maxMinutes !== "number" ||
+    !Number.isInteger(maxMinutes) ||
+    maxMinutes < 5 ||
+    maxMinutes > 240
+  ) {
+    throw new PlanInputError("maxMinutes must be a whole number from 5 to 240");
+  }
+  const meal = await requireMeal(deps, mealId);
+  requireSwappable(meal);
+  const generation = await deps.store.startQuickSwap(mealId, maxMinutes);
+  if (generation === null) throw new PlanInputError("No meal with that id");
+  const result = await deps.jobs.enqueue({
+    queue: MEAL_JOB_QUEUE,
+    jobKind: MEAL_JOB_KIND,
+    idempotencyKey: mealJobKey(mealId, "quick_swap", generation),
+    params: { mealId, generation, mode: "quick_swap" }
+  });
+  if (result.status === "limited") {
+    throw new PlanInputError(
+      `Quick swapping is paused by the ${result.limit} limit. Try again later.`
+    );
+  }
+}
+
 export async function mealSwap(deps: PlanDeps, input: Input): Promise<RecipeView> {
   const mealId = requireString(input, "mealId", 64);
   const action = input["action"];
@@ -93,8 +120,10 @@ export async function mealSwap(deps: PlanDeps, input: Input): Promise<RecipeView
     await requestChoices(deps, mealId);
   } else if (action === "choose") {
     await choose(deps, mealId, requireString(input, "choiceId", 64));
+  } else if (action === "quick") {
+    await quick(deps, mealId, input);
   } else {
-    throw new PlanInputError("action must be request_choices or choose");
+    throw new PlanInputError("action must be request_choices, choose or quick");
   }
   return loadRecipe(deps, mealId);
 }

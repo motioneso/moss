@@ -48,6 +48,7 @@ const meal = (overrides: Partial<PlannedMealView> = {}): PlannedMealView => ({
   eaters: [eater()],
   checkLabelCount: 0,
   cookedAt: null,
+  quickMaxMinutes: null,
   ...overrides
 });
 

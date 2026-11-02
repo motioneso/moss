@@ -98,7 +98,9 @@ function planDeps(ctx: ModuleWorkerContext): PlanDeps {
     ensureKitchen: () => kitchens.getOrCreateKitchen(),
     ai: ctx.ai,
     jobs: ctx.jobs,
-    newId: randomUUID
+    newId: randomUUID,
+    now: () => new Date(),
+    localTimezone: ctx.localTimezone ?? undefined
   };
 }
 

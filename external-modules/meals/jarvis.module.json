@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "meals",
   "name": "Meals",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": {
@@ -241,6 +241,14 @@
       {
         "id": "meals.swap-choices",
         "description": "Swap a meal: ask for three replacement recipes, each checked for Safety first, and choose one. A dish someone eating the meal rated one star is not offered. Moss can start and finish a swap from chat."
+      },
+      {
+        "id": "meals.replan",
+        "description": "Re-plan the rest of the week from the Pantry as it is now. Past days stay as written, and today's meals stay once their usual time has passed. Locked, cooked and text meals stay."
+      },
+      {
+        "id": "meals.quick-swap",
+        "description": "Quick swap one meal for a faster one, such as a 15-minute dinner tonight. It prefers what is on hand and the recipe shows what is still to buy."
       }
     ]
   },
@@ -1236,7 +1244,8 @@
                       "servings",
                       "eaters",
                       "checkLabelCount",
-                      "cookedAt"
+                      "cookedAt",
+                      "quickMaxMinutes"
                     ],
                     "properties": {
                       "mealId": {
@@ -1484,6 +1493,16 @@
                           },
                           {
                             "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "quickMaxMinutes": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
                           },
                           {
                             "type": "null"
@@ -1687,7 +1706,8 @@
                       "servings",
                       "eaters",
                       "checkLabelCount",
-                      "cookedAt"
+                      "cookedAt",
+                      "quickMaxMinutes"
                     ],
                     "properties": {
                       "mealId": {
@@ -1940,6 +1960,16 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "quickMaxMinutes": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     }
                   }
@@ -2138,7 +2168,8 @@
                           "servings",
                           "eaters",
                           "checkLabelCount",
-                          "cookedAt"
+                          "cookedAt",
+                          "quickMaxMinutes"
                         ],
                         "properties": {
                           "mealId": {
@@ -2391,6 +2422,16 @@
                                 "type": "null"
                               }
                             ]
+                          },
+                          "quickMaxMinutes": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       }
@@ -2439,8 +2480,8 @@
     {
       "name": "meals.plan.control",
       "permissionId": "meals.plan.control",
-      "description": "Stop a plan that is being written, resume a stopped or paused plan where it left off, retry one day that failed, or regenerate. A retry keeps the day's finished meals and rewrites only the rest. Name the day by dayId or date. Retrying a day on a stopped plan resumes the whole plan, so later unwritten days are written too. A retry asked for while another day is being written waits its turn. Regenerate replaces written and failed recipe meals with new ones and never touches locked meals, cooked meals or text meals. It covers the whole plan, one day (dayId or date) or one meal (mealId). The plan's replaceable count says how many meals a whole-plan regenerate would replace. Shopping list ticks survive, and only lines whose amount changed show a new amount.",
-      "actionLabel": "Stop, resume, retry or regenerate a meal plan",
+      "description": "Stop a plan that is being written, resume a stopped or paused plan where it left off, retry one day that failed, regenerate, or re-plan the rest of the week. A retry keeps the day's finished meals and rewrites only the rest. Name the day by dayId or date. Retrying a day on a stopped plan resumes the whole plan, so later unwritten days are written too. A retry asked for while another day is being written waits its turn. Regenerate replaces written and failed recipe meals with new ones and never touches locked meals, cooked meals or text meals. It covers the whole plan, one day (dayId or date) or one meal (mealId). Re-plan replaces only the meals still to come, from the Pantry as it is now: past days stay, today's meals stay once their usual time has passed, and locked, cooked and text meals stay. A plan that ignored the Pantry is raised to prefer what is on hand. The household's own time zone decides what today means. The plan's replaceable count says how many meals a whole-plan regenerate would replace. Shopping list ticks survive, and only lines whose amount changed show a new amount.",
+      "actionLabel": "Stop, resume, retry, regenerate or re-plan a meal plan",
       "risk": "write",
       "actionFamilyId": "meal_planning",
       "executionPolicy": "auto",
@@ -2458,7 +2499,7 @@
           },
           "action": {
             "type": "string",
-            "enum": ["stop", "resume", "retry_day", "regenerate"]
+            "enum": ["stop", "resume", "retry_day", "regenerate", "replan"]
           },
           "dayId": {
             "type": "string",
@@ -2473,6 +2514,11 @@
             "type": "string",
             "minLength": 36,
             "maxLength": 36
+          },
+          "timeZone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
           }
         }
       },
@@ -2608,7 +2654,8 @@
                       "servings",
                       "eaters",
                       "checkLabelCount",
-                      "cookedAt"
+                      "cookedAt",
+                      "quickMaxMinutes"
                     ],
                     "properties": {
                       "mealId": {
@@ -2861,6 +2908,16 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "quickMaxMinutes": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     }
                   }
@@ -2984,7 +3041,8 @@
               "servings",
               "eaters",
               "checkLabelCount",
-              "cookedAt"
+              "cookedAt",
+              "quickMaxMinutes"
             ],
             "properties": {
               "mealId": {
@@ -3222,6 +3280,16 @@
                   },
                   {
                     "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "quickMaxMinutes": {
+                "anyOf": [
+                  {
+                    "type": "integer"
                   },
                   {
                     "type": "null"
@@ -3564,7 +3632,8 @@
               "servings",
               "eaters",
               "checkLabelCount",
-              "cookedAt"
+              "cookedAt",
+              "quickMaxMinutes"
             ],
             "properties": {
               "mealId": {
@@ -3733,6 +3802,16 @@
                 "anyOf": [
                   {
                     "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "quickMaxMinutes": {
+                "anyOf": [
+                  {
+                    "type": "integer"
                   },
                   {
                     "type": "null"
@@ -3884,7 +3963,8 @@
               "servings",
               "eaters",
               "checkLabelCount",
-              "cookedAt"
+              "cookedAt",
+              "quickMaxMinutes"
             ],
             "properties": {
               "mealId": {
@@ -4053,6 +4133,16 @@
                 "anyOf": [
                   {
                     "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "quickMaxMinutes": {
+                "anyOf": [
+                  {
+                    "type": "integer"
                   },
                   {
                     "type": "null"
@@ -4357,7 +4447,8 @@
               "servings",
               "eaters",
               "checkLabelCount",
-              "cookedAt"
+              "cookedAt",
+              "quickMaxMinutes"
             ],
             "properties": {
               "mealId": {
@@ -4526,6 +4617,16 @@
                 "anyOf": [
                   {
                     "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "quickMaxMinutes": {
+                "anyOf": [
+                  {
+                    "type": "integer"
                   },
                   {
                     "type": "null"
@@ -4961,7 +5062,8 @@
                   "servings",
                   "eaters",
                   "checkLabelCount",
-                  "cookedAt"
+                  "cookedAt",
+                  "quickMaxMinutes"
                 ],
                 "properties": {
                   "mealId": {
@@ -5135,6 +5237,16 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "quickMaxMinutes": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               },
@@ -5202,7 +5314,8 @@
               "servings",
               "eaters",
               "checkLabelCount",
-              "cookedAt"
+              "cookedAt",
+              "quickMaxMinutes"
             ],
             "properties": {
               "mealId": {
@@ -5349,6 +5462,16 @@
                 "anyOf": [
                   {
                     "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "quickMaxMinutes": {
+                "anyOf": [
+                  {
+                    "type": "integer"
                   },
                   {
                     "type": "null"
@@ -5553,7 +5676,7 @@
     {
       "name": "meals.meal.swap",
       "permissionId": "meals.meal.swap",
-      "description": "Swap one written or failed recipe meal. request_choices starts three replacement recipes, each checked for Safety before it shows; read the meal to see them as they finish. choose takes a ready choiceId, replaces the meal with it and rebuilds the shopping list. A locked meal can be swapped by asking.",
+      "description": "Swap one written or failed recipe meal. request_choices starts three replacement recipes, each checked for Safety before it shows; read the meal to see them as they finish. choose takes a ready choiceId, replaces the meal with it and rebuilds the shopping list. quick takes maxMinutes (5 to 240) and writes one replacement inside that time, preferring what is on hand, on the fast model tier; read the meal to see it and what is still to buy. A locked meal can be swapped by asking.",
       "actionLabel": "Swap a meal",
       "risk": "write",
       "actionFamilyId": "meal_planning",
@@ -5572,12 +5695,17 @@
           },
           "action": {
             "type": "string",
-            "enum": ["request_choices", "choose"]
+            "enum": ["request_choices", "choose", "quick"]
           },
           "choiceId": {
             "type": "string",
             "minLength": 36,
             "maxLength": 36
+          },
+          "maxMinutes": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 240
           }
         }
       },
@@ -5611,7 +5739,8 @@
               "servings",
               "eaters",
               "checkLabelCount",
-              "cookedAt"
+              "cookedAt",
+              "quickMaxMinutes"
             ],
             "properties": {
               "mealId": {
@@ -5758,6 +5887,16 @@
                 "anyOf": [
                   {
                     "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "quickMaxMinutes": {
+                "anyOf": [
+                  {
+                    "type": "integer"
                   },
                   {
                     "type": "null"

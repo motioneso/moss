@@ -41,7 +41,8 @@ const recipe = (cookedAt: string | null = null): RecipeView => ({
       }
     ],
     checkLabelCount: 0,
-    cookedAt
+    cookedAt,
+    quickMaxMinutes: null
   },
   recipeId: "r1",
   baseServings: 2,

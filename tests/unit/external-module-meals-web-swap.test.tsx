@@ -38,6 +38,7 @@ const meal = (overrides: Record<string, unknown> = {}) => ({
   eaters: [eater],
   checkLabelCount: 0,
   cookedAt: null,
+  quickMaxMinutes: null,
   ...overrides
 });
 
@@ -197,6 +198,44 @@ describe("Plan tab controls", () => {
       action: "regenerate",
       planId: "p1",
       dayId: "d1"
+    });
+  });
+
+  it("hides quick swap and re-plan without a tools handle", async () => {
+    const renderer = await render("/m/meals");
+    expect(buttons(renderer, "Quick swap")).toHaveLength(0);
+    expect(buttons(renderer, "Re-plan the rest of the week")).toHaveLength(0);
+  });
+
+  it("confirms before re-planning and sends the browser zone", async () => {
+    const invoke = okInvoke();
+    const renderer = await render("/m/meals", { tools: { invoke } });
+    await act(async () => {
+      buttons(renderer, "Re-plan the rest of the week")[0]!.props.onClick();
+    });
+    expect(invoke).not.toHaveBeenCalled();
+    await act(async () => {
+      buttons(renderer, "Re-plan")[0]!.props.onClick();
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "meals.plan.control",
+      expect.objectContaining({ action: "replan", planId: "p1", timeZone: expect.any(String) })
+    );
+  });
+
+  it("quick swaps with the minutes from the dialog", async () => {
+    const invoke = okInvoke();
+    const renderer = await render("/m/meals", { tools: { invoke } });
+    await act(async () => {
+      buttons(renderer, "Quick swap")[0]!.props.onClick();
+    });
+    await act(async () => {
+      buttons(renderer, "Swap it")[0]!.props.onClick();
+    });
+    expect(invoke).toHaveBeenCalledWith("meals.meal.swap", {
+      mealId: "meal1",
+      action: "quick",
+      maxMinutes: 15
     });
   });
 });
