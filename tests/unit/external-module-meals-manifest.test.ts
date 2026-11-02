@@ -12,6 +12,10 @@ import { describe, expect, it } from "vitest";
 import { validateExternalModuleManifest } from "@moss/module-registry";
 
 import type {
+  LogEntryView,
+  LogListResult,
+  LogSummaryResult,
+  NutrientsView,
   CalorieFit,
   EaterView,
   KitchenView,
@@ -74,7 +78,9 @@ const EATER: Required<EaterView> = {
   portion: 1.5,
   safety: "fail",
   safetyReason: "peanuts",
-  fit: FIT
+  fit: FIT,
+  rating: 4,
+  favourite: true
 };
 const MEAL: Required<PlannedMealView> = {
   mealId: "meal",
@@ -156,6 +162,52 @@ function uncovered(schema: Schema, value: unknown, path = ""): string[] {
   return [];
 }
 
+const NUTRIENTS: NutrientsView = {
+  caloriesKcal: 520,
+  proteinG: 30,
+  carbohydratesG: 40,
+  fatG: 22,
+  fiberG: 5,
+  sugarG: 6,
+  sodiumMg: 800
+};
+const LOG_ENTRY: LogEntryView = {
+  entryId: "e",
+  consumedAt: "2026-11-02T18:00:00.000Z",
+  localDate: "2026-11-02",
+  timezoneOffset: -300,
+  description: "chicken salad",
+  servingNote: "large bowl",
+  captureKind: "text",
+  estimateState: "estimated",
+  estimateRevision: 2,
+  nutrients: NUTRIENTS,
+  items: [{ label: "chicken", portionNote: "150 g", nutrients: NUTRIENTS }],
+  missingDetails: null,
+  clarificationQuestion: null
+};
+const LOG_LIST: LogListResult = {
+  entries: [LOG_ENTRY],
+  totals: {
+    localDate: "2026-11-02",
+    nutrients: NUTRIENTS,
+    incomplete: false,
+    entriesWithoutEstimate: 0
+  },
+  targets: { caloriesKcal: 2000, proteinG: 120, carbG: 200, fatG: 70 },
+  calorieFit: { targetKcal: 2000, estimatedKcal: 520, band: "under", differenceKcal: -1480 },
+  truncated: false,
+  totalCount: 1
+};
+const LOG_SUMMARY: LogSummaryResult = {
+  fromLocalDate: "2026-11-01",
+  toLocalDate: "2026-11-02",
+  nutrients: NUTRIENTS,
+  incomplete: false,
+  entriesWithoutEstimate: 0,
+  daysWithEntries: 2
+};
+
 const LINE: Required<ListLineView> = {
   lineId: "l",
   name: "milk",
@@ -205,7 +257,7 @@ describe("meals manifest", () => {
     expect(result.ok, JSON.stringify(!result.ok ? result.errors : [])).toBe(true);
   });
 
-  it("declares the S1 to S5 tools with their risks and handlers", () => {
+  it("declares the S1 to S6 tools with their risks and handlers", () => {
     const tools = loadManifest().assistantTools as Array<Record<string, unknown>>;
     expect(tools.map((entry) => [entry.name, entry.risk, entry.handler])).toEqual([
       ["meals.kitchen.get", "read", "kitchen.get"],
@@ -218,6 +270,10 @@ describe("meals manifest", () => {
       ["meals.plan.control", "write", "plan.control"],
       ["meals.plan.delete", "destructive", "plan.delete"],
       ["meals.meal.get", "read", "meal.get"],
+      ["meals.meal.cooked", "write", "meal.cooked"],
+      ["meals.meal.servings", "write", "meal.servings"],
+      ["meals.meal.rate", "write", "meal.rate"],
+      ["meals.favourites.edit", "write", "favourites.edit"],
       ["meals.list.get", "read", "list.get"],
       ["meals.list.build", "write", "list.build"],
       ["meals.list.edit", "write", "list.edit"],
@@ -225,8 +281,17 @@ describe("meals manifest", () => {
       ["meals.list.clear", "destructive", "list.clear"],
       ["meals.pantry.get", "read", "pantry.get"],
       ["meals.pantry.edit", "write", "pantry.edit"],
-      ["meals.undo", "write", "undo"]
+      ["meals.undo", "write", "undo"],
+      ["meals.log.list", "read", "log.list"],
+      ["meals.log.summarize", "read", "log.summarize"],
+      ["meals.log.add", "write", "log.add"],
+      ["meals.log.reestimate", "write", "log.reestimate"],
+      ["meals.log.correct", "write", "log.correct"],
+      ["meals.log.delete", "destructive", "log.delete"]
     ]);
+    expect(tool("meals.log.delete").selfOperationGrant).toBe("confirm_always");
+    expect(tool("meals.log.add").selfOperationGrant).toBe("granted_at_install");
+    expect(tool("meals.log.correct").actionFamilyId).toBe("meal_logging");
     expect(tool("meals.list.clear").selfOperationGrant).toBe("confirm_always");
     expect(tool("meals.list.bought").selfOperationGrant).toBe("granted_at_install");
     expect(tool("meals.household.remove").selfOperationGrant).toBe("confirm_always");
@@ -256,7 +321,7 @@ describe("meals manifest", () => {
     );
   });
 
-  it("declares the day queue with ids-only params and the ten-minute ceiling", () => {
+  it("declares the day and estimate queues with ids-only params", () => {
     const queues = (loadManifest().worker as { queues: Array<Record<string, unknown>> }).queues;
     expect(queues).toEqual([
       {
@@ -273,11 +338,24 @@ describe("meals manifest", () => {
             generation: { type: "integer", min: 1, max: 100000 }
           }
         }
+      },
+      {
+        name: "meals.log-estimate",
+        handler: "log.estimate",
+        retryLimit: 2,
+        allowModuleEnqueue: true,
+        paramsSchema: {
+          type: "object",
+          fields: {
+            entryId: { type: "uuid" },
+            revision: { type: "integer", min: 1, max: 1000000 }
+          }
+        }
       }
     ]);
   });
 
-  it("owns exactly the S1 to S5 tables", () => {
+  it("owns exactly the S1 to S6 tables", () => {
     expect(loadManifest().database).toEqual({
       ownedTables: [
         "app.meals_kitchens",
@@ -293,7 +371,12 @@ describe("meals manifest", () => {
         "app.meals_shopping_list_items",
         "app.meals_pantry_items",
         "app.meals_undo_actions",
-        "app.meals_staples"
+        "app.meals_staples",
+        "app.meals_log_entries",
+        "app.meals_log_estimates",
+        "app.meals_log_estimate_items",
+        "app.meals_ratings",
+        "app.meals_favourites"
       ]
     });
   });
@@ -309,6 +392,8 @@ describe("meals manifest", () => {
     ["meals.plan.control", PLAN],
     ["meals.plan.delete", { deleted: true }],
     ["meals.meal.get", RECIPE],
+    ["meals.meal.servings", RECIPE],
+    ["meals.meal.rate", RECIPE],
     ["meals.list.get", LIST],
     ["meals.list.build", LIST],
     ["meals.list.edit", { list: LIST, undo: UNDO }],
@@ -316,7 +401,13 @@ describe("meals manifest", () => {
     ["meals.list.clear", { cleared: true }],
     ["meals.pantry.get", PANTRY],
     ["meals.pantry.edit", { pantry: PANTRY, undo: UNDO }],
-    ["meals.undo", { restored: 1, skipped: 0 }]
+    ["meals.undo", { restored: 1, skipped: 0 }],
+    ["meals.log.list", LOG_LIST],
+    ["meals.log.summarize", LOG_SUMMARY],
+    ["meals.log.add", { entry: LOG_ENTRY }],
+    ["meals.log.reestimate", { entry: LOG_ENTRY }],
+    ["meals.log.correct", { entry: LOG_ENTRY }],
+    ["meals.log.delete", { entryId: "e", deleted: true }]
   ])("%s output schema covers every view field", (name, sample) => {
     expect(uncovered(tool(name).outputSchema as Schema, sample)).toEqual([]);
   });
@@ -344,6 +435,7 @@ describe("meals manifest", () => {
     expect(appMap.screens.map((screen) => [screen.id, screen.path])).toEqual(
       expect.arrayContaining([
         ["meals.list", "/list"],
+        ["meals.log", "/log"],
         ["meals.recipe", "/recipe"],
         ["meals.household", "/household"],
         ["meals.settings", "/settings"]
@@ -351,6 +443,7 @@ describe("meals manifest", () => {
     );
     expect(appMap.features.map((feature) => feature.id)).toContain("meals.chat-household");
     expect(appMap.features.map((feature) => feature.id)).toContain("meals.chat-list");
+    expect(appMap.features.map((feature) => feature.id)).toContain("meals.chat-log");
   });
 
   it("maps plan writing and Safety in the words the plan gives", () => {

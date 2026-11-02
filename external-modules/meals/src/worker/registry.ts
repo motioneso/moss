@@ -18,6 +18,23 @@ import {
   listOnPlanChange,
   undo
 } from "../lists/tools.js";
+import type { LogDeps, LogJobDeps } from "../log/deps.js";
+import { runLogEstimate } from "../log/job.js";
+import {
+  logAdd,
+  logCorrect,
+  logDelete,
+  logList,
+  logReestimate,
+  logSummarize
+} from "../log/tools.js";
+import {
+  favouritesEdit,
+  mealCooked,
+  mealRate,
+  mealServings,
+  type CookingDeps
+} from "../cooking/tools.js";
 import { pantryEdit, pantryGet } from "../pantry/tools.js";
 import type { PantryDeps } from "../pantry/tools.js";
 import { runPlanDay } from "../plans/day-job.js";
@@ -30,6 +47,8 @@ import {
   planDelete,
   planGet
 } from "../plans/tools.js";
+import { sqlCookingStore } from "../store/cooking.js";
+import { sqlLogStore } from "../store/log.js";
 import { sqlListStore } from "../store/list.js";
 import { sqlPantryStore } from "../store/pantry.js";
 import { sqlPlanStore } from "../store/plans.js";
@@ -52,6 +71,7 @@ function listDeps(ctx: ModuleWorkerContext): ListDeps {
     lists: sqlListStore(ctx.db),
     plans: sqlPlanStore(ctx.db),
     pantry: sqlPantryStore(ctx.db),
+    cooking: sqlCookingStore(ctx.db),
     kitchen: () => kitchens.readKitchen(),
     ensureKitchen: () => kitchens.getOrCreateKitchen(),
     newId: randomUUID,
@@ -70,6 +90,8 @@ function planDeps(ctx: ModuleWorkerContext): PlanDeps {
     onPlanChange: (planId, change) => listOnPlanChange(listDeps(ctx), planId, change),
     store: sqlPlanStore(ctx.db),
     pantry: sqlPantryStore(ctx.db),
+    marks: () => sqlCookingStore(ctx.db).readMarks(),
+    vetoes: (memberIds) => sqlCookingStore(ctx.db).vetoes(memberIds),
     kitchen: () => kitchens.readKitchen(),
     ensureKitchen: () => kitchens.getOrCreateKitchen(),
     ai: ctx.ai,
@@ -77,6 +99,21 @@ function planDeps(ctx: ModuleWorkerContext): PlanDeps {
     newId: randomUUID
   };
 }
+
+function cookingDeps(ctx: ModuleWorkerContext): CookingDeps {
+  return {
+    ...planDeps(ctx),
+    pantry: sqlPantryStore(ctx.db),
+    cooking: sqlCookingStore(ctx.db),
+    now: () => new Date(),
+    onPantryChange: () => listOnPantryChange(listDeps(ctx))
+  };
+}
+
+const cooking =
+  (run: (deps: CookingDeps, input: Record<string, unknown>) => Promise<unknown>): Handler =>
+  (ctx) =>
+    run(cookingDeps(ctx), stripEnvelope(ctx.input));
 
 function pantryDeps(ctx: ModuleWorkerContext): PantryDeps {
   const kitchens = storeFrom(ctx);
@@ -94,6 +131,27 @@ const pantryTool =
   (ctx) =>
     run(pantryDeps(ctx), stripEnvelope(ctx.input));
 
+function logDeps(ctx: ModuleWorkerContext): LogDeps {
+  const kitchens = storeFrom(ctx);
+  return {
+    store: sqlLogStore(ctx.db),
+    kitchen: () => kitchens.readKitchen(),
+    jobs: ctx.jobs,
+    newId: randomUUID,
+    now: () => new Date(),
+    localTimezone: ctx.localTimezone ?? undefined
+  };
+}
+
+const logTool =
+  (run: (deps: LogDeps, input: Record<string, unknown>) => Promise<unknown>): Handler =>
+  (ctx) =>
+    run(logDeps(ctx), stripEnvelope(ctx.input));
+
+function logJobDeps(ctx: ModuleWorkerContext): LogJobDeps {
+  return { store: sqlLogStore(ctx.db), ai: ctx.ai };
+}
+
 const plan =
   (run: (deps: PlanDeps, input: Record<string, unknown>) => Promise<unknown>): Handler =>
   (ctx) =>
@@ -103,7 +161,7 @@ const plan =
 function jobParams(input: unknown): Record<string, unknown> {
   const params = (input as { readonly params?: unknown } | null)?.params;
   if (typeof params !== "object" || params === null || Array.isArray(params)) {
-    throw new Error("plan-day: job params must be an object");
+    throw new Error("job params must be an object");
   }
   return params as Record<string, unknown>;
 }
@@ -119,6 +177,10 @@ export const HANDLERS: Readonly<Record<string, Handler>> = {
   "plan.control": plan(planControl),
   "plan.delete": plan(planDelete),
   "meal.get": plan(mealGet),
+  "meal.cooked": cooking(mealCooked),
+  "meal.servings": cooking(mealServings),
+  "meal.rate": cooking(mealRate),
+  "favourites.edit": cooking(favouritesEdit),
   "list.get": list(listGet),
   "list.build": list(listBuild),
   "list.edit": list(listEdit),
@@ -127,5 +189,12 @@ export const HANDLERS: Readonly<Record<string, Handler>> = {
   "pantry.get": pantryTool(pantryGet),
   "pantry.edit": pantryTool(pantryEdit),
   undo: list(undo),
+  "log.list": logTool(logList),
+  "log.summarize": logTool(logSummarize),
+  "log.add": logTool(logAdd),
+  "log.correct": logTool(logCorrect),
+  "log.reestimate": logTool(logReestimate),
+  "log.delete": logTool(logDelete),
+  "log.estimate": (ctx) => runLogEstimate(logJobDeps(ctx), jobParams(ctx.input)),
   "plan.day": (ctx) => runPlanDay(planDeps(ctx), jobParams(ctx.input))
 };

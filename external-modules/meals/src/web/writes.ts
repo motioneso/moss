@@ -7,11 +7,18 @@ export type MealsWriteToolName =
   | "meals.household.save"
   | "meals.household.remove"
   | "meals.plan.control"
+  | "meals.meal.cooked"
+  | "meals.meal.servings"
+  | "meals.meal.rate"
+  | "meals.favourites.edit"
   | "meals.list.build"
   | "meals.list.edit"
   | "meals.list.bought"
   | "meals.pantry.edit"
-  | "meals.pantry.edit"
+  | "meals.log.add"
+  | "meals.log.correct"
+  | "meals.log.delete"
+  | "meals.log.reestimate"
   | "meals.undo";
 
 export type MealsWriteOutcome =

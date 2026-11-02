@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "meals",
   "name": "Meals",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": {
@@ -30,7 +30,12 @@
       "app.meals_shopping_list_items",
       "app.meals_pantry_items",
       "app.meals_undo_actions",
-      "app.meals_staples"
+      "app.meals_staples",
+      "app.meals_log_entries",
+      "app.meals_log_estimates",
+      "app.meals_log_estimate_items",
+      "app.meals_ratings",
+      "app.meals_favourites"
     ]
   },
   "runtime": {
@@ -61,6 +66,25 @@
             }
           }
         }
+      },
+      {
+        "name": "meals.log-estimate",
+        "handler": "log.estimate",
+        "retryLimit": 2,
+        "allowModuleEnqueue": true,
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "entryId": {
+              "type": "uuid"
+            },
+            "revision": {
+              "type": "integer",
+              "min": 1,
+              "max": 1000000
+            }
+          }
+        }
       }
     ]
   },
@@ -82,7 +106,7 @@
       {
         "id": "meals.plan",
         "label": "Meals",
-        "description": "The Meals page, with tabs for Plan, Shopping list, Pantry, Household and Log. Plan shows the meal plan day by day as Moss writes it, with tonight's dinner on top, and an empty state until a plan exists. Log shows an empty state until it is built.",
+        "description": "The Meals page, with tabs for Plan, Shopping list, Pantry, Household and Log. Plan shows the meal plan day by day as Moss writes it, with tonight's dinner on top, and an empty state until a plan exists.",
         "path": "/"
       },
       {
@@ -106,7 +130,7 @@
       {
         "id": "meals.recipe",
         "label": "Recipe",
-        "description": "One planned meal as a recipe, with who eats it, the ingredients beside the original line, and the method. Opened from a meal on the Plan tab.",
+        "description": "One planned meal as a recipe, with who eats it, the ingredients beside the original line, the method, and under it the cooking controls: servings in halves, Mark cooked with Undo, a star rating and a favourite toggle for each person. Opened from a meal on the Plan tab.",
         "path": "/recipe"
       },
       {
@@ -120,6 +144,12 @@
         "label": "Meals settings",
         "description": "Units (US or metric) and the default Pantry mode.",
         "path": "/settings"
+      },
+      {
+        "id": "meals.log",
+        "label": "Log",
+        "path": "/log",
+        "description": "What you ate on a day, with calories and macros against your daily target. Log a meal by typing it, correct or delete an entry, and retry an estimate that is stuck."
       }
     ],
     "features": [
@@ -146,6 +176,22 @@
       {
         "id": "meals.chat-pantry",
         "description": "Ask Moss what is in the Pantry, add or change an item or a Staple, or remove one and undo it."
+      },
+      {
+        "id": "meals.chat-log",
+        "description": "Log what you ate through Moss. Moss estimates calories and macros, answers what you ate on a day or over a range, corrects an entry, and deletes one after asking."
+      },
+      {
+        "id": "meals.cooking",
+        "description": "Change a meal's servings in halves, and the recipe and shopping list follow. Mark cooked takes what the recipe used out of the Pantry, never below zero, shows what it took, and offers Undo and an offer to log your portion in Log. Ask Moss to say you cooked a meal, or to undo it."
+      },
+      {
+        "id": "meals.ratings",
+        "description": "Rate a recipe from one to five stars for each person who ate it. One star keeps that recipe out of new plans that include that person, unless you ask for it by name."
+      },
+      {
+        "id": "meals.favourites",
+        "description": "Mark a recipe as a favourite for a person, and ask Moss to place a favourite into a meal slot. Placing runs the Never serve check first and refuses a locked meal."
       }
     ]
   },
@@ -154,6 +200,13 @@
       "id": "meal_planning",
       "label": "Meal planning",
       "description": "Plan meals, manage the household, list, Pantry and cooking.",
+      "defaultTier": "ask_each_time",
+      "allowedTiers": ["ask_each_time", "trusted_auto", "always_confirm"]
+    },
+    {
+      "id": "meal_logging",
+      "label": "Meal logging",
+      "description": "Log what you ate and correct or delete a logged meal.",
       "defaultTier": "ask_each_time",
       "allowedTiers": ["ask_each_time", "trusted_auto", "always_confirm"]
     }
@@ -1060,7 +1113,9 @@
                             "portion",
                             "safety",
                             "safetyReason",
-                            "fit"
+                            "fit",
+                            "rating",
+                            "favourite"
                           ],
                           "properties": {
                             "memberId": {
@@ -1114,6 +1169,19 @@
                                   "type": "null"
                                 }
                               ]
+                            },
+                            "rating": {
+                              "anyOf": [
+                                {
+                                  "type": "integer"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "favourite": {
+                              "type": "boolean"
                             }
                           }
                         }
@@ -1400,7 +1468,9 @@
                             "portion",
                             "safety",
                             "safetyReason",
-                            "fit"
+                            "fit",
+                            "rating",
+                            "favourite"
                           ],
                           "properties": {
                             "memberId": {
@@ -1454,6 +1524,19 @@
                                   "type": "null"
                                 }
                               ]
+                            },
+                            "rating": {
+                              "anyOf": [
+                                {
+                                  "type": "integer"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "favourite": {
+                              "type": "boolean"
                             }
                           }
                         }
@@ -1740,7 +1823,9 @@
                                 "portion",
                                 "safety",
                                 "safetyReason",
-                                "fit"
+                                "fit",
+                                "rating",
+                                "favourite"
                               ],
                               "properties": {
                                 "memberId": {
@@ -1794,6 +1879,19 @@
                                       "type": "null"
                                     }
                                   ]
+                                },
+                                "rating": {
+                                  "anyOf": [
+                                    {
+                                      "type": "integer"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "favourite": {
+                                  "type": "boolean"
                                 }
                               }
                             }
@@ -2094,7 +2192,9 @@
                             "portion",
                             "safety",
                             "safetyReason",
-                            "fit"
+                            "fit",
+                            "rating",
+                            "favourite"
                           ],
                           "properties": {
                             "memberId": {
@@ -2148,6 +2248,19 @@
                                   "type": "null"
                                 }
                               ]
+                            },
+                            "rating": {
+                              "anyOf": [
+                                {
+                                  "type": "integer"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "favourite": {
+                              "type": "boolean"
                             }
                           }
                         }
@@ -2372,7 +2485,16 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": ["memberId", "name", "portion", "safety", "safetyReason", "fit"],
+                  "required": [
+                    "memberId",
+                    "name",
+                    "portion",
+                    "safety",
+                    "safetyReason",
+                    "fit",
+                    "rating",
+                    "favourite"
+                  ],
                   "properties": {
                     "memberId": {
                       "type": "string"
@@ -2420,6 +2542,19 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "rating": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "favourite": {
+                      "type": "boolean"
                     }
                   }
                 }
@@ -2574,7 +2709,16 @@
                   "type": "array",
                   "items": {
                     "type": "object",
-                    "required": ["memberId", "name", "portion", "safety", "safetyReason", "fit"],
+                    "required": [
+                      "memberId",
+                      "name",
+                      "portion",
+                      "safety",
+                      "safetyReason",
+                      "fit",
+                      "rating",
+                      "favourite"
+                    ],
                     "properties": {
                       "memberId": {
                         "type": "string"
@@ -2622,12 +2766,1651 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "rating": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "favourite": {
+                        "type": "boolean"
                       }
                     }
                   }
                 }
               }
             }
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.meal.cooked",
+      "permissionId": "meals.meal.cooked",
+      "description": "Mark a planned meal cooked. It takes what the recipe used, scaled to the servings, out of the Pantry without taking any item below zero, and returns what changed, an undo token for meals.undo, and an offer to log the person's portion. The offer is only an offer: to log it, call meals.log.add with its description and servingNote. A meal can be marked cooked once.",
+      "actionLabel": "Mark a meal cooked",
+      "risk": "write",
+      "actionFamilyId": "meal_planning",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "handler": "meal.cooked",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["mealId"],
+        "properties": {
+          "mealId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["meal", "pantryChanges", "undo", "logOffer"],
+        "properties": {
+          "meal": {
+            "type": "object",
+            "required": [
+              "mealId",
+              "slotName",
+              "kind",
+              "sharing",
+              "status",
+              "failureReason",
+              "locked",
+              "oneOffFor",
+              "favouriteOf",
+              "title",
+              "plainText",
+              "cookMinutes",
+              "servings",
+              "eaters",
+              "checkLabelCount",
+              "cookedAt"
+            ],
+            "properties": {
+              "mealId": {
+                "type": "string"
+              },
+              "slotName": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "sharing": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "failureReason": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "locked": {
+                "type": "boolean"
+              },
+              "oneOffFor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "favouriteOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "title": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "plainText": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "cookMinutes": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "servings": {
+                "type": "number"
+              },
+              "eaters": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "memberId",
+                    "name",
+                    "portion",
+                    "safety",
+                    "safetyReason",
+                    "fit",
+                    "rating",
+                    "favourite"
+                  ],
+                  "properties": {
+                    "memberId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "portion": {
+                      "type": "number"
+                    },
+                    "safety": {
+                      "type": "string"
+                    },
+                    "safetyReason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "fit": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                          "properties": {
+                            "targetKcal": {
+                              "type": "integer"
+                            },
+                            "estimatedKcal": {
+                              "type": "integer"
+                            },
+                            "band": {
+                              "type": "string"
+                            },
+                            "differenceKcal": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "rating": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "favourite": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              "checkLabelCount": {
+                "type": "integer"
+              },
+              "cookedAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "pantryChanges": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "before", "after", "unit"],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "before": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "after": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "unit": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "undo": {
+            "type": "object",
+            "required": ["actionId", "kind", "count"],
+            "properties": {
+              "actionId": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "count": {
+                "type": "number"
+              }
+            }
+          },
+          "logOffer": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": ["description", "servingNote"],
+                "properties": {
+                  "description": {
+                    "type": "string"
+                  },
+                  "servingNote": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.meal.servings",
+      "permissionId": "meals.meal.servings",
+      "description": "Change how many servings a planned meal cooks, in steps of half a serving from 0.5 to 24, or pass null to go back to the eaters' portions. The recipe amounts and the shopping list follow the new servings.",
+      "actionLabel": "Change servings",
+      "risk": "write",
+      "actionFamilyId": "meal_planning",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "handler": "meal.servings",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["mealId", "servings"],
+        "properties": {
+          "mealId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "servings": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.5,
+                "maximum": 24
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "meal",
+          "recipeId",
+          "baseServings",
+          "servingsOverride",
+          "steps",
+          "ingredients",
+          "swapChoices"
+        ],
+        "properties": {
+          "meal": {
+            "type": "object",
+            "required": [
+              "mealId",
+              "slotName",
+              "kind",
+              "sharing",
+              "status",
+              "failureReason",
+              "locked",
+              "oneOffFor",
+              "favouriteOf",
+              "title",
+              "plainText",
+              "cookMinutes",
+              "servings",
+              "eaters",
+              "checkLabelCount",
+              "cookedAt"
+            ],
+            "properties": {
+              "mealId": {
+                "type": "string"
+              },
+              "slotName": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "sharing": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "failureReason": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "locked": {
+                "type": "boolean"
+              },
+              "oneOffFor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "favouriteOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "title": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "plainText": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "cookMinutes": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "servings": {
+                "type": "number"
+              },
+              "eaters": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "memberId",
+                    "name",
+                    "portion",
+                    "safety",
+                    "safetyReason",
+                    "fit",
+                    "rating",
+                    "favourite"
+                  ],
+                  "properties": {
+                    "memberId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "portion": {
+                      "type": "number"
+                    },
+                    "safety": {
+                      "type": "string"
+                    },
+                    "safetyReason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "fit": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                          "properties": {
+                            "targetKcal": {
+                              "type": "integer"
+                            },
+                            "estimatedKcal": {
+                              "type": "integer"
+                            },
+                            "band": {
+                              "type": "string"
+                            },
+                            "differenceKcal": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "rating": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "favourite": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              "checkLabelCount": {
+                "type": "integer"
+              },
+              "cookedAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "recipeId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "baseServings": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "servingsOverride": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "originalText",
+                "name",
+                "quantity",
+                "unit",
+                "display",
+                "section",
+                "checkLabel",
+                "missing"
+              ],
+              "properties": {
+                "originalText": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "unit": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "display": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "section": {
+                  "type": "string"
+                },
+                "checkLabel": {
+                  "type": "boolean"
+                },
+                "missing": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "swapChoices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["choiceId", "status", "title", "cookMinutes", "eaters"],
+              "properties": {
+                "choiceId": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "title": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "cookMinutes": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "eaters": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "memberId",
+                      "name",
+                      "portion",
+                      "safety",
+                      "safetyReason",
+                      "fit",
+                      "rating",
+                      "favourite"
+                    ],
+                    "properties": {
+                      "memberId": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "portion": {
+                        "type": "number"
+                      },
+                      "safety": {
+                        "type": "string"
+                      },
+                      "safetyReason": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fit": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                            "properties": {
+                              "targetKcal": {
+                                "type": "integer"
+                              },
+                              "estimatedKcal": {
+                                "type": "integer"
+                              },
+                              "band": {
+                                "type": "string"
+                              },
+                              "differenceKcal": {
+                                "type": "integer"
+                              }
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "rating": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "favourite": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.meal.rate",
+      "permissionId": "meals.meal.rate",
+      "description": "Rate a meal's recipe from 1 to 5 stars for one or more household members, or pass null stars to clear a rating. One star keeps that recipe out of future plans that include that person, unless a request names the recipe.",
+      "actionLabel": "Rate a recipe",
+      "risk": "write",
+      "actionFamilyId": "meal_planning",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "handler": "meal.rate",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["mealId", "ratings"],
+        "properties": {
+          "mealId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "ratings": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["memberId", "stars"],
+              "properties": {
+                "memberId": {
+                  "type": "string",
+                  "minLength": 36,
+                  "maxLength": 36
+                },
+                "stars": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 5
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "meal",
+          "recipeId",
+          "baseServings",
+          "servingsOverride",
+          "steps",
+          "ingredients",
+          "swapChoices"
+        ],
+        "properties": {
+          "meal": {
+            "type": "object",
+            "required": [
+              "mealId",
+              "slotName",
+              "kind",
+              "sharing",
+              "status",
+              "failureReason",
+              "locked",
+              "oneOffFor",
+              "favouriteOf",
+              "title",
+              "plainText",
+              "cookMinutes",
+              "servings",
+              "eaters",
+              "checkLabelCount",
+              "cookedAt"
+            ],
+            "properties": {
+              "mealId": {
+                "type": "string"
+              },
+              "slotName": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "sharing": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "failureReason": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "locked": {
+                "type": "boolean"
+              },
+              "oneOffFor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "favouriteOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "title": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "plainText": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "cookMinutes": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "servings": {
+                "type": "number"
+              },
+              "eaters": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "memberId",
+                    "name",
+                    "portion",
+                    "safety",
+                    "safetyReason",
+                    "fit",
+                    "rating",
+                    "favourite"
+                  ],
+                  "properties": {
+                    "memberId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "portion": {
+                      "type": "number"
+                    },
+                    "safety": {
+                      "type": "string"
+                    },
+                    "safetyReason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "fit": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                          "properties": {
+                            "targetKcal": {
+                              "type": "integer"
+                            },
+                            "estimatedKcal": {
+                              "type": "integer"
+                            },
+                            "band": {
+                              "type": "string"
+                            },
+                            "differenceKcal": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "rating": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "favourite": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              "checkLabelCount": {
+                "type": "integer"
+              },
+              "cookedAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "recipeId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "baseServings": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "servingsOverride": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "originalText",
+                "name",
+                "quantity",
+                "unit",
+                "display",
+                "section",
+                "checkLabel",
+                "missing"
+              ],
+              "properties": {
+                "originalText": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "unit": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "display": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "section": {
+                  "type": "string"
+                },
+                "checkLabel": {
+                  "type": "boolean"
+                },
+                "missing": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "swapChoices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["choiceId", "status", "title", "cookMinutes", "eaters"],
+              "properties": {
+                "choiceId": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "title": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "cookMinutes": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "eaters": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "memberId",
+                      "name",
+                      "portion",
+                      "safety",
+                      "safetyReason",
+                      "fit",
+                      "rating",
+                      "favourite"
+                    ],
+                    "properties": {
+                      "memberId": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "portion": {
+                        "type": "number"
+                      },
+                      "safety": {
+                        "type": "string"
+                      },
+                      "safetyReason": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fit": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                            "properties": {
+                              "targetKcal": {
+                                "type": "integer"
+                              },
+                              "estimatedKcal": {
+                                "type": "integer"
+                              },
+                              "band": {
+                                "type": "string"
+                              },
+                              "differenceKcal": {
+                                "type": "integer"
+                              }
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "rating": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "favourite": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.favourites.edit",
+      "permissionId": "meals.favourites.edit",
+      "description": "Add or remove a recipe as one person's favourite (action add or remove, with memberId and recipeId), or place a favourite into a planned meal (action place, with mealId). Placing runs the Never serve check for everyone who eats that meal and refuses when it fails or when the meal is locked. Returns the kitchen, and the meal when one was placed.",
+      "actionLabel": "Edit favourites",
+      "risk": "write",
+      "actionFamilyId": "meal_planning",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "handler": "favourites.edit",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "memberId", "recipeId"],
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": ["add", "remove", "place"]
+          },
+          "memberId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "recipeId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "mealId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["kitchen", "meal"],
+        "properties": {
+          "kitchen": {
+            "type": "object",
+            "required": ["kitchenId", "unitsSystem", "defaultPantryMode", "members", "slotRules"],
+            "properties": {
+              "kitchenId": {
+                "type": "string"
+              },
+              "unitsSystem": {
+                "type": "string"
+              },
+              "defaultPantryMode": {
+                "type": "string"
+              },
+              "members": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "memberId",
+                    "name",
+                    "isSelf",
+                    "linkedAccountEmail",
+                    "calorieTarget",
+                    "macroTargets",
+                    "mealPattern",
+                    "restrictions",
+                    "preferences",
+                    "favouriteRecipeIds"
+                  ],
+                  "properties": {
+                    "memberId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "isSelf": {
+                      "type": "boolean"
+                    },
+                    "linkedAccountEmail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "calorieTarget": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "macroTargets": {
+                      "type": "object",
+                      "required": ["proteinG", "carbG", "fatG"],
+                      "properties": {
+                        "proteinG": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "carbG": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fatG": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "mealPattern": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "restrictions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "preferences": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "favouriteRecipeIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "slotRules": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["slotName", "soloWeekdays", "usualTime"],
+                  "properties": {
+                    "slotName": {
+                      "type": "string"
+                    },
+                    "soloWeekdays": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer"
+                      }
+                    },
+                    "usualTime": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "meal": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": [
+                  "mealId",
+                  "slotName",
+                  "kind",
+                  "sharing",
+                  "status",
+                  "failureReason",
+                  "locked",
+                  "oneOffFor",
+                  "favouriteOf",
+                  "title",
+                  "plainText",
+                  "cookMinutes",
+                  "servings",
+                  "eaters",
+                  "checkLabelCount",
+                  "cookedAt"
+                ],
+                "properties": {
+                  "mealId": {
+                    "type": "string"
+                  },
+                  "slotName": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "sharing": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "failureReason": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "locked": {
+                    "type": "boolean"
+                  },
+                  "oneOffFor": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "favouriteOf": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "title": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "plainText": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "cookMinutes": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "servings": {
+                    "type": "number"
+                  },
+                  "eaters": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "memberId",
+                        "name",
+                        "portion",
+                        "safety",
+                        "safetyReason",
+                        "fit",
+                        "rating",
+                        "favourite"
+                      ],
+                      "properties": {
+                        "memberId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "portion": {
+                          "type": "number"
+                        },
+                        "safety": {
+                          "type": "string"
+                        },
+                        "safetyReason": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fit": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                              "properties": {
+                                "targetKcal": {
+                                  "type": "integer"
+                                },
+                                "estimatedKcal": {
+                                  "type": "integer"
+                                },
+                                "band": {
+                                  "type": "string"
+                                },
+                                "differenceKcal": {
+                                  "type": "integer"
+                                }
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "rating": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "favourite": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  },
+                  "checkLabelCount": {
+                    "type": "integer"
+                  },
+                  "cookedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       }
@@ -3695,7 +5478,7 @@
     {
       "name": "meals.undo",
       "permissionId": "meals.undo",
-      "description": "Undo the change an undo token names. A removed shopping line or Pantry item comes back, and a Bought is reversed. A Pantry amount that was edited after Bought is left alone and counted as skipped.",
+      "description": "Undo the change an undo token names. A removed shopping line or Pantry item comes back, a Bought is reversed, and a Mark cooked puts the meal back to not cooked and its Pantry amounts back. A Pantry amount that was edited after Bought or Mark cooked is left alone and counted as skipped.",
       "actionLabel": "Undo a shopping list or Pantry change",
       "risk": "write",
       "actionFamilyId": "meal_planning",
@@ -3726,6 +5509,1641 @@
           }
         }
       }
+    },
+    {
+      "name": "meals.log.list",
+      "permissionId": "meals.log.list",
+      "description": "List logged meals for one day (localDate) or a range of up to 31 days (fromLocalDate and toLocalDate). A single day also returns the day's totals, the self member's daily targets and how the calories compare to the calorie target. Totals count only estimated meals. A meal still being estimated is counted in entriesWithoutEstimate, never as zero.",
+      "actionLabel": "Look at what you ate",
+      "risk": "read",
+      "handler": "log.list",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "localDate": {
+            "type": "string"
+          },
+          "fromLocalDate": {
+            "type": "string"
+          },
+          "toLocalDate": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Maximum meals to return, keeping the most recent. Defaults to 200, which is also the ceiling."
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["entries", "totals", "targets", "calorieFit", "truncated", "totalCount"],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "entryId",
+                "consumedAt",
+                "localDate",
+                "timezoneOffset",
+                "description",
+                "servingNote",
+                "captureKind",
+                "estimateState",
+                "estimateRevision",
+                "nutrients",
+                "items",
+                "missingDetails",
+                "clarificationQuestion"
+              ],
+              "properties": {
+                "entryId": {
+                  "type": "string"
+                },
+                "consumedAt": {
+                  "type": "string"
+                },
+                "localDate": {
+                  "type": "string"
+                },
+                "timezoneOffset": {
+                  "type": "integer"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "servingNote": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "captureKind": {
+                  "type": "string"
+                },
+                "estimateState": {
+                  "type": "string"
+                },
+                "estimateRevision": {
+                  "type": "integer"
+                },
+                "nutrients": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "caloriesKcal",
+                        "proteinG",
+                        "carbohydratesG",
+                        "fatG",
+                        "fiberG",
+                        "sugarG",
+                        "sodiumMg"
+                      ],
+                      "properties": {
+                        "caloriesKcal": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "proteinG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "carbohydratesG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fatG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fiberG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sugarG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sodiumMg": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["label", "portionNote", "nutrients"],
+                    "properties": {
+                      "label": {
+                        "type": "string"
+                      },
+                      "portionNote": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "nutrients": {
+                        "type": "object",
+                        "required": [
+                          "caloriesKcal",
+                          "proteinG",
+                          "carbohydratesG",
+                          "fatG",
+                          "fiberG",
+                          "sugarG",
+                          "sodiumMg"
+                        ],
+                        "properties": {
+                          "caloriesKcal": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "proteinG": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "carbohydratesG": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "fatG": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "fiberG": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "sugarG": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "sodiumMg": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "missingDetails": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "clarificationQuestion": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "totals": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": ["localDate", "nutrients", "incomplete", "entriesWithoutEstimate"],
+                "properties": {
+                  "localDate": {
+                    "type": "string"
+                  },
+                  "nutrients": {
+                    "type": "object",
+                    "required": [
+                      "caloriesKcal",
+                      "proteinG",
+                      "carbohydratesG",
+                      "fatG",
+                      "fiberG",
+                      "sugarG",
+                      "sodiumMg"
+                    ],
+                    "properties": {
+                      "caloriesKcal": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "proteinG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "carbohydratesG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fatG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fiberG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sugarG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sodiumMg": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "incomplete": {
+                    "type": "boolean"
+                  },
+                  "entriesWithoutEstimate": {
+                    "type": "integer"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targets": {
+            "type": "object",
+            "required": ["caloriesKcal", "proteinG", "carbG", "fatG"],
+            "properties": {
+              "caloriesKcal": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "proteinG": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "carbG": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fatG": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "calorieFit": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": ["targetKcal", "estimatedKcal", "band", "differenceKcal"],
+                "properties": {
+                  "targetKcal": {
+                    "type": "integer"
+                  },
+                  "estimatedKcal": {
+                    "type": "integer"
+                  },
+                  "band": {
+                    "type": "string"
+                  },
+                  "differenceKcal": {
+                    "type": "integer"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "totalCount": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.log.summarize",
+      "permissionId": "meals.log.summarize",
+      "description": "Add up nutrition across a date range of up to 92 days. Meals without an estimate are counted, never treated as zero.",
+      "actionLabel": "Add up what you ate",
+      "risk": "read",
+      "handler": "log.summarize",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fromLocalDate", "toLocalDate"],
+        "properties": {
+          "fromLocalDate": {
+            "type": "string"
+          },
+          "toLocalDate": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "fromLocalDate",
+          "toLocalDate",
+          "nutrients",
+          "incomplete",
+          "entriesWithoutEstimate",
+          "daysWithEntries"
+        ],
+        "properties": {
+          "fromLocalDate": {
+            "type": "string"
+          },
+          "toLocalDate": {
+            "type": "string"
+          },
+          "nutrients": {
+            "type": "object",
+            "required": [
+              "caloriesKcal",
+              "proteinG",
+              "carbohydratesG",
+              "fatG",
+              "fiberG",
+              "sugarG",
+              "sodiumMg"
+            ],
+            "properties": {
+              "caloriesKcal": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "proteinG": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "carbohydratesG": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fatG": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fiberG": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sugarG": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sodiumMg": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "incomplete": {
+            "type": "boolean"
+          },
+          "entriesWithoutEstimate": {
+            "type": "integer"
+          },
+          "daysWithEntries": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    {
+      "name": "meals.log.add",
+      "permissionId": "meals.log.add",
+      "description": "Log a meal from a description. The meal is saved at once as pending and Moss estimates calories and macros in the background. Read it again with meals.log.list to see the estimate. A retry with the same idempotencyKey returns the same meal.",
+      "actionLabel": "Log a meal",
+      "risk": "write",
+      "actionFamilyId": "meal_logging",
+      "executionPolicy": "auto",
+      "handler": "log.add",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["description", "idempotencyKey"],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "consumedAt": {
+            "type": "string",
+            "description": "When the meal was consumed: use an ISO instant with Z or a numeric offset, or an offset-less local date-time interpreted in timeZone. Example: 2026-08-22T20:14:00 with America/Los_Angeles stores 2026-08-23T03:14:00.000Z. DST gaps and folds require an explicit offset."
+          },
+          "timeZone": {
+            "type": "string",
+            "description": "IANA time zone for an offset-less consumedAt value; for example, 2026-08-22T20:14:00 with America/Los_Angeles stores 2026-08-23T03:14:00.000Z. The host locale takes precedence when available."
+          },
+          "mealType": {
+            "type": "string",
+            "enum": ["breakfast", "lunch", "dinner", "snack"],
+            "description": "Part of the day. Use it when the person names a meal such as lunch and gives no time; Moss stamps a usual time today. consumedAt wins when both are given."
+          },
+          "captureKind": {
+            "type": "string",
+            "enum": ["text", "photo", "voice"]
+          },
+          "servingNote": {
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["entry"],
+        "properties": {
+          "entry": {
+            "type": "object",
+            "required": [
+              "entryId",
+              "consumedAt",
+              "localDate",
+              "timezoneOffset",
+              "description",
+              "servingNote",
+              "captureKind",
+              "estimateState",
+              "estimateRevision",
+              "nutrients",
+              "items",
+              "missingDetails",
+              "clarificationQuestion"
+            ],
+            "properties": {
+              "entryId": {
+                "type": "string"
+              },
+              "consumedAt": {
+                "type": "string"
+              },
+              "localDate": {
+                "type": "string"
+              },
+              "timezoneOffset": {
+                "type": "integer"
+              },
+              "description": {
+                "type": "string"
+              },
+              "servingNote": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "captureKind": {
+                "type": "string"
+              },
+              "estimateState": {
+                "type": "string"
+              },
+              "estimateRevision": {
+                "type": "integer"
+              },
+              "nutrients": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "caloriesKcal",
+                      "proteinG",
+                      "carbohydratesG",
+                      "fatG",
+                      "fiberG",
+                      "sugarG",
+                      "sodiumMg"
+                    ],
+                    "properties": {
+                      "caloriesKcal": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "proteinG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "carbohydratesG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fatG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fiberG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sugarG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sodiumMg": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["label", "portionNote", "nutrients"],
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "portionNote": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "nutrients": {
+                      "type": "object",
+                      "required": [
+                        "caloriesKcal",
+                        "proteinG",
+                        "carbohydratesG",
+                        "fatG",
+                        "fiberG",
+                        "sugarG",
+                        "sodiumMg"
+                      ],
+                      "properties": {
+                        "caloriesKcal": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "proteinG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "carbohydratesG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fatG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fiberG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sugarG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sodiumMg": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "missingDetails": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "clarificationQuestion": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "selfOperationGrant": "granted_at_install"
+    },
+    {
+      "name": "meals.log.reestimate",
+      "permissionId": "meals.log.reestimate",
+      "description": "Retry the estimate for a meal that is still pending or whose estimate failed. A meal that already has an estimate is left alone. Use meals.log.correct to change one.",
+      "actionLabel": "Retry a meal estimate",
+      "risk": "write",
+      "actionFamilyId": "meal_logging",
+      "executionPolicy": "auto",
+      "handler": "log.reestimate",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["entryId"],
+        "properties": {
+          "entryId": {
+            "type": "string",
+            "description": "Identifier of the meal to re-estimate."
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["entry"],
+        "properties": {
+          "entry": {
+            "type": "object",
+            "required": [
+              "entryId",
+              "consumedAt",
+              "localDate",
+              "timezoneOffset",
+              "description",
+              "servingNote",
+              "captureKind",
+              "estimateState",
+              "estimateRevision",
+              "nutrients",
+              "items",
+              "missingDetails",
+              "clarificationQuestion"
+            ],
+            "properties": {
+              "entryId": {
+                "type": "string"
+              },
+              "consumedAt": {
+                "type": "string"
+              },
+              "localDate": {
+                "type": "string"
+              },
+              "timezoneOffset": {
+                "type": "integer"
+              },
+              "description": {
+                "type": "string"
+              },
+              "servingNote": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "captureKind": {
+                "type": "string"
+              },
+              "estimateState": {
+                "type": "string"
+              },
+              "estimateRevision": {
+                "type": "integer"
+              },
+              "nutrients": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "caloriesKcal",
+                      "proteinG",
+                      "carbohydratesG",
+                      "fatG",
+                      "fiberG",
+                      "sugarG",
+                      "sodiumMg"
+                    ],
+                    "properties": {
+                      "caloriesKcal": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "proteinG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "carbohydratesG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fatG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fiberG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sugarG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sodiumMg": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["label", "portionNote", "nutrients"],
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "portionNote": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "nutrients": {
+                      "type": "object",
+                      "required": [
+                        "caloriesKcal",
+                        "proteinG",
+                        "carbohydratesG",
+                        "fatG",
+                        "fiberG",
+                        "sugarG",
+                        "sodiumMg"
+                      ],
+                      "properties": {
+                        "caloriesKcal": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "proteinG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "carbohydratesG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fatG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fiberG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sugarG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sodiumMg": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "missingDetails": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "clarificationQuestion": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "selfOperationGrant": "granted_at_install"
+    },
+    {
+      "name": "meals.log.correct",
+      "permissionId": "meals.log.correct",
+      "description": "Correct a logged meal's description, serving note, time or one of the foods in it. Pass the expectedRevision from the last read. A stale revision is refused. The meal's totals are recalculated from its foods.",
+      "actionLabel": "Correct a logged meal",
+      "risk": "write",
+      "actionFamilyId": "meal_logging",
+      "executionPolicy": "auto",
+      "handler": "log.correct",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["entryId", "expectedRevision"],
+        "properties": {
+          "entryId": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "servingNote": {
+            "type": ["string", "null"]
+          },
+          "consumedAt": {
+            "type": "string",
+            "description": "When the meal was consumed: use an ISO instant with Z or a numeric offset, or an offset-less local date-time interpreted in timeZone. Example: 2026-08-22T20:14:00 with America/Los_Angeles stores 2026-08-23T03:14:00.000Z. DST gaps and folds require an explicit offset."
+          },
+          "timeZone": {
+            "type": "string",
+            "description": "IANA time zone for an offset-less consumedAt value; for example, 2026-08-22T20:14:00 with America/Los_Angeles stores 2026-08-23T03:14:00.000Z. The host locale takes precedence when available."
+          },
+          "items": {
+            "type": "array",
+            "description": "Entry N corrects the Nth food in the meal; null leaves that food alone. The meal's totals are recalculated from the foods afterwards.",
+            "items": {
+              "type": ["object", "null"],
+              "additionalProperties": false,
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "portionNote": {
+                  "type": ["string", "null"]
+                },
+                "nutrients": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "caloriesKcal": {
+                      "type": ["number", "null"]
+                    },
+                    "proteinG": {
+                      "type": ["number", "null"]
+                    },
+                    "carbohydratesG": {
+                      "type": ["number", "null"]
+                    },
+                    "fatG": {
+                      "type": ["number", "null"]
+                    },
+                    "fiberG": {
+                      "type": ["number", "null"]
+                    },
+                    "sugarG": {
+                      "type": ["number", "null"]
+                    },
+                    "sodiumMg": {
+                      "type": ["number", "null"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["entry"],
+        "properties": {
+          "entry": {
+            "type": "object",
+            "required": [
+              "entryId",
+              "consumedAt",
+              "localDate",
+              "timezoneOffset",
+              "description",
+              "servingNote",
+              "captureKind",
+              "estimateState",
+              "estimateRevision",
+              "nutrients",
+              "items",
+              "missingDetails",
+              "clarificationQuestion"
+            ],
+            "properties": {
+              "entryId": {
+                "type": "string"
+              },
+              "consumedAt": {
+                "type": "string"
+              },
+              "localDate": {
+                "type": "string"
+              },
+              "timezoneOffset": {
+                "type": "integer"
+              },
+              "description": {
+                "type": "string"
+              },
+              "servingNote": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "captureKind": {
+                "type": "string"
+              },
+              "estimateState": {
+                "type": "string"
+              },
+              "estimateRevision": {
+                "type": "integer"
+              },
+              "nutrients": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "caloriesKcal",
+                      "proteinG",
+                      "carbohydratesG",
+                      "fatG",
+                      "fiberG",
+                      "sugarG",
+                      "sodiumMg"
+                    ],
+                    "properties": {
+                      "caloriesKcal": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "proteinG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "carbohydratesG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fatG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "fiberG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sugarG": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sodiumMg": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["label", "portionNote", "nutrients"],
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "portionNote": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "nutrients": {
+                      "type": "object",
+                      "required": [
+                        "caloriesKcal",
+                        "proteinG",
+                        "carbohydratesG",
+                        "fatG",
+                        "fiberG",
+                        "sugarG",
+                        "sodiumMg"
+                      ],
+                      "properties": {
+                        "caloriesKcal": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "proteinG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "carbohydratesG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fatG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fiberG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sugarG": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sodiumMg": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "missingDetails": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "clarificationQuestion": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "selfOperationGrant": "granted_at_install"
+    },
+    {
+      "name": "meals.log.delete",
+      "permissionId": "meals.log.delete",
+      "description": "Delete a logged meal.",
+      "actionLabel": "Delete a logged meal",
+      "risk": "destructive",
+      "handler": "log.delete",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["entryId"],
+        "properties": {
+          "entryId": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["entryId", "deleted"],
+        "properties": {
+          "entryId": {
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "selfOperationGrant": "confirm_always"
     }
   ]
 }

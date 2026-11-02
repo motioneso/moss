@@ -15,6 +15,8 @@ import {
 import type { RecipeView } from "../../contracts";
 import { readTool } from "../api";
 import { navigate } from "../router";
+import type { MealsWrites } from "../writes";
+import { CookingPanel } from "./recipe-cooking";
 import { failureText } from "./plan-day";
 
 type State =
@@ -22,12 +24,18 @@ type State =
   | { readonly kind: "error" }
   | { readonly kind: "ready"; readonly recipe: RecipeView };
 
-function useRecipe(mealId: string): { state: State; retry: () => void } {
+function useRecipe(mealId: string): {
+  state: State;
+  retry: () => void;
+  reload: () => void;
+  set: (recipe: RecipeView) => void;
+} {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
+  const [quiet, setQuiet] = useState(false);
   useEffect(() => {
     let live = true;
-    setState({ kind: "loading" });
+    if (!quiet) setState({ kind: "loading" });
     readTool<RecipeView>("meals.meal.get", { mealId }).then(
       (recipe) => live && setState({ kind: "ready", recipe }),
       () => live && setState({ kind: "error" })
@@ -36,7 +44,18 @@ function useRecipe(mealId: string): { state: State; retry: () => void } {
       live = false;
     };
   }, [mealId, attempt]);
-  return { state, retry: () => setAttempt((n: number) => n + 1) };
+  return {
+    state,
+    retry: () => {
+      setQuiet(false);
+      setAttempt((n: number) => n + 1);
+    },
+    reload: () => {
+      setQuiet(true);
+      setAttempt((n: number) => n + 1);
+    },
+    set: (recipe) => setState({ kind: "ready", recipe })
+  };
 }
 
 function BackLink(): ReactNodeLike {
@@ -54,8 +73,8 @@ function BackLink(): ReactNodeLike {
   );
 }
 
-export function RecipeScreen(props: { mealId: string }): ReactNodeLike {
-  const { state, retry } = useRecipe(props.mealId);
+export function RecipeScreen(props: { mealId: string; writes: MealsWrites | null }): ReactNodeLike {
+  const { state, retry, reload, set } = useRecipe(props.mealId);
   if (state.kind === "loading") {
     return (
       <div className="mls-stack">
@@ -146,6 +165,7 @@ export function RecipeScreen(props: { mealId: string }): ReactNodeLike {
           </ol>
         </section>
       </div>
+      <CookingPanel recipe={recipe} writes={props.writes} onRecipe={set} onReload={reload} />
     </div>
   );
 }

@@ -1,16 +1,18 @@
 // external-modules/meals/src/web/root.tsx
 //
-// The Meals page: five area tabs and a settings route behind the header cog. Areas whose tools
-// arrive in later slices (Log) show an empty state.
-import { EmptyState, Segmented, type ReactNodeLike } from "@moss/module-web-sdk";
+// The Meals page: five area tabs and a settings route behind the header cog.
+import { Segmented, useState, type ReactNodeLike } from "@moss/module-web-sdk";
 
 import { useKitchen } from "./kitchen";
+import { todayIso } from "./format";
+import { useLog } from "./log";
 import { useShoppingList } from "./list";
 import { usePantry } from "./pantry";
 import { usePlan } from "./plan";
 import { navigate, useModulePath } from "./router";
 import { HouseholdScreen } from "./screens/household";
 import { ListScreen } from "./screens/list";
+import { LogScreen } from "./screens/log";
 import { PantryScreen } from "./screens/pantry";
 import { PlanScreen } from "./screens/plan";
 import { RecipeScreen } from "./screens/recipe";
@@ -21,12 +23,12 @@ export type HostActions = { openAssistant: (input: { starterPrompt: string }) =>
 
 type Area = "plan" | "list" | "pantry" | "household" | "log";
 
-const AREAS: ReadonlyArray<{ value: Area; label: string; path: string; empty: string }> = [
-  { value: "plan", label: "Plan", path: "/", empty: "Plan your first week" },
-  { value: "list", label: "Shopping list", path: "/list", empty: "" },
-  { value: "pantry", label: "Pantry", path: "/pantry", empty: "" },
-  { value: "household", label: "Household", path: "/household", empty: "" },
-  { value: "log", label: "Log", path: "/log", empty: "Nothing logged" }
+const AREAS: ReadonlyArray<{ value: Area; label: string; path: string }> = [
+  { value: "plan", label: "Plan", path: "/" },
+  { value: "list", label: "Shopping list", path: "/list" },
+  { value: "pantry", label: "Pantry", path: "/pantry" },
+  { value: "household", label: "Household", path: "/household" },
+  { value: "log", label: "Log", path: "/log" }
 ];
 
 function PlanArea(props: {
@@ -56,6 +58,24 @@ function PantryArea(props: {
       reload={reload}
       apply={apply}
       staplesOpen={props.staplesOpen}
+      writes={props.writes}
+      hostActions={props.hostActions}
+    />
+  );
+}
+
+function LogArea(props: {
+  writes: ReturnType<typeof bindWrites>;
+  hostActions: HostActions;
+}): ReactNodeLike {
+  const [localDate, setLocalDate] = useState(todayIso());
+  const { state, reload } = useLog(localDate);
+  return (
+    <LogScreen
+      state={state}
+      localDate={localDate}
+      onDate={setLocalDate}
+      reload={reload}
       writes={props.writes}
       hostActions={props.hostActions}
     />
@@ -111,7 +131,7 @@ export function Root(props: Readonly<Record<string, unknown>>): ReactNodeLike {
         />
       </div>
       {recipeId !== null ? (
-        <RecipeScreen mealId={recipeId} />
+        <RecipeScreen mealId={recipeId} writes={writes} />
       ) : area?.value === "household" ? (
         <HouseholdScreen state={state} reload={reload} writes={writes} hostActions={hostActions} />
       ) : (area ?? AREAS[0]!).value === "plan" ? (
@@ -121,7 +141,7 @@ export function Root(props: Readonly<Record<string, unknown>>): ReactNodeLike {
       ) : area?.value === "pantry" ? (
         <PantryArea writes={writes} hostActions={hostActions} staplesOpen={staplesOpen} />
       ) : (
-        <EmptyState title={(area ?? AREAS[0]!).empty} />
+        <LogArea writes={writes} hostActions={hostActions} />
       )}
     </div>
   );

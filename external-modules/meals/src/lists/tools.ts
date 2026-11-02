@@ -2,6 +2,7 @@
 //
 // The meals.list.* and meals.undo tool handlers. list.get never writes. Every write that changes
 // lines returns the whole list so the page and Moss see the result without a second read.
+import type { CookedState } from "../store/cooking-port.js";
 import type {
   BoughtResult,
   ListEditResult,
@@ -393,6 +394,13 @@ export async function undo(deps: ListDeps, input: Input): Promise<UndoResult> {
   if (record.kind === "bought") {
     const state = record.state as { at: string; lineIds: string[]; itemIds: string[] };
     return deps.lists.undoBought(actionId, state.at, state.lineIds, state.itemIds);
+  }
+  if (record.kind === "cooked") {
+    if (deps.cooking === undefined) throw new InputError("That action cannot be undone here");
+    const state = record.state as unknown as CookedState;
+    const restored = await deps.cooking.undoCooked(actionId, state);
+    if (restored > 0) await listOnPantryChange(deps);
+    return { restored, skipped: state.changes.length - restored };
   }
   throw new InputError("That action cannot be undone here");
 }
