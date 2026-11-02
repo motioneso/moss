@@ -140,7 +140,7 @@ afterAll(async () => {
 
 describe("meals tables (S1 #3885)", () => {
   it("installs every migration with FORCE RLS on every table, and re-runs as a no-op", async () => {
-    expect(installedCount).toBe(26);
+    expect(installedCount).toBe(27);
     const client = new Client({ connectionString: connectionStrings.bootstrap });
     await client.connect();
     try {
