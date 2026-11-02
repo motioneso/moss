@@ -159,6 +159,27 @@ async function waitForPlanSettled(page: Page): Promise<void> {
     .toBe("settled");
 }
 
+/** Polls the module's own read route until one day and every meal on it are written. */
+async function waitForDayReady(page: Page, planId: string, dayIndex: number): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const read = await invokeTool<{
+          days: readonly {
+            status: string;
+            meals: readonly { status: string }[];
+          }[];
+        }>(page, "meals.plan.get", { planId });
+        const day = read.days[dayIndex]!;
+        return day.status === "ready" && day.meals.every((meal) => meal.status === "ready")
+          ? "ready"
+          : `${day.status}:${day.meals.map((meal) => meal.status).join(",")}`;
+      },
+      { timeout: 10 * 60_000, intervals: [2_000, 5_000] }
+    )
+    .toBe("ready");
+}
+
 const daySection = (page: Page, index: number) => page.locator("section.mls-day").nth(index);
 const mealArticle = (page: Page, dayIndex: number, title: string) =>
   daySection(page, dayIndex).locator("article.mls-meal", { hasText: title });
@@ -377,6 +398,7 @@ test("arranging the week runs through the real Meals page on generated data", as
     await section.getByLabel("One-off meal slot", { exact: true }).selectOption("dinner");
     await section.getByLabel("One-off meal for", { exact: true }).selectOption({ label: "Sam" });
     await section.getByRole("button", { name: "Add One-off", exact: true }).click();
+    await waitForDayReady(page, plan.planId, 2);
     await waitForPlanSettled(page);
     const read = await invokeTool<PlanRead>(page, "meals.plan.get", { planId: plan.planId });
     const dinners = read.days[2]!.meals.filter((meal) => meal.slotName === "dinner");
@@ -399,7 +421,11 @@ test("arranging the week runs through the real Meals page on generated data", as
       )
       .toBe(20);
     await shot(page, "08-cook-limit");
-    await section.getByRole("button", { name: "Regenerate day", exact: true }).click();
+    await waitForDayReady(page, plan.planId, 2);
+    await section
+      .getByRole("button", { name: "Regenerate day", exact: true })
+      .click({ timeout: 60_000 });
+    await waitForDayReady(page, plan.planId, 2);
     await waitForPlanSettled(page);
     const read = await invokeTool<PlanRead>(page, "meals.plan.get", { planId: plan.planId });
     const meals = read.days[2]!.meals;
