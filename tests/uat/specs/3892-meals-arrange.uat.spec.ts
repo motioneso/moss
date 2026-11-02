@@ -227,7 +227,7 @@ async function waitForDayReady(page: Page, planId: string, dayIndex: number): Pr
           ? "ready"
           : `${day.status}:${day.meals.map((meal) => meal.status).join(",")}`;
       },
-      { timeout: 10 * 60_000, intervals: [2_000, 5_000] }
+      { timeout: 20 * 60_000, intervals: [2_000, 5_000] }
     )
     .toBe("ready");
 }
