@@ -305,10 +305,10 @@ test("every Meals page control works through the real page", async ({ page }) =>
   const goto = async (path: string): Promise<void> => {
     await page.goto(`/m/meals${path}`);
   };
-  const confirmHost = async (decision: "Confirm action" | "Cancel"): Promise<void> => {
+  const confirmHost = async (decision: "Confirm action" | "Cancel", tag = ""): Promise<void> => {
     const dialog = page.getByRole("dialog", { name: "Confirm Meals action" });
     await expect(dialog).toBeVisible({ timeout: 30_000 });
-    await shot(page, `host-confirm-${decision === "Cancel" ? "cancel" : "confirm"}`);
+    await shot(page, `host-confirm-${decision === "Cancel" ? "cancel" : "confirm"}${tag}`);
     await press(page, dialog.getByRole("button", { name: decision, exact: true }));
     await expect(dialog).toBeHidden({ timeout: 30_000 });
   };
@@ -425,6 +425,30 @@ test("every Meals page control works through the real page", async ({ page }) =>
     say("cooked=yes rated=4 logged=visible-in-log");
   });
 
+  await test.step("Undo toasts on the list and the Pantry, light", async () => {
+    await goto("/list");
+    const removeLine = page.getByRole("button", { name: /^Remove / }).first();
+    await expect(removeLine).toBeVisible({ timeout: 60_000 });
+    await expect(removeLine).toBeEnabled({ timeout: 30_000 });
+    await press(page, removeLine);
+    const undoLine = page.getByRole("button", { name: "Undo", exact: true });
+    await expect(undoLine).toBeVisible({ timeout: 30_000 });
+    await shot(page, "16-undo-toast-list-light");
+    await press(page, undoLine);
+    await expect(undoLine).toBeHidden({ timeout: 30_000 });
+    await goto("/pantry");
+    const removeItem = page.getByRole("button", { name: "Remove Basmati rice", exact: true });
+    await expect(removeItem).toBeVisible({ timeout: 60_000 });
+    await expect(removeItem).toBeEnabled({ timeout: 30_000 });
+    await press(page, removeItem);
+    const undoItem = page.getByRole("button", { name: "Undo", exact: true });
+    await expect(undoItem).toBeVisible({ timeout: 30_000 });
+    await shot(page, "17-undo-toast-pantry-light");
+    await press(page, undoItem);
+    await expect(page.getByText("Basmati rice").first()).toBeVisible({ timeout: 30_000 });
+    say("undo list=restored pantry=restored");
+  });
+
   await test.step("a failed change names its problem, light and dark", async () => {
     // The household form refuses a bad calorie target before it leaves the page.
     await goto("/household");
@@ -454,6 +478,52 @@ test("every Meals page control works through the real page", async ({ page }) =>
     await shot(page, "12-pantry-dark");
     await goto("/log");
     await shot(page, "13-log-dark");
+    await goto("/household");
+    await expect(page.getByRole("button", { name: "Add person", exact: true })).toBeVisible({
+      timeout: 60_000
+    });
+    await shot(page, "20-household-dark");
+    await goto("");
+    await settlePlan(page);
+    await shot(page, "21-plan-dark");
+    const darkMeals = page.locator("article.mls-meal");
+    await press(page, darkMeals.last().getByRole("button", { name: "Swap", exact: true }));
+    await expect(page).toHaveURL(/\/plan\/swap\//, { timeout: 60_000 });
+    await expect(page.getByRole("button", { name: "Choose", exact: true }).first()).toBeVisible({
+      timeout: QUICK_SWAP_TIMEOUT_MS
+    });
+    await shot(page, "22-swap-choices-dark");
+    await goto("");
+    await settlePlan(page);
+    await press(page, page.locator("a.mls-meal__title").first());
+    await settleRecipe(page);
+    await shot(page, "23-recipe-dark");
+    await goto("/list");
+    await expect(page.getByRole("button", { name: "Clear list", exact: true }).first()).toBeEnabled(
+      { timeout: 60_000 }
+    );
+    await shot(page, "24-list-dark");
+    await press(page, page.getByRole("button", { name: /^Bought/ }).first());
+    await expect(page.getByRole("dialog", { name: "Bought" })).toBeVisible();
+    await shot(page, "25-bought-dialog-dark");
+    await page.keyboard.press("Escape");
+    await press(page, page.getByRole("button", { name: "Clear list", exact: true }).first());
+    await confirmHost("Cancel", "-dark");
+    const removeDark = page.getByRole("button", { name: /^Remove / }).first();
+    await expect(removeDark).toBeEnabled({ timeout: 30_000 });
+    await press(page, removeDark);
+    const undoDark = page.getByRole("button", { name: "Undo", exact: true });
+    await expect(undoDark).toBeVisible({ timeout: 30_000 });
+    await shot(page, "26-undo-toast-list-dark");
+    await press(page, undoDark);
+    await expect(undoDark).toBeHidden({ timeout: 30_000 });
+    await goto("/pantry");
+    const removePantryDark = page.getByRole("button", { name: "Remove Basmati rice", exact: true });
+    await expect(removePantryDark).toBeEnabled({ timeout: 60_000 });
+    await press(page, removePantryDark);
+    await expect(undoDark).toBeVisible({ timeout: 30_000 });
+    await shot(page, "27-undo-toast-pantry-dark");
+    await press(page, undoDark);
     await setColorMode(page, "Light");
     say("visual error=light,dark widths=1280,390");
   });
