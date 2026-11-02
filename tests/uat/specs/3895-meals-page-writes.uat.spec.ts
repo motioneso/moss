@@ -415,6 +415,7 @@ test("every Meals page control works through the real page", async ({ page }) =>
     await shot(page, "08-cooked-toast");
     await press(page, portion);
     const stars = page.getByRole("button", { name: /^4 stars for / }).first();
+    await expect(stars).toBeEnabled({ timeout: 60_000 });
     await press(page, stars);
     await expect(stars).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
     await shot(page, "09-recipe-rated");
