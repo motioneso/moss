@@ -401,6 +401,7 @@ export type AiCallKind = "recipe" | "safety" | "estimate";
 export interface AiCall {
   readonly kind: AiCallKind;
   readonly tierHint: string | undefined;
+  readonly prompt: string;
 }
 
 /** Answers each call kind from its own queue; an empty queue repeats the last answer. */
@@ -430,7 +431,7 @@ export class ScriptedAi implements MealsAi {
     tierHint?: "reasoning" | "interactive" | "economy";
   }) {
     const kind = kindOf(input.schema);
-    this.calls.push({ kind, tierHint: input.tierHint });
+    this.calls.push({ kind, tierHint: input.tierHint, prompt: input.prompt });
     const queue = this.queues.get(kind) ?? [];
     const answer = queue.length > 0 ? queue.shift() : this.fallback.get(kind);
     if (answer instanceof AiError) return { ok: false as const, error: answer.kind };
