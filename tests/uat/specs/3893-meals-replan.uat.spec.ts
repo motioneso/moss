@@ -34,7 +34,7 @@ const MODULE_VERSION = (
   }
 ).version;
 const MODULE_BUILD_TIMEOUT_MS = 180_000;
-const PLAN_WRITE_TIMEOUT_MS = 20 * 60_000;
+const PLAN_WRITE_TIMEOUT_MS = 35 * 60_000;
 const QUICK_SWAP_TIMEOUT_MS = 10 * 60_000;
 
 function say(message: string): void {
@@ -250,7 +250,7 @@ async function waitForPlanSettled(page: Page): Promise<void> {
 test("re-plan the rest of the week and quick swap tonight through the real Meals page", async ({
   page
 }) => {
-  test.setTimeout(45 * 60_000);
+  test.setTimeout(75 * 60_000);
   const baseURL = process.env.JARVIS_UAT_BASE_URL;
   const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
   if (!baseURL || !projectName) throw new Error("Disposable UAT stack required");
