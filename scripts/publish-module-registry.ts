@@ -32,10 +32,9 @@ import { buildExternalModule } from "./build-external-module.js";
 export const REGISTRY_RETAINED_VERSIONS = 5;
 
 // Archived modules keep their source and installed copies, but are not offered for download.
-// Food is unlisted because Meals replaces it for new installs (#3896); installed copies keep
-// running. Keep this publication policy outside signed manifests so other artifact identities
-// do not change.
-const UNLISTED_MODULE_IDS = new Set(["job-search", "food"]);
+// Keep this publication policy outside signed manifests so other artifact identities do not
+// change.
+const UNLISTED_MODULE_IDS = new Set(["job-search"]);
 
 /**
  * Discover every child directory of `external-modules/` except explicitly unlisted modules.

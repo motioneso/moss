@@ -150,14 +150,11 @@ describe("Finance review empty state scope", () => {
   });
 });
 
-it.each(["food", "finance", "job-search", "meals"])(
-  "keeps %s app-map metadata valid",
-  (moduleId) => {
-    const manifest = JSON.parse(
-      readFileSync(resolve("external-modules", moduleId, "jarvis.module.json"), "utf8")
-    ) as Record<string, unknown>;
-    const errors: string[] = [];
-    expect(validateModuleAppMap(manifest, moduleId, errors)).toBeDefined();
-    expect(errors).toEqual([]);
-  }
-);
+it.each(["finance", "job-search", "meals"])("keeps %s app-map metadata valid", (moduleId) => {
+  const manifest = JSON.parse(
+    readFileSync(resolve("external-modules", moduleId, "jarvis.module.json"), "utf8")
+  ) as Record<string, unknown>;
+  const errors: string[] = [];
+  expect(validateModuleAppMap(manifest, moduleId, errors)).toBeDefined();
+  expect(errors).toEqual([]);
+});
