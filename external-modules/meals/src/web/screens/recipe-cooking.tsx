@@ -12,7 +12,7 @@ import {
 } from "@moss/module-web-sdk";
 
 import type { CookedResult, RecipeView, UndoToken } from "../../contracts";
-import type { MealsWrites } from "../writes";
+import { noticeFor, type MealsWrites } from "../writes";
 
 type Toast = {
   readonly text: string;
@@ -33,7 +33,7 @@ export function CookingPanel(props: {
   const { recipe, writes } = props;
   const { meal } = recipe;
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const [toast, setToast] = useState(null as Toast | null);
   if (writes === null) return null;
 
@@ -46,11 +46,11 @@ export function CookingPanel(props: {
     input: Record<string, unknown>
   ): Promise<unknown | null> {
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     const outcome = await writes!.invoke(name, input);
     setBusy(false);
     if (outcome.kind === "succeeded") return outcome.result;
-    if (outcome.kind !== "cancelled") setFailed(true);
+    if (outcome.kind !== "cancelled") setFailed(noticeFor(outcome));
     return null;
   }
 
@@ -194,9 +194,9 @@ export function CookingPanel(props: {
         </div>
       ))}
 
-      {failed ? (
+      {failed !== null ? (
         <p className="jds-caption" role="alert">
-          That did not go through. Try again.
+          {failed}
         </p>
       ) : null}
 

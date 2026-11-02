@@ -8,6 +8,7 @@ export type MealsWriteToolName =
   | "meals.household.remove"
   | "meals.plan.create"
   | "meals.plan.control"
+  | "meals.plan.delete"
   | "meals.meal.cooked"
   | "meals.meal.servings"
   | "meals.meal.rate"
@@ -18,6 +19,7 @@ export type MealsWriteToolName =
   | "meals.list.build"
   | "meals.list.edit"
   | "meals.list.bought"
+  | "meals.list.clear"
   | "meals.pantry.edit"
   | "meals.log.add"
   | "meals.log.correct"
@@ -30,6 +32,7 @@ export type MealsWriteOutcome =
   | { readonly kind: "cancelled" }
   | { readonly kind: "rejected"; readonly moduleCode?: string }
   | { readonly kind: "invalid_input" }
+  | { readonly kind: "saved" }
   | { readonly kind: "failed" };
 
 export interface MealsWrites {
@@ -71,9 +74,31 @@ export function bindWrites(props: Readonly<Record<string, unknown>>): MealsWrite
           return { kind: "rejected", moduleCode: outcome.moduleCode };
         case "invalid_input":
           return { kind: "invalid_input" };
+        case "saved":
+          return { kind: "saved" };
         default:
           return { kind: "failed" };
       }
     }
   };
+}
+
+/**
+ * The message for an outcome that needs one. Success and a person's own cancel return null.
+ * Each of the other four outcomes says something different, because the next step differs.
+ */
+export function noticeFor(outcome: Pick<MealsWriteOutcome, "kind">): string | null {
+  switch (outcome.kind) {
+    case "succeeded":
+    case "cancelled":
+      return null;
+    case "rejected":
+      return "Meals did not accept that change. Check it and try again.";
+    case "invalid_input":
+      return "That entry was not valid. Check it and try again.";
+    case "saved":
+      return "The change was saved. Refresh this page to see it.";
+    default:
+      return "Moss could not confirm that change. Refresh the page and check before trying again.";
+  }
 }

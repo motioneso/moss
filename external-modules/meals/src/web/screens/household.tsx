@@ -16,7 +16,7 @@ import {
 import type { KitchenView, MemberView } from "../../contracts";
 import { dailyTarget, joinTitled, sharingRule, slotsEaten, titleCase } from "../format";
 import type { KitchenState } from "../kitchen";
-import type { MealsWrites } from "../writes";
+import { noticeFor, type MealsWrites } from "../writes";
 import type { HostActions } from "../root";
 
 export function HouseholdScreen(props: {
@@ -53,17 +53,17 @@ function Household(props: {
 }): ReactNodeLike {
   const { kitchen, writes } = props;
   const [busy, setBusy] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const count = kitchen.members.length;
 
   async function remove(member: MemberView) {
     if (writes === null) return;
     setBusy(member.memberId);
-    setFailed(false);
+    setFailed(null);
     const outcome = await writes.invoke("meals.household.remove", { memberId: member.memberId });
     setBusy(null);
     if (outcome.kind === "succeeded") props.reload();
-    else if (outcome.kind !== "cancelled") setFailed(true);
+    else if (outcome.kind !== "cancelled") setFailed(noticeFor(outcome));
   }
 
   return (
@@ -76,9 +76,9 @@ function Household(props: {
             meta={count === 1 ? "1 person" : `${count} people`}
             rule
           />
-          {failed ? (
+          {failed !== null ? (
             <p className="jds-caption" role="alert">
-              Couldn't remove that person
+              {failed}
             </p>
           ) : null}
           <ul className="mls-members">

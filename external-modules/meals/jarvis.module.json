@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "meals",
   "name": "Meals",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": {
@@ -135,13 +135,13 @@
       {
         "id": "meals.plan",
         "label": "Meals",
-        "description": "The Meals page, with tabs for Plan, Shopping list, Pantry, Household and Log. Plan shows the meal plan day by day as Moss writes it, with tonight's dinner on top, and an empty state until a plan exists.",
+        "description": "The Meals page, with tabs for Plan, Shopping list, Pantry, Household and Log. Plan shows the meal plan day by day as Moss writes it, with tonight's dinner on top, an empty state until a plan exists, and controls to stop, resume, regenerate, re-plan, start a new plan or Delete plan, which asks first.",
         "path": "/"
       },
       {
         "id": "meals.list",
         "label": "Shopping list",
-        "description": "The shopping list by store section, with amounts to buy, where each line came from, the plan's Pantry mode, a You have this group for what the Pantry covers, and Bought.",
+        "description": "The shopping list by store section, with amounts to buy, where each line came from, the plan's Pantry mode, a You have this group for what the Pantry covers, Bought, and Clear list, which asks first.",
         "path": "/list"
       },
       {
@@ -271,6 +271,10 @@
       {
         "id": "meals.arrange",
         "description": "Arrange the week: move a meal to another day or slot, change who eats a meal (Safety runs again and servings follow), set a slot to plain text such as eating out, give one person a One-off meal, set a cook-time limit for a night, or make one slot Shared or Solo for a single day. Ask Moss, or use Move, Eaters and Text on a meal in the Plan tab."
+      },
+      {
+        "id": "meals.page-writes",
+        "description": "Every Meals screen changes things directly: tick and mark Bought, edit the Pantry, log and correct meals, rate, mark cooked, lock, swap and arrange. Deleting a plan, removing a person, clearing the shopping list or deleting a logged meal asks first. A change that did not go through says which kind of problem it was: not accepted, not valid, saved but not shown yet, or not confirmed."
       }
     ]
   },

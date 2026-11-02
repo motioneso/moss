@@ -20,7 +20,7 @@ import type { KitchenView, PlanView, RecipeView } from "../../contracts";
 import { readTool } from "../api";
 import { dayTitle, titleCase, todayIso } from "../format";
 import { navigate } from "../router";
-import type { MealsWrites } from "../writes";
+import { noticeFor, type MealsWrites } from "../writes";
 
 type MealState =
   | { readonly kind: "loading" }
@@ -91,18 +91,18 @@ function Shell(props: {
 
 function useRun(writes: MealsWrites | null) {
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   async function run(
     name: "meals.meal.edit" | "meals.day.edit",
     input: Record<string, unknown>
   ): Promise<boolean> {
     if (writes === null || busy) return false;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     const outcome = await writes.invoke(name, input);
     setBusy(false);
     if (outcome.kind !== "succeeded") {
-      setFailed(true);
+      setFailed(noticeFor(outcome));
       return false;
     }
     navigate("/");
@@ -111,10 +111,10 @@ function useRun(writes: MealsWrites | null) {
   return { busy, failed, run };
 }
 
-const FailedNote = (props: { failed: boolean }): ReactNodeLike =>
-  props.failed ? (
+const FailedNote = (props: { failed: string | null }): ReactNodeLike =>
+  props.failed !== null ? (
     <p className="jds-caption" role="alert">
-      That did not go through. Try again.
+      {props.failed}
     </p>
   ) : null;
 
