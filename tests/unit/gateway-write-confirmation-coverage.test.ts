@@ -173,7 +173,7 @@ describe("outside-content confirmation across every shipped write declaration", 
         "settings.themeMode.set",
         "tasks.create",
         "finance.budget.assign",
-        "food.meals.log",
+        "meals.log.add",
         "job-search.profile.create"
       ])
     );

@@ -125,7 +125,7 @@ test("fresh signup, setup, persisted Wellness and installed module copy use real
   });
 
   await test.step("install changed external packages and enable them through Settings", async () => {
-    for (const id of ["finance", "food", "job-search"]) {
+    for (const id of ["finance", "job-search"]) {
       execFileSync("pnpm", [`build:external:${id}`], { stdio: "pipe" });
       execFileSync(
         "docker",
@@ -142,7 +142,7 @@ test("fresh signup, setup, persisted Wellness and installed module copy use real
     await openSettings(page);
     await page.getByRole("button", { name: "Admin / Setup", exact: true }).click();
     await page.getByRole("button", { name: "Instance modules", exact: true }).click();
-    for (const name of ["Finance", "Food", "Job Search"]) {
+    for (const name of ["Finance", "Job Search"]) {
       const toggle = page.getByRole("checkbox", { name: `Enable ${name}`, exact: true });
       await expect(page.locator("label.jds-switch", { has: toggle })).toBeVisible();
       await expect(toggle).toBeEnabled();
@@ -157,7 +157,7 @@ test("fresh signup, setup, persisted Wellness and installed module copy use real
     );
   });
 
-  await test.step("Finance and Food render the changed copy through their installed routes", async () => {
+  await test.step("Finance renders the changed copy through their installed routes", async () => {
     const nav = page.locator('nav[aria-label="Main"]');
     await nav.getByRole("link", { name: "Finance", exact: true }).click();
     await page.getByRole("link", { name: "Finance settings", exact: true }).click();
@@ -171,14 +171,7 @@ test("fresh signup, setup, persisted Wellness and installed module copy use real
     await expect(limit).toHaveValue("$125");
     await page.reload();
     await expect(page.getByLabel("Maximum per budget move", { exact: true })).toHaveValue("$125");
-    await nav.getByRole("link", { name: "Food", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Nothing logged for this day" })).toBeVisible({
-      timeout: 30_000
-    });
-    await expect(
-      page.getByText("Describe what you ate to log a meal.", { exact: false })
-    ).toBeVisible();
-    console.log("TYPOGRAPHY_EXTERNAL finance-limit=persisted food=real-empty-day");
+    console.log("TYPOGRAPHY_EXTERNAL finance-limit=persisted");
     expect(errors).toEqual([]);
   });
 });
