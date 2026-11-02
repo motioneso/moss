@@ -36,10 +36,11 @@ Issue #3893, Vikunja card 314. Parent plan section S9 and section 6.6/6.8 in
    reads the Pantry as it does today, so no new job param is needed.
 4. Re-plan reuses Regenerate's reset and enqueue path. Only the scope and the Pantry mode
    differ. No second reset path.
-5. The clock is a seam, not a global. The plan deps gain an optional `now` function. Tests set
-   it. Live code uses the real clock. The tool takes an optional `timeZone` string. The page
-   sends its own zone. Chat sends none and the handler falls back to UTC, which can misjudge a
-   meal near midnight. That limit goes in the tool description.
+5. The clock is a seam, not a global. The plan deps gain an optional `now` function and an
+   optional `localTimezone`, wired from the worker context the same way the log tools get
+   theirs. Tests set both. The zone resolves in the log tools' order. The user's own zone
+   first, then the tool input, then UTC. The page sends its own zone as input, and chat uses
+   the user's zone, so a meal near midnight is judged in the zone the household lives in.
 6. Quick swap input is `maxMinutes`, a whole number from 5 to 240. It is stored on the meal in
    the new `quick_max_minutes` column from SQL 0027, so a queued job that runs late still knows
    the cap. Job params carry no strings and no cap, per the parent plan.
@@ -84,9 +85,9 @@ Unit, at the tool and job seam with the in-memory store and scripted model.
 - Re-plan replaces only future unlocked uncooked meals, and today's meals whose usual time has
   not passed. A meal today after its usual time, a locked meal, a cooked meal and a past day all
   keep their recipes. It fails if re-plan is just whole-plan regenerate.
-- Re-plan on an ignore-mode plan drafts from the Pantry. The scripted model first offers a dish
-  needing food nobody has, in `only`-style rejection it would fail, so the assert is weaker and
-  exact. The plan view after re-plan shows `prefer`. It fails if the mode is untouched.
+- Re-plan on an ignore-mode plan forces on-hand cooking. Two exact asserts. The plan view after
+  re-plan shows pantry mode `prefer`, and the recipe call that drafts a re-planned meal receives
+  the Pantry stock in prefer mode. Either one fails if the mode is untouched.
 - Quick swap honours the cap. The model first offers a 45-minute dish for a 15-minute ask. The
   saved recipe cooks in 15 minutes or less. It fails if the day's cook limit is used instead.
 - Quick swap passes the interactive tier. The scripted model records the tier hint of the recipe
