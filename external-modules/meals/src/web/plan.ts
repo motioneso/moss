@@ -16,11 +16,19 @@ export type PlanState =
 
 export const POLL_MS = 4000;
 
-/** True while the plan still has days to write and is not stopped or paused. */
+/** True while the plan still has days or meals to write and is not stopped or paused. */
 export function isWriting(plan: PlanView): boolean {
   return (
     plan.state === "active" &&
-    plan.days.some((day) => day.status === "pending" || day.status === "writing")
+    plan.days.some(
+      (day) =>
+        day.status === "pending" ||
+        day.status === "writing" ||
+        // A change can leave a ready day with one meal still to write, for example a new
+        // household member joining a written plan. Keep polling for that meal too, or the slot
+        // shows Waiting until the page is reloaded.
+        day.meals.some((meal) => meal.status === "pending" || meal.status === "writing")
+    )
   );
 }
 
