@@ -413,3 +413,6 @@ blocking	packages/chat/src/live/pre-model-turn.ts	tests/uat/specs/3529-scheduled
 blocking	packages/chat/src/reminders/features.ts	tests/uat/specs/3529-scheduled-read-terminal-real.uat.spec.ts
 blocking	packages/chat/src/scheduled-reads/generation.ts	tests/uat/specs/3529-scheduled-read-terminal-real.uat.spec.ts
 blocking	packages/chat/src/scheduled-reads/request.ts	tests/uat/specs/3529-scheduled-read-terminal-real.uat.spec.ts
+blocking	external-modules/meals/src/domain/replan.ts	tests/uat/specs/3893-meals-replan.uat.spec.ts
+blocking	external-modules/meals/src/plans/meal-job.ts	tests/uat/specs/3893-meals-replan.uat.spec.ts
+blocking	external-modules/meals/sql/0027_add_meals_planned_meals_quick_max_minutes.sql	tests/uat/specs/3893-meals-replan.uat.spec.ts
