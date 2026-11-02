@@ -488,9 +488,20 @@ test("every Meals page control works through the real page", async ({ page }) =>
       page.getByRole("dialog", { name: "Add a person" }).getByRole("button", { name: "Cancel" })
     );
     await goto("/pantry");
-    await shot(page, "12-pantry-dark");
+    await press(page, page.getByRole("button", { name: "Add item", exact: true }).first());
+    await expect(page.getByRole("dialog", { name: "Add to the Pantry" })).toBeVisible({
+      timeout: 60_000
+    });
+    await shot(page, "12-pantry-add-dialog-dark");
+    await page.keyboard.press("Escape");
     await goto("/log");
+    const logMeal = page.getByRole("button", { name: "Log a meal", exact: true }).first();
+    await expect(logMeal).toBeVisible({ timeout: 60_000 });
     await shot(page, "13-log-dark");
+    await press(page, logMeal);
+    await expect(page.getByRole("dialog", { name: "Log a meal" })).toBeVisible();
+    await shot(page, "13-log-meal-dialog-dark");
+    await page.keyboard.press("Escape");
     await goto("/household");
     await expect(page.getByRole("button", { name: "Add person", exact: true })).toBeVisible({
       timeout: 60_000
