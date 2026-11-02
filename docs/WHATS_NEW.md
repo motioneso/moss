@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Lock, regenerate and swap meals.** In the Meals Plan tab you can lock a meal you like, regenerate the rest of the plan, and swap any meal for one of three Safety-checked replacements that never include a dish someone rated one star. [PR #3941](https://github.com/motioneso/moss/pull/3941)
 - **Cook, rate and favourite meals.** On a recipe you can change the servings, mark the meal cooked so the Pantry updates (with Undo), rate it for each person, and mark it as a favourite. [PR #3942](https://github.com/motioneso/moss/pull/3942)
 
 ### 2026-10-31
