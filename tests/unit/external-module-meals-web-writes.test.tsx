@@ -172,3 +172,67 @@ describe("destructive controls", () => {
     expect(buttons(plan, "Delete plan")).toEqual([]);
   });
 });
+
+describe("household controls", () => {
+  const kitchen = {
+    kitchenId: "k",
+    unitsSystem: "metric",
+    defaultPantryMode: "prefer",
+    members: [
+      {
+        memberId: "m1",
+        name: "You",
+        isSelf: true,
+        linkedAccountEmail: null,
+        calorieTarget: null,
+        macroTargets: { proteinG: null, carbG: null, fatG: null },
+        mealPattern: ["breakfast", "lunch", "dinner"],
+        restrictions: [],
+        preferences: [],
+        favouriteRecipeIds: []
+      }
+    ],
+    slotRules: []
+  };
+
+  it("Add person saves a new member through the handle and reloads", async () => {
+    mockReadTool.mockImplementation(async (name: string) => {
+      if (name === "meals.kitchen.get") return kitchen;
+      return { plan: null };
+    });
+    const invoke = vi.fn(async () => ({ status: "succeeded", result: {} }));
+    const renderer = await render("/m/meals/household", { tools: { invoke } });
+    await act(async () => {
+      buttons(renderer, "Add person")[0]!.props.onClick();
+    });
+    const field = (label: string) =>
+      renderer.root.find((n) => n.type === "input" && n.props["aria-label"] === label);
+    await act(async () => {
+      field("Name").props.onChange({ target: { value: "Sam" } });
+      field("Never serve").props.onChange({ target: { value: "peanuts, shellfish" } });
+    });
+    await act(async () => {
+      buttons(renderer, "Save")[0]!.props.onClick();
+    });
+    expect(invoke).toHaveBeenCalledWith("meals.household.save", {
+      name: "Sam",
+      restrictions: ["peanuts", "shellfish"]
+    });
+  });
+
+  it("will not save a person with no name", async () => {
+    mockReadTool.mockImplementation(async (name: string) =>
+      name === "meals.kitchen.get" ? kitchen : { plan: null }
+    );
+    const invoke = vi.fn();
+    const renderer = await render("/m/meals/household", { tools: { invoke } });
+    await act(async () => {
+      buttons(renderer, "Add person")[0]!.props.onClick();
+    });
+    await act(async () => {
+      buttons(renderer, "Save")[0]!.props.onClick();
+    });
+    expect(invoke).not.toHaveBeenCalled();
+    expect(text(renderer)).toContain("Enter a name first");
+  });
+});

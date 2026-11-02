@@ -18,6 +18,7 @@ import { dailyTarget, joinTitled, sharingRule, slotsEaten, titleCase } from "../
 import type { KitchenState } from "../kitchen";
 import { noticeFor, type MealsWrites } from "../writes";
 import type { HostActions } from "../root";
+import { PersonDialog } from "./household-dialog";
 
 export function HouseholdScreen(props: {
   state: KitchenState;
@@ -54,6 +55,7 @@ function Household(props: {
   const { kitchen, writes } = props;
   const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
+  const [editing, setEditing] = useState<MemberView | "new" | null>(null);
   const count = kitchen.members.length;
 
   async function remove(member: MemberView) {
@@ -66,8 +68,30 @@ function Household(props: {
     else if (outcome.kind !== "cancelled") setFailed(noticeFor(outcome));
   }
 
+  async function save(input: Record<string, unknown>) {
+    if (writes === null || busy !== null) return;
+    setBusy("save");
+    setFailed(null);
+    const outcome = await writes.invoke("meals.household.save", input);
+    setBusy(null);
+    if (outcome.kind === "succeeded") {
+      setEditing(null);
+      props.reload();
+    } else {
+      setFailed(noticeFor(outcome));
+    }
+  }
+
   return (
     <div className="mls-grid">
+      {editing !== null ? (
+        <PersonDialog
+          member={editing === "new" ? null : editing}
+          busy={busy !== null}
+          onClose={() => setEditing(null)}
+          onSave={(input) => void save(input)}
+        />
+      ) : null}
       <div className="mls-stack">
         <section className="mls-stack">
           <SectionHead
@@ -92,6 +116,17 @@ function Household(props: {
                   </div>
                   <Facts member={member} />
                 </div>
+                {writes !== null ? (
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    aria-label={`Edit ${member.name}`}
+                    disabled={busy !== null}
+                    onClick={() => setEditing(member)}
+                  >
+                    Edit
+                  </Button>
+                ) : null}
                 {writes !== null && !member.isSelf ? (
                   <Button
                     variant="quiet"
@@ -127,14 +162,20 @@ function Household(props: {
             ))}
           </ul>
         </div>
-        <Button
-          variant="secondary"
-          onClick={() =>
-            props.hostActions.openAssistant({ starterPrompt: "Add someone to my household: " })
-          }
-        >
-          Ask Moss
-        </Button>
+        {writes !== null ? (
+          <Button disabled={busy !== null} onClick={() => setEditing("new")}>
+            Add person
+          </Button>
+        ) : (
+          <Button
+            variant="secondary"
+            onClick={() =>
+              props.hostActions.openAssistant({ starterPrompt: "Add someone to my household: " })
+            }
+          >
+            Ask Moss
+          </Button>
+        )}
       </aside>
     </div>
   );

@@ -165,7 +165,7 @@
       {
         "id": "meals.household",
         "label": "Household",
-        "description": "Who eats, each person's meals of the day, Never serve list, preferences and optional calorie target.",
+        "description": "Who eats, each person's meals of the day, Never serve list, preferences and optional calorie target. Add person and Edit open a form; Remove asks first.",
         "path": "/household"
       },
       {
