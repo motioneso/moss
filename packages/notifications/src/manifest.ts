@@ -96,6 +96,21 @@ export const notificationsModuleManifest = {
   ],
   features: [
     {
+      id: "notifications.sensitivity",
+      description:
+        "The Notifications page under Modules in Settings opens with Sensitivity, a Quiet, Balanced or Proactive choice with a one-line hint under it. Balanced is the default."
+    },
+    {
+      id: "notifications.sensitivity-levels",
+      description:
+        "Quiet: only what is genuinely urgent, the rest waits for your briefing. Balanced: timely nudges without the noise. Proactive: speaks up early and often."
+    },
+    {
+      id: "notifications.channels-and-modules",
+      description:
+        "Below Sensitivity, Channels lists In-app and the Email digest, and Modules lets you mute one module without changing its own settings."
+    },
+    {
       id: "notifications.quiet_hours",
       description:
         "Normal alerts recheck quiet hours and wait for the local boundary. Visible bell items stay visible; their alerts release individually. Items created during quiet hours release as a summary. Urgent alerts remain immediate."

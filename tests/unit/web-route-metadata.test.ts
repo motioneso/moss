@@ -110,9 +110,13 @@ describe("web route metadata", () => {
 
   it("keeps every core app-map screen reachable by web route metadata", () => {
     const routeIds = new Set(webRoutes.map((route) => route.id));
-    expect(CORE_APP_SCREENS.map((surface) => surface.id).filter((id) => !routeIds.has(id))).toEqual(
-      []
-    );
+    const routePaths = new Set(webRoutes.map((route) => route.path));
+    // Topic entries may share the path of a routed screen instead of owning a route id.
+    expect(
+      CORE_APP_SCREENS.filter(
+        (surface) => !routeIds.has(surface.id) && !routePaths.has(surface.path)
+      ).map((surface) => surface.id)
+    ).toEqual([]);
   });
 });
 

@@ -75,6 +75,11 @@ export const scratchpadModuleManifest = {
   // matching the notifications module's precedent for a module with no screen yet.
   features: [
     {
+      id: "scratchpad.where-to-find",
+      description:
+        "The web app has no Scratchpad screen, navigation entry or settings pane yet. It works through chat: ask Moss to read the scratchpad or add a line to it. Moss only adds text and never replaces or deletes it."
+    },
+    {
       id: "scratchpad.chat_app_actions",
       description:
         "App actions read and append Scratchpad text and change its local settings. Replacing the whole Scratchpad remains blocked; returned note text is outside content."
@@ -120,13 +125,13 @@ export const scratchpadModuleManifest = {
     {
       id: "scratchpad.settings",
       description:
-        "Scratchpad settings: the keyboard shortcut that opens the pad, and whether the pad is copied into the user's notes folder.",
+        "Scratchpad settings: the keyboard shortcut that opens the pad, and whether the pad is copied into the user's notes folder. The web app has no settings pane for these yet, so they are changed through chat.",
       remediations: [
         {
           id: "scratchpad.settings.connect_notes_folder",
           description:
             "Connect a notes folder under Connections in Settings, then turn on copying the scratchpad to notes again.",
-          path: "/settings?section=sources"
+          path: "/settings?section=connections"
         }
       ],
       errors: [

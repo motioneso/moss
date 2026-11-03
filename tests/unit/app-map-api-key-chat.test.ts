@@ -27,7 +27,9 @@ describe("app map: API-key chat (#3410)", () => {
 
   it("quotes every chat readiness line on an API-key provider card", () => {
     const description =
-      CORE_APP_SETTINGS.find((entry) => entry.id === "aiproviders")?.description ?? "";
+      CORE_APP_SETTINGS.find((entry) =>
+        entry.description.includes("API-key provider card also shows whether chat can use it")
+      )?.description ?? "";
     const marker = "API-key provider card also shows whether chat can use it";
     const readiness = description.slice(
       description.indexOf(marker),
