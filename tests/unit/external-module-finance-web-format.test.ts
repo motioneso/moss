@@ -12,6 +12,7 @@ import {
 
 import {
   centsToAmountInput,
+  defaultLedgerMonth,
   formatCents,
   instantDayLabel,
   parseAmountToCents
@@ -206,5 +207,21 @@ describe("instantDayLabel", () => {
 
   it("returns text it cannot read unchanged", () => {
     expect(instantDayLabel("not a time")).toBe("not a time");
+  });
+});
+
+describe("defaultLedgerMonth", () => {
+  it("opens on the previous month during the first days of a month", () => {
+    expect(defaultLedgerMonth(new Date(2026, 10, 2))).toBe("2026-10");
+    expect(defaultLedgerMonth(new Date(2026, 10, 7))).toBe("2026-10");
+  });
+
+  it("opens on the current month from the eighth day on", () => {
+    expect(defaultLedgerMonth(new Date(2026, 10, 8))).toBe("2026-11");
+    expect(defaultLedgerMonth(new Date(2026, 10, 30))).toBe("2026-11");
+  });
+
+  it("crosses the year boundary", () => {
+    expect(defaultLedgerMonth(new Date(2027, 0, 3))).toBe("2026-12");
   });
 });

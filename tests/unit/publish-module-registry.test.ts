@@ -252,10 +252,9 @@ describe("module discovery", () => {
     expect(readFileSync(join(outDir, "index.json"), "utf8")).not.toContain("job-search");
     expect(readdirSync(outDir).some((name) => name.startsWith("job-search-"))).toBe(false);
     expect(existsSync(join(repoRoot, "external-modules/job-search/src"))).toBe(true);
-    // Food is unlisted so new installs get Meals; its source stays for installed copies.
+    // Food's source is gone; it is never published.
     expect(publishedIds).not.toContain("food");
     expect(readdirSync(outDir).some((name) => name.startsWith("food-"))).toBe(false);
-    expect(existsSync(join(repoRoot, "external-modules/food/src"))).toBe(true);
     // Each index entry claims a packed artifact; confirm the tarball actually landed on
     // disk rather than trusting the returned object alone.
     for (const module of index.modules) {

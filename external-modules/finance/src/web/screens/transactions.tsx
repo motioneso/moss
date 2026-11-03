@@ -21,7 +21,7 @@ import {
 } from "@moss/module-web-sdk";
 import { runWrite, type RunOutcome } from "../api";
 import { chunkReviewRows } from "../assign";
-import { currentMonth, monthLabel, shiftMonth } from "../format";
+import { defaultLedgerMonth, monthLabel, shiftMonth } from "../format";
 import { announce, EmptyState, outcomeGate } from "../states";
 import { invalidateQueries, invalidateToolQueries, useToolQuery } from "../store";
 import { downloadTransactionsCsv, transactionsCsv, initialRegisterScope } from "../register";
@@ -202,7 +202,7 @@ export function TransactionsScreen(
     initialRegisterScope(typeof window === "undefined" ? "" : window.location.search)
   );
   const [ownOnly, setOwnOnly] = useState(initial.ownOnly);
-  const [month, setMonth] = useState(() => initial.month ?? currentMonth());
+  const [month, setMonth] = useState(() => initial.month ?? defaultLedgerMonth());
   const [exporting, setExporting] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [draft, setDraft] = useState("");
