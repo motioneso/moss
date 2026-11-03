@@ -111,6 +111,8 @@ export async function draftSafeRecipe(request: DraftRequest): Promise<DraftResul
   let attempts = 0;
   let lastVerdicts: readonly SafetyVerdict[] | null = null;
   let lastRejection: "safety" | "pantry" | "veto" = "safety";
+  // Why earlier tries failed Safety, fed to the next try so it leaves those ingredients out.
+  const rejected: string[] = [];
   const fail = (reason: GenerationFailure): DraftResult => ({
     ok: false,
     reason,
@@ -133,6 +135,7 @@ export async function draftSafeRecipe(request: DraftRequest): Promise<DraftResul
         cookTimeLimitMinutes: request.cookTimeLimitMinutes,
         requestText: plan.requestText,
         avoidTitles: request.avoidTitles,
+        rejected,
         unitsSystem: kitchen.unitsSystem,
         ...(pantry !== null && pantry.mode !== "ignore"
           ? {
@@ -172,6 +175,11 @@ export async function draftSafeRecipe(request: DraftRequest): Promise<DraftResul
     if (checked.kind === "error") return fail(checked.reason);
     if (checked.verdicts.some((verdict) => verdict.verdict === "fail")) {
       lastVerdicts = checked.verdicts;
+      for (const verdict of checked.verdicts) {
+        if (verdict.verdict === "fail" && !rejected.includes(verdict.reason)) {
+          rejected.push(verdict.reason);
+        }
+      }
       lastRejection = "safety";
       continue;
     }

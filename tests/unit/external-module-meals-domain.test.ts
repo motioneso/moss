@@ -133,7 +133,39 @@ describe("calorie split, portions and fit", () => {
   });
 });
 
-describe("deterministic Safety", () => {
+describe("deterministic Safety and gluten-free wording", () => {
+  const rules = ["gluten", "beef", "pork", "chicken"];
+
+  it("lets a line the recipe calls gluten-free pass a gluten rule", () => {
+    for (const line of [
+      ingredient("2 cups gluten-free vegetable broth", "vegetable broth"),
+      ingredient("1 cup quinoa (gluten free)", "quinoa"),
+      ingredient("1 tbsp gluten-free soy sauce", "soy sauce"),
+      ingredient("200 g pasta, free from gluten", "pasta"),
+      ingredient("200 g corn tortillas", "corn tortillas"),
+      ingredient("2 tbsp rice flour", "rice flour")
+    ]) {
+      expect(deterministicSafety([line], rules).verdict).toBe("pass");
+    }
+  });
+
+  it("still fails real gluten and meat", () => {
+    for (const line of [
+      ingredient("200 g spaghetti", "spaghetti"),
+      ingredient("2 flour tortillas", "flour tortillas"),
+      ingredient("1 tbsp soy sauce", "soy sauce"),
+      ingredient("2 chicken thighs", "chicken thighs")
+    ]) {
+      expect(deterministicSafety([line], rules).verdict).toBe("fail");
+    }
+  });
+
+  it("names the item and the rule in the reason", () => {
+    expect(deterministicSafety([ingredient("200 g spaghetti", "spaghetti")], rules)).toEqual({
+      verdict: "fail",
+      reason: 'spaghetti conflicts with "gluten"'
+    });
+  });
   it("fails a peanut ingredient for a no-peanut eater", () => {
     const verdict = deterministicSafety(
       [ingredient("2 tbsp smooth peanut butter", "peanut butter")],

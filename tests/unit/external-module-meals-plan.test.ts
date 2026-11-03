@@ -410,6 +410,22 @@ describe("Safety", () => {
     expect((await setup.store.getDay(plan.days[0]!.dayId))?.failureReason).toBe("safety_cap");
   });
 
+  it("tells the next recipe attempt why the last one was turned down", async () => {
+    const ai = new ScriptedAi()
+      .always("recipe", recipeAnswer())
+      .script("safety", { eaters: [{ eater: 1, verdict: "fail", reason: "Fish sauce" }] })
+      .always("safety", safetyPass(1))
+      .always("estimate", ESTIMATE_800);
+    const setup = fakeDeps(kitchenOf([noPeanuts]), ai);
+    await planCreate(setup.deps, createInput());
+    await drain(setup);
+    const recipes = ai.calls.filter((call) => call.kind === "recipe");
+    expect(recipes[0]!.prompt).not.toContain("Earlier tries were turned down");
+    expect(recipes[1]!.prompt).toContain("Earlier tries were turned down");
+    expect(recipes[1]!.prompt).toContain("Fish sauce");
+    expect(mealsOf(setup)[0]?.status).toBe("ready");
+  });
+
   it("keeps a rule failure even when the model would pass it", async () => {
     const ai = new ScriptedAi()
       .always("recipe", peanutRecipe)

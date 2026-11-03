@@ -220,14 +220,48 @@ function containsTerm(haystack: string, term: string): boolean {
   return ` ${haystack} `.includes(` ${term} `);
 }
 
+/** "gluten free", "dairy free", "free from nuts" and "free of eggs" after normalising. */
+const FREE_PHRASE = /\b(?:[a-z0-9]+ free|free (?:from|of) [a-z0-9]+)\b/g;
+
+/** Grain-free flours and breads that a gluten rule does not exclude. */
+const GLUTEN_FREE_COMPOUND =
+  /\b(?:corn|rice|buckwheat|chickpea|gram|almond|coconut|cassava|tapioca|potato|quinoa|lentil|sorghum|millet|arrowroot) (?:flour|bread|pasta|noodles?|tortillas?|crackers?|breadcrumbs|spaghetti|pita)\b/g;
+
+/** Every restriction word that rules out the same terms, such as gluten, wheat and coeliac. */
+function sameGroup(phrase: string): readonly string[] {
+  const group = EXPANSIONS[phrase];
+  if (group === undefined) return [phrase];
+  return Object.keys(EXPANSIONS).filter((key) => EXPANSIONS[key] === group);
+}
+
+/**
+ * A line the recipe itself calls free of the restricted food, such as "gluten-free soy sauce",
+ * does not trip that rule. The model check and the label flag still look at it.
+ */
+function declaresFree(text: string, phrase: string): boolean {
+  return sameGroup(phrase).some(
+    (word) =>
+      containsTerm(text, `${word} free`) ||
+      containsTerm(text, `free from ${word}`) ||
+      containsTerm(text, `free of ${word}`)
+  );
+}
+
 export function deterministicSafety(
   ingredients: readonly IngredientDraft[],
   restrictions: readonly string[]
 ): SafetyVerdict {
   for (const restriction of restrictions) {
     const terms = restrictionTerms(restriction);
+    const phrase = normalise(restriction)
+      .replace(LEADING_NEGATION, "")
+      .replace(TRAILING_QUALIFIER, "");
+    const glutenRule = EXPANSIONS[phrase] === GLUTEN;
     for (const line of ingredients) {
-      const text = `${normalise(line.name)} ${normalise(line.originalText)}`;
+      let text = `${normalise(line.name)} ${normalise(line.originalText)}`;
+      if (declaresFree(text, phrase)) continue;
+      text = text.replace(FREE_PHRASE, " ");
+      if (glutenRule) text = text.replace(GLUTEN_FREE_COMPOUND, " ");
       const hit = terms.find((term) => containsTerm(text, term));
       if (hit !== undefined) {
         const reason = `${line.name} conflicts with "${restriction}"`;

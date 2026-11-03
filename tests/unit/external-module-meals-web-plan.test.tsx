@@ -204,6 +204,42 @@ describe("Meals Plan tab", () => {
     expect(text(renderer)).toContain("The AI service hit its usage limit.");
   });
 
+  it("keeps the written meals when a day failed and names who blocked the failed one", async () => {
+    current = () => ({
+      plan: plan({
+        days: [
+          day({
+            status: "failed",
+            failureReason: "safety_cap",
+            meals: [
+              meal({ mealId: "ok", slotName: "breakfast", title: "Berry porridge" }),
+              meal({
+                mealId: "bad",
+                slotName: "lunch",
+                status: "failed",
+                failureReason: "safety_cap",
+                title: null,
+                eaters: [
+                  eater({
+                    memberId: "m2",
+                    name: "Kather",
+                    safety: "fail",
+                    safetyReason: 'spaghetti conflicts with "gluten"'
+                  })
+                ]
+              })
+            ]
+          })
+        ]
+      })
+    });
+    const renderer = await render();
+    const shown = text(renderer);
+    expect(shown).toContain("Berry porridge");
+    expect(shown).toContain('Kather: spaghetti conflicts with "gluten".');
+    expect(shown).not.toContain("Moss could not finish");
+  });
+
   it("shows no write control without the host's write handle", async () => {
     current = () => ({
       plan: plan({
