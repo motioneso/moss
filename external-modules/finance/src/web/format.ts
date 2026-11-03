@@ -81,6 +81,18 @@ export function currentMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
+/** Days at the start of a month during which Transactions opens on the month just ended. */
+export const EARLY_MONTH_DAYS = 7;
+
+/**
+ * The month Transactions opens on. In the first days of a month the previous month still holds
+ * the rows being reviewed, so it opens there instead of on a nearly empty current month.
+ */
+export function defaultLedgerMonth(now: Date = new Date()): string {
+  const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return now.getDate() <= EARLY_MONTH_DAYS ? shiftMonth(current, -1) : current;
+}
+
 // Mirrors the finance.budget-apply manifest bound (±$1M in cents): anything
 // the parser lets through is guaranteed legal for the queue params gate.
 const MAX_ASSIGN_CENTS = 100_000_000;
