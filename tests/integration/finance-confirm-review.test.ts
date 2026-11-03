@@ -165,6 +165,37 @@ describe("atomic captured category confirmation", () => {
     expect(await owner((s) => s.bulk!.confirm!(rows))).toBe(false);
     expect(await activityCount()).toBe(count + 2);
   });
+  it("undoes a confirm by restoring review state and how each category was chosen", async () => {
+    await seed(
+      transaction("undo:a", { categorizedBy: "ai" }),
+      transaction("undo:b", { categorizedBy: "rule" })
+    );
+    const before = await owner((s) => s.listMonthTransactions("2026-10"));
+    const rows = await review(["undo:a", "undo:b"]);
+    const confirmed = await owner((s) => s.bulk!.confirmWithUndo!(rows));
+    expect(confirmed?.map((r) => [r.id, r.categorizedBy])).toEqual([
+      ["undo:a", "ai"],
+      ["undo:b", "rule"]
+    ]);
+    const mid = await owner((s) => s.listMonthTransactions("2026-10"));
+    expect(
+      mid.filter((r) => r.id.startsWith("undo:")).every((r) => r.reviewState === "confirmed")
+    ).toBe(true);
+    expect(await owner((s) => s.bulk!.unconfirm!(confirmed!))).toBe(true);
+    expect(await owner((s) => s.listMonthTransactions("2026-10"))).toEqual(before);
+    expect(await owner((s) => s.bulk!.unconfirm!(confirmed!))).toBe(false);
+  });
+  it("refuses an undo when any row changed after the confirm", async () => {
+    await seed(transaction("undo:c"), transaction("undo:d"));
+    const confirmed = (await owner((s) =>
+      s.bulk!.confirmWithUndo!(await review(["undo:c", "undo:d"]))
+    ))!;
+    const fresh = await review(["undo:c"]);
+    await owner((s) => s.bulk!.categorize(fresh, "utilities"));
+    expect(await owner((s) => s.bulk!.unconfirm!(confirmed))).toBe(false);
+    const after = await owner((s) => s.listMonthTransactions("2026-10"));
+    expect(after.find((r) => r.id === "undo:d")?.reviewState).toBe("confirmed");
+  });
   it("refuses stale, pending, split, uncategorized, unavailable-category and foreign rows as a whole", async () => {
     await seed(
       transaction("confirm:good"),
