@@ -424,7 +424,11 @@ export function AttentionList(props: {
             {row.count > 1 ? `Confirm all ${row.count}` : "Confirm"}
           </Button>
         ) : null}
-        <Button size="sm" variant="quiet" onClick={() => navigate("/transactions?filter=look")}>
+        <Button
+          size="sm"
+          variant="quiet"
+          onClick={() => navigate(`/transactions?filter=look&month=${props.month}`)}
+        >
           Review
         </Button>
       </>
