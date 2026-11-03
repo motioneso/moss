@@ -53,6 +53,15 @@ export function renderChatResponseStyleInstruction(style: ChatResponseStyle): st
   return "Default response style: balanced. Be direct, with enough context to be useful.";
 }
 
+/** Applies a save to the stored settings. A field the save omits keeps its stored value. */
+export function mergeChatSettings(stored: unknown, update: ChatSettingsUpdateDto): ChatSettingsDto {
+  const current = normalizeChatSettings(stored);
+  return normalizeChatSettings({
+    ...update,
+    frontDoorGuardedDevices: update.frontDoorGuardedDevices ?? current.frontDoorGuardedDevices
+  });
+}
+
 const chatSettingsSchema = {
   type: "object",
   additionalProperties: false,

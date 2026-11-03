@@ -10,6 +10,7 @@ import type { Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
 import type { ActAsGrantRegistry } from "@moss/module-sdk/server";
 import { createAppActionsService } from "./app-actions.js";
+import { saveChatSettings } from "./chat-settings-save.js";
 
 import {
   isUuid,
@@ -817,18 +818,9 @@ export function registerChatRoutes(
       try {
         const access = await dependencies.resolveAccessContext(request);
         const body = request.body as PutChatSettingsRequest;
-        const chat = await dependencies.dataContext.withDataContext(access, async (scopedDb) => {
-          const stored = normalizeChatSettings(
-            await chatSettingsRepo.get(scopedDb, CHAT_SETTINGS_PREFERENCE_KEY)
-          );
-          const next = normalizeChatSettings({
-            ...body.chat,
-            frontDoorGuardedDevices:
-              body.chat.frontDoorGuardedDevices ?? stored.frontDoorGuardedDevices
-          });
-          await chatSettingsRepo.upsert(scopedDb, CHAT_SETTINGS_PREFERENCE_KEY, next);
-          return next;
-        });
+        const chat = await dependencies.dataContext.withDataContext(access, (db) =>
+          saveChatSettings(db, chatSettingsRepo, body.chat)
+        );
         return { chat };
       } catch (error) {
         return handleRouteError(error, reply);
