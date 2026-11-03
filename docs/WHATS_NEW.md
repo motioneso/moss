@@ -37,6 +37,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Meal plans no longer fail on gluten-free ingredients.** Meal plans now finish for people with a gluten-free or similar Never serve list, and a day that has a problem still shows the meals that worked, with a Retry on the ones that did not. [PR #3956](https://github.com/motioneso/moss/pull/3956)
 - **Transactions opens on last month early in the month.** In the first week of a month, Transactions now opens on the month that just ended, and the Budget screen shows a placeholder amount instead of dots while it loads. [PR #3954](https://github.com/motioneso/moss/pull/3954)
 
 ### 2026-11-01
