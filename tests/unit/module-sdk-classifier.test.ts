@@ -277,10 +277,35 @@ describe("filterOnOffCandidates", () => {
     ]);
   });
 
-  it("leaves a list that is not made of device ids unchanged", () => {
-    const names = [device("kitchen"), device("Living Room")];
-    expect(filterOnOffCandidates(names)).toEqual(names);
+  it("drops every id that is not a light, switch or fan, whatever its shape", () => {
+    const ids = [
+      "Lock.front",
+      "lock.front-door",
+      "lock.front.door",
+      "LOCK.a",
+      "Cover.b",
+      "kitchen",
+      "Living Room",
+      " lock.x",
+      ".lock",
+      ""
+    ];
+    expect(filterOnOffCandidates(ids.map(device))).toEqual([]);
   });
+
+  it("compares the kind case-insensitively and keeps a light written in capitals", () => {
+    expect(filterOnOffCandidates([device("Light.Kitchen"), device("LOCK.a")])).toEqual([
+      device("Light.Kitchen")
+    ]);
+  });
+
+  it.each(["Lock.front", "lock.front-door", "lock.front.door", "LOCK.a", "Cover.b"])(
+    "keeps %s only for an account that opted in",
+    (id) => {
+      expect(filterOnOffCandidates([device(id)])).toEqual([]);
+      expect(filterOnOffCandidates([device(id)], { includeGuarded: true })).toEqual([device(id)]);
+    }
+  );
 
   it("keeps locks and covers when the account opted in, and still drops unknown kinds", () => {
     const kept = filterOnOffCandidates(

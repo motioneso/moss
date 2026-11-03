@@ -67,6 +67,12 @@ export interface ModuleAssistantToolClassifier {
   /** Required when any argument is `candidates`. */
   readonly candidates?: ClassifierCandidateProvider;
   /**
+   * Set to `false` only when the candidates are not devices (for example task names). Without it,
+   * a tool that changes things is offered only lights, switches and fans, and locks or covers only
+   * to an account that opted in.
+   */
+  readonly candidatesAreDevices?: boolean;
+  /**
    * Reply text filled from the tool result, for example "Added {task.title}.". Each placeholder
    * is a dotted path into `outputSchema.properties` ending at a string, number, integer or
    * boolean. The classifier never writes reply text.
@@ -232,24 +238,24 @@ export const ON_OFF_DEVICE_DOMAINS: readonly string[] = ["light", "switch", "fan
 /** Locks, doors and garage openers. Offered only when the account has switched them on. */
 export const GUARDED_DEVICE_DOMAINS: readonly string[] = ["lock", "cover"];
 
-const DEVICE_ENTITY_ID = /^([a-z][a-z0-9_]*)\.[a-z0-9_]+$/;
-
 /**
- * Keeps only lights, switches and fans when a candidate list is a device list (every id looks like
- * `domain.name`). Locks, doors and garage openers are kept only when `includeGuarded` is true, and
- * any unknown kind is always removed. A list whose ids are not device ids passes unchanged.
+ * Allow-list for a candidate list that feeds a tool which changes things. An id is kept only when
+ * the text before its first dot, lowercased, is a light, switch or fan, or a lock or cover when
+ * `includeGuarded` is true. Every other id is dropped, including ids with no dot, so a list
+ * cannot slip through because nothing in it looks like a device. A tool whose candidates are not
+ * devices must say so with `candidatesAreDevices: false` on its classifier, and the caller skips
+ * this filter for it.
  */
 export function filterOnOffCandidates(
   candidates: readonly ClassifierCandidate[],
   options: { readonly includeGuarded?: boolean } = {}
 ): readonly ClassifierCandidate[] {
-  if (!candidates.some((entry) => DEVICE_ENTITY_ID.test(entry.id))) return candidates;
   const allowed = options.includeGuarded
     ? [...ON_OFF_DEVICE_DOMAINS, ...GUARDED_DEVICE_DOMAINS]
     : ON_OFF_DEVICE_DOMAINS;
   return candidates.filter((entry) => {
-    const domain = DEVICE_ENTITY_ID.exec(entry.id)?.[1];
-    return domain !== undefined && allowed.includes(domain);
+    const dot = entry.id.indexOf(".");
+    return dot > 0 && allowed.includes(entry.id.slice(0, dot).toLowerCase());
   });
 }
 

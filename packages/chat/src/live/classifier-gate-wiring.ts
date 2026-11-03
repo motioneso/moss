@@ -252,7 +252,7 @@ export function createClassifierGatePortsFactory(
         // A tool that changes things is offered lights, switches and fans from a device list, and
         // locks, doors and garage openers only for an account that switched them on.
         const offered =
-          tool.risk === "read"
+          tool.risk === "read" || manifestTool.classifier.candidatesAreDevices === false
             ? normalized.candidates
             : filterOnOffCandidates(normalized.candidates, {
                 includeGuarded: await guardedDevicesOn()

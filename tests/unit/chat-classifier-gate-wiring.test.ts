@@ -43,7 +43,7 @@ const calendarTool = {
   execute: vi.fn()
 };
 
-const candidates = vi.fn(async () => [{ id: "kitchen", label: "Kitchen light" }]);
+const candidates = vi.fn(async () => [{ id: "light.kitchen", label: "Kitchen light" }]);
 const switchTool = {
   name: "home.setSwitch",
   description: "Set a switch",
@@ -137,7 +137,7 @@ describe("createClassifierGatePortsFactory", () => {
     const switchGateTool = tools.find((tool) => tool.name === "home.setSwitch")!;
     const controller = new AbortController();
     const raw = await ports.loadCandidates(switchGateTool, controller.signal);
-    expect(raw).toEqual([{ id: "kitchen", label: "Kitchen light" }]);
+    expect(raw).toEqual([{ id: "light.kitchen", label: "Kitchen light" }]);
     expect(candidates).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({ actorUserId: "actor-1" }),
@@ -157,6 +157,34 @@ describe("createClassifierGatePortsFactory", () => {
     const switchGateTool = tools.find((tool) => tool.name === "home.setSwitch")!;
     const raw = await ports.loadCandidates(switchGateTool, new AbortController().signal);
     expect(raw).toEqual([{ id: "light.kitchen", label: "Kitchen light" }]);
+  });
+
+  it("drops a list with no device-shaped ids unless the tool says its candidates are not devices", async () => {
+    const odd = [
+      { id: "Lock.front", label: "A" },
+      { id: "lock.front-door", label: "B" },
+      { id: "lock.front.door", label: "C" },
+      { id: "kitchen", label: "D" }
+    ];
+    candidates.mockResolvedValueOnce(odd);
+    const { factory } = makeFactory({ preferences: { get: async () => null } });
+    const ports = factory("actor-1", "jst_gate");
+    const gateTool = (await ports.listTools()).find((tool) => tool.name === "home.setSwitch")!;
+    expect(await ports.loadCandidates(gateTool, new AbortController().signal)).toEqual([]);
+
+    const named = {
+      ...switchTool,
+      classifier: { ...switchTool.classifier, candidatesAreDevices: false }
+    };
+    candidates.mockResolvedValueOnce(odd);
+    const { factory: namedFactory } = makeFactory({
+      manifests: () => [{ ...manifest, assistantTools: [calendarTool, named] } as never]
+    });
+    const namedPorts = namedFactory("actor-1", "jst_gate");
+    const namedTool = (await namedPorts.listTools()).find(
+      (tool) => tool.name === "home.setSwitch"
+    )!;
+    expect(await namedPorts.loadCandidates(namedTool, new AbortController().signal)).toEqual(odd);
   });
 
   const mixedDevices = [
