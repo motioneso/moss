@@ -65,6 +65,7 @@ describe("activity titles (#2956 slice C)", () => {
     expect(activityTitle("chat.tool_check", "clef-flash")).toBe(
       "clef-flash guessed which tool to use"
     );
+    expect(activityTitle("chat.handled", "clef-flash")).toBe("clef-flash handled a chat message");
     expect(activityTitle("embed.notes", "embed")).toBe("Indexed notes for search");
     expect(activityTitle("transcribe.voice_note", "transcribe")).toBe("Transcribed a voice note");
     expect(activityTitle("transcribe.meeting", "transcribe")).toBe("Transcribed a meeting clip");

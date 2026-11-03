@@ -231,6 +231,12 @@ export const chatModuleManifest = {
       featureFlagId: "chat.module"
     },
     {
+      id: "chat.handled_turn_activity",
+      description:
+        "Main chat only. When the fast decision model answers a message itself, Settings > Activity shows one line naming that model, the tool it ran and the time taken. Private chats and messages with attachments skip the fast model, so they add no such line. A message it cannot handle goes to the main model with no handled line.",
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.domain_read_resolution",
       description:
         "Moss tries authorized reads before clarifying saved names. Replies honor resolved units and actual sample times; comparisons may convert. Explicit sources are honored. Ambiguity needs clarification; unavailable reads keep truthful text.",
