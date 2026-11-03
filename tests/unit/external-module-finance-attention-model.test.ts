@@ -123,8 +123,8 @@ describe("finance attention model", () => {
       predicted: {
         total: 2,
         rows: [
-          { id: "t1", name: "Cafe", categoryName: null, amountCents: 300 },
-          { id: "t2", name: "Shop", categoryName: null, amountCents: 400 }
+          { id: "t1", name: "Cafe", categoryName: "Dining", amountCents: 300 },
+          { id: "t2", name: "Shop", categoryName: "Shopping", amountCents: 400 }
         ]
       }
     });
@@ -148,6 +148,24 @@ describe("finance attention model", () => {
       predicted: {
         total: 5,
         rows: [{ id: "t1", name: "Cafe", categoryName: null, amountCents: 300 }]
+      }
+    });
+    const first = rows[0]!;
+    expect(first.kind === "predicted" ? first.confirmable : "wrong").toBeNull();
+  });
+
+  it("offers no bulk confirm when a transaction has no guessed category", () => {
+    const rows = attentionRows({
+      month: "2026-11",
+      currentMonth: "2026-11",
+      bills: null,
+      lines: [],
+      predicted: {
+        total: 2,
+        rows: [
+          { id: "t1", name: "Cafe", categoryName: "Dining", amountCents: 300 },
+          { id: "t2", name: "Payout", categoryName: null, amountCents: 400 }
+        ]
       }
     });
     const first = rows[0]!;

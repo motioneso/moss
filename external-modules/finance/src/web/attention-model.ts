@@ -222,7 +222,9 @@ export function attentionRows(input: {
       names: input.predicted.rows.slice(0, 3).map((row) => row.name),
       first: input.predicted.rows[0] ?? null,
       confirmable:
-        input.predicted.rows.length === input.predicted.total && input.predicted.rows.length > 0
+        input.predicted.rows.length === input.predicted.total &&
+        input.predicted.rows.length > 0 &&
+        input.predicted.rows.every((row) => row.categoryName)
           ? input.predicted.rows
           : null
     });
