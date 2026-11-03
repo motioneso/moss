@@ -60,7 +60,7 @@ describe("chat settings", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json<GetChatSettingsResponse>()).toEqual({
-      chat: { responseStyle: "balanced" }
+      chat: { responseStyle: "balanced", frontDoorGuardedDevices: false }
     });
   });
 
@@ -87,6 +87,44 @@ describe("chat settings", () => {
       headers: { cookie: memberCookie }
     });
     expect(member.json<GetChatSettingsResponse>().chat.responseStyle).toBe("balanced");
+  });
+
+  it("keeps the locks-and-doors switch private to its owner and across style saves", async () => {
+    const put = (cookie: string, chat: object) =>
+      server.inject({
+        method: "PUT",
+        url: "/api/chat/settings",
+        headers: { cookie, "content-type": "application/json" },
+        payload: { chat }
+      });
+    const read = async (cookie: string) =>
+      (
+        await server.inject({
+          method: "GET",
+          url: "/api/chat/settings",
+          headers: { cookie }
+        })
+      ).json<GetChatSettingsResponse>().chat;
+
+    // The owner is the first account, so an admin. Their value must not reach the member.
+    expect(
+      (await put(ownerCookie, { responseStyle: "balanced", frontDoorGuardedDevices: true }))
+        .statusCode
+    ).toBe(200);
+    expect((await read(ownerCookie)).frontDoorGuardedDevices).toBe(true);
+    expect((await read(memberCookie)).frontDoorGuardedDevices).toBe(false);
+
+    // A save that leaves the field out keeps the stored value.
+    expect((await put(ownerCookie, { responseStyle: "detailed" })).statusCode).toBe(200);
+    expect(await read(ownerCookie)).toEqual({
+      responseStyle: "detailed",
+      frontDoorGuardedDevices: true
+    });
+
+    // The member's own save never touches the owner's value.
+    expect((await put(memberCookie, { responseStyle: "concise" })).statusCode).toBe(200);
+    expect((await read(ownerCookie)).frontDoorGuardedDevices).toBe(true);
+    expect((await read(memberCookie)).frontDoorGuardedDevices).toBe(false);
   });
 
   it("rejects unsupported response styles", async () => {
