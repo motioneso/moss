@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-11-03
+
+#### Changed
+
+- **Clearer Finance reports and lists.** Finance charts are easier to read, long activity lists fold away, and phones and the Transactions screen are easier to use. [PR #3964](https://github.com/motioneso/moss/pull/3964)
+
 ### 2026-11-02
 
 #### Added
