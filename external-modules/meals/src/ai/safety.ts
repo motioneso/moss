@@ -27,7 +27,8 @@ export const SAFETY_SCHEMA = {
           verdict: {
             type: "string",
             enum: ["pass", "fail"],
-            description: '"fail" if any ingredient may break this eater\'s Never serve list.'
+            description:
+              '"fail" if an ingredient breaks, or may break, this eater\'s Never serve list.'
           },
           reason: {
             type: ["string", "null"],
@@ -46,8 +47,10 @@ export function buildSafetyPrompt(
   const lines = [
     "Check one recipe against each eater's food rules. A rule names a food, or a diet such as " +
       '"vegetarian" that excludes foods.',
-    "Fail an eater when any ingredient is, contains, or is commonly made with something their rules exclude. " +
-      "Hidden sources count: stocks, sauces, pastes and garnishes. When unsure, fail.",
+    'When unsure, fail. A "might contain" or cross-contact risk counts as unsure. Name the ' +
+      "specific ingredient and the rule it breaks in the reason.",
+    "A line explicitly marked free of the excluded food (gluten-free bread for a gluten rule) passes " +
+      "that rule only, never a different one.",
     "",
     'Example: eater 1 never eats fish; ingredient "1 tbsp Thai red curry paste" -> ' +
       '{eater 1, verdict "fail", reason "Red curry paste often contains shrimp paste"}.',
