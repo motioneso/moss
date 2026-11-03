@@ -19,6 +19,14 @@ All names, banks, merchants and amounts are made up.
 | `05-first-budget-phone-chat` | The same draft on phone with the chat drawer open                 |
 | `06-settings`                | Finance settings, Plaid keys, and this week's activity with undo  |
 
+## Strip and attention list
+
+`attention.html` opens the mockups for the Budget "This month" strip and "Needs your attention"
+list (pages `07` to `10`, spec `../2026-11-03-finance-month-strip-and-attention-design.md`). They
+are built by `build-attention.py`, not `build.tsx`, from the Budget pages' frame and
+`attention.css`. Rebuild from the repository root with
+`python3 docs/superpowers/specs/finance-redesign/build-attention.py`.
+
 ## Files
 
 - `build.tsx` renders every page from the real `@moss/ui` components with `renderToStaticMarkup`.
