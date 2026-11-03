@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Meals.** Plan your household's meals for the week, get a shopping list built from the plan, keep track of what's in your kitchen, and log what you eat. Meals replaces Food for new installs, and Food keeps working where it is installed. [PR #3949](https://github.com/motioneso/moss/pull/3949)
 
+#### Fixed
+
+- **Transactions opens on last month early in the month.** In the first week of a month, Transactions now opens on the month that just ended, and the Budget screen shows a placeholder amount instead of dots while it loads. [PR #3954](https://github.com/motioneso/moss/pull/3954)
+
 ### 2026-11-01
 
 #### Added
