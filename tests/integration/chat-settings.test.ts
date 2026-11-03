@@ -118,13 +118,45 @@ describe("chat settings", () => {
     expect((await put(ownerCookie, { responseStyle: "detailed" })).statusCode).toBe(200);
     expect(await read(ownerCookie)).toEqual({
       responseStyle: "detailed",
-      frontDoorGuardedDevices: true
+      frontDoorGuardedDevices: true,
+      frontDoorDisabled: false
     });
 
     // The member's own save never touches the owner's value.
     expect((await put(memberCookie, { responseStyle: "concise" })).statusCode).toBe(200);
     expect((await read(ownerCookie)).frontDoorGuardedDevices).toBe(true);
     expect((await read(memberCookie)).frontDoorGuardedDevices).toBe(false);
+  });
+
+  it("keeps the personal fast-model off switch private to its owner", async () => {
+    const put = (cookie: string, chat: Record<string, unknown>) =>
+      server.inject({
+        method: "PUT",
+        url: "/api/chat/settings",
+        headers: { cookie, "content-type": "application/json" },
+        payload: { chat }
+      });
+    const read = async (cookie: string) =>
+      (
+        await server.inject({ method: "GET", url: "/api/chat/settings", headers: { cookie } })
+      ).json<GetChatSettingsResponse>().chat;
+
+    // The member switches it off. The admin owner sees nothing of it.
+    expect(
+      (await put(memberCookie, { responseStyle: "balanced", frontDoorDisabled: true })).statusCode
+    ).toBe(200);
+    expect((await read(memberCookie)).frontDoorDisabled).toBe(true);
+    expect((await read(ownerCookie)).frontDoorDisabled).toBe(false);
+
+    // An admin save never reaches the member's value, and a save that omits the field keeps it.
+    expect((await put(ownerCookie, { responseStyle: "concise" })).statusCode).toBe(200);
+    expect((await put(memberCookie, { responseStyle: "detailed" })).statusCode).toBe(200);
+    expect((await read(memberCookie)).frontDoorDisabled).toBe(true);
+    expect((await read(ownerCookie)).frontDoorDisabled).toBe(false);
+
+    // Clearing it re-enables.
+    await put(memberCookie, { responseStyle: "detailed", frontDoorDisabled: false });
+    expect((await read(memberCookie)).frontDoorDisabled).toBe(false);
   });
 
   it("rejects unsupported response styles", async () => {
