@@ -7,7 +7,7 @@ import {
   type AssistantToolGateway,
   type ClassifierDeps
 } from "@moss/ai";
-import type { DataContextDb, DataContextRunner } from "@moss/db";
+import type { DataContextDb, DataContextRunner, PreferencesPort } from "@moss/db";
 import {
   filterOnOffCandidates,
   normalizeClassifierCandidates,
@@ -15,7 +15,11 @@ import {
   type MossModuleManifest,
   type ToolContext
 } from "@moss/module-sdk";
-import { MODULE_WORKER_SERVICE_KEY } from "@moss/shared";
+import {
+  CHAT_SETTINGS_PREFERENCE_KEY,
+  MODULE_WORKER_SERVICE_KEY,
+  normalizeChatSettings
+} from "@moss/shared";
 
 import type { ClassifierGatePorts, GateTool } from "./classifier-gate.js";
 
@@ -76,6 +80,11 @@ export interface ClassifierGatePortsFactoryDeps {
     "callToolForGate" | "recordContextForSession" | "admitToolDescriptorsForSession"
   >;
   readonly classifierDeps: ClassifierDeps;
+  /**
+   * Reads the actor's own chat settings. Without it, or on any read failure, locks, doors and
+   * garage openers stay out of every device list.
+   */
+  readonly preferences?: Pick<PreferencesPort, "get">;
   /** The human-readable area label shown to the classifier; defaults to the manifest name. */
   readonly moduleDescription?: (manifest: MossModuleManifest) => string;
   readonly now?: () => number;
@@ -125,6 +134,23 @@ export function createClassifierGatePortsFactory(
     /** Populated by `listTools`; the engine consults `isReleased` only after listing. */
     const listedIds = new Set<string>();
     let requestCounter = 0;
+    let guardedDevices: Promise<boolean> | undefined;
+    /** The actor's own opt-in, read once per attempt. A failed read means off. */
+    const guardedDevicesOn = (): Promise<boolean> => {
+      guardedDevices ??= (async () => {
+        if (!deps.preferences) return false;
+        try {
+          const raw = await dataContext.withDataContext(
+            { actorUserId, requestId: nextRequestId() },
+            (db) => deps.preferences!.get(db, CHAT_SETTINGS_PREFERENCE_KEY)
+          );
+          return normalizeChatSettings(raw).frontDoorGuardedDevices;
+        } catch {
+          return false;
+        }
+      })();
+      return guardedDevices;
+    };
     const nextRequestId = () => `classifier_gate_${actorUserId}_${(requestCounter += 1)}`;
     const scoped = <T>(work: (db: DataContextDb) => Promise<T>) =>
       dataContext.withDataContext({ actorUserId, requestId: nextRequestId() }, work);
@@ -223,11 +249,14 @@ export function createClassifierGatePortsFactory(
         const raw = await scoped((db) => manifestTool.classifier!.candidates!(db, ctx, { signal }));
         const normalized = normalizeClassifierCandidates(raw);
         if (!normalized.ok) throw new Error("invalid classifier candidates");
-        // A tool that changes things is only ever offered lights, switches and fans from a device list.
+        // A tool that changes things is offered lights, switches and fans from a device list, and
+        // locks, doors and garage openers only for an account that switched them on.
         const offered =
           tool.risk === "read"
             ? normalized.candidates
-            : filterOnOffCandidates(normalized.candidates);
+            : filterOnOffCandidates(normalized.candidates, {
+                includeGuarded: await guardedDevicesOn()
+              });
         if (offered.length > 0) {
           // Admission acquires its own actor-scoped connection, after the hook released its own.
           await deps.gateway.recordContextForSession(token, "classifier_candidates");

@@ -282,6 +282,14 @@ describe("filterOnOffCandidates", () => {
     expect(filterOnOffCandidates(names)).toEqual(names);
   });
 
+  it("keeps locks and covers when the account opted in, and still drops unknown kinds", () => {
+    const kept = filterOnOffCandidates(
+      [device("light.a"), device("lock.front_door"), device("cover.garage"), device("valve.main")],
+      { includeGuarded: true }
+    );
+    expect(kept.map((entry) => entry.id)).toEqual(["light.a", "lock.front_door", "cover.garage"]);
+  });
+
   it("returns an empty list when only guarded devices are present", () => {
     expect(filterOnOffCandidates([device("lock.front_door")])).toEqual([]);
   });

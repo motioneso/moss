@@ -394,6 +394,7 @@ export function registerChatRoutes(
         resolveActiveModules: resolveActiveModules as ActiveModulesResolver,
         dataContext: dependencies.dataContext,
         gateway: wiring.gateway,
+        preferences: chatSettingsRepo,
         classifierDeps: {
           repository: wiring.aiRepository,
           cipher: createAiSecretCipher(),
@@ -816,10 +817,18 @@ export function registerChatRoutes(
       try {
         const access = await dependencies.resolveAccessContext(request);
         const body = request.body as PutChatSettingsRequest;
-        const chat = normalizeChatSettings(body.chat);
-        await dependencies.dataContext.withDataContext(access, (scopedDb) =>
-          chatSettingsRepo.upsert(scopedDb, CHAT_SETTINGS_PREFERENCE_KEY, chat)
-        );
+        const chat = await dependencies.dataContext.withDataContext(access, async (scopedDb) => {
+          const stored = normalizeChatSettings(
+            await chatSettingsRepo.get(scopedDb, CHAT_SETTINGS_PREFERENCE_KEY)
+          );
+          const next = normalizeChatSettings({
+            ...body.chat,
+            frontDoorGuardedDevices:
+              body.chat.frontDoorGuardedDevices ?? stored.frontDoorGuardedDevices
+          });
+          await chatSettingsRepo.upsert(scopedDb, CHAT_SETTINGS_PREFERENCE_KEY, next);
+          return next;
+        });
         return { chat };
       } catch (error) {
         return handleRouteError(error, reply);

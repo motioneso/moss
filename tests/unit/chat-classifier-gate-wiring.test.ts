@@ -15,8 +15,12 @@ import { createClassifierGatePortsFactory } from "../../packages/chat/src/live/c
  */
 
 const fakeDb = {} as DataContextDb;
+const dataContextCalls: unknown[] = [];
 const dataContext = {
-  withDataContext: (_access: unknown, work: (db: DataContextDb) => Promise<unknown>) => work(fakeDb)
+  withDataContext: (access: unknown, work: (db: DataContextDb) => Promise<unknown>) => {
+    dataContextCalls.push(access);
+    return work(fakeDb);
+  }
 } as unknown as DataContextRunner;
 
 const calendarTool = {
@@ -80,6 +84,7 @@ function makeFactory(
   overrides: {
     manifests?: () => readonly MossModuleManifest[];
     onCall?: (tool: string, mode: string) => unknown;
+    preferences?: { get: (db: unknown, key: string) => Promise<unknown> };
   } = {}
 ) {
   const callToolForGate = vi.fn(
@@ -104,6 +109,7 @@ function makeFactory(
       },
       cipher: { decryptJson: vi.fn() }
     } as unknown as ClassifierDeps,
+    preferences: overrides.preferences as never,
     now: () => 0
   });
   return { factory, callToolForGate };
@@ -151,6 +157,52 @@ describe("createClassifierGatePortsFactory", () => {
     const switchGateTool = tools.find((tool) => tool.name === "home.setSwitch")!;
     const raw = await ports.loadCandidates(switchGateTool, new AbortController().signal);
     expect(raw).toEqual([{ id: "light.kitchen", label: "Kitchen light" }]);
+  });
+
+  const mixedDevices = [
+    { id: "light.kitchen", label: "Kitchen light" },
+    { id: "lock.front_door", label: "Front door" },
+    { id: "cover.garage_door", label: "Garage door" }
+  ];
+
+  async function offeredWith(preferences: { get: (db: unknown, key: string) => Promise<unknown> }) {
+    candidates.mockResolvedValueOnce(mixedDevices);
+    const { factory } = makeFactory({ preferences });
+    const ports = factory("actor-1", "jst_gate");
+    const tools = await ports.listTools();
+    const gateTool = tools.find((tool) => tool.name === "home.setSwitch")!;
+    return ports.loadCandidates(gateTool, new AbortController().signal);
+  }
+
+  it("offers locks and doors once the account has switched them on", async () => {
+    const get = vi.fn(async () => ({ responseStyle: "balanced", frontDoorGuardedDevices: true }));
+    const raw = await offeredWith({ get });
+    expect((raw as { id: string }[]).map((entry) => entry.id)).toEqual([
+      "light.kitchen",
+      "lock.front_door",
+      "cover.garage_door"
+    ]);
+  });
+
+  it("keeps locks and doors out when the account setting is off", async () => {
+    const get = vi.fn(async () => ({ responseStyle: "balanced", frontDoorGuardedDevices: false }));
+    const raw = await offeredWith({ get });
+    expect((raw as { id: string }[]).map((entry) => entry.id)).toEqual(["light.kitchen"]);
+  });
+
+  it("treats a failed settings read as off", async () => {
+    const get = vi.fn(async () => {
+      throw new Error("db down");
+    });
+    const raw = await offeredWith({ get });
+    expect((raw as { id: string }[]).map((entry) => entry.id)).toEqual(["light.kitchen"]);
+  });
+
+  it("reads the setting for the actor the attempt belongs to", async () => {
+    const get = vi.fn(async () => ({ responseStyle: "balanced", frontDoorGuardedDevices: true }));
+    await offeredWith({ get });
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(dataContextCalls).toContainEqual(expect.objectContaining({ actorUserId: "actor-1" }));
   });
 
   it("rejects a candidate read for a tool with no hook", async () => {

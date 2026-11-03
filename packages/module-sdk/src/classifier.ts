@@ -226,23 +226,30 @@ export function checkClassifierEligibility(
   return unique.length === 0 ? { eligible: true } : { eligible: false, problems: unique };
 }
 
-/** Device kinds an on/off action may be offered. Anything else in a device list is left out. */
+/** Device kinds an on/off action is always offered. */
 export const ON_OFF_DEVICE_DOMAINS: readonly string[] = ["light", "switch", "fan"];
+
+/** Locks, doors and garage openers. Offered only when the account has switched them on. */
+export const GUARDED_DEVICE_DOMAINS: readonly string[] = ["lock", "cover"];
 
 const DEVICE_ENTITY_ID = /^([a-z][a-z0-9_]*)\.[a-z0-9_]+$/;
 
 /**
  * Keeps only lights, switches and fans when a candidate list is a device list (every id looks like
- * `domain.name`). Locks, doors, garage openers and any unknown kind are removed, so a classifier
- * that acts on the list can never reach them. A list whose ids are not device ids passes unchanged.
+ * `domain.name`). Locks, doors and garage openers are kept only when `includeGuarded` is true, and
+ * any unknown kind is always removed. A list whose ids are not device ids passes unchanged.
  */
 export function filterOnOffCandidates(
-  candidates: readonly ClassifierCandidate[]
+  candidates: readonly ClassifierCandidate[],
+  options: { readonly includeGuarded?: boolean } = {}
 ): readonly ClassifierCandidate[] {
   if (!candidates.some((entry) => DEVICE_ENTITY_ID.test(entry.id))) return candidates;
+  const allowed = options.includeGuarded
+    ? [...ON_OFF_DEVICE_DOMAINS, ...GUARDED_DEVICE_DOMAINS]
+    : ON_OFF_DEVICE_DOMAINS;
   return candidates.filter((entry) => {
     const domain = DEVICE_ENTITY_ID.exec(entry.id)?.[1];
-    return domain !== undefined && ON_OFF_DEVICE_DOMAINS.includes(domain);
+    return domain !== undefined && allowed.includes(domain);
   });
 }
 
