@@ -12,6 +12,7 @@ import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import { PreferencesRepository } from "@moss/structured-state";
 
+import { ConversationProvenanceStore } from "../../packages/chat/src/conversation-provenance.js";
 import { saveChatSettings } from "../../packages/chat/src/chat-settings-save.js";
 import { createClassifierGatePortsFactory } from "../../packages/chat/src/live/classifier-gate-wiring.js";
 import { ChatRepository } from "../../packages/chat/src/repository.js";
@@ -102,6 +103,7 @@ async function ports(actorUserId: string) {
     tokens,
     confirmations: new ConfirmationRegistry(),
     notifier: { emit: () => {} },
+    provenance: new ConversationProvenanceStore(runner),
     confirmTimeoutMs: 5000,
     yoloMode: async () => false,
     actionPolicy: () => ({
