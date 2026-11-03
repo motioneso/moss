@@ -31,6 +31,8 @@ export interface RecipeRequest {
   readonly avoidTitles: readonly string[];
   readonly unitsSystem: UnitsSystem;
   readonly pantry?: RecipePantry;
+  /** Reasons earlier tries for this meal were turned down, so the next try avoids them. */
+  readonly rejected?: readonly string[];
 }
 
 export interface RecipeDraft {
@@ -56,6 +58,7 @@ export const STORE_SECTIONS: readonly StoreSection[] = [
 
 const MAX_AVOID_TITLES = 60;
 const MAX_PANTRY_LINES = 80;
+const MAX_REJECTED = 12;
 const MAX_INGREDIENTS = 40;
 const MAX_STEPS = 30;
 const MAX_STEP_LENGTH = 600;
@@ -168,6 +171,12 @@ export function buildRecipePrompt(request: RecipeRequest): string {
       : "",
     avoid.length > 0 ? `Do not repeat any of these dishes: ${avoid.join("; ")}` : "",
     ...pantryLines(request.pantry),
+    ...(request.rejected !== undefined && request.rejected.length > 0
+      ? [
+          "Earlier tries were turned down. Leave out these ingredients and anything made with them: " +
+            request.rejected.slice(-MAX_REJECTED).join("; ")
+        ]
+      : []),
     request.requestText ? `The household asked: ${request.requestText}` : ""
   ];
   return lines.filter((line) => line !== "").join("\n");

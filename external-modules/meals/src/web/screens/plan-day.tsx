@@ -25,8 +25,7 @@ const FAILURE_TEXT: Record<GenerationFailure, string> = {
   usage_limited: "The AI service hit its usage limit.",
   validation_failed: "Moss got an answer it could not use.",
   aborted: "The run was interrupted.",
-  safety_cap:
-    "Every option had something from an eater's Never serve list. Double check before you cook anything.",
+  safety_cap: "Every try had something from an eater's Never serve list.",
   timeout: "It took too long to write.",
   stopped: "Writing stopped before this day."
 };
@@ -211,9 +210,28 @@ function Safety(props: { meal: PlannedMealView }): ReactNodeLike | null {
 function Meal(props: { meal: PlannedMealView; actions: MealActions | null }): ReactNodeLike {
   const { meal } = props;
   if (meal.status === "failed") {
+    const blocked = meal.eaters.flatMap((eater) =>
+      eater.safety === "fail" && eater.safetyReason ? [`${eater.name}: ${eater.safetyReason}.`] : []
+    );
+    const message = [failureText(meal.failureReason), ...blocked].filter(Boolean).join(" ");
+    const retry =
+      props.actions !== null && isReplaceable(meal) ? (
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={props.actions.busy}
+          onClick={() => props.actions!.regenerateMeal(meal)}
+        >
+          Retry
+        </Button>
+      ) : null;
     return (
       <div className="mls-meal">
-        <Recovery title="No meal yet" message={failureText(meal.failureReason)} />
+        <Recovery
+          title={`No ${meal.slotName} yet`}
+          message={message === "" ? null : message}
+          action={retry}
+        />
       </div>
     );
   }
@@ -397,22 +415,30 @@ export function DaySection(props: {
   );
   const className = isToday ? "mls-day mls-day--today" : "mls-day";
 
-  if (day.status === "failed") {
-    const message = failureText(day.failureReason);
+  // A failed day still shows the meals that did get written. The day card carries the retry only
+  // when a meal is left waiting, or there are no meals to hold the failure.
+  const unwritten = day.meals.some(
+    (meal) => meal.status === "pending" || meal.status === "writing"
+  );
+  const dayCard =
+    day.status === "failed" && (day.meals.length === 0 || unwritten) ? (
+      <Recovery
+        title={`Moss could not finish ${dayTitle(day.date).split(",")[0]}`}
+        message={failureText(day.failureReason)}
+        action={
+          props.onRetry ? (
+            <Button variant="secondary" size="sm" onClick={props.onRetry}>
+              Retry
+            </Button>
+          ) : null
+        }
+      />
+    ) : null;
+  if (dayCard !== null && day.meals.length === 0) {
     return (
       <section className={className} aria-label={dayTitle(day.date)}>
         {head}
-        <Recovery
-          title={`Moss could not finish ${dayTitle(day.date).split(",")[0]}`}
-          message={message}
-          action={
-            props.onRetry ? (
-              <Button variant="secondary" size="sm" onClick={props.onRetry}>
-                Retry
-              </Button>
-            ) : null
-          }
-        />
+        {dayCard}
       </section>
     );
   }
@@ -428,6 +454,7 @@ export function DaySection(props: {
   return (
     <section className={className} aria-label={dayTitle(day.date)}>
       {head}
+      {dayCard}
       {totals.length > 0 ? (
         <div className="mls-day__totals">
           {totals.map((entry) => (

@@ -77,6 +77,7 @@ function harness(
         ...(options.extract ? { title: { kind: "extract" as const } } : {})
       },
       candidates: candidateHook as never,
+      candidatesAreDevices: false,
       replyTemplate: "{summary}"
     },
     execute: vi.fn(async () => ({ data: {} }))

@@ -73,6 +73,7 @@
     "start:worker": "pnpm --filter @moss/worker start",
     "test:unit": "tsx scripts/test-unit.ts",
     "test:uat-seed": "vitest run tests/uat/seed",
+    "test:integration:front-door-slice-1": "tsx scripts/test-integration.ts tests/integration/front-door-guarded-devices.test.ts tests/integration/chat-settings.test.ts tests/integration/chat-response-style-tool.test.ts",
     "test:integration:3722": "tsx scripts/test-integration.ts tests/integration/module-worker-queue-enqueue.test.ts",
     "test:integration:3720": "tsx scripts/test-integration.ts tests/integration/module-job-enqueue.test.ts",
     "test:integration:3735": "tsx scripts/test-integration.ts tests/integration/module-job-sweep.test.ts",

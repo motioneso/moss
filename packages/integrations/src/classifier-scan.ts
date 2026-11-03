@@ -157,7 +157,7 @@ export function scanActionMarkIsCurrent(action: ClassifierScanAction): boolean {
   return action.mark !== null && action.mark.fingerprint === action.definitionFingerprint;
 }
 
-const ARGUMENT_KINDS = ["enum", "candidates", "extract"] as const;
+const ARGUMENT_KINDS = ["enum", "candidates", "extract", "blank"] as const;
 const ARGUMENT_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 function parseArgument(raw: unknown): IntegrationClassifierArgument | null {

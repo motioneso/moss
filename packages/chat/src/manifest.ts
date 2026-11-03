@@ -225,6 +225,12 @@ export const chatModuleManifest = {
   features: [
     MODULE_NOTICE_FEATURE,
     {
+      id: "chat.front_door_guarded_devices",
+      description:
+        "Per-account switch, off by default. On lets the fast model act on your locks, doors and garage openers without asking. Off offers only lights, switches and fans. Each person sets their own; an admin cannot set it for someone else.",
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.domain_read_resolution",
       description:
         "Moss tries authorized reads before clarifying saved names. Replies honor resolved units and actual sample times; comparisons may convert. Explicit sources are honored. Ambiguity needs clarification; unavailable reads keep truthful text.",

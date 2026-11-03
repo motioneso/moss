@@ -112,6 +112,22 @@ export function filterOnOffCandidates(
 
 **Live proof for slice 1.** Dry-run only, because the gate is still not On. On a dev instance with the real Home Assistant connection, run the eligibility report and send "turn off the kitchen lights" with the gate in Watch only. Show the decision record naming the lights tool and a filled device. Confirm the light did not change, since Watch only never executes.
 
+## 3a. Slice 1 as built (supersedes the hard lock filter above)
+
+Ben ruled on 2026-11-02 that the lock, door and garage exclusion is configurable, not a hard never.
+
+- **Default off.** Without the setting, a tool that changes things is offered only lights, switches and fans from a device list. Unknown device kinds are always dropped.
+- **Per-account opt-in.** `frontDoorGuardedDevices` is a boolean inside the existing owner-only chat settings (`chat.settings.v1`, `GET/PUT /api/chat/settings`). No migration. When on, `lock` and `cover` devices are also offered.
+- **Only the owner sets it.** The route acts as the caller; the chat manifest already blocks the assistant from the PUT route. An admin has no path to another person's value.
+- **Fails closed.** A missing port or a failed settings read means off. The value is read once per attempt, for the attempt's own actor.
+- **A save that omits the field keeps the stored value**, so the response-style control cannot switch it off or on by accident.
+- **The control and its wording belong to slice 3**, in the same settings section as the off switch. Slice 1 ships the stored field and the filter only.
+- **Opt-in makes the devices eligible, nothing more (the card waiver is issue 3960).** Running a lock without a card still depends on the gateway and the tool's own risk class. A tool sorted Sensitive still escalates until the scan work's Run without asking setting exists.
+
+Findings from task 1.1: Q1, lights are not offered because automatic preparation never builds a device list and drops optional arguments. The automatic device-list wiring is tracked in issue 3953. Q2, candidates carry only an id and a label, so the id's domain prefix (`light.`, `lock.`) is the only type signal. A list with no device-shaped ids passes unchanged. Task 1.5 (the report script) is dropped.
+
+Live proof for slice 1 shows a lock refused by default and offered after the account opts in.
+
 ## 4. Slice 2: activity line and record
 
 **Goal.** Every handled turn writes one activity line naming the deciding model, the tool and the time taken. Every gated message writes a decision record with verdict, confidence, lead and reason.
@@ -327,3 +343,4 @@ Slice 1 and 2 ship before slice 3 is planned further. The planner re-reads this 
 | The lock filter is an allow-list of device types, not a deny-list                                      | This plan, slice 1 decision 3 |
 | A switch read failure means no front door for that turn                                                | This plan, slice 3 decision 4 |
 | Q1 to Q4 are unproven in the tree and are owned by the builders named above                            | This plan, section 1          |
+| The lock exclusion is a per-account setting, default off, set only by its owner                        | Ben via t3, 2026-11-02        |

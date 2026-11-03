@@ -387,7 +387,11 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "twice the time a full tool request takes it, up to 30 seconds, and a signed-in " +
       "command-line model simply gets the full 30 seconds. After Moss restarts or a new " +
       "classifier model is chosen, the wait starts at 30 seconds while the model is measured, " +
-      "and nothing about the wait can be set by hand. " +
+      "and nothing about the wait can be set by hand. When the gate runs a tool that changes " +
+      "something, it only offers lights, switches and fans from a connected device list; " +
+      "locks, doors and garage openers are offered only to an account that switched them on " +
+      "for itself (off by default, each person sets their own), and any other kind of device " +
+      "is never offered. Without the switch they are left to the main model. " +
       "The classifier " +
       "sorts each new email into junk, needs a reply, needs action, receipt or notice, " +
       "waiting on someone, time-sensitive, or for your information; receipts, order and booking " +

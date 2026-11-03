@@ -698,6 +698,55 @@ describe("a tool with an argument the gate will not fill", () => {
   it("leaves a read tool with an optional argument on the menu", () => {
     expect(gateEligibilityProblem(withOptional("read"), "choice_only")).toBeNull();
   });
+
+  it("offers a non-read tool whose optional argument is declared blank on purpose", () => {
+    const base = withOptional("write");
+    const tool: GateTool = {
+      ...base,
+      classifier: {
+        ...base.classifier!,
+        arguments: { ...base.classifier!.arguments, which: { kind: "blank" } }
+      }
+    };
+    expect(gateEligibilityProblem(tool, "choice_only")).toBeNull();
+  });
+
+  it("still keeps a non-read tool off when a different optional argument is not declared", () => {
+    const base = withOptional("write");
+    const tool: GateTool = {
+      ...base,
+      inputSchema: {
+        ...base.inputSchema!,
+        properties: {
+          ...(base.inputSchema!.properties as Record<string, unknown>),
+          extra: { type: "string" }
+        }
+      },
+      classifier: {
+        ...base.classifier!,
+        arguments: { ...base.classifier!.arguments, which: { kind: "blank" } }
+      }
+    };
+    expect(gateEligibilityProblem(tool, "choice_only")).toBe("unfilled_optional");
+  });
+
+  it("never asks about or sends a blank argument", async () => {
+    const base = withOptional("write");
+    const tool: GateTool = {
+      ...base,
+      classifier: {
+        ...base.classifier!,
+        arguments: { ...base.classifier!.arguments, which: { kind: "blank" } }
+      }
+    };
+    const h = harness({
+      tools: [tool],
+      answers: [pick("home"), pick("home.setSwitch"), pick("kitchen"), pick("off")]
+    });
+    expect(await h.gate.evaluate(request())).toMatchObject({ kind: "handled" });
+    const input = h.gatewayCall.mock.calls.at(-1)![1] as Record<string, unknown>;
+    expect("which" in input).toBe(false);
+  });
 });
 
 describe("an argument named __proto__ on the pick path", () => {

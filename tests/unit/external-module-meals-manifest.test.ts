@@ -488,7 +488,7 @@ describe("meals manifest", () => {
       "Ask Moss to plan any number of days up to 28. Days are written one by one. Stop, resume, or retry one day."
     );
     expect(description("meals.safety")).toBe(
-      "Every meal is checked against each eater's Never serve list. The check only says nothing listed was found outright, never that a meal is safe, and every result, pass or fail, reminds you to double check. Packaged or branded ingredients carry a check-the-label note."
+      "Every meal is checked against each eater's Never serve list. The check only says nothing listed was found outright, never that a meal is safe, and every result, pass or fail, reminds you to double check. Packaged or branded ingredients carry a check-the-label note. An ingredient the recipe labels free of a listed food, such as gluten-free bread for a gluten rule, is not flagged for that food only; the rest of the line is still checked. When a meal cannot be written, the card names the eater and the ingredient that blocked it, and has its own Retry; the day's other meals stay visible."
     );
   });
 });

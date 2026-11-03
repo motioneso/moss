@@ -65,7 +65,16 @@ const FISH = [
   "tilapia",
   "pollock",
   "bass",
-  "fish sauce"
+  "fish sauce",
+  "worcestershire",
+  "dashi",
+  "bonito",
+  "caviar",
+  "roe",
+  "eel",
+  "snapper",
+  "swordfish",
+  "herring"
 ];
 const SHELLFISH = [
   "shellfish",
@@ -84,7 +93,12 @@ const SHELLFISH = [
   "scallop",
   "scallops",
   "squid",
-  "octopus"
+  "octopus",
+  "langoustine",
+  "cockle",
+  "whelk",
+  "crawfish",
+  "abalone"
 ];
 const DAIRY = [
   "dairy",
@@ -106,7 +120,7 @@ const DAIRY = [
   "halloumi",
   "custard"
 ];
-const EGG = ["egg", "eggs", "mayonnaise", "mayo", "meringue"];
+const EGG = ["egg", "eggs", "mayonnaise", "mayo", "meringue", "aioli", "albumen", "hollandaise"];
 const GLUTEN = [
   "gluten",
   "wheat",
@@ -130,7 +144,19 @@ const GLUTEN = [
   "panko",
   "orzo",
   "farro",
-  "spelt"
+  "spelt",
+  "beer",
+  "ale",
+  "lager",
+  "stout",
+  "malt",
+  "oats",
+  "kamut",
+  "einkorn",
+  "udon",
+  "ramen",
+  "matzo",
+  "graham"
 ];
 const TREE_NUTS = [
   "almond",
@@ -150,7 +176,22 @@ const TREE_NUTS = [
   "pine nut",
   "pine nuts",
   "praline",
-  "marzipan"
+  "marzipan",
+  "amaretto",
+  "frangipane",
+  "nougat",
+  "gianduja",
+  "nutella"
+];
+const CHEESE = [
+  "cheese",
+  "feta",
+  "parmesan",
+  "mozzarella",
+  "cheddar",
+  "ricotta",
+  "paneer",
+  "halloumi"
 ];
 const PEANUT = ["peanut", "peanuts", "groundnut", "satay"];
 const PORK = ["pork", "bacon", "ham", "prosciutto", "pancetta", "chorizo", "salami", "lard"];
@@ -162,6 +203,8 @@ const EXPANSIONS: Readonly<Record<string, readonly string[]>> = {
   vegan: [...MEAT, ...FISH, ...SHELLFISH, ...DAIRY, ...EGG, "honey"],
   pescatarian: MEAT,
   dairy: DAIRY,
+  milk: DAIRY,
+  cheese: CHEESE,
   lactose: DAIRY,
   gluten: GLUTEN,
   wheat: GLUTEN,
@@ -184,7 +227,19 @@ const EXPANSIONS: Readonly<Record<string, readonly string[]>> = {
   alcohol: ALCOHOL,
   meat: MEAT,
   beef: ["beef", "steak", "veal"],
-  soy: ["soy", "soya", "tofu", "tempeh", "edamame", "miso", "soy sauce"],
+  soy: [
+    "soy",
+    "soya",
+    "soybean",
+    "tofu",
+    "tempeh",
+    "edamame",
+    "miso",
+    "natto",
+    "shoyu",
+    "tamari",
+    "soy sauce"
+  ],
   sesame: ["sesame", "tahini"]
 };
 
@@ -220,14 +275,56 @@ function containsTerm(haystack: string, term: string): boolean {
   return ` ${haystack} `.includes(` ${term} `);
 }
 
+/** "egg free eggs" style phrases that are about farming, not about leaving the food out. */
+const NOT_A_DECLARATION = "range|run|roaming|ranging";
+
+function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Words that may follow "free from <food>" without making a compound food such as "milk chocolate". */
+const AFTER_FREE_FROM = "and|or|with|but|plus|contains|contain|for|use|not|made";
+
+const NEGATIONS = new Set(["not", "non", "never", "t"]);
+
+/** True when "not" or "non" sits right before the label, or one word before it. */
+function negated(before: string): boolean {
+  const words = before.trim().split(" ");
+  const last = words[words.length - 1] ?? "";
+  const previous = words[words.length - 2] ?? "";
+  return NEGATIONS.has(last) || NEGATIONS.has(previous);
+}
+
+/**
+ * Removes only the label words themselves, "gluten free" or "free from gluten" for a gluten rule,
+ * and nothing after them. A different food never clears the rule ("lactose free" does not clear
+ * dairy), a negated label ("not gluten free") clears nothing, "free from milk chocolate" is a
+ * compound food, and every other word on the line is still scanned.
+ */
+function stripOwnFreeLabel(text: string, phrase: string): string {
+  const base = phrase.endsWith("s") ? phrase.slice(0, -1) : phrase;
+  const food = [base, `${base}s`, `${base}es`].map(escapeRegex).join("|");
+  const fromOf = new RegExp(`\\bfree (?:from|of) (?:${food})(?= (?:${AFTER_FREE_FROM})\\b|$)`, "g");
+  const labelled = new RegExp(`\\b(?:${food}) free\\b(?!\\s+(?:${NOT_A_DECLARATION})\\b)`, "g");
+  const strip = (match: string, offset: number, whole: string): string =>
+    negated(whole.slice(0, offset)) ? match : " ";
+  return text.replace(fromOf, strip).replace(labelled, strip);
+}
+
 export function deterministicSafety(
   ingredients: readonly IngredientDraft[],
   restrictions: readonly string[]
 ): SafetyVerdict {
   for (const restriction of restrictions) {
     const terms = restrictionTerms(restriction);
+    const phrase = normalise(restriction)
+      .replace(LEADING_NEGATION, "")
+      .replace(TRAILING_QUALIFIER, "");
     for (const line of ingredients) {
-      const text = `${normalise(line.name)} ${normalise(line.originalText)}`;
+      const text = stripOwnFreeLabel(
+        `${normalise(line.name)} ${normalise(line.originalText)}`,
+        phrase
+      );
       const hit = terms.find((term) => containsTerm(text, term));
       if (hit !== undefined) {
         const reason = `${line.name} conflicts with "${restriction}"`;
