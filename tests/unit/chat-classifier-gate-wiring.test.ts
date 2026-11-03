@@ -139,6 +139,20 @@ describe("createClassifierGatePortsFactory", () => {
     );
   });
 
+  it("never offers a lock, door or garage target to a tool that changes things", async () => {
+    candidates.mockResolvedValueOnce([
+      { id: "light.kitchen", label: "Kitchen light" },
+      { id: "lock.front_door", label: "Front door" },
+      { id: "cover.garage_door", label: "Garage door" }
+    ]);
+    const { factory } = makeFactory();
+    const ports = factory("actor-1", "jst_gate");
+    const tools = await ports.listTools();
+    const switchGateTool = tools.find((tool) => tool.name === "home.setSwitch")!;
+    const raw = await ports.loadCandidates(switchGateTool, new AbortController().signal);
+    expect(raw).toEqual([{ id: "light.kitchen", label: "Kitchen light" }]);
+  });
+
   it("rejects a candidate read for a tool with no hook", async () => {
     const { factory } = makeFactory();
     const ports = factory("actor-1", "jst_gate");

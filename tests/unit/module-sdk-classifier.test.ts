@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   CLASSIFIER_LIMITS,
   checkClassifierEligibility,
+  filterOnOffCandidates,
   normalizeClassifierCandidates,
   type ModuleAssistantToolClassifier,
   type ModuleAssistantToolManifest
@@ -221,5 +222,67 @@ describe("normalizeClassifierCandidates", () => {
     expect(normalizeClassifierCandidates([{ id: "", label: "One" }]).ok).toBe(false);
     expect(normalizeClassifierCandidates(["nope"]).ok).toBe(false);
     expect(normalizeClassifierCandidates("nope").ok).toBe(false);
+  });
+});
+
+describe("blank arguments", () => {
+  const withOptional = (kind: "blank" | "extract"): ModuleAssistantToolManifest =>
+    tool({
+      inputSchema: {
+        type: "object",
+        properties: {
+          scene: { type: "string", enum: ["movie", "reading"] },
+          dim: { type: "string" }
+        },
+        required: ["scene"]
+      },
+      classifier: { ...enumDecl, arguments: { scene: { kind: "enum" }, dim: { kind } } }
+    });
+
+  it("accepts a blank declaration on an optional argument", () => {
+    expect(checkClassifierEligibility(withOptional("blank")).eligible).toBe(true);
+  });
+
+  it("rejects a blank declaration on a required argument", () => {
+    const required = tool({
+      classifier: { ...enumDecl, arguments: { scene: { kind: "blank" } } }
+    });
+    const result = checkClassifierEligibility(required);
+    expect(result.eligible).toBe(false);
+  });
+});
+
+describe("filterOnOffCandidates", () => {
+  const device = (id: string) => ({ id, label: id });
+
+  it("keeps lights, switches and fans and drops locks, doors, garage openers and covers", () => {
+    const kept = filterOnOffCandidates([
+      device("light.kitchen"),
+      device("lock.front_door"),
+      device("cover.garage_door"),
+      device("switch.heater"),
+      device("fan.bedroom"),
+      device("binary_sensor.door")
+    ]);
+    expect(kept.map((entry) => entry.id)).toEqual([
+      "light.kitchen",
+      "switch.heater",
+      "fan.bedroom"
+    ]);
+  });
+
+  it("drops a kind nobody listed", () => {
+    expect(filterOnOffCandidates([device("light.a"), device("valve.water_main")])).toEqual([
+      device("light.a")
+    ]);
+  });
+
+  it("leaves a list that is not made of device ids unchanged", () => {
+    const names = [device("kitchen"), device("Living Room")];
+    expect(filterOnOffCandidates(names)).toEqual(names);
+  });
+
+  it("returns an empty list when only guarded devices are present", () => {
+    expect(filterOnOffCandidates([device("lock.front_door")])).toEqual([]);
   });
 });

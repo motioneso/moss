@@ -9,6 +9,7 @@ import {
 } from "@moss/ai";
 import type { DataContextDb, DataContextRunner } from "@moss/db";
 import {
+  filterOnOffCandidates,
   normalizeClassifierCandidates,
   type ModuleAssistantToolManifest,
   type MossModuleManifest,
@@ -222,11 +223,16 @@ export function createClassifierGatePortsFactory(
         const raw = await scoped((db) => manifestTool.classifier!.candidates!(db, ctx, { signal }));
         const normalized = normalizeClassifierCandidates(raw);
         if (!normalized.ok) throw new Error("invalid classifier candidates");
-        if (normalized.candidates.length > 0) {
+        // A tool that changes things is only ever offered lights, switches and fans from a device list.
+        const offered =
+          tool.risk === "read"
+            ? normalized.candidates
+            : filterOnOffCandidates(normalized.candidates);
+        if (offered.length > 0) {
           // Admission acquires its own actor-scoped connection, after the hook released its own.
           await deps.gateway.recordContextForSession(token, "classifier_candidates");
         }
-        return normalized.candidates;
+        return offered;
       },
       // Synchronous by contract. A tool is released when this attempt listed it: a module tool by
       // its author's classifier declaration, a connected tool by the declaration its synthetic

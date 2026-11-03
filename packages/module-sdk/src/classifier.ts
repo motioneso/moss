@@ -28,11 +28,14 @@ export const CLASSIFIER_LIMITS = {
  * - `candidates`: pick one id from the list the tool's `candidates` hook returns.
  * - `extract`: extract a typed value from the message. Only classifiers that can return
  *   extracted fields can serve this; others treat the tool as ineligible.
+ * - `blank`: an optional argument the classifier never fills. The tool runs on its own default,
+ *   and the declaration says so on purpose. A required argument cannot be blank.
  */
 export type ClassifierArgumentDecl =
   | { readonly kind: "enum" }
   | { readonly kind: "candidates" }
-  | { readonly kind: "extract" };
+  | { readonly kind: "extract" }
+  | { readonly kind: "blank" };
 
 /** One value the classifier may pick. `id` is what the tool receives; `label` is shown to the classifier. */
 export interface ClassifierCandidate {
@@ -171,7 +174,15 @@ function checkArguments(
     if (arg.kind === "candidates" && !decl.candidates) {
       problems.push(`argument ${name} needs a candidates hook`);
     }
-    if (arg.kind !== "enum" && arg.kind !== "candidates" && arg.kind !== "extract") {
+    if (arg.kind === "blank" && required.includes(name)) {
+      problems.push(`argument ${name} is required and cannot be blank`);
+    }
+    if (
+      arg.kind !== "enum" &&
+      arg.kind !== "candidates" &&
+      arg.kind !== "extract" &&
+      arg.kind !== "blank"
+    ) {
       problems.push(`argument ${name} has an unknown kind`);
     }
   }
@@ -213,6 +224,26 @@ export function checkClassifierEligibility(
 
   const unique = [...new Set(problems)];
   return unique.length === 0 ? { eligible: true } : { eligible: false, problems: unique };
+}
+
+/** Device kinds an on/off action may be offered. Anything else in a device list is left out. */
+export const ON_OFF_DEVICE_DOMAINS: readonly string[] = ["light", "switch", "fan"];
+
+const DEVICE_ENTITY_ID = /^([a-z][a-z0-9_]*)\.[a-z0-9_]+$/;
+
+/**
+ * Keeps only lights, switches and fans when a candidate list is a device list (every id looks like
+ * `domain.name`). Locks, doors, garage openers and any unknown kind are removed, so a classifier
+ * that acts on the list can never reach them. A list whose ids are not device ids passes unchanged.
+ */
+export function filterOnOffCandidates(
+  candidates: readonly ClassifierCandidate[]
+): readonly ClassifierCandidate[] {
+  if (!candidates.some((entry) => DEVICE_ENTITY_ID.test(entry.id))) return candidates;
+  return candidates.filter((entry) => {
+    const domain = DEVICE_ENTITY_ID.exec(entry.id)?.[1];
+    return domain !== undefined && ON_OFF_DEVICE_DOMAINS.includes(domain);
+  });
 }
 
 export type NormalizedCandidates =
