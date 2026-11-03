@@ -69,7 +69,10 @@ interface SettingsSection<Id extends string> {
 function coreSettingDescription(id: string): string {
   const declaration = CORE_APP_SETTINGS.find((setting) => setting.id === id);
   if (!declaration) throw new Error(`Missing core app-map setting declaration: ${id}`);
-  return declaration.description;
+  // A section can be described by several entries that share its path; search matches all of them.
+  return CORE_APP_SETTINGS.filter((setting) => setting.path === declaration.path)
+    .map((setting) => setting.description)
+    .join(" ");
 }
 
 type PersonalSectionId =
