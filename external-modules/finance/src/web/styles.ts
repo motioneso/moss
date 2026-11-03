@@ -73,6 +73,11 @@ export const MODULE_STYLES = `
 /* #3173 Budget: layout only. Desktop shows the table and rail, phone the row list. */
 .fnm-tabs { margin-bottom: var(--space-5); overflow-x: auto; scrollbar-width: none; }
 .fnm-tabs::-webkit-scrollbar { display: none; }
+/* Phones fade the right edge while more tabs wait off screen. */
+@media (max-width: 720px) {
+  .fnm-tabs.has-more { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent); }
+  .fnm-hero .jds-masthead--field { padding-block: var(--space-4); margin-bottom: var(--space-4); }
+}
 .fnm-tabs .jds-segmented__opt { flex: 0 0 auto; white-space: nowrap; }
 .fnm-hero { margin-bottom: var(--space-6); }
 .fnm-pad { padding: 0; }
