@@ -81,7 +81,8 @@ describe("finance attention model", () => {
   it("computes month ends and windows", () => {
     expect(monthEnd("2026-02")).toBe("2026-02-28");
     expect(addDays("2026-11-28", 7)).toBe("2026-12-05");
-    expect(billsWindow("2026-11", "2026-11-28")).toEqual({ from: "2026-11-01", to: "2026-12-05" });
+    expect(billsWindow("2026-11", "2026-11-28")).toEqual({ from: "2026-08-01", to: "2026-12-05" });
+    expect(billsWindow("2027-01", "2027-01-10")).toEqual({ from: "2026-10-01", to: "2027-01-31" });
     expect(billsWindow("2026-10", "2026-11-28")).toEqual({ from: "2026-10-01", to: "2026-10-31" });
   });
 
@@ -137,6 +138,28 @@ describe("finance attention model", () => {
     ]);
     const predicted = rows[4]!;
     expect(predicted.kind === "predicted" ? predicted.confirmable?.length : null).toBe(2);
+  });
+
+  it("lists unresolved bills from earlier months first, oldest first", () => {
+    const rows = attentionRows({
+      month: "2026-11",
+      currentMonth: "2026-11",
+      bills: view("2026-11-10", [
+        bill("thisMonth", "2026-11-02"),
+        bill("october", "2026-10-15"),
+        bill("september", "2026-09-28"),
+        bill("paid", "2026-10-05", { state: "posted" })
+      ]),
+      lines: [line("big", -500)],
+      predicted: null
+    });
+    expect(rows.map((r) => r.key)).toEqual([
+      expect.stringContaining("september"),
+      expect.stringContaining("october"),
+      expect.stringContaining("thisMonth"),
+      "over:big"
+    ]);
+    expect(rows.slice(0, 3).every((r) => r.kind === "bill" && r.pastDue)).toBe(true);
   });
 
   it("offers no bulk confirm when the list is shorter than the count", () => {

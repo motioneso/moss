@@ -63,12 +63,27 @@ export function addDays(date: string, days: number): string {
   return moved.toISOString().slice(0, 10);
 }
 
-/** The window the bills read covers: the whole month, plus the coming week for this month. */
+/** How many whole months before the current one still count as past due. */
+export const PAST_DUE_LOOKBACK_MONTHS = 3;
+
+function monthsBack(month: string, back: number): string {
+  const [year, index] = month.split("-").map(Number) as [number, number];
+  const total = year * 12 + (index - 1) - back;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
+}
+
+/**
+ * The window the bills read covers. The current month also reaches back for unresolved bills from
+ * earlier months and forward for the coming week; other months cover just their own days.
+ */
 export function billsWindow(month: string, today: string): { from: string; to: string } {
   const end = monthEnd(month);
   const isCurrent = today.slice(0, 7) === month;
   const soon = addDays(today, ATTENTION_DAYS);
-  return { from: `${month}-01`, to: isCurrent && soon > end ? soon : end };
+  return {
+    from: `${isCurrent ? monthsBack(month, PAST_DUE_LOOKBACK_MONTHS) : month}-01`,
+    to: isCurrent && soon > end ? soon : end
+  };
 }
 
 const open = (o: Occurrence) => o.state === "projected" || o.state === "review";
