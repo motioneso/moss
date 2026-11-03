@@ -140,7 +140,9 @@ describe("deterministic Safety and gluten-free wording", () => {
     for (const line of [
       ingredient("2 cups gluten-free vegetable broth", "vegetable broth"),
       ingredient("1 cup quinoa (gluten free)", "quinoa"),
-      ingredient("200 g gluten free rice", "rice")
+      ingredient("200 g gluten free rice", "rice"),
+      ingredient("200 g tomato sauce, free from gluten", "tomato sauce"),
+      ingredient("1 cup tomato passata free from gluten and dairy", "tomato passata")
     ]) {
       expect(deterministicSafety([line], rules).verdict).toBe("pass");
     }
@@ -174,6 +176,16 @@ describe("deterministic Safety and gluten-free wording", () => {
     ["fish", "fish free anchovy paste"],
     ["egg", "egg free egg noodles"],
     ["wheat", "wheat free wheat flour"],
+    ["dairy", "free from milk chocolate"],
+    ["milk", "free from milk chocolate"],
+    ["fish", "free from fish sauce"],
+    ["soy", "free of soy sauce"],
+    ["nuts", "free from nut butter"],
+    ["gluten", "ketchup (not gluten free)"],
+    ["gluten", "not gluten free"],
+    ["gluten", "non gluten free bread"],
+    ["gluten", "ketchup (isn't gluten free)"],
+    ["dairy", "not free from dairy cheese"],
     ["milk", "milk free cheese"],
     ["milk", "milk free butter"],
     ["milk", "milk free cream"],

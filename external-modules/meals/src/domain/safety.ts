@@ -282,17 +282,33 @@ function escapeRegex(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/** Words that may follow "free from <food>" without making a compound food such as "milk chocolate". */
+const AFTER_FREE_FROM = "and|or|with|but|plus|contains|contain|for|use|not|made";
+
+const NEGATIONS = new Set(["not", "non", "never", "t"]);
+
+/** True when "not" or "non" sits right before the label, or one word before it. */
+function negated(before: string): boolean {
+  const words = before.trim().split(" ");
+  const last = words[words.length - 1] ?? "";
+  const previous = words[words.length - 2] ?? "";
+  return NEGATIONS.has(last) || NEGATIONS.has(previous);
+}
+
 /**
  * Removes only the label words themselves, "gluten free" or "free from gluten" for a gluten rule,
  * and nothing after them. A different food never clears the rule ("lactose free" does not clear
- * dairy), and every other word on the line is still scanned, so "gluten free wheat flour" fails.
+ * dairy), a negated label ("not gluten free") clears nothing, "free from milk chocolate" is a
+ * compound food, and every other word on the line is still scanned.
  */
 function stripOwnFreeLabel(text: string, phrase: string): string {
   const base = phrase.endsWith("s") ? phrase.slice(0, -1) : phrase;
   const food = [base, `${base}s`, `${base}es`].map(escapeRegex).join("|");
-  const fromOf = new RegExp(`\\bfree (?:from|of) (?:${food})\\b`, "g");
+  const fromOf = new RegExp(`\\bfree (?:from|of) (?:${food})(?= (?:${AFTER_FREE_FROM})\\b|$)`, "g");
   const labelled = new RegExp(`\\b(?:${food}) free\\b(?!\\s+(?:${NOT_A_DECLARATION})\\b)`, "g");
-  return text.replace(fromOf, " ").replace(labelled, " ");
+  const strip = (match: string, offset: number, whole: string): string =>
+    negated(whole.slice(0, offset)) ? match : " ";
+  return text.replace(fromOf, strip).replace(labelled, strip);
 }
 
 export function deterministicSafety(
