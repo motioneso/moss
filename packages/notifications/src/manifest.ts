@@ -88,7 +88,9 @@ export const notificationsModuleManifest = {
       id: "notifications.push",
       label: "Push notifications",
       description:
-        "Manage push for up to 10 devices over a secure connection in supported browsers. Chat appears in the per-module notification switches and counts toward email digest availability.",
+        "Manage push for up to 10 devices over a secure connection in supported browsers. Chat appears in the per-module notification switches and counts toward email digest availability. " +
+        "The Notifications page under Modules in Settings opens with Sensitivity, a Quiet, Balanced or Proactive choice with a one-line hint under it (Quiet: only what is genuinely urgent, the rest waits for your briefing; Balanced: the default, timely nudges without the noise; Proactive: speaks up early and often). " +
+        "Below it, Channels lists In-app and the Email digest, and Modules lets you mute one module without changing its own settings.",
       path: "/settings?section=modules&module=notifications",
       scope: "user",
       permissionId: "notifications.update"
