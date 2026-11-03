@@ -233,7 +233,7 @@ export const chatModuleManifest = {
     {
       id: "chat.handled_turn_activity",
       description:
-        "Main chat only. When the fast decision model answers a message itself, Settings > Activity shows one line naming that model, the tool it ran and the time taken. Private chats and messages with attachments skip the fast model, so they add no such line. A message it cannot handle goes to the main model with no handled line.",
+        "Main chat only. When the fast model answers a message itself, Settings > Activity shows one line with that model, the tool it ran and the time taken. Private chats and attachments skip it.",
       featureFlagId: "chat.module"
     },
     {
