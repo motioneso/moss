@@ -26,16 +26,20 @@ export interface TrendChartProps {
   /* Axis labels under the first and last point. */
   readonly startLabel?: string;
   readonly endLabel?: string;
+  /* Starts the axis at zero even when the values sit far from it. */
+  readonly zeroBased?: boolean;
+  /* Draws the line, area and grid at full strength. */
+  readonly strong?: boolean;
   readonly className?: string;
 }
 
 /* Keeps zero on the axis unless the values sit far from it, so a small change over a large
    balance still reads. */
-function domain(values: readonly number[]): [number, number] {
+function domain(values: readonly number[], zeroBased = false): [number, number] {
   if (values.length === 0) return [0, 0];
   const lo = Math.min(...values);
   const hi = Math.max(...values);
-  const nearZero = lo >= 0 ? lo <= hi / 2 : hi <= 0 ? hi >= lo / 2 : true;
+  const nearZero = zeroBased || (lo >= 0 ? lo <= hi / 2 : hi <= 0 ? hi >= lo / 2 : true);
   return nearZero ? [Math.min(lo, 0), Math.max(hi, 0)] : [lo, hi];
 }
 
@@ -56,7 +60,10 @@ function nearest(fractions: readonly number[], fraction: number): number {
    focus and arrow keys step through the points. */
 export function TrendChart(props: TrendChartProps) {
   const points = props.points;
-  const [lo, hi] = domain(points.map((point) => point.value));
+  const [lo, hi] = domain(
+    points.map((point) => point.value),
+    props.zeroBased
+  );
   const ticks = niceTicks(lo, hi);
   const y = percentScale(ticks);
   const first = points[0]?.at ?? 0;
@@ -93,7 +100,11 @@ export function TrendChart(props: TrendChartProps) {
         ];
 
   return (
-    <figure className={["jds-chart", props.className ?? null].filter(Boolean).join(" ")}>
+    <figure
+      className={["jds-chart", props.strong ? "jds-chart--strong" : null, props.className ?? null]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <div className="jds-chart__frame">
         <ChartTicks ticks={ticks} y={y} format={props.formatTick ?? props.format} />
         <div

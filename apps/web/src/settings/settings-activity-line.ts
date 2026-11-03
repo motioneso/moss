@@ -46,6 +46,8 @@ export function activityTitle(actionCode: string | null, modelName: string): str
   switch (actionCode) {
     case "chat.answer":
       return "Answered a chat message";
+    case "chat.handled":
+      return `${modelName} handled a chat message`;
     case "chat.tool_check":
       return `${modelName} guessed which tool to use`;
     case "transcribe.meeting":
@@ -101,6 +103,7 @@ export function activitySubline(line: ActivityLineDto): string {
     const agreed = bool(facts.jev_agreed);
     return `Used ${tools} tool${tools === 1 ? "" : "s"}.${agreed === true ? " The classifier agreed." : agreed === false ? " The classifier disagreed." : ""}`;
   }
+  if (line.actionCode === "chat.handled") return `Ran ${line.action}.`;
   if (line.actionCode === "chat.tool_check") {
     const confidence = num(facts.confidence);
     const agreed = bool(facts.jev_agreed);

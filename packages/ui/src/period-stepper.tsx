@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { type ReactNode } from "react";
 
+import { Button } from "./button.js";
 import { IconButton } from "./icon-button.js";
 
 export interface PeriodStepperProps {
@@ -11,6 +12,9 @@ export interface PeriodStepperProps {
   readonly nextLabel: string;
   readonly onPrevious: () => void;
   readonly onNext: () => void;
+  /* Visible words beside each arrow, such as "Sep" and "Nov". The arrows are icon-only without them. */
+  readonly previousText?: string;
+  readonly nextText?: string;
   readonly disabled?: boolean;
   readonly className?: string;
 }
@@ -19,6 +23,35 @@ export interface PeriodStepperProps {
    masthead's ink. */
 export function PeriodStepper(props: PeriodStepperProps) {
   const classes = ["jds-stepper", props.className ?? null].filter(Boolean).join(" ");
+  if (props.previousText && props.nextText) {
+    return (
+      <div className={classes}>
+        <Button
+          variant="quiet"
+          size="sm"
+          aria-label={props.previousLabel}
+          disabled={props.disabled}
+          onClick={props.onPrevious}
+        >
+          <ChevronLeft aria-hidden="true" />
+          {props.previousText}
+        </Button>
+        <span className="jds-stepper__label" aria-live="polite">
+          {props.label}
+        </span>
+        <Button
+          variant="quiet"
+          size="sm"
+          aria-label={props.nextLabel}
+          disabled={props.disabled}
+          onClick={props.onNext}
+        >
+          {props.nextText}
+          <ChevronRight aria-hidden="true" />
+        </Button>
+      </div>
+    );
+  }
   return (
     <div className={classes}>
       <IconButton

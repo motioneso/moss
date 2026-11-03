@@ -247,7 +247,7 @@
       "dependencies": [],
       "exports": ["ColumnChart"],
       "options": [],
-      "flags": []
+      "flags": [{ "prop": "strong", "optional": true }]
     },
     {
       "name": "combobox",
@@ -767,7 +767,10 @@
       "dependencies": [],
       "exports": ["TrendChart"],
       "options": [],
-      "flags": []
+      "flags": [
+        { "prop": "zeroBased", "optional": true },
+        { "prop": "strong", "optional": true }
+      ]
     },
     {
       "name": "weather-chip",

@@ -21,7 +21,7 @@ import {
 } from "@moss/module-web-sdk";
 import { runWrite, type RunOutcome } from "../api";
 import { chunkReviewRows } from "../assign";
-import { defaultLedgerMonth, monthLabel, shiftMonth } from "../format";
+import { defaultLedgerMonth, monthLabel, shiftMonth, shortMonthLabel } from "../format";
 import { announce, EmptyState, outcomeGate } from "../states";
 import { invalidateQueries, invalidateToolQueries, useToolQuery } from "../store";
 import { downloadTransactionsCsv, transactionsCsv, initialRegisterScope } from "../register";
@@ -561,6 +561,8 @@ export function TransactionsScreen(
             label={monthLabel(month)}
             previousLabel={monthLabel(shiftMonth(month, -1))}
             nextLabel={monthLabel(shiftMonth(month, 1))}
+            previousText={shortMonthLabel(shiftMonth(month, -1))}
+            nextText={shortMonthLabel(shiftMonth(month, 1))}
             onPrevious={() => setMonth(shiftMonth(month, -1))}
             onNext={() => setMonth(shiftMonth(month, 1))}
           />
@@ -706,6 +708,7 @@ export function TransactionsScreen(
         ),
         {
           loadingLabel: "Loading transactions",
+          immediateLoading: true,
           errorMessage:
             "We couldn't load your transactions. Your filters are kept; check your connection or try again.",
           errorAction: (

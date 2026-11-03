@@ -14,9 +14,10 @@ import {
 import { invalidateQueries, type QuerySnapshot } from "./store";
 
 // A quick read shows nothing; a slow one shows one quiet status line.
-export function LoadingState(props: { label: string }): ReactNodeLike {
-  const [shown, setShown] = useState(false);
+export function LoadingState(props: { label: string; immediate?: boolean }): ReactNodeLike {
+  const [shown, setShown] = useState(props.immediate === true);
   useEffect(() => {
+    if (props.immediate) return;
     const timer = setTimeout(() => setShown(true), 300);
     return () => clearTimeout(timer);
   }, []);
@@ -98,10 +99,17 @@ export function DegradedState(props: { detail: string }): ReactNodeLike {
 export function outcomeGate<T extends Record<string, unknown>>(
   snapshot: QuerySnapshot<T>,
   render: (result: T) => ReactNodeLike,
-  opts?: { loadingLabel?: string; errorMessage?: string; errorAction?: ReactNodeLike }
+  opts?: {
+    loadingLabel?: string;
+    immediateLoading?: boolean;
+    errorMessage?: string;
+    errorAction?: ReactNodeLike;
+  }
 ): ReactNodeLike {
   if (snapshot.status === "loading") {
-    return <LoadingState label={opts?.loadingLabel ?? "Loading"} />;
+    return (
+      <LoadingState label={opts?.loadingLabel ?? "Loading"} immediate={opts?.immediateLoading} />
+    );
   }
   const outcome = snapshot.outcome;
   if (outcome.kind === "disabled") return <DisabledState />;

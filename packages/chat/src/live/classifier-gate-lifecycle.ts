@@ -16,6 +16,7 @@ import type {
   ChatSessionManagerDeps,
   HandledTurnOptions
 } from "./chat-session-ports.js";
+import { recordHandledTurnActivity } from "./classifier-gate-activity.js";
 import type { GateMode, GateOutcome, GateRequest } from "./classifier-gate.js";
 import type { UserSession } from "./chat-session-provider-identity.js";
 import type { TranscriptRecord } from "./types.js";
@@ -228,6 +229,15 @@ async function persistGateOutcome(
     toolName: trace.toolName ?? null,
     outcome: handled ? "executed-success" : "executed-failure-or-unknown"
   };
+  // One activity-history line per turn the gate answered, filed once the turn is committed to the
+  // gate path (a read that falls back to the default model files its own answer line instead).
+  const fileHandledTurnLine = (): void =>
+    recordHandledTurnActivity({
+      actorUserId,
+      turnId: opts?.turnId,
+      trace,
+      outcome: handled ? "handled" : "failed"
+    });
   const handledOpts: HandledTurnOptions = {
     threadId,
     turnId: opts?.turnId,
@@ -275,12 +285,15 @@ async function persistGateOutcome(
     // A read falls back: emit nothing here, so the default path is the single source of the user's
     // message and its reply.
     if (!mutating) return undefined;
+    fileHandledTurnLine();
     // The turn is committed to the gate path: emit the user message now, then the code-written reply.
     host.emit(actorUserId, surface, { kind: "user", text });
     const fallback = handled ? GATE_STORAGE_FAILURE_MESSAGE : reply;
     host.emit(actorUserId, surface, { kind: "reply", text: fallback, origin });
     return { reply: fallback };
   }
+
+  fileHandledTurnLine();
 
   // Post-store: the user message and the reply, with the reply carrying its id (and freshness) so
   // the live UI reconciles with history, mirroring the default-model path.

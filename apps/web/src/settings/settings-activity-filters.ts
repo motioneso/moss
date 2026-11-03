@@ -119,7 +119,12 @@ export function modelsButtonLabel(tickedCount: number, totalCount: number): stri
  */
 export function lineActivityModule(actionCode: string | null): string | null {
   if (!actionCode) return null;
-  if (actionCode === "chat.answer" || actionCode === "chat.tool_check") return "ai";
+  if (
+    actionCode === "chat.answer" ||
+    actionCode === "chat.handled" ||
+    actionCode === "chat.tool_check"
+  )
+    return "ai";
   if (actionCode.startsWith("embed.")) return "memory";
   if (actionCode === "transcribe.meeting") return "meetings";
   if (actionCode === "transcribe.voice_note") return "ai";

@@ -217,6 +217,21 @@
 .jds-chart__tone--accent {
   color: var(--accent-meter);
 }
+.jds-chart__tone--in {
+  color: var(--accent-meter);
+}
+.jds-chart__tone--out {
+  color: var(--danger);
+}
+.jds-chart--strong .jds-chart__grid {
+  border-top-color: var(--border-strong);
+}
+.jds-chart--strong .jds-chart__line {
+  stroke-width: 3;
+}
+.jds-chart--strong .jds-chart__area {
+  fill-opacity: 0.16;
+}
 @media (max-width: 480px) {
   .jds-chart__frame {
     grid-template-rows: 10rem auto;

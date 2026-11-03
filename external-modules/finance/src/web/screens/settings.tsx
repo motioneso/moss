@@ -119,6 +119,8 @@ interface ActivityResult extends Record<string, unknown> {
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const UNDO_CHECKS_MS = [2000, 4000, 8000];
+// A window shows this many rows until Show all opens the rest.
+const ACTIVITY_CAP = 10;
 
 function whenLabel(iso: string): string {
   const date = new Date(iso);
@@ -133,6 +135,7 @@ function whenLabel(iso: string): string {
 function ActivityRows(props: { rows: ActivityRow[] }): ReactNodeLike {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [all, setAll] = useState(false);
   const latest = useRef(props.rows);
   latest.current = props.rows;
 
@@ -174,7 +177,7 @@ function ActivityRows(props: { rows: ActivityRow[] }): ReactNodeLike {
 
   return (
     <div>
-      {props.rows.map((row) => (
+      {(all ? props.rows : props.rows.slice(0, ACTIVITY_CAP)).map((row) => (
         <div key={row.id} className="fnm-switch-row">
           <div className="fnm-switch-text">
             <span>{row.summary}</span>
@@ -196,6 +199,13 @@ function ActivityRows(props: { rows: ActivityRow[] }): ReactNodeLike {
           ) : null}
         </div>
       ))}
+      {!all && props.rows.length > ACTIVITY_CAP ? (
+        <div className="fnm-activity-more">
+          <Button variant="secondary" size="sm" onClick={() => setAll(true)}>
+            Show all {props.rows.length}
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -159,7 +159,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "activity",
     label: "Activity",
     description:
-      "Review every model call Moss made for you: chat answers, structured tasks, " +
+      "Review every model call Moss made for you: chat answers, chat messages the decision model handled itself (shown with the model, the tool it ran and the time taken), structured tasks, " +
       "transcription, embeddings, background tasks and tool runs, including actions done " +
       "on a module's own page, each as a plain action " +
       "with how long it took. Opening a line shows the detail dialog with its steps and " +
@@ -392,6 +392,9 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "locks, doors and garage openers are offered only to an account that switched them on " +
       "for itself (off by default, each person sets their own), and any other kind of device " +
       "is never offered. Without the switch they are left to the main model. " +
+      "Each message the classifier answers on its own adds one line to Settings > Activity, " +
+      "naming the classifier model, the tool it ran and how long it took; a message the main " +
+      "model answers adds no such line. " +
       "The classifier " +
       "sorts each new email into junk, needs a reply, needs action, receipt or notice, " +
       "waiting on someone, time-sensitive, or for your information; receipts, order and booking " +
