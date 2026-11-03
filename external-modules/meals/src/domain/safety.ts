@@ -220,31 +220,41 @@ function containsTerm(haystack: string, term: string): boolean {
   return ` ${haystack} `.includes(` ${term} `);
 }
 
-/** "gluten free", "dairy free", "free from nuts" and "free of eggs" after normalising. */
-const FREE_PHRASE = /\b(?:[a-z0-9]+ free|free (?:from|of) [a-z0-9]+)\b/g;
+/** Words that end the item a "<food> free" label describes. */
+const FREE_STOP =
+  "contains|contain|with|or|and|plus|made|not|but|use|for|from|may|might|has|have|without|then|else";
 
-/** Grain-free flours and breads that a gluten rule does not exclude. */
-const GLUTEN_FREE_COMPOUND =
-  /\b(?:corn|rice|buckwheat|chickpea|gram|almond|coconut|cassava|tapioca|potato|quinoa|lentil|sorghum|millet|arrowroot) (?:flour|bread|pasta|noodles?|tortillas?|crackers?|breadcrumbs|spaghetti|pita)\b/g;
+/** "egg free eggs" style phrases that are about farming, not about leaving the food out. */
+const NOT_A_DECLARATION = "range|run|roaming|ranging";
 
-/** Every restriction word that rules out the same terms, such as gluten, wheat and coeliac. */
-function sameGroup(phrase: string): readonly string[] {
-  const group = EXPANSIONS[phrase];
-  if (group === undefined) return [phrase];
-  return Object.keys(EXPANSIONS).filter((key) => EXPANSIONS[key] === group);
+function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
- * A line the recipe itself calls free of the restricted food, such as "gluten-free soy sauce",
- * does not trip that rule. The model check and the label flag still look at it.
+ * Removes only the restricted food's own free label from a line, such as "gluten free" for the
+ * gluten rule, plus the few words naming the item it describes ("gluten free bread"). A different
+ * food never clears the rule ("lactose free" does not clear dairy) and the rest of the line is
+ * still scanned, so "flour (not gluten free)" and "gluten free bread contains wheat starch" fail.
+ * Returns the cleaned text and the words the label covered.
  */
-function declaresFree(text: string, phrase: string): boolean {
-  return sameGroup(phrase).some(
-    (word) =>
-      containsTerm(text, `${word} free`) ||
-      containsTerm(text, `free from ${word}`) ||
-      containsTerm(text, `free of ${word}`)
+function stripOwnFreeLabel(
+  text: string,
+  phrase: string
+): { readonly text: string; readonly covered: ReadonlySet<string> } {
+  const base = phrase.endsWith("s") ? phrase.slice(0, -1) : phrase;
+  const food = [base, `${base}s`, `${base}es`].map(escapeRegex).join("|");
+  const fromOf = new RegExp(`\\bfree (?:from|of) (?:${food})\\b`, "g");
+  const labelled = new RegExp(
+    `\\b(?:${food}) free\\b(?!\\s+(?:${NOT_A_DECLARATION})\\b)(?:\\s+(?!(?:${FREE_STOP})\\b)[a-z0-9]+){0,3}`,
+    "g"
   );
+  const covered = new Set<string>();
+  const take = (match: string): string => {
+    for (const word of match.split(" ")) covered.add(word);
+    return " ";
+  };
+  return { text: text.replace(fromOf, take).replace(labelled, take), covered };
 }
 
 export function deterministicSafety(
@@ -256,12 +266,14 @@ export function deterministicSafety(
     const phrase = normalise(restriction)
       .replace(LEADING_NEGATION, "")
       .replace(TRAILING_QUALIFIER, "");
-    const glutenRule = EXPANSIONS[phrase] === GLUTEN;
     for (const line of ingredients) {
-      let text = `${normalise(line.name)} ${normalise(line.originalText)}`;
-      if (declaresFree(text, phrase)) continue;
-      text = text.replace(FREE_PHRASE, " ");
-      if (glutenRule) text = text.replace(GLUTEN_FREE_COMPOUND, " ");
+      const original = stripOwnFreeLabel(normalise(line.originalText), phrase);
+      // A parsed name loses the label, so drop only the name words the label covered.
+      const name = normalise(line.name)
+        .split(" ")
+        .filter((word) => !original.covered.has(word))
+        .join(" ");
+      const text = `${name} ${original.text}`;
       const hit = terms.find((term) => containsTerm(text, term));
       if (hit !== undefined) {
         const reason = `${line.name} conflicts with "${restriction}"`;

@@ -46,11 +46,11 @@ export function buildSafetyPrompt(
   const lines = [
     "Check one recipe against each eater's food rules. A rule names a food, or a diet such as " +
       '"vegetarian" that excludes foods.',
-    "Fail an eater only when an ingredient clearly is, contains, or is normally made with something their " +
-      "rules exclude, such as soy sauce for a wheat rule or red curry paste for a shellfish rule.",
-    "Do not fail for trace amounts, fillers, anti-caking agents or cross-contact that only some brands have, " +
-      "as in plain spices, curry powder, stock, broth or oats. A line marked gluten-free, dairy-free or the " +
-      "like passes that rule. Packaged products are flagged for a label check elsewhere.",
+    "When unsure whether an ingredient breaks a rule, fail it. Name the specific ingredient and the " +
+      'rule it breaks in the reason. A bare "might contain" or cross-contact is not enough, and ' +
+      "plain curry powder passes unless you can name an ingredient in it that breaks the rule.",
+    "A line explicitly marked free of the excluded food (gluten-free bread for a gluten rule) passes " +
+      "that rule only, never a different one.",
     "",
     'Example: eater 1 never eats fish; ingredient "1 tbsp Thai red curry paste" -> ' +
       '{eater 1, verdict "fail", reason "Red curry paste often contains shrimp paste"}.',
