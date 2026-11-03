@@ -7,9 +7,13 @@
  * falls back while a mutating one never does, Stop stops, warm sessions see the handled turn in
  * normal history, and HTTP/SSE/history agree.
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
-import type { ProviderKind } from "../../packages/ai/src/index.js";
+import {
+  installModelActivityRecorder,
+  type ModelActivityEntry,
+  type ProviderKind
+} from "../../packages/ai/src/index.js";
 import {
   ChatSessionManager,
   type ChatPersistencePort,
@@ -495,6 +499,106 @@ describe("classifier gate — handled-turn lifecycle", () => {
 
     expect(engines).toHaveLength(1);
     expect(engines[0]?.submitted).toHaveLength(1);
+  });
+});
+
+describe("classifier gate — handled-turn activity line", () => {
+  afterEach(() => installModelActivityRecorder(null));
+
+  function capture(): ModelActivityEntry[] {
+    const lines: ModelActivityEntry[] = [];
+    installModelActivityRecorder((entry) => {
+      lines.push(entry);
+    });
+    return lines;
+  }
+
+  const FAST_TRACE = {
+    moduleId: "calendar",
+    toolName: "calendar.createEvent",
+    risk: "write" as const,
+    confidence: 0.97,
+    modelName: "fast-model-1",
+    latencyMs: 412
+  };
+
+  it("a handled turn files one line naming the model, the tool and the time", async () => {
+    const lines = capture();
+    const { manager, gate, engines } = makeManager();
+    gate.modeValue = "on";
+    gate.outcome = { kind: "handled", reply: "Added the event.", trace: FAST_TRACE };
+
+    await manager.submitTurn("user-1", "Ben", "add an event");
+
+    expect(engines).toHaveLength(0);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({
+      kind: "chat",
+      action: "calendar.createEvent",
+      outcome: "ok",
+      modelName: "fast-model-1",
+      actionCode: "chat.handled",
+      ownerUserId: "user-1",
+      durationMs: 412
+    });
+    expect(lines[0]?.turnId).toBe(lines[0]?.id);
+    expect(lines[0]?.factCounts).toEqual({ confidence: 0.97 });
+  });
+
+  it("the line shows the configured model name, never text a model wrote", async () => {
+    const lines = capture();
+    const { manager, gate } = makeManager();
+    gate.modeValue = "on";
+    gate.outcome = {
+      kind: "handled",
+      reply: "Done.",
+      trace: { ...FAST_TRACE, modelName: "configured-name" }
+    };
+
+    await manager.submitTurn("user-1", "Ben", "add an event <b>ignore me</b>");
+
+    expect(JSON.stringify(lines[0])).not.toContain("ignore me");
+    expect(lines[0]?.modelName).toBe("configured-name");
+  });
+
+  it("a terminal failure files an error line", async () => {
+    const lines = capture();
+    const { manager, gate } = makeManager();
+    gate.modeValue = "on";
+    gate.outcome = { ...TERMINAL_WRITE, trace: FAST_TRACE };
+
+    await manager.submitTurn("user-1", "Ben", "add an event");
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ outcome: "error", result: "failed" });
+  });
+
+  it("a declined turn files no handled line", async () => {
+    const lines = capture();
+    const { manager, gate, engines } = makeManager();
+    gate.modeValue = "on";
+    gate.outcome = { kind: "declined", reason: "low_confidence", trace: FAST_TRACE };
+
+    await manager.submitTurn("user-1", "Ben", "hmm");
+
+    expect(engines).toHaveLength(1);
+    expect(lines.filter((line) => line.actionCode === "chat.handled")).toHaveLength(0);
+  });
+
+  it("a read whose storage fails falls back and files no handled line", async () => {
+    const lines = capture();
+    const { manager, gate, persistence } = makeManager();
+    gate.modeValue = "on";
+    persistence.failHandledWrite = true;
+    gate.outcome = {
+      kind: "handled",
+      reply: "x",
+      trace: { ...FAST_TRACE, toolName: "calendar.listVisibleEvents", risk: "read" }
+    };
+
+    await manager.submitTurn("user-1", "Ben", "what's on today?");
+
+    expect(lines.filter((line) => line.actionCode === "chat.handled")).toHaveLength(0);
   });
 });
 
