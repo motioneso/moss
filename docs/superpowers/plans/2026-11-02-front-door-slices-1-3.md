@@ -122,7 +122,7 @@ Ben ruled on 2026-11-02 that the lock, door and garage exclusion is configurable
 - **Fails closed.** A missing port or a failed settings read means off. The value is read once per attempt, for the attempt's own actor.
 - **A save that omits the field keeps the stored value**, so the response-style control cannot switch it off or on by accident.
 - **The control and its wording belong to slice 3**, in the same settings section as the off switch. Slice 1 ships the stored field and the filter only.
-- **Opt-in makes the devices eligible, nothing more.** Running a lock without a card still depends on the gateway and the tool's own risk class. A tool sorted Sensitive still escalates until the scan work's Run without asking setting exists.
+- **Opt-in makes the devices eligible, nothing more (the card waiver is issue 3960).** Running a lock without a card still depends on the gateway and the tool's own risk class. A tool sorted Sensitive still escalates until the scan work's Run without asking setting exists.
 
 Findings from task 1.1: Q1, lights are not offered because automatic preparation never builds a device list and drops optional arguments. The automatic device-list wiring is tracked in issue 3953. Q2, candidates carry only an id and a label, so the id's domain prefix (`light.`, `lock.`) is the only type signal. A list with no device-shaped ids passes unchanged. Task 1.5 (the report script) is dropped.
 
