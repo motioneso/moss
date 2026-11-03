@@ -187,9 +187,8 @@ describe("atomic captured category confirmation", () => {
   });
   it("refuses an undo when any row changed after the confirm", async () => {
     await seed(transaction("undo:c"), transaction("undo:d"));
-    const confirmed = (await owner((s) =>
-      s.bulk!.confirmWithUndo!(await review(["undo:c", "undo:d"]))
-    ))!;
+    const pair = await review(["undo:c", "undo:d"]);
+    const confirmed = (await owner((s) => s.bulk!.confirmWithUndo!(pair)))!;
     const fresh = await review(["undo:c"]);
     await owner((s) => s.bulk!.categorize(fresh, "utilities"));
     expect(await owner((s) => s.bulk!.unconfirm!(confirmed))).toBe(false);
