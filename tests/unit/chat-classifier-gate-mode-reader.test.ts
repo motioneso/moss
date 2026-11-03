@@ -6,7 +6,7 @@ import {
   type DataContextDb,
   type DataContextRunner
 } from "../../packages/db/src/index.js";
-import { createGateModeReader } from "../../packages/chat/src/live/classifier-gate-mode.js";
+import { createAdminModeReader } from "../../packages/chat/src/live/classifier-gate-mode.js";
 
 const ACTOR_ID = "00000000-0000-4000-8000-000000000001";
 
@@ -48,10 +48,10 @@ function fakeDataContext(storedValue: string | undefined) {
   return { dataContext, tablesRead, actors };
 }
 
-describe("createGateModeReader", () => {
+describe("createAdminModeReader", () => {
   it("runs a saved on as on and never reads the review table or the classifier binding", async () => {
     const { dataContext, tablesRead, actors } = fakeDataContext("on");
-    const read = createGateModeReader(dataContext, {});
+    const read = createAdminModeReader(dataContext, {});
 
     await expect(read(ACTOR_ID)).resolves.toBe("on");
     expect(tablesRead).toEqual(["app.instance_settings"]);
@@ -60,24 +60,24 @@ describe("createGateModeReader", () => {
 
   it("runs an environment on as on when nothing is saved", async () => {
     const { dataContext } = fakeDataContext(undefined);
-    const read = createGateModeReader(dataContext, { MOSS_CHAT_CLASSIFIER_GATE_MODE: "on" });
+    const read = createAdminModeReader(dataContext, { MOSS_CHAT_CLASSIFIER_GATE_MODE: "on" });
 
     await expect(read(ACTOR_ID)).resolves.toBe("on");
   });
 
   it("keeps a saved off ahead of an environment on", async () => {
     const { dataContext } = fakeDataContext("off");
-    const read = createGateModeReader(dataContext, { MOSS_CHAT_CLASSIFIER_GATE_MODE: "on" });
+    const read = createAdminModeReader(dataContext, { MOSS_CHAT_CLASSIFIER_GATE_MODE: "on" });
 
     await expect(read(ACTOR_ID)).resolves.toBe("off");
   });
 
   it("returns a saved shadow unchanged, and off when nothing is set", async () => {
     await expect(
-      createGateModeReader(fakeDataContext("shadow").dataContext, {})(ACTOR_ID)
+      createAdminModeReader(fakeDataContext("shadow").dataContext, {})(ACTOR_ID)
     ).resolves.toBe("shadow");
     await expect(
-      createGateModeReader(fakeDataContext(undefined).dataContext, {})(ACTOR_ID)
+      createAdminModeReader(fakeDataContext(undefined).dataContext, {})(ACTOR_ID)
     ).resolves.toBe("off");
   });
 });

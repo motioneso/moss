@@ -194,7 +194,7 @@ describe("Response style visibility", () => {
       (await import("../../apps/web/src/api/client.js")).putChatSettings
     );
     putChatSettings.mockResolvedValueOnce({
-      chat: { responseStyle: "concise", frontDoorGuardedDevices: false }
+      chat: { responseStyle: "concise", frontDoorGuardedDevices: false, frontDoorDisabled: false }
     });
 
     const conciseButton = renderer.root
@@ -211,6 +211,31 @@ describe("Response style visibility", () => {
     expect(text).not.toContain("Balanced example:");
     expect(text).not.toContain("Detailed example:");
 
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe("Fast model switch", () => {
+  it("turning it off saves the personal switch and keeps the response style", async () => {
+    const api = await import("../../apps/web/src/api/client.js");
+    const put = vi.mocked(api.putChatSettings);
+    put.mockClear();
+    put.mockResolvedValueOnce({
+      chat: { responseStyle: "concise", frontDoorGuardedDevices: false, frontDoorDisabled: true }
+    });
+    const renderer = await renderAssistantPane();
+    const toggle = renderer.root.findByProps({
+      "aria-label": "Let the fast model handle simple requests"
+    });
+    await act(async () => {
+      toggle.props.onChange({ target: { checked: false } });
+      await flush();
+    });
+    expect(put.mock.calls[0]?.[0]).toEqual({
+      chat: { responseStyle: "balanced", frontDoorDisabled: true }
+    });
     await act(async () => {
       renderer.unmount();
     });

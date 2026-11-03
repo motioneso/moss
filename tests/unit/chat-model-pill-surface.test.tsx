@@ -258,10 +258,10 @@ describe("ChatModelPill mutation surface routing (#1533)", () => {
     });
     vi.mocked(putChatModelOverride).mockResolvedValue({ settings: settingsFixture() });
     vi.mocked(getChatSettings).mockResolvedValue({
-      chat: { responseStyle: "balanced", frontDoorGuardedDevices: false }
+      chat: { responseStyle: "balanced", frontDoorGuardedDevices: false, frontDoorDisabled: false }
     });
     vi.mocked(putChatSettings).mockResolvedValue({
-      chat: { responseStyle: "balanced", frontDoorGuardedDevices: false }
+      chat: { responseStyle: "balanced", frontDoorGuardedDevices: false, frontDoorDisabled: false }
     });
     vi.mocked(switchChatProvider).mockResolvedValue(undefined);
   });
