@@ -1565,6 +1565,38 @@
       }
     },
     {
+      "name": "finance.transactions.unconfirm",
+      "permissionId": "finance.transactions.unconfirm",
+      "actionLabel": "Undo confirmed categories",
+      "description": "Atomically put one to 200 just-confirmed transactions back to needs-look and restore how each category was first chosen. Rechecks revision tokens and confirmed state; all revert with metadata-only activity or none do. Category, amounts, notes and splits are untouched.",
+      "risk": "write",
+      "handler": "transactions.unconfirm",
+      "actionFamilyId": "sorting",
+      "executionPolicy": "confirm",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rows": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": { "type": "string", "minLength": 1, "maxLength": 256 },
+                "writeRevision": { "type": "string", "pattern": "^[a-f0-9]{32}$" },
+                "categorizedBy": { "enum": ["rule", "plaid-map", "ai", "user", null] }
+              },
+              "required": ["id", "writeRevision", "categorizedBy"]
+            }
+          }
+        },
+        "required": ["rows"]
+      }
+    },
+    {
       "name": "finance.manual.account-review",
       "permissionId": "finance.manual.account-review",
       "description": "Read an owned manual account and captured row revision, with exact ledger/statement checks and future bill-plan blockers for closing. Never returns credentials or transaction notes.",

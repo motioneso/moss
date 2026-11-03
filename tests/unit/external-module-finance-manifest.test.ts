@@ -212,6 +212,7 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.reports.transactions", "reports.transactions"],
         ["finance.transactions.export", "transactions.export"],
         ["finance.transactions.confirm", "transactions.confirm"],
+        ["finance.transactions.unconfirm", "transactions.unconfirm"],
         ["finance.manual.account-review", "manual.account-review"],
         ["finance.manual.account-update", "manual.account-update"],
         ["finance.manual.transfer-context", "manual.transfer-context"],

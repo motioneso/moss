@@ -300,16 +300,24 @@ export function AttentionList(props: {
       () => run(row.line.id, source.id)
     );
   };
-  const confirm = (row: Extract<AttentionRow, { kind: "predicted" }>, txs: PredictedTx[]) =>
+  const confirm = (row: Extract<AttentionRow, { kind: "predicted" }>, txs: PredictedTx[]) => {
+    let undoRows: unknown[] = [];
     void write(
       row,
       txs.length === 1 ? "Confirmed." : `Confirmed ${txs.length} predicted categories.`,
-      () =>
-        props.tools!.invoke("finance.transactions.confirm", {
+      async () => {
+        const outcome = await props.tools!.invoke("finance.transactions.confirm", {
           rows: txs.map((tx) => ({ id: tx.id, writeRevision: tx.writeRevision! }))
-        }),
-      null
+        });
+        const result = ("result" in outcome ? outcome.result : undefined) as
+          | { undo?: { rows?: unknown[] } }
+          | undefined;
+        undoRows = result?.undo?.rows ?? [];
+        return outcome;
+      },
+      () => props.tools!.invoke("finance.transactions.unconfirm", { rows: undoRows })
     );
+  };
 
   const handlersFor = (): OccurrenceHandlers => ({
     disabled: props.locked || !props.tools,
