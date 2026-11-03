@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { GoogleTokenError } from "@moss/connectors";
 import {
   handles,
   ids,
@@ -273,6 +274,73 @@ describe("runGoogleSync auth and health", () => {
     // The raw provider/auth error text must never reach the persisted health row.
     expect(JSON.stringify(health)).not.toContain("raw provider body");
     expect(JSON.stringify(health)).not.toContain("secret-token");
+  });
+
+  it("records a temporary token-endpoint failure as a retry, not an expired sign-in (#3839)", async () => {
+    const accountId = await seedGoogleAccount(handles.dataContext, [
+      "https://www.googleapis.com/auth/calendar"
+    ]);
+    const ctx = { actorUserId: ids.userA, requestId: "pgboss:test" };
+    const outcome = await handles.workerDataContext.withDataContext(ctx, (scopedDb) =>
+      runGoogleSync(scopedDb, {
+        getFreshAccessToken: async () => {
+          throw new GoogleTokenError({
+            kind: "transient",
+            statusCode: 503,
+            oauthError: null,
+            message: "Google token endpoint returned 503"
+          });
+        },
+        getActiveAccount: async () => ({ id: accountId, scopes: ["calendar"] }),
+        googleClient: {
+          listCalendarEvents: async () => [],
+          listMessageIds: async () => [],
+          getMessage: async () => ({ id: "x" })
+        },
+        emailExtractDeps: {
+          runChat: async () => ({ text: "" })
+        },
+        now: () => new Date("2026-06-13T12:00:00.000Z")
+      })
+    );
+
+    expect(outcome.errors).toEqual(["provider-unavailable"]);
+    const health = await readAccountHealth(accountId, ctx);
+    expect(health.last_sync_status).toBe("failed");
+    expect(health.last_sync_error).toBe("provider-unavailable");
+  });
+
+  it("records a revoked grant as needing a reconnect (#3839)", async () => {
+    const accountId = await seedGoogleAccount(handles.dataContext, [
+      "https://www.googleapis.com/auth/calendar"
+    ]);
+    const ctx = { actorUserId: ids.userA, requestId: "pgboss:test" };
+    await handles.workerDataContext.withDataContext(ctx, (scopedDb) =>
+      runGoogleSync(scopedDb, {
+        getFreshAccessToken: async () => {
+          throw new GoogleTokenError({
+            kind: "needs-reconnect",
+            statusCode: 400,
+            oauthError: "invalid_grant",
+            message: "Google token endpoint returned 400"
+          });
+        },
+        getActiveAccount: async () => ({ id: accountId, scopes: ["calendar"] }),
+        googleClient: {
+          listCalendarEvents: async () => [],
+          listMessageIds: async () => [],
+          getMessage: async () => ({ id: "x" })
+        },
+        emailExtractDeps: {
+          runChat: async () => ({ text: "" })
+        },
+        now: () => new Date("2026-06-13T12:00:00.000Z")
+      })
+    );
+
+    const health = await readAccountHealth(accountId, ctx);
+    expect(health.last_sync_status).toBe("failed");
+    expect(health.last_sync_error).toBe("auth-error");
   });
 
   async function readAccountHealth(

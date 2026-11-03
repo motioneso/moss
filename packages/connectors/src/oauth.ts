@@ -44,6 +44,86 @@ export interface GoogleOAuthClientDeps {
 
 export const GOOGLE_OAUTH_REQUEST_TIMEOUT_MS = 10_000;
 
+/**
+ * How a failed token call has to be treated by its caller.
+ *
+ * - `needs-reconnect`: Google refused the saved grant (revoked, expired, or a client the
+ *   project no longer has). Only a new sign-in fixes it.
+ * - `transient`: Google did not answer, answered too slowly, or answered "try again later"
+ *   (a 5xx or a 429). The saved sign-in is untouched and the next run should try again.
+ *
+ * An unrecognised refusal keeps today's behaviour and asks for a reconnect, so a real auth
+ * problem never hides behind a retry loop.
+ */
+export type GoogleTokenFailureKind = "needs-reconnect" | "transient";
+
+const OAUTH_ERROR_CODE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
+
+/**
+ * A token-endpoint failure with the parts a caller is allowed to act on: the HTTP status, the
+ * OAuth error code, and whether the fix is a reconnect or a retry.
+ *
+ * The message deliberately carries neither the OAuth code nor the response body. The split
+ * lives in `kind`, not in text a caller would have to parse, and #141's rule still holds: no
+ * provider body, token or secret in the message, which error handlers log and may echo.
+ */
+export class GoogleTokenError extends Error {
+  readonly statusCode: number | null;
+  readonly oauthError: string | null;
+  readonly kind: GoogleTokenFailureKind;
+
+  constructor(input: {
+    kind: GoogleTokenFailureKind;
+    statusCode: number | null;
+    oauthError: string | null;
+    message: string;
+  }) {
+    super(input.message);
+    this.name = "GoogleTokenError";
+    this.kind = input.kind;
+    this.statusCode = input.statusCode;
+    this.oauthError = input.oauthError;
+  }
+}
+
+/**
+ * True only when the failure says Google, not the grant, is the problem. Callers use this to
+ * keep the connection, record a retry label, and leave Reconnect alone.
+ */
+export function isTransientGoogleTokenFailure(error: unknown): boolean {
+  return error instanceof GoogleTokenError && error.kind === "transient";
+}
+
+/**
+ * Only Google's own failures are temporary: no answer at all, a 5xx, or a 429. Every answer is a
+ * refusal of the saved grant (400/401 carry `invalid_grant`, `invalid_client` or
+ * `unauthorized_client`), and an unrecognised refusal stays a reconnect too, so a real auth
+ * problem never hides behind a retry loop. The OAuth code rides along on the error for callers
+ * that want it; the status alone decides retry versus reconnect.
+ */
+function classifyTokenFailure(statusCode: number | null): GoogleTokenFailureKind {
+  if (statusCode === null) return "transient";
+  if (statusCode >= 500 || statusCode === 429) return "transient";
+  return "needs-reconnect";
+}
+
+/**
+ * The OAuth error code from a failed token response, and nothing else. Google answers
+ * `{"error":"invalid_grant","error_description":"..."}`; only a short token-shaped code is
+ * kept, so prose (or a future field carrying something private) can never ride along.
+ */
+async function readOAuthErrorCode(response: Response): Promise<string | null> {
+  try {
+    const body = (await response.json()) as unknown;
+    if (typeof body !== "object" || body === null) return null;
+    const code = (body as { error?: unknown }).error;
+    return typeof code === "string" && OAUTH_ERROR_CODE.test(code) ? code : null;
+  } catch {
+    // A body that is not JSON, or has already been read, names no code. Still a failure.
+    return null;
+  }
+}
+
 export function parseRedirectUrl(redirectUrl: string): { code: string; state: string } {
   let url: URL;
   try {
@@ -121,20 +201,37 @@ export class GoogleOAuthClient {
   }
 
   private async postToken(params: Record<string, string>): Promise<GoogleTokenResponse> {
-    const response = await this.fetchFn(GOOGLE_TOKEN_ENDPOINT, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams(params).toString(),
-      signal: AbortSignal.timeout(this.requestTimeoutMs)
-    });
+    let response: Response;
+    try {
+      response = await this.fetchFn(GOOGLE_TOKEN_ENDPOINT, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(params).toString(),
+        signal: AbortSignal.timeout(this.requestTimeoutMs)
+      });
+    } catch {
+      // A timeout or a network failure never reached Google, so nothing about the grant is
+      // known. The underlying error is not logged (it can quote the request URL/params).
+      this.logger.error({ stage: "network" }, "Google token exchange did not answer");
+      throw new GoogleTokenError({
+        kind: "transient",
+        statusCode: null,
+        oauthError: null,
+        message: "Google token endpoint did not answer"
+      });
+    }
     if (!response.ok) {
-      // Log the STATUS only. The token-endpoint error body is {error, error_description} (an
-      // OAuth status token like "invalid_grant" + a human string) — no credentials — but logging
-      // it is needless data exposure and could capture a future field, so we drop it entirely.
-      // Never embed it in the Error message either: handleRouteError propagates Error.message to
-      // the HTTP response body (#141).
+      // Keep the OAuth error code (`invalid_grant` and friends) as a typed property so the sync
+      // can tell "retry next tick" from "reconnect"; drop the rest of the body. #141: never embed
+      // it in the Error message — an error handler logs that text and may echo it to the client.
+      const oauthError = await readOAuthErrorCode(response);
       this.logger.error({ statusCode: response.status }, "Google token exchange failed");
-      throw new Error(`Google token endpoint returned ${response.status}`);
+      throw new GoogleTokenError({
+        kind: classifyTokenFailure(response.status),
+        statusCode: response.status,
+        oauthError,
+        message: `Google token endpoint returned ${response.status}`
+      });
     }
     return (await response.json()) as GoogleTokenResponse;
   }

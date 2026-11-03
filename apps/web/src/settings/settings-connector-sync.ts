@@ -66,7 +66,10 @@ export function getConnectorAccountHealth(
   };
 }
 
-/** The coloured dot beside the account name. */
+/**
+ * The coloured dot beside the account name. A connection Google is not answering for a moment
+ * keeps the calm dot (#3839): the saved sign-in is still good and the next run retries.
+ */
 function indicatorFor(code: ConnectorSyncExplainCode): ConnectorAccountHealth["indicator"] {
   switch (code) {
     case "sign-in-expired":
@@ -78,6 +81,7 @@ function indicatorFor(code: ConnectorSyncExplainCode): ConnectorAccountHealth["i
     case "revoked":
     case "syncing":
     case "queued":
+    case "provider-unavailable":
     case "first-run-pending":
     case "not-scheduled":
       return "idle";
