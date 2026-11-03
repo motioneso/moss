@@ -386,10 +386,11 @@ function CashFlowSection(props: {
         ]}
         tones={["in", "out"]}
         strong
-        marker={{ label: "Net (dot)", values: net, total: total(net) }}
+        marker={{ label: "Net", values: net, total: total(net) }}
         format={money}
         formatTick={(cents) => formatCentsCompact(cents, currency)}
       />
+      <p className="jds-caption">The dot marks net cash flow, income minus outflow.</p>
       <DisclosureToggle
         expanded={showTable}
         controls="fnm-cash-flow-months"
