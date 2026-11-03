@@ -193,7 +193,9 @@ describe("Response style visibility", () => {
     const putChatSettings = vi.mocked(
       (await import("../../apps/web/src/api/client.js")).putChatSettings
     );
-    putChatSettings.mockResolvedValueOnce({ chat: { responseStyle: "concise" } });
+    putChatSettings.mockResolvedValueOnce({
+      chat: { responseStyle: "concise", frontDoorGuardedDevices: false }
+    });
 
     const conciseButton = renderer.root
       .findAllByType("button")

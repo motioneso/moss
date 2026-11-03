@@ -41,7 +41,7 @@ export interface IntegrationGroupSummary {
 export type IntegrationClassifierRisk = "read" | "write" | "outbound" | "destructive";
 
 /** How the classifier is allowed to supply one argument of a connected tool. */
-export type IntegrationClassifierArgumentKind = "enum" | "candidates" | "extract";
+export type IntegrationClassifierArgumentKind = "enum" | "candidates" | "extract" | "blank";
 
 export interface IntegrationClassifierArgument {
   readonly kind: IntegrationClassifierArgumentKind;

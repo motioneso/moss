@@ -42,7 +42,7 @@ describe("chat.setResponseStyle tool", () => {
       { actorUserId: ids.userA, requestId: "req:response-style-a-read" },
       (scopedDb) => preferences.getWithRevision(scopedDb, CHAT_SETTINGS_PREFERENCE_KEY)
     );
-    expect(stored?.value).toEqual({ responseStyle: "detailed" });
+    expect(stored?.value).toEqual({ responseStyle: "detailed", frontDoorGuardedDevices: false });
     expect(stored?.revision).toBe(1);
   });
 
@@ -55,7 +55,7 @@ describe("chat.setResponseStyle tool", () => {
       { actorUserId: ids.userA, requestId: "req:response-style-a2-read" },
       (scopedDb) => preferences.getWithRevision(scopedDb, CHAT_SETTINGS_PREFERENCE_KEY)
     );
-    expect(stored?.value).toEqual({ responseStyle: "concise" });
+    expect(stored?.value).toEqual({ responseStyle: "concise", frontDoorGuardedDevices: false });
     expect(stored?.revision).toBe(2);
 
     const otherStored = await dataContext.withDataContext(
@@ -83,7 +83,7 @@ describe("chat.setResponseStyle tool", () => {
       { actorUserId: ids.userB, requestId: "req:response-style-opencode-read" },
       (scopedDb) => preferences.getWithRevision(scopedDb, CHAT_SETTINGS_PREFERENCE_KEY)
     );
-    expect(stored?.value).toEqual({ responseStyle: "detailed" });
+    expect(stored?.value).toEqual({ responseStyle: "detailed", frontDoorGuardedDevices: false });
   });
 
   it("declares the style enum on inputSchema so the gateway rejects anything outside it", () => {

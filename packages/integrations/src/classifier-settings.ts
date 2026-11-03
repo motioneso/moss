@@ -40,7 +40,7 @@ export const INTEGRATION_CLASSIFIER_MAX_IDENTIFIER_CHARS = CLASSIFIER_LIMITS.idC
 export const INTEGRATION_CLASSIFIER_MAX_ENTRY_JSON_CHARS = 8192;
 
 const RISKS: readonly IntegrationClassifierRisk[] = ["read", "write", "outbound", "destructive"];
-const ARGUMENT_KINDS = ["enum", "candidates", "extract"] as const;
+const ARGUMENT_KINDS = ["enum", "candidates", "extract", "blank"] as const;
 const ARGUMENT_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 export interface ClassifierPreparationEntry {

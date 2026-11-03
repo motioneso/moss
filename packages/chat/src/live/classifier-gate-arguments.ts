@@ -28,6 +28,12 @@ export interface GateTool {
 
 export type ArgumentKind = "enum" | "candidates" | "extract";
 
+/** Names of optional arguments the tool declares deliberately blank. The gate never fills them. */
+export function blankArgumentNames(tool: GateTool): ReadonlySet<string> {
+  const declared = tool.classifier?.arguments ?? {};
+  return new Set(Object.keys(declared).filter((name) => declared[name]?.kind === "blank"));
+}
+
 export interface ArgumentPlan {
   readonly name: string;
   readonly kind: ArgumentKind;
@@ -63,12 +69,18 @@ function propertyOf(schema: JsonSchema | undefined, name: string): Record<string
 export function planArguments(tool: GateTool): ArgumentPlan[] {
   const declared = tool.classifier?.arguments ?? {};
   const required = requiredNames(tool.inputSchema);
-  const names = [...new Set([...required, ...Object.keys(declared)])];
-  return names.map((name) => ({
-    name,
-    kind: declared[name]?.kind ?? "enum",
-    required: required.includes(name)
-  }));
+  const blank = blankArgumentNames(tool);
+  const names = [...new Set([...required, ...Object.keys(declared)])].filter(
+    (name) => !blank.has(name)
+  );
+  return names.map((name) => {
+    const kind = declared[name]?.kind;
+    return {
+      name,
+      kind: kind === undefined || kind === "blank" ? "enum" : kind,
+      required: required.includes(name)
+    };
+  });
 }
 
 /**
@@ -82,9 +94,10 @@ export function gateEligibilityProblem(
   const declaration = checkClassifierEligibility(tool);
   if (!declaration.eligible) return "not_declared";
   const plan = planArguments(tool);
-  // A non-read tool with a property the gate will not fill would run on the server's default.
+  // A non-read tool with a property the gate will not fill would run on the server's default,
+  // unless the declaration marked that property blank on purpose.
   if (tool.risk !== "read") {
-    const planned = new Set(plan.map((arg) => arg.name));
+    const planned = new Set([...plan.map((arg) => arg.name), ...blankArgumentNames(tool)]);
     const properties = isRecord(tool.inputSchema?.properties) ? tool.inputSchema.properties : {};
     if (Object.keys(properties).some((name) => !planned.has(name))) return "unfilled_optional";
   }

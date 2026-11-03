@@ -28,11 +28,14 @@ export const CLASSIFIER_LIMITS = {
  * - `candidates`: pick one id from the list the tool's `candidates` hook returns.
  * - `extract`: extract a typed value from the message. Only classifiers that can return
  *   extracted fields can serve this; others treat the tool as ineligible.
+ * - `blank`: an optional argument the classifier never fills. The tool runs on its own default,
+ *   and the declaration says so on purpose. A required argument cannot be blank.
  */
 export type ClassifierArgumentDecl =
   | { readonly kind: "enum" }
   | { readonly kind: "candidates" }
-  | { readonly kind: "extract" };
+  | { readonly kind: "extract" }
+  | { readonly kind: "blank" };
 
 /** One value the classifier may pick. `id` is what the tool receives; `label` is shown to the classifier. */
 export interface ClassifierCandidate {
@@ -63,6 +66,12 @@ export interface ModuleAssistantToolClassifier {
   readonly arguments?: Readonly<Record<string, ClassifierArgumentDecl>>;
   /** Required when any argument is `candidates`. */
   readonly candidates?: ClassifierCandidateProvider;
+  /**
+   * Set to `false` only when the candidates are not devices (for example task names). Without it,
+   * a tool that changes things is offered only lights, switches and fans, and locks or covers only
+   * to an account that opted in.
+   */
+  readonly candidatesAreDevices?: boolean;
   /**
    * Reply text filled from the tool result, for example "Added {task.title}.". Each placeholder
    * is a dotted path into `outputSchema.properties` ending at a string, number, integer or
@@ -171,7 +180,15 @@ function checkArguments(
     if (arg.kind === "candidates" && !decl.candidates) {
       problems.push(`argument ${name} needs a candidates hook`);
     }
-    if (arg.kind !== "enum" && arg.kind !== "candidates" && arg.kind !== "extract") {
+    if (arg.kind === "blank" && required.includes(name)) {
+      problems.push(`argument ${name} is required and cannot be blank`);
+    }
+    if (
+      arg.kind !== "enum" &&
+      arg.kind !== "candidates" &&
+      arg.kind !== "extract" &&
+      arg.kind !== "blank"
+    ) {
       problems.push(`argument ${name} has an unknown kind`);
     }
   }
@@ -213,6 +230,33 @@ export function checkClassifierEligibility(
 
   const unique = [...new Set(problems)];
   return unique.length === 0 ? { eligible: true } : { eligible: false, problems: unique };
+}
+
+/** Device kinds an on/off action is always offered. */
+export const ON_OFF_DEVICE_DOMAINS: readonly string[] = ["light", "switch", "fan"];
+
+/** Locks, doors and garage openers. Offered only when the account has switched them on. */
+export const GUARDED_DEVICE_DOMAINS: readonly string[] = ["lock", "cover"];
+
+/**
+ * Allow-list for a candidate list that feeds a tool which changes things. An id is kept only when
+ * the text before its first dot, lowercased, is a light, switch or fan, or a lock or cover when
+ * `includeGuarded` is true. Every other id is dropped, including ids with no dot, so a list
+ * cannot slip through because nothing in it looks like a device. A tool whose candidates are not
+ * devices must say so with `candidatesAreDevices: false` on its classifier, and the caller skips
+ * this filter for it.
+ */
+export function filterOnOffCandidates(
+  candidates: readonly ClassifierCandidate[],
+  options: { readonly includeGuarded?: boolean } = {}
+): readonly ClassifierCandidate[] {
+  const allowed = options.includeGuarded
+    ? [...ON_OFF_DEVICE_DOMAINS, ...GUARDED_DEVICE_DOMAINS]
+    : ON_OFF_DEVICE_DOMAINS;
+  return candidates.filter((entry) => {
+    const dot = entry.id.indexOf(".");
+    return dot > 0 && allowed.includes(entry.id.slice(0, dot).toLowerCase());
+  });
 }
 
 export type NormalizedCandidates =

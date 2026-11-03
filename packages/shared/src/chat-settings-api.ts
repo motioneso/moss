@@ -6,6 +6,14 @@ export const CHAT_SETTINGS_PREFERENCE_KEY = "chat.settings.v1";
 
 export interface ChatSettingsDto {
   readonly responseStyle: ChatResponseStyle;
+  /** The fast model may be offered locks, doors and garage openers. Off unless the account opts in. */
+  readonly frontDoorGuardedDevices: boolean;
+}
+
+/** The save request may leave the front-door switch out, which keeps the stored value. */
+export interface ChatSettingsUpdateDto {
+  readonly responseStyle: ChatResponseStyle;
+  readonly frontDoorGuardedDevices?: boolean;
 }
 
 export interface GetChatSettingsResponse {
@@ -13,19 +21,22 @@ export interface GetChatSettingsResponse {
 }
 
 export interface PutChatSettingsRequest {
-  readonly chat: ChatSettingsDto;
+  readonly chat: ChatSettingsUpdateDto;
 }
 
 export type PutChatSettingsResponse = GetChatSettingsResponse;
 
-export const DEFAULT_CHAT_SETTINGS: ChatSettingsDto = { responseStyle: "balanced" };
+export const DEFAULT_CHAT_SETTINGS: ChatSettingsDto = {
+  responseStyle: "balanced",
+  frontDoorGuardedDevices: false
+};
 
 export function normalizeChatSettings(value: unknown): ChatSettingsDto {
   if (!value || typeof value !== "object" || Array.isArray(value)) return DEFAULT_CHAT_SETTINGS;
   const raw = value as Record<string, unknown>;
   const responseStyle = raw.responseStyle;
   if (!isChatResponseStyle(responseStyle)) return DEFAULT_CHAT_SETTINGS;
-  return { responseStyle };
+  return { responseStyle, frontDoorGuardedDevices: raw.frontDoorGuardedDevices === true };
 }
 
 export function isChatResponseStyle(value: unknown): value is ChatResponseStyle {
@@ -42,12 +53,32 @@ export function renderChatResponseStyleInstruction(style: ChatResponseStyle): st
   return "Default response style: balanced. Be direct, with enough context to be useful.";
 }
 
+/** Applies a save to the stored settings. A field the save omits keeps its stored value. */
+export function mergeChatSettings(stored: unknown, update: ChatSettingsUpdateDto): ChatSettingsDto {
+  const current = normalizeChatSettings(stored);
+  return normalizeChatSettings({
+    ...update,
+    frontDoorGuardedDevices: update.frontDoorGuardedDevices ?? current.frontDoorGuardedDevices
+  });
+}
+
 const chatSettingsSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["responseStyle", "frontDoorGuardedDevices"],
+  properties: {
+    responseStyle: { type: "string", enum: CHAT_RESPONSE_STYLES },
+    frontDoorGuardedDevices: { type: "boolean" }
+  }
+} as const;
+
+const chatSettingsUpdateSchema = {
   type: "object",
   additionalProperties: false,
   required: ["responseStyle"],
   properties: {
-    responseStyle: { type: "string", enum: CHAT_RESPONSE_STYLES }
+    responseStyle: { type: "string", enum: CHAT_RESPONSE_STYLES },
+    frontDoorGuardedDevices: { type: "boolean" }
   }
 } as const;
 
@@ -68,7 +99,7 @@ export const putChatSettingsRouteSchema = {
     type: "object",
     additionalProperties: false,
     required: ["chat"],
-    properties: { chat: chatSettingsSchema }
+    properties: { chat: chatSettingsUpdateSchema }
   },
   response: {
     200: {

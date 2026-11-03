@@ -10,6 +10,7 @@ import type { Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
 import type { ActAsGrantRegistry } from "@moss/module-sdk/server";
 import { createAppActionsService } from "./app-actions.js";
+import { saveChatSettings } from "./chat-settings-save.js";
 
 import {
   isUuid,
@@ -394,6 +395,7 @@ export function registerChatRoutes(
         resolveActiveModules: resolveActiveModules as ActiveModulesResolver,
         dataContext: dependencies.dataContext,
         gateway: wiring.gateway,
+        preferences: chatSettingsRepo,
         classifierDeps: {
           repository: wiring.aiRepository,
           cipher: createAiSecretCipher(),
@@ -816,9 +818,8 @@ export function registerChatRoutes(
       try {
         const access = await dependencies.resolveAccessContext(request);
         const body = request.body as PutChatSettingsRequest;
-        const chat = normalizeChatSettings(body.chat);
-        await dependencies.dataContext.withDataContext(access, (scopedDb) =>
-          chatSettingsRepo.upsert(scopedDb, CHAT_SETTINGS_PREFERENCE_KEY, chat)
+        const chat = await dependencies.dataContext.withDataContext(access, (db) =>
+          saveChatSettings(db, chatSettingsRepo, body.chat)
         );
         return { chat };
       } catch (error) {
