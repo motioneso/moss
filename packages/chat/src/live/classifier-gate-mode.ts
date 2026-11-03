@@ -1,4 +1,5 @@
 import type { DataContextRunner, PreferencesPort } from "@moss/db";
+import { PreferencesRepository } from "@moss/structured-state";
 import { CHAT_SETTINGS_PREFERENCE_KEY, normalizeChatSettings } from "@moss/shared";
 import { CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY, RuntimeConfigResolver } from "@moss/settings";
 
@@ -11,8 +12,8 @@ import type { GateMode } from "./classifier-gate.js";
  */
 export function createGateModeReader(
   dataContext: Pick<DataContextRunner, "withDataContext">,
-  preferences: Pick<PreferencesPort, "get">,
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  preferences: Pick<PreferencesPort, "get"> = new PreferencesRepository()
 ): (actorUserId: string) => Promise<GateMode> {
   return withFrontDoorSwitch(
     createAdminModeReader(dataContext, env),

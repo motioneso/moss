@@ -407,9 +407,7 @@ export function registerChatRoutes(
     : undefined;
 
   /** The admin gate mode, read fresh for each turn. Shared by both runners. */
-  const readGateMode = wiring
-    ? createGateModeReader(dependencies.dataContext, chatSettingsRepo)
-    : undefined;
+  const readGateMode = wiring ? createGateModeReader(dependencies.dataContext) : undefined;
 
   /**
    * Task 4.1 (#2901) — the classifier gate seam, wired with the real access token and admin setting.
