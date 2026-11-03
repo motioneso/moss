@@ -160,7 +160,7 @@ STATES = {
 links = []
 for sid, (title, tiles, rows, more, ready) in STATES.items():
     for phone in (False, True):
-        s = strip(tiles, phone)
+        s = strip([tile("Income so far", "$2,840.00", "1 deposit")] + tiles, phone)
         top = (attention(rows, more, phone) if rows else "") + s
         base = "01-budget-phone.html" if phone else "01-budget-desktop.html"
         html = page(base, f"{title} ({'phone' if phone else 'desktop'})", hero(ready, phone), top, phone)

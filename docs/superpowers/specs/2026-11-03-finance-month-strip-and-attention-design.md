@@ -12,7 +12,7 @@
 Budget opens with the question "how am I doing this month" unanswered and one large number nobody
 explains. This spec adds two blocks to the Budget tab and one button.
 
-- The strip shows four figures: spent, left to spend, bills due, overspent.
+- The strip shows five figures: income so far, spent, left to spend, bills due, overspent.
 - The attention list shows what needs a decision now, each item with a one-tap fix.
 - Ready to assign gets an Assign button and a plain label.
 
@@ -59,32 +59,33 @@ Further states, described here and not drawn because they reuse drawn parts:
 ### Desktop layout
 
 The attention list runs in two columns so a long list does not push the strip off the screen.
-Rows fill left to right, top to bottom. The strip runs four tiles across the full width. Groups
+Rows fill left to right, top to bottom. The strip runs five tiles across the full width. Groups
 and the Balances rail follow as today.
 
 ### Phone layout
 
 One column. Each row stacks its text over its buttons, and buttons are 44px tall. The strip is a
-2 by 2 grid. The list shows at most five rows before "Show N more", never a scroll box.
+full-width Income tile over a 2 by 2 grid. The list shows at most five rows before "Show N more", never a scroll box.
 
 ## The strip
 
-Four tiles, always in this order. Figures are for the month on screen and use Budget's existing
+Five tiles, always in this order. Figures are for the month on screen and use Budget's existing
 currency. All of them come from data the Budget read already returns or from the bills read.
 
-| Tile          | Value                                                            | Sub-line                                    |
-| ------------- | ---------------------------------------------------------------- | ------------------------------------------- |
-| Spent         | Sum of activity across spending categories, shown as a positive  | "of $X assigned"                            |
-| Left to spend | Sum of the positive available amounts across spending categories | "across N categories"                       |
-| Bills due     | Expected amount of bills not yet posted or skipped this month    | "N bills, next Fri Oct 10"                  |
-| Overspent     | Sum of negative available amounts. "None" when there are none    | Names the worst category, or "0 categories" |
+| Tile          | Value                                                               | Sub-line                                    |
+| ------------- | ------------------------------------------------------------------- | ------------------------------------------- |
+| Income so far | Sum of deposits in the Income group this month (transfers excluded) | "N deposits"                                |
+| Spent         | Sum of activity across spending categories, shown as a positive     | "of $X assigned"                            |
+| Left to spend | Sum of the positive available amounts across spending categories    | "across N categories"                       |
+| Bills due     | Expected amount of bills not yet posted or skipped this month       | "N bills, next Fri Oct 10"                  |
+| Overspent     | Sum of negative available amounts. "None" when there are none       | Names the worst category, or "0 categories" |
 
-Spending categories are every category except the Savings and Income groups, which the taxonomy
+Income so far uses the Income group's activity, which Budget already returns, so it needs no new data. It is not tappable. Spending categories are every category except the Savings and Income groups, which the taxonomy
 already separates. Transfers are excluded, as Ready to assign already excludes them.
 
 Rules:
 
-- Left to spend ignores overspent categories. They show on the fourth tile and nowhere else, so
+- Left to spend ignores overspent categories. They show on the Overspent tile and nowhere else, so
   one overspent category does not silently reduce a figure the user reads as "safe".
 - Money set aside for a later bill counts in Left to spend. Car insurance with $210 available
   and nothing posted counts. This matches how the category rows read today.
@@ -94,9 +95,6 @@ Rules:
   Upcoming. Spent and Left to spend are not tappable.
 - Past months use the same definitions on that month's figures. Bills due then counts bills that
   were never posted, labelled "unpaid".
-
-**Income is not in the strip.** The critique listed income so far, the card did not, so the strip
-carries four tiles. The data exists (the Income group's activity) if Ben wants a fifth.
 
 ## Ready to assign
 
@@ -260,7 +258,7 @@ for review:
 - Moss chat answering "what needs my attention" (the data is the same, a later tool).
 - The Today money line (R2).
 - Push alerts for these items (R2).
-- Income tile, charts, and the Reports changes from the critique.
+- Charts and the Reports changes from the critique.
 - Household shared budget.
 
 ## Build slicing
