@@ -15,7 +15,11 @@ describe("meetings composition", () => {
   it("keeps single-link approval consistent with the newer minimal meeting surfaces", () => {
     const meeting = getBuiltInModuleManifests().find((item) => item.id === "meetings")!;
     const native = meeting.features!.find((item) => item.id === "meetings.native_capture")!;
-    const profile = CORE_APP_SETTINGS.find((item) => item.id === "profile")!.description;
+    const profilePath = CORE_APP_SETTINGS.find((item) => item.id === "profile")!.path;
+    // Topic entries that share a path read as one page description.
+    const profile = CORE_APP_SETTINGS.filter((item) => item.path === profilePath)
+      .map((item) => item.description)
+      .join(" ");
     const link = CORE_APP_SCREENS.find((item) => item.id === "link-trail-marker")!.description;
     expect(meeting.navigation![0]!.description).toContain("pasted recording without a Mac");
     expect(meeting.navigation![0]!.description).toContain("Live recording needs a linked Mac");

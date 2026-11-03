@@ -338,7 +338,7 @@ export const connectorsModuleManifest = {
     {
       id: "connectors.imap_connect",
       description:
-        "Add an email account over IMAP from Accounts in Settings, Connections. Type the email address, confirm the mail service (Yahoo Mail, Proton Mail, iCloud or Fastmail, picked automatically when the address is recognised) and paste an app password. Test connection checks the login and reports whether it works, was rejected, had no secure connection or could not reach the server. Connect saves the account and starts syncing.",
+        "Add an email account over IMAP from Accounts in Settings, Connections. Type the email address, confirm the mail service (Yahoo Mail, Proton Mail, iCloud or Fastmail, picked automatically when recognised) and paste an app password.",
       remediations: [
         {
           id: "connectors.imap_connect.use_app_password",
@@ -347,6 +347,11 @@ export const connectorsModuleManifest = {
           path: "/settings?section=connections"
         }
       ]
+    },
+    {
+      id: "connectors.imap_connect_test",
+      description:
+        "In the IMAP form, Test connection checks the login and reports whether it works, was rejected, had no secure connection or could not reach the server. Connect saves the account and starts syncing."
     },
     {
       id: "connectors.outlook_browser_coverage",

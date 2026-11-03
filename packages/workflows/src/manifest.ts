@@ -23,7 +23,12 @@ export const workflowsModuleManifest = {
     {
       id: "workflows.where-to-find",
       description:
-        "Workflows has no screen, navigation entry or settings pane, and users do not create workflows. It is background machinery that lets another module run a multi-step job that pauses for your approval. When a run waits on you, a Workflow approval card with Approve and Reject buttons appears in chat, and the run continues or stops from there. Moss cannot answer these approvals for you or cancel a run from chat. Moss can read your own runs and their steps in chat."
+        "Workflows has no screen, navigation entry or settings pane, and users do not create workflows. It is background machinery that lets another module run a multi-step job that pauses for your approval."
+    },
+    {
+      id: "workflows.approvals-in-chat",
+      description:
+        "When a run waits on you, a Workflow approval card with Approve and Reject buttons appears in chat. Moss cannot answer these approvals for you or cancel a run from chat, but can read your runs and steps."
     }
   ],
   workflows: [

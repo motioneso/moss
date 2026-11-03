@@ -8,7 +8,12 @@ import { CORE_APP_SETTINGS } from "../../packages/shared/src/app-map-core.js";
 // #2984 R2.5b review: the app map must name every state the Classifier panel can show, and the
 // panel's spacing must meet the design system's minimum gaps.
 
-const connections = CORE_APP_SETTINGS.find((entry) => entry.id === "connections");
+// Several entries share the Connections path; their descriptions read as one.
+const connections = {
+  description: CORE_APP_SETTINGS.filter((entry) => entry.path === "/settings?section=connections")
+    .map((entry) => entry.description)
+    .join(" ")
+};
 const panelFeature = integrationsModuleManifest.features.find(
   (feature) => feature.id === "integrations.connection_classifier_panel"
 );

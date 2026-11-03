@@ -75,7 +75,14 @@ describe("app-map integrity and truthfulness", () => {
   });
 
   it("describes exact server disclosure, raw permission exceptions and quiet outcomes", () => {
-    const provider = CORE_APP_SETTINGS.find((screen) => screen.id === "assistant");
+    // The Your assistant page is split across several topic entries sharing one path.
+    const provider = {
+      description: CORE_APP_SETTINGS.filter(
+        (screen) => screen.path === "/settings?section=assistant"
+      )
+        .map((screen) => screen.description)
+        .join(" ")
+    };
     for (const text of [
       "server-owned action title",
       "full resolved target",
@@ -318,7 +325,7 @@ describe("app-map integrity and truthfulness", () => {
     const assistantEntries = appMap.settings.filter(
       (setting) => setting.path === "/settings?section=assistant"
     );
-    expect(assistantEntries).toHaveLength(1);
+    expect(assistantEntries.length).toBeGreaterThan(0);
     for (const phrase of ["ai model", "which model", "change model"]) {
       const hits = assistantEntries.filter((entry) =>
         JSON.stringify(entry).toLowerCase().includes(phrase)

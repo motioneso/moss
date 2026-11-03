@@ -5,7 +5,10 @@ import { CORE_APP_SETTINGS } from "@moss/shared";
 function descriptionOf(id: string): string {
   const setting = CORE_APP_SETTINGS.find((entry) => entry.id === id);
   expect(setting).toBeDefined();
-  return setting!.description;
+  // Topic entries that share a path read as one page description.
+  return CORE_APP_SETTINGS.filter((entry) => entry.path === setting!.path)
+    .map((entry) => entry.description)
+    .join(" ");
 }
 
 describe("source and account-export app-map outcomes (#3397)", () => {

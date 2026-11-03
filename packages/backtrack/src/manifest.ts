@@ -41,6 +41,21 @@ export const backtrackModuleManifest: MossModuleManifest = {
   },
   features: [
     {
+      id: "backtrack.recording-switch",
+      description:
+        "Recording has one switch that pauses every Mac (turning a Mac's recording on happens on that Mac, with its own consent), with a badge reading Paused or On with the Mac count."
+    },
+    {
+      id: "backtrack.kept-and-delete",
+      description:
+        "Kept shows Days kept, Stored size and Last received. Delete offers the last hour, today, one day, or all of Backtrack, each behind a confirmation, and works with no Mac linked."
+    },
+    {
+      id: "backtrack.empty-states",
+      description:
+        "With no Mac and no history the page says No Mac is linked and to link Trail Marker for Mac from Account settings, where the Mac companion connection is approved and signed out. It notes when an admin has not turned storage on."
+    },
+    {
       id: "backtrack.day_memory",
       description:
         "Trail Marker can read your screen through the day and keep it as searchable day memory " +
@@ -98,16 +113,7 @@ export const backtrackModuleManifest: MossModuleManifest = {
       id: "backtrack.module-settings",
       label: "Backtrack",
       description:
-        "Pause or resume Backtrack for all your Macs, see days and size kept (37 days, plus up " +
-        "to one hourly run), and delete history. Shows an empty state with no Mac and no " +
-        "history, and a note when an admin has not turned storage on. " +
-        "The page is Settings, Modules, Backtrack. Recording has one switch that pauses every Mac " +
-        "(turning a Mac's recording on happens on that Mac, with its own consent), with a badge " +
-        "reading Paused or On with the Mac count. Kept shows Days kept, Stored size and Last received. " +
-        "Delete offers the last hour, today, one day, or all of Backtrack, each behind a confirmation, " +
-        "and works with no Mac linked. With no Mac and no history it says No Mac is linked and to link " +
-        "Trail Marker for Mac from Account settings, which is where the Mac companion connection " +
-        "is approved and signed out.",
+        "Pause or resume Backtrack for all your Macs, see days and size kept (37 days, plus up to one hourly run), and delete history. The page is Settings, Modules, Backtrack.",
       path: "/settings?section=modules&module=backtrack",
       scope: "user",
       permissionId: "backtrack.manage",

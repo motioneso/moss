@@ -37,7 +37,12 @@ export const goalsModuleManifest: MossModuleManifest = {
     {
       id: "goals.where-to-find",
       description:
-        "Goals has no screen of its own. Active goals appear on Today under the heading Long-term goals (labelled Focus), and the section is hidden when there are none. There is no goals page or goals setting in the web app, so goals are created and updated by asking Moss in chat (list, look up by title, create, update, add evidence)."
+        "Goals has no screen of its own. Active goals appear on Today under the heading Long-term goals (labelled Focus), and the section is hidden when there are none."
+    },
+    {
+      id: "goals.manage-in-chat",
+      description:
+        "There is no goals page or goals setting in the web app, so goals are created and updated by asking Moss in chat (list, look up by title, create, update, add evidence)."
     },
     {
       id: "goals.today_section",

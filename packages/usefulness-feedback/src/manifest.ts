@@ -74,13 +74,17 @@ export const usefulnessFeedbackModuleManifest = {
     {
       id: "usefulness-feedback.where-to-find",
       description:
-        "Moss asks how useful things were in these places. Under an assistant reply in chat, a " +
-        "three-dot Feedback menu offers More like this and Not useful, and on a Main chat reply " +
-        "also Remember this. On the evening briefing in Today, a Feedback menu offers More like " +
-        "this, Too much, Not useful and Dismiss. A Moss check-in message in chat has Useful and " +
-        "Not useful buttons. Catch-up rows and proactive cards in Today each have a Dismiss " +
-        "button that also records the feedback. After a choice the control shows Saved " +
-        "with Undo where it has one. The settings pages have no feedback page of their own."
+        "Moss asks how useful things were in these places. Under an assistant reply in chat, a three-dot Feedback menu offers More like this and Not useful, and on a Main chat reply also Remember this."
+    },
+    {
+      id: "usefulness-feedback.briefing-and-checkins",
+      description:
+        "On the evening briefing in Today, a Feedback menu offers More like this, Too much, Not useful and Dismiss. A Moss check-in message in chat has Useful and Not useful buttons."
+    },
+    {
+      id: "usefulness-feedback.dismiss-and-undo",
+      description:
+        "Catch-up rows and proactive cards in Today each have a Dismiss button that also records the feedback. After a choice the control shows Saved with Undo where it has one. Settings has no feedback page."
     }
   ],
   routes: [
