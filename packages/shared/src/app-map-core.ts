@@ -267,7 +267,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     description:
       "Review and configure assistant memory behaviour, and choose the People folder. Every " +
       "folder is chosen from the same list of available folders, and People notes live inside " +
-      "the chosen notes folder. The dashboard distinguishes a failed read from no memories and offers Try again; previously loaded rows remain visible after a failed refresh. People folder, match-candidate and People-list reads also show failures with Try again.",
+      "the chosen notes folder. The dashboard distinguishes a failed read from no memories and offers Try again; previously loaded rows remain visible after a failed refresh. People folder, match-candidate and People-list reads also show failures with Try again. The People tab (beside Memory at the top of Memory & context) holds four groups. People notes shows the Folder (Notes folder: name, or No People folder configured.) with a choose-a-folder button, Refresh from notes (Read this folder and sync your People list.), and the Suggest note updates switch, which makes Moss create review candidates for its own People note updates instead of silently changing human notes. Review matches lists match candidates with Accept and Reject, or Nothing to review. People lists everyone, with rename (Save name) and Archive. Add a person manually takes a Name and an Email and creates the person.",
     path: "/settings?section=memory",
     scope: "user"
   },

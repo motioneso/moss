@@ -132,6 +132,11 @@ export const peopleModuleManifest: MossModuleManifest = {
   ],
   features: [
     {
+      id: "people.where-to-find",
+      description:
+        "People has no screen of its own. A person is managed in Settings, Memory & context, People tab: choose the People folder inside the notes folder, refresh from notes, switch Suggest note updates on or off (on by default; when on, Moss makes review candidates for its own People note updates instead of silently changing human notes), accept or reject match candidates, rename or archive a person, and add a person by name and email. In chat, Moss can read People and review matches; note-backed writes, merges and identity splits are not available there."
+    },
+    {
       id: "people.coordinated_note_writes",
       description:
         "People note updates preserve unrelated concurrent Moss edits by reading the current note before saving. Creating a person chooses an unused filename without overwriting an existing note."
