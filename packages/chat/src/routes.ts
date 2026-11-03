@@ -123,7 +123,11 @@ import { createClassifierGatePortsFactory } from "./live/classifier-gate-wiring.
 import { createClassifierGateShadowRunner } from "./live/classifier-gate-shadow.js";
 import { GateSpeedRecord } from "./live/classifier-gate-speed.js";
 import { THRESHOLD_VERSION } from "./live/classifier-gate.js";
-import { createGateModeReader } from "./live/classifier-gate-mode.js";
+import {
+  createFrontDoorSwitchReader,
+  createGateModeReader,
+  withFrontDoorSwitch
+} from "./live/classifier-gate-mode.js";
 import { buildChatGatewayDependencies } from "./gateway-services.js";
 import { VisualPresentationService } from "./visual/presentation-service.js";
 import { buildCheckTokenMinter, type CheckTokenMinter } from "./check-token-minter.js";
@@ -407,7 +411,12 @@ export function registerChatRoutes(
     : undefined;
 
   /** The admin gate mode, read fresh for each turn. Shared by both runners. */
-  const readGateMode = wiring ? createGateModeReader(dependencies.dataContext) : undefined;
+  const readGateMode = wiring
+    ? withFrontDoorSwitch(
+        createGateModeReader(dependencies.dataContext),
+        createFrontDoorSwitchReader(dependencies.dataContext, chatSettingsRepo)
+      )
+    : undefined;
 
   /**
    * Task 4.1 (#2901) — the classifier gate seam, wired with the real access token and admin setting.

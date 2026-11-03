@@ -517,6 +517,48 @@ function YoloMode() {
   );
 }
 
+/** The signed-in person's own front-door switches, saved with the rest of their chat settings. */
+function FastModel() {
+  const queryClient = useQueryClient();
+  const { toast } = useFeedback();
+  const settingsQuery = useQuery({ queryKey: queryKeys.chat.settings, queryFn: getChatSettings });
+  const mutation = useMutation({
+    mutationFn: putChatSettings,
+    onSuccess: (data) => queryClient.setQueryData(queryKeys.chat.settings, data),
+    onError: (error) => toast(readError(error), { tone: "drift" })
+  });
+  const chat = settingsQuery.data?.chat;
+  if (!chat) return null;
+  const save = (patch: { frontDoorDisabled?: boolean; frontDoorGuardedDevices?: boolean }) =>
+    mutation.mutate({ chat: { responseStyle: chat.responseStyle, ...patch } });
+  return (
+    <Group title="Fast model" desc="Your own setting for chat.">
+      <Row
+        name="Let the fast model handle simple requests"
+        control={
+          <Switch
+            ariaLabel="Let the fast model handle simple requests"
+            checked={!chat.frontDoorDisabled}
+            disabled={mutation.isPending}
+            onChange={(value) => save({ frontDoorDisabled: !value })}
+          />
+        }
+      />
+      <Row
+        name="Include locks, doors and garage openers"
+        control={
+          <Switch
+            ariaLabel="Include locks, doors and garage openers"
+            checked={chat.frontDoorGuardedDevices}
+            disabled={mutation.isPending || chat.frontDoorDisabled}
+            onChange={(value) => save({ frontDoorGuardedDevices: value })}
+          />
+        }
+      />
+    </Group>
+  );
+}
+
 const DEFAULT_CHAT_ARCHIVE_FOLDER = "Moss/Chats";
 const CHAT_ARCHIVE_FOLDER_HINT = (
   <>
@@ -628,6 +670,7 @@ export function AssistantPane({ me, onSelectSection }: PaneProps) {
       <Persona who={who} />
       <ChatModel isAdmin={me.user.isInstanceAdmin} onSelectSection={onSelectSection} />
       <YoloMode />
+      <FastModel />
       <ChatArchive />
     </>
   );

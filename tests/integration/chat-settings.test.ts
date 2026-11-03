@@ -60,7 +60,7 @@ describe("chat settings", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json<GetChatSettingsResponse>()).toEqual({
-      chat: { responseStyle: "balanced", frontDoorGuardedDevices: false }
+      chat: { responseStyle: "balanced", frontDoorGuardedDevices: false, frontDoorDisabled: false }
     });
   });
 
