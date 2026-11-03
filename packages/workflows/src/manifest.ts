@@ -19,7 +19,6 @@ export const workflowsModuleManifest = {
   lifecycle: "required",
   availability: { defaultEnabled: true, required: true },
   compatibility: { jarv1s: ">=0.0.0" },
-  // Moss reads user-facing facts for this module from the app map; see features below.
   features: [
     {
       id: "workflows.where-to-find",

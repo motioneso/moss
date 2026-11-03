@@ -187,6 +187,69 @@ describe("app-map integrity and truthfulness", () => {
     }
   });
 
+  it("declares a map screen for every web route", () => {
+    const mapPaths = new Set(appMap.screens.map((screen) => screen.path));
+    for (const route of webRoutes) {
+      expect(
+        mapPaths.has(route.path),
+        `Web route "${route.id}" (${route.path}) has no screen entry in the app map`
+      ).toBe(true);
+    }
+  });
+
+  it("declares a map setting for every section on the Settings page", () => {
+    const pageSource = readFileSync(
+      new URL("../../apps/web/src/settings/settings-page.tsx", import.meta.url),
+      "utf8"
+    );
+    const sectionIds = [...pageSource.matchAll(/coreSettingDescription\("([a-z0-9_-]+)"\)/g)].map(
+      (match) => match[1]!
+    );
+    expect(sectionIds.length).toBeGreaterThan(10);
+    const mapped = new Set(
+      CORE_APP_SETTINGS.map((setting) => /section=([a-z0-9_-]+)/.exec(setting.path)?.[1])
+    );
+    for (const id of sectionIds) {
+      expect(mapped.has(id), `Settings section "${id}" has no app map entry`).toBe(true);
+    }
+    // The reverse: a map entry must not point at a section the page does not render.
+    const rendered = new Set(sectionIds);
+    for (const setting of CORE_APP_SETTINGS) {
+      const section = /section=([a-z0-9_-]+)/.exec(setting.path)?.[1];
+      if (!section) continue;
+      expect(rendered.has(section), `Setting "${setting.id}" names unknown section`).toBe(true);
+    }
+  });
+
+  it("keeps each core description short enough to summarise", () => {
+    // Long topics are split into several entries that share a path rather than one wall of text.
+    for (const surface of [...CORE_APP_SCREENS, ...CORE_APP_SETTINGS]) {
+      expect(
+        surface.description.length,
+        `Core entry "${surface.id}" is too long; split it into topic entries`
+      ).toBeLessThanOrEqual(5000);
+    }
+  });
+
+  it("describes where users reach modules that have no screen of their own", () => {
+    const featureIds = new Set(appMap.features.map((feature) => feature.id));
+    for (const id of [
+      "notes.where-to-find",
+      "goals.where-to-find",
+      "commitments.where-to-find",
+      "scratchpad.where-to-find",
+      "proactive-monitoring.where-to-find",
+      "workflows.where-to-find",
+      "people.where-to-find",
+      "usefulness-feedback.where-to-find",
+      "connectors.imap_connect"
+    ]) {
+      expect(featureIds.has(id), `App map is missing "${id}"`).toBe(true);
+    }
+    const screenIds = new Set(appMap.screens.map((screen) => screen.id));
+    expect(screenIds.has("chat-drawer")).toBe(true);
+  });
+
   it("contains no duplicate screen IDs or duplicate setting IDs", () => {
     // Bare IDs: the map is one shared namespace for Moss, so the same id declared
     // twice reads as two different things even when the owners differ.
