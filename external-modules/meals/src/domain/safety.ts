@@ -65,7 +65,16 @@ const FISH = [
   "tilapia",
   "pollock",
   "bass",
-  "fish sauce"
+  "fish sauce",
+  "worcestershire",
+  "dashi",
+  "bonito",
+  "caviar",
+  "roe",
+  "eel",
+  "snapper",
+  "swordfish",
+  "herring"
 ];
 const SHELLFISH = [
   "shellfish",
@@ -84,7 +93,12 @@ const SHELLFISH = [
   "scallop",
   "scallops",
   "squid",
-  "octopus"
+  "octopus",
+  "langoustine",
+  "cockle",
+  "whelk",
+  "crawfish",
+  "abalone"
 ];
 const DAIRY = [
   "dairy",
@@ -106,7 +120,7 @@ const DAIRY = [
   "halloumi",
   "custard"
 ];
-const EGG = ["egg", "eggs", "mayonnaise", "mayo", "meringue"];
+const EGG = ["egg", "eggs", "mayonnaise", "mayo", "meringue", "aioli", "albumen", "hollandaise"];
 const GLUTEN = [
   "gluten",
   "wheat",
@@ -130,7 +144,19 @@ const GLUTEN = [
   "panko",
   "orzo",
   "farro",
-  "spelt"
+  "spelt",
+  "beer",
+  "ale",
+  "lager",
+  "stout",
+  "malt",
+  "oats",
+  "kamut",
+  "einkorn",
+  "udon",
+  "ramen",
+  "matzo",
+  "graham"
 ];
 const TREE_NUTS = [
   "almond",
@@ -150,7 +176,22 @@ const TREE_NUTS = [
   "pine nut",
   "pine nuts",
   "praline",
-  "marzipan"
+  "marzipan",
+  "amaretto",
+  "frangipane",
+  "nougat",
+  "gianduja",
+  "nutella"
+];
+const CHEESE = [
+  "cheese",
+  "feta",
+  "parmesan",
+  "mozzarella",
+  "cheddar",
+  "ricotta",
+  "paneer",
+  "halloumi"
 ];
 const PEANUT = ["peanut", "peanuts", "groundnut", "satay"];
 const PORK = ["pork", "bacon", "ham", "prosciutto", "pancetta", "chorizo", "salami", "lard"];
@@ -162,6 +203,8 @@ const EXPANSIONS: Readonly<Record<string, readonly string[]>> = {
   vegan: [...MEAT, ...FISH, ...SHELLFISH, ...DAIRY, ...EGG, "honey"],
   pescatarian: MEAT,
   dairy: DAIRY,
+  milk: DAIRY,
+  cheese: CHEESE,
   lactose: DAIRY,
   gluten: GLUTEN,
   wheat: GLUTEN,
@@ -184,7 +227,19 @@ const EXPANSIONS: Readonly<Record<string, readonly string[]>> = {
   alcohol: ALCOHOL,
   meat: MEAT,
   beef: ["beef", "steak", "veal"],
-  soy: ["soy", "soya", "tofu", "tempeh", "edamame", "miso", "soy sauce"],
+  soy: [
+    "soy",
+    "soya",
+    "soybean",
+    "tofu",
+    "tempeh",
+    "edamame",
+    "miso",
+    "natto",
+    "shoyu",
+    "tamari",
+    "soy sauce"
+  ],
   sesame: ["sesame", "tahini"]
 };
 

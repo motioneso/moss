@@ -140,7 +140,7 @@ describe("deterministic Safety and gluten-free wording", () => {
     for (const line of [
       ingredient("2 cups gluten-free vegetable broth", "vegetable broth"),
       ingredient("1 cup quinoa (gluten free)", "quinoa"),
-      ingredient("200 g gluten free oats", "oats")
+      ingredient("200 g gluten free rice", "rice")
     ]) {
       expect(deterministicSafety([line], rules).verdict).toBe("pass");
     }
@@ -173,7 +173,23 @@ describe("deterministic Safety and gluten-free wording", () => {
     ["dairy", "dairy free milk chocolate"],
     ["fish", "fish free anchovy paste"],
     ["egg", "egg free egg noodles"],
-    ["wheat", "wheat free wheat flour"]
+    ["wheat", "wheat free wheat flour"],
+    ["milk", "milk free cheese"],
+    ["milk", "milk free butter"],
+    ["milk", "milk free cream"],
+    ["milk", "milk free yogurt"],
+    ["milk", "milk free whey powder"],
+    ["milk", "milk free ghee"],
+    ["cheese", "cheese free cheddar"],
+    ["gluten", "gluten free beer"],
+    ["gluten", "gluten free malt vinegar"],
+    ["gluten", "gluten free oats"],
+    ["gluten", "gluten free couscous"],
+    ["tree nuts", "tree nut free amaretto"],
+    ["fish", "fish free worcestershire sauce"],
+    ["soy", "soy free tamari"],
+    ["egg", "egg free aioli"],
+    ["shellfish", "shellfish free langoustine"]
   ])("fails %s for %s", (rule, line) => {
     expect(deterministicSafety([ingredient(line, line)], [rule]).verdict).toBe("fail");
   });
