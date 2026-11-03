@@ -136,12 +136,11 @@ describe("calorie split, portions and fit", () => {
 describe("deterministic Safety and gluten-free wording", () => {
   const rules = ["gluten", "beef", "pork", "chicken"];
 
-  it("lets a plain gluten-free item pass a gluten rule", () => {
+  it("lets a gluten-free label pass when no listed food remains", () => {
     for (const line of [
       ingredient("2 cups gluten-free vegetable broth", "vegetable broth"),
       ingredient("1 cup quinoa (gluten free)", "quinoa"),
-      ingredient("1 tbsp gluten-free soy sauce", "soy sauce"),
-      ingredient("200 g gluten free pasta", "pasta")
+      ingredient("200 g gluten free oats", "oats")
     ]) {
       expect(deterministicSafety([line], rules).verdict).toBe("pass");
     }
@@ -163,17 +162,30 @@ describe("deterministic Safety and gluten-free wording", () => {
     ["shellfish", "200 g shrimp, chemical-free"],
     ["dairy", "2 tbsp butter dairy free alternative or regular"],
     ["gluten", "2 tbsp soy sauce, sugar free"],
-    ["dairy", "cage free eggs and cheese"]
+    ["dairy", "cage free eggs and cheese"],
+    ["gluten", "gluten free wheat flour"],
+    ["gluten", "gluten free barley malt"],
+    ["gluten", "gluten free rye bread"],
+    ["gluten", "gluten free bread, wheat flour"],
+    ["gluten", "gluten free; wheat flour"],
+    ["nuts", "nut free almond butter"],
+    ["nuts", "nut free peanut butter"],
+    ["dairy", "dairy free milk chocolate"],
+    ["fish", "fish free anchovy paste"],
+    ["egg", "egg free egg noodles"],
+    ["wheat", "wheat free wheat flour"]
   ])("fails %s for %s", (rule, line) => {
     expect(deterministicSafety([ingredient(line, line)], [rule]).verdict).toBe("fail");
   });
 
   it("clears a rule only for the food named in the free label", () => {
     expect(
-      deterministicSafety([ingredient("1 cup dairy-free milk", "milk")], ["dairy"]).verdict
+      deterministicSafety([ingredient("1 cup dairy-free oat drink", "oat drink")], ["dairy"])
+        .verdict
     ).toBe("pass");
     expect(
-      deterministicSafety([ingredient("1 cup lactose-free milk", "milk")], ["lactose"]).verdict
+      deterministicSafety([ingredient("1 cup gluten-free oat drink", "oat drink")], ["dairy"])
+        .verdict
     ).toBe("pass");
   });
 

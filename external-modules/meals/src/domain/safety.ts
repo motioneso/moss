@@ -220,10 +220,6 @@ function containsTerm(haystack: string, term: string): boolean {
   return ` ${haystack} `.includes(` ${term} `);
 }
 
-/** Words that end the item a "<food> free" label describes. */
-const FREE_STOP =
-  "contains|contain|with|or|and|plus|made|not|but|use|for|from|may|might|has|have|without|then|else";
-
 /** "egg free eggs" style phrases that are about farming, not about leaving the food out. */
 const NOT_A_DECLARATION = "range|run|roaming|ranging";
 
@@ -232,29 +228,16 @@ function escapeRegex(text: string): string {
 }
 
 /**
- * Removes only the restricted food's own free label from a line, such as "gluten free" for the
- * gluten rule, plus the few words naming the item it describes ("gluten free bread"). A different
- * food never clears the rule ("lactose free" does not clear dairy) and the rest of the line is
- * still scanned, so "flour (not gluten free)" and "gluten free bread contains wheat starch" fail.
- * Returns the cleaned text and the words the label covered.
+ * Removes only the label words themselves, "gluten free" or "free from gluten" for a gluten rule,
+ * and nothing after them. A different food never clears the rule ("lactose free" does not clear
+ * dairy), and every other word on the line is still scanned, so "gluten free wheat flour" fails.
  */
-function stripOwnFreeLabel(
-  text: string,
-  phrase: string
-): { readonly text: string; readonly covered: ReadonlySet<string> } {
+function stripOwnFreeLabel(text: string, phrase: string): string {
   const base = phrase.endsWith("s") ? phrase.slice(0, -1) : phrase;
   const food = [base, `${base}s`, `${base}es`].map(escapeRegex).join("|");
   const fromOf = new RegExp(`\\bfree (?:from|of) (?:${food})\\b`, "g");
-  const labelled = new RegExp(
-    `\\b(?:${food}) free\\b(?!\\s+(?:${NOT_A_DECLARATION})\\b)(?:\\s+(?!(?:${FREE_STOP})\\b)[a-z0-9]+){0,3}`,
-    "g"
-  );
-  const covered = new Set<string>();
-  const take = (match: string): string => {
-    for (const word of match.split(" ")) covered.add(word);
-    return " ";
-  };
-  return { text: text.replace(fromOf, take).replace(labelled, take), covered };
+  const labelled = new RegExp(`\\b(?:${food}) free\\b(?!\\s+(?:${NOT_A_DECLARATION})\\b)`, "g");
+  return text.replace(fromOf, " ").replace(labelled, " ");
 }
 
 export function deterministicSafety(
@@ -267,13 +250,10 @@ export function deterministicSafety(
       .replace(LEADING_NEGATION, "")
       .replace(TRAILING_QUALIFIER, "");
     for (const line of ingredients) {
-      const original = stripOwnFreeLabel(normalise(line.originalText), phrase);
-      // A parsed name loses the label, so drop only the name words the label covered.
-      const name = normalise(line.name)
-        .split(" ")
-        .filter((word) => !original.covered.has(word))
-        .join(" ");
-      const text = `${name} ${original.text}`;
+      const text = stripOwnFreeLabel(
+        `${normalise(line.name)} ${normalise(line.originalText)}`,
+        phrase
+      );
       const hit = terms.find((term) => containsTerm(text, term));
       if (hit !== undefined) {
         const reason = `${line.name} conflicts with "${restriction}"`;

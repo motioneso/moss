@@ -27,7 +27,8 @@ export const SAFETY_SCHEMA = {
           verdict: {
             type: "string",
             enum: ["pass", "fail"],
-            description: '"fail" if an ingredient clearly breaks this eater\'s Never serve list.'
+            description:
+              '"fail" if an ingredient breaks, or may break, this eater\'s Never serve list.'
           },
           reason: {
             type: ["string", "null"],
@@ -46,9 +47,8 @@ export function buildSafetyPrompt(
   const lines = [
     "Check one recipe against each eater's food rules. A rule names a food, or a diet such as " +
       '"vegetarian" that excludes foods.',
-    "When unsure whether an ingredient breaks a rule, fail it. Name the specific ingredient and the " +
-      'rule it breaks in the reason. A bare "might contain" or cross-contact is not enough, and ' +
-      "plain curry powder passes unless you can name an ingredient in it that breaks the rule.",
+    'When unsure, fail. A "might contain" or cross-contact risk counts as unsure. Name the ' +
+      "specific ingredient and the rule it breaks in the reason.",
     "A line explicitly marked free of the excluded food (gluten-free bread for a gluten rule) passes " +
       "that rule only, never a different one.",
     "",
