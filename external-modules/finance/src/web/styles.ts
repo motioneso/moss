@@ -65,6 +65,7 @@ export const MODULE_STYLES = `
 .fnm-bank-status-row { display: inline-flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .fnm-switch-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-4); padding: var(--space-4) 0; border-bottom: var(--border-w) solid var(--border-subtle); }
 .fnm-switch-text { display: flex; flex-direction: column; gap: var(--space-1); }
+.fnm-activity-more { padding-top: var(--space-3); }
 .fnm-limit { max-width: 14rem; }
 .fnm-disclosure-head { display: inline-flex; align-items: center; gap: var(--space-2); }
 .fnm-disclosure-marker { flex: 0 0 auto; width: 0.5rem; height: 0.5rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-0.15rem) rotate(45deg); transition: transform 120ms ease; }

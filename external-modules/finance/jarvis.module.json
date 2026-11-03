@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "finance",
   "name": "Finance",
-  "version": "0.7.6",
+  "version": "0.7.7",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
@@ -156,7 +156,7 @@
       },
       {
         "id": "finance.settings-activity",
-        "description": "On Finance settings, the activity list shows this week's changes by you and by Moss, newest first, each with who did it and when. Undo reverses a row (a budget amount, a move between categories, a sorted purchase, a merchant rule, or a category added or archived) and says so inline if the data changed since. Earlier weeks loads the week before. With nothing yet it says Nothing yet."
+        "description": "On Finance settings, the activity list shows this week's changes by you and by Moss, newest first, each with who did it and when. A week shows its first 10 rows; Show all opens the rest. Undo reverses a row (a budget amount, a move between categories, a sorted purchase, a merchant rule, or a category added or archived) and says so inline if the data changed since. Earlier weeks loads the week before. With nothing yet it says Nothing yet."
       },
       {
         "id": "finance.ledger-safety",
