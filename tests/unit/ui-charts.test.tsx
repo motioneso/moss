@@ -173,3 +173,63 @@ describe("TrendChart", () => {
     expect(document.querySelector(".jds-chart__dot")).toBeNull();
   });
 });
+
+describe("chart options", () => {
+  const day = 86_400_000;
+  const points = [
+    { at: 0, value: 1000, name: "July 1" },
+    { at: 30 * day, value: 1100, name: "July 31" }
+  ];
+  const columns = (extra: object = {}) => (
+    <ColumnChart
+      label="Cash flow"
+      categories={["Aug", "Sep"]}
+      series={[
+        { key: "in", label: "Income", values: [10, 20] },
+        { key: "out", label: "Outflow", values: [5, 15] }
+      ]}
+      format={dollars}
+      {...extra}
+    />
+  );
+
+  it("leaves default output unchanged", () => {
+    mount(columns());
+    const figure = document.querySelector("figure")!;
+    expect(figure.className).toBe("jds-chart");
+    const bars = [...document.querySelectorAll(".jds-chart__bar")].map((bar) => bar.className);
+    expect(bars).toEqual([
+      "jds-chart__bar jds-chart__tone--1",
+      "jds-chart__bar jds-chart__tone--2",
+      "jds-chart__bar jds-chart__tone--1",
+      "jds-chart__bar jds-chart__tone--2"
+    ]);
+    act(() => root?.unmount());
+    host?.remove();
+    mount(<TrendChart label="Net worth" points={points} format={dollars} />);
+    expect(document.querySelector("figure")!.className).toBe("jds-chart");
+    expect(
+      [...document.querySelectorAll(".jds-chart__tick")].map((tick) => tick.textContent)
+    ).not.toContain("$0");
+  });
+
+  it("colours columns and strengthens the chart when asked", () => {
+    mount(columns({ tones: ["in", "out"], strong: true }));
+    expect(document.querySelector("figure")!.className).toBe("jds-chart jds-chart--strong");
+    const bars = [...document.querySelectorAll(".jds-chart__bar")].map((bar) => bar.className);
+    expect(bars[0]).toContain("jds-chart__tone--in");
+    expect(bars[1]).toContain("jds-chart__tone--out");
+    expect(document.querySelector(".jds-chart__legend-item span")!.className).toContain(
+      "jds-chart__tone--in"
+    );
+  });
+
+  it("starts the trend axis at zero when asked", () => {
+    mount(<TrendChart label="Net worth" points={points} format={dollars} zeroBased strong />);
+    const ticks = [...document.querySelectorAll(".jds-chart__tick")].map(
+      (tick) => tick.textContent
+    );
+    expect(ticks).toContain("$0");
+    expect(document.querySelector("figure")!.className).toContain("jds-chart--strong");
+  });
+});

@@ -151,6 +151,20 @@ describe("Reports screen charts", () => {
     expect(spoken(worth)).toBe("October 31, 2026, Net worth $1,100.00");
   });
 
+  it("defaults spending to the last full month and lets the month picker change it", async () => {
+    await mount();
+    const picker = document.querySelector<HTMLSelectElement>(
+      'select[aria-label="Spending month"]'
+    )!;
+    expect(picker.value).toBe("2026-09");
+    expect([...picker.options].map((option) => option.textContent)).toEqual([
+      "October 2026 (so far)",
+      "September 2026",
+      "August 2026"
+    ]);
+    expect(region("Spending by category").textContent).toContain("September 2026");
+  });
+
   it("marks category rows past the top five to fold on phones behind Show all", async () => {
     const original = results["finance.reports.spending"];
     const byCategory = Object.fromEntries(
@@ -164,8 +178,8 @@ describe("Reports screen charts", () => {
       window: periods,
       own: [
         month("2026-08", 0, 0),
-        month("2026-09", 0, 0),
-        { ...month("2026-10", 0, 28_000), byCategory }
+        { ...month("2026-09", 0, 28_000), byCategory },
+        month("2026-10", 0, 0)
       ],
       shared: [],
       categories: []

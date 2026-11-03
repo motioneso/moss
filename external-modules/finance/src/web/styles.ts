@@ -65,6 +65,7 @@ export const MODULE_STYLES = `
 .fnm-bank-status-row { display: inline-flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .fnm-switch-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-4); padding: var(--space-4) 0; border-bottom: var(--border-w) solid var(--border-subtle); }
 .fnm-switch-text { display: flex; flex-direction: column; gap: var(--space-1); }
+.fnm-activity-more { padding-top: var(--space-3); }
 .fnm-limit { max-width: 14rem; }
 .fnm-disclosure-head { display: inline-flex; align-items: center; gap: var(--space-2); }
 .fnm-disclosure-marker { flex: 0 0 auto; width: 0.5rem; height: 0.5rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-0.15rem) rotate(45deg); transition: transform 120ms ease; }
@@ -72,6 +73,11 @@ export const MODULE_STYLES = `
 /* #3173 Budget: layout only. Desktop shows the table and rail, phone the row list. */
 .fnm-tabs { margin-bottom: var(--space-5); overflow-x: auto; scrollbar-width: none; }
 .fnm-tabs::-webkit-scrollbar { display: none; }
+/* Phones fade the right edge while more tabs wait off screen. */
+@media (max-width: 720px) {
+  .fnm-tabs.has-more { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent); }
+  .fnm-hero .jds-masthead--field { padding-block: var(--space-4); margin-bottom: var(--space-4); }
+}
 .fnm-tabs .jds-segmented__opt { flex: 0 0 auto; white-space: nowrap; }
 .fnm-hero { margin-bottom: var(--space-6); }
 .fnm-pad { padding: 0; }
@@ -140,7 +146,7 @@ export const MODULE_STYLES = `
   .fnm-occ .fnm-occ__open { display: inline-flex; }
 }
 @media (max-width: 720px) {
-  .fnm-root { padding: 1rem 0.75rem 2rem; }
+  .fnm-root { padding: 1rem 0.75rem 5rem; }
   .fnm-page { grid-template-columns: minmax(0, 1fr); gap: var(--space-7); }
   .fnm-desktop-only { display: none; }
   .fnm-phone-only { display: block; }

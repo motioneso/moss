@@ -87,12 +87,23 @@ export function Root(props: {
       if (box.right > barBox.right) bar.scrollLeft += box.right - barBox.right;
       else if (box.left < barBox.left) bar.scrollLeft -= barBox.left - box.left;
     };
+    const markMore = () =>
+      bar.classList.toggle("has-more", bar.scrollLeft + bar.clientWidth < bar.scrollWidth - 2);
+    bar.addEventListener("scroll", markMore);
     reveal();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(reveal);
+    markMore();
+    if (typeof ResizeObserver === "undefined")
+      return () => bar.removeEventListener("scroll", markMore);
+    const observer = new ResizeObserver(() => {
+      reveal();
+      markMore();
+    });
     observer.observe(bar);
     if (bar.firstElementChild) observer.observe(bar.firstElementChild);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      bar.removeEventListener("scroll", markMore);
+    };
   }, [path]);
   return (
     <div className="fnm-root">

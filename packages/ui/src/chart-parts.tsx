@@ -3,6 +3,16 @@ import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 /* Series take these colours in order, the same in every theme. */
 export const SERIES_TONES = ["jds-chart__tone--1", "jds-chart__tone--2"] as const;
 
+/* Optional per-series colours. "in" is the accent green and "out" is the danger red. */
+export type SeriesTone = "steel" | "gold" | "in" | "out";
+
+export const TONE_CLASS: Record<SeriesTone, string> = {
+  steel: "jds-chart__tone--1",
+  gold: "jds-chart__tone--2",
+  in: "jds-chart__tone--in",
+  out: "jds-chart__tone--out"
+};
+
 /* Even steps (1, 2 or 5 times a power of ten) that cover min..max. A flat range is one tick. */
 export function niceTicks(min: number, max: number, target = 4): number[] {
   if (!(max > min)) return [min];

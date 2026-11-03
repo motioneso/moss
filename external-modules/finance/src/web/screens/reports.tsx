@@ -187,6 +187,8 @@ function NetWorthSection(props: { result: NetWorthResult }): ReactNodeLike {
           {points.length >= 2 ? (
             <TrendChart
               label="Net worth"
+              zeroBased
+              strong
               points={points.map((point) => ({
                 at: Date.parse(`${point.date}T00:00:00Z`),
                 value: point.totalCents,
@@ -220,6 +222,7 @@ function SpendingSection(props: {
 }): ReactNodeLike {
   const { window: windowMonths, own, shared, categories, currency } = props.result;
   const { directory } = props;
+  const [picked, setPicked] = useState<string | null>(null);
   if (!currency)
     return (
       <EmptyState title="No transactions yet" body="Add or import transactions in Accounts." />
@@ -240,7 +243,10 @@ function SpendingSection(props: {
   }
   // Window is ascending, so the last merged entry is the current month —
   // the breakdown the bars show (the cash-flow table covers the rest).
-  const latest = merged[merged.length - 1];
+  const latestMonth = merged[merged.length - 1];
+  // The bars default to the last full month; the current month is a partial picture.
+  const defaultMonth = (merged.length > 1 ? merged[merged.length - 2] : latestMonth)?.month;
+  const latest = merged.find((entry) => entry.month === (picked ?? defaultMonth)) ?? latestMonth;
   if (!latest) {
     return (
       <EmptyState title="No transactions yet" body="Add or import transactions in Accounts." />
@@ -282,6 +288,20 @@ function SpendingSection(props: {
           </div>
         </div>
       ) : null}
+      <div className="fnm-chips">
+        <Select
+          aria-label="Spending month"
+          value={latest.month}
+          onChange={(event: { target: { value: string } }) => setPicked(event.target.value)}
+        >
+          {[...merged].reverse().map((entry) => (
+            <option key={entry.month} value={entry.month}>
+              {monthLabel(entry.month)}
+              {entry.month === latestMonth?.month && merged.length > 1 ? " (so far)" : ""}
+            </option>
+          ))}
+        </Select>
+      </div>
       {resolvable.length > 0 ? (
         <p className="jds-caption">Includes shared household accounts</p>
       ) : null}
@@ -364,10 +384,13 @@ function CashFlowSection(props: {
           { key: "income", label: "Income", values: income, total: total(income) },
           { key: "outflow", label: "Outflow", values: outflow, total: total(outflow) }
         ]}
+        tones={["in", "out"]}
+        strong
         marker={{ label: "Net", values: net, total: total(net) }}
         format={money}
         formatTick={(cents) => formatCentsCompact(cents, currency)}
       />
+      <p className="jds-caption">The dot marks net cash flow, income minus outflow.</p>
       <DisclosureToggle
         expanded={showTable}
         controls="fnm-cash-flow-months"
