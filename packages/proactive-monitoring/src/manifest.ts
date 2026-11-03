@@ -24,6 +24,11 @@ export const proactiveMonitoringModuleManifest = {
   },
   features: [
     {
+      id: "proactive-monitoring.where-to-find",
+      description:
+        "Proactive monitoring has no screen or settings pane. Its cards appear on Today in a section titled Things worth your attention (kicker On your radar), each showing a title, its source (Tasks, Calendar, Email or Notes) and a short summary, with a Dismiss button. The section is absent when no card is active. Cards held back by quiet hours appear after they end. Moss can read the cards in chat, but cannot start a scan from chat."
+    },
+    {
       id: "proactive-monitoring.quiet_hours",
       description:
         "Proactive cards found during quiet hours defer until the local daily end. They follow " +

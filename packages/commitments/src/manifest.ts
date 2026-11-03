@@ -101,6 +101,11 @@ export const commitmentsModuleManifest: MossModuleManifest = {
   ],
   features: [
     {
+      id: "commitments.where-to-find",
+      description:
+        "Commitments has no screen, navigation entry or settings pane. Moss finds commitment candidates from your chats, notes and email in the background. You review them by asking Moss in chat: list candidates, show the evidence for one, then accept it, reject it or snooze it. Accepted commitments with a due date can show up in Moss check-ins."
+    },
+    {
       id: "commitments.heartbeat_source",
       description:
         "Accepted commitments with a due date can appear in Moss check-ins (the Memory source). Check-ins read saved commitments only.",

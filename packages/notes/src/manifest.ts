@@ -205,6 +205,11 @@ export const notesModuleManifest = {
   ],
   features: [
     {
+      id: "notes.where-to-find",
+      description:
+        "Notes has no screen and no navigation entry. Your notes are the Markdown files in the folder linked under Settings, Connections, Notes folder (or Notes & documents), where Browse or Change folder picks the folder, Sync now reads it (the line there shows Last sync with counts, Never synced, or No folder linked), and Unlink removes the link without deleting files. After that, ask Moss in chat to search, create, edit or delete notes. Deleting always asks first."
+    },
+    {
       id: "notes.recording_source_export",
       description:
         "Your account export includes saved recording-source status, note destination labels and contribution review, change and undo receipts. Recording filing controls are not yet available."
