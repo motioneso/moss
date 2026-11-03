@@ -241,7 +241,7 @@ function Hero(props: {
             : props.readyCents === null
               ? props.unavailable
                 ? "Unavailable"
-                : "…"
+                : "$––.––"
               : money(props.readyCents, props.currency!)
         }
         aside={
