@@ -89,6 +89,8 @@ export interface GateTrace {
   readonly risk?: GateTool["risk"];
   readonly confidence?: number;
   readonly lead?: number;
+  /** The configured name of the model that decided. Never text the model produced. */
+  readonly modelName?: string;
   readonly latencyMs: number;
 }
 
@@ -286,6 +288,7 @@ export class ClassifierGate {
         },
         model: (model) => {
           checkModel = model.provider_model_id;
+          trace.modelName = model.provider_model_id;
           if (!this.ports.speed) return;
           // #3365: the model's own limit, counted from the start of the attempt.
           speedModel = model.id;
