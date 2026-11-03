@@ -278,7 +278,7 @@ export const aiModuleManifest = {
     {
       id: "ai.classifier_gate_setting",
       description:
-        "Use in chat (Off, Watch only, On) in the Decision model row on Settings > AI providers. Instance-wide. Shown once a decision model is chosen. On needs no Watch only run first."
+        "Use in chat (Off, Watch only, On) in the Decision model row on Settings > AI providers. Instance-wide. Shown once a decision model is chosen. On needs no Watch only run first. When On runs a tool that changes something, it is only offered lights, switches and fans from a device list; locks, doors and garage openers always go to the main model."
     },
     {
       id: "ai.sorting_model",
