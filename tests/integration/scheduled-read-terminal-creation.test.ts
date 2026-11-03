@@ -25,7 +25,7 @@ import { SettingsRepository } from "@moss/settings";
 import { CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY } from "@moss/shared";
 import { TasksRepository } from "@moss/tasks";
 
-import { createGateModeReader } from "../../packages/chat/src/live/classifier-gate-mode.js";
+import { createAdminModeReader } from "../../packages/chat/src/live/classifier-gate-mode.js";
 import { resolveChatHome } from "../../packages/chat/src/live/chat-home.js";
 import type { ChatEngineFactory } from "../../packages/chat/src/live/runtime.js";
 import type { CliChatEngine } from "../../packages/chat/src/live/types.js";
@@ -573,7 +573,7 @@ describe("terminal one-time task-check creation (#3529)", () => {
     "P1 refuses an absent task selection terminally in gate mode %s",
     async (mode) => {
       await setGateMode(mode);
-      expect(await createGateModeReader(app)(ids.userA)).toBe(mode);
+      expect(await createAdminModeReader(app)(ids.userA)).toBe(mode);
       resetCounts();
       structured.script = answer(ABSENT_TASK_ID, "remind me in 30 minutes to check task");
       const before = await snapshot();

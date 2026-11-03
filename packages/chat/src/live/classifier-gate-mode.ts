@@ -5,10 +5,23 @@ import { CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY, RuntimeConfigResolver } from "@mo
 import type { GateMode } from "./classifier-gate.js";
 
 /**
- * Reads the admin gate mode as the gate runs it. The stored value is used as is, so a saved or
- * environment `on` runs as `on` with no review or classifier check.
+ * Reads the gate mode as the gate runs it: the admin value, then the person's own switch on top.
+ * The stored admin value is used as is, so a saved or environment `on` runs as `on` with no
+ * review or classifier check.
  */
 export function createGateModeReader(
+  dataContext: Pick<DataContextRunner, "withDataContext">,
+  preferences: Pick<PreferencesPort, "get">,
+  env: NodeJS.ProcessEnv = process.env
+): (actorUserId: string) => Promise<GateMode> {
+  return withFrontDoorSwitch(
+    createAdminModeReader(dataContext, env),
+    createFrontDoorSwitchReader(dataContext, preferences)
+  );
+}
+
+/** The admin gate mode alone. */
+export function createAdminModeReader(
   dataContext: Pick<DataContextRunner, "withDataContext">,
   env: NodeJS.ProcessEnv = process.env
 ): (actorUserId: string) => Promise<GateMode> {
