@@ -6,7 +6,6 @@ import type {
 } from "@moss/module-sdk";
 import type { AppMapItem } from "@moss/shared";
 
-const MAX_ENTRIES = 16;
 const PATH_RE = /^\/(?:[a-z0-9-]+(?:\/[a-z0-9-]+)*)?$/;
 
 function checkId(id: unknown, moduleId: string, seen: Set<string>, errors: string[]): boolean {
@@ -56,8 +55,8 @@ function readList(
 ): Record<string, unknown>[] | undefined {
   const raw = block[key];
   if (raw === undefined) return undefined;
-  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_ENTRIES) {
-    errors.push(`appMap.${key} must be an array of 1 to ${MAX_ENTRIES} entries`);
+  if (!Array.isArray(raw) || raw.length === 0) {
+    errors.push(`appMap.${key} must be a non-empty array`);
     return undefined;
   }
   const out: Record<string, unknown>[] = [];
