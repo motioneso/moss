@@ -278,7 +278,7 @@ export const aiModuleManifest = {
     {
       id: "ai.classifier_gate_setting",
       description:
-        "Use in chat (Off, Watch only, On) in the Decision model row on Settings > AI providers. Instance-wide. Shown once a decision model is chosen. On needs no Watch only run first. Each person can turn the fast model off for their own account in Settings > Your assistant, and On does not override that. Locks and doors are a per-account chat setting."
+        "Use in chat (Off, Watch only, On) in the Decision model row on Settings > AI providers. Instance-wide. On needs no Watch only run first. Each person can turn it off for themselves in Settings > Your assistant; On does not override that."
     },
     {
       id: "ai.sorting_model",
