@@ -65,6 +65,22 @@ describe("external appMap block (#3168)", () => {
     expect(validate(bad).ok).toBe(false);
   });
 
+  it("accepts 40 entries in every list (no entry cap)", () => {
+    const many = (n: number) => Array.from({ length: n }, (_, i) => i);
+    const result = validate({
+      screens: many(40).map((i) => ({ ...appMap.screens[0], id: `acme-widgets.s${i}` })),
+      settings: many(40).map((i) => ({ ...appMap.settings[0], id: `acme-widgets.t${i}` })),
+      features: many(40).map((i) => ({ ...appMap.features[0], id: `acme-widgets.f${i}` }))
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.manifest.appMap?.screens).toHaveLength(40);
+  });
+
+  it("still rejects an empty list and a non-array", () => {
+    expect(validate({ screens: [] }).ok).toBe(false);
+    expect(validate({ features: "x" }).ok).toBe(false);
+  });
+
   it("puts every path under the module's own route", () => {
     const items = externalAppMapItems([{ id: "acme-widgets", appMap }]);
     expect(items.screens.map((s) => s.path)).toEqual([

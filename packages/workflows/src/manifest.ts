@@ -19,6 +19,18 @@ export const workflowsModuleManifest = {
   lifecycle: "required",
   availability: { defaultEnabled: true, required: true },
   compatibility: { jarv1s: ">=0.0.0" },
+  features: [
+    {
+      id: "workflows.where-to-find",
+      description:
+        "Workflows has no screen, navigation entry or settings pane, and users do not create workflows. It is background machinery that lets another module run a multi-step job that pauses for your approval."
+    },
+    {
+      id: "workflows.approvals-in-chat",
+      description:
+        "When a run waits on you, a Workflow approval card with Approve and Reject buttons appears in chat. Moss cannot answer these approvals for you or cancel a run from chat, but can read your runs and steps."
+    }
+  ],
   workflows: [
     {
       id: "workflows.approval-continuation",

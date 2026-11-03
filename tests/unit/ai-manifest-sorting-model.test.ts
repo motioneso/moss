@@ -28,9 +28,15 @@ describe("app map: sorting model (#2594)", () => {
   });
 
   it("describes the row on the AI providers settings page", () => {
-    const page = CORE_APP_SETTINGS.find((entry) => entry.id === "aiproviders");
-    expect(page?.description).toMatch(/Decision model row/);
-    expect(page?.description).toMatch(/Use main model/);
-    expect(page?.description).toMatch(/every user's eligible/);
+    const anchor = CORE_APP_SETTINGS.find((entry) => entry.id === "aiproviders");
+    // Topic entries that share a path read as one page description.
+    const page = {
+      description: CORE_APP_SETTINGS.filter((entry) => entry.path === anchor?.path)
+        .map((entry) => entry.description)
+        .join(" ")
+    };
+    expect(page.description).toMatch(/Decision model row/);
+    expect(page.description).toMatch(/Use main model/);
+    expect(page.description).toMatch(/every user's eligible/);
   });
 });
