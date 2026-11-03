@@ -6,6 +6,8 @@ import {
   percentScale,
   readoutText,
   SERIES_TONES,
+  TONE_CLASS,
+  type SeriesTone,
   useActiveIndex,
   type ReadoutRow
 } from "./chart-parts.js";
@@ -39,8 +41,15 @@ export interface ColumnChartProps {
   readonly format: (value: number) => string;
   /* Shorter values for the axis. Defaults to format. */
   readonly formatTick?: (value: number) => string;
+  /* Colours for the series in order. Defaults to steel then gold. */
+  readonly tones?: readonly [SeriesTone] | readonly [SeriesTone, SeriesTone];
+  /* Draws the grid and zero line at full strength. */
+  readonly strong?: boolean;
   readonly className?: string;
 }
+
+const toneOf = (props: ColumnChartProps, slot: number): string =>
+  props.tones?.[slot] ? TONE_CLASS[props.tones[slot]!] : (SERIES_TONES[slot] ?? SERIES_TONES[0]);
 
 /* Grouped columns from a zero baseline. Hover, focus and arrow keys show one group's values.
    The chart enhances a table on the same screen; it never holds the only copy of a number. */
@@ -66,7 +75,7 @@ export function ColumnChart(props: ColumnChartProps) {
             key: series.key,
             label: series.label,
             value: props.format(series.values[active] ?? 0),
-            tone: SERIES_TONES[index] ?? SERIES_TONES[0]
+            tone: toneOf(props, index)
           })),
           ...(marker
             ? [
@@ -82,11 +91,15 @@ export function ColumnChart(props: ColumnChartProps) {
   const title = active === null ? "" : (names[active] ?? "");
 
   return (
-    <figure className={["jds-chart", props.className ?? null].filter(Boolean).join(" ")}>
+    <figure
+      className={["jds-chart", props.strong ? "jds-chart--strong" : null, props.className ?? null]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <ul className="jds-chart__legend">
         {props.series.map((series, index) => (
           <li key={series.key} className="jds-chart__legend-item">
-            <span className={`jds-chart__swatch ${SERIES_TONES[index] ?? SERIES_TONES[0]}`} />
+            <span className={`jds-chart__swatch ${toneOf(props, index)}`} />
             {series.label}
             {series.total ? <span className="jds-chart__legend-total">{series.total}</span> : null}
           </li>
@@ -119,7 +132,7 @@ export function ColumnChart(props: ColumnChartProps) {
                   const value = series.values[index] ?? 0;
                   const top = y(Math.max(value, 0));
                   const bottom = y(Math.min(value, 0));
-                  const tone = SERIES_TONES[slot] ?? SERIES_TONES[0];
+                  const tone = toneOf(props, slot);
                   return (
                     <span key={series.key} className="jds-chart__slot">
                       <span

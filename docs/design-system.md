@@ -279,6 +279,9 @@ Import from `@moss/ui`. Full option list in `packages/ui/OPTIONS.md`.
   dot; `TrendChart` draws one dated line. Series one is `--steel` and series two is
   `--gold-strong` in every theme, because park themes re-point the accent and accent beside gold
   fails colour-blind separation in dark canyon. A single trend line takes `--accent-meter`.
+- Both charts take optional `strong` (full-strength grid and line). `TrendChart` takes `zeroBased`.
+  `ColumnChart` takes `tones` (`steel`, `gold`, `in`, `out`); `in` is `--accent-meter` and `out` is
+  `--danger`, for money in and out. Defaults are unchanged.
 - A chart never holds the only copy of a number. Keep the table on the same screen (a disclosure
   is fine), legend totals for two series, and the readout on hover, tap, focus and arrow keys.
 

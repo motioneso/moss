@@ -85,7 +85,7 @@ _No enum or boolean props._
 
 ## column-chart
 
-_No enum or boolean props._
+- **strong** (optional boolean flag)
 
 ## combobox
 
@@ -263,7 +263,8 @@ _No enum or boolean props._
 
 ## trend-chart
 
-_No enum or boolean props._
+- **zeroBased** (optional boolean flag)
+- **strong** (optional boolean flag)
 
 ## weather-chip
 

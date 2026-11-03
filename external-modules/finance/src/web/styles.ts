@@ -140,7 +140,7 @@ export const MODULE_STYLES = `
   .fnm-occ .fnm-occ__open { display: inline-flex; }
 }
 @media (max-width: 720px) {
-  .fnm-root { padding: 1rem 0.75rem 2rem; }
+  .fnm-root { padding: 1rem 0.75rem 5rem; }
   .fnm-page { grid-template-columns: minmax(0, 1fr); gap: var(--space-7); }
   .fnm-desktop-only { display: none; }
   .fnm-phone-only { display: block; }

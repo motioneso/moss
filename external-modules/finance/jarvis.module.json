@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "finance",
   "name": "Finance",
-  "version": "0.7.5",
+  "version": "0.7.6",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
@@ -97,7 +97,7 @@
       {
         "id": "finance.reports",
         "label": "Reports",
-        "description": "Reports is a primary tab with currency-separated spending, cash flow and own-account net worth. The period picker sits top left; a currency picker appears for multi-currency activity; no FX conversion. Cash flow charts monthly income and outflow with a net dot and period totals; hover, tap or arrow keys read a month; Monthly numbers opens the table. Net worth is a dated line, read the same way. Manual net worth replays opening balances and posted entries to the owner's local date; connected accounts carry snapshots forward; no market values are estimated. Sources, coverage and missing balances are disclosed. Category/payee bars (five on phones until Show all) and monthly income/outflow open exact signed contributions, including splits, with count, total and changed-record notes. Pending spending counts; refunds reduce outflow; own transfers are excluded. Private notes are omitted; Refresh updates totals; unsafe amounts are rejected. Busy detail reads show the wait; retry is explicit.",
+        "description": "Reports is a primary tab with currency-separated spending, cash flow and own-account net worth. The period picker sits top left; a currency picker appears for multi-currency activity; no FX conversion. Cash flow charts monthly income (green) and outflow (red) with a labelled net dot and period totals; hover, tap or arrow keys read a month; Monthly numbers opens the table. Net worth is a dated line on a scale that starts at zero, read the same way. Spending bars default to the last full month; a Spending month picker switches month. Manual net worth replays opening balances and posted entries to the owner's local date; connected accounts carry snapshots forward; no market values are estimated. Sources, coverage and missing balances are disclosed. Category/payee bars (five on phones until Show all) and monthly income/outflow open exact signed contributions, including splits, with count, total and changed-record notes. Pending spending counts; refunds reduce outflow; own transfers are excluded. Private notes are omitted; Refresh updates totals; unsafe amounts are rejected. Busy detail reads show the wait; retry is explicit.",
         "path": "/reports"
       },
       {
