@@ -1,11 +1,13 @@
-import { assertDataContextDb, type DataContextDb } from "@moss/db";
+import { assertDataContextDb, withSavepoint, type DataContextDb } from "@moss/db";
 import type { ModuleDiagnosticObservation, ModuleDiagnosticProvider } from "@moss/module-sdk";
 
+import { computeFeedProvenance, type NewsFeedProvenance } from "./feed-provenance.js";
 import {
   NewsPersonalizationRepository,
-  type NewsFeedProvenance,
   type NewsRefreshDiagnostics
 } from "./personalization-repository.js";
+import { NewsPrefsRepository } from "./repository.js";
+import type { NewsStoryFeedbackPort } from "./story-feedback-port.js";
 
 const STALE_AFTER_SECONDS = 24 * 60 * 60;
 
@@ -104,50 +106,105 @@ function plural(count: number, one: string, many: string): string {
 }
 
 function provenanceSummary(p: NewsFeedProvenance): string {
-  if (!p.hasSnapshot) return "News has no feed yet for this account.";
+  if (p.snapshotState === "none") return "News has no saved feed yet for this account.";
   const topics =
     p.followedTopicCount === 0
       ? "no followed topics"
       : plural(p.followedTopicCount, "followed topic", "followed topics");
+  const tail = `${topics}, ${plural(p.excludedSourceCount, "excluded source", "excluded sources")}.`;
+  if (p.snapshotState === "expired") {
+    return `The saved feed has expired, so News shows a live front page from built-in sources. ${tail}`;
+  }
   return (
-    `Feed holds ${plural(p.totalStories, "story", "stories")}: ${p.storiesFromBuiltInSources} from ` +
-    `built-in sources, ${p.storiesFromAddedSources} from added sources. ` +
-    `${topics}, ${plural(p.excludedSourceCount, "excluded source", "excluded sources")}.`
+    `The feed shows ${plural(p.totalStories, "story", "stories")}: ${p.storiesFromBuiltInSources} ` +
+    `from built-in sources, ${p.storiesFromAddedSources} from added sources, ` +
+    `${p.storiesFoundByTopicSearch} found by a topic search. ${tail}`
   );
 }
 
 /**
+ * Dismissals live in another module, so the composition root hands this module its story
+ * feedback port after startup. Until then the counts skip dismissals and say so.
+ */
+let storyFeedbackPort: NewsStoryFeedbackPort | undefined;
+
+export function setNewsDiagnosticsStoryFeedback(port: NewsStoryFeedbackPort | undefined): void {
+  storyFeedbackPort = port;
+}
+
+export interface NewsProvenanceDependencies {
+  readonly personalization: Pick<
+    NewsPersonalizationRepository,
+    "readLatestSnapshot" | "listExclusions" | "listCustomSources" | "listCustomTopics"
+  >;
+  readonly prefs: Pick<NewsPrefsRepository, "list">;
+  readonly now?: () => Date;
+  readonly storyFeedback?: () => NewsStoryFeedbackPort | undefined;
+}
+
+/**
  * A second provider because the refresh provider already uses 11 of the 12 allowed fact keys.
- * Counts only: story text, domains and topic labels never appear.
+ * Counts come from the same filters the feed uses (visibleSnapshotArticles). Story text, domains
+ * and topic labels never appear.
  */
 export function createNewsProvenanceDiagnosticsProvider(
-  repository: Pick<
-    NewsPersonalizationRepository,
-    "readFeedProvenance"
-  > = new NewsPersonalizationRepository()
+  deps: NewsProvenanceDependencies = {
+    personalization: new NewsPersonalizationRepository(),
+    prefs: new NewsPrefsRepository()
+  }
 ): ModuleDiagnosticProvider {
   return {
     domain: "news",
     providerId: "news.provenance",
-    async observe(scopedDb: unknown, _ctx) {
+    async observe(scopedDb: unknown, ctx) {
       assertDataContextDb(scopedDb);
-      const p = await repository.readFeedProvenance(scopedDb as DataContextDb);
+      const db = scopedDb as DataContextDb;
+      const port = (deps.storyFeedback ?? (() => storyFeedbackPort))();
+      const [prefs, exclusions, customSources, customTopics, snapshot] = await Promise.all([
+        deps.prefs.list(db),
+        deps.personalization.listExclusions(db),
+        deps.personalization.listCustomSources(db),
+        deps.personalization.listCustomTopics(db),
+        deps.personalization.readLatestSnapshot(db)
+      ]);
+      let dismissedRefs: ReadonlySet<string> | null = null;
+      if (port) {
+        dismissedRefs = await withSavepoint(db, () =>
+          port.listDismissedRefs(db, ctx.actorUserId)
+        ).catch(() => null);
+      }
+      const p = computeFeedProvenance({
+        snapshot,
+        prefs,
+        exclusions,
+        customSources,
+        customTopics,
+        now: (deps.now ?? (() => new Date()))(),
+        dismissedRefs,
+        ...(port ? { storyRef: port.storyRef.bind(port) } : {})
+      });
       return {
         domain: "news",
         providerId: "news.provenance",
         observedAt: new Date().toISOString(),
-        status: p.hasSnapshot ? "ok" : "unknown",
+        status:
+          p.snapshotState === "current"
+            ? "ok"
+            : p.snapshotState === "expired"
+              ? "degraded"
+              : "unknown",
         summary: provenanceSummary(p),
         facts: {
           totalStories: p.totalStories,
+          storiesHiddenFromSavedFeed: p.storiesHiddenFromSavedFeed,
           storiesFromBuiltInSources: p.storiesFromBuiltInSources,
           storiesFromAddedSources: p.storiesFromAddedSources,
           storiesFoundByTopicSearch: p.storiesFoundByTopicSearch,
           storiesMatchingFollowedTopic: p.storiesMatchingFollowedTopic,
-          storiesFromExcludedSources: p.storiesFromExcludedSources,
           addedSourceCount: p.addedSourceCount,
           followedTopicCount: p.followedTopicCount,
-          excludedSourceCount: p.excludedSourceCount
+          excludedSourceCount: p.excludedSourceCount,
+          dismissalsApplied: p.dismissalsApplied
         }
       };
     }

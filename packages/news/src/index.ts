@@ -2,7 +2,12 @@ export { registerNewsRoutes } from "./routes.js";
 // #1025: re-exported so root-level tests/uat/seed/* can write prefs through the real
 // repository (same precedent as @moss/auth's hashPassword re-export for admin.ts).
 export { NewsPrefsRepository } from "./repository.js";
-export type { NewsFeedProvenance, NewsRefreshDiagnostics } from "./personalization-repository.js";
+export type { NewsRefreshDiagnostics } from "./personalization-repository.js";
+export {
+  computeFeedProvenance,
+  type NewsFeedProvenance,
+  type NewsFeedProvenanceInputs
+} from "./feed-provenance.js";
 export type { NewsRoutesDependencies, NewsPrefsWriter } from "./routes.js";
 // #2005: the two seams the composition root must satisfy, plus the repository so the
 // integration tests can exercise the real read/write path.
@@ -85,7 +90,8 @@ export {
 export { decideSourcePolicy, NEWS_POLICY_VERDICT_TTL_MS } from "./discovery/policy-validation.js";
 export {
   createNewsDiagnosticsProvider,
-  createNewsProvenanceDiagnosticsProvider
+  createNewsProvenanceDiagnosticsProvider,
+  setNewsDiagnosticsStoryFeedback
 } from "./diagnostics-provider.js";
 
 // #2007 — the reviewed API-key publisher connection runtime. Nothing here is wired into a

@@ -1,5 +1,10 @@
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
-import { createNewsProvenanceDiagnosticsProvider } from "@moss/news";
+import { moduleDiagnosticProvidersFor } from "@moss/module-registry";
+import {
+  createNewsProvenanceDiagnosticsProvider,
+  NewsPrefsRepository,
+  newsModuleManifest
+} from "@moss/news";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
@@ -47,7 +52,10 @@ describe("news provenance diagnostics (#3978)", () => {
 
   const observe = (actorUserId: string) =>
     dataContext.withDataContext({ actorUserId, requestId: "news-provenance" }, (db) =>
-      createNewsProvenanceDiagnosticsProvider(repository).observe(db, {
+      createNewsProvenanceDiagnosticsProvider({
+        personalization: repository,
+        prefs: new NewsPrefsRepository()
+      }).observe(db, {
         actorUserId,
         requestId: "news-provenance"
       })
@@ -94,11 +102,11 @@ describe("news provenance diagnostics (#3978)", () => {
     expect(before?.status).toBe("ok");
     expect(before?.facts).toMatchObject({
       totalStories: 4,
-      storiesFromBuiltInSources: 3,
+      storiesHiddenFromSavedFeed: 0,
+      storiesFromBuiltInSources: 2,
       storiesFromAddedSources: 1,
       storiesFoundByTopicSearch: 1,
       storiesMatchingFollowedTopic: 0,
-      storiesFromExcludedSources: 0,
       addedSourceCount: 1,
       followedTopicCount: 0,
       excludedSourceCount: 0
@@ -111,7 +119,11 @@ describe("news provenance diagnostics (#3978)", () => {
     const after = await observe(ids.userA);
     expect(after?.facts).toMatchObject({
       excludedSourceCount: 1,
-      storiesFromExcludedSources: 2
+      totalStories: 2,
+      storiesHiddenFromSavedFeed: 2,
+      storiesFromBuiltInSources: 0,
+      storiesFromAddedSources: 1,
+      storiesFoundByTopicSearch: 1
     });
   });
 
@@ -132,18 +144,30 @@ describe("news provenance diagnostics (#3978)", () => {
           payload: {
             articles: [
               article("b1", "x.example.org", { topics: ["Secret Topic Label"] }),
-              article("b2", "x.example.org", { rank: 2 })
+              article("b2", "x.example.org", { rank: 2, topics: ["Technology"] }),
+              article("b3", "x.example.org", { rank: 3, topics: ["Science"] })
             ]
           }
         });
       }
     );
 
+    await bootstrap.query(
+      `INSERT INTO app.news_custom_topics
+         (owner_user_id, label, guidance, validation_status, validation_fingerprint, validated_at)
+       VALUES ($1, 'Unapproved Topic', NULL, 'pending', 'fp', NULL)`,
+      [ids.userB]
+    );
+    // Follow one built-in topic. Science stays tagged on a story but is not followed.
+    await dataContext.withDataContext({ actorUserId: ids.userB, requestId: "follow" }, (db) =>
+      new NewsPrefsRepository().create(db, { kind: "topic", key: "technology" })
+    );
+
     const result = await observe(ids.userB);
     expect(result?.facts).toMatchObject({
-      followedTopicCount: 1,
-      storiesMatchingFollowedTopic: 1,
-      totalStories: 2
+      followedTopicCount: 2,
+      storiesMatchingFollowedTopic: 2,
+      totalStories: 3
     });
   });
 
@@ -153,6 +177,7 @@ describe("news provenance diagnostics (#3978)", () => {
       expect(text).not.toContain(HEADLINE);
       expect(text).not.toContain("Secret excerpt");
       expect(text).not.toContain("Secret Topic Label");
+      expect(text).not.toContain("Unapproved Topic");
       expect(text).not.toContain("example.org");
       expect(text).not.toContain("example.com");
     }
@@ -164,9 +189,24 @@ describe("news provenance diagnostics (#3978)", () => {
     const b = await observe(ids.userB);
     expect(a?.facts).toMatchObject({ totalStories: 4, followedTopicCount: 0 });
     expect(b?.facts).toMatchObject({
-      totalStories: 2,
+      totalStories: 3,
       addedSourceCount: 0,
       excludedSourceCount: 0
     });
+  });
+
+  it("is registered through the real news manifest and runs from the diagnostics path", async () => {
+    const registered = moduleDiagnosticProvidersFor([newsModuleManifest]).filter(
+      (entry) => entry.provider.providerId === "news.provenance"
+    );
+    expect(registered).toHaveLength(1);
+    expect(registered[0]?.moduleId).toBe(newsModuleManifest.id);
+
+    const observation = await dataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "manifest-path" },
+      (db) =>
+        registered[0]!.provider.observe(db, { actorUserId: ids.userA, requestId: "manifest-path" })
+    );
+    expect(observation?.facts).toMatchObject({ totalStories: 2, excludedSourceCount: 1 });
   });
 });
