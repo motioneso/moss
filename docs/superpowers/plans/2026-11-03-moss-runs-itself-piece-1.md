@@ -455,3 +455,444 @@ Files: packages/news/src/diagnostics-provider.ts, packages/news/src/personalizat
   separate decision (a tool argument of story id, owner-only).
 - Test: counts change when a source is excluded; no headline text appears in the output. Fails
   if story titles are included.
+
+## 12. Phase 2 detailed task list: raw log store and `logs` section
+
+Ben ruled on 2026-11-04 to build Phase 2 now. This overrides the section 10.6 advice to defer it. It
+does not remove the section 8 rule that an empty store at the moment of need reopens the storage
+design. Phase 2 builds on the Phase 1 contracts in PR 3981 (not yet merged when this was written):
+section types in packages/module-sdk/src/platform-diagnostics-types.ts, the `capSection` helper and
+live admin check in packages/ai/src/platform-diagnostics.ts, and the injected-reader pattern wired
+at packages/module-registry/src/index.ts near :3953. Rebase on main after PR 3981 merges and
+re-cite any line that moved.
+
+### 12.1 Seams check (origin/main, 2026-11-04)
+
+| Capability                     | Evidence                                                                                                                                                                                             | Finding                                                                                                                                                                  |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| API logger                     | apps/api/src/server.ts:267-269 (`Fastify({ logger: recordingLoggerOptions(options.logger) })`), apps/api/src/recording-logger-options.ts:19-34                                                       | The wrapper adds path redaction and keeps the caller's stream. `false` stays `false`. The sanitizing destination goes in here.                                           |
+| API database handles           | apps/api/src/server.ts:244-252 (app role, and a worker-role handle `workerDb` created before Fastify)                                                                                                | The worker-role handle exists before the logger is built, so the sink can bind it with no reordering in the API.                                                         |
+| Worker logger                  | apps/worker/src/worker.ts:206-209 (`pino({ level, base:{process:"worker"} })`), `workerDb` created at :211                                                                                           | Logger is built before the database handle. Task 2A.5 reorders them. No redaction today.                                                                                 |
+| Two processes                  | scripts/start-jarv1s.ts:182-183 (migrate runs as a one-shot first), :190-199 (worker and API resident)                                                                                               | Migrations finish before either process starts. A missing table is still tolerated (12.4).                                                                               |
+| Scheduled purge pattern        | packages/settings/src/data-export-schedule.ts:4-12 (queue, cron, `boss.schedule`), packages/settings/src/data-export-jobs.ts:253-275 (`registerSettingsJobWorkers` registers the cleanup worker)     | Worker is the sole cron owner (apps/worker/src/worker.ts:117-136). A second queue in the same registration function follows the same pattern.                            |
+| Security-definer cleanup       | packages/settings/sql/0112_data_export_cleanup_function.sql (policy for the migration owner, definer function, execute granted to the worker role only)                                              | Precedent for a purge and a read function that bypass row policies without any runtime role holding BYPASSRLS.                                                           |
+| Owner-only table precedent     | packages/settings/sql/0108_data_export_jobs.sql (RLS enabled and forced, owner policy on `app.current_actor_user_id()`)                                                                              | Same classification style.                                                                                                                                               |
+| Runtime roles                  | infra/postgres/grants/0001_pgboss_runtime_grants.sql:1-40                                                                                                                                            | Roles are `jarvis_app_runtime` (API requests, chat tools) and `jarvis_worker_runtime`. The new table grants follow the same split.                                       |
+| Chat tools use the app role    | Phase 0 finding 10.5 answer 2 (apps/api/src/server.ts:246-251)                                                                                                                                       | The `logs` reader runs as the app role. It cannot read the table directly (12.3), only through a function.                                                               |
+| Actor binding on log lines     | packages/module-registry/src/route-guard.ts:297 and :320-323 (the request hook resolves `actorUserId` for module routes only); no `log.child` with an actor exists in apps/api/src                   | Nothing tags a log line with its owner today. Task 2B.1 adds the binding and states which routes it covers. Untagged lines are unowned and metadata-only.                |
+| Existing redaction             | packages/ai/src/adapters/redact.ts:32 (`redactSecrets`); a second copy at packages/cli-runner/src/stderr-redactor.ts                                                                                 | Lives in `@moss/ai`, which depends on `@moss/settings`, so settings cannot import it (Phase 0 finding 10.5 answer 3). Misses URL credentials, cookies and nested errors. |
+| Where a shared module can live | packages/shared/package.json:6-9 (exports map; deps are only module-sdk and priority); apps/api/package.json:23-24 lists settings and shared; apps/worker/package.json:24 lists settings, not shared | `@moss/shared` is a leaf both processes can reach (the worker gains one dependency line). `@moss/settings` already reaches both and depends on shared.                   |
+| Next free migration number     | origin/main highest is 0356 (packages/settings/sql/0356_module_page_activity_surface.sql). Open PRs hold 0346 (PR 3571), 0354 (PR 3868), 0355 (PR 3859)                                              | The next free number is 0357. Collision rule in 12.4.                                                                                                                    |
+| App-map metadata               | packages/settings/src/platform-diagnostics-features.ts (added by PR 3981)                                                                                                                            | The `limits` feature there says "Moss cannot yet show application log lines". Phase 2 must change that sentence or it becomes false.                                     |
+| Real chat proof pattern        | package.json scripts `test:uat:*`, tests/uat/run-uat.ts, tests/uat/real-chat-env.ts                                                                                                                  | Real-chat proofs run through the UAT runner, not the Playwright mock specs under tests/e2e (those fake their own responses).                                             |
+
+Open questions, each owned by the 2B builder and answered in Task 2B.0 before any code:
+
+1. Which real worker job emits a warning that carries its owner, so the two-process proof needs no
+   test-only route? Candidate: a connector sync against an unreachable host. If none exists, add the
+   owner binding to the nearest real handler; do not add a debug endpoint.
+2. Which API routes can bind the actor to the request logger (module routes through route-guard.ts
+   only, or a global hook after authentication)? Write the answer into the app-map limits entry.
+
+### 12.2 Decisions
+
+- **One sink, two writers, one reader.** A table owned by the settings module. The API and worker
+  both write through one exported sink. The only reader is the diagnostics service.
+- **Sanitizer scope.** A pure function module in `@moss/shared`, run before a record reaches stdout
+  and before it reaches the table. It must cover each of these, and each has its own test:
+  - Strings: bearer and token prefixes, provider key prefixes, secret query parameters, secret
+    assignments and secret JSON fields (everything `redactSecrets` covers today).
+  - URL credentials of the form `scheme://user:password@host`. Mask the password, keep user and host.
+  - `Cookie` and `Set-Cookie` header values, whole value masked, name kept.
+  - `Authorization` header values of any scheme (Basic, Bearer, Digest).
+  - Nested errors: walk an `Error`, its `cause` chain, an `errors` array, and any plain object or
+    array, to depth 6, with a visited set so a cycle does not hang. Keys named like secrets
+    (password, token, secret, apiKey, authorization, cookie, credential) are masked by key, not only
+    by value shape.
+  - Oversize: after masking, cut `message` to 2048 UTF-8 bytes and the serialized context to 2048
+    bytes, never splitting a character, and set `truncated`. A single record never exceeds 4 KB.
+  - Failure of the sanitizer itself drops the record and counts it. It never falls back to writing
+    the raw record.
+- **`redactSecrets` is extended in shared and re-exported from `@moss/ai`.** The ai file keeps its
+  export name and every current caller keeps working. The cli-runner copy is left alone (separate
+  contract, out of scope).
+- **What is stored.** Level warn (40) and above only. Info and debug stay on stdout. Reason: info is
+  the storm level, and the question Moss answers is "what went wrong". Constants, not a setting.
+- **Owner tagging.** The owner is the top-level `actorUserId` field of the log line, accepted only if
+  it is a valid uuid, else null. Nothing infers an owner from message text.
+- **Privacy classification.** Table `app.diagnostic_log_records` is owner-or-unowned, read through a
+  function. A row whose `owner_user_id` equals the caller returns full message and context. Every
+  other row (other owner, or no owner) returns only time, level, process, component, connection
+  kind and event code. No admin exception. No role holds BYPASSRLS. The function also returns
+  nothing at all to a non-admin, as a second gate behind the service's live check.
+- **Write path never breaks a request.** The sink is a bounded in-memory queue with a background
+  flush. The log call returns before any database work. All sink failures are swallowed and counted.
+  The sink never logs through the logger it feeds (recursion guard) and reports at most one line per
+  minute to stderr.
+- **Bounds.** Row cap 50,000. Age cap 7 days. Per record 4 KB. Queue 500 records per process. Write
+  rate 200 records per minute per process; extra records are dropped and summarised by one
+  `log.dropped` record per minute with the count. Reader output follows 12.3 and 12.6.
+- **No new required setting.** Retention numbers are constants. No dev or prod compose or env change
+  is needed. The PR states this and shows a grep over infra/docker-compose.prod.yml and the dev
+  compose file for any log-related key, to prove nothing is missing.
+- **Log text may still hold private data a pattern cannot recognise** (a mail subject inside a
+  message). Mitigated by owner-only visibility of message text, the 7-day age cap, and the user
+  deletion cascade. Recorded as a known limit in the app map, not claimed as solved.
+
+### 12.3 Contracts
+
+New migration: packages/settings/sql/0357_diagnostic_log_records.sql (number per 12.4).
+
+```sql
+CREATE TABLE IF NOT EXISTS app.diagnostic_log_records (
+  id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  occurred_at     timestamptz NOT NULL,
+  process         text NOT NULL CHECK (process IN ('api', 'worker')),
+  level           smallint NOT NULL CHECK (level BETWEEN 40 AND 60),
+  component       text NOT NULL CHECK (char_length(component) <= 80),
+  connection_kind text CHECK (connection_kind IS NULL OR char_length(connection_kind) <= 40),
+  event_code      text CHECK (event_code IS NULL OR char_length(event_code) <= 80),
+  owner_user_id   uuid REFERENCES app.users(id) ON DELETE CASCADE,
+  message         text NOT NULL CHECK (octet_length(message) <= 2048),
+  context         jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (octet_length(context::text) <= 2048),
+  truncated       boolean NOT NULL DEFAULT false
+);
+
+CREATE INDEX IF NOT EXISTS diagnostic_log_records_time_idx
+  ON app.diagnostic_log_records (occurred_at DESC);
+CREATE INDEX IF NOT EXISTS diagnostic_log_records_owner_time_idx
+  ON app.diagnostic_log_records (owner_user_id, occurred_at DESC) WHERE owner_user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS diagnostic_log_records_component_idx
+  ON app.diagnostic_log_records (component, occurred_at DESC);
+
+ALTER TABLE app.diagnostic_log_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app.diagnostic_log_records FORCE ROW LEVEL SECURITY;
+
+-- The worker role (used by both processes for log writes) may insert only.
+DROP POLICY IF EXISTS diagnostic_log_records_insert ON app.diagnostic_log_records;
+CREATE POLICY diagnostic_log_records_insert ON app.diagnostic_log_records
+  FOR INSERT TO jarvis_worker_runtime WITH CHECK (true);
+GRANT INSERT ON app.diagnostic_log_records TO jarvis_worker_runtime;
+
+-- The migration owner reads and deletes for the definer functions below. No runtime role gets
+-- SELECT or DELETE on the table.
+DROP POLICY IF EXISTS diagnostic_log_records_definer_select ON app.diagnostic_log_records;
+CREATE POLICY diagnostic_log_records_definer_select ON app.diagnostic_log_records
+  FOR SELECT TO jarvis_migration_owner USING (true);
+DROP POLICY IF EXISTS diagnostic_log_records_definer_delete ON app.diagnostic_log_records;
+CREATE POLICY diagnostic_log_records_definer_delete ON app.diagnostic_log_records
+  FOR DELETE TO jarvis_migration_owner USING (true);
+
+-- Reader: app role only. Admin check inside, owner rows full, all other rows metadata only.
+CREATE OR REPLACE FUNCTION app.read_diagnostic_log(
+  p_since timestamptz, p_min_level smallint, p_component text,
+  p_connection_kind text, p_limit integer)
+RETURNS TABLE(
+  occurred_at timestamptz, process text, level smallint, component text,
+  connection_kind text, event_code text, owned boolean, owner_known boolean,
+  message text, context jsonb, truncated boolean)
+LANGUAGE sql SECURITY DEFINER SET search_path = app, pg_temp AS $$ ... $$;
+-- Contract for the body: no rows unless app.current_actor_user_id() belongs to a user with
+-- is_instance_admin = true; LEAST(p_limit, 50); ORDER BY occurred_at DESC; message and context are
+-- NULL unless owner_user_id = app.current_actor_user_id().
+
+CREATE OR REPLACE FUNCTION app.diagnostic_log_coverage()
+RETURNS TABLE(oldest_at timestamptz, newest_at timestamptz, row_count bigint)
+LANGUAGE sql SECURITY DEFINER SET search_path = app, pg_temp AS $$ ... $$;
+-- Same admin gate. Returns the retained time window and count, no content.
+
+-- Purge: worker role only.
+CREATE OR REPLACE FUNCTION app.purge_diagnostic_log(p_max_age interval, p_max_rows integer)
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path = app, pg_temp AS $$ ... $$;
+-- Contract: delete rows older than p_max_age, then the oldest rows beyond p_max_rows, in batches of
+-- 5000, and return the count deleted.
+
+REVOKE ALL ON FUNCTION app.read_diagnostic_log(timestamptz, smallint, text, text, integer) FROM PUBLIC;
+REVOKE ALL ON FUNCTION app.diagnostic_log_coverage() FROM PUBLIC;
+REVOKE ALL ON FUNCTION app.purge_diagnostic_log(interval, integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.read_diagnostic_log(timestamptz, smallint, text, text, integer)
+  TO jarvis_app_runtime;
+GRANT EXECUTE ON FUNCTION app.diagnostic_log_coverage() TO jarvis_app_runtime;
+GRANT EXECUTE ON FUNCTION app.purge_diagnostic_log(interval, integer) TO jarvis_worker_runtime;
+```
+
+The `...` bodies are written against a real database in Task 2A.2. The signatures, grants and
+rules above are the contract. The migration is re-runnable (`IF NOT EXISTS`, `OR REPLACE`, and
+`DROP POLICY IF EXISTS` before each policy, as in 0112).
+
+TypeScript contracts.
+
+Package `@moss/shared`, new file packages/shared/src/log-sanitizer.ts, exported from
+packages/shared/src/index.ts:
+
+- `sanitizeLogText(text: string): string`
+- `sanitizeLogValue(value: unknown, opts?: { maxDepth?: number }): unknown`
+- `sanitizeLogRecord(raw: Record<string, unknown>): SanitizedLogRecord | null` (null means drop)
+- `utf8Truncate(text: string, maxBytes: number): { text: string; truncated: boolean }`
+- `interface SanitizedLogRecord { occurredAt: string; process: "api" | "worker"; level: 40 | 50 | 60; component: string; connectionKind: string | null; eventCode: string | null; ownerUserId: string | null; message: string; context: Record<string, unknown>; truncated: boolean }`
+- Constants `LOG_MESSAGE_MAX_BYTES = 2048` and `LOG_CONTEXT_MAX_BYTES = 2048`.
+
+Package `@moss/settings`, new files packages/settings/src/diagnostic-log-sink.ts and
+packages/settings/src/diagnostic-log-destination.ts, both exported from the package index:
+
+- `createDiagnosticLogSink(opts: { db: Kysely<MossDatabase>; process: "api" | "worker"; now?: () => number; stderr?: (line: string) => void }): DiagnosticLogSink`
+- `interface DiagnosticLogSink { enqueue(record: SanitizedLogRecord): void; flush(): Promise<void>; close(): Promise<void>; stats(): { queued: number; written: number; dropped: number; failed: number } }`.
+  `enqueue` is synchronous and never throws.
+- `createSanitizedLogDestination(opts: { process: "api" | "worker"; destination: NodeJS.WritableStream; sink: DiagnosticLogSink | null }): NodeJS.WritableStream`.
+  Each incoming pino line is parsed, sanitized, written to `destination` as sanitized JSON, and
+  enqueued if level is 40 or higher. A line that does not parse as JSON is written to the
+  destination after `sanitizeLogText` and is not stored.
+- `withLogOwner<T extends { child(bindings: Record<string, unknown>): T }>(logger: T, actorUserId: string): T`
+  binds `actorUserId` on a child logger.
+- `purgeDiagnosticLog(db: Kysely<MossDatabase>): Promise<number>` calls the purge function with
+  7 days and 50,000 rows. `DIAGNOSTIC_LOG_PURGE_QUEUE = "diagnostics.log_purge"` and
+  `DIAGNOSTIC_LOG_PURGE_CRON = "43 * * * *"`, registered in `registerSettingsJobWorkers`
+  (packages/settings/src/data-export-jobs.ts:253). The job payload carries only `{ kind }`.
+
+Package `@moss/module-sdk`, appended to packages/module-sdk/src/platform-diagnostics-types.ts:
+
+- `type LogLevelName = "warn" | "error" | "fatal"`
+- `interface LogRecordObservation { occurredAt: string; process: "api" | "worker"; level: LogLevelName; component: string; connectionKind: string | null; eventCode: string | null; ownerKnown: boolean; owned: boolean; message: string | null; truncated: boolean }`
+- `interface LogsSection { records: readonly LogRecordObservation[]; coverage: { oldestAt: string | null; newestAt: string | null }; truncated: boolean }`
+- `EMPTY_LOGS_SECTION`. Message strings in this output are cut to 500 characters.
+
+Package `@moss/ai`, packages/ai/src/platform-diagnostics.ts: add `"logs"` to the include union,
+`logs: LogsSection` to the report, and an optional injected
+`readLogs?: (scopedDb: DataContextDb, ctx: { actorUserId: string; requestId: string }, opts: { limit: number; since: Date; minLevel: LogLevelName; component?: string; connectionKind?: string }) => Promise<LogsSection>`.
+It uses the same live admin check and the same `capSection` as `jobs`. A non-admin, or an absent
+reader, pushes `"logs"` onto `redactions`.
+
+Tool input (packages/settings/src/platform-diagnostics-tool.ts): `logs` is a new optional object,
+added to `INPUT_KEYS`, with `sinceMinutes` (integer 1 to 1440, default 60), `minLevel` (enum warn,
+error, fatal; default warn), `component` (string, max 80) and `connectionKind` (string, max 40),
+`additionalProperties:false`. The `include` maximum grows by one. The output schema gains `logs`.
+
+### 12.4 Migration number and collision
+
+At the start of Task 2A.2, run `git fetch` and list the highest number across `packages/*/sql` and
+`infra/postgres/migrations` at origin/main and across open pull requests (the same data
+scripts/check-migration-collisions.ts reads). Use the next free number. On 2026-11-04 that is
+0357; open PRs hold 0346, 0354 and 0355. Run the collision script before the first push and again
+before enabling auto-merge. If it reports a clash, rename the file before it is applied anywhere.
+Never renumber a file that has already merged. Never edit an applied migration. Module SQL stays in
+packages/settings/sql, never in infra/postgres/migrations.
+
+If the table is missing at runtime (a start-order surprise), the sink sees SQLSTATE 42P01, counts a
+failure, pauses for 30 seconds and retries after that. The migration is additive, so an existing
+install keeps working while it is applied.
+
+### 12.5 Phase 2A: sink and writer (one build session)
+
+Branch per the task issue. TDD: each test is written first and observed failing as stated.
+
+**Task 2A.1: Sanitizer in shared.** Files: packages/shared/src/log-sanitizer.ts,
+packages/shared/src/index.ts, packages/ai/src/adapters/redact.ts (re-export),
+tests/unit/log-sanitizer.test.ts. Tests:
+
+1. URL credentials: `https://bob:hunter2@host/x` returns no `hunter2` and keeps `bob` and `host`.
+   Fails on a broken build because the current function passes it through (Phase 0 verified).
+2. Cookie and Set-Cookie header values and Basic and Digest Authorization values are masked. Fails
+   if only Bearer is handled.
+3. A nested error, `new Error("x", { cause: new Error("token=abc12345") })` inside a context object
+   under key `err`, returns no `abc12345` at any depth, including inside an `errors` array. Fails if
+   only top-level strings are scrubbed.
+4. A key named `password` holding a short plain value is masked by key. Fails if only value shapes
+   are checked.
+5. A cyclic object terminates and the result is bounded. Fails with a hang or stack overflow.
+6. A 10 MB message returns at most 2048 bytes with `truncated:true`, and a three-byte character is
+   never split (use a string of 1,000 euro signs). Fails if the cut counts characters.
+7. A sanitizer that throws drops the record (returns null) and never returns the raw input. Fails if
+   a catch falls back to the raw record.
+8. Every existing `redactSecrets` assertion (find them with the codebase graph) still passes through
+   the re-export. Fails if the extension changed old behaviour.
+
+**Task 2A.2: Migration.** Files: packages/settings/sql/<next number>\_diagnostic_log_records.sql,
+tests/integration/diagnostic-log-store.test.ts. Verify the number per 12.4. Tests run through the
+real runtime roles, not the migration owner:
+
+1. The worker role inserts a row. Fails if the grant or policy is missing.
+2. The app role cannot SELECT or DELETE the table directly (permission error). Fails if a grant
+   leaked.
+3. Admin A reads A's own row with full message, and another user's row as metadata only with
+   `message` null. Observed failing with the owner comparison removed from the function.
+4. An unowned row returns metadata only to every admin.
+5. A non-admin gets no rows from the function. Observed failing with the admin check removed.
+6. Table checks reject a message over 2048 bytes and a level of 30. Fails if the checks are absent.
+7. Purge removes rows older than the age cap and trims to the row cap oldest-first, returns the
+   count, and the app role cannot execute it. Fails on an off-by-one cap or a leaked grant.
+8. Deleting a user deletes that user's rows (cascade).
+9. Running the migration file twice changes nothing.
+
+**Task 2A.3: Sink.** Files: packages/settings/src/diagnostic-log-sink.ts,
+tests/unit/diagnostic-log-sink.test.ts (fake database handle), plus an integration case in
+tests/integration/diagnostic-log-store.test.ts. Tests:
+
+1. `enqueue` returns without awaiting. A database that never answers does not block it. Fails if the
+   write is awaited in the call path.
+2. A database that throws on every flush leaves `enqueue` silent, increments `failed`, and the next
+   `enqueue` still works. Fails if an exception escapes.
+3. Failure reporting never re-enters the logger (a fake logger fed by the sink sees zero calls
+   caused by the sink's own failure). Fails with infinite recursion if unguarded.
+4. A storm of 10,000 records in one minute stores at most 200 plus one `log.dropped` summary with the
+   right count, and the queue never exceeds 500. Fails if either bound is missing.
+5. A foreign-key failure (stale owner id) retries the batch with owners removed, and the rows land
+   unowned. Fails if the batch is lost.
+6. SQLSTATE 42P01 opens the 30-second pause and recovers after it (fake clock). Fails if it retries
+   hot.
+7. `close()` flushes what is queued once and then ignores later records.
+
+**Task 2A.4: Destination and API wiring.** Files: packages/settings/src/diagnostic-log-destination.ts,
+apps/api/src/recording-logger-options.ts, apps/api/src/server.ts (:267-269),
+tests/unit/diagnostic-log-destination.test.ts, tests/unit/recording-logger-options.test.ts.
+
+- `recordingLoggerOptions` gains an optional second argument `{ sink }`. With an object logger it
+  sets `stream` to `createSanitizedLogDestination` wrapping the caller's stream (or stdout). With
+  `false` it still returns `false`. A caller's serializers, redact policy and level survive.
+- server.ts builds the sink from the worker-role handle that already exists (:244-252) and closes it
+  in the server's close hook.
+- Tests: (1) a line with `Authorization: Bearer xyz12345` reaches the destination stream already
+  masked and the stored record is masked. Fails if either copy is raw. (2) `logger:false` writes
+  nothing and builds no sink. (3) a custom caller stream still receives output. (4) a line below
+  warn reaches stdout but not the sink. (5) a request that triggers a warning still returns its
+  normal status when the sink database is down. Fails if a sink fault becomes a request error.
+
+**Task 2A.5: Worker wiring and purge job.** Files: apps/worker/src/worker.ts (:206-211, reorder so
+the database handle exists first, then the logger with the sanitizing destination),
+apps/worker/package.json (add `@moss/shared` only if the worker imports it directly),
+packages/settings/src/data-export-jobs.ts (:253), packages/settings/src/diagnostic-log-sink.ts,
+tests/unit/worker-schedule-mode.test.ts (extend), tests/integration/diagnostic-log-purge.test.ts.
+
+- Tests: (1) a worker-logger warning is stored with process `worker` and masked. (2) the purge
+  queue is scheduled by the worker only (extend the existing schedule test; fails if the API
+  process schedules it). (3) the purge job deletes aged rows through a real pg-boss run. (4) the
+  purge payload holds only `{ kind }` (metadata-only invariant).
+
+**Phase 2A verification** (unpiped, expect exit 0 each):
+
+```bash
+pnpm typecheck > /mnt/unity-nvme/scratch/phase2a-typecheck.log 2>&1; echo "EXIT=$?"
+```
+
+```bash
+pnpm test:unit > /mnt/unity-nvme/scratch/phase2a-unit.log 2>&1; echo "EXIT=$?"
+```
+
+```bash
+node_modules/.bin/tsx scripts/check-migration-collisions.ts > /mnt/unity-nvme/scratch/phase2a-collide.log 2>&1; echo "EXIT=$?"
+```
+
+The integration files and the full gate run only through the verify-gate skill. Add a script
+`test:integration:3978-logs` next to `test:integration:3978` listing the new integration files.
+2A ships as its own PR. Nothing reads the table yet, so it adds no visible behaviour. Ship it,
+confirm rows appear on a dev instance after a real warning, then start 2B.
+
+### 12.6 Phase 2B: reader, owner tagging, app map, two-process proof (one build session)
+
+Depends on 2A merged and PR 3981 merged.
+
+**Task 2B.0: Answer the two open questions in 12.1** and write the answers into this section.
+
+**Task 2B.1: Owner binding.** Files: packages/module-registry/src/route-guard.ts (:320-323), the
+worker job handler chosen in 2B.0, packages/settings/src/diagnostic-log-destination.ts
+(`withLogOwner`), tests/unit.
+
+- Bind the actor on the request logger after authentication resolves, and on the job logger inside
+  the chosen worker handler from the job's actor id.
+- Tests: (1) a warning logged in a request by user A is stored with A as owner. Fails if the binding
+  is missing. (2) an invalid uuid in `actorUserId` stores null. (3) a request without
+  authentication logs unowned.
+
+**Task 2B.2: Reader.** Files: packages/settings/src/diagnostic-log-reader.ts (new, exported),
+packages/module-registry/src/index.ts (inject next to `readJobs`, near :3953),
+packages/ai/src/platform-diagnostics.ts, packages/module-sdk/src/platform-diagnostics-types.ts,
+packages/settings/src/platform-diagnostics-tool.ts.
+
+- `readDiagnosticLogs(scopedDb: DataContextDb, opts): Promise<LogsSection>` calls the two definer
+  functions through the scoped handle (app role). It maps level numbers to names, cuts messages to
+  500 characters, and caps the list at 10 and the section at 16 KB through the existing
+  `capSection`.
+- Tests (integration, each observed failing with its protection removed):
+  1. A non-admin gets `logs` in `redactions`, an empty section, and the function was not called.
+  2. A demoted admin is refused on the second call.
+  3. Spoofed `isInstanceAdmin` or `actorUserId` in tool arguments is rejected.
+  4. Admin A sees A's own warning text, and sees only metadata for B's warning and for an unowned
+     warning, with `message:null`. Fails with the function's owner check removed.
+  5. Filters: `minLevel:"error"` excludes warn rows, `component` narrows, `sinceMinutes` excludes
+     old rows. Each fails if its filter is ignored.
+  6. A record whose stored context holds `SECRET-MARKER` never returns that string (the reader
+     returns no context at all). Fails if context is passed through.
+  7. 50 matching rows return 10 and `truncated:true`. Fails if the cap is missing.
+  8. `coverage` reports the oldest and newest times, and an empty store returns nulls so Moss can say
+     "logs only go back to X" or "nothing is stored yet".
+  9. Prompt guidance: the Phase 1 sentence (total under 150 words) grows by at most one clause that
+     names logs. Fails if guidance exceeds the cap.
+
+**Task 2B.3: App map.** Files: packages/settings/src/platform-diagnostics-features.ts. Add feature
+`settings.platformDiagnostics.logs` (what it shows, admin only, warn and above, 7 days, 50,000 rows,
+owner-visible text only, both processes, the sink may drop records under a storm), an error entry
+`log_store_empty_or_gap` with a remediation, and rewrite the `limits` sentence so it no longer says
+Moss cannot show log lines. State the owner-binding coverage found in 2B.0. Test: the app-map
+coverage test passes, and a new assertion that these entries exist fails without them.
+
+**Task 2B.4: Two-process live proof.** Files: tests/uat/3978-logs.uat.spec.ts (new), script
+`test:uat:3978-logs` in package.json, following tests/uat/run-uat.ts and
+tests/uat/real-chat-env.ts. Real instance, real chat, no faked or rewritten network responses.
+
+1. Cause a real warning inside the worker process, owned by the admin, by the real path chosen in
+   2B.0. The marker is a unique string present in the logged message and absent from the question.
+2. Sign in as the admin and ask Moss in plain words why the connection failed. Assert the answer
+   contains the marker, and that the conversation's recorded tool activity includes
+   `settings.platformDiagnostics` with the `logs` section.
+3. Cause a warning owned by a second user. Ask as the first admin. Assert the answer carries the time
+   and component but not the second user's marker, and the returned record has `message:null`.
+4. Sign in as a non-admin and ask the same. Assert a server-side `redactions` entry for `logs` and
+   neither marker anywhere in the answer.
+5. Restart the API and worker, ask again, and assert the first warning is still retrievable (the
+   store survives a restart).
+6. Assert the output of both processes contains no unmasked secret planted in the same warning (a
+   fake token inside the logged error), proving the sanitizer ran before both destinations.
+
+The test must fail if registration, the sanitizer, owner binding, the admin gate or the owner check
+is broken. Run it and record the output on the PR (Live-Path Gate). Until that is attached the
+honest status is code-complete, unverified.
+
+**Phase 2B verification** (unpiped): the three commands in 2A, plus the live proof below
+(expect exit 0), plus the full gate through verify-gate. CI's end-to-end step is listed separately
+because the local gate excludes it.
+
+```bash
+pnpm test:uat:3978-logs > /mnt/unity-nvme/scratch/phase2b-uat.log 2>&1; echo "EXIT=$?"
+```
+
+### 12.7 Kill gate and sizing
+
+- Owner: Ben. After 2B, run both Phase 0 faults again and then one fresh fault that jobs and
+  connection state cannot explain. Phase 0 showed neither earlier fault needed raw logs, so this
+  phase is judged on that third fault. If the store is empty or the fault left no warning at the
+  moment it is needed, reopen the storage design before Phase 3 (section 8).
+- Sizing: 2A is medium-large (sanitizer, migration, sink, two wirings). 2B is medium-large (reader,
+  binding, app map, live proof). If a context warning arrives in 2A, cut after Task 2A.3 and ship
+  tasks 2A.4 and 2A.5 as a second PR on the same branch. Relay at most once.
+- Phase 3 is not planned here.
+
+### 12.8 Rulings ledger additions
+
+- The sanitizer lives in `@moss/shared`, not `@moss/ai` (settings cannot import it) and not a new
+  package (one more workspace for a small module). `@moss/ai` re-exports it so old callers keep
+  working.
+- Reading the table directly from the app role was rejected. A function is the only way to return
+  metadata for some rows and full text for others, because row policies cannot hide columns.
+- Storing info-level lines was rejected. It is the storm level and no Phase 0 fault needed it.
+- A debug route that emits a test warning was rejected. The proof must go through a real worker
+  path.
+- `ON DELETE CASCADE` on the owner is deliberate, so deleting a user removes that user's log text.
+
+### 12.9 Decisions only Ben can make
+
+1. Whether unowned system records (a worker warning with no user attached) stay metadata-only for
+   admins, as ruled. An admin then sees "a warning at time T from component C" but not its text for
+   most platform faults. The alternative is a separate instance scope, readable by admins and
+   limited to records the platform itself produced. That is not a bypass of user data, but it is a
+   classification change and needs his word. This plan builds the ruled version.
+2. Retention numbers: 7 days, 50,000 rows, warn and above. Constants, so easy to change later.
+3. Whether `app.readSource` becomes admin-only (Phase 3, unchanged).
