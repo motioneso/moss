@@ -254,9 +254,11 @@ export function createPlatformDiagnosticsService(dependencies: {
         }
         if (include.has("connections")) {
           if (admin && dependencies.readConnections) {
-            connections = capSection(await dependencies.readConnections(scopedDb, ctx, { limit }), [
-              "items"
-            ]);
+            connections = capSection(
+              await dependencies.readConnections(scopedDb, ctx, { limit }),
+              ["items"],
+              limit
+            );
           } else redactions.push("connections");
         }
       }

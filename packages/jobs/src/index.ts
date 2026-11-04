@@ -7,3 +7,4 @@ export * from "./upgrade-check.js";
 export * from "./upgrade-notify.js";
 export * from "./push-jobs.js";
 export * from "./module-job-sweep.js";
+export * from "./job-diagnostics.js";

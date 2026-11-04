@@ -252,8 +252,8 @@ describe("platform diagnostics service", () => {
         runInContext: async (work) => work({}),
         isInstanceAdmin: options.isInstanceAdmin,
         assertDiagnosticsSafe: vi.fn(),
-        readJobs: options.readJobs,
-        readConnections: options.readConnections
+        readJobs: options.readJobs as never,
+        readConnections: options.readConnections as never
       });
     }
 

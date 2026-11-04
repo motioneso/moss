@@ -861,7 +861,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       name: "settings.platformDiagnostics",
       description:
-        "Inspect bounded platform health and actor-scoped operational observations. Source provenance is returned only when requested and is limited to safe relative excerpts.",
+        "Use when a connection, sync, job or refresh is not working, or the user asks why something happened. Returns bounded platform health and actor-scoped observations. The jobs and connections sections show recent job runs and connection state and are admin only: other users get a redactions entry and no data. Source provenance is returned only when requested and is limited to safe relative excerpts.",
       permissionId: "settings.view",
       risk: "read",
       content: "outside",
