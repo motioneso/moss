@@ -1,7 +1,15 @@
-import type { ToolExecute } from "@moss/module-sdk";
+import type { ConnectionsSection, JobsSection, ToolExecute } from "@moss/module-sdk";
 import { hostDiagnosticsSchema } from "@moss/shared";
 
-type DiagnosticSection = "version" | "runtime" | "modules" | "errors" | "actions" | "source";
+type DiagnosticSection =
+  | "version"
+  | "runtime"
+  | "modules"
+  | "errors"
+  | "actions"
+  | "jobs"
+  | "connections"
+  | "source";
 
 interface PlatformDiagnosticsReport {
   readonly observedAt: string;
@@ -10,6 +18,8 @@ interface PlatformDiagnosticsReport {
   readonly modules: readonly Record<string, unknown>[];
   readonly errors: readonly Record<string, unknown>[];
   readonly actions: readonly Record<string, unknown>[];
+  readonly jobs: JobsSection;
+  readonly connections: ConnectionsSection;
   readonly source: {
     readonly matches: readonly {
       readonly path: string;
@@ -43,6 +53,8 @@ const DIAGNOSTIC_SECTIONS: readonly DiagnosticSection[] = [
   "modules",
   "errors",
   "actions",
+  "jobs",
+  "connections",
   "source"
 ];
 const INPUT_KEYS = new Set(["question", "module", "include", "limit"]);
@@ -55,7 +67,7 @@ export const platformDiagnosticsInputSchema = {
     module: { type: "string", maxLength: 120 },
     include: {
       type: "array",
-      maxItems: 6,
+      maxItems: 8,
       items: { type: "string", enum: DIAGNOSTIC_SECTIONS }
     },
     limit: { type: "integer", minimum: 1, maximum: 10 }
@@ -142,6 +154,102 @@ const actionObservationSchema = {
     requestId: nullableString
   }
 } as const;
+const labelString = { type: "string", maxLength: 120 } as const;
+const nullableLabel = { type: ["string", "null"], maxLength: 120 } as const;
+const jobsSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["recent", "summaries", "truncated"],
+  properties: {
+    recent: {
+      type: "array",
+      maxItems: 10,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "occurredAt",
+          "queue",
+          "state",
+          "retryCount",
+          "ownerKnown",
+          "kind",
+          "connectorAccountId",
+          "errorLabel"
+        ],
+        properties: {
+          occurredAt: { type: "string" },
+          queue: labelString,
+          state: labelString,
+          retryCount: { type: "number" },
+          ownerKnown: { type: "boolean" },
+          kind: nullableLabel,
+          connectorAccountId: nullableLabel,
+          errorLabel: nullableLabel
+        }
+      }
+    },
+    summaries: {
+      type: "array",
+      maxItems: 10,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "queue",
+          "lastSuccessAt",
+          "lastFailureAt",
+          "failedLast24h",
+          "stuckCount",
+          "activeCount"
+        ],
+        properties: {
+          queue: labelString,
+          lastSuccessAt: nullableString,
+          lastFailureAt: nullableString,
+          failedLast24h: { type: "number" },
+          stuckCount: { type: "number" },
+          activeCount: { type: "number" }
+        }
+      }
+    },
+    truncated: { type: "boolean" }
+  }
+} as const;
+const connectionsSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["items", "truncated"],
+  properties: {
+    items: {
+      type: "array",
+      maxItems: 10,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "provider",
+          "accountId",
+          "status",
+          "lastAttemptAt",
+          "lastGoodAt",
+          "failureCount",
+          "errorLabel"
+        ],
+        properties: {
+          provider: labelString,
+          accountId: labelString,
+          status: labelString,
+          lastAttemptAt: nullableString,
+          lastGoodAt: nullableString,
+          failureCount: { type: "number" },
+          errorLabel: nullableLabel
+        }
+      }
+    },
+    truncated: { type: "boolean" }
+  }
+} as const;
 const sourceSchema = {
   type: "object",
   additionalProperties: false,
@@ -185,6 +293,8 @@ export const platformDiagnosticsOutputSchema = {
     "modules",
     "errors",
     "actions",
+    "jobs",
+    "connections",
     "source",
     "redactions"
   ],
@@ -200,6 +310,8 @@ export const platformDiagnosticsOutputSchema = {
     modules: { type: "array", items: diagnosticObservationSchema },
     errors: { type: "array", items: errorObservationSchema },
     actions: { type: "array", items: actionObservationSchema },
+    jobs: jobsSchema,
+    connections: connectionsSchema,
     source: { anyOf: [{ type: "null" }, sourceSchema] },
     redactions: { type: "array", items: { type: "string" } }
   }

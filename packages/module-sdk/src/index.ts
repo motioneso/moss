@@ -49,6 +49,7 @@ export {
   type ModuleDiagnosticProvider,
   type RegisteredModuleDiagnosticProvider
 } from "./diagnostics.js";
+export * from "./platform-diagnostics-types.js";
 export * from "./module-params.js";
 export * from "./route-chat.js";
 export * from "./action-presentation.js";
