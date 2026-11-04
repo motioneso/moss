@@ -5,7 +5,13 @@ import {
   createNewsProvenanceDiagnosticsProvider,
   type NewsFeedProvenanceInputs
 } from "@moss/news";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// The unit test has no database, so the savepoint wrapper just runs the work.
+vi.mock("@moss/db", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  withSavepoint: async (_db: unknown, work: () => Promise<unknown>) => work()
+}));
 
 const scopedDb = { [dataContextBrand]: true } as DataContextDb;
 const ctx = { actorUserId: "user-a", requestId: "req-1" };
@@ -125,7 +131,8 @@ describe("computeFeedProvenance", () => {
       })
     );
     expect(p.snapshotState).toBe("expired");
-    expect(p.totalStories).toBe(0);
+    expect(p.totalStories).toBeNull();
+    expect(p.storiesFromBuiltInSources).toBeNull();
   });
 
   it("flags that dismissals were not consulted", () => {
@@ -135,7 +142,13 @@ describe("computeFeedProvenance", () => {
   });
 });
 
-function provider(input: NewsFeedProvenanceInputs) {
+const noDismissals = () =>
+  ({
+    storyRef: (url: string) => `ref:${url}`,
+    listDismissedRefs: async () => new Set<string>()
+  }) as never;
+
+function provider(input: NewsFeedProvenanceInputs, storyFeedback: () => unknown = noDismissals) {
   return createNewsProvenanceDiagnosticsProvider({
     personalization: {
       readLatestSnapshot: async () => input.snapshot,
@@ -145,7 +158,7 @@ function provider(input: NewsFeedProvenanceInputs) {
     },
     prefs: { list: async () => [...input.prefs] },
     now: () => NOW,
-    storyFeedback: () => undefined
+    storyFeedback: storyFeedback as never
   });
 }
 
@@ -165,7 +178,7 @@ describe("news provenance diagnostics provider", () => {
       totalStories: 2,
       storiesFromBuiltInSources: 1,
       storiesFoundByTopicSearch: 1,
-      dismissalsApplied: false
+      dismissalsApplied: true
     });
     expect(Object.keys(result?.facts ?? {}).length).toBeLessThanOrEqual(
       MODULE_DIAGNOSTIC_LIMITS.maxFactKeys
@@ -184,5 +197,46 @@ describe("news provenance diagnostics provider", () => {
   it("reports unknown when there is no feed yet", async () => {
     const result = await provider(inputs([], { snapshot: null })).observe(scopedDb, ctx);
     expect(result?.status).toBe("unknown");
+  });
+
+  it("is degraded and qualifies the counts when no dismissal source is available", async () => {
+    const result = await provider(inputs([story("1", "a.example.org")]), () => undefined).observe(
+      scopedDb,
+      ctx
+    );
+    expect(result?.status).toBe("degraded");
+    expect(result?.facts).toMatchObject({ dismissalsApplied: false });
+    expect(result?.summary).toContain("may include dismissed stories");
+    expect(result!.summary.length).toBeLessThanOrEqual(MODULE_DIAGNOSTIC_LIMITS.summaryMaxLength);
+  });
+
+  it("is degraded and qualifies the counts when the dismissal lookup fails", async () => {
+    const failing = () =>
+      ({
+        storyRef: (url: string) => url,
+        listDismissedRefs: async () => {
+          throw new Error("down");
+        }
+      }) as never;
+    const result = await provider(inputs([story("1", "a.example.org")]), failing).observe(
+      scopedDb,
+      ctx
+    );
+    expect(result?.status).toBe("degraded");
+    expect(result?.summary).toContain("may include dismissed stories");
+  });
+
+  it("reports unknown counts, not zero, when the saved feed has expired", async () => {
+    const expired = inputs([], {
+      snapshot: {
+        compiledAt: NOW,
+        expiresAt: new Date(NOW.getTime() - 1000),
+        payload: { articles: [story("1", "a.example.org")] }
+      }
+    });
+    const result = await provider(expired).observe(scopedDb, ctx);
+    expect(result?.status).toBe("degraded");
+    expect(result?.facts).toMatchObject({ totalStories: null, storiesFromBuiltInSources: null });
+    expect(result?.summary).toContain("unknown");
   });
 });

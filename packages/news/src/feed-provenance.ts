@@ -12,16 +12,20 @@ import { topicOption } from "./source/catalog.js";
 export interface NewsFeedProvenance {
   /** "current" means the saved feed is what the reader sees; otherwise News shows a live front page. */
   readonly snapshotState: "none" | "expired" | "current";
+  /**
+   * Story counts are null when the saved feed is missing or expired, because News then shows a
+   * live front page this view does not count. Unknown is never reported as zero.
+   */
   /** Stories the reader is shown, after the same filters the feed applies. */
-  readonly totalStories: number;
+  readonly totalStories: number | null;
   /** Saved stories the feed hides: too old, excluded, repeated or dismissed. */
-  readonly storiesHiddenFromSavedFeed: number;
-  readonly storiesFromBuiltInSources: number;
-  readonly storiesFromAddedSources: number;
+  readonly storiesHiddenFromSavedFeed: number | null;
+  readonly storiesFromBuiltInSources: number | null;
+  readonly storiesFromAddedSources: number | null;
   /** Stories found by searching a followed topic, whatever publisher they came from. */
-  readonly storiesFoundByTopicSearch: number;
+  readonly storiesFoundByTopicSearch: number | null;
   /** Shown stories tagged with a topic the account follows right now. */
-  readonly storiesMatchingFollowedTopic: number;
+  readonly storiesMatchingFollowedTopic: number | null;
   readonly addedSourceCount: number;
   /** Built-in topics plus approved custom topics, the same set the feed uses. */
   readonly followedTopicCount: number;
@@ -51,12 +55,12 @@ export function computeFeedProvenance(input: NewsFeedProvenanceInputs): NewsFeed
     if (topic.validationStatus === "approved") followedLabels.add(topic.label);
   }
   const base = {
-    storiesHiddenFromSavedFeed: 0,
-    totalStories: 0,
-    storiesFromBuiltInSources: 0,
-    storiesFromAddedSources: 0,
-    storiesFoundByTopicSearch: 0,
-    storiesMatchingFollowedTopic: 0,
+    storiesHiddenFromSavedFeed: null,
+    totalStories: null,
+    storiesFromBuiltInSources: null,
+    storiesFromAddedSources: null,
+    storiesFoundByTopicSearch: null,
+    storiesMatchingFollowedTopic: null,
     addedSourceCount: input.customSources.length,
     followedTopicCount: followedLabels.size,
     excludedSourceCount: input.exclusions.length,

@@ -54,18 +54,23 @@ describe("news provenance diagnostics (#3978)", () => {
     dataContext.withDataContext({ actorUserId, requestId: "news-provenance" }, (db) =>
       createNewsProvenanceDiagnosticsProvider({
         personalization: repository,
-        prefs: new NewsPrefsRepository()
+        prefs: new NewsPrefsRepository(),
+        storyFeedback: () =>
+          ({
+            storyRef: (url: string) => `ref:${url}`,
+            listDismissedRefs: async () => new Set<string>()
+          }) as never
       }).observe(db, {
         actorUserId,
         requestId: "news-provenance"
       })
     );
 
-  it("reports unknown with zero counts when the account has no feed", async () => {
+  it("reports unknown counts when the account has no feed", async () => {
     const result = await observe(ids.userA);
     expect(result).toMatchObject({
       status: "unknown",
-      facts: { totalStories: 0, followedTopicCount: 0, excludedSourceCount: 0 }
+      facts: { totalStories: null, followedTopicCount: 0, excludedSourceCount: 0 }
     });
   });
 

@@ -106,19 +106,24 @@ function plural(count: number, one: string, many: string): string {
 }
 
 function provenanceSummary(p: NewsFeedProvenance): string {
-  if (p.snapshotState === "none") return "News has no saved feed yet for this account.";
+  if (p.snapshotState === "none") {
+    return "News has no saved feed yet for this account, so story counts are unknown.";
+  }
   const topics =
     p.followedTopicCount === 0
       ? "no followed topics"
       : plural(p.followedTopicCount, "followed topic", "followed topics");
   const tail = `${topics}, ${plural(p.excludedSourceCount, "excluded source", "excluded sources")}.`;
   if (p.snapshotState === "expired") {
-    return `The saved feed has expired, so News shows a live front page from built-in sources. ${tail}`;
+    return `The saved feed has expired. News shows a live front page that these counts do not cover, so story counts are unknown. ${tail}`;
   }
+  const caveat = p.dismissalsApplied
+    ? ""
+    : " Dismissals could not be checked, so these counts may include dismissed stories.";
   return (
-    `The feed shows ${plural(p.totalStories, "story", "stories")}: ${p.storiesFromBuiltInSources} ` +
-    `from built-in sources, ${p.storiesFromAddedSources} from added sources, ` +
-    `${p.storiesFoundByTopicSearch} found by a topic search. ${tail}`
+    `The saved feed shows ${plural(p.totalStories ?? 0, "story", "stories")}: ` +
+    `${p.storiesFromBuiltInSources} from built-in sources, ${p.storiesFromAddedSources} ` +
+    `from added sources, ${p.storiesFoundByTopicSearch} found by a topic search. ${tail}${caveat}`
   );
 }
 
@@ -189,7 +194,9 @@ export function createNewsProvenanceDiagnosticsProvider(
         observedAt: new Date().toISOString(),
         status:
           p.snapshotState === "current"
-            ? "ok"
+            ? p.dismissalsApplied
+              ? "ok"
+              : "degraded"
             : p.snapshotState === "expired"
               ? "degraded"
               : "unknown",
