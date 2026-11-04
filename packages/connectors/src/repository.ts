@@ -66,6 +66,20 @@ export interface ConnectorAccountSafeRow {
   readonly previous_sync?: PreviousSyncSnapshot | null;
 }
 
+/** Narrow row for diagnostics. The stored error text is mapped to a fixed label in SQL. */
+export interface ConnectorDiagnosticRow {
+  readonly id: string;
+  readonly provider_id: string;
+  readonly status: ConnectorAccountStatus;
+  readonly revoked_at: Date | null;
+  readonly last_sync_started_at: Date | null;
+  readonly last_sync_finished_at: Date | null;
+  readonly last_sync_status: ConnectorSyncStatus | null;
+  readonly error_label: string | null;
+  readonly previous_status: string | null;
+  readonly previous_finished_at: string | null;
+}
+
 export interface CreateConnectorAccountInput {
   readonly providerId: string;
   readonly scopes: readonly string[];
@@ -138,6 +152,47 @@ export class ConnectorsRepository {
     assertDataContextDb(scopedDb);
 
     return this.safeAccountQuery(scopedDb.db).execute();
+  }
+
+  /**
+   * Reads at most `limit` of the caller's accounts for diagnostics. Secrets, scopes, counts and
+   * the raw sync error are not selected; the error is reduced to a fixed label inside the query.
+   */
+  async listDiagnosticAccounts(
+    scopedDb: DataContextDb,
+    limit: number
+  ): Promise<ConnectorDiagnosticRow[]> {
+    assertDataContextDb(scopedDb);
+
+    const result = await sql<ConnectorDiagnosticRow>`
+      select
+        id,
+        provider_id,
+        status::text as status,
+        revoked_at,
+        last_sync_started_at,
+        last_sync_finished_at,
+        last_sync_status::text as last_sync_status,
+        case
+          when last_sync_error is null or btrim(last_sync_error) = '' then null
+          when lower(btrim(last_sync_error)) in
+            ('auth-error', 'no-active-connection', 'disconnected', 'rate-limited', 'network-error')
+            then lower(btrim(last_sync_error))
+          when last_sync_error ~* '(\y(401|403)\y|unauthori[sz]ed|invalid_grant|auth|forbidden|sign.?in)'
+            then 'auth-error'
+          when last_sync_error ~* '(\y429\y|rate.?limit|quota)' then 'rate-limited'
+          when last_sync_error ~* '(timeout|timed out|econn|enotfound|ehostunreach|network|socket|unreachable)'
+            then 'network-error'
+          else 'sync-error'
+        end as error_label,
+        previous_sync->>'status' as previous_status,
+        previous_sync->>'finishedAt' as previous_finished_at
+      from app.connector_accounts
+      order by created_at desc, id
+      limit ${limit}
+    `.execute(scopedDb.db);
+
+    return result.rows;
   }
 
   async listAdminSafeAccounts(scopedDb: DataContextDb): Promise<ConnectorAccountSafeRow[]> {

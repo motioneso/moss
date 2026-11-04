@@ -330,6 +330,37 @@ describe("platform diagnostics service", () => {
       expect(isInstanceAdmin).not.toHaveBeenCalled();
     });
 
+    it("removes items by byte size when a section is within the row limit but over 16 KB", async () => {
+      const wide = "\u65e5".repeat(120);
+      const recent = Array.from({ length: 10 }, (_, i) => ({
+        ...jobsSection.recent[0]!,
+        queue: `${i}${wide}`,
+        kind: wide,
+        connectorAccountId: wide,
+        errorLabel: wide
+      }));
+      const summaries = Array.from({ length: 10 }, (_, i) => ({
+        queue: `${i}${wide}`,
+        lastSuccessAt: null,
+        lastFailureAt: null,
+        failedLast24h: 1,
+        stuckCount: 0,
+        activeCount: 0
+      }));
+      const raw = { recent, summaries, truncated: false };
+      expect(Buffer.byteLength(JSON.stringify(raw), "utf8")).toBeGreaterThan(16 * 1024);
+      const service = build({
+        isInstanceAdmin: async () => true,
+        readJobs: vi.fn().mockResolvedValue(raw),
+        readConnections: vi.fn().mockResolvedValue(connectionsSection)
+      });
+      const report = await service.observe(scopedDb, ctx, both);
+      expect(Buffer.byteLength(JSON.stringify(report.jobs), "utf8")).toBeLessThanOrEqual(16 * 1024);
+      expect(report.jobs.truncated).toBe(true);
+      expect(report.jobs.recent.length + report.jobs.summaries.length).toBeLessThan(20);
+      expect(report.jobs.recent.length).toBeGreaterThan(0);
+    });
+
     it("drops items from the end of an oversized section and flags it", async () => {
       const big = Array.from({ length: 10 }, (_, i) => ({
         ...jobsSection.recent[0]!,

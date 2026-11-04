@@ -37,6 +37,6 @@ export const platformDiagnosticsFeatures: readonly Feature[] = [
   {
     id: "settings.platformDiagnostics.limits",
     description:
-      "Diagnosis results hold at most 10 items and 16 KB. They never include job payloads, failure text or log lines. Moss cannot yet show application log lines."
+      "Each list in a diagnosis holds at most 10 items, and the jobs and connections sections hold at most 16 KB each. They never include job payloads, failure text or log lines. Moss cannot yet show application log lines."
   }
 ];

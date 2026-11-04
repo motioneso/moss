@@ -203,4 +203,58 @@ describe("job diagnostics reader", () => {
     expect((await read(ids.userA, { queuePrefix: OTHER_QUEUE })).recent).toHaveLength(1);
     expect((await read(ids.userA, { queuePrefix: "diag.%" })).recent).toHaveLength(0);
   });
+
+  it("9. the database only ever returns the allowlisted columns, never data or output", async () => {
+    await clear();
+    await insertJob(
+      QUEUE,
+      { actorUserId: ids.userB, kind: "other-kind", params: { note: MARKER }, extra: MARKER },
+      { state: "failed", output: { message: MARKER } }
+    );
+    await insertJob(
+      QUEUE,
+      { actorUserId: ids.userA, kind: "sync", params: { note: MARKER } },
+      { state: "failed", output: { message: MARKER } }
+    );
+    const rawRows: Record<string, unknown>[] = [];
+    const spy = appDb.withPlugin({
+      transformQuery: (args) => args.node,
+      transformResult: async (args) => {
+        rawRows.push(...(args.result.rows as Record<string, unknown>[]));
+        return args.result;
+      }
+    });
+    const spied = new DataContextRunner(spy);
+    await spied.withDataContext({ actorUserId: ids.userA, requestId: "job-diag-raw" }, (scoped) =>
+      readJobDiagnostics(scoped.db, {
+        actorUserId: ids.userA,
+        limit: 10,
+        queuePrefix: QUEUE,
+        since: new Date(Date.now() - 24 * 60 * 60 * 1000)
+      })
+    );
+    const allowed = new Set([
+      "name",
+      "state",
+      "retry_count",
+      "occurred_at",
+      "owned",
+      "kind",
+      "connector_account_id",
+      "error_label",
+      "last_success",
+      "last_failure",
+      "failed_recent",
+      "stuck",
+      "active"
+    ]);
+    // Context set-up statements also pass through the plugin; only the two job reads matter.
+    const jobRows = rawRows.filter((row) => "name" in row);
+    expect(jobRows.some((row) => row.name === QUEUE)).toBe(true);
+    for (const row of jobRows) {
+      for (const key of Object.keys(row)) expect(allowed.has(key)).toBe(true);
+    }
+    expect(JSON.stringify(jobRows)).not.toContain(MARKER);
+    expect(JSON.stringify(jobRows)).not.toContain("other-kind");
+  });
 });

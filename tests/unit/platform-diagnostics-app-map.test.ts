@@ -17,7 +17,7 @@ describe("app map entries for settings.platformDiagnostics (#3978)", () => {
 
   it("states the limits, the log gap and the Outlook partial-state gap", () => {
     expect(feature("settings.platformDiagnostics.limits")?.description).toContain(
-      "10 items and 16 KB"
+      "at most 10 items, and the jobs and connections sections hold at most 16 KB each"
     );
     expect(feature("settings.platformDiagnostics.limits")?.description).toContain(
       "cannot yet show application log lines"

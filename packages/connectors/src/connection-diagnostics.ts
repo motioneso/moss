@@ -12,37 +12,11 @@ import {
   readOutlookHealth,
   type OutlookCalendarHealth
 } from "./outlook-calendar-jobs.js";
-import { ConnectorsRepository, type ConnectorAccountSafeRow } from "./repository.js";
+import { ConnectorsRepository, type ConnectorDiagnosticRow } from "./repository.js";
 
 export interface ConnectionDiagnosticsDependencies {
-  readonly repository?: Pick<ConnectorsRepository, "listAccounts">;
+  readonly repository?: Pick<ConnectorsRepository, "listDiagnosticAccounts">;
   readonly preferences?: Pick<PreferencesRepository, "get">;
-}
-
-const KNOWN_ERROR_CODES = new Set([
-  "auth-error",
-  "no-active-connection",
-  "disconnected",
-  "rate-limited",
-  "network-error"
-]);
-
-/**
- * Maps a stored sync error to a fixed word. The stored text can carry provider messages, so it
- * is never returned. Unrecognised text becomes "sync-error".
- */
-export function connectionErrorLabel(raw: string | null): string | null {
-  if (!raw) return null;
-  const text = raw.trim().toLowerCase();
-  if (KNOWN_ERROR_CODES.has(text)) return text;
-  if (/\b(401|403)\b|unauthori[sz]ed|invalid_grant|auth|forbidden|sign.?in/.test(text)) {
-    return "auth-error";
-  }
-  if (/\b429\b|rate.?limit|quota/.test(text)) return "rate-limited";
-  if (/timeout|timed out|econn|enotfound|ehostunreach|network|socket|unreachable/.test(text)) {
-    return "network-error";
-  }
-  return "sync-error";
 }
 
 function outlookLabels(health: OutlookCalendarHealth): { status: string; error: string | null } {
@@ -76,7 +50,7 @@ function iso(value: Date | string | null | undefined): string | null {
 }
 
 function observe(
-  account: ConnectorAccountSafeRow,
+  account: ConnectorDiagnosticRow,
   outlook: OutlookCalendarHealth | null
 ): ConnectionObservation {
   const base = {
@@ -105,7 +79,6 @@ function observe(
     };
   }
   const failed = account.last_sync_status === "failed";
-  const previous = account.previous_sync ?? null;
   const status =
     account.status === "error"
       ? "error"
@@ -123,19 +96,17 @@ function observe(
     lastGoodAt:
       account.last_sync_status === "success"
         ? iso(account.last_sync_finished_at)
-        : previous?.status === "success"
-          ? iso(previous.finishedAt)
+        : account.previous_status === "success"
+          ? iso(account.previous_finished_at)
           : null,
     failureCount: failed ? 1 : 0,
-    errorLabel:
-      connectionErrorLabel(account.last_sync_error) ??
-      (failed || account.status === "error" ? "sync-error" : null)
+    errorLabel: account.error_label ?? (failed || account.status === "error" ? "sync-error" : null)
   };
 }
 
 /**
  * Reads the caller's own connections through the connectors repository, so row-level security
- * scopes the list. Errors are returned as fixed labels, never as stored text.
+ * scopes the list. Reads one more row than the limit to detect truncation. Errors are returned as fixed labels, never as stored text.
  */
 export async function readConnectionDiagnostics(
   scopedDb: DataContextDb,
@@ -146,7 +117,7 @@ export async function readConnectionDiagnostics(
   const limit = Math.max(1, Math.min(10, Math.floor(options.limit)));
   const repository = dependencies.repository ?? new ConnectorsRepository();
   const preferences = dependencies.preferences ?? new PreferencesRepository();
-  const accounts = await repository.listAccounts(scopedDb);
+  const accounts = await repository.listDiagnosticAccounts(scopedDb, limit + 1);
   const items: ConnectionObservation[] = [];
   for (const account of accounts.slice(0, limit)) {
     const outlook =
