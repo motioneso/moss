@@ -471,9 +471,9 @@ re-cite any line that moved.
 | Capability                     | Evidence                                                                                                                                                                                             | Finding                                                                                                                                                                  |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | API logger                     | apps/api/src/server.ts:267-269 (`Fastify({ logger: recordingLoggerOptions(options.logger) })`), apps/api/src/recording-logger-options.ts:19-34                                                       | The wrapper adds path redaction and keeps the caller's stream. `false` stays `false`. The sanitizing destination goes in here.                                           |
-| API database handles           | apps/api/src/server.ts:244-252 (app role, and a worker-role handle `workerDb` created before Fastify)                                                                                                | The worker-role handle exists before the logger is built, so the sink can bind it with no reordering in the API.                                                         |
-| Worker logger                  | apps/worker/src/worker.ts:206-209 (`pino({ level, base:{process:"worker"} })`), `workerDb` created at :211                                                                                           | Logger is built before the database handle. Task 2A.5 reorders them. No redaction today.                                                                                 |
-| Two processes                  | scripts/start-jarv1s.ts:182-183 (migrate runs as a one-shot first), :190-199 (worker and API resident)                                                                                               | Migrations finish before either process starts. A missing table is still tolerated (12.4).                                                                               |
+| API database handles           | apps/api/src/server.ts:254 (app role, and a worker-role handle `workerDb` created before Fastify)                                                                                                    | The worker-role handle exists before the logger is built, so the sink can bind it with no reordering in the API.                                                         |
+| Worker logger                  | apps/worker/src/worker.ts:206-209 (`pino({ level, base:{process:"worker"} })`), `workerDb` created at :212                                                                                           | Logger is built before the database handle. Task 2A.5 reorders them. No redaction today.                                                                                 |
+| Two processes                  | scripts/start-jarv1s.ts:182-183 (migrate runs as a one-shot first), :200 (API entry; the worker is the entry above it)                                                                               | Migrations finish before either process starts. A missing table is still tolerated (12.4).                                                                               |
 | Scheduled purge pattern        | packages/settings/src/data-export-schedule.ts:4-12 (queue, cron, `boss.schedule`), packages/settings/src/data-export-jobs.ts:253-275 (`registerSettingsJobWorkers` registers the cleanup worker)     | Worker is the sole cron owner (apps/worker/src/worker.ts:117-136). A second queue in the same registration function follows the same pattern.                            |
 | Security-definer cleanup       | packages/settings/sql/0112_data_export_cleanup_function.sql (policy for the migration owner, definer function, execute granted to the worker role only)                                              | Precedent for a purge and a read function that bypass row policies without any runtime role holding BYPASSRLS.                                                           |
 | Owner-only table precedent     | packages/settings/sql/0108_data_export_jobs.sql (RLS enabled and forced, owner policy on `app.current_actor_user_id()`)                                                                              | Same classification style.                                                                                                                                               |
@@ -482,7 +482,7 @@ re-cite any line that moved.
 | Actor binding on log lines     | packages/module-registry/src/route-guard.ts:297 and :320-323 (the request hook resolves `actorUserId` for module routes only); no `log.child` with an actor exists in apps/api/src                   | Nothing tags a log line with its owner today. Task 2B.1 adds the binding and states which routes it covers. Untagged lines are unowned and metadata-only.                |
 | Existing redaction             | packages/ai/src/adapters/redact.ts:32 (`redactSecrets`); a second copy at packages/cli-runner/src/stderr-redactor.ts                                                                                 | Lives in `@moss/ai`, which depends on `@moss/settings`, so settings cannot import it (Phase 0 finding 10.5 answer 3). Misses URL credentials, cookies and nested errors. |
 | Where a shared module can live | packages/shared/package.json:6-9 (exports map; deps are only module-sdk and priority); apps/api/package.json:23-24 lists settings and shared; apps/worker/package.json:24 lists settings, not shared | `@moss/shared` is a leaf both processes can reach (the worker gains one dependency line). `@moss/settings` already reaches both and depends on shared.                   |
-| Next free migration number     | origin/main highest is 0356 (packages/settings/sql/0356_module_page_activity_surface.sql). Open PRs hold 0346 (PR 3571), 0354 (PR 3868), 0355 (PR 3859)                                              | The next free number is 0357. Collision rule in 12.4.                                                                                                                    |
+| Next free migration number     | origin/main highest is 0356 (packages/ai/sql/0356_module_page_activity_surface.sql). Open PRs hold 0346 (PR 3571), 0354 (PR 3868), 0355 (PR 3859)                                                    | The next free number is 0357. Collision rule in 12.4.                                                                                                                    |
 | App-map metadata               | packages/settings/src/platform-diagnostics-features.ts (added by PR 3981)                                                                                                                            | The `limits` feature there says "Moss cannot yet show application log lines". Phase 2 must change that sentence or it becomes false.                                     |
 | Real chat proof pattern        | package.json scripts `test:uat:*`, tests/uat/run-uat.ts, tests/uat/real-chat-env.ts                                                                                                                  | Real-chat proofs run through the UAT runner, not the Playwright mock specs under tests/e2e (those fake their own responses).                                             |
 
@@ -591,15 +591,37 @@ RETURNS TABLE(
   occurred_at timestamptz, process text, level smallint, component text,
   connection_kind text, event_code text, owned boolean, owner_known boolean,
   message text, context jsonb, truncated boolean)
-LANGUAGE sql SECURITY DEFINER SET search_path = app, pg_temp AS $$ ... $$;
--- Contract for the body: no rows unless app.current_actor_user_id() belongs to a user with
--- is_instance_admin = true; LEAST(p_limit, 50); ORDER BY occurred_at DESC; message and context are
--- NULL unless owner_user_id = app.current_actor_user_id().
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = app, pg_temp AS $$
+  SELECT r.occurred_at, r.process, r.level, r.component, r.connection_kind, r.event_code,
+         (r.owner_user_id = app.current_actor_user_id()) AS owned,
+         (r.owner_user_id IS NOT NULL) AS owner_known,
+         CASE WHEN r.owner_user_id = app.current_actor_user_id() THEN r.message END,
+         CASE WHEN r.owner_user_id = app.current_actor_user_id() THEN r.context END,
+         r.truncated
+  FROM app.diagnostic_log_records r
+  WHERE app.current_actor_is_admin()
+    AND r.occurred_at >= p_since
+    AND r.level >= p_min_level
+    AND (p_component IS NULL OR r.component = p_component)
+    AND (p_connection_kind IS NULL OR r.connection_kind = p_connection_kind)
+  ORDER BY r.occurred_at DESC
+  LIMIT LEAST(GREATEST(p_limit, 1), 50);
+$$;
+-- The admin check is app.current_actor_is_admin() (migration 0050, infra/postgres/migrations/
+-- 0050_multi_user_accounts.sql:27-40): an active user with is_instance_admin = true. It is NOT a
+-- check on the bootstrap owner flag, so an active admin who is not the bootstrap owner passes. A
+-- plain read of app.users by the app role would wrongly reject that admin because the app role
+-- sees only its own user row (the same reason 0050 added the definer helper).
 
 CREATE OR REPLACE FUNCTION app.diagnostic_log_coverage()
 RETURNS TABLE(oldest_at timestamptz, newest_at timestamptz, row_count bigint)
-LANGUAGE sql SECURITY DEFINER SET search_path = app, pg_temp AS $$ ... $$;
--- Same admin gate. Returns the retained time window and count, no content.
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = app, pg_temp AS $$
+  SELECT min(r.occurred_at), max(r.occurred_at), count(*)
+  FROM app.diagnostic_log_records r
+  WHERE app.current_actor_is_admin();
+$$;
+-- Same admin gate. Returns the retained time window and count, no content. A non-admin gets one
+-- row of nulls and zero, which the reader maps to the empty section.
 
 -- Purge: worker role only.
 CREATE OR REPLACE FUNCTION app.purge_diagnostic_log(p_max_age interval, p_max_rows integer)
@@ -669,7 +691,7 @@ error, fatal; default warn), `component` (string, max 80) and `connectionKind` (
 
 ### 12.4 Migration number and collision
 
-At the start of Task 2A.2, run `git fetch` and list the highest number across `packages/*/sql` and
+At the start of Task 2A.2, run `git fetch` and list the highest number across `packages/*/sql`, `packages/*/src/sql` (scripts/check-migration-collisions.ts:11) and
 `infra/postgres/migrations` at origin/main and across open pull requests (the same data
 scripts/check-migration-collisions.ts reads). Use the next free number. On 2026-11-04 that is
 0357; open PRs hold 0346, 0354 and 0355. Run the collision script before the first push and again
@@ -748,7 +770,7 @@ tests/unit/diagnostic-log-destination.test.ts, tests/unit/recording-logger-optio
 - `recordingLoggerOptions` gains an optional second argument `{ sink }`. With an object logger it
   sets `stream` to `createSanitizedLogDestination` wrapping the caller's stream (or stdout). With
   `false` it still returns `false`. A caller's serializers, redact policy and level survive.
-- server.ts builds the sink from the worker-role handle that already exists (:244-252) and closes it
+- server.ts builds the sink from the worker-role handle that already exists (:254) and closes it
   in the server's close hook.
 - Tests: (1) a line with `Authorization: Bearer xyz12345` reaches the destination stream already
   masked and the stored record is masked. Fails if either copy is raw. (2) `logger:false` writes
@@ -896,3 +918,162 @@ pnpm test:uat:3978-logs > /mnt/unity-nvme/scratch/phase2b-uat.log 2>&1; echo "EX
    classification change and needs his word. This plan builds the ruled version.
 2. Retention numbers: 7 days, 50,000 rows, warn and above. Constants, so easy to change later.
 3. Whether `app.readSource` becomes admin-only (Phase 3, unchanged).
+
+### 12.10 Amendments after Codex review (2026-11-04)
+
+This subsection overrides any conflicting text in 12.1 to 12.9. Where 12.5 and 12.6 name "2A" and
+"2B", read them through the four-slice split in 12.10.1. The task bodies still apply, moved as shown.
+
+#### 12.10.1 Four slices, one build session each
+
+| Slice | Content                                                                                                                                               | Moved from            |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| 2A    | Sanitizer in shared, plus every error output path routed through it (12.10.2). No database.                                                           | 2A.1 and new          |
+| 2B    | Database boundaries: table, read and coverage functions, grants, purge function and the hourly purge job. Tests for roles, admin check and the purge. | 2A.2, 2A.5 part       |
+| 2C    | Sink (bounded queue, one flush at a time) and wiring in both processes, with the limits in 12.10.5.                                                   | 2A.3, 2A.4, 2A.5 part |
+| 2D    | Reader section and tool input, owner binding in shared service loggers (12.10.3), allow-listed labels (12.10.4), app map, two-process live proof.     | 2B.0 to 2B.4          |
+
+Each slice ships as its own PR and has its own unpiped verification block (the three commands in
+12.5, plus the integration scripts named for that slice). 2D carries the live-path proof and the
+kill gate. 2B and 2C may be built in either order, but both must merge before 2D.
+
+#### 12.10.2 Error output that bypasses the logger (blocker 1)
+
+The sanitizer must also cover the places that write errors without going through the process
+logger. Seams, each verified on main:
+
+- packages/jobs/src/pg-boss.ts:263-275 (`defaultOnPgBossError` writes `error.message` raw to
+  stderr). Used by the API (apps/api/src/server.ts:252) and the worker (apps/worker/src/worker.ts:223).
+- apps/worker/src/worker.ts:665-676 (crash handler: `console.error` of a JSON line holding the raw
+  `err.message`; it already drops non-Error reasons to "unknown").
+- apps/api/src/process-lifecycle.ts:39 (`createCrashHandler`, the API counterpart) and the API
+  entry block at apps/api/src/server.ts:874-890 (crash hooks, `server.listen`).
+- Startup and shutdown failures: the worker startup check around apps/worker/src/worker.ts:252
+  (the "queues do not exist" error), the `bootstrap` function near :727, and both shutdown paths
+  (worker.ts:697-701 and `shutdownOnSignal` in apps/api/src/process-lifecycle.ts).
+
+Decision: every one of these calls `sanitizeLogText` on any message text before writing it. Crash
+lines, startup failures and shutdown failures are also fed to the sink when it is available, with
+the short bounded wait in 12.10.5, and are not dropped just because the process is exiting.
+`@moss/jobs` gains a dependency on `@moss/shared` if it lacks one.
+
+Tests, one per entry point, each observed failing against the unsanitized code:
+
+1. `defaultOnPgBossError` given an error whose message holds `postgres://u:SECRET-CANARY@h/db`
+   writes a line without the canary.
+2. The worker crash handler given an `Error` whose message holds the canary logs a line without it.
+3. The API crash handler, same.
+4. A startup failure carrying a canary writes sanitized text in both processes.
+5. A shutdown failure carrying a canary writes sanitized text in both processes.
+6. A static check (unit test over the source tree) that no file under apps/api/src, apps/worker/src
+   or packages/jobs/src writes `error.message` to stderr or `console.error` without calling the
+   sanitizer. It fails when a new raw writer is added.
+
+#### 12.10.3 Owner binding in shared service loggers (blocker 2)
+
+A process-wide logger cannot know whose work it is doing. Decision: every logger handed to a
+service that acts for a user is a child bound to `actorUserId` for that one request or job, and the
+sanitizer treats only that top-level field as the owner (12.2). Concretely:
+
+- API composition root: apps/api/src/server.ts:554 builds `createModuleLogger(server.log, "connectors")`
+  once, shared by the OAuth and Google clients. That shared logger stays unowned. The OAuth
+  callback, the Google connection and any other request-scoped call site obtain a per-request child
+  through `withLogOwner(request.log, actorUserId)` after authentication and pass it down as that
+  call's logger. The client classes take an optional per-call `logger` argument that defaults to the
+  shared one.
+- Connector sync: packages/connectors/src/sync-jobs.ts:663 passes `deps.logger` (shared) into the
+  email extraction. `job.data.actorUserId` exists in the job. The sync entry builds
+  `withLogOwner(deps.logger, job.data.actorUserId)` once per job and passes that child to every
+  helper in the job. The auth-failure warning at :345 currently carries `actorScoped: true`. It uses
+  the bound child instead, so the stored owner is the user's id, and the `actorScoped` field is
+  removed.
+- `createModuleLogger` returns a pino child, so `withLogOwner` is applied to that child, and the
+  destination must still see `actorUserId` as a top-level field. Task 2D.0 verifies this with the
+  real logger before any other 2D work.
+
+Tests (2D), using warnings the services really emit, not a fake call:
+
+1. The Google sync with a failing token fetch logs `google-sync auth failed`. The stored record has
+   the user's id as owner and no `actorScoped` field. Fails against the current code.
+2. The same warning for user B is not readable as text by admin A.
+3. An OAuth callback failure for user A stores A as owner.
+4. A call with no bound child logs unowned, never owned by a guessed user.
+5. Two jobs for different users run concurrently and each stores its own owner (no cross-binding
+   through the shared logger).
+
+#### 12.10.4 Labels shown across owners (blocker 3)
+
+Component, connection kind and event code are visible to admins on rows they do not own, so they
+cannot carry free text. Decision: take them only from fixed allow-lists in `@moss/shared`
+(`LOG_COMPONENTS`, `LOG_CONNECTION_KINDS`, `LOG_EVENT_CODES`, each a readonly string array exported
+with a type). The sanitizer maps any value outside its list to `"other"` (component) or null (kind
+and code) and never stores the original. Matching is by exact equality with no transformation, so a
+private value that merely contains a list word does not pass. Message and context stay owner-only.
+
+Tests (negative, each field):
+
+1. A record whose component is `mail-for-alice@example.test` stores `other`. Same for kind and code.
+2. A private marker placed in `component`, `connectionKind` and `eventCode` of user B's record never
+   appears anywhere in the serialized section admin A receives.
+3. Every component, kind and code used by a real emitter in the repo is on its list (a unit test
+   greps the emitters). It fails when a label is added without a list entry.
+
+Adding a label is a one-line change plus its test.
+
+#### 12.10.5 Limits that bound the logging work (blocker 4)
+
+All limits are constants in the sink or sanitizer, each with a test:
+
+- One flush at a time per process. While a flush runs, records wait in the queue.
+- Queue capped at 500 records and 512 KB serialized. When either cap is hit, the oldest queued
+  records are dropped first, then new ones, and a counter feeds the one `log.dropped` summary per
+  minute.
+- Traversal bound applied before masking: the sanitizer stops at depth 6, 200 keys per object, 200
+  items per array and 64 KB of visited text, then truncates, so a huge input never costs unbounded
+  CPU. This bounds work, not only output.
+- Database timeouts: each insert batch runs with a 3-second statement timeout and the flush has a
+  5-second overall deadline. On deadline the batch is dropped and counted.
+- Shutdown: `close()` waits at most 2 seconds for the final flush, then abandons it.
+- Output stall: if the destination stream reports backpressure, records to the stream are dropped
+  once its buffer reaches 256 KB, and the sink path continues on its own. The logger never blocks the
+  event loop waiting on stdout.
+
+Tests:
+
+1. A database that never answers: 1,000 `enqueue` calls complete in under 50 ms, only one flush is
+   running, the flush ends at its deadline, and `close()` returns within 2 seconds. Fails if flushes
+   stack up or shutdown hangs.
+2. A stalled output stream: the process keeps handling records, memory stays under the cap, and sink
+   writes continue.
+3. A 50 MB nested object is truncated within a fixed work bound (assert on visited-node count, not
+   only on time). Fails if the traversal runs before the cap.
+4. A cap hit drops by the stated rule and the summary count is exact.
+
+#### 12.10.6 Caps are purge targets, not hard limits (non-blocker 5)
+
+The 50,000-row and 7-day caps are targets enforced by the hourly purge job, not hard limits. At 200
+records a minute per process and two processes, up to 24,000 records can arrive between purges, so
+the table can briefly hold about 74,000 rows. The app-map entry and the 12.2 bounds bullet must say
+this. Test: with 50,000 existing rows and 24,000 inserted, the reader still honours its own limit
+of 50, and the purge brings the count back to 50,000 or fewer.
+
+#### 12.10.7 Admin check and role tests (non-blockers 6 and 7)
+
+- The read function body is written out in 12.3. Added tests: an active admin who is not the
+  bootstrap owner reads rows (fails with a plain users-table check); a deactivated admin and a
+  non-admin get nothing; a bootstrap owner who has been demoted is refused.
+- The worker role cannot read or delete rows directly (permission errors) and cannot execute the
+  read or coverage functions. The app role cannot insert. The API's writes use its existing
+  worker-role handle at apps/api/src/server.ts:254.
+- Live proof (2D) uses a separate canary secret per process: one planted in a real API warning and a
+  different one planted in a real worker warning. The test then removes each sanitizer in turn (API
+  destination, worker destination, stored copy, and each error path in 12.10.2) and must fail every
+  time. It also asserts neither canary appears in process output, the table or the chat answer.
+
+#### 12.10.8 Citation fixes (non-blocker 8)
+
+Applied in place in 12.1, 12.4 and 12.5: API worker-role handle apps/api/src/server.ts:254, worker
+database apps/worker/src/worker.ts:212, API entry scripts/start-jarv1s.ts:200, migration 0356 is
+packages/ai/sql/0356_module_page_activity_surface.sql, and the manual next-number search covers
+`packages/*/src/sql` as well (scripts/check-migration-collisions.ts:11). The builder re-runs the
+number search against origin/main and open pull requests at the start of slice 2B.
