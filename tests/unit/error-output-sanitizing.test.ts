@@ -113,30 +113,6 @@ describe("error entry points never write a secret", () => {
 
 /** Directories whose error output must be sanitized. */
 const SCANNED_DIRS = ["apps/api/src", "apps/worker/src", "packages/jobs/src"];
-const RAW_WRITER =
-  /\b(?:console\.(?:log|info|warn|error|debug|trace)|process\.(?:stderr|stdout)\.write)\s*\(/g;
-const SANITIZED_ARGUMENT = /\b(?:sanitizeLog\w*|writeSanitizedFatal)\s*\(/;
-
-/** Text of a call's argument list, from just after the opening paren to its matching paren. */
-function callArguments(text: string, open: number): string {
-  let depth = 1;
-  let quote = "";
-  for (let i = open; i < text.length; i++) {
-    const ch = text[i]!;
-    if (quote) {
-      if (ch === "\\") i++;
-      else if (ch === quote) quote = "";
-    } else if (ch === '"' || ch === "'" || ch === "`") {
-      quote = ch;
-    } else if (ch === "(") {
-      depth++;
-    } else if (ch === ")" && --depth === 0) {
-      return text.slice(open, i);
-    }
-  }
-  return text.slice(open);
-}
-
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir)) {
@@ -147,10 +123,110 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
+const RAW_WRITER =
+  /\b(?:console\.(?:log|info|warn|error|debug|trace)|process\.(?:stderr|stdout)\.write)\s*\(/g;
+const SANITIZER_CALL = /^(?:sanitizeLog\w*|writeSanitizedFatal)\s*\(/;
+
+/** Index just past the quote or template literal that starts at `i`. */
+function skipQuoted(text: string, i: number): number {
+  const quote = text[i]!;
+  let j = i + 1;
+  while (j < text.length) {
+    const ch = text[j]!;
+    if (ch === "\\") j += 2;
+    else if (quote === "`" && ch === "$" && text[j + 1] === "{") j = skipTemplateExpr(text, j + 2);
+    else if (ch === quote) return j + 1;
+    else j++;
+  }
+  return text.length;
+}
+
+/** Index just past the `}` that closes a template expression whose body starts at `i`. */
+function skipTemplateExpr(text: string, i: number): number {
+  let depth = 1;
+  let j = i;
+  while (j < text.length) {
+    const ch = text[j]!;
+    if (ch === '"' || ch === "'" || ch === "`") j = skipQuoted(text, j);
+    else {
+      if (ch === "{") depth++;
+      else if (ch === "}" && --depth === 0) return j + 1;
+      j++;
+    }
+  }
+  return text.length;
+}
+
+/** Split a call's arguments at top-level commas. `end` is the index of the closing paren. */
+function splitArguments(text: string, open: number): { args: string[]; end: number } {
+  const args: string[] = [];
+  let depth = 0;
+  let start = open;
+  let i = open;
+  while (i < text.length) {
+    const ch = text[i]!;
+    if (ch === '"' || ch === "'" || ch === "`") {
+      i = skipQuoted(text, i);
+      continue;
+    }
+    if (ch === "(" || ch === "[" || ch === "{") depth++;
+    else if (ch === ")" || ch === "]" || ch === "}") {
+      if (depth === 0) {
+        args.push(text.slice(start, i));
+        return { args, end: i };
+      }
+      depth--;
+    } else if (ch === "," && depth === 0) {
+      args.push(text.slice(start, i));
+      start = i + 1;
+    }
+    i++;
+  }
+  args.push(text.slice(start));
+  return { args, end: text.length };
+}
+
+/** True when the whole argument is a call to a sanitizer. */
+function isSanitizerCall(arg: string): boolean {
+  const match = SANITIZER_CALL.exec(arg);
+  if (!match) return false;
+  return splitArguments(arg, match[0].length).end === arg.length - 1;
+}
+
+/** Expression texts inside a template literal, or null when `arg` is not one whole template. */
+function templateExpressions(arg: string): string[] | null {
+  if (arg[0] !== "`" || skipQuoted(arg, 0) !== arg.length) return null;
+  const out: string[] = [];
+  let j = 1;
+  while (j < arg.length - 1) {
+    if (arg[j] === "\\") j += 2;
+    else if (arg[j] === "$" && arg[j + 1] === "{") {
+      const end = skipTemplateExpr(arg, j + 2);
+      out.push(arg.slice(j + 2, end - 1).trim());
+      j = end;
+    } else j++;
+  }
+  return out;
+}
+
 /**
- * Return `file:line` for every console.* or stdout/stderr write whose own arguments are not
- * wrapped in a sanitizer call and that has no log-safe marker on its line or the line before.
- * A sanitizer call elsewhere nearby does not count.
+ * An argument is safe when it is a plain string literal, a whole call to a sanitizer, or a
+ * template whose every interpolation is itself a sanitizer call. Text that merely mentions a
+ * sanitizer inside a string does not count.
+ */
+function isSafeArgument(raw: string): boolean {
+  const arg = raw.trim();
+  if (arg === "") return true;
+  if (/^(["'])(?:\\.|(?!\1)[^\\])*\1$/s.test(arg)) return true;
+  const expressions = templateExpressions(arg);
+  if (expressions) return expressions.every(isSanitizerCall);
+  return isSanitizerCall(arg);
+}
+
+/**
+ * Return `file:line` for every console.* or stdout/stderr write with an argument that is not
+ * safe, unless a log-safe marker sits on its line or the line before. Each argument is judged on
+ * its own, so one sanitized argument does not excuse a raw one beside it.
  */
 export function findRawErrorWriters(files: Array<{ path: string; text: string }>): string[] {
   const offenders: string[] = [];
@@ -158,8 +234,8 @@ export function findRawErrorWriters(files: Array<{ path: string; text: string }>
     const lines = text.split("\n");
     for (const match of text.matchAll(RAW_WRITER)) {
       const index = match.index ?? 0;
-      const args = callArguments(text, index + match[0].length);
-      if (SANITIZED_ARGUMENT.test(args)) continue;
+      const { args } = splitArguments(text, index + match[0].length);
+      if (args.every(isSafeArgument)) continue;
       const line = text.slice(0, index).split("\n").length;
       const nearby = `${lines[line - 2] ?? ""}\n${lines[line - 1] ?? ""}`;
       if (/log-safe:/.test(nearby)) continue;
@@ -168,7 +244,6 @@ export function findRawErrorWriters(files: Array<{ path: string; text: string }>
   }
   return offenders;
 }
-
 describe("process loggers use the sanitized output stream", () => {
   it("builds the worker logger on the sanitizing destination", () => {
     const text = readFileSync(join(__dirname, "..", "..", "apps/worker/src/worker.ts"), "utf8");
@@ -232,6 +307,28 @@ describe("source scan for raw error writers", () => {
   it("handles nested calls and quotes inside the arguments", () => {
     const ok = [
       { path: "n.ts", text: 'console.error(`x ${sanitizeLogText(String(e))} (a)`, ")");' }
+    ];
+    expect(findRawErrorWriters(ok)).toEqual([]);
+  });
+
+  it("judges each argument on its own", () => {
+    const text = "console.error(sanitizeLogText('safe'), err.message);";
+    expect(findRawErrorWriters([{ path: "m.ts", text }])).toEqual(["m.ts:1"]);
+  });
+
+  it("rejects a string that only mentions a sanitizer call", () => {
+    const planted = [
+      { path: "q1.ts", text: 'console.error("sanitizeLogText(fake)" + err.message);' },
+      { path: "q2.ts", text: "console.error(`sanitizeLogText(fake) ${err.message}`);" },
+      { path: "q3.ts", text: "console.error(err.message, 'sanitizeLogText(fake)');" }
+    ];
+    expect(findRawErrorWriters(planted)).toEqual(["q1.ts:1", "q2.ts:1", "q3.ts:1"]);
+  });
+
+  it("accepts plain string literals and sanitized templates", () => {
+    const ok = [
+      { path: "k1.ts", text: 'console.log("worker ready");' },
+      { path: "k2.ts", text: "console.error(`x ${sanitizeLogText(e.message)} y`);" }
     ];
     expect(findRawErrorWriters(ok)).toEqual([]);
   });

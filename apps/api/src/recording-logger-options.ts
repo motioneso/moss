@@ -1,7 +1,7 @@
 import type { FastifyServerOptions } from "fastify";
 import {
   createSanitizedLogDestination,
-  sanitizingLogFormatters,
+  createSanitizingFormatters,
   type LogWriteTarget
 } from "@moss/shared/log-sanitizer";
 const recordingSecretPaths = [
@@ -37,7 +37,13 @@ export function recordingLoggerOptions(
   return {
     ...configured,
     stream: createSanitizedLogDestination(target ?? process.stdout),
-    formatters: { ...configured.formatters, ...sanitizingLogFormatters },
+    formatters: {
+      ...configured.formatters,
+      ...createSanitizingFormatters({
+        log: configured.formatters?.log,
+        serializerKeys: Object.keys(configured.serializers ?? {})
+      })
+    },
     redact: {
       ...(existing && !Array.isArray(existing) ? existing : {}),
       paths: [...new Set([...paths, ...recordingSecretPaths])]

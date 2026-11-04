@@ -264,6 +264,7 @@ export interface PgBossClientHooks {
 export function defaultOnPgBossError(error: Error): void {
   // Single-line structured JSON for log scrapers. We serialise only name+message, never the raw
   // error object, and mask the text because some driver errors carry the connection string.
+  // log-safe: name and message pass through sanitizeLogText inside the JSON object
   process.stderr.write(
     `${JSON.stringify({
       level: "error",

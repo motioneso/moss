@@ -41,8 +41,17 @@ const LEGACY_PATTERNS: readonly RegExp[] = [
   /(["']?(?:api[_-]?key|access[_-]?token|auth(?:orization)?|client[_-]?secret|password|secret|token|key)["']?\s*:\s*)(["']?)([^"'\s,}]+)\2/gi
 ];
 
-const AUTHORITY_END = /[\s/?#"']/;
 const SCHEME_CHAR = /[a-z0-9+.-]/i;
+
+/**
+ * End of a URL authority. Whitespace or a path, query or fragment delimiter. Quote characters
+ * can be part of a password, so they do not end it. The cost is that a JSON field after a URL
+ * can be masked along with it, which hides more than needed and never less.
+ */
+function isAuthorityEnd(text: string, index: number): boolean {
+  const ch = text[index]!;
+  return ch === "/" || ch === "?" || ch === "#" || /\s/.test(ch);
+}
 
 /**
  * Mask `scheme://user:password@host` in one linear pass (a regex here backtracks quadratically
@@ -63,7 +72,7 @@ function maskUrlCredentials(text: string): string {
     while (start < marker && !/[a-z]/i.test(text[start]!)) start++;
     if (start === marker) continue;
     let end = from;
-    while (end < text.length && !AUTHORITY_END.test(text[end]!)) end++;
+    while (end < text.length && !isAuthorityEnd(text, end)) end++;
     const authority = text.slice(from, end);
     const firstAt = authority.indexOf("@");
     const colon = authority.indexOf(":");
@@ -78,13 +87,30 @@ function maskUrlCredentials(text: string): string {
 }
 
 /** An authority that ends the text without a terminator may hold the start of a password. */
-const DANGLING_AUTHORITY = /[a-z][a-z0-9+.-]{0,31}:\/\/[^\s/?#"']*$/i;
+const DANGLING_AUTHORITY = /[a-z][a-z0-9+.-]{0,31}:\/\/[^\s/?#]*$/i;
 
 function dropDanglingAuthority(text: string): string {
-  const tail = text.slice(-2100);
-  const match = DANGLING_AUTHORITY.exec(tail);
+  const match = DANGLING_AUTHORITY.exec(text);
   if (!match) return text;
-  return `${text.slice(0, text.length - tail.length + match.index)}[truncated]`;
+  return `${text.slice(0, match.index)}[truncated]`;
+}
+
+/** Input longer than this is never read. Only its length is reported. */
+const HARD_INPUT_CHARS = 1_000_000;
+
+/**
+ * Mask, then cut. Credentials in a URL are masked across the whole input with the linear scan
+ * before any cut, so a long password never leaves its first characters behind. Input past the
+ * hard ceiling is dropped without being read.
+ */
+function maskAndCut(input: string, maxChars: number): { text: string; cut: boolean } {
+  if (input.length > HARD_INPUT_CHARS) {
+    return { text: `[truncated ${input.length} chars]`, cut: true };
+  }
+  if (input.length <= maxChars) return { text: redactSecrets(input), cut: false };
+  const urlMasked = maskUrlCredentials(input);
+  const masked = redactSecrets(urlMasked.slice(0, maxChars));
+  return { text: dropDanglingAuthority(masked), cut: true };
 }
 
 /** Whole header value up to the end of the line or the closing JSON quote. */
@@ -148,17 +174,15 @@ function sanitizeString(value: string, budget: Budget): string {
     return "[truncated]";
   }
   const room = Math.min(budget.text, LOG_LIMITS.maxStringChars);
-  let input = value;
-  let cut = false;
-  if (input.length > room) {
-    input = input.slice(0, room);
-    cut = true;
-    budget.cut = true;
-  }
-  budget.text -= input.length;
-  const masked = redactSecrets(input);
-  // Masking runs before any cut, and a cut that lands inside an authority drops its start.
-  return cut ? dropDanglingAuthority(masked) : masked;
+  const result = maskAndCut(value, room);
+  if (result.cut) budget.cut = true;
+  budget.text -= Math.min(value.length, room);
+  return result.text;
+}
+
+/** A key can carry a secret too, so it is masked and bounded like a value. */
+function sanitizeKey(key: string): string {
+  return maskAndCut(key, 256).text;
 }
 
 /** Cut masked text to a byte limit and drop an authority the cut may have split. */
@@ -167,14 +191,20 @@ function cutMasked(text: string, maxBytes: number): { text: string; cut: boolean
   return result.cut ? { text: dropDanglingAuthority(result.text), cut: true } : result;
 }
 
-function isBinary(value: object): boolean {
-  if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) return true;
-  if (typeof SharedArrayBuffer !== "undefined" && value instanceof SharedArrayBuffer) return true;
-  // The shapes JSON.stringify gives a Buffer or a typed array before the line is parsed back.
+/** Byte size of a binary value that needs no key listing, or -1 when the value is not one. */
+function binarySize(value: object): number {
+  if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) return value.byteLength;
+  if (typeof SharedArrayBuffer !== "undefined" && value instanceof SharedArrayBuffer) {
+    return value.byteLength;
+  }
+  // The shape JSON.stringify gives a Buffer.
   const asBuffer = value as { type?: unknown; data?: unknown };
-  if (asBuffer.type === "Buffer" && Array.isArray(asBuffer.data)) return true;
-  if (Array.isArray(value)) return false;
-  const keys = Object.keys(value);
+  if (asBuffer.type === "Buffer" && Array.isArray(asBuffer.data)) return asBuffer.data.length;
+  return -1;
+}
+
+/** Typed arrays after a JSON round trip are objects keyed "0", "1", "2" with byte values. */
+function looksLikeByteMap(value: object, keys: string[]): boolean {
   if (keys.length < 4) return false;
   for (let i = 0; i < Math.min(keys.length, 16); i++) {
     const v = (value as Record<string, unknown>)[keys[i]!];
@@ -192,20 +222,18 @@ function walk(value: unknown, depth: number, seen: WeakSet<object>, budget: Budg
   if (typeof value === "symbol" || typeof value === "function") return "[unserializable]";
   const obj = value as object;
   if (seen.has(obj)) return "[circular]";
-  if (isBinary(obj)) {
-    const size = ArrayBuffer.isView(obj)
-      ? obj.byteLength
-      : obj instanceof ArrayBuffer
-        ? obj.byteLength
-        : Object.keys(obj).length;
-    return `[binary ${size} bytes]`;
+  if (obj instanceof Date) {
+    return Number.isNaN(obj.getTime()) ? "Invalid Date" : obj.toISOString();
   }
   // One budget for the whole record, so a shared sub-object cannot be expanded again and again.
+  // It is checked before any key is listed.
   if (budget.nodes <= 0) {
     budget.cut = true;
     return "[truncated]";
   }
   budget.nodes -= 1;
+  const size = binarySize(obj);
+  if (size >= 0) return `[binary ${size} bytes]`;
   if (depth >= LOG_LIMITS.maxDepth) {
     budget.cut = true;
     return "[truncated]";
@@ -220,6 +248,9 @@ function walk(value: unknown, depth: number, seen: WeakSet<object>, budget: Budg
       }
       return items;
     }
+    // One key listing per object serves both the binary check and the copy.
+    const keys = Object.keys(obj);
+    if (looksLikeByteMap(obj, keys)) return `[binary ${keys.length} bytes]`;
     const out: Record<string, unknown> = {};
     if (obj instanceof Error) {
       out.name = sanitizeString(obj.name, budget);
@@ -234,23 +265,52 @@ function walk(value: unknown, depth: number, seen: WeakSet<object>, budget: Budg
       if (withExtras.errors !== undefined)
         out.errors = walk(withExtras.errors, depth + 1, seen, budget);
     }
-    let count = 0;
-    for (const key in obj) {
-      if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
-      if (count >= LOG_LIMITS.maxKeys) {
-        budget.cut = true;
-        out._more = true;
-        break;
-      }
-      count += 1;
-      if (key in out) continue;
-      const child = (obj as Record<string, unknown>)[key];
-      out[key] = SECRET_KEY.test(key) ? LOG_REDACTED : walk(child, depth + 1, seen, budget);
-    }
+    copyKeys(obj, keys, out, depth, seen, budget, undefined);
     return out;
   } finally {
     seen.delete(obj);
   }
+}
+
+/** Copy up to maxKeys keys into `out`, masking secret keys, key text and values. */
+function copyKeys(
+  obj: object,
+  keys: string[],
+  out: Record<string, unknown>,
+  depth: number,
+  seen: WeakSet<object>,
+  budget: Budget,
+  keep: ReadonlySet<string> | undefined
+): void {
+  let count = 0;
+  for (const key of keys) {
+    if (count >= LOG_LIMITS.maxKeys) {
+      budget.cut = true;
+      out._more = true;
+      break;
+    }
+    count += 1;
+    const safeKey = sanitizeKey(key);
+    if (safeKey in out) continue;
+    const child = (obj as Record<string, unknown>)[key];
+    if (SECRET_KEY.test(key)) out[safeKey] = LOG_REDACTED;
+    else if (keep?.has(key)) out[safeKey] = child;
+    else out[safeKey] = walk(child, depth + 1, seen, budget);
+  }
+}
+
+/**
+ * Sanitize the object a logger call merges into a record. Values under `keep` are left for the
+ * logger's own serializers (request, response, error), and the final line is masked afterwards.
+ * Everything else is bounded and masked here, before pino serializes it.
+ */
+export function sanitizeLogContext(
+  obj: Record<string, unknown>,
+  keep: ReadonlySet<string>
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  copyKeys(obj, Object.keys(obj), out, -1, new WeakSet(), newBudget(), keep);
+  return out;
 }
 
 function newBudget(): Budget {
@@ -266,23 +326,33 @@ export function sanitizeLogValue(value: unknown): unknown {
   return walk(value, 0, new WeakSet(), newBudget());
 }
 
+/** Keys whose values pino's own serializers shape (Fastify request, response and error). */
+const DEFAULT_SERIALIZED_KEYS = ["req", "res", "err"];
+
 /**
- * Pino formatter for the merge object. It runs before pino serializes the record, so a huge or
- * heavily shared object is bounded first. A value that cannot be walked is replaced and counted.
+ * Pino formatters that bound and mask the merge object before pino serializes it. Values under
+ * serializer keys are left alone for their serializers, and a caller's own log formatter runs
+ * first. A record that cannot be walked is replaced and counted.
  */
-export const sanitizingLogFormatters = {
-  log(object: Record<string, unknown>): Record<string, unknown> {
-    try {
-      const walked = sanitizeLogValue(object);
-      return walked !== null && typeof walked === "object"
-        ? (walked as Record<string, unknown>)
-        : {};
-    } catch {
-      LOG_DROP_COUNTER.count += 1;
-      return { _dropped: true };
+export function createSanitizingFormatters(
+  options: {
+    log?: (object: Record<string, unknown>) => Record<string, unknown>;
+    serializerKeys?: Iterable<string>;
+  } = {}
+): { log(object: Record<string, unknown>): Record<string, unknown> } {
+  const keep = new Set([...DEFAULT_SERIALIZED_KEYS, ...(options.serializerKeys ?? [])]);
+  return {
+    log(object) {
+      try {
+        const shaped = options.log ? options.log(object) : object;
+        return sanitizeLogContext(shaped, keep);
+      } catch {
+        LOG_DROP_COUNTER.count += 1;
+        return { _dropped: true };
+      }
     }
-  }
-};
+  };
+}
 
 export interface SanitizedLogRecord {
   readonly message: string;

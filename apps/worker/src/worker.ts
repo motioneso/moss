@@ -7,7 +7,7 @@ import { sql } from "kysely";
 import {
   createSanitizedLogDestination,
   sanitizeLogText,
-  sanitizingLogFormatters,
+  createSanitizingFormatters,
   writeSanitizedFatal
 } from "@moss/shared/log-sanitizer";
 
@@ -214,7 +214,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     {
       level: process.env.LOG_LEVEL ?? "info",
       base: { process: "worker" },
-      formatters: sanitizingLogFormatters
+      formatters: createSanitizingFormatters()
     },
     createSanitizedLogDestination(process.stdout)
   );
