@@ -1,8 +1,14 @@
 import type { DataContextDb, MossActionAuditLog, MossErrorLog } from "@moss/db";
 import type { HostDiagnosticsDto } from "@moss/shared";
 import type { AppMapReadService, SourceSearchResult, SourceInspector } from "@moss/settings";
-import { aggregateModuleDiagnostics } from "@moss/module-sdk";
+import {
+  aggregateModuleDiagnostics,
+  EMPTY_CONNECTIONS_SECTION,
+  EMPTY_JOBS_SECTION
+} from "@moss/module-sdk";
 import type {
+  ConnectionsSection,
+  JobsSection,
   ModuleDiagnosticContextRunner,
   ModuleDiagnosticObservation,
   RegisteredModuleDiagnosticProvider
@@ -34,6 +40,14 @@ export interface ActionAuditObservation {
   readonly requestId: string | null;
 }
 
+export type {
+  ConnectionObservation,
+  ConnectionsSection,
+  JobRunObservation,
+  JobsSection,
+  JobSummaryObservation
+} from "@moss/module-sdk";
+
 export interface PlatformDiagnosticsQuery {
   readonly domain?: string;
   readonly include?: readonly (
@@ -42,6 +56,8 @@ export interface PlatformDiagnosticsQuery {
     | "modules"
     | "errors"
     | "actions"
+    | "jobs"
+    | "connections"
     | "source"
   )[];
   readonly query?: string;
@@ -55,6 +71,8 @@ export interface PlatformDiagnosticsReport {
   readonly modules: readonly ModuleDiagnosticObservation[];
   readonly errors: readonly StructuredErrorObservation[];
   readonly actions: readonly ActionAuditObservation[];
+  readonly jobs: JobsSection;
+  readonly connections: ConnectionsSection;
   readonly source: SourceSearchResult | null;
   readonly redactions: readonly string[];
 }
@@ -109,6 +127,39 @@ function includeSet(query: PlatformDiagnosticsQuery | undefined): ReadonlySet<Di
   return new Set(query?.include ?? ["version", "runtime", "modules", "errors", "actions"]);
 }
 
+/** Largest serialized size of one admin section. */
+const SECTION_MAX_BYTES = 16 * 1024;
+
+function byteLength(value: unknown): number {
+  return Buffer.byteLength(JSON.stringify(value), "utf8");
+}
+
+/** Drops items from the end until the section fits, and flags the section as truncated. */
+function capSection<T extends { readonly truncated: boolean }>(
+  section: T,
+  lists: readonly (keyof T)[],
+  limit: number
+): T {
+  const copy = { ...section } as Record<keyof T, unknown> & T;
+  let truncated = section.truncated;
+  for (const name of lists) {
+    const items = copy[name] as readonly unknown[];
+    if (items.length > limit) {
+      (copy as Record<keyof T, unknown>)[name] = items.slice(0, limit);
+      truncated = true;
+    }
+  }
+  while (byteLength({ ...copy, truncated }) > SECTION_MAX_BYTES) {
+    const key = lists
+      .filter((name) => (copy[name] as readonly unknown[]).length > 0)
+      .sort((a, b) => byteLength(copy[b] as unknown[]) - byteLength(copy[a] as unknown[]))[0];
+    if (!key) break;
+    (copy as Record<keyof T, unknown>)[key] = (copy[key] as readonly unknown[]).slice(0, -1);
+    truncated = true;
+  }
+  return { ...copy, truncated };
+}
+
 export function createPlatformDiagnosticsService(dependencies: {
   readonly appMap: Pick<AppMapReadService, "getBuildInfo">;
   readonly sourceInspector?: Pick<SourceInspector, "search">;
@@ -120,10 +171,22 @@ export function createPlatformDiagnosticsService(dependencies: {
   readonly runInContext: ModuleDiagnosticContextRunner;
   readonly isInstanceAdmin: (scopedDb: DataContextDb, actorUserId: string) => Promise<boolean>;
   readonly assertDiagnosticsSafe: (dto: HostDiagnosticsDto) => void;
+  /** Admin-only readers; absent means the section is reported as redacted. */
+  readonly readJobs?: (
+    scopedDb: DataContextDb,
+    ctx: { readonly actorUserId: string; readonly requestId: string },
+    opts: { readonly limit: number; readonly queuePrefix?: string; readonly since: Date }
+  ) => Promise<JobsSection>;
+  readonly readConnections?: (
+    scopedDb: DataContextDb,
+    ctx: { readonly actorUserId: string; readonly requestId: string },
+    opts: { readonly limit: number }
+  ) => Promise<ConnectionsSection>;
   readonly onProviderError?: (moduleId: string, errorName: string) => void;
 }): PlatformDiagnosticsService {
   return {
     async observe(scopedDb, ctx, query) {
+      if (!ctx.actorUserId) throw new Error("platform diagnostics requires an actor");
       const include = includeSet(query);
       const limit = limitFor(query);
       const redactions: string[] = [];
@@ -171,6 +234,32 @@ export function createPlatformDiagnosticsService(dependencies: {
             .slice(0, limit)
             .map(projectAction)
         : [];
+      // Live lookup on every call. Never cached, never read from tool arguments.
+      let jobs: JobsSection = EMPTY_JOBS_SECTION;
+      let connections: ConnectionsSection = EMPTY_CONNECTIONS_SECTION;
+      if (include.has("jobs") || include.has("connections")) {
+        const admin = await dependencies.isInstanceAdmin(scopedDb, ctx.actorUserId);
+        if (include.has("jobs")) {
+          if (admin && dependencies.readJobs) {
+            jobs = capSection(
+              await dependencies.readJobs(scopedDb, ctx, {
+                limit,
+                ...(query?.domain ? { queuePrefix: query.domain } : {}),
+                since: new Date(Date.now() - 24 * 60 * 60 * 1000)
+              }),
+              ["recent", "summaries"],
+              limit
+            );
+          } else redactions.push("jobs");
+        }
+        if (include.has("connections")) {
+          if (admin && dependencies.readConnections) {
+            connections = capSection(await dependencies.readConnections(scopedDb, ctx, { limit }), [
+              "items"
+            ]);
+          } else redactions.push("connections");
+        }
+      }
       const source =
         include.has("source") && query?.query && dependencies.sourceInspector
           ? await dependencies.sourceInspector.search({ query: query.query, limit })
@@ -184,6 +273,8 @@ export function createPlatformDiagnosticsService(dependencies: {
         modules,
         errors,
         actions,
+        jobs,
+        connections,
         source,
         redactions
       };
