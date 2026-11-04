@@ -243,6 +243,7 @@ import {
   registerSourceMonitorWorkers,
   sharesSubjectToken,
   parseEmailSourceRef,
+  readConnectionDiagnostics,
   type ActionRowRelevancePort,
   type EmailTaskCreationPort,
   type GoogleApiClient,
@@ -282,6 +283,7 @@ import {
   assertMetadataOnlyPayload,
   createPushQueuePort,
   FOUNDATION_QUEUES,
+  readJobDiagnostics,
   registerDataContextWorker,
   sendJob,
   MODULE_BUILD_QUEUE,
@@ -3951,6 +3953,14 @@ export function registerBuiltInApiRoutes(
       return user?.is_instance_admin === true;
     },
     assertDiagnosticsSafe,
+    readJobs: (scopedDb, ctx, opts) =>
+      readJobDiagnostics(scopedDb.db, {
+        actorUserId: ctx.actorUserId,
+        limit: opts.limit,
+        queuePrefix: opts.queuePrefix,
+        since: opts.since
+      }),
+    readConnections: (scopedDb, _ctx, opts) => readConnectionDiagnostics(scopedDb, opts),
     onProviderError: (moduleId, errorName) =>
       server.log.warn({ moduleId, errorName }, "module diagnostics provider was dropped")
   });
