@@ -1,10 +1,12 @@
 import { dataContextBrand, type DataContextDb } from "@moss/db";
+import { sanitizeAssistantToolResult } from "@moss/ai";
 import { MODULE_DIAGNOSTIC_LIMITS } from "@moss/module-sdk";
 import {
   computeFeedProvenance,
   createNewsProvenanceDiagnosticsProvider,
   type NewsFeedProvenanceInputs
 } from "@moss/news";
+import { platformDiagnosticsOutputSchema } from "@moss/settings";
 import { describe, expect, it, vi } from "vitest";
 
 // The unit test has no database, so the savepoint wrapper just runs the work.
@@ -197,6 +199,7 @@ describe("news provenance diagnostics provider", () => {
   it("reports unknown when there is no feed yet", async () => {
     const result = await provider(inputs([], { snapshot: null })).observe(scopedDb, ctx);
     expect(result?.status).toBe("unknown");
+    for (const key of STORY_COUNT_KEYS) expect(result?.facts?.[key]).toBeNull();
   });
 
   it("is degraded and qualifies the counts when no dismissal source is available", async () => {
@@ -236,7 +239,81 @@ describe("news provenance diagnostics provider", () => {
     });
     const result = await provider(expired).observe(scopedDb, ctx);
     expect(result?.status).toBe("degraded");
-    expect(result?.facts).toMatchObject({ totalStories: null, storiesFromBuiltInSources: null });
+    for (const key of STORY_COUNT_KEYS) expect(result?.facts?.[key]).toBeNull();
     expect(result?.summary).toContain("unknown");
+  });
+});
+
+const STORY_COUNT_KEYS = [
+  "totalStories",
+  "storiesHiddenFromSavedFeed",
+  "storiesFromBuiltInSources",
+  "storiesFromAddedSources",
+  "storiesFoundByTopicSearch",
+  "storiesMatchingFollowedTopic"
+] as const;
+
+/** Runs the provider's observation through the same output filter the tool uses. */
+async function throughToolOutput(input: NewsFeedProvenanceInputs, feedback?: () => unknown) {
+  const observation = await provider(input, feedback).observe(scopedDb, ctx);
+  const sanitized = sanitizeAssistantToolResult(platformDiagnosticsOutputSchema, {
+    data: {
+      observedAt: "2026-11-04T12:00:00.000Z",
+      build: { version: "v", buildId: "b" },
+      runtime: null,
+      modules: [observation],
+      errors: [],
+      actions: [],
+      jobs: { recent: [], summaries: [], truncated: false },
+      connections: { items: [], truncated: false },
+      source: null,
+      redactions: []
+    }
+  });
+  return (sanitized.data.modules as { facts: Record<string, unknown> }[])[0]!.facts;
+}
+
+describe("news provenance facts through the tool output filter", () => {
+  it("keeps every count and the dismissal result for a current feed", async () => {
+    const facts = await throughToolOutput(
+      inputs([story("1", "a.example.org"), story("2", "b.example.net", { preferred: false })])
+    );
+    expect(facts).toMatchObject({
+      totalStories: 2,
+      storiesHiddenFromSavedFeed: 0,
+      storiesFromBuiltInSources: 1,
+      storiesFromAddedSources: 0,
+      storiesFoundByTopicSearch: 1,
+      storiesMatchingFollowedTopic: 0,
+      addedSourceCount: 0,
+      followedTopicCount: 0,
+      excludedSourceCount: 0,
+      dismissalsApplied: true
+    });
+  });
+
+  it("keeps all six story counts as null for an expired feed", async () => {
+    const facts = await throughToolOutput(
+      inputs([], {
+        snapshot: {
+          compiledAt: NOW,
+          expiresAt: new Date(NOW.getTime() - 1000),
+          payload: { articles: [story("1", "a.example.org")] }
+        }
+      })
+    );
+    for (const key of STORY_COUNT_KEYS) expect(facts[key]).toBeNull();
+    expect(facts).toMatchObject({ dismissalsApplied: true });
+  });
+
+  it("keeps all six story counts as null for a missing feed", async () => {
+    const facts = await throughToolOutput(inputs([], { snapshot: null }));
+    for (const key of STORY_COUNT_KEYS) expect(facts[key]).toBeNull();
+    expect(facts).toMatchObject({ addedSourceCount: 0, excludedSourceCount: 0 });
+  });
+
+  it("keeps the dismissal-check result when dismissals were not applied", async () => {
+    const facts = await throughToolOutput(inputs([story("1", "a.example.org")]), () => undefined);
+    expect(facts).toMatchObject({ dismissalsApplied: false, totalStories: 1 });
   });
 });
