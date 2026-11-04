@@ -92,3 +92,5 @@ scripts/uat-campaign/PROTOCOL.md
 
 # Reviewed UAT host helpers stay byte-identical to their approved commits.
 scripts/uat-host/
+# Moss runs itself mockup: static page, frozen for review.
+docs/superpowers/specs/mockups/moss-runs-itself/
