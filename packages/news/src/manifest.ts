@@ -582,6 +582,11 @@ export const newsModuleManifest = {
   ],
   features: [
     {
+      id: "news.provenance_diagnostics",
+      description:
+        "Moss can explain why a story is in your feed from counts alone: stories from built-in sources, stories from added sources, stories found by a followed-topic search, stories that matched a followed topic, how many topics you follow, and how many sources you excluded. It never reads out headlines or story text and cannot say why one particular story arrived."
+    },
+    {
       id: "news.heartbeat_source",
       description:
         "Saved news stories can appear in Moss check-ins. Check-ins read stored stories only and never fetch new ones.",
