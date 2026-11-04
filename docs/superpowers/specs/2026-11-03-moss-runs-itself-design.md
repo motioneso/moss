@@ -59,11 +59,12 @@ Anti-goals (failure even if it technically works):
 ## 4. Piece 1: Moss sees itself
 
 What exists: the app map (screens, settings, error codes), about 100 chat tools over user data,
-per-connection last-sync fields, news refresh attempt records, and approved designs for
-self-diagnostics (#1586) and feature health alerts (#2683). The builder must check how much of
-those two shipped before planning, because the code search for a self-diagnostics tool found none.
+per-connection last-sync fields, news refresh attempt records, stored per-user AI errors, a
+platform diagnostics tool (version, runtime, modules, errors, actions, source search) and a source
+reader. Both of those tools are open to any user with settings access and are not admin-gated. The
+piece-1 plan audits what they answer for real faults before anything is added.
 
-What is new: read-only tools that let Moss inspect:
+What is new, after that audit: read-only additions that let Moss inspect:
 
 - Recent application log lines, filterable by time, component and connection.
 - The job queue: what ran, what failed, what is stuck, last success per job kind, and retries.
@@ -188,6 +189,6 @@ the real UI. No piece merges as done on green tests alone.
   standalone project.
 - Piece 4 needs a code checkout, Node and the test tooling on the install. Installs without them
   do not get the feature, and the settings switch explains why.
-- Shipped status of #1586 and #2683: a search of the current code found an instance admin role but
-  no tool or module named for feature health or log reading. The builder confirms before planning
-  piece 1.
+- Shipped status of #1586: a platform diagnostics tool and source reader already ship (settings
+  manifest). The remaining gaps are the job queue, raw logs from both the API and the worker, and
+  admin gating. The piece-1 plan was written against that finding.
