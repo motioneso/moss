@@ -1,6 +1,10 @@
 // Process lifecycle for the api entrypoint: graceful shutdown on signal and the crash handler.
 
-import { sanitizeLogValue, writeSanitizedFatal } from "@moss/shared/log-sanitizer";
+import {
+  LOG_DROP_COUNTER,
+  sanitizeLogValue,
+  writeSanitizedFatal
+} from "@moss/shared/log-sanitizer";
 
 type LineWriter = (line: string) => void;
 
@@ -73,7 +77,13 @@ export function createCrashHandler(
   return (label: string, err: unknown): void => {
     if (crashing) return;
     crashing = true;
-    server.log.error({ err: sanitizeLogValue(err), label }, "Process crash — exiting");
+    try {
+      server.log.error({ err: sanitizeLogValue(err), label }, "Process crash — exiting");
+    } catch {
+      // A hostile error (a throwing getter) or a failing logger drops the record. Shutdown and
+      // the exit below still run, and nothing raw is written.
+      LOG_DROP_COUNTER.count += 1;
+    }
     const drain = Promise.race([
       new Promise<void>((resolve) => {
         server.close(() => resolve());

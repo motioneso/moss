@@ -113,7 +113,29 @@ describe("error entry points never write a secret", () => {
 
 /** Directories whose error output must be sanitized. */
 const SCANNED_DIRS = ["apps/api/src", "apps/worker/src", "packages/jobs/src"];
-const RAW_WRITER = /\b(?:console\.(?:error|warn)|process\.stderr\.write)\s*\(/g;
+const RAW_WRITER =
+  /\b(?:console\.(?:log|info|warn|error|debug|trace)|process\.(?:stderr|stdout)\.write)\s*\(/g;
+const SANITIZED_ARGUMENT = /\b(?:sanitizeLog\w*|writeSanitizedFatal)\s*\(/;
+
+/** Text of a call's argument list, from just after the opening paren to its matching paren. */
+function callArguments(text: string, open: number): string {
+  let depth = 1;
+  let quote = "";
+  for (let i = open; i < text.length; i++) {
+    const ch = text[i]!;
+    if (quote) {
+      if (ch === "\\") i++;
+      else if (ch === quote) quote = "";
+    } else if (ch === '"' || ch === "'" || ch === "`") {
+      quote = ch;
+    } else if (ch === "(") {
+      depth++;
+    } else if (ch === ")" && --depth === 0) {
+      return text.slice(open, i);
+    }
+  }
+  return text.slice(open);
+}
 
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
@@ -125,15 +147,22 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
-/** Return `file:line` for every stderr writer that is neither sanitized nor marked log-safe. */
+/**
+ * Return `file:line` for every console.* or stdout/stderr write whose own arguments are not
+ * wrapped in a sanitizer call and that has no log-safe marker on its line or the line before.
+ * A sanitizer call elsewhere nearby does not count.
+ */
 export function findRawErrorWriters(files: Array<{ path: string; text: string }>): string[] {
   const offenders: string[] = [];
   for (const { path, text } of files) {
+    const lines = text.split("\n");
     for (const match of text.matchAll(RAW_WRITER)) {
       const index = match.index ?? 0;
-      const window = text.slice(Math.max(0, index - 100), index + 450);
-      if (/sanitizeLog|writeSanitizedFatal|log-safe:/.test(window)) continue;
+      const args = callArguments(text, index + match[0].length);
+      if (SANITIZED_ARGUMENT.test(args)) continue;
       const line = text.slice(0, index).split("\n").length;
+      const nearby = `${lines[line - 2] ?? ""}\n${lines[line - 1] ?? ""}`;
+      if (/log-safe:/.test(nearby)) continue;
       offenders.push(`${path}:${line}`);
     }
   }
@@ -178,6 +207,31 @@ describe("source scan for raw error writers", () => {
     const ok = [
       { path: "a.ts", text: "console.error(sanitizeLogText(e.message));" },
       { path: "b.ts", text: "// log-safe: constant event name\nprocess.stderr.write(line);" }
+    ];
+    expect(findRawErrorWriters(ok)).toEqual([]);
+  });
+
+  it("flags a raw message even when an unrelated sanitizer call is nearby", () => {
+    const text = [
+      "const a = sanitizeLogText(other);",
+      "console.error(err.message);",
+      "sanitizeLogText(more);"
+    ].join("\n");
+    expect(findRawErrorWriters([{ path: "z.ts", text }])).toEqual(["z.ts:2"]);
+  });
+
+  it("covers every console method and stdout writes", () => {
+    const planted = ["log", "info", "warn", "error", "debug", "trace"].map((m, i) => ({
+      path: `c${i}.ts`,
+      text: `console.${m}(err.message);`
+    }));
+    planted.push({ path: "o.ts", text: "process.stdout.write(err.message);" });
+    expect(findRawErrorWriters(planted)).toHaveLength(7);
+  });
+
+  it("handles nested calls and quotes inside the arguments", () => {
+    const ok = [
+      { path: "n.ts", text: 'console.error(`x ${sanitizeLogText(String(e))} (a)`, ")");' }
     ];
     expect(findRawErrorWriters(ok)).toEqual([]);
   });

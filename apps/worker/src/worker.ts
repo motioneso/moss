@@ -7,6 +7,7 @@ import { sql } from "kysely";
 import {
   createSanitizedLogDestination,
   sanitizeLogText,
+  sanitizingLogFormatters,
   writeSanitizedFatal
 } from "@moss/shared/log-sanitizer";
 
@@ -138,6 +139,7 @@ export const WORKER_BOSS_OPTIONS: Partial<ConstructorOptions> = {
  * worker binary.
  */
 export function logScheduleMode(): void {
+  // log-safe: constant event line
   console.log(JSON.stringify({ event: "pgboss.schedule_mode", schedule: true }));
 }
 
@@ -211,7 +213,8 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   const workerLogger: PinoLogger = pino(
     {
       level: process.env.LOG_LEVEL ?? "info",
-      base: { process: "worker" }
+      base: { process: "worker" },
+      formatters: sanitizingLogFormatters
     },
     createSanitizedLogDestination(process.stdout)
   );
@@ -738,6 +741,7 @@ export async function bootstrap(
     return;
   }
 
+  // log-safe: constant text
   console.log(`Jarv1s worker listening on ${RLS_PROBE_QUEUE} and built-in module queues`);
 
   const handleCrash = createCrashHandler(handle, { log: opts.log, exit: opts.exit });
