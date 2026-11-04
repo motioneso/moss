@@ -23,57 +23,97 @@ export const LOG_LIMITS = {
 export const LOG_DROP_COUNTER = { count: 0 };
 
 /**
- * The one list of secret-bearing names. Parts of a name are separated by a space here, and any
- * run of space, dot, underscore or hyphen (or nothing, as in camelCase) matches between them.
- * Object keys and text forms both use it.
+ * The one list of secret-bearing names, written flat. A name matches however it is spelled,
+ * because detection runs on text with case, spaces, dots, underscores, hyphens, backslashes and
+ * quotes removed ("pass phrase", "pass_phrase", "API KEY", "\\"password\\"" all contain
+ * "passphrase" or "password"). Object keys and text use the same matcher.
  */
-const SECRET_NAME_LIST = [
+const SECRET_MARKERS = [
   "password",
   "passwd",
   "passphrase",
   "secret",
   "token",
-  "api key",
-  "private key",
-  "secret key",
-  "access key",
-  "signing key",
-  "encryption key",
-  "auth key",
+  "apikey",
+  "privatekey",
+  "accesskey",
+  "signingkey",
+  "encryptionkey",
+  "authkey",
   "authorization",
   "cookie",
   "credential",
-  "session id",
+  "sessionid",
   "bearer"
 ] as const;
 
-const NAME_SEPARATORS = /[\s._-]+/g;
+/** Characters ignored while detecting a name. */
+const IGNORED_FOR_DETECTION = /[\s._\-\\"'`]/;
+
+/** Words that contain a marker but are ordinary ("secretary"). Checked right after the marker. */
+const BENIGN_AFTER: Readonly<Record<string, readonly string[]>> = {
+  secret: ["ary", "ariat", "ive", "ively", "ion", "ions"]
+};
+
+interface MarkerHit {
+  /** Index in the original text where the marker starts. */
+  readonly start: number;
+  /** Index in the original text just past the marker's last character. */
+  readonly end: number;
+}
+
+/** The first secret marker in `text`, or null. Runs in time linear in the text. */
+function findSecretMarker(text: string): MarkerHit | null {
+  let flat = "";
+  const positions: number[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (IGNORED_FOR_DETECTION.test(ch)) continue;
+    flat += ch.toLowerCase();
+    positions.push(i);
+  }
+  let best: { at: number; length: number } | null = null;
+  for (const marker of SECRET_MARKERS) {
+    let from = 0;
+    for (;;) {
+      const at = flat.indexOf(marker, from);
+      if (at < 0) break;
+      from = at + 1;
+      const benign = BENIGN_AFTER[marker]?.some((suffix) =>
+        flat.startsWith(suffix, at + marker.length)
+      );
+      if (benign) continue;
+      if (best === null || at < best.at) best = { at, length: marker.length };
+      break;
+    }
+  }
+  if (best === null) return null;
+  return { start: positions[best.at]!, end: positions[best.at + best.length - 1]! + 1 };
+}
 
 /** True when a field name holds a secret, however it is spelled. */
 export function isSecretName(name: string): boolean {
-  const flat = name.toLowerCase().replace(NAME_SEPARATORS, "");
-  return SECRET_NAME_LIST.some((entry) => flat.includes(entry.replace(" ", "")));
+  return findSecretMarker(name) !== null;
 }
 
-/** Regex source for the names in text, with flexible separators between name parts. */
-const SECRET_NAME_SOURCE = SECRET_NAME_LIST.map((entry) =>
-  entry.split(" ").join(String.raw`[\s._-]*`)
-).join("|");
+/** A separator right after a name (`": "`, `=`, `=\"`) is kept so the field name stays readable. */
+const AFTER_NAME = /^[\w.-]{0,24}[\\"'`]*\s*[:=]\s*[\\"'`]*/;
 
 /**
- * A secret name followed by a separator and a quoted value, in JSON, key=value or key: value
- * form. The key may itself be quoted (plain or escaped quotes). The value runs to the matching
- * quote, over escapes and spaces, or to the end of the line when it is never closed.
+ * Fail closed on text. From the first secret marker to the end of the string, everything is
+ * replaced. Over-hiding is accepted. The text is never parsed, so no quoting, escaping, nesting
+ * or newline can hide the end of a value.
  */
-const QUOTED_SECRET = new RegExp(
-  String.raw`((?:${SECRET_NAME_SOURCE})[\w.-]{0,24}(?:\\*["'])?\s*[:=]\s*)(\\*["'])(?:(?!\2)(?:\\.|[^\\\r\n]))*(?:\2)?`,
-  "gi"
-);
-/** The same names with an unquoted value, which ends at whitespace, a comma, & or a brace. */
-const BARE_SECRET = new RegExp(
-  String.raw`((?:${SECRET_NAME_SOURCE})[\w.-]{0,24}(?:\\*["'])?\s*[:=]\s*)(?![\\"'])[^\s,&}]+`,
-  "gi"
-);
+function maskFromSecretMarker(text: string): string {
+  const hit = findSecretMarker(text);
+  if (hit === null) return text;
+  const rest = text.slice(hit.end);
+  if (rest.trim() === "") return text;
+  const separator = AFTER_NAME.exec(rest.slice(0, 80));
+  const keep = hit.end + (separator ? separator[0].length : 0);
+  const joiner = separator ? "" : " ";
+  return `${text.slice(0, keep)}${joiner}${LOG_REDACTED}`;
+}
 
 const LEGACY_PATTERNS: readonly RegExp[] = [
   // `JARVIS_MCP_TOKEN=<value>` env-var prefix on the launch line (Codex path).
@@ -185,9 +225,7 @@ export function redactSecrets(text: string | undefined): string {
   let out = text;
   out = out.replace(QUOTED_HEADER, `$1${LOG_REDACTED}`);
   out = out.replace(BARE_HEADER, `$1${LOG_REDACTED}`);
-  out = maskUrlCredentials(out);
-  out = out.replace(QUOTED_SECRET, `$1$2${LOG_REDACTED}$2`);
-  out = out.replace(BARE_SECRET, `$1${LOG_REDACTED}`);
+  out = maskFromSecretMarker(maskUrlCredentials(out));
   out = out.replace(LEGACY_PATTERNS[0]!, LOG_REDACTED);
   out = out.replace(LEGACY_PATTERNS[1]!, LOG_REDACTED);
   out = out.replace(LEGACY_PATTERNS[2]!, LOG_REDACTED);

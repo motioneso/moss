@@ -36,6 +36,7 @@ export function recordingLoggerOptions(
     | undefined;
   return {
     ...configured,
+    // log-safe: the sanitizing destination wraps the raw stream
     stream: createSanitizedLogDestination(target ?? process.stdout),
     formatters: {
       ...configured.formatters,

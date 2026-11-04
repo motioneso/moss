@@ -137,6 +137,12 @@ const WRITER_REFERENCE = new RegExp(
 );
 /** `console` used as a value (passed, aliased or destructured) rather than with a member. */
 const BARE_CONSOLE = /\bconsole\b(?!\s*(?:\.|\[))/g;
+/** `process.stderr` or `process.stdout` used as a value, so a later `.write` is out of sight. */
+const BARE_STREAM = new RegExp(
+  String.raw`\bprocess\s*(?:\.\s*(?:stderr|stdout)|\[\s*${QUOTE}(?:stderr|stdout)${QUOTE}\s*\])` +
+    String.raw`(?!\s*(?:\.\s*write\b|\[\s*${QUOTE}write${QUOTE}\s*\]))(?![\w$])`,
+  "g"
+);
 const SANITIZER_CALL = /^(?:sanitizeLog\w*|writeSanitizedFatal)\s*\(/;
 
 /** Index just past the quote or template literal that starts at `i`. */
@@ -247,7 +253,8 @@ export function findRawErrorWriters(files: Array<{ path: string; text: string }>
     const flag = (index: number): void => {
       const line = text.slice(0, index).split("\n").length;
       const nearby = `${lines[line - 2] ?? ""}\n${lines[line - 1] ?? ""}`;
-      if (!/log-safe:/.test(nearby)) offenders.push(`${path}:${line}`);
+      const entry = `${path}:${line}`;
+      if (!/log-safe:/.test(nearby) && !offenders.includes(entry)) offenders.push(entry);
     };
     for (const match of text.matchAll(WRITER_REFERENCE)) {
       const index = match.index ?? 0;
@@ -262,6 +269,7 @@ export function findRawErrorWriters(files: Array<{ path: string; text: string }>
       if (!args.every(isSafeArgument)) flag(index);
     }
     for (const match of text.matchAll(BARE_CONSOLE)) flag(match.index ?? 0);
+    for (const match of text.matchAll(BARE_STREAM)) flag(match.index ?? 0);
   }
   return offenders;
 }
@@ -362,6 +370,30 @@ describe("source scan for raw error writers", () => {
       { path: "a4.ts", text: "run(console);" }
     ];
     expect(findRawErrorWriters(planted)).toEqual(["a1.ts:1", "a2.ts:1", "a3.ts:1", "a4.ts:1"]);
+  });
+
+  it("flags a stream held in a variable", () => {
+    const planted = [
+      { path: "s1.ts", text: "const output = process.stderr;\noutput.write(err.message);" },
+      { path: "s2.ts", text: "const out = process.stdout;" },
+      { path: "s3.ts", text: 'const o = process["stderr"];' },
+      { path: "s4.ts", text: "const { write } = process.stderr;" },
+      { path: "s5.ts", text: "emit(target ?? process.stdout);" }
+    ];
+    expect(findRawErrorWriters(planted)).toEqual([
+      "s1.ts:1",
+      "s2.ts:1",
+      "s3.ts:1",
+      "s4.ts:1",
+      "s5.ts:1"
+    ]);
+  });
+
+  it("accepts a marked stream reference", () => {
+    const ok = [
+      { path: "s6.ts", text: "// log-safe: wrapped by the sanitizer\nwrap(process.stdout);" }
+    ];
+    expect(findRawErrorWriters(ok)).toEqual([]);
   });
 
   it("flags bracket-style writers", () => {

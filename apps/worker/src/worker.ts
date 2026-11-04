@@ -216,6 +216,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
       base: { process: "worker" },
       formatters: createSanitizingFormatters()
     },
+    // log-safe: the sanitizing destination wraps the raw stream
     createSanitizedLogDestination(process.stdout)
   );
 
