@@ -5,6 +5,7 @@
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { inspect } from "node:util";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -56,7 +57,7 @@ describe("error entry points never write a secret", () => {
     );
     handle("uncaughtException", new Error(SECRET_MESSAGE));
     expect(error).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(error.mock.calls[0])).not.toContain(CANARY);
+    expect(inspect(error.mock.calls[0], { depth: 10 })).not.toContain(CANARY);
   });
 
   it("4a. a worker startup failure", async () => {
