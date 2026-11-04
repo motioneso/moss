@@ -155,7 +155,7 @@ describe("news provenance diagnostics (#3978)", () => {
     await bootstrap.query(
       `INSERT INTO app.news_custom_topics
          (owner_user_id, label, guidance, validation_status, validation_fingerprint, validated_at)
-       VALUES ($1, 'Unapproved Topic', NULL, 'pending', 'fp', now())`,
+       VALUES ($1, 'Unapproved Topic', NULL, 'rejected', 'fp', now())`,
       [ids.userB]
     );
     // Follow one built-in topic. Science stays tagged on a story but is not followed.

@@ -78,7 +78,10 @@ describe("computeFeedProvenance", () => {
     const p = computeFeedProvenance(
       inputs([story("1", "a.example.org", { topics: ["Technology"] })], {
         prefs: [topicPref("technology")],
-        customTopics: [customTopic("Pending", "pending"), customTopic("Mine", "approved")]
+        customTopics: [
+          customTopic("Pending", "needs_revalidation"),
+          customTopic("Mine", "approved")
+        ]
       })
     );
     expect(p.followedTopicCount).toBe(2);
