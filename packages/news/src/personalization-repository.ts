@@ -59,6 +59,37 @@ export interface NewsRefreshDiagnostics {
   readonly itemCount: number;
 }
 
+/**
+ * Scalar counts that explain why stories are in the feed. Counts only: no headline, publisher,
+ * domain or topic label ever appears here.
+ */
+export interface NewsFeedProvenance {
+  readonly hasSnapshot: boolean;
+  readonly totalStories: number;
+  readonly storiesFromBuiltInSources: number;
+  readonly storiesFromAddedSources: number;
+  /** Stories the compiler found through a followed-topic search rather than a preferred source. */
+  readonly storiesFoundByTopicSearch: number;
+  readonly storiesMatchingFollowedTopic: number;
+  /** Stories still in the feed whose domain is on the exclusion list. */
+  readonly storiesFromExcludedSources: number;
+  readonly addedSourceCount: number;
+  readonly followedTopicCount: number;
+  readonly excludedSourceCount: number;
+}
+
+interface FeedProvenanceRow {
+  has_snapshot: boolean;
+  total: string;
+  added: string;
+  topic_search: string;
+  topic_match: string;
+  excluded: string;
+  added_sources: string;
+  followed_topics: string;
+  exclusions: string;
+}
+
 /** Raw shape of the single diagnostics row. bigint columns arrive as strings from pg. */
 interface RefreshDiagnosticsRow {
   state: "idle" | "queued" | "running" | "failed" | null;
@@ -657,6 +688,55 @@ export class NewsPersonalizationRepository {
       snapshotAgeSeconds:
         row?.snapshot_age_seconds == null ? null : Number(row.snapshot_age_seconds),
       itemCount: Number(row?.item_count ?? 0)
+    };
+  }
+
+  /**
+   * Counts only (see NewsFeedProvenance). Story fields are read as jsonb scalars inside SQL and
+   * aggregated there, so no headline or domain text reaches this process. Built-in means the
+   * story's domain is not one of the user's added sources. Every table is owner-only under RLS.
+   */
+  async readFeedProvenance(scopedDb: DataContextDb): Promise<NewsFeedProvenance> {
+    assertDataContextDb(scopedDb);
+    const result = await sql<FeedProvenanceRow>`
+      WITH arts AS (
+        SELECT a ->> 'canonicalDomain' AS domain,
+               (a ->> 'preferred')::boolean AS preferred,
+               CASE WHEN jsonb_typeof(a -> 'topics') = 'array'
+                    THEN jsonb_array_length(a -> 'topics') ELSE 0 END AS topic_matches
+          FROM app.news_compilation_snapshots snap
+          CROSS JOIN LATERAL jsonb_array_elements(
+            CASE WHEN jsonb_typeof(snap.payload -> 'articles') = 'array'
+                 THEN snap.payload -> 'articles' ELSE '[]'::jsonb END
+          ) AS a
+      )
+      SELECT EXISTS (SELECT 1 FROM app.news_compilation_snapshots) AS has_snapshot,
+             (SELECT count(*) FROM arts) AS total,
+             (SELECT count(*) FROM arts WHERE domain IN
+                (SELECT canonical_domain FROM app.news_custom_sources)) AS added,
+             (SELECT count(*) FROM arts WHERE preferred = false) AS topic_search,
+             (SELECT count(*) FROM arts WHERE topic_matches > 0) AS topic_match,
+             (SELECT count(*) FROM arts WHERE domain IN
+                (SELECT canonical_domain FROM app.news_source_exclusions)) AS excluded,
+             (SELECT count(*) FROM app.news_custom_sources) AS added_sources,
+             (SELECT count(*) FROM app.news_custom_topics) AS followed_topics,
+             (SELECT count(*) FROM app.news_source_exclusions) AS exclusions
+    `.execute(scopedDb.db);
+    const row = result.rows[0];
+    const n = (value: string | undefined) => Number(value ?? 0);
+    const total = n(row?.total);
+    const added = n(row?.added);
+    return {
+      hasSnapshot: row?.has_snapshot ?? false,
+      totalStories: total,
+      storiesFromBuiltInSources: total - added,
+      storiesFromAddedSources: added,
+      storiesFoundByTopicSearch: n(row?.topic_search),
+      storiesMatchingFollowedTopic: n(row?.topic_match),
+      storiesFromExcludedSources: n(row?.excluded),
+      addedSourceCount: n(row?.added_sources),
+      followedTopicCount: n(row?.followed_topics),
+      excludedSourceCount: n(row?.exclusions)
     };
   }
 

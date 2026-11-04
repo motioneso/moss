@@ -3647,9 +3647,9 @@ export function moduleDiagnosticProvidersFor(
   manifests: readonly MossModuleManifest[]
 ): RegisteredModuleDiagnosticProvider[] {
   return manifests.flatMap((manifest) =>
-    manifest.diagnosticsProvider
-      ? [{ moduleId: manifest.id, provider: manifest.diagnosticsProvider }]
-      : []
+    [manifest.diagnosticsProvider, ...(manifest.additionalDiagnosticsProviders ?? [])]
+      .filter((provider) => provider !== undefined)
+      .map((provider) => ({ moduleId: manifest.id, provider }))
   );
 }
 

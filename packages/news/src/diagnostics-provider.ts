@@ -3,6 +3,7 @@ import type { ModuleDiagnosticObservation, ModuleDiagnosticProvider } from "@mos
 
 import {
   NewsPersonalizationRepository,
+  type NewsFeedProvenance,
   type NewsRefreshDiagnostics
 } from "./personalization-repository.js";
 
@@ -93,6 +94,61 @@ export function createNewsDiagnosticsProvider(
         summary: summaryFor(diagnostics),
         remediationActionId: "news.refreshNews",
         facts: factsFor(diagnostics)
+      };
+    }
+  };
+}
+
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+function provenanceSummary(p: NewsFeedProvenance): string {
+  if (!p.hasSnapshot) return "News has no feed yet for this account.";
+  const topics =
+    p.followedTopicCount === 0
+      ? "no followed topics"
+      : plural(p.followedTopicCount, "followed topic", "followed topics");
+  return (
+    `Feed holds ${plural(p.totalStories, "story", "stories")}: ${p.storiesFromBuiltInSources} from ` +
+    `built-in sources, ${p.storiesFromAddedSources} from added sources. ` +
+    `${topics}, ${plural(p.excludedSourceCount, "excluded source", "excluded sources")}.`
+  );
+}
+
+/**
+ * A second provider because the refresh provider already uses 11 of the 12 allowed fact keys.
+ * Counts only: story text, domains and topic labels never appear.
+ */
+export function createNewsProvenanceDiagnosticsProvider(
+  repository: Pick<
+    NewsPersonalizationRepository,
+    "readFeedProvenance"
+  > = new NewsPersonalizationRepository()
+): ModuleDiagnosticProvider {
+  return {
+    domain: "news",
+    providerId: "news.provenance",
+    async observe(scopedDb: unknown, _ctx) {
+      assertDataContextDb(scopedDb);
+      const p = await repository.readFeedProvenance(scopedDb as DataContextDb);
+      return {
+        domain: "news",
+        providerId: "news.provenance",
+        observedAt: new Date().toISOString(),
+        status: p.hasSnapshot ? "ok" : "unknown",
+        summary: provenanceSummary(p),
+        facts: {
+          totalStories: p.totalStories,
+          storiesFromBuiltInSources: p.storiesFromBuiltInSources,
+          storiesFromAddedSources: p.storiesFromAddedSources,
+          storiesFoundByTopicSearch: p.storiesFoundByTopicSearch,
+          storiesMatchingFollowedTopic: p.storiesMatchingFollowedTopic,
+          storiesFromExcludedSources: p.storiesFromExcludedSources,
+          addedSourceCount: p.addedSourceCount,
+          followedTopicCount: p.followedTopicCount,
+          excludedSourceCount: p.excludedSourceCount
+        }
       };
     }
   };
