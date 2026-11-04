@@ -86,6 +86,29 @@ describe("fail-closed text masking, on real pino output and stderr", () => {
     expect(sanitizeLogText(`note ${word} done`)).toBe(`note ${word} done`);
   });
 
+  it.each(["İ", "ß", "ﬁ", "ǅ", "ŉ", "ΐ"])("keeps positions aligned after %s", (letter) => {
+    const text = `${letter.repeat(12)} pass.word=INDEX_CANARY trailing-long-enough-for-position-map`;
+    const { server, output } = logger();
+    server.log.warn({ note: text }, text);
+    expect(output(), letter).not.toMatch(/CANARY/);
+    expect(sanitizeLogText(text)).not.toContain("CANARY");
+  });
+
+  it.each(["passwordKEY_CANARY=value", "token_CANARY: x", "api key CANARY value"])(
+    "drops a suffix after the marker in text: %s",
+    (text) => {
+      const { server, output } = logger();
+      server.log.warn({ note: text }, text);
+      expect(output(), text).not.toMatch(/CANARY/);
+    }
+  );
+
+  it("drops a suffix after the marker in an object key", () => {
+    const { server, output } = logger();
+    server.log.warn({ "passwordKEY_CANARY=foo": "v", nested: { tokenCANARY2: 1 } }, "keys");
+    expect(output()).not.toMatch(/CANARY/);
+  });
+
   it("stays fast on hostile input", () => {
     const start = performance.now();
     sanitizeLogText("secretary ".repeat(1600));

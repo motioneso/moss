@@ -69,7 +69,11 @@ function findSecretMarker(text: string): MarkerHit | null {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]!;
     if (IGNORED_FOR_DETECTION.test(ch)) continue;
-    flat += ch.toLowerCase();
+    // One normalized character per source character, so positions stay aligned. Folding that
+    // expands ("İ" becomes two characters) keeps only its first character.
+    const folded = ch.toLowerCase();
+    if (folded.length === 0) continue;
+    flat += folded[0];
     positions.push(i);
   }
   let best: { at: number; length: number } | null = null;
@@ -96,8 +100,8 @@ export function isSecretName(name: string): boolean {
   return findSecretMarker(name) !== null;
 }
 
-/** A separator right after a name (`": "`, `=`, `=\"`) is kept so the field name stays readable. */
-const AFTER_NAME = /^[\w.-]{0,24}[\\"'`]*\s*[:=]\s*[\\"'`]*/;
+/** A separator directly after the marker (`": "`, `=`, `=\"`) is kept so the field stays readable. */
+const AFTER_NAME = /^[\\"'`]*\s*[:=]\s*[\\"'`]*/;
 
 /**
  * Fail closed on text. From the first secret marker to the end of the string, everything is
