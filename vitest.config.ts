@@ -325,6 +325,12 @@ export default defineConfig({
         )
       },
       {
+        find: "@moss/shared/log-sanitizer",
+        replacement: fileURLToPath(
+          new URL("./packages/shared/src/log-sanitizer.ts", import.meta.url)
+        )
+      },
+      {
         find: "@moss/shared/chat-action-outcome",
         replacement: fileURLToPath(
           new URL("./packages/shared/src/chat-action-outcome.ts", import.meta.url)
