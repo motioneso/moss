@@ -155,7 +155,7 @@ describe("news provenance diagnostics (#3978)", () => {
     await bootstrap.query(
       `INSERT INTO app.news_custom_topics
          (owner_user_id, label, guidance, validation_status, validation_fingerprint, validated_at)
-       VALUES ($1, 'Unapproved Topic', NULL, 'pending', 'fp', NULL)`,
+       VALUES ($1, 'Unapproved Topic', NULL, 'pending', 'fp', now())`,
       [ids.userB]
     );
     // Follow one built-in topic. Science stays tagged on a story but is not followed.
@@ -184,10 +184,10 @@ describe("news provenance diagnostics (#3978)", () => {
   });
 
   it("is owner scoped: another account's feed, sources and topics never count", async () => {
-    // userA has 4 stories, 1 added source and 1 exclusion; userB has 2 stories and 1 topic.
+    // userA shows 2 stories after 1 exclusion, with 1 added source; userB has 2 stories and 1 topic.
     const a = await observe(ids.userA);
     const b = await observe(ids.userB);
-    expect(a?.facts).toMatchObject({ totalStories: 4, followedTopicCount: 0 });
+    expect(a?.facts).toMatchObject({ totalStories: 2, followedTopicCount: 0 });
     expect(b?.facts).toMatchObject({
       totalStories: 3,
       addedSourceCount: 0,
