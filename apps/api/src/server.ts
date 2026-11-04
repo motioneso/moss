@@ -89,7 +89,7 @@ import { focusService, type FocusGenerate } from "./focus-service.js";
 import { resolveApiE2eFetchOverride } from "./e2e-fetch-override.js";
 import { createModuleAiBridge } from "./external-module-ai-bridge.js";
 import { createModuleDistributionPort } from "./module-distribution-port.js";
-import { createCrashHandler, shutdownOnSignal } from "./process-lifecycle.js";
+import { createCrashHandler, runApiStartup, shutdownOnSignal } from "./process-lifecycle.js";
 import { resolveHerdrInstall } from "./herdr-install-port.js";
 import { mapEnvMode, resolveDeployMode, restartCommandFor } from "./host-diagnostics-env.js";
 import type { HerdrInstallDependencies } from "@moss/settings";
@@ -864,30 +864,29 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const apiServerConfig = resolveApiServerConfig();
-  // TEST-ONLY e2e fixture bypass (absent without the UAT env): host-scoped to the
-  // briefing sources, everything else keeps global fetch.
-  const server = createApiServer({ apiServerConfig, ...resolveApiE2eFetchOverride() });
-  const port = apiServerConfig.port;
-  const host = apiServerConfig.host;
+  await runApiStartup(async () => {
+    const apiServerConfig = resolveApiServerConfig();
+    // TEST-ONLY e2e fixture bypass (absent without the UAT env): host-scoped to the
+    // briefing sources, everything else keeps global fetch.
+    const server = createApiServer({ apiServerConfig, ...resolveApiE2eFetchOverride() });
+    const port = apiServerConfig.port;
+    const host = apiServerConfig.host;
 
-  const handleCrash = createCrashHandler(server);
+    const handleCrash = createCrashHandler(server);
 
-  process.on("unhandledRejection", (reason) => {
-    handleCrash("unhandledRejection", reason);
-  });
-  process.on("uncaughtException", (err: Error) => {
-    handleCrash("uncaughtException", err);
-  });
+    process.on("unhandledRejection", (reason) => {
+      handleCrash("unhandledRejection", reason);
+    });
+    process.on("uncaughtException", (err: Error) => {
+      handleCrash("uncaughtException", err);
+    });
 
-  process.once("SIGTERM", () => {
-    void shutdownOnSignal(server);
-  });
-  process.once("SIGINT", () => {
-    void shutdownOnSignal(server);
-  });
+    for (const signal of ["SIGTERM", "SIGINT"] as const) {
+      process.once(signal, () => void shutdownOnSignal(server));
+    }
 
-  await server.listen({ host, port });
+    await server.listen({ host, port });
+  });
 }
 
 // Credential POST paths that must be throttled.

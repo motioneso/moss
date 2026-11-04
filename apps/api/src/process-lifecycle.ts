@@ -1,5 +1,30 @@
 // Process lifecycle for the api entrypoint: graceful shutdown on signal and the crash handler.
 
+import {
+  LOG_DROP_COUNTER,
+  sanitizeLogValue,
+  writeSanitizedFatal
+} from "@moss/shared/log-sanitizer";
+
+type LineWriter = (line: string) => void;
+
+/**
+ * Run the startup work and report a failure as one sanitized line, then exit 1. A rejected
+ * startup would otherwise reach Node's default handler, which prints the raw error.
+ */
+export async function runApiStartup(
+  start: () => Promise<unknown>,
+  opts: { log?: LineWriter; exit?: (code: number) => never } = {}
+): Promise<void> {
+  const exit = opts.exit ?? ((code: number) => process.exit(code));
+  try {
+    await start();
+  } catch (err) {
+    writeSanitizedFatal("startup", err, opts.log, "API startup failed");
+    exit(1);
+  }
+}
+
 /**
  * Graceful-shutdown helper for the api entrypoint (deployable-stack §9). On
  * SIGTERM/SIGINT we call server.close() — which runs the onClose hook tearing
@@ -11,13 +36,16 @@
  */
 export async function shutdownOnSignal(
   server: { close(cb: (err?: Error) => void): void },
-  opts: { timeoutMs?: number; exit?: (code: number) => never } = {}
+  opts: { timeoutMs?: number; exit?: (code: number) => never; log?: LineWriter } = {}
 ): Promise<void> {
   const timeoutMs = opts.timeoutMs ?? 10_000;
   const exit = opts.exit ?? ((code: number) => process.exit(code));
   await Promise.race([
     new Promise<void>((resolve) => {
-      server.close(() => resolve());
+      server.close((err) => {
+        if (err) writeSanitizedFatal("shutdown", err, opts.log, "Shutdown failed");
+        resolve();
+      });
     }),
     new Promise<void>((resolve) => {
       setTimeout(resolve, timeoutMs);
@@ -49,7 +77,13 @@ export function createCrashHandler(
   return (label: string, err: unknown): void => {
     if (crashing) return;
     crashing = true;
-    server.log.error({ err, label }, "Process crash — exiting");
+    try {
+      server.log.error({ err: sanitizeLogValue(err), label }, "Process crash — exiting");
+    } catch {
+      // A hostile error (a throwing getter) or a failing logger drops the record. Shutdown and
+      // the exit below still run, and nothing raw is written.
+      LOG_DROP_COUNTER.count += 1;
+    }
     const drain = Promise.race([
       new Promise<void>((resolve) => {
         server.close(() => resolve());
