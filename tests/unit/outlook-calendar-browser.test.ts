@@ -12,8 +12,15 @@ import { collectOutlookCalendar } from "../../packages/connectors/src/outlook-ca
 // just as the dedicated browser does between scheduled refreshes.
 type SettingsLayout = "direct" | "late-direct" | "menu" | "empty-menu" | "bare";
 
-function calendarBrowser(secondary = false, shared = false, layout: SettingsLayout = "direct") {
+function calendarBrowser(
+  secondary = false,
+  shared = false,
+  layout: SettingsLayout = "direct",
+  tabs: "calendar" | "mail-only" | "none" = "calendar"
+) {
   let menuOpen = false;
+  const opened: string[] = [];
+  let openedClosed = false;
   const clicked: string[] = [];
   const settingsVisible = () =>
     layout === "direct" || layout === "late-direct" || (layout === "menu" && menuOpen);
@@ -79,10 +86,17 @@ function calendarBrowser(secondary = false, shared = false, layout: SettingsLayo
     getByRole: (role: string, options?: { name: string }) => locator(options?.name ?? role),
     setDefaultTimeout: () => undefined,
     setViewportSize: async () => undefined,
+    goto: async (url: string) => {
+      opened.push(url);
+    },
+    close: async () => {
+      openedClosed = true;
+    },
     reload: async () => undefined,
     waitForFunction: async () => undefined,
     waitForTimeout: async () => undefined,
     context: () => ({
+      newPage: async () => page,
       newCDPSession: async () => ({
         send: async (method: string) => {
           if (method === "Page.getFrameTree") return { frameTree: { frame: { id: "invented" } } };
@@ -93,7 +107,21 @@ function calendarBrowser(secondary = false, shared = false, layout: SettingsLayo
       })
     })
   };
-  return { clicked, contexts: () => [{ pages: () => [page] }], close: async () => undefined };
+  const mail = {
+    url: () => "https://outlook.cloud.microsoft/mail/inbox",
+    context: () => context
+  };
+  const context = {
+    pages: () => (tabs === "calendar" ? [page] : tabs === "mail-only" ? [mail] : []),
+    newPage: async () => page
+  };
+  return {
+    clicked,
+    opened,
+    openedClosed: () => openedClosed,
+    contexts: () => [context],
+    close: async () => undefined
+  };
 }
 
 describe("Outlook browser refresh navigation", () => {
@@ -156,4 +184,18 @@ describe("Outlook browser refresh navigation", () => {
       });
     }
   );
+  it("opens its own calendar tab when only a mail tab exists, then closes it", async () => {
+    const browser = calendarBrowser(false, false, "direct", "mail-only");
+    transport.connect.mockResolvedValue(browser);
+    expect((await collectOutlookCalendar(binding, now)).complete).toBe(true);
+    expect(browser.opened).toEqual(["https://outlook.cloud.microsoft/calendar/view/week"]);
+    expect(browser.openedClosed()).toBe(true);
+  });
+  it("does not touch an existing calendar tab's lifetime", async () => {
+    const browser = calendarBrowser();
+    transport.connect.mockResolvedValue(browser);
+    await collectOutlookCalendar(binding, now);
+    expect(browser.opened).toEqual([]);
+    expect(browser.openedClosed()).toBe(false);
+  });
 });

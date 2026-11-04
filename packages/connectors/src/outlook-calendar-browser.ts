@@ -316,31 +316,37 @@ export async function collectOutlookCalendar(
 ): Promise<OutlookCalendarScan> {
   const endpoint = validateOutlookBrowserEndpoint(binding.endpoint);
   let activePage: Page | undefined;
+  let openedPage: Page | undefined;
   let stage: "account" | "timezone" | "calendar" | "coverage" = "account";
   const browser = await chromium.connectOverCDP(endpoint, { timeout: 10_000 }).catch(() => {
     throw new OutlookCalendarSourceError("partial", "account");
   });
   try {
-    const pages = browser
-      .contexts()
-      .flatMap((c) => c.pages())
-      .filter((p) => {
-        const url = new URL(p.url());
-        return HOSTS.has(url.hostname) && url.pathname.startsWith("/calendar/");
-      });
-    if (pages.length !== 1) {
+    const allPages = browser.contexts().flatMap((c) => c.pages());
+    const calendarPages = allPages.filter((p) => {
+      const url = new URL(p.url());
+      return HOSTS.has(url.hostname) && url.pathname.startsWith("/calendar/");
+    });
+    if (calendarPages.length > 1) throw new OutlookCalendarSourceError("source-changed");
+    let page = calendarPages[0];
+    if (!page) {
       if (
-        browser
-          .contexts()
-          .flatMap((c) => c.pages())
-          .some((p) =>
-            ["login.microsoftonline.com", "login.live.com"].includes(new URL(p.url()).hostname)
-          )
+        allPages.some((p) =>
+          ["login.microsoftonline.com", "login.live.com"].includes(new URL(p.url()).hostname)
+        )
       )
         throw new OutlookCalendarSourceError("sign-in-needed");
-      throw new OutlookCalendarSourceError("source-changed");
+      // The calendar tab is gone (browser restart, tab closed). Open our own in the
+      // signed-in browser profile and close it again when the scan ends.
+      const context = browser.contexts()[0];
+      if (!context) throw new OutlookCalendarSourceError("source-changed");
+      const host =
+        allPages.map((p) => new URL(p.url()).hostname).find((h) => HOSTS.has(h)) ??
+        "outlook.cloud.microsoft";
+      page = await context.newPage();
+      openedPage = page;
+      await page.goto(`https://${host}/calendar/view/week`, { waitUntil: "domcontentloaded" });
     }
-    const page = pages[0]!;
     activePage = page;
     page.setDefaultTimeout(10_000);
     // Narrow Outlook windows turn the calendar navigation into an occluding modal.
@@ -482,6 +488,7 @@ export async function collectOutlookCalendar(
       throw new OutlookCalendarSourceError(error.code, stage);
     throw new OutlookCalendarSourceError("partial", stage);
   } finally {
+    await openedPage?.close().catch(() => undefined);
     // For a CDP connection this disconnects the client; the signed-in browser remains open.
     await browser.close().catch(() => undefined);
   }
