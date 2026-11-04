@@ -22,6 +22,59 @@ export const LOG_LIMITS = {
 /** Counts records dropped because sanitizing failed. */
 export const LOG_DROP_COUNTER = { count: 0 };
 
+/**
+ * The one list of secret-bearing names. Parts of a name are separated by a space here, and any
+ * run of space, dot, underscore or hyphen (or nothing, as in camelCase) matches between them.
+ * Object keys and text forms both use it.
+ */
+const SECRET_NAME_LIST = [
+  "password",
+  "passwd",
+  "passphrase",
+  "secret",
+  "token",
+  "api key",
+  "private key",
+  "secret key",
+  "access key",
+  "signing key",
+  "encryption key",
+  "auth key",
+  "authorization",
+  "cookie",
+  "credential",
+  "session id",
+  "bearer"
+] as const;
+
+const NAME_SEPARATORS = /[\s._-]+/g;
+
+/** True when a field name holds a secret, however it is spelled. */
+export function isSecretName(name: string): boolean {
+  const flat = name.toLowerCase().replace(NAME_SEPARATORS, "");
+  return SECRET_NAME_LIST.some((entry) => flat.includes(entry.replace(" ", "")));
+}
+
+/** Regex source for the names in text, with flexible separators between name parts. */
+const SECRET_NAME_SOURCE = SECRET_NAME_LIST.map((entry) =>
+  entry.split(" ").join(String.raw`[\s._-]*`)
+).join("|");
+
+/**
+ * A secret name followed by a separator and a quoted value, in JSON, key=value or key: value
+ * form. The key may itself be quoted (plain or escaped quotes). The value runs to the matching
+ * quote, over escapes and spaces, or to the end of the line when it is never closed.
+ */
+const QUOTED_SECRET = new RegExp(
+  String.raw`((?:${SECRET_NAME_SOURCE})[\w.-]{0,24}(?:\\*["'])?\s*[:=]\s*)(\\*["'])(?:(?!\2)(?:\\.|[^\\\r\n]))*(?:\2)?`,
+  "gi"
+);
+/** The same names with an unquoted value, which ends at whitespace, a comma, & or a brace. */
+const BARE_SECRET = new RegExp(
+  String.raw`((?:${SECRET_NAME_SOURCE})[\w.-]{0,24}(?:\\*["'])?\s*[:=]\s*)(?![\\"'])[^\s,&}]+`,
+  "gi"
+);
+
 const LEGACY_PATTERNS: readonly RegExp[] = [
   // `JARVIS_MCP_TOKEN=<value>` env-var prefix on the launch line (Codex path).
   /JARVIS_MCP_TOKEN=\S+/gi,
@@ -133,6 +186,8 @@ export function redactSecrets(text: string | undefined): string {
   out = out.replace(QUOTED_HEADER, `$1${LOG_REDACTED}`);
   out = out.replace(BARE_HEADER, `$1${LOG_REDACTED}`);
   out = maskUrlCredentials(out);
+  out = out.replace(QUOTED_SECRET, `$1$2${LOG_REDACTED}$2`);
+  out = out.replace(BARE_SECRET, `$1${LOG_REDACTED}`);
   out = out.replace(LEGACY_PATTERNS[0]!, LOG_REDACTED);
   out = out.replace(LEGACY_PATTERNS[1]!, LOG_REDACTED);
   out = out.replace(LEGACY_PATTERNS[2]!, LOG_REDACTED);
@@ -149,9 +204,6 @@ export function redactSecrets(text: string | undefined): string {
 export function sanitizeLogText(text: string): string {
   return sanitizeString(String(text), newBudget());
 }
-
-const SECRET_KEY =
-  /pass(?:word|wd)|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key/i;
 
 /** Cut to at most `maxBytes` of UTF-8 without splitting a character. */
 export function truncateUtf8(text: string, maxBytes: number): { text: string; cut: boolean } {
@@ -293,7 +345,7 @@ function copyKeys(
     const safeKey = sanitizeKey(key);
     if (safeKey in out) continue;
     const child = (obj as Record<string, unknown>)[key];
-    if (SECRET_KEY.test(key)) out[safeKey] = LOG_REDACTED;
+    if (isSecretName(key)) out[safeKey] = LOG_REDACTED;
     else if (keep?.has(key)) out[safeKey] = child;
     else out[safeKey] = walk(child, depth + 1, seen, budget);
   }
@@ -482,7 +534,7 @@ export function writeSanitizedFatal(
         level: "fatal",
         label: sanitizeLogText(label),
         err: record.message,
-        msg
+        msg: sanitizeLogText(msg)
       })}\n`
     );
   } catch {

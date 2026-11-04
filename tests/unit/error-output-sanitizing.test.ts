@@ -123,8 +123,20 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
-const RAW_WRITER =
-  /\b(?:console\.(?:log|info|warn|error|debug|trace)|process\.(?:stderr|stdout)\.write)\s*\(/g;
+/**
+ * Every way to name a console method or a stdout/stderr write: dotted (`console.error`),
+ * bracketed (`console["error"]`) and `process.stderr.write` in either style. A match that is not
+ * called on the spot (an alias, a bind, a destructure) is an offender by itself.
+ */
+const QUOTE = String.raw`["'\x60]`;
+const WRITER_REFERENCE = new RegExp(
+  String.raw`\bconsole\s*(?:\.\s*\w+|\[\s*${QUOTE}\w+${QUOTE}\s*\])` +
+    String.raw`|\bprocess\s*(?:\.\s*|\[\s*${QUOTE})(?:stderr|stdout)(?:${QUOTE}\s*\])?` +
+    String.raw`\s*(?:\.\s*write\b|\[\s*${QUOTE}write${QUOTE}\s*\])`,
+  "g"
+);
+/** `console` used as a value (passed, aliased or destructured) rather than with a member. */
+const BARE_CONSOLE = /\bconsole\b(?!\s*(?:\.|\[))/g;
 const SANITIZER_CALL = /^(?:sanitizeLog\w*|writeSanitizedFatal)\s*\(/;
 
 /** Index just past the quote or template literal that starts at `i`. */
@@ -232,15 +244,24 @@ export function findRawErrorWriters(files: Array<{ path: string; text: string }>
   const offenders: string[] = [];
   for (const { path, text } of files) {
     const lines = text.split("\n");
-    for (const match of text.matchAll(RAW_WRITER)) {
-      const index = match.index ?? 0;
-      const { args } = splitArguments(text, index + match[0].length);
-      if (args.every(isSafeArgument)) continue;
+    const flag = (index: number): void => {
       const line = text.slice(0, index).split("\n").length;
       const nearby = `${lines[line - 2] ?? ""}\n${lines[line - 1] ?? ""}`;
-      if (/log-safe:/.test(nearby)) continue;
-      offenders.push(`${path}:${line}`);
+      if (!/log-safe:/.test(nearby)) offenders.push(`${path}:${line}`);
+    };
+    for (const match of text.matchAll(WRITER_REFERENCE)) {
+      const index = match.index ?? 0;
+      const after = index + match[0].length;
+      const call = /^\s*\(/.exec(text.slice(after, after + 40));
+      // A reference that is not called here could be called later with raw text.
+      if (!call) {
+        flag(index);
+        continue;
+      }
+      const { args } = splitArguments(text, after + call[0].length);
+      if (!args.every(isSafeArgument)) flag(index);
     }
+    for (const match of text.matchAll(BARE_CONSOLE)) flag(match.index ?? 0);
   }
   return offenders;
 }
@@ -330,6 +351,38 @@ describe("source scan for raw error writers", () => {
       { path: "k1.ts", text: 'console.log("worker ready");' },
       { path: "k2.ts", text: "console.error(`x ${sanitizeLogText(e.message)} y`);" }
     ];
+    expect(findRawErrorWriters(ok)).toEqual([]);
+  });
+
+  it("flags an aliased writer", () => {
+    const planted = [
+      { path: "a1.ts", text: "const w = console.error;\nw(err.message);" },
+      { path: "a2.ts", text: "const { error } = console;" },
+      { path: "a3.ts", text: "const w = process.stderr.write.bind(process.stderr);" },
+      { path: "a4.ts", text: "run(console);" }
+    ];
+    expect(findRawErrorWriters(planted)).toEqual(["a1.ts:1", "a2.ts:1", "a3.ts:1", "a4.ts:1"]);
+  });
+
+  it("flags bracket-style writers", () => {
+    const planted = [
+      { path: "b1.ts", text: 'console["error"](err.message);' },
+      { path: "b2.ts", text: "console['warn'](err.message);" },
+      { path: "b3.ts", text: 'process["stderr"].write(err.message);' },
+      { path: "b4.ts", text: 'process.stdout["write"](err.message);' },
+      { path: "b5.ts", text: "console.table(err);" }
+    ];
+    expect(findRawErrorWriters(planted)).toEqual([
+      "b1.ts:1",
+      "b2.ts:1",
+      "b3.ts:1",
+      "b4.ts:1",
+      "b5.ts:1"
+    ]);
+  });
+
+  it("accepts a sanitized bracket-style call", () => {
+    const ok = [{ path: "c1.ts", text: 'console["error"](sanitizeLogText(e.message));' }];
     expect(findRawErrorWriters(ok)).toEqual([]);
   });
 });
