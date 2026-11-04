@@ -584,7 +584,7 @@ export const newsModuleManifest = {
     {
       id: "news.provenance_diagnostics",
       description:
-        "Moss can explain why a story is in your feed from counts alone: stories from built-in sources, stories from added sources, stories found by a followed-topic search, stories that matched a followed topic, how many topics you follow, and how many sources you excluded. It never reads out headlines or story text and cannot say why one particular story arrived."
+        "Moss explains why stories are in your feed from counts only: built-in versus added sources, topic matches, followed topics and excluded sources. No headlines, and nothing about one single story."
     },
     {
       id: "news.heartbeat_source",
