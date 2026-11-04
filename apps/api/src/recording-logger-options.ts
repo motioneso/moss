@@ -1,4 +1,5 @@
 import type { FastifyServerOptions } from "fastify";
+import { createSanitizedLogDestination, type LogWriteTarget } from "@moss/shared/log-sanitizer";
 const recordingSecretPaths = [
   "req.headers.authorization",
   "headers.authorization",
@@ -15,7 +16,10 @@ const recordingSecretPaths = [
   "req.body.pcmBase64",
   "req.body.recordingProof"
 ];
-/** Add secret redaction without dropping a caller's stream, serializers or existing policy. */
+/**
+ * Add secret redaction and a sanitizing output stream without dropping a caller's stream,
+ * serializers or existing policy. Every line is masked before it reaches the stream.
+ */
 export function recordingLoggerOptions(
   logger: FastifyServerOptions["logger"]
 ): FastifyServerOptions["logger"] {
@@ -23,8 +27,12 @@ export function recordingLoggerOptions(
   const configured = typeof logger === "object" ? logger : {};
   const existing = configured.redact;
   const paths = Array.isArray(existing) ? existing : (existing?.paths ?? []);
+  const target = ("stream" in configured ? configured.stream : undefined) as
+    | LogWriteTarget
+    | undefined;
   return {
     ...configured,
+    stream: createSanitizedLogDestination(target ?? process.stdout),
     redact: {
       ...(existing && !Array.isArray(existing) ? existing : {}),
       paths: [...new Set([...paths, ...recordingSecretPaths])]

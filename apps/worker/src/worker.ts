@@ -4,6 +4,11 @@ import type { ConstructorOptions, PgBoss } from "pg-boss";
 import { pino, type Logger as PinoLogger } from "pino";
 import type { FastifyBaseLogger } from "fastify";
 import { sql } from "kysely";
+import {
+  createSanitizedLogDestination,
+  sanitizeLogText,
+  writeSanitizedFatal
+} from "@moss/shared/log-sanitizer";
 
 import {
   DataContextRunner,
@@ -203,10 +208,13 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   // each module's worker registration so no `console.*` lands in production
   // worker logs; module-tagged children are created by the registry. Level honors
   // LOG_LEVEL (pino default is "info"). Suppressed in unit tests via LOG_LEVEL.
-  const workerLogger: PinoLogger = pino({
-    level: process.env.LOG_LEVEL ?? "info",
-    base: { process: "worker" }
-  });
+  const workerLogger: PinoLogger = pino(
+    {
+      level: process.env.LOG_LEVEL ?? "info",
+      base: { process: "worker" }
+    },
+    createSanitizedLogDestination(process.stdout)
+  );
 
   const meetingSummaryCli = createWorkerMeetingSummaryCli();
   const workerDb = createDatabase({
@@ -610,7 +618,10 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   // against, so it must outlive the drain (pg-boss owns a separate connection).
   // -------------------------------------------------------------------------
   const captureSupervision = startMeetingCaptureSupervision(boss, (error) => {
-    workerLogger.warn({ event: "capture_maintenance.supervision", message: error.message });
+    workerLogger.warn({
+      event: "capture_maintenance.supervision",
+      message: sanitizeLogText(error.message)
+    });
   });
   async function shutdown(): Promise<void> {
     const supervisionClosed = captureSupervision.close();
@@ -663,17 +674,20 @@ export function createCrashHandler(
 ): (label: string, err: unknown) => void {
   const timeoutMs = opts.timeoutMs ?? 2000;
   const exit = opts.exit ?? ((code: number) => process.exit(code));
-  const log = opts.log ?? ((line: string) => console.error(line));
+  const log = opts.log;
   let crashing = false;
   return (label: string, err: unknown): void => {
     if (crashing) return;
     crashing = true;
-    // LOW (#165): log err.message for Error values instead of String(err), which
-    // would stringify a non-Error object (e.g. a config/pool object) and could
-    // surface a connection string. Non-Error rejection reasons collapse to
-    // "unknown" — blunt, but never leaks.
-    const message = err instanceof Error ? err.message : "unknown";
-    log(JSON.stringify({ level: "fatal", label, err: message, msg: "Process crash — exiting" }));
+    // Only the message of an Error is written, masked by the shared sanitizer. A non-Error
+    // rejection reason collapses to "unknown" because stringifying it could surface a
+    // connection string (#165).
+    writeSanitizedFatal(
+      label,
+      err instanceof Error ? err : "unknown",
+      log,
+      "Process crash — exiting"
+    );
     const drain = Promise.race([
       handle.shutdown(),
       new Promise<void>((resolve) => {
@@ -686,19 +700,55 @@ export function createCrashHandler(
   };
 }
 
-async function bootstrap(): Promise<void> {
-  const handle = await buildWorker();
+/**
+ * Shutdown on signal. A failed shutdown writes one sanitized line and exits 1 instead of
+ * surfacing as an unhandled rejection with the raw error.
+ */
+export function createShutdownHandler(
+  handle: { shutdown(): Promise<void> },
+  opts: { exit?: (code: number) => never; log?: (line: string) => void } = {}
+): () => Promise<void> {
+  const exit = opts.exit ?? ((code: number) => process.exit(code));
+  return async () => {
+    try {
+      await handle.shutdown();
+    } catch (err) {
+      writeSanitizedFatal("shutdown", err, opts.log, "Shutdown failed");
+      exit(1);
+      return;
+    }
+    exit(0);
+  };
+}
+
+export async function bootstrap(
+  opts: {
+    build?: () => Promise<WorkerHandle>;
+    log?: (line: string) => void;
+    exit?: (code: number) => never;
+  } = {}
+): Promise<void> {
+  const exit = opts.exit ?? ((code: number) => process.exit(code));
+  let handle: WorkerHandle;
+  try {
+    handle = await (opts.build ?? buildWorker)();
+  } catch (err) {
+    writeSanitizedFatal("startup", err, opts.log, "Worker startup failed");
+    exit(1);
+    return;
+  }
 
   console.log(`Jarv1s worker listening on ${RLS_PROBE_QUEUE} and built-in module queues`);
 
-  const handleCrash = createCrashHandler(handle);
+  const handleCrash = createCrashHandler(handle, { log: opts.log, exit: opts.exit });
+  const shutdownOnSignal = createShutdownHandler(handle, { log: opts.log, exit: opts.exit });
 
   process.once("SIGINT", () => {
-    void handle.shutdown().then(() => process.exit(0));
+    void shutdownOnSignal();
   });
 
   process.once("SIGTERM", () => {
-    void handle.shutdown().then(() => process.exit(0));
+    void shutdownOnSignal();
   });
 
   process.on("unhandledRejection", (reason) => {

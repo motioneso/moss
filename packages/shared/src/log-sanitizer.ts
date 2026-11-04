@@ -296,14 +296,12 @@ export function writeSanitizedFatal(
 ): void {
   try {
     const raw = err instanceof Error ? err.message : typeof err === "string" ? err : "unknown";
-    const name = err instanceof Error ? err.name : undefined;
     const record = sanitizeLogRecord(raw, {});
     if (!record) return;
     write(
       `${JSON.stringify({
         level: "fatal",
         label: sanitizeLogText(label),
-        ...(name ? { name: sanitizeLogText(name) } : {}),
         err: record.message,
         msg
       })}\n`

@@ -45,6 +45,7 @@ export async function handleUpgradeCheckJob(
   });
 
   if (!res.ok && (res.status === 403 || res.status === 429 || res.status >= 500)) {
+    // log-safe: fixed event name with a numeric status or a user id only
     process.stderr.write(
       `${JSON.stringify({ level: "warn", event: "upgrade_check_soft_skip", status: res.status })}\n`
     );
@@ -80,6 +81,7 @@ export async function handleUpgradeCheckJob(
     }>`select id from app.upgrade_notify_owner_ids()`.execute(workerDb);
     const owner = owners[0];
     if (owners.length > 1) {
+      // log-safe: fixed event name with a numeric status or a user id only
       process.stderr.write(
         `${JSON.stringify({
           level: "warn",
@@ -89,6 +91,7 @@ export async function handleUpgradeCheckJob(
       );
     }
     if (!owner) {
+      // log-safe: fixed event name with a numeric status or a user id only
       process.stderr.write(
         `${JSON.stringify({ level: "warn", event: "upgrade_notify_no_owner" })}\n`
       );
