@@ -36,6 +36,10 @@ feature that is not present in the image you are running.
 - **Moss knows more of the app.** Moss now knows where more of the app lives. [PR #3970](https://github.com/motioneso/moss/pull/3970)
 - **Clearer Finance reports and lists.** Finance charts are easier to read, long activity lists fold away, and phones and the Transactions screen are easier to use. [PR #3964](https://github.com/motioneso/moss/pull/3964)
 
+#### Fixed
+
+- **Outlook calendar sync recovers after the browser restarts.** Outlook calendar sync no longer pauses with "Needs repair" when the sync browser has no calendar page open. [PR #3974](https://github.com/motioneso/moss/pull/3974)
+
 ### 2026-11-02
 
 #### Added
