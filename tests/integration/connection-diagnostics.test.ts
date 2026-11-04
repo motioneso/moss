@@ -13,7 +13,7 @@ import { PreferencesRepository } from "@moss/structured-state";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const OUTLOOK_BROWSER_PROVIDER = "outlook-browser-calendar";
-const RAW_ERROR = "provider said: token abc123-SECRET-MARKER expired";
+const RAW_ERROR = "401 Unauthorized: token abc123-SECRET-MARKER rejected";
 
 describe("connection diagnostics reader", () => {
   let appDb: Kysely<MossDatabase>;
@@ -104,9 +104,11 @@ describe("connection diagnostics reader", () => {
 
   it("4. gives Outlook sign-in-needed and partial distinct labels", async () => {
     const signIn = await create(ids.userD, OUTLOOK_BROWSER_PROVIDER);
-    const partial = await create(ids.userD, OUTLOOK_BROWSER_PROVIDER);
-    await as(ids.userD, async (db) => {
-      await prefs.upsert(db, outlookHealthKey(signIn), { state: "sign-in-needed" });
+    const partial = await create(ids.userC, OUTLOOK_BROWSER_PROVIDER);
+    await as(ids.userD, (db) =>
+      prefs.upsert(db, outlookHealthKey(signIn), { state: "sign-in-needed" })
+    );
+    await as(ids.userC, async (db) => {
       await prefs.upsert(db, outlookHealthKey(partial), {
         state: "partial",
         failures: 2,
@@ -114,9 +116,12 @@ describe("connection diagnostics reader", () => {
         lastCompleteAt: "2026-09-04T09:00:00.000Z"
       });
     });
-    const section = await as(ids.userD, (db) => readConnectionDiagnostics(db, { limit: 10 }));
-    const bySign = section.items.find((entry) => entry.accountId === signIn);
-    const byPartial = section.items.find((entry) => entry.accountId === partial);
+    const signSection = await as(ids.userD, (db) => readConnectionDiagnostics(db, { limit: 10 }));
+    const partialSection = await as(ids.userC, (db) =>
+      readConnectionDiagnostics(db, { limit: 10 })
+    );
+    const bySign = signSection.items.find((entry) => entry.accountId === signIn);
+    const byPartial = partialSection.items.find((entry) => entry.accountId === partial);
     expect(bySign).toMatchObject({ status: "sign-in-needed", errorLabel: "sign-in-needed" });
     expect(byPartial).toMatchObject({
       status: "partial",
