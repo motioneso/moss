@@ -200,9 +200,9 @@ function maskAndCut(input: string, maxChars: number): { text: string; cut: boole
   if (input.length > HARD_INPUT_CHARS) {
     return { text: `[truncated ${input.length} chars]`, cut: true };
   }
-  if (input.length <= maxChars) return { text: redactSecrets(input), cut: false };
+  if (input.length <= maxChars) return { text: redactSecrets(input, true), cut: false };
   const urlMasked = maskUrlCredentials(input);
-  const masked = redactSecrets(urlMasked.slice(0, maxChars));
+  const masked = redactSecrets(urlMasked.slice(0, maxChars), true);
   return { text: dropDanglingAuthority(masked), cut: true };
 }
 
@@ -220,12 +220,14 @@ const BARE_HEADER = new RegExp(String.raw`(\b${HEADER_NAME}["']?\s*[:=]\s*)(?!["
  * Replace secret-bearing substrings with a fixed marker. Safe on undefined and empty input.
  * Covers the older shapes plus URL passwords, cookies and every Authorization scheme.
  */
-export function redactSecrets(text: string | undefined): string {
+export function redactSecrets(text: string | undefined, failClosed = false): string {
   if (!text) return "";
   let out = text;
   out = out.replace(QUOTED_HEADER, `$1${LOG_REDACTED}`);
   out = out.replace(BARE_HEADER, `$1${LOG_REDACTED}`);
-  out = maskFromSecretMarker(maskUrlCredentials(out));
+  out = maskUrlCredentials(out);
+  // Log text only. Other callers keep the precise patterns below.
+  if (failClosed) out = maskFromSecretMarker(out);
   out = out.replace(LEGACY_PATTERNS[0]!, LOG_REDACTED);
   out = out.replace(LEGACY_PATTERNS[1]!, LOG_REDACTED);
   out = out.replace(LEGACY_PATTERNS[2]!, LOG_REDACTED);
