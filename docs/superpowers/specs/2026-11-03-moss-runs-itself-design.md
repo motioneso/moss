@@ -1,6 +1,6 @@
 # Moss Runs Itself
 
-**Status:** Draft for Ben's approval
+**Status:** Approved by Ben on 2026-11-03
 **GitHub:** issue #3973
 **Owner:** Ben
 
