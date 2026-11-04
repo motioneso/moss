@@ -881,12 +881,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       handleCrash("uncaughtException", err);
     });
 
-    process.once("SIGTERM", () => {
-      void shutdownOnSignal(server);
-    });
-    process.once("SIGINT", () => {
-      void shutdownOnSignal(server);
-    });
+    for (const signal of ["SIGTERM", "SIGINT"] as const) {
+      process.once(signal, () => void shutdownOnSignal(server));
+    }
 
     await server.listen({ host, port });
   });
