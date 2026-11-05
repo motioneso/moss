@@ -30,7 +30,8 @@ describe("automatic meeting summary worker composition", () => {
       dataContext,
       createConstrainedCliStructuredAdapter,
       probeConstrainedCli,
-      resolveActiveModules: expect.any(Function)
+      resolveActiveModules: expect.any(Function),
+      onIsolationFailed: expect.any(Function)
     });
     expect(work).toHaveBeenCalledTimes(2);
     expect(work).toHaveBeenCalledWith(
