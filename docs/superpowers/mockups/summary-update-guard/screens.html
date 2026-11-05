@@ -8,9 +8,7 @@
 <button class="jds-segmented__opt" data-pick="view:member">Meeting: update problem (member)</button>
 <button class="jds-segmented__opt" data-pick="view:admin">Meeting: update problem (admin)</button>
 <button class="jds-segmented__opt" data-pick="view:offline">Meeting: connection offline</button>
-<button class="jds-segmented__opt" data-pick="view:nomodel">Meeting: no model set</button>
-<button class="jds-segmented__opt" data-pick="view:gaveup">Meeting: retries used up</button>
-<button class="jds-segmented__opt" data-pick="view:recovered">Meeting: after recovery</button></span></span>
+<button class="jds-segmented__opt" data-pick="view:nomodel">Meeting: no model set</button></span></span>
 <span class="mk-group"><span class="mk-label">Theme</span><span class="jds-segmented"><button class="jds-segmented__opt" data-pick="theme:light" aria-pressed="true">Light</button><button class="jds-segmented__opt" data-pick="theme:dark">Dark</button></span></span></div>
 <div class="mk-page">
 
@@ -28,39 +26,29 @@
 </div>
 </div>
 
-<div data-show="view:member admin offline nomodel gaveup recovered">
+<div data-show="view:member admin offline nomodel">
 <h1 class="mk-h">Meetings / Weekly planning</h1>
 <p class="mk-help">The summary panel on one meeting. The transcript and notes above it are unchanged.</p>
 <div class="stack">
  <div class="jds-card jds-card--pad-lg fail" data-show="view:member">
   <div class="card-h">Summary</div>
-  <p>This summary could not be written because the installed Claude did not pass its summary safety check. Moss will try again by itself once that is fixed.</p>
+  <p>This summary could not be written because the installed Claude did not pass its summary safety check. Use Rewrite summary once that is fixed.</p>
   <div class="row"><span class="sub">Ask an admin to check the AI connection.</span> <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button></div>
  </div>
  <div class="jds-card jds-card--pad-lg fail" data-show="view:admin">
   <div class="card-h">Summary</div>
-  <p>This summary could not be written because the installed Claude did not pass its summary safety check. Moss will try again by itself once that is fixed.</p>
+  <p>This summary could not be written because the installed Claude did not pass its summary safety check. Use Rewrite summary once that is fixed.</p>
   <div class="row"><button class="jds-btn jds-btn--secondary jds-btn--sm">Open AI providers</button> <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button></div>
  </div>
  <div class="jds-card jds-card--pad-lg fail" data-show="view:offline">
   <div class="card-h">Summary</div>
-  <p>This summary could not be written because Moss cannot reach the Claude connection right now. Moss will try again by itself when it is back.</p>
+  <p>This summary could not be written because Moss cannot reach the Claude connection right now. Use Rewrite summary when it is back.</p>
   <div class="row"><button class="jds-btn jds-btn--secondary jds-btn--sm">Open AI providers</button> <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button></div>
  </div>
  <div class="jds-card jds-card--pad-lg fail" data-show="view:nomodel">
   <div class="card-h">Summary</div>
   <p>This summary could not be written because no model is set up for summaries.</p>
   <div class="row"><button class="jds-btn jds-btn--secondary jds-btn--sm">Open AI providers</button> <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button></div>
- </div>
- <div class="jds-card jds-card--pad-lg fail" data-show="view:gaveup">
-  <div class="card-h">Summary</div>
-  <p>Moss tried three times and has stopped retrying this summary. Use Rewrite summary when the connection is fixed.</p>
-  <div class="row"><button class="jds-btn jds-btn--secondary jds-btn--sm">Open AI providers</button> <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button></div>
- </div>
- <div class="jds-card jds-card--pad-lg ok" data-show="view:recovered">
-  <div class="card-h">Summary</div>
-  <p>Weekly planning covered the launch checklist, who owns the vendor follow-ups, and a decision to move the review to Thursday.</p>
-  <div class="row"><span class="jds-badge jds-badge--pine">Written automatically after the connection was fixed</span> <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button></div>
  </div>
 </div>
 </div>
