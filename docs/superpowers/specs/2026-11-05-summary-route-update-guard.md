@@ -19,9 +19,8 @@ Mockups: `docs/superpowers/mockups/summary-update-guard/screens.html` (not yet a
 5. **No automatic re-run of failed summaries.** Ben re-runs them himself with Rewrite summary.
 6. **Failures use the existing admin alert.** Nothing new (no email or push).
 7. **Retire the version hash lists and the old summary route.**
-8. **Open, needs Ben:** if the session cannot report one of the three properties, the run goes ahead
-   on "requested and accepted" wording. The alternative is to stop every Claude run, which breaks
-   summaries. Recommended: go ahead, and word it honestly.
+8. **When the session cannot confirm a property, the summary still runs.** Ben ruled yes. The PR
+   and app map word it as "requested and accepted, not observed".
 
 This spec supersedes decision 5 of the approved plan ("the update system's live check runs the
 profile before a build goes live"). The build PR amends that document to match.
@@ -120,8 +119,7 @@ Build step zero-b: read the Claude adapter and the launch code and fill in the t
 property, with the file and line that supplies the value. Any property that lands in "could not be
 observed" is worded as "requested and accepted, not observed" in the PR and the app map (Claims
 About Security Properties rule). Failing closed on unobservable properties is not an option here,
-because it would stop every Claude run and break summaries, which is what Ben ruled out. Ben must
-confirm this trade (see Decisions, item 8).
+because it would stop every Claude run and break summaries, which is what Ben ruled out. This is Decisions item 8.
 
 Only that run stops. The next run checks again, so a later fix or update recovers without any
 reset. Each failure raises the existing admin alert, with the cause but no transcript text.
