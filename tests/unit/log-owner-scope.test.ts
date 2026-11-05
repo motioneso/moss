@@ -36,24 +36,42 @@ describe("owner scope lifetime", () => {
     const request = {};
     const response = new EventEmitter();
     rememberRequestLogOwner(request, A);
-    let later: () => Record<string, unknown> = () => ({});
+    let later: Promise<Record<string, unknown>> = Promise.resolve({});
+    let now: Record<string, unknown> = {};
     continueInRequestLogOwner(request, response, () => {
-      expect(withCurrentLogOwner({})).toEqual({ actorUserId: A });
-      later = () => withCurrentLogOwner({});
+      now = withCurrentLogOwner({});
+      // Detached work started inside the scope and read after the response closes.
+      later = new Promise((resolve) => setTimeout(() => resolve(withCurrentLogOwner({})), 20));
     });
+    expect(now).toEqual({ actorUserId: A });
     response.emit("close");
-    await Promise.resolve();
-    expect(later()).toEqual({});
+    expect(await later).toEqual({});
+  });
+
+  it("carries no owner when the response closed before the scope was entered", async () => {
+    const request = {};
+    const response = Object.assign(new EventEmitter(), { closed: false });
+    rememberRequestLogOwner(request, A);
+    // Aborted during an earlier hook, so "close" fired before this hook registered a listener.
+    response.closed = true;
+    response.emit("close");
+    let seen: Promise<Record<string, unknown>> = Promise.resolve({ unset: true });
+    continueInRequestLogOwner(request, response, () => {
+      seen = new Promise((resolve) => setTimeout(() => resolve(withCurrentLogOwner({})), 20));
+    });
+    expect(await seen).toEqual({});
   });
 
   it("stops applying after a bound function settles", async () => {
-    let later: () => Record<string, unknown> = () => ({});
+    let later: Promise<Record<string, unknown>> = Promise.resolve({});
+    let during: Record<string, unknown> = {};
     await runWithLogOwner(A, async () => {
       await Promise.resolve();
-      later = () => withCurrentLogOwner({});
-      expect(later()).toEqual({ actorUserId: A });
+      during = withCurrentLogOwner({});
+      later = new Promise((resolve) => setTimeout(() => resolve(withCurrentLogOwner({})), 20));
     });
-    expect(later()).toEqual({});
+    expect(during).toEqual({ actorUserId: A });
+    expect(await later).toEqual({});
   });
 
   it("does not stamp detached client work that outlives its request", async () => {

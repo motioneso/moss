@@ -21,10 +21,15 @@ export function rememberRequestLogOwner(request: object, actorUserId: string): v
  */
 export function continueInRequestLogOwner(
   request: object,
-  response: { once(event: "close", listener: () => void): unknown },
+  response: { once(event: "close", listener: () => void): unknown; closed?: boolean },
   next: () => void
 ): void {
-  const entry: OwnerScope = { actorUserId: requestOwners.get(request) ?? null, active: true };
+  // A request aborted during an earlier hook has already emitted "close", so it gets no owner.
+  const alreadyClosed = response.closed === true;
+  const entry: OwnerScope = {
+    actorUserId: alreadyClosed ? null : (requestOwners.get(request) ?? null),
+    active: !alreadyClosed
+  };
   response.once("close", () => {
     entry.active = false;
   });
