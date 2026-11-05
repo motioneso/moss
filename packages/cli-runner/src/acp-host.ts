@@ -83,6 +83,7 @@ import {
 import { sanitizeSessionKey } from "@moss/chat/live";
 import { applyAgentCredential, type AcpCredential } from "./acp-launch-credential.js";
 import { logRedactedStderr } from "./stderr-redactor.js";
+import { credentialValuesIn, maskSecretsInLine } from "./stdout-redactor.js";
 
 // Re-exported so callers that only know acp-host.ts keep working unchanged;
 // the definitions live in acp-execs.ts (task 5b, 2026-09-08 file-size split).
@@ -212,6 +213,8 @@ interface AcpSession {
   /** HOME handed to the agent process — where its own CLI may keep a transcript outside cwd. */
   readonly home: string;
   readonly providerKind: AcpProviderKind;
+  /** Exact credential values handed to the agent; masked out of everything it prints. */
+  readonly secrets: readonly string[];
   /**
    * The slot's own identity, present whenever per-user separation launched
    * this session. The launcher's three privileges (chown/setuid/setgid) do
@@ -561,6 +564,7 @@ export class AcpHost {
       profile,
       home: agentHome,
       providerKind,
+      secrets: credentialValuesIn(env),
       generation: (this.generationCounter += 1),
       buffered: [],
       bufferedBytes: 0,
@@ -578,7 +582,8 @@ export class AcpHost {
       pending += chunk.toString("utf8");
       const parts = pending.split("\n");
       pending = parts.pop() ?? "";
-      for (const line of parts) {
+      for (const rawLine of parts) {
+        const line = maskSecretsInLine(rawLine, session.secrets);
         const trimmed = line.length > MAX_LINE_BYTES ? line.slice(0, MAX_LINE_BYTES) : line;
         if (trimmed.length === 0) continue;
         session.buffered.push(trimmed);
