@@ -151,6 +151,8 @@ describe("MOSS_PERSONA_TOOL_GUIDANCE", () => {
     expect(sentence).toBeDefined();
     expect(sentence).toContain("jobs");
     expect(sentence).toContain("connections");
+    expect(sentence).toContain("news story");
+    expect(sentence).toContain("modules section for news");
     expect(sentence!.split(/\s+/).length).toBeLessThan(75);
   });
 

@@ -288,26 +288,14 @@ export class NewsService {
     }
 
     const excludedDomains = exclusions.map((item) => item.canonicalDomain);
-    const cutoff = now.getTime() - NEWS_ARTICLE_MAX_AGE_MS;
     const storyRef = this.storyFeedback?.storyRef.bind(this.storyFeedback);
-    const seen = new Set<string>();
-    const articles = snapshot.payload.articles.filter((article) => {
-      if (Date.parse(article.publishedAt) < cutoff) return false;
-      if (hostnameIsExcluded(article.canonicalDomain, excludedDomains)) return false;
-      if (seen.has(article.url)) return false;
-      // #2247: a published snapshot can predate a later dismissal, so it is re-checked here on
-      // every read rather than only at compile time. A link that cannot be turned into a
-      // reference was never offered feedback in the first place, so it is never suppressed here.
-      if (dismissedRefs.size > 0 && storyRef) {
-        try {
-          if (dismissedRefs.has(storyRef(article.url))) return false;
-        } catch {
-          // malformed link: not judged, not suppressed
-        }
-      }
-      seen.add(article.url);
-      return true;
-    });
+    const articles = visibleSnapshotArticles(
+      snapshot.payload.articles,
+      excludedDomains,
+      now,
+      dismissedRefs,
+      storyRef
+    );
     const headlines = articles.map((article) => toPersonalizedHeadline(article, storyRef));
     const configuredSources = personalizedSources(prefs, customSources, excludedDomains);
     const configuredByDomain = new Map(configuredSources.map((source) => [source.domain, source]));
@@ -606,6 +594,39 @@ function urlHostname(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * The stories a reader is actually shown from a published snapshot: not older than a week, not
+ * from an excluded publisher, not a repeat of an earlier link and not dismissed. Shared with the
+ * news provenance diagnostics so their counts match the feed by construction.
+ */
+export function visibleSnapshotArticles(
+  articles: readonly NewsSnapshotArticle[],
+  excludedDomains: readonly string[],
+  now: Date,
+  dismissedRefs: ReadonlySet<string>,
+  storyRef?: (canonicalUrl: string) => string
+): NewsSnapshotArticle[] {
+  const cutoff = now.getTime() - NEWS_ARTICLE_MAX_AGE_MS;
+  const seen = new Set<string>();
+  return articles.filter((article) => {
+    if (Date.parse(article.publishedAt) < cutoff) return false;
+    if (hostnameIsExcluded(article.canonicalDomain, excludedDomains)) return false;
+    if (seen.has(article.url)) return false;
+    // #2247: a published snapshot can predate a later dismissal, so it is re-checked here on
+    // every read rather than only at compile time. A link that cannot be turned into a
+    // reference was never offered feedback in the first place, so it is never suppressed here.
+    if (dismissedRefs.size > 0 && storyRef) {
+      try {
+        if (dismissedRefs.has(storyRef(article.url))) return false;
+      } catch {
+        // malformed link: not judged, not suppressed
+      }
+    }
+    seen.add(article.url);
+    return true;
+  });
 }
 
 /**

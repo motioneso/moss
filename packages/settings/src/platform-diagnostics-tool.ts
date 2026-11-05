@@ -89,7 +89,18 @@ const diagnosticFactsSchema = {
     snapshotAgeSeconds: { type: ["number", "null"] },
     itemCount: { type: ["number", "null"] },
     requestedGeneration: { type: "number" },
-    compiledGeneration: { type: "number" }
+    compiledGeneration: { type: "number" },
+    // News provenance. Story counts are null when the saved feed is missing or expired.
+    totalStories: { type: ["number", "null"] },
+    storiesHiddenFromSavedFeed: { type: ["number", "null"] },
+    storiesFromBuiltInSources: { type: ["number", "null"] },
+    storiesFromAddedSources: { type: ["number", "null"] },
+    storiesFoundByTopicSearch: { type: ["number", "null"] },
+    storiesMatchingFollowedTopic: { type: ["number", "null"] },
+    addedSourceCount: { type: "number" },
+    followedTopicCount: { type: "number" },
+    excludedSourceCount: { type: "number" },
+    dismissalsApplied: { type: "boolean" }
   }
 } as const;
 const diagnosticObservationSchema = {
