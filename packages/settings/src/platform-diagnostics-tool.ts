@@ -87,8 +87,16 @@ export const platformDiagnosticsInputSchema = {
       properties: {
         sinceMinutes: { type: "integer", minimum: 1, maximum: 1440 },
         minLevel: { type: "string", enum: LOG_LEVELS },
-        component: { type: "string", maxLength: 80 },
-        connectionKind: { type: "string", maxLength: 40 }
+        component: {
+          type: "string",
+          maxLength: 80,
+          description: "Leave unset on the first call. Only use a label an earlier result showed."
+        },
+        connectionKind: {
+          type: "string",
+          maxLength: 40,
+          description: "Leave unset on the first call. Most records carry no connection kind."
+        }
       }
     }
   }

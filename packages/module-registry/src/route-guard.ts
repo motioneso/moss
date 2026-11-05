@@ -346,7 +346,7 @@ export function registerRouteEnablementGuard(server: FastifyInstance, deps: Rout
   });
 
   // Callback style, so the handler runs inside the owner scope that shared service loggers read.
-  server.addHook("preHandler", (request, _reply, done) => {
-    continueInRequestLogOwner(request, done);
+  server.addHook("preHandler", (request, reply, done) => {
+    continueInRequestLogOwner(request, reply.raw, done);
   });
 }

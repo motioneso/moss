@@ -26,6 +26,17 @@ const TURN_DEADLINE_MS = 300_000;
 const WORKER_WARNING = "google-sync stored connection invalid";
 const PLANTED_SECRET = "sk-uat3978-planted-secret-token-0001";
 
+// A well-formed encrypted envelope that the instance key cannot open. The key id carries the
+// planted secret, so the decrypt error text names it and only the log cleaner keeps it out.
+const BROKEN_ENVELOPE = JSON.stringify({
+  version: 1,
+  algorithm: "aes-256-gcm",
+  keyId: PLANTED_SECRET,
+  iv: "AAAAAAAAAAAAAAAA",
+  tag: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  ciphertext: "AAAAAAAA"
+});
+
 type LogRecord = {
   readonly component: string;
   readonly message: string | null;
@@ -57,7 +68,7 @@ function sql(statement: string): string {
 function plantBrokenConnection(ownerId: string, accountId: string): void {
   sql(
     `INSERT INTO app.connector_accounts (id, provider_id, owner_user_id, scopes, status, encrypted_secret)
-     VALUES ('${accountId}', 'google', '${ownerId}', ARRAY['https://www.googleapis.com/auth/gmail.modify'], 'active', '${PLANTED_SECRET}')
+     VALUES ('${accountId}', 'google', '${ownerId}', ARRAY['https://www.googleapis.com/auth/gmail.modify'], 'active', '${BROKEN_ENVELOPE}'::jsonb)
      ON CONFLICT (id) DO NOTHING`
   );
 }
@@ -151,23 +162,24 @@ test("Moss reads both processes' warnings, hides other owners' text, and survive
   await page.context().addCookies(adminCookies);
 
   // 2. Admin asks in plain words. The answer quotes the worker warning, and the tool call
-  //    included the logs section.
+  //    called the diagnostics tool. The warning text only exists in its logs section.
   await page.goto(requireUatBaseURL());
   await bringUpRealChatModel(page);
   const reply = await ask(page, "Why did my Google connection sync fail? What do the logs show?");
   expect(reply.toLowerCase()).toContain("stored connection invalid");
   const activity = sql(
-    `SELECT count(*) FROM app.chat_messages WHERE owner_user_id='${UAT_ADMIN_ID}' AND tool_metadata::text LIKE '%platformDiagnostics%' AND tool_metadata::text LIKE '%logs%'`
+    `SELECT count(*) FROM app.chat_messages WHERE owner_user_id='${UAT_ADMIN_ID}' AND tool_metadata::text LIKE '%settings_platformDiagnostics%'`
   );
   expect(Number(activity)).toBeGreaterThan(0);
 
   // 3. The second owner's record shows up as metadata only for the admin.
   const adminView = await readLogs(page.request);
   const own = adminView.records.filter((r) => r.owned && r.message?.includes("stored connection"));
-  const others = adminView.records.filter((r) => !r.owned && r.component === "google-sync");
+  const others = adminView.records.filter((r) => !r.owned && r.component === "worker");
   expect(own.length).toBeGreaterThan(0);
   expect(others.length).toBeGreaterThan(0);
-  expect(others.every((r) => r.message === null && r.ownerKnown)).toBe(true);
+  expect(others.every((r) => r.message === null)).toBe(true);
+  expect(others.some((r) => r.ownerKnown)).toBe(true);
 
   // 4. A non-admin gets nothing and a server-side redaction notice.
   await signIn(page, UAT_SECOND_OWNER_EMAIL, UAT_SECOND_OWNER_PASSWORD);
@@ -185,11 +197,40 @@ test("Moss reads both processes' warnings, hides other owners' text, and survive
     afterRestart.records.some((r) => r.owned && r.message?.includes("stored connection"))
   ).toBe(true);
 
-  // 6. The planted secret never reached the stored log text.
-  expect(
-    sql(
-      `SELECT count(*) FROM app.diagnostic_log_records WHERE message LIKE '%${PLANTED_SECRET}%' OR context::text LIKE '%${PLANTED_SECRET}%'`
+  // 6. A real API warning carries the planted secret in its error text. The failing request
+  //    echoes the unknown input key, so the secret reaches the logger inside an error object.
+  await page.context().clearCookies();
+  await page.context().addCookies(adminCookies);
+  const echo = await page.request.post(
+    "/api/ai/assistant-tools/settings.platformDiagnostics/invoke",
+    {
+      data: { input: { include: ["logs"], logs: { [PLANTED_SECRET]: 1 } } }
+    }
+  );
+  expect(echo.ok()).toBeFalsy();
+  await expect
+    .poll(
+      () =>
+        sql(
+          "SELECT count(*) FROM app.diagnostic_log_records WHERE process='api' AND message='Unhandled route error' AND occurred_at > now() - interval '2 minutes'"
+        ),
+      { timeout: 60_000, message: "the API never stored the warning that carried the secret" }
     )
-  ).toBe("0");
+    .not.toBe("0");
+
+  // Neither the stored rows nor the output of any process may hold the secret. The worker's
+  // own warnings never print error text, so for it the check is that its output stays clean
+  // while the planted envelope sits in the database it reads.
+  const stored = sql(
+    `SELECT count(*) FROM app.diagnostic_log_records WHERE message LIKE '%${PLANTED_SECRET}%' OR context::text LIKE '%${PLANTED_SECRET}%'`
+  );
+  expect(stored).toBe("0");
+  const output = execFileSync(
+    "docker",
+    buildUatComposeArgs(requireUatProjectName(), ["logs", "--no-color", "--tail", "2000"]),
+    { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 }
+  );
+  expect(output).toContain("Unhandled route error");
+  expect(output).not.toContain(PLANTED_SECRET);
   expect(WORKER_WARNING).toContain("connection invalid");
 });
