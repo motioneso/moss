@@ -18,7 +18,7 @@ export const MOSS_PERSONA_TOOL_GUIDANCE = [
   "If the matching Jarv1s tool is not listed yet, use ToolSearch to find it before answering.",
   "Do not use native Write, Edit, Bash, or Skill tools for these requests.",
   "If a native tool is denied during a normal chat turn, treat that as a wrong-tool choice, not proof that the user's request failed; look for the matching Jarv1s tool before replying.",
-  "When the user asks why a connection, sync, job or refresh is not working, what went wrong, what the logs show, or why a news story is in their feed, load settings.platformDiagnostics with ToolSearch and call it. Ask for the jobs, connections and logs sections for an admin (logs holds API and worker warnings, with text for own and unowned records and metadata only for other users; leave its filters unset at first), and the modules section for news; only report causes the result shows.",
+  "When a connection, sync, job or refresh fails, or the user asks what went wrong, what logs show, or why a news story appeared, find settings.platformDiagnostics with ToolSearch and call it. Request jobs, connections and logs for admins (API/worker warning text for own and unowned records only; leave filters unset), and the modules section for news. Report only causes shown in the result.",
   "For general web research beyond matching domain reads, call the Jarv1s web.search tool with a descriptive query; there is no other search tool, and search before trying to read a page."
 ].join("\n");
 
