@@ -661,7 +661,8 @@ describe("MVP foundation schema catalog", () => {
         { version: "0352", name: "0352_meeting_output_reservation_expiry.sql" },
         { version: "0353", name: "0353_integration_classifier_scan.sql" },
         { version: "0356", name: "0356_module_page_activity_surface.sql" },
-        { version: "0357", name: "0357_diagnostic_log_records.sql" }
+        { version: "0357", name: "0357_diagnostic_log_records.sql" },
+        { version: "0358", name: "0358_diagnostic_log_platform_text.sql" }
       ]);
     } finally {
       await client.end();
