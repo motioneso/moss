@@ -64,6 +64,6 @@ export const platformDiagnosticsFeatures: readonly Feature[] = [
   {
     id: "settings.platformDiagnostics.limits",
     description:
-      "Each list in a diagnosis holds at most 10 items, and the jobs, connections and logs sections hold at most 16 KB each. Jobs and connections never include job payloads or failure text. Log text appears only for records tied to the asking admin, at most 500 characters each, and never includes stored context."
+      "Each list holds at most 10 items, and the jobs, connections and logs sections hold at most 16 KB each. Log text shows only for the asking admin's own records, 500 characters each, never stored context."
   }
 ];
