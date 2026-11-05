@@ -4,12 +4,13 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import pg from "pg";
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
-import { createPgBossClient, sendJob, type PgBoss } from "@moss/jobs";
+import { assertMetadataOnlyPayload, createPgBossClient, type PgBoss } from "@moss/jobs";
 import {
   DIAGNOSTIC_LOG_MAX_ROWS,
   DIAGNOSTIC_LOG_PURGE_CRON,
   DIAGNOSTIC_LOG_PURGE_QUEUE,
-  registerSettingsJobWorkers
+  registerSettingsJobWorkers,
+  type DiagnosticLogPurgeJobPayload
 } from "@moss/settings";
 import type { Kysely } from "kysely";
 
@@ -43,9 +44,10 @@ describe("diagnostic log purge job", () => {
   }
 
   async function runPurgeJob(): Promise<void> {
-    const jobId = await sendJob(boss, DIAGNOSTIC_LOG_PURGE_QUEUE, {
-      kind: "diagnostics.log_purge"
-    });
+    // The purge job has no actor, so it is sent with boss.send like the schedule does.
+    const payload: DiagnosticLogPurgeJobPayload = { kind: "diagnostics.log_purge" };
+    assertMetadataOnlyPayload(payload);
+    const jobId = await boss.send(DIAGNOSTIC_LOG_PURGE_QUEUE, payload);
     expect(jobId).not.toBeNull();
     await waitFor(async () => {
       const job = await boss.getJobById(DIAGNOSTIC_LOG_PURGE_QUEUE, jobId as string);
