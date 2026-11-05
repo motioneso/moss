@@ -281,18 +281,52 @@ test("Moss reads both processes' warnings, hides other owners' text, and survive
   expect(plainView.records).toEqual([]);
   expect(plainView.redactions).toContain("logs");
 
-  // 5. The store survives a restart of the API and worker, and chat still finds the admin's
-  //    warning afterwards.
+  // 5. The store survives a restart of the API and worker. After it, a brand-new conversation
+  //    (no earlier turn to copy from) must still report the admin's warning, so the answer can
+  //    only come from the stored rows. The row ids are captured first and must still exist.
+  const storedWarningIds = sql(
+    `SELECT string_agg(id::text, ',' ORDER BY id) FROM app.diagnostic_log_records WHERE process='worker' AND owner_user_id='${UAT_ADMIN_ID}' AND message='${WORKER_WARNING}'`
+  );
+  expect(storedWarningIds, "worker warning rows stored before the restart").not.toBe("");
+  const threadBeforeRestart = sql(
+    `SELECT thread_id FROM app.chat_messages WHERE owner_user_id='${UAT_ADMIN_ID}' ORDER BY created_at DESC LIMIT 1`
+  );
   await restartUatStack(requireUatProjectName(), requireUatBaseURL());
   await page.context().clearCookies();
   await page.context().addCookies(adminCookies);
   await page.goto(requireUatBaseURL());
+  const composer = page.getByRole("textbox", { name: /^Message/ });
+  if (!(await composer.isVisible())) {
+    await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
+    await expect(composer).toBeVisible();
+  }
+  await page.getByRole("button", { name: "Open conversations" }).click();
+  await page.getByRole("button", { name: "New side chat" }).click();
+  await expect(composer).toBeVisible();
+  expect(
+    sql(
+      `SELECT string_agg(id::text, ',' ORDER BY id) FROM app.diagnostic_log_records WHERE process='worker' AND owner_user_id='${UAT_ADMIN_ID}' AND message='${WORKER_WARNING}'`
+    ),
+    "the same stored rows after the restart"
+  ).toContain(storedWarningIds.split(",")[0]);
   const afterRestartReply = await ask(
     page,
     "After the restart, what do the logs still show about my Google connection?"
   );
   expect(afterRestartReply.toLowerCase()).toContain("stored connection invalid");
   expect(afterRestartReply.toLowerCase()).not.toContain(SECOND_OWNER_WARNING);
+  const threadAfterRestart = sql(
+    `SELECT thread_id FROM app.chat_messages WHERE owner_user_id='${UAT_ADMIN_ID}' ORDER BY created_at DESC LIMIT 1`
+  );
+  expect(threadAfterRestart, "the after-restart turn ran in a new conversation").not.toBe(
+    threadBeforeRestart
+  );
+  expect(
+    sql(
+      `SELECT count(*) FROM app.chat_messages WHERE thread_id='${threadAfterRestart}' AND body ILIKE '%stored connection invalid%'`
+    ),
+    "the warning text appears in the new conversation only in this turn's answer"
+  ).toBe("1");
 
   // 6. A real API warning carries the planted secret in its error text. The failing request
   //    echoes the unknown input key, so the secret reaches the logger inside an error object.
