@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { sql, type Kysely } from "kysely";
+import type { Kysely } from "kysely";
 import pg from "pg";
 
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";

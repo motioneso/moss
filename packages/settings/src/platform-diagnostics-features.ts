@@ -37,7 +37,7 @@ export const platformDiagnosticsFeatures: readonly Feature[] = [
   {
     id: "settings.platformDiagnostics.logs",
     description:
-      "Stored warnings and errors from the API and the worker, instance admins only. Filter by time (up to 24 hours back), level, component and connection kind. Shows the full message only for records tied to your own account. Other records show time, component and level, with no text. Logs keep about 7 days and about 50,000 records, enforced hourly, so the store can briefly hold more. A heavy burst may drop records, and some records have no known owner.",
+      "Stored warnings and errors, instance admins only. Filter by time, level, component. Full text only for records tied to your own account; other records show time, component and level only.",
     errors: [
       {
         code: "log_store_empty_or_gap",
@@ -55,6 +55,11 @@ export const platformDiagnosticsFeatures: readonly Feature[] = [
         path: "/settings"
       }
     ]
+  },
+  {
+    id: "settings.platformDiagnostics.logs.retention",
+    description:
+      "Logs keep about 7 days and about 50,000 records, enforced hourly, so the store can briefly hold more. A heavy burst may drop records, and some records have no known owner."
   },
   {
     id: "settings.platformDiagnostics.limits",
