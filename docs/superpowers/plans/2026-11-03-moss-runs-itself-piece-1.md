@@ -523,7 +523,8 @@ Open questions, each owned by the 2B builder and answered in Task 2B.0 before an
 - **Privacy classification.** Table `app.diagnostic_log_records` is owner-or-unowned, read through a
   function. A row whose `owner_user_id` equals the caller returns full message and context. Every
   other row (other owner, or no owner) returns only time, level, process, component, connection
-  kind and event code. No admin exception. No role holds BYPASSRLS. The function also returns
+  kind and event code. No admin exception. (Superseded in 12.11 for rows with no owner: admins see
+  their message text. Rows owned by another user stay metadata-only.) No role holds BYPASSRLS. The function also returns
   nothing at all to a non-admin, as a second gate behind the service's live check.
 - **Write path never breaks a request.** The sink is a bounded in-memory queue with a background
   flush. The log call returns before any database work. All sink failures are swallowed and counted.
@@ -536,7 +537,7 @@ Open questions, each owned by the 2B builder and answered in Task 2B.0 before an
   is needed. The PR states this and shows a grep over infra/docker-compose.prod.yml and the dev
   compose file for any log-related key, to prove nothing is missing.
 - **Log text may still hold private data a pattern cannot recognise** (a mail subject inside a
-  message). Mitigated by owner-only visibility of message text, the 7-day age cap, and the user
+  message). Mitigated by owner-only visibility of message text (see 12.11 for unowned rows), the 7-day age cap, and the user
   deletion cascade. Recorded as a known limit in the app map, not claimed as solved.
 
 ### 12.3 Contracts
@@ -757,8 +758,10 @@ tests/integration/diagnostic-log-store.test.ts. Tests:
    caused by the sink's own failure). Fails with infinite recursion if unguarded.
 4. A storm of 10,000 records in one minute stores at most 200 plus one `log.dropped` summary with the
    right count, and the queue never exceeds 500. Fails if either bound is missing.
-5. A foreign-key failure (stale owner id) retries the batch with owners removed, and the rows land
-   unowned. Fails if the batch is lost.
+5. A foreign-key failure (stale owner id) retries row by row in savepoints. Rows with a valid owner
+   keep it, rows with a stale owner are dropped and counted. Never retry with owners removed,
+   because an owned warning would become an unowned one (12.11). Fails if the batch is lost or a
+   valid owner is cleared.
 6. SQLSTATE 42P01 opens the 30-second pause and recovers after it (fake clock). Fails if it retries
    hot.
 7. `close()` flushes what is queued once and then ignores later records.
