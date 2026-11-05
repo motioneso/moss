@@ -243,6 +243,31 @@ describe("diagnostic log table checks", () => {
 });
 
 describe("diagnostic log row security and migration", () => {
+  it("removes legacy unowned rows before exposing platform text and preserves owned rows", async () => {
+    await clearRecords();
+    await insertRecord(workerDb, { message: "LEGACY-UNOWNED-PRIVATE-MARKER" });
+    await insertRecord(workerDb, { owner: adminA, message: "OWNED-A-MARKER" });
+    await insertRecord(workerDb, { owner: adminB, message: "OWNED-B-MARKER" });
+    expect(await countRecords()).toBe(3);
+    const migration = readFileSync(
+      "packages/settings/sql/0358_diagnostic_log_platform_text.sql",
+      "utf8"
+    );
+    await boot.query("BEGIN");
+    try {
+      await boot.query(migration);
+      const remaining = await boot.query(
+        "SELECT owner_user_id, message FROM app.diagnostic_log_records ORDER BY message"
+      );
+      expect(remaining.rows).toEqual([
+        { owner_user_id: adminA, message: "OWNED-A-MARKER" },
+        { owner_user_id: adminB, message: "OWNED-B-MARKER" }
+      ]);
+    } finally {
+      await boot.query("ROLLBACK");
+    }
+  });
+
   it("enables and forces row security, and hides rows from a role that holds SELECT", async () => {
     const flags = await boot.query(
       `SELECT relrowsecurity, relforcerowsecurity FROM pg_class

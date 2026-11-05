@@ -62,6 +62,11 @@ export const platformDiagnosticsFeatures: readonly Feature[] = [
       "Unowned text may hold private data a pattern cannot recognise, such as a mail subject in an error. The 7-day cap and 2 KB storage cut limit exposure; stored context is never returned. Deleted-owner warnings are dropped."
   },
   {
+    id: "settings.platformDiagnostics.logs.upgrade",
+    description:
+      "Upgrade removes existing unowned warnings because older writers could lose ownership. Owned warnings survive. Stop old writers before upgrading; an old writer left running can still expose private text."
+  },
+  {
     id: "settings.platformDiagnostics.logs.retention",
     description:
       "Logs keep about 7 days and about 50,000 records, enforced hourly, so the store can briefly hold more. A heavy burst may drop records, and some records have no known owner."

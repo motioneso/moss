@@ -1,5 +1,9 @@
 -- #3991 / #3978 slice 2E. Live admins can read cleaned platform warning text.
 -- Other owners stay metadata-only; context and the admin gate are unchanged.
+-- Old sink retries could strip valid owners, so existing unowned rows may be private.
+-- Discarding this diagnostic history is acceptable: it has only 7-day retention.
+DELETE FROM app.diagnostic_log_records WHERE owner_user_id IS NULL;
+
 CREATE OR REPLACE FUNCTION app.read_diagnostic_log(
   p_since timestamptz, p_min_level smallint, p_component text,
   p_connection_kind text, p_limit integer)
