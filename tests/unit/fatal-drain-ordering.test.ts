@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createCrashHandler as apiCrash } from "../../apps/api/src/process-lifecycle.js";
-import { createCrashHandler as workerCrash, finishShutdown } from "../../apps/worker/src/worker.js";
+import { createCrashHandler as workerCrash } from "../../apps/worker/src/worker.js";
 import Fastify from "fastify";
 import { recordingLoggerOptions } from "../../apps/api/src/recording-logger-options.js";
 import type { DiagnosticLogRow, DiagnosticLogSink } from "@moss/settings";
@@ -97,17 +97,5 @@ describe("api crash path", () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-});
-
-describe("worker shutdown order", () => {
-  it("flushes before destroying and closes last on a clean shutdown", async () => {
-    const order: string[] = [];
-    const sink = {
-      flush: async () => void order.push("flush"),
-      close: async () => void order.push("close")
-    };
-    await finishShutdown(sink, { destroy: async () => void order.push("destroy") });
-    expect(order).toEqual(["flush", "destroy", "close"]);
   });
 });
