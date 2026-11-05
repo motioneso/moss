@@ -1091,9 +1091,9 @@ Decisions:
   No admin exception for rows owned by someone else. No BYPASSRLS.
 - **Change surface.** One new migration in `packages/settings/sql/` (next free number, checked
   against origin/main and open pull requests) that does `CREATE OR REPLACE FUNCTION
-  app.read_diagnostic_log` with the same signature and return columns. The `message` expression
+app.read_diagnostic_log` with the same signature and return columns. The `message` expression
   becomes `CASE WHEN r.owner_user_id = app.current_actor_user_id() OR r.owner_user_id IS NULL THEN
-  r.message END`. The admin check in WHERE is unchanged, so a non-admin still gets nothing. The
+r.message END`. The admin check in WHERE is unchanged, so a non-admin still gets nothing. The
   applied migration 0357 is not edited.
 - **Context.** The stored context JSON is still never selected. Only the cleaned message text is
   added.
