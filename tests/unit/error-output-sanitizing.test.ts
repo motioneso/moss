@@ -276,12 +276,20 @@ export function findRawErrorWriters(files: Array<{ path: string; text: string }>
 describe("process loggers use the sanitized output stream", () => {
   it("builds the worker logger on the sanitizing destination", () => {
     const text = readFileSync(join(__dirname, "..", "..", "apps/worker/src/worker.ts"), "utf8");
-    expect(text).toMatch(/pino\([^;]*createSanitizedLogDestination\(/s);
+    expect(text).toMatch(/pino\([^;]*createDiagnosticLogDestination\(/s);
   });
 
   it("builds the API logger options on the sanitizing destination", () => {
     const text = readFileSync(
       join(__dirname, "..", "..", "apps/api/src/recording-logger-options.ts"),
+      "utf8"
+    );
+    expect(text).toContain("createDiagnosticLogDestination(");
+  });
+
+  it("makes the diagnostic destination sanitize before it writes or stores", () => {
+    const text = readFileSync(
+      join(__dirname, "..", "..", "packages/settings/src/diagnostic-log-destination.ts"),
       "utf8"
     );
     expect(text).toContain("createSanitizedLogDestination(");

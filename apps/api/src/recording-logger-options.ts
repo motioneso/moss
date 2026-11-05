@@ -41,9 +41,9 @@ export function recordingLoggerOptions(
     | undefined;
   return {
     ...configured,
-    // log-safe: the sanitizing destination wraps the raw stream
     stream: createDiagnosticLogDestination({
       process: "api",
+      // log-safe: the sanitizing destination wraps the raw stream
       target: target ?? process.stdout,
       sink: deps.sink ?? null
     }),
