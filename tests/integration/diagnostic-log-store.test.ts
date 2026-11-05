@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sql, type Kysely } from "kysely";
 import pg from "pg";
@@ -235,6 +236,57 @@ describe("diagnostic log table checks", () => {
     await insertRecord(workerDb, { owner: adminA });
     await boot.query("DELETE FROM app.users WHERE id = $1", [deletableUser]);
     expect(await countRecords()).toBe(1);
+  });
+});
+
+describe("diagnostic log row security and migration", () => {
+  it("enables and forces row security, and hides rows from a role that holds SELECT", async () => {
+    const flags = await boot.query(
+      `SELECT relrowsecurity, relforcerowsecurity FROM pg_class
+       WHERE oid = 'app.diagnostic_log_records'::regclass`
+    );
+    expect(flags.rows[0]).toEqual({ relrowsecurity: true, relforcerowsecurity: true });
+
+    // With the table grant leaked, row security alone must still return no rows.
+    await clearRecords();
+    await insertRecord(workerDb, { owner: adminA });
+    await boot.query("BEGIN");
+    try {
+      await boot.query("GRANT SELECT ON app.diagnostic_log_records TO jarvis_app_runtime");
+      await boot.query("SET LOCAL ROLE jarvis_app_runtime");
+      const visible = await boot.query("SELECT count(*)::int AS n FROM app.diagnostic_log_records");
+      expect(visible.rows[0].n).toBe(0);
+    } finally {
+      await boot.query("ROLLBACK");
+    }
+  });
+
+  it("re-applies cleanly and leaves policies, functions and grants unchanged", async () => {
+    const snapshot = async () => {
+      const policies = await boot.query(
+        `SELECT policyname, cmd, roles::text AS roles FROM pg_policies
+         WHERE tablename = 'diagnostic_log_records' ORDER BY policyname`
+      );
+      const functions = await boot.query(
+        `SELECT proname, md5(prosrc) AS body, proacl::text AS acl FROM pg_proc
+         WHERE proname IN ('read_diagnostic_log', 'diagnostic_log_coverage', 'purge_diagnostic_log')
+         ORDER BY proname`
+      );
+      const table = await boot.query(
+        "SELECT relacl::text AS acl FROM pg_class WHERE oid = 'app.diagnostic_log_records'::regclass"
+      );
+      return { policies: policies.rows, functions: functions.rows, table: table.rows };
+    };
+    const before = await snapshot();
+    const migration = readFileSync("packages/settings/sql/0357_diagnostic_log_records.sql", "utf8");
+    await boot.query("BEGIN");
+    try {
+      await boot.query(migration);
+      await boot.query(migration);
+      expect(await snapshot()).toEqual(before);
+    } finally {
+      await boot.query("ROLLBACK");
+    }
   });
 });
 
