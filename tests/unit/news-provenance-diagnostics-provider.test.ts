@@ -266,6 +266,7 @@ async function throughToolOutput(input: NewsFeedProvenanceInputs, feedback?: () 
       actions: [],
       jobs: { recent: [], summaries: [], truncated: false },
       connections: { items: [], truncated: false },
+      logs: { records: [], coverage: { oldestAt: null, newestAt: null }, truncated: false },
       source: null,
       redactions: []
     }

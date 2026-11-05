@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import type { AccessContext } from "@moss/db";
 import type { MossModuleManifest } from "@moss/module-sdk";
-import { withLogOwner } from "@moss/settings";
+import { continueInRequestLogOwner, rememberRequestLogOwner, withLogOwner } from "@moss/settings";
 
 import type { ActiveModulesResolver } from "@moss/ai";
 
@@ -325,6 +325,7 @@ export function registerRouteEnablementGuard(server: FastifyInstance, deps: Rout
       // Every later record for this request carries its owner.
       request.log = withLogOwner(request.log, actorUserId);
       reply.log = request.log;
+      rememberRequestLogOwner(request, actorUserId);
     } catch {
       // Not authenticated — let the route's own handler return its normal 401.
       return;
@@ -342,5 +343,10 @@ export function registerRouteEnablementGuard(server: FastifyInstance, deps: Rout
     if (!active.some((m) => m.id === moduleId)) {
       return reply.code(404).send({ error: "Not found" });
     }
+  });
+
+  // Callback style, so the handler runs inside the owner scope that shared service loggers read.
+  server.addHook("preHandler", (request, reply, done) => {
+    continueInRequestLogOwner(request, reply.raw, done);
   });
 }

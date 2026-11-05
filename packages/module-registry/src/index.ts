@@ -370,7 +370,8 @@ import {
   updateModuleBuildStatus,
   INTEGRATIONS_FAMILY,
   loadFamilyKeyring,
-  resolveAlertsQuietPolicy
+  resolveAlertsQuietPolicy,
+  readDiagnosticLogs
 } from "@moss/settings";
 import {
   TASKS_QUEUE_DEFINITIONS,
@@ -3965,6 +3966,7 @@ export function registerBuiltInApiRoutes(
         since: opts.since
       }),
     readConnections: (scopedDb, _ctx, opts) => readConnectionDiagnostics(scopedDb, opts),
+    readLogs: (scopedDb, _ctx, opts) => readDiagnosticLogs(scopedDb, opts),
     onProviderError: (moduleId, errorName) =>
       server.log.warn({ moduleId, errorName }, "module diagnostics provider was dropped")
   });

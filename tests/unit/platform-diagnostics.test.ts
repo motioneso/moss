@@ -291,6 +291,74 @@ describe("platform diagnostics service", () => {
       );
     });
 
+    describe("logs", () => {
+      const logsSection = {
+        records: [],
+        coverage: { oldestAt: null, newestAt: null },
+        truncated: false
+      };
+      const withLogs = (readLogs?: ReturnType<typeof vi.fn>, admin = true) =>
+        createPlatformDiagnosticsService({
+          appMap: { getBuildInfo: () => ({ version: "1.2.3", buildId: "build-1" }) },
+          repository: {
+            listRecentErrors: vi.fn().mockResolvedValue([]),
+            listActionAuditLog: vi.fn().mockResolvedValue([])
+          },
+          moduleProviders: async () => [],
+          runInContext: async (work) => work({}),
+          isInstanceAdmin: async () => admin,
+          assertDiagnosticsSafe: vi.fn(),
+          readLogs: readLogs as never
+        });
+
+      it("redacts logs for a non-admin without reading", async () => {
+        const readLogs = vi.fn().mockResolvedValue(logsSection);
+        const report = await withLogs(readLogs, false).observe(scopedDb, ctx, {
+          include: ["logs"]
+        });
+        expect(report.redactions).toEqual(["logs"]);
+        expect(readLogs).not.toHaveBeenCalled();
+      });
+
+      it("redacts logs for an admin when no reader is wired", async () => {
+        const report = await withLogs(undefined).observe(scopedDb, ctx, { include: ["logs"] });
+        expect(report.redactions).toEqual(["logs"]);
+      });
+
+      it("passes filters with defaults and caps the list", async () => {
+        const record = (n: number) => ({
+          occurredAt: "2026-11-04T10:00:00.000Z",
+          process: "api" as const,
+          level: "warn" as const,
+          component: `c${n}`,
+          connectionKind: null,
+          eventCode: null,
+          ownerKnown: false,
+          owned: false,
+          message: null,
+          truncated: false
+        });
+        const readLogs = vi.fn().mockResolvedValue({
+          ...logsSection,
+          records: Array.from({ length: 30 }, (_, n) => record(n))
+        });
+        const report = await withLogs(readLogs).observe(scopedDb, ctx, {
+          include: ["logs"],
+          logs: { component: "oauth" }
+        });
+        expect(readLogs).toHaveBeenCalledWith(
+          scopedDb,
+          ctx,
+          expect.objectContaining({ minLevel: "warn", component: "oauth", limit: 10 })
+        );
+        const since = readLogs.mock.calls[0]![2].since as Date;
+        expect(Date.now() - since.getTime()).toBeGreaterThan(59 * 60 * 1000);
+        expect(Date.now() - since.getTime()).toBeLessThan(61 * 60 * 1000);
+        expect(report.logs.records).toHaveLength(10);
+        expect(report.logs.truncated).toBe(true);
+      });
+    });
+
     it("leaves the sections out unless asked, so default calls are unchanged", async () => {
       const readJobs = vi.fn();
       const service = build({ isInstanceAdmin: async () => true, readJobs });
