@@ -98,7 +98,11 @@ describe("diagnostic log purge job", () => {
     });
     expect(jobId).not.toBeNull();
 
-    await waitFor(async () => (await count()) <= DIAGNOSTIC_LOG_MAX_ROWS, "the purge job to run");
+    await waitFor(async () => {
+      const job = await boss.getJobById(DIAGNOSTIC_LOG_PURGE_QUEUE, jobId as string);
+      if (job?.state === "failed") throw new Error("the purge job failed");
+      return job?.state === "completed";
+    }, "the purge job to complete");
     expect(await count()).toBe(DIAGNOSTIC_LOG_MAX_ROWS);
     expect(await count("message LIKE 'aged%'")).toBe(0);
     expect(await count("message LIKE 'fresh%'")).toBe(5);
@@ -123,6 +127,10 @@ describe("diagnostic log purge ownership", () => {
     );
     expect(apiHits).toEqual([]);
     expect(read("apps/worker/src/worker.ts")).toContain("registerBuiltInModuleWorkers(boss");
+    // The production chain: worker.ts -> registerBuiltInModuleWorkers -> settings workers.
+    expect(read("packages/module-registry/src/index.ts")).toMatch(
+      /return registerSettingsJobWorkers\(\s*boss,/
+    );
     expect(read("packages/settings/src/data-export-jobs.ts")).toContain(
       "await reconcileDiagnosticLogPurgeSchedule(boss)"
     );
