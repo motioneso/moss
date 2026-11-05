@@ -126,17 +126,13 @@ export interface ProviderInstallStateStore {
 
 /**
  * Reconciles + reads the persisted provider install lifecycle for the founder-status
- * resolver (§A.5 step 2 + §A.4.2). Runs INSIDE the admin-scoped DataContextDb the status
- * route resolves (the §A.4.2 correction WRITE needs the 0103 admin write RLS; the probe is
- * the cli-runner `probeProvider`). Implemented by the install lane (composition root): for
- * every persisted row it runs the §A.4.2 stale-`installing` projection over (persisted, fresh
- * probe), persists any correction under the admin actor, and returns the reconciled state per
- * provider. A provider with no row is absent from the map ⇒ `installState` is omitted on the
- * wizard (Phase-1 byte-for-byte surface). Errors are the install lane's concern (fail-soft so
- * a transient probe never breaks the status load).
+ * resolver (§A.5 step 2 + §A.4.2). The route supplies short admin-checked transactions for
+ * reads and corrections. Runner probes MUST run outside those callbacks (#3442), so a slow
+ * runner never holds a pooled database connection. A provider with no row is absent from
+ * the map; transient probe errors leave the persisted state unchanged.
  */
 export type ReconcileInstallStatesPort = (
-  scopedDb: DataContextDb,
+  withAdminDataContext: <T>(work: (scopedDb: DataContextDb) => Promise<T>) => Promise<T>,
   actorUserId?: string
 ) => Promise<Partial<Record<OnboardingProviderKind, ProviderInstallState>>>;
 
@@ -558,14 +554,6 @@ export function registerOnboardingRoutes(
               repository.readOnboardingState(scopedDb),
               probes.connectorAccountExists(scopedDb)
             ]);
-            // §A.5 step 2 / §A.4.2: read the persisted install lifecycle, correcting any stale
-            // `installing` row left by an api crash mid-install (the projection runs + persists
-            // under THIS admin-scoped handle, so the correction WRITE satisfies the 0103 admin
-            // write RLS). The reconcile MUST come after the admin gate above. Absent seam ⇒ the
-            // Phase-1 presence-only surface (no installState).
-            const installStateByKind = install
-              ? await install.reconcileInstallStates(scopedDb, accessContext.actorUserId)
-              : undefined;
             // #365: derive per-provider catalog installability (the `supported` set) from the
             // install seam's PURE installability port, so the wizard offers Connect data-drivenly
             // (no provider hardcoded in the UI control flow). Absent seam ⇒ omitted (phase-1
@@ -580,11 +568,26 @@ export function registerOnboardingRoutes(
             return {
               state,
               connectorAccountExists,
-              installStateByKind,
               installableByKind
             };
           }
         );
+
+        // #3442: reconciliation waits on the runner without a transaction open. Every
+        // database callback rechecks the admin actor, including correction writes.
+        const installStateByKind = install
+          ? await install.reconcileInstallStates(
+              (work) =>
+                dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
+                  await dependencies.assertBootstrapOwnerAdminUser(
+                    scopedDb,
+                    accessContext.actorUserId
+                  );
+                  return work(scopedDb);
+                }),
+              accessContext.actorUserId
+            )
+          : undefined;
 
         const actorId = accessContext.actorUserId;
         const now = Date.now();
@@ -614,9 +617,7 @@ export function registerOnboardingRoutes(
           state: dbPart.state,
           cliPresentByKind: { anthropic, "openai-compatible": openaiCompatible, google },
           connectorAccountExists: dbPart.connectorAccountExists,
-          ...(dbPart.installStateByKind !== undefined
-            ? { installStateByKind: dbPart.installStateByKind }
-            : {}),
+          ...(installStateByKind !== undefined ? { installStateByKind } : {}),
           ...(dbPart.installableByKind !== undefined
             ? { installableByKind: dbPart.installableByKind }
             : {})

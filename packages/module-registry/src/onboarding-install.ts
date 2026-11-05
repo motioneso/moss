@@ -141,7 +141,7 @@ export function buildOnboardingInstall(deps: {
   };
 
   // §A.5 step 2 / §A.4.2: the store port the reconcile projection drives. It is the SAME
-  // admin-scoped DataContextDb the status route opened — every read/write here is admin-RLS-safe.
+  // admin-scoped DataContextDb supplied by a short route callback, never across a runner probe.
   const reconcileStoreFor = (scopedDb: DataContextDb): ChatInstallStateStore => ({
     read: async (provider) => {
       const row = await repository.readProviderInstallState(scopedDb, provider);
@@ -167,11 +167,12 @@ export function buildOnboardingInstall(deps: {
     installability,
     installClient,
     stateStore,
-    reconcileInstallStates: async (scopedDb, actorUserId) => {
+    reconcileInstallStates: async (withAdminDataContext, actorUserId) => {
       const out: Partial<Record<OnboardingProviderKind, ProviderInstallState>> = {};
-      const rows = await repository.readAllProviderInstallStates(scopedDb);
+      const rows = await withAdminDataContext((scopedDb) =>
+        repository.readAllProviderInstallStates(scopedDb)
+      );
       if (rows.length === 0) return out;
-      const store = reconcileStoreFor(scopedDb);
       for (const row of rows) {
         if (!INSTALL_PROVIDER_KINDS.includes(row.provider)) continue;
         if (row.state !== "installing" && row.state !== "ready") {
@@ -199,10 +200,16 @@ export function buildOnboardingInstall(deps: {
                 actorUserId
               )
             : ({ status: "error" } as const);
-          const corrected =
-            row.state === "installing"
-              ? await reconcileInstallingRow(row.provider, store, probe)
-              : await reconcileProviderLifecycleRow(row.provider, store, probe);
+          const corrected = await withAdminDataContext(async (scopedDb) => {
+            const store = reconcileStoreFor(scopedDb);
+            const current = await store.read(row.provider);
+            // A login or reinstall may have changed the lifecycle while the probe waited.
+            // Leave that newer state alone rather than applying the old probe to it.
+            if (current?.state !== row.state) return current?.state;
+            return row.state === "installing"
+              ? reconcileInstallingRow(row.provider, store, probe)
+              : reconcileProviderLifecycleRow(row.provider, store, probe);
+          });
           out[row.provider] = corrected ?? row.state;
         } catch (err) {
           deps.logger?.warn(
