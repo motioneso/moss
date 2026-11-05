@@ -37,6 +37,15 @@ function fromList(list: readonly string[], value: unknown): string | null {
   return typeof value === "string" && list.includes(value) ? value : null;
 }
 
+/** A context that fits the column limit once JSON-escaped, shrinking the kept text until it does. */
+function cutContext(serialized: string): Record<string, unknown> {
+  for (const budget of [1800, 1000, 400, 100]) {
+    const cut = { _cut: truncateUtf8(serialized, budget).text };
+    if (Buffer.byteLength(JSON.stringify(cut)) <= LOG_LIMITS.contextBytes) return cut;
+  }
+  return {};
+}
+
 /**
  * Turn one line that has already been sanitized into a table row, or null when it is below
  * warn or cannot be read. Only the sanitized text is parsed, so the stored copy is never raw.
@@ -65,7 +74,7 @@ export function rowFromSanitizedLine(
   let storedContext = context;
   const serialized = JSON.stringify(context);
   if (Buffer.byteLength(serialized) > LOG_LIMITS.contextBytes) {
-    storedContext = { _cut: truncateUtf8(serialized, LOG_LIMITS.contextBytes).text };
+    storedContext = cutContext(serialized);
     truncated = true;
   }
   const message = truncateUtf8(
