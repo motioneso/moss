@@ -32,7 +32,11 @@ describe("createCrashHandler (api)", () => {
 
     expect(errorLog).toHaveBeenCalledTimes(1);
     expect(errorLog).toHaveBeenCalledWith(
-      { err: expect.objectContaining({ message: "first" }), label: "unhandledRejection" },
+      {
+        err: expect.objectContaining({ message: "first" }),
+        label: "unhandledRejection",
+        eventCode: "crash"
+      },
       "Process crash — exiting"
     );
     expect(close).toHaveBeenCalledTimes(1);

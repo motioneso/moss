@@ -305,6 +305,74 @@ describe("diagnostic log sink", () => {
     const sink = createDiagnosticLogSink({ db, process: "worker", stderr: () => {} });
     for (let i = 0; i < 201; i += 1) sink.enqueue(row(i));
     await sink.close();
-    expect(JSON.stringify(inserts.at(-1)!.parameters)).toContain("dropped 1 log records");
+    expect(JSON.stringify(inserts.map((q) => q.parameters))).toContain("dropped 1 log records");
+  });
+
+  it("writes at most 200 records a minute to the database after a backlog builds", async () => {
+    let now = 20_000_000;
+    const { db } = fakeDb(() => {});
+    const sink = createDiagnosticLogSink({
+      db,
+      process: "worker",
+      now: () => now,
+      stderr: () => {}
+    });
+    for (let minute = 0; minute < 3; minute += 1) {
+      for (let i = 0; i < 200; i += 1) sink.enqueue(row(i));
+      now += 61_000;
+    }
+    await sink.flush();
+    // 200 records plus at most the two drop summaries.
+    expect(sink.stats().written).toBeGreaterThanOrEqual(200);
+    expect(sink.stats().written).toBeLessThanOrEqual(202);
+    expect(sink.stats().queued).toBeGreaterThanOrEqual(298);
+    now += 61_000;
+    await sink.flush();
+    // 400 records plus at most the one drop summary.
+    expect(sink.stats().written).toBeGreaterThanOrEqual(400);
+    expect(sink.stats().written).toBeLessThanOrEqual(404);
+  });
+
+  it("reports queue evictions in a drop summary after a flush and then silence", async () => {
+    vi.useFakeTimers();
+    const { db, inserts } = fakeDb(() => {});
+    const sink = createDiagnosticLogSink({ db, process: "worker", stderr: () => {} });
+    const big = "x".repeat(3000);
+    // The byte cap evicts the oldest records inside the first minute.
+    for (let i = 0; i < 190; i += 1) sink.enqueue(row(i, { message: `${i}:${big}` }));
+    expect(sink.stats().dropped).toBeGreaterThan(0);
+    await vi.advanceTimersByTimeAsync(500);
+    const before = inserts.length;
+    expect(before).toBeGreaterThan(0);
+    // Nothing else is logged. The summary timer alone must get the count written.
+    await vi.advanceTimersByTimeAsync(61_000);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(inserts.length).toBeGreaterThan(before);
+    expect(JSON.stringify(inserts.at(-1)!.parameters)).toMatch(/dropped \d+ log records/);
+  });
+
+  it("holds the queue at 500 across minute windows while a write is stuck", async () => {
+    let now = 40_000_000;
+    const { db } = fakeDb(() => new Promise<void>(() => {}));
+    const sink = createDiagnosticLogSink({
+      db,
+      process: "worker",
+      now: () => now,
+      stderr: () => {}
+    });
+    sink.enqueue(row(0));
+    void sink.flush();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    let max = 0;
+    for (let minute = 0; minute < 5; minute += 1) {
+      for (let i = 0; i < 200; i += 1) {
+        sink.enqueue(row(i));
+        max = Math.max(max, sink.stats().queued);
+      }
+      now += 61_000;
+    }
+    expect(max).toBeLessThanOrEqual(500);
+    expect(max).toBeGreaterThan(400);
+    expect(sink.stats().dropped).toBeGreaterThanOrEqual(500);
   });
 });

@@ -37,6 +37,12 @@ function fromList(list: readonly string[], value: unknown): string | null {
   return typeof value === "string" && list.includes(value) ? value : null;
 }
 
+/** No label means the process itself. A label outside the list becomes "other". */
+function componentLabel(raw: unknown, processName: "api" | "worker"): string {
+  if (raw === undefined || raw === null) return processName;
+  return fromList(LOG_COMPONENTS, raw) ?? "other";
+}
+
 /**
  * Upper bound on the size of the stored jsonb text. Postgres prints a space after every colon
  * and comma, so each one outside a string adds a byte. Counting all of them only overshoots.
@@ -103,10 +109,7 @@ export function rowFromSanitizedLine(
     occurredAt: new Date(Number.isFinite(time) ? time : now()).toISOString(),
     process: processName,
     level: Math.min(60, Math.round(level)),
-    component:
-      fromList(LOG_COMPONENTS, source.component) ??
-      fromList(LOG_COMPONENTS, source.module) ??
-      (processName === "api" ? "api" : "worker"),
+    component: componentLabel(source.component ?? source.module, processName),
     connectionKind: fromList(LOG_CONNECTION_KINDS, source.connectionKind),
     eventCode: fromList(LOG_EVENT_CODES, source.eventCode),
     ownerUserId,
@@ -135,8 +138,13 @@ export function createDiagnosticLogDestination(
   const sanitizedStream = createSanitizedLogDestination({
     write(chunk: string): unknown {
       // A stalled stream drops its copy once 256 KB is buffered. The table path continues.
-      const pending = (target as { writableLength?: number }).writableLength ?? 0;
-      const result = pending > STREAM_BACKLOG_LIMIT ? true : target.write(chunk);
+      let result: unknown = true;
+      try {
+        const pending = (target as { writableLength?: number }).writableLength ?? 0;
+        if (pending <= STREAM_BACKLOG_LIMIT) result = target.write(chunk);
+      } catch {
+        // A failing output stream must not reach the caller or stop the table copy.
+      }
       if (opts.sink) {
         try {
           const row = rowFromSanitizedLine(chunk, opts.process);
@@ -158,4 +166,42 @@ export function withLogOwner<T extends { child(bindings: Record<string, unknown>
 ): T {
   if (typeof actorUserId !== "string" || !UUID.test(actorUserId)) return logger;
   return logger.child({ actorUserId });
+}
+
+export type FatalEventCode = "crash" | "startup-failed" | "shutdown-failed";
+
+/**
+ * Line writer for fatal reports. It writes the already-sanitized line to stderr and, when a
+ * sink is available, queues the same text as a level-60 record with the given event code.
+ * The caller drains the sink (sink.close) before it exits.
+ */
+export function createFatalLineWriter(opts: {
+  process: "api" | "worker";
+  eventCode: FatalEventCode;
+  sink: DiagnosticLogSink | null | undefined;
+  stderr?: (line: string) => void;
+}): (line: string) => void {
+  return (line: string): void => {
+    try {
+      (opts.stderr ?? ((l: string) => process.stderr.write(l)))(line);
+    } catch {
+      // stderr failing must not stop the table copy.
+    }
+    if (!opts.sink) return;
+    try {
+      const parsed = JSON.parse(line) as Record<string, unknown>;
+      const row = rowFromSanitizedLine(
+        JSON.stringify({
+          ...parsed,
+          level: 60,
+          component: opts.process,
+          eventCode: opts.eventCode
+        }),
+        opts.process
+      );
+      if (row) opts.sink.enqueue(row);
+    } catch {
+      // A broken sink must never break the exit path.
+    }
+  };
 }

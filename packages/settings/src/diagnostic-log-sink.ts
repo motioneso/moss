@@ -65,6 +65,8 @@ function rowBytes(row: DiagnosticLogRow): number {
 interface Queued {
   readonly row: DiagnosticLogRow;
   readonly bytes: number;
+  /** Drop summaries do not use the per-minute allowance. */
+  readonly summary: boolean;
 }
 
 export interface CreateDiagnosticLogSinkOptions {
@@ -97,6 +99,8 @@ export function createDiagnosticLogSink(opts: CreateDiagnosticLogSinkOptions): D
   let failed = 0;
   let windowStart = now();
   let windowCount = 0;
+  let writeWindowStart = now();
+  let writeWindowCount = 0;
   let droppedSinceSummary = 0;
   let lastSummaryAt = now();
   let lastStderrAt = 0;
@@ -139,33 +143,38 @@ export function createDiagnosticLogSink(opts: CreateDiagnosticLogSinkOptions): D
     const count = droppedSinceSummary;
     droppedSinceSummary = 0;
     lastSummaryAt = at;
-    push(summaryRow(at, count));
+    push(summaryRow(at, count), true);
     return true;
   }
 
-  function schedule(): void {
+  function schedule(delay: number = LOG_SINK_LIMITS.flushDelayMs): void {
     if (timer !== null || closed) return;
     timer = setTimeout(() => {
       timer = null;
       void flush();
-    }, LOG_SINK_LIMITS.flushDelayMs);
+    }, delay);
     timer.unref?.();
   }
 
-  function push(row: DiagnosticLogRow): void {
+  function push(row: DiagnosticLogRow, summary = false): void {
     const bytes = rowBytes(row);
-    queue.push({ row, bytes });
+    // A summary goes first so the allowance never holds it behind a backlog.
+    if (summary) queue.unshift({ row, bytes, summary });
+    else queue.push({ row, bytes, summary });
     queuedBytes += bytes;
     // Oldest records go first when either cap is hit.
     while (
       queue.length > LOG_SINK_LIMITS.maxQueued ||
       queuedBytes > LOG_SINK_LIMITS.maxQueuedBytes
     ) {
-      const oldest = queue.shift();
+      const index = queue.findIndex((item) => !item.summary);
+      if (index < 0) break;
+      const [oldest] = queue.splice(index, 1);
       if (!oldest) break;
       queuedBytes -= oldest.bytes;
       dropped += 1;
       droppedSinceSummary += 1;
+      scheduleSummary();
     }
   }
 
@@ -256,7 +265,28 @@ export function createDiagnosticLogSink(opts: CreateDiagnosticLogSinkOptions): D
         report("log storage slow, flush cut short");
         return;
       }
-      const batch = queue.splice(0, LOG_SINK_LIMITS.batchSize);
+      // The per-minute allowance limits what reaches the database, not only what is admitted.
+      const at = now();
+      if (at - writeWindowStart >= 60_000) {
+        writeWindowStart = at;
+        writeWindowCount = 0;
+      }
+      const allowance = LOG_SINK_LIMITS.maxPerMinute - writeWindowCount;
+      let take = 0;
+      let counted = 0;
+      while (take < queue.length && take < LOG_SINK_LIMITS.batchSize) {
+        if (!queue[take]!.summary) {
+          if (counted >= allowance) break;
+          counted += 1;
+        }
+        take += 1;
+      }
+      if (take === 0) {
+        schedule(writeWindowStart + 60_000 - at + 10);
+        return;
+      }
+      const batch = queue.splice(0, take);
+      writeWindowCount += counted;
       for (const item of batch) queuedBytes -= item.bytes;
       const rows = batch.map((item) => item.row);
       const write = writeBatch(rows);

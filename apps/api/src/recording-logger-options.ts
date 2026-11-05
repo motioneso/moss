@@ -61,10 +61,19 @@ export function recordingLoggerOptions(
   };
 }
 
+let currentSink: DiagnosticLogSink | null = null;
+
 /** The API's table writer. `logger: false` means no logging at all, so no sink either. */
 export function createApiLogSink(
   logger: FastifyServerOptions["logger"],
   workerDb: Kysely<MossDatabase>
 ): DiagnosticLogSink | null {
-  return logger === false ? null : createDiagnosticLogSink({ db: workerDb, process: "api" });
+  if (logger === false) return null;
+  currentSink = createDiagnosticLogSink({ db: workerDb, process: "api" });
+  return currentSink;
+}
+
+/** The most recent API sink, so startup and shutdown failures can reach it from the entrypoint. */
+export function currentApiLogSink(): DiagnosticLogSink | null {
+  return currentSink;
 }

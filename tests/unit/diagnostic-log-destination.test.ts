@@ -7,11 +7,13 @@ import {
 } from "../../apps/api/src/recording-logger-options.js";
 import {
   createDiagnosticLogDestination,
+  createFatalLineWriter,
   withLogOwner,
   type DiagnosticLogRow,
   type DiagnosticLogSink
 } from "@moss/settings";
 import { createSanitizingFormatters } from "@moss/shared";
+import { writeSanitizedFatal } from "@moss/shared/log-sanitizer";
 
 // #3978 slice 2C: stdout and the stored copy are both built from sanitized text, owners come only
 // from a bound uuid, and labels come only from the fixed lists.
@@ -104,7 +106,7 @@ describe("diagnostic log destination", () => {
       connectionKind: "google",
       eventCode: "auth-failed"
     });
-    expect(rows[1]).toMatchObject({ component: "worker", connectionKind: null, eventCode: null });
+    expect(rows[1]).toMatchObject({ component: "other", connectionKind: null, eventCode: null });
     expect(JSON.stringify(rows[1])).not.toContain("alice-inbox");
   });
 
@@ -126,6 +128,45 @@ describe("diagnostic log destination", () => {
     const stored = JSON.stringify(row.context).replace(/([:,])/g, "$1 ");
     expect(Buffer.byteLength(stored)).toBeLessThanOrEqual(2048);
     expect(row.truncated).toBe(true);
+  });
+
+  it("keeps logging and still queues the record when the output stream throws", () => {
+    const rows: DiagnosticLogRow[] = [];
+    const logger = makeLogger(
+      {},
+      createDiagnosticLogDestination({
+        process: "api",
+        target: {
+          write: () => {
+            throw new Error("EPIPE");
+          }
+        },
+        sink: { enqueue: (r: DiagnosticLogRow) => rows.push(r) } as unknown as DiagnosticLogSink
+      })
+    );
+    expect(() => logger.warn("stream is broken")).not.toThrow();
+    expect(rows).toHaveLength(1);
+  });
+
+  it("writes fatal lines to stderr and queues them with an event code", () => {
+    const rows: DiagnosticLogRow[] = [];
+    const errLines: string[] = [];
+    const write = createFatalLineWriter({
+      process: "worker",
+      eventCode: "startup-failed",
+      sink: { enqueue: (r: DiagnosticLogRow) => rows.push(r) } as unknown as DiagnosticLogSink,
+      stderr: (l) => errLines.push(l)
+    });
+    writeSanitizedFatal(
+      "startup",
+      new Error("boom password=hunter2secret"),
+      write,
+      "Worker startup failed"
+    );
+    expect(errLines).toHaveLength(1);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ level: 60, eventCode: "startup-failed", component: "worker" });
+    expect(JSON.stringify(rows[0])).not.toContain("hunter2secret");
   });
 
   it("keeps logging when the sink throws", () => {

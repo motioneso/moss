@@ -84,6 +84,7 @@ import {
   appendModuleBuildFetchedUrl,
   appendModuleBuildWrittenFile,
   createDiagnosticLogDestination,
+  createFatalLineWriter,
   createDiagnosticLogSink,
   type DiagnosticLogSink
 } from "@moss/settings";
@@ -151,6 +152,28 @@ export interface WorkerHandle {
   shutdown(): Promise<void>;
 }
 
+let currentSink: DiagnosticLogSink | null = null;
+
+/** Fatal lines go to stderr and, when a sink exists, to the log table. */
+function fatalWriter(
+  eventCode: "crash" | "startup-failed" | "shutdown-failed",
+  log: ((line: string) => void) | undefined,
+  sink: SinkSource = () => currentSink
+): (line: string) => void {
+  return createFatalLineWriter({ process: "worker", eventCode, sink: sink(), stderr: log });
+}
+
+type SinkSource = () => DiagnosticLogSink | null;
+
+/** Bounded drain of the log table writer before the process exits. */
+async function drainSink(sink: SinkSource = () => currentSink): Promise<void> {
+  try {
+    await sink()?.close();
+  } catch {
+    // Draining is best effort and bounded.
+  }
+}
+
 export function resolveExternalWorkerConfig(env: NodeJS.ProcessEnv = process.env): {
   readonly modulesDir: string;
 } {
@@ -204,6 +227,7 @@ export function createWorkerLogging(workerDb: Kysely<MossDatabase>): {
   sink: DiagnosticLogSink;
 } {
   const sink = createDiagnosticLogSink({ db: workerDb, process: "worker" });
+  currentSink = sink;
   const logger: PinoLogger = pino(
     {
       level: process.env.LOG_LEVEL ?? "info",
@@ -690,7 +714,12 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
  */
 export function createCrashHandler(
   handle: { shutdown(): Promise<void> },
-  opts: { timeoutMs?: number; exit?: (code: number) => never; log?: (line: string) => void } = {}
+  opts: {
+    timeoutMs?: number;
+    exit?: (code: number) => never;
+    log?: (line: string) => void;
+    sink?: SinkSource;
+  } = {}
 ): (label: string, err: unknown) => void {
   const timeoutMs = opts.timeoutMs ?? 2000;
   const exit = opts.exit ?? ((code: number) => process.exit(code));
@@ -705,7 +734,7 @@ export function createCrashHandler(
     writeSanitizedFatal(
       label,
       err instanceof Error ? err : "unknown",
-      log,
+      fatalWriter("crash", log, opts.sink),
       "Process crash — exiting"
     );
     const drain = Promise.race([
@@ -726,14 +755,20 @@ export function createCrashHandler(
  */
 export function createShutdownHandler(
   handle: { shutdown(): Promise<void> },
-  opts: { exit?: (code: number) => never; log?: (line: string) => void } = {}
+  opts: { exit?: (code: number) => never; log?: (line: string) => void; sink?: SinkSource } = {}
 ): () => Promise<void> {
   const exit = opts.exit ?? ((code: number) => process.exit(code));
   return async () => {
     try {
       await handle.shutdown();
     } catch (err) {
-      writeSanitizedFatal("shutdown", err, opts.log, "Shutdown failed");
+      writeSanitizedFatal(
+        "shutdown",
+        err,
+        fatalWriter("shutdown-failed", opts.log, opts.sink),
+        "Shutdown failed"
+      );
+      await drainSink(opts.sink);
       exit(1);
       return;
     }
@@ -746,6 +781,7 @@ export async function bootstrap(
     build?: () => Promise<WorkerHandle>;
     log?: (line: string) => void;
     exit?: (code: number) => never;
+    sink?: SinkSource;
   } = {}
 ): Promise<void> {
   const exit = opts.exit ?? ((code: number) => process.exit(code));
@@ -753,7 +789,13 @@ export async function bootstrap(
   try {
     handle = await (opts.build ?? buildWorker)();
   } catch (err) {
-    writeSanitizedFatal("startup", err, opts.log, "Worker startup failed");
+    writeSanitizedFatal(
+      "startup",
+      err,
+      fatalWriter("startup-failed", opts.log, opts.sink),
+      "Worker startup failed"
+    );
+    await drainSink(opts.sink);
     exit(1);
     return;
   }
@@ -761,8 +803,16 @@ export async function bootstrap(
   // log-safe: constant text
   console.log(`Jarv1s worker listening on ${RLS_PROBE_QUEUE} and built-in module queues`);
 
-  const handleCrash = createCrashHandler(handle, { log: opts.log, exit: opts.exit });
-  const shutdownOnSignal = createShutdownHandler(handle, { log: opts.log, exit: opts.exit });
+  const handleCrash = createCrashHandler(handle, {
+    log: opts.log,
+    exit: opts.exit,
+    sink: opts.sink
+  });
+  const shutdownOnSignal = createShutdownHandler(handle, {
+    log: opts.log,
+    exit: opts.exit,
+    sink: opts.sink
+  });
 
   process.once("SIGINT", () => {
     void shutdownOnSignal();
