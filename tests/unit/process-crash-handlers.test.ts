@@ -57,10 +57,7 @@ describe("createCrashHandler (api)", () => {
       { timeoutMs: 2_000, exit: exit as unknown as (code: number) => never }
     );
     handleCrash("uncaughtException", new Error("boom"));
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(exit).toHaveBeenCalledWith(1);
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
   });
 
   it("still exits 1 after the bounded timeout when close hangs", async () => {
@@ -128,10 +125,7 @@ describe("createCrashHandler (worker)", () => {
       { timeoutMs: 2_000, exit: exit as unknown as (code: number) => never, log: vi.fn() }
     );
     handleCrash("uncaughtException", new Error("boom"));
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(exit).toHaveBeenCalledWith(1);
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
   });
 
   it("still exits 1 after the bounded timeout when shutdown hangs", async () => {

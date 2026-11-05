@@ -102,7 +102,12 @@ export function createCrashHandler(
     log: { error(obj: Record<string, unknown>, msg: string): void };
     close(cb: (err?: Error) => void): void;
   },
-  opts: { timeoutMs?: number; exit?: (code: number) => never } = {}
+  opts: {
+    timeoutMs?: number;
+    exit?: (code: number) => never;
+    log?: LineWriter;
+    sink?: SinkSource;
+  } = {}
 ): (label: string, err: unknown) => void {
   const timeoutMs = opts.timeoutMs ?? 2000;
   const exit = opts.exit ?? ((code: number) => process.exit(code));
@@ -120,15 +125,31 @@ export function createCrashHandler(
       // the exit below still run, and nothing raw is written.
       LOG_DROP_COUNTER.count += 1;
     }
-    const drain = Promise.race([
+    // stderr gets its own copy. The logger call above already queued the table row.
+    try {
+      writeSanitizedFatal(
+        label,
+        err instanceof Error ? err : "unknown",
+        // log-safe: writeSanitizedFatal masks the line before it reaches this writer
+        opts.log ?? ((line: string) => void process.stderr.write(line)),
+        "Process crash — exiting"
+      );
+    } catch {
+      LOG_DROP_COUNTER.count += 1;
+    }
+    // The sink drains alongside server close, so stalled runtime cleanup cannot hold it back.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const bound = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeoutMs);
+    });
+    const work = Promise.allSettled([
+      Promise.resolve().then(() => (opts.sink ?? currentApiLogSink)()?.close()),
       new Promise<void>((resolve) => {
         server.close(() => resolve());
-      }),
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, timeoutMs);
       })
     ]);
-    void drain.then(() => {
+    void Promise.race([work, bound]).then(() => {
+      clearTimeout(timer);
       exit(1);
     });
   };

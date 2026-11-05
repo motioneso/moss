@@ -140,9 +140,19 @@ export function createDiagnosticLogSink(opts: CreateDiagnosticLogSinkOptions): D
   function summarize(at: number, force: boolean): boolean {
     if (droppedSinceSummary === 0) return false;
     if (!force && at - lastSummaryAt < 60_000) return false;
-    const count = droppedSinceSummary;
+    let count = droppedSinceSummary;
     droppedSinceSummary = 0;
     lastSummaryAt = at;
+    // One queued summary at a time, so summaries never push the queue past its cap.
+    const existing = queue.findIndex((item) => item.summary);
+    if (existing >= 0) {
+      const [old] = queue.splice(existing, 1);
+      if (old) {
+        queuedBytes -= old.bytes;
+        const prior = old.row.context.count;
+        count += typeof prior === "number" ? prior : 0;
+      }
+    }
     push(summaryRow(at, count), true);
     return true;
   }

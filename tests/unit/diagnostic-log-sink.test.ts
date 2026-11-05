@@ -375,4 +375,32 @@ describe("diagnostic log sink", () => {
     expect(max).toBeGreaterThan(400);
     expect(sink.stats().dropped).toBeGreaterThanOrEqual(500);
   });
+
+  it("coalesces drop summaries so a long stall never queues past 500", async () => {
+    let now = 40_000_000;
+    const { db } = fakeDb(() => new Promise<void>(() => {}));
+    const sink = createDiagnosticLogSink({
+      db,
+      process: "worker",
+      now: () => now,
+      stderr: () => {}
+    });
+    sink.enqueue(row(0));
+    void sink.flush();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    for (let i = 0; i < 200; i += 1) sink.enqueue(row(i));
+    now += 61_000;
+    for (let i = 0; i < 200; i += 1) sink.enqueue(row(i));
+    now += 61_000;
+    for (let i = 0; i < 120; i += 1) sink.enqueue(row(i));
+    let max = 0;
+    // One oversized record a minute yields one new summary a minute, 600 minutes running.
+    for (let minute = 0; minute < 600; minute += 1) {
+      now += 61_000;
+      sink.enqueue(row(1, { message: "y".repeat(5000) }));
+      sink.enqueue(row(2));
+      max = Math.max(max, sink.stats().queued);
+    }
+    expect(max).toBeLessThanOrEqual(500);
+  });
 });
