@@ -237,6 +237,14 @@ export interface SyncLogger {
   info(data: Record<string, unknown>, message: string): void;
 }
 
+/** Stamps the job owner on every line so the log store can tie a warning to its user. */
+export function bindSyncLoggerOwner(logger: SyncLogger, actorUserId: string): SyncLogger {
+  return {
+    warn: (data, message) => logger.warn({ ...data, actorUserId }, message),
+    info: (data, message) => logger.info({ ...data, actorUserId }, message)
+  };
+}
+
 const NOOP_SYNC_LOGGER: SyncLogger = {
   // Silent fallback; production injects the structured server logger at composition.
   warn: () => undefined,
@@ -255,7 +263,7 @@ export async function loadGoogleSyncActiveAccount(
     const bundle = decryptGoogleConnectionSecret(cipher, secret.encryptedSecret);
     return { id: secret.id, scopes: bundle.grantedScopes };
   } catch {
-    logger.warn({ actorScoped: true, stage: "auth" }, "google-sync stored connection invalid");
+    logger.warn({ stage: "auth" }, "google-sync stored connection invalid");
     return undefined;
   }
 }
@@ -342,7 +350,7 @@ export async function runGoogleSyncChunk(
     tokenHolder.token = await deps.getFreshAccessToken(scopedDb);
   } catch {
     // Never log the underlying auth error object (may carry client_secret/refresh_token).
-    logger.warn({ actorScoped: true, stage: "auth" }, "google-sync auth failed");
+    logger.warn({ stage: "auth" }, "google-sync auth failed");
     // Record a failed run with the bounded auth label only — never the raw provider error.
     try {
       await connectorsRepo.markSyncFinished(scopedDb, account.id, {
@@ -655,6 +663,9 @@ export async function registerConnectorsJobWorkers(
   const processJob = async (
     job: Job<GoogleSyncPayload | GoogleSyncContinuationPayload>
   ): Promise<GoogleSyncResult> => {
+    const jobLogger = deps.logger
+      ? bindSyncLoggerOwner(deps.logger, job.data.actorUserId)
+      : undefined;
     const result = await handleGoogleSyncJob(
       boss,
       deps.dataContext,
@@ -662,7 +673,7 @@ export async function registerConnectorsJobWorkers(
       (scopedDb, state, options) => {
         const emailExtractDeps = buildEmailExtractDeps(scopedDb, aiRepo, aiCipher, {
           createCliStructuredAdapter: deps.createCliStructuredAdapter,
-          logger: deps.logger
+          logger: jobLogger
         });
         return runGoogleSyncChunk(
           scopedDb,
@@ -673,7 +684,7 @@ export async function registerConnectorsJobWorkers(
                 connectorsRepo,
                 connectorCipher,
                 db,
-                deps.logger ?? NOOP_SYNC_LOGGER
+                jobLogger ?? NOOP_SYNC_LOGGER
               ),
             getFreshAccessToken: (db, opts) => googleService.getFreshAccessToken(db, opts),
             googleClient,
@@ -684,9 +695,9 @@ export async function registerConnectorsJobWorkers(
               suppressionRepository,
               actionRowRelevance: deps.actionRowRelevance,
               actorUserId: job.data.actorUserId,
-              logger: deps.logger
+              logger: jobLogger
             },
-            logger: deps.logger,
+            logger: jobLogger,
             runId: job.data.kind === "google-sync" ? job.id : job.data.idempotencyKey,
             trigger: job.data.kind === "google-sync" ? job.data.trigger : undefined,
             threadJudgementRequester: deps.threadJudgementRequester,
@@ -703,8 +714,8 @@ export async function registerConnectorsJobWorkers(
           actorUserId
         );
         if (inFlight) {
-          deps.logger?.info(
-            { actorScoped: true, event: "recent-only:lineage-in-flight" },
+          jobLogger?.info(
+            { event: "recent-only:lineage-in-flight" },
             "google-sync root fetching recent mail only while a continuation lineage is in flight"
           );
         }
