@@ -117,6 +117,17 @@ describe("diagnostic log destination", () => {
     expect(row.truncated).toBe(true);
   });
 
+  it("sizes the context as Postgres stores it, with spaces after colons and commas", () => {
+    const { rows, logger } = harness();
+    const data: Record<string, number> = {};
+    for (let i = 0; i < 200; i += 1) data[`k${i}`] = 1;
+    logger.warn({ data }, "many small keys");
+    const row = rows[0]!;
+    const stored = JSON.stringify(row.context).replace(/([:,])/g, "$1 ");
+    expect(Buffer.byteLength(stored)).toBeLessThanOrEqual(2048);
+    expect(row.truncated).toBe(true);
+  });
+
   it("keeps logging when the sink throws", () => {
     const { lines, logger } = harness({
       enqueue: () => {

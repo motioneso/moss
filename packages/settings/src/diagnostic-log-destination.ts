@@ -37,11 +37,24 @@ function fromList(list: readonly string[], value: unknown): string | null {
   return typeof value === "string" && list.includes(value) ? value : null;
 }
 
-/** A context that fits the column limit once JSON-escaped, shrinking the kept text until it does. */
+/**
+ * Upper bound on the size of the stored jsonb text. Postgres prints a space after every colon
+ * and comma, so each one outside a string adds a byte. Counting all of them only overshoots.
+ */
+function storedContextBytes(serialized: string): number {
+  let extra = 0;
+  for (let i = 0; i < serialized.length; i += 1) {
+    const ch = serialized.charCodeAt(i);
+    if (ch === 58 || ch === 44) extra += 1;
+  }
+  return Buffer.byteLength(serialized) + extra;
+}
+
+/** A context that fits the column limit once stored, shrinking the kept text until it does. */
 function cutContext(serialized: string): Record<string, unknown> {
   for (const budget of [1800, 1000, 400, 100]) {
     const cut = { _cut: truncateUtf8(serialized, budget).text };
-    if (Buffer.byteLength(JSON.stringify(cut)) <= LOG_LIMITS.contextBytes) return cut;
+    if (storedContextBytes(JSON.stringify(cut)) <= LOG_LIMITS.contextBytes) return cut;
   }
   return {};
 }
@@ -73,7 +86,7 @@ export function rowFromSanitizedLine(
   let truncated = source.truncated === true;
   let storedContext = context;
   const serialized = JSON.stringify(context);
-  if (Buffer.byteLength(serialized) > LOG_LIMITS.contextBytes) {
+  if (storedContextBytes(serialized) > LOG_LIMITS.contextBytes) {
     storedContext = cutContext(serialized);
     truncated = true;
   }

@@ -57,8 +57,14 @@ function sqlState(error: unknown): string | undefined {
   return undefined;
 }
 
+/** Size of the whole record as serialized, measured once per record. */
 function rowBytes(row: DiagnosticLogRow): number {
-  return Buffer.byteLength(row.message) + Buffer.byteLength(JSON.stringify(row.context)) + 256;
+  return Buffer.byteLength(JSON.stringify(row));
+}
+
+interface Queued {
+  readonly row: DiagnosticLogRow;
+  readonly bytes: number;
 }
 
 export interface CreateDiagnosticLogSinkOptions {
@@ -77,9 +83,12 @@ export function createDiagnosticLogSink(opts: CreateDiagnosticLogSinkOptions): D
     ((line: string) => {
       process.stderr.write(line);
     });
-  let queue: DiagnosticLogRow[] = [];
+  let queue: Queued[] = [];
   let queuedBytes = 0;
   let flushing: Promise<void> | null = null;
+  /** The database write still outstanding, even after its deadline passed. */
+  let inFlight: Promise<void> | null = null;
+  let summaryTimer: ReturnType<typeof setTimeout> | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let closed = false;
   let pausedUntil = 0;
@@ -106,6 +115,32 @@ export function createDiagnosticLogSink(opts: CreateDiagnosticLogSinkOptions): D
   function drop(count = 1): void {
     dropped += count;
     droppedSinceSummary += count;
+    scheduleSummary();
+  }
+
+  /** Emits the pending drop count once a minute has passed, even if no record follows. */
+  function scheduleSummary(): void {
+    if (summaryTimer !== null || closed) return;
+    const wait = Math.max(0, lastSummaryAt + 60_000 - now()) + 10;
+    summaryTimer = setTimeout(() => {
+      summaryTimer = null;
+      try {
+        if (summarize(now(), false) && !closed) schedule();
+      } catch {
+        // A summary fault must not escape a timer.
+      }
+    }, wait);
+    summaryTimer.unref?.();
+  }
+
+  function summarize(at: number, force: boolean): boolean {
+    if (droppedSinceSummary === 0) return false;
+    if (!force && at - lastSummaryAt < 60_000) return false;
+    const count = droppedSinceSummary;
+    droppedSinceSummary = 0;
+    lastSummaryAt = at;
+    push(summaryRow(at, count));
+    return true;
   }
 
   function schedule(): void {
@@ -118,8 +153,9 @@ export function createDiagnosticLogSink(opts: CreateDiagnosticLogSinkOptions): D
   }
 
   function push(row: DiagnosticLogRow): void {
-    queue.push(row);
-    queuedBytes += rowBytes(row);
+    const bytes = rowBytes(row);
+    queue.push({ row, bytes });
+    queuedBytes += bytes;
     // Oldest records go first when either cap is hit.
     while (
       queue.length > LOG_SINK_LIMITS.maxQueued ||
@@ -127,8 +163,9 @@ export function createDiagnosticLogSink(opts: CreateDiagnosticLogSinkOptions): D
     ) {
       const oldest = queue.shift();
       if (!oldest) break;
-      queuedBytes -= rowBytes(oldest);
-      drop();
+      queuedBytes -= oldest.bytes;
+      dropped += 1;
+      droppedSinceSummary += 1;
     }
   }
 
@@ -155,12 +192,7 @@ export function createDiagnosticLogSink(opts: CreateDiagnosticLogSinkOptions): D
         windowStart = at;
         windowCount = 0;
       }
-      if (at - lastSummaryAt >= 60_000 && droppedSinceSummary > 0) {
-        const count = droppedSinceSummary;
-        droppedSinceSummary = 0;
-        lastSummaryAt = at;
-        push(summaryRow(at, count));
-      }
+      summarize(at, false);
       if (rowBytes(record) > LOG_SINK_LIMITS.maxRecordBytes) {
         drop();
         return;
@@ -212,26 +244,43 @@ export function createDiagnosticLogSink(opts: CreateDiagnosticLogSinkOptions): D
   }
 
   async function runFlush(): Promise<void> {
+    // A write that outlived its deadline may still hold a connection. Wait for it to end.
+    if (inFlight) return;
     if (now() < pausedUntil) return;
+    summarize(now(), false);
+    const deadline = Date.now() + LOG_SINK_LIMITS.flushDeadlineMs;
     while (queue.length > 0) {
+      const left = deadline - Date.now();
+      if (left <= 0) {
+        failed += 1;
+        report("log storage slow, flush cut short");
+        return;
+      }
       const batch = queue.splice(0, LOG_SINK_LIMITS.batchSize);
-      for (const row of batch) queuedBytes -= rowBytes(row);
-      let deadline: ReturnType<typeof setTimeout> | undefined;
+      for (const item of batch) queuedBytes -= item.bytes;
+      const rows = batch.map((item) => item.row);
+      const write = writeBatch(rows);
+      inFlight = write.then(
+        () => {},
+        () => {}
+      );
+      void inFlight.then(() => {
+        inFlight = null;
+        if (queue.length > 0) schedule();
+      });
+      let timeout: ReturnType<typeof setTimeout> | undefined;
       try {
         await Promise.race([
-          writeBatch(batch),
+          write,
           new Promise<never>((_, reject) => {
-            deadline = setTimeout(
-              () => reject(new Error("log flush deadline")),
-              LOG_SINK_LIMITS.flushDeadlineMs
-            );
-            deadline.unref?.();
+            timeout = setTimeout(() => reject(new Error("log flush deadline")), left);
+            timeout.unref?.();
           })
         ]);
-        written += batch.length;
+        written += rows.length;
       } catch (error) {
         failed += 1;
-        drop(batch.length);
+        drop(rows.length);
         if (sqlState(error) === UNDEFINED_TABLE) {
           pausedUntil = now() + LOG_SINK_LIMITS.missingTablePauseMs;
           report("log table missing, pausing log storage");
@@ -240,7 +289,7 @@ export function createDiagnosticLogSink(opts: CreateDiagnosticLogSinkOptions): D
         report("log storage failed, batch dropped");
         return;
       } finally {
-        if (deadline !== undefined) clearTimeout(deadline);
+        if (timeout !== undefined) clearTimeout(timeout);
       }
     }
   }
@@ -264,6 +313,16 @@ export function createDiagnosticLogSink(opts: CreateDiagnosticLogSinkOptions): D
     if (timer !== null) {
       clearTimeout(timer);
       timer = null;
+    }
+    if (summaryTimer !== null) {
+      clearTimeout(summaryTimer);
+      summaryTimer = null;
+    }
+    // Drops still pending at shutdown get their summary now.
+    try {
+      summarize(now(), true);
+    } catch {
+      // Closing must not throw.
     }
     let wait: ReturnType<typeof setTimeout> | undefined;
     try {

@@ -256,4 +256,55 @@ describe("diagnostic log sink", () => {
     await closing;
     expect(done).toBe(true);
   });
+
+  it("never starts a second write while a timed-out write is still outstanding", async () => {
+    vi.useFakeTimers();
+    let active = 0;
+    let maxActive = 0;
+    const { db } = fakeDb(async (q) => {
+      if (!/insert into/i.test(q.sql)) return;
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise<void>(() => {});
+    });
+    const sink = createDiagnosticLogSink({ db, process: "worker", stderr: () => {} });
+    sink.enqueue(row(1));
+    await vi.advanceTimersByTimeAsync(5500);
+    sink.enqueue(row(2));
+    await vi.advanceTimersByTimeAsync(20_000);
+    await sink.flush();
+    expect(maxActive).toBe(1);
+    expect(sink.stats().queued).toBe(1);
+  });
+
+  it("counts JSON escaping when sizing a record", () => {
+    const { db } = fakeDb(() => {});
+    const sink = createDiagnosticLogSink({ db, process: "worker", stderr: () => {} });
+    sink.enqueue(row(1, { message: '"'.repeat(2048), context: { a: "x".repeat(1000) } }));
+    expect(sink.stats()).toMatchObject({ queued: 0, dropped: 1 });
+  });
+
+  it("writes the drop summary after a quiet minute with no further records", async () => {
+    let now = 9_000_000;
+    const { db, inserts } = fakeDb(() => {});
+    const sink = createDiagnosticLogSink({
+      db,
+      process: "worker",
+      now: () => now,
+      stderr: () => {}
+    });
+    for (let i = 0; i < 201; i += 1) sink.enqueue(row(i));
+    await sink.flush();
+    now += 61_000;
+    await sink.flush();
+    expect(JSON.stringify(inserts.at(-1)!.parameters)).toContain("dropped 1 log records");
+  });
+
+  it("writes a pending drop summary on close", async () => {
+    const { db, inserts } = fakeDb(() => {});
+    const sink = createDiagnosticLogSink({ db, process: "worker", stderr: () => {} });
+    for (let i = 0; i < 201; i += 1) sink.enqueue(row(i));
+    await sink.close();
+    expect(JSON.stringify(inserts.at(-1)!.parameters)).toContain("dropped 1 log records");
+  });
 });
