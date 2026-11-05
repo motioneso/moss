@@ -40,6 +40,11 @@ DROP POLICY IF EXISTS diagnostic_log_records_definer_delete ON app.diagnostic_lo
 CREATE POLICY diagnostic_log_records_definer_delete ON app.diagnostic_log_records
   FOR DELETE TO jarvis_migration_owner USING (true);
 
+-- The definer functions below run as the migration owner and call the live admin check.
+SET LOCAL ROLE jarvis_auth_runtime;
+GRANT EXECUTE ON FUNCTION app.current_actor_is_admin() TO jarvis_migration_owner;
+RESET ROLE;
+
 -- Reader. Returns nothing unless the caller is a live active instance admin. Full text only for
 -- the caller's own rows. Other or unknown owners get the allow-listed metadata only.
 CREATE OR REPLACE FUNCTION app.read_diagnostic_log(
