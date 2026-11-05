@@ -214,7 +214,7 @@ interface AcpSession {
   /** HOME handed to the agent process — where its own CLI may keep a transcript outside cwd. */
   readonly home: string;
   readonly providerKind: AcpProviderKind;
-  /** Exact credential values handed to the agent; masked out of everything it prints. */
+  /** Credential values handed to the agent; masked from its output. */
   readonly secrets: readonly string[];
   /**
    * The slot's own identity, present whenever per-user separation launched
@@ -630,11 +630,10 @@ export class AcpHost {
     return sendAcpLine(session, line, MAX_LINE_BYTES);
   }
 
-  /** Real locations of paths a tool call names, so the policy sees through symlinks. */
   async resolvePaths(sessionKey: string, paths: readonly string[]): Promise<string[]> {
-    const session = this.sessions.get(sanitizeSessionKey(sessionKey));
-    if (!session) throw new Error("ACP session is not running");
-    return resolveRealPaths(session.cwd, paths);
+    const cwd = this.sessions.get(sanitizeSessionKey(sessionKey))?.cwd;
+    if (cwd === undefined) throw new Error("ACP session is not running");
+    return resolveRealPaths(cwd, paths);
   }
 
   read(sessionKey: string, afterSeq: number): AcpReadResult {
