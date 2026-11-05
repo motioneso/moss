@@ -1,30 +1,14 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Summary update guard - mockup</title><link rel="stylesheet" href="../classifier-gate/app.css">
 <style>.row{display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;margin-top:var(--space-2)}.sub{color:var(--text-muted);font-size:var(--text-sm)}.card-h{font-family:var(--font-display);font-weight:var(--weight-bold);font-size:var(--text-lg)}.stack{display:grid;gap:var(--space-4)}.fail{border-left:3px solid var(--danger)}.ok{border-left:3px solid var(--accent)}</style></head>
-<body data-view="held">
+<body data-view="admin">
 <div class="mk-bar"><b>Mockup: summary update guard</b>
 <span class="mk-group"><span class="mk-label">Screen</span><span class="jds-segmented">
-<button class="jds-segmented__opt" data-pick="view:held" aria-pressed="true">AI providers: update held back</button>
-<button class="jds-segmented__opt" data-pick="view:normal">AI providers: all fine</button>
-<button class="jds-segmented__opt" data-pick="view:member">Meeting: update problem (member)</button>
-<button class="jds-segmented__opt" data-pick="view:admin">Meeting: update problem (admin)</button>
+<button class="jds-segmented__opt" data-pick="view:member">Meeting: safety check failed (member)</button>
+<button class="jds-segmented__opt" data-pick="view:admin" aria-pressed="true">Meeting: safety check failed (admin)</button>
 <button class="jds-segmented__opt" data-pick="view:offline">Meeting: connection offline</button>
 <button class="jds-segmented__opt" data-pick="view:nomodel">Meeting: no model set</button></span></span>
 <span class="mk-group"><span class="mk-label">Theme</span><span class="jds-segmented"><button class="jds-segmented__opt" data-pick="theme:light" aria-pressed="true">Light</button><button class="jds-segmented__opt" data-pick="theme:dark">Dark</button></span></span></div>
 <div class="mk-page">
-
-<div data-show="view:held normal">
-<h1 class="mk-h">Settings / Admin / AI providers</h1>
-<p class="mk-help">Only the Anthropic card is shown. Everything else on this page is unchanged.</p>
-<div class="jds-card jds-card--pad-lg">
- <div class="card-h">Anthropic</div>
- <div class="row"><span>Claude CLI 2.1.286</span>
-  <span data-show="view:held"><span class="jds-badge jds-badge--amber">Version 2.1.318 held back</span> <button class="jds-btn jds-btn--quiet jds-btn--sm">Retry</button></span>
-  <span data-show="view:normal"><span class="jds-badge jds-badge--forest">Up to date</span></span>
- </div>
- <p class="sub" data-show="view:held">Version 2.1.318 would stop Meeting summaries from working, so Moss kept 2.1.286. Summaries and chat keep working. Moss tries again whenever a newer version comes out, or press Retry.</p>
- <p class="sub" data-show="view:normal">Moss tests each new version against Meeting summaries before switching to it.</p>
-</div>
-</div>
 
 <div data-show="view:member admin offline nomodel">
 <h1 class="mk-h">Meetings / Weekly planning</h1>
@@ -32,12 +16,12 @@
 <div class="stack">
  <div class="jds-card jds-card--pad-lg fail" data-show="view:member">
   <div class="card-h">Summary</div>
-  <p>This summary could not be written because the installed Claude did not pass its summary safety check. Use Rewrite summary once that is fixed.</p>
+  <p>This summary could not be written because the safety check before this run found the model could use tools, read files or save a session, so nothing was sent to it. Use Rewrite summary once that is fixed.</p>
   <div class="row"><span class="sub">Ask an admin to check the AI connection.</span> <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button></div>
  </div>
  <div class="jds-card jds-card--pad-lg fail" data-show="view:admin">
   <div class="card-h">Summary</div>
-  <p>This summary could not be written because the installed Claude did not pass its summary safety check. Use Rewrite summary once that is fixed.</p>
+  <p>This summary could not be written because the safety check before this run found the model could use tools, read files or save a session, so nothing was sent to it. Use Rewrite summary once that is fixed.</p>
   <div class="row"><button class="jds-btn jds-btn--secondary jds-btn--sm">Open AI providers</button> <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button></div>
  </div>
  <div class="jds-card jds-card--pad-lg fail" data-show="view:offline">
@@ -54,6 +38,6 @@
 </div>
 
 <h2 class="mk-h" style="margin-top:var(--space-6)">States covered</h2>
-<p class="mk-help">Empty: no Claude installed shows the existing "not installed" card, unchanged. Loading: the existing "Updating to ..." badge while the check runs. Broken: the held-back view above.</p>
+<p class="mk-help">Loading: the existing summary-in-progress state. Empty: no summary yet, unchanged. Broken: the four failure views above. The AI providers screen does not change.</p>
 </div>
 <script src="../classifier-gate/switcher.js"></script></body></html>

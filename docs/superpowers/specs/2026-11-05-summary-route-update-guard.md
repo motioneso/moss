@@ -1,22 +1,27 @@
-# Claude updates must not silently break Meeting summaries
+# Claude updates must not break Meeting summaries
 
 Issue #3689. Follows #3565 (PRs #3608, #3690) and the approved
-`2026-10-25-one-path-for-ai-calls.md`. Status: draft for Ben, 2026-11-05.
+`2026-10-25-one-path-for-ai-calls.md`. Status: reworked for Ben's direction of 2026-11-05.
 Mockups: `docs/superpowers/mockups/summary-update-guard/screens.html` (not yet agreed).
 
 ## Decisions (Ben, 2026-11-05)
 
 1. **The lasting fix is finishing the one-path plan, and it is a must.** Claude updates breaking
-   meetings has happened far too often. Slices 3 and 4 of `2026-10-25-one-path-for-ai-calls.md`:
-   test every new build against summaries before it goes live, then retire the old route.
-2. **Step zero is reading the real error** on the failed Ring recordings. If the cause differs from
+   meetings has happened far too often.
+2. **Claude updates always go live. Nothing holds one back.** Ben: "I don't want it to hold back, it
+   should auto update, we need to stop our checking from breaking meetings." No version list, hash
+   list or before-release check may stop a summary or block an update.
+3. **Summaries work on whatever Claude version is installed.** The only safety kept is the part that
+   does not depend on the version: each summary run checks, at run time, that the model is offered
+   no tools, reads no files and saves no session. If that check fails, only that run stops.
+4. **Step zero is reading the real error** on the failed Ring recordings. If the cause differs from
    this spec's reading, the plan changes (see Findings).
-3. **No automatic re-run of failed summaries.** Ben re-runs them himself with Rewrite summary. This
-   spec has no sweep, recovery job or "written automatically" note.
-4. **Held-back builds use the existing admin alert** plus the badge on the AI providers screen.
-   Nothing new (no email or push). Ben gave no further answer.
-5. **Retire the version hash lists** as slice 4 of the approved plan says. Ben gave no further
-   answer. The Safety section records what guards the Claude file instead.
+5. **No automatic re-run of failed summaries.** Ben re-runs them himself with Rewrite summary.
+6. **Failures use the existing admin alert.** Nothing new (no email or push).
+7. **Retire the version hash lists and the old summary route.**
+
+This spec supersedes decision 5 of the approved plan ("the update system's live check runs the
+profile before a build goes live"). The build PR amends that document to match.
 
 ## Findings (checked 2026-11-05)
 
@@ -24,136 +29,144 @@ Mockups: `docs/superpowers/mockups/summary-update-guard/screens.html` (not yet a
   tools folder, read-only. Prod is not on 2.1.318.
 - **The 2.1.318 on the build box is the box's own install**, not the managed copy Moss runs. Other
   hosts that run Moss from source use whichever `claude` is first on the path.
-- **The update system worked as designed.** Its last recorded check passed 2.1.286 on 2026-10-01.
-  The check tests chat and a structured answer, not the summary route, so it passed a build the old
-  summary route then refused. That gap is the real bug.
+- **The update system's check never tested the summary route.** Its last recorded check passed
+  2.1.286 on 2026-10-01, a build the old summary route then refused.
 - **Prod already uses the new route.** Its logs show `no-tools` sessions closing on Claude. On main,
   `meeting-output-runtime.ts` prefers the ACP no-tools adapter when it exists, and the module
-  registry always supplies one. The old allowlist
-  (`CONSTRAINED_CLAUDE_RELEASES`: 2.1.282, 2.1.286) is only reached when the new adapter is absent.
+  registry always supplies one. The old allowlist (`CONSTRAINED_CLAUDE_RELEASES`: 2.1.282, 2.1.286)
+  is only reached when the new adapter is absent.
 - **`meeting_output_route_unavailable` is one code for many causes**: no usable default model, model
   lacks summarization or JSON, missing credential, runner not connected, readiness probe says no,
-  and (old route only) unlisted Claude build. Users and Moss cannot tell them apart. This is why the
-  cause of the Ring failures is unproven.
+  and (old route only) unlisted Claude build. Users and Moss cannot tell them apart, so the cause of
+  the Ring failures is unproven.
+- **Checks that can stop an update today.** `cli-version-check.ts` runs a live check on a staged
+  Claude build and holds it back on failure. For a first install it promotes before the check, so
+  hold-back is not even consistent.
 - **No one is told.** The summary panel shows the generic message and a link to AI providers, which
   shows nothing wrong.
 
 ## Why versions were pinned (intent to keep)
 
-From #3565, #3608 and `docs/evidence/3565-meeting-claude/native-compatibility.md`:
-
-- A summary runs on untrusted transcript text, so the model must have no tools, read no project
-  files and save no session.
-- Each listed build had its archive integrity checked and its native profile controls run (hostile
-  hooks do not run, only the output formatter is offered, nothing persisted, cancel kills the
-  process), with a removal control that shows the protection matters.
-- Unknown or modified builds failed closed.
-
-The fix keeps all three: the same controls run on every new build before it goes live, and a build
-that fails stays out.
+From #3565, #3608 and `docs/evidence/3565-meeting-claude/native-compatibility.md`: a summary runs on
+untrusted transcript text, so the model must have no tools, read no project files and save no
+session. The old route enforced that by pinning reviewed builds. The new route enforces the same
+three properties on every run instead, so no list is needed and an update cannot break summaries.
 
 ## Options
 
-| Option                                                                                                                                                                | Stops the break?                               | Cost                                                                                              | Verdict                      |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------- |
-| A. Hold updates to a hand-kept list of versions                                                                                                                       | Yes, until someone forgets                     | A person edits the list and runs native proofs for every release; blocks security fixes meanwhile | Repeats the cause. No.       |
-| B. Keep a separate pinned Claude only for summaries                                                                                                                   | Yes                                            | A second large install and update story; keeps the private route the approved plan retires        | No.                          |
-| C. Only show the mismatch on AI providers, with a fix button                                                                                                          | No. Summaries still break, then an admin fixes | Small                                                                                             | Useful as a part, not a fix. |
-| D. Test each new build against the summary route before it goes live (approved plan slice 3), retire the old route (slice 4), add clear failure messages | Yes: a bad build never becomes live            | Moderate; mostly extends an existing check and existing screen                                    | **Recommended.**             |
+| Option                                                                 | Stops the break?                         | Cost                                                                          | Verdict                  |
+| ---------------------------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------- | ------------------------ |
+| A. Hold updates to a hand-kept list of versions                        | Until someone forgets                    | A person edits the list for every release; delays security fixes              | Ben rejected. No.        |
+| B. Keep a separate pinned Claude only for summaries                    | Yes                                      | A second large install and update story; keeps the private route being retired | No.                      |
+| C. Only show the mismatch on AI providers, with a fix button           | No                                       | Small                                                                         | No.                      |
+| D. Test each new build before it goes live, hold back failures         | Mostly, but a bad check blocks updates   | The approved plan's slice 3                                                   | Ben rejected. No.        |
+| E. Let every update go live and check isolation on each summary run   | Yes: no build is ever refused up front   | Moderate; a run-time check plus clear failure messages                        | **Recommended, chosen.** |
 
-D uses machinery that exists: the update system already stages a candidate, runs a live check,
-holds back a failing build and shows "held back" with a Retry button on the AI providers screen.
-The only change to that flow is what the check runs.
+E trades a before-release gate for a per-run gate. A build that offers a tool stops the summaries
+that run on it, with a named cause and an admin alert, instead of being kept out. Ben chose this
+trade.
 
 ## Design
 
-### 1. Update check runs the summary profile
+### 1. Updates never held back for Claude
 
-- `runLiveCheckSteps` (`packages/ai/src/cli-live-check.ts`) gains a step that opens a session under
-  the no-tools profile, proves zero tools are offered, and gets a valid structured answer.
-- Failure reasons added to `cliToolReasonText`: `summary_tools_offered` ("would let a model use
-  tools during Meeting summaries"), `summary_profile_failed` ("could not write a Meeting summary").
-- **Which controls gate every build.** The check proves, per build, each protection the approved
-  spec calls independent: no tools offered, no project files or settings read (setting sources off),
-  no saved session left behind, and that cancel ends the process. Each has a failure reason and a
-  removal control in the build's tests (guard off makes the check fail). The one-time native test
-  suite is migration evidence and is not repeated per update.
-- Order: tool turn, structured turn, then the summary profile. A build must pass all three to
-  promote. Failure leaves the live build in place (existing `held_back` state).
-- **First install is different today.** `cli-version-check.ts` promotes a first install before the
-  live check, so a failing first build would stay live. The build must run the check before
-  promotion for first installs too, or mark an unverified first install unusable for summaries until
-  it passes. Test: a failing first install never serves a summary.
-- Codex runs the same step. Its real-model run waits on the usage reset noted in the approved spec.
+- A staged Claude build always promotes. The existing live check may still run and its result is
+  recorded and shown, but it is advisory: a failure raises the existing admin alert and never blocks
+  promotion. First install and upgrade behave the same.
+- The AI providers screen has no "held back" state for Claude. Its Claude update text keeps the
+  existing "Updating to ..." and current-version states.
+- Codex is out of scope and keeps its current behaviour.
 
-### 2. Retire the old route (slice 4)
+### 2. Retire the version lists and the old route
 
-Delete `constrained-*` runner files, the release hash table and `constrained-claude-catalog-pin`
-tests once the ACP profile passes the same native tests. Until then the old route stays as a
-fallback and its hash table is not edited again.
+Delete `constrained-*` runner files, the release hash table, the Claude entries in the summary
+readiness code and the `constrained-claude-catalog-pin` test. After this, no code path names a
+Claude version to decide whether summaries run. The catalog's install recipe and signed update
+manifest are unchanged; they decide what gets installed, not whether summaries run.
 
-### 3. Say what is wrong
+### 3. Isolation check on every run
+
+Each summary run, before any transcript text is sent:
+
+1. Opens the session under the no-tools profile.
+2. Reads back what the adapter reports: tools offered (must be none), setting sources and project
+   files (must be none), session persistence (must be off).
+3. Sends the transcript only if all three hold. Otherwise it closes the session, sends nothing and
+   fails that run with `meeting_output_isolation_failed`.
+
+Only that run stops. The next run checks again, so a later fix or update recovers without any
+reset. Each failure raises the existing admin alert, with the cause but no transcript text.
+
+Limit to settle in the build plan: the check can only prove what the adapter reports. Build must
+read the adapter and the launch code and list, per property, whether the check observes the real
+state or only confirms the option was accepted. Any property that is only confirmed as accepted is
+worded that way in the PR and the app map (Claims About Security Properties rule). If a property
+cannot be observed at all for a Claude version, the run fails closed with the same code.
+
+### 4. Say what is wrong
 
 Split `meeting_output_route_unavailable` into causes the user can act on:
 
-| Cause                                          | Code                                       | Who can fix it |
-| ---------------------------------------------- | ------------------------------------------ | -------------- |
-| No usable default model or credential          | keep `meeting_output_route_unavailable`    | Admin          |
-| Runner not connected or provider not signed in | `meeting_output_runner_offline` (new)      | Admin          |
-| Installed tool failed the summary check        | `meeting_output_runtime_unsupported` (new) | Admin, or wait |
+| Cause                                          | Code                                    | Who can fix it |
+| ---------------------------------------------- | --------------------------------------- | -------------- |
+| No usable default model or credential          | keep `meeting_output_route_unavailable` | Admin          |
+| Runner not connected or provider not signed in | `meeting_output_runner_offline` (new)   | Admin          |
+| Run-time isolation check failed                | `meeting_output_isolation_failed` (new) | Admin          |
 
-Mockup copy (see screens): the summary panel names the cause in one sentence and points to Rewrite
-summary for when it is fixed, and shows an "Open AI providers" button to admins only. Members are
-told to ask an admin.
+The panel names the cause in one sentence, points to Rewrite summary for when it is fixed, and shows
+"Open AI providers" to admins only. Members are told to ask an admin.
 
-Today's readiness probe (`acp-no-tools-readiness.ts`) ignores the user and returns only available
-or unavailable, so it cannot tell these apart. The build widens its result to a typed reason:
-`no_model`, `runner_offline`, `not_signed_in`, or `runtime_unsupported`. Sources: the model selection
-for the first, the runner connection for the second, the provider sign-in state for the third, and
-the update system's stored check result for the fourth. A rejected candidate does not count:
-`runtime_unsupported` applies only when the build that is actually live fails the check, so a
-held-back update never makes working summaries look unsupported. The reason travels in the summary
-failure record and reaches the panel with the existing error code field.
+Today's readiness probe (`acp-no-tools-readiness.ts`) ignores the user and returns only available or
+unavailable. The build widens it to a typed reason: `no_model`, `runner_offline`, `not_signed_in`.
+Sources: model selection, the runner connection, and the provider sign-in state. The isolation
+failure comes from the run itself, not the probe. The reason travels in the summary failure record
+and reaches the panel with the existing error code field.
 
-### 4. Moss can explain it
+### 5. Moss can explain it
 
-Same PR updates the app map: the Meetings manifest error catalogue in `packages/meetings/src/features.ts`
-(three codes above, with what to do), the "AI providers - CLI software" entry in
-`packages/shared/src/app-map-core.ts` (held back now includes "would break Meeting summaries"), and
-the Meetings error text. A stale entry blocks the PR.
-
+Same PR updates the app map: the Meetings error catalogue in `packages/meetings/src/features.ts`
+(three codes above, with what to do) and the "AI providers - CLI software" entry in
+`packages/shared/src/app-map-core.ts` (Claude updates always go live; a run that fails the isolation
+check stops and names the cause). A stale entry blocks the PR.
 
 ## Screens that change
 
-Two, both in the mockup file, and both reuse existing components (`Badge`, `Button`, card).
+One, in the mockup file, reusing existing components (card, badge, button).
 
-1. **Settings / Admin / AI providers, Anthropic card.** Only the held-back reason text and a one-line
-   explanation change. Normal and "all fine" states shown.
-2. **Meeting summary panel.** Cause-specific failure textand an admin-only button.
+1. **Meeting summary panel.** Cause-specific failure text and an admin-only button, for four
+   states: isolation check failed, connection offline, no model set, and the member view.
 
-Empty, loading and broken states are listed at the bottom of the mockup. Nothing else on either
-screen moves. No new screen. Ben must agree the mockups before build.
+The AI providers screen does not change: there is no held-back state to show. Empty, loading and
+broken states of the panel are listed at the bottom of the mockup. Ben must agree the mockup before
+build.
 
 ## Safety
 
-- The new route's guards are the three Claude session options (tools off, no setting sources, no
-  saved session) plus the post-launch proof of zero tools, per the approved spec.
-- Dropping the hash table removes the launch-time check that the Claude file matches reviewed bytes.
-  The install step still checks the package lockfile integrity, pins a hash over the promoted tree
-  and re-hashes after promote. It does not re-hash at launch. Build plan must read the launch code
-  and state what really guards the file between install and use before the PR says "integrity
-  verified" (Claims About Security Properties rule). Question 5 asks Ben to accept this.
-- No secrets or content added to logs, job payloads or the new codes.
+- Kept: no tools, no project files, no saved session, enforced by the profile options and proven on
+  every run before the transcript leaves Moss.
+- Removed: the launch-time check that the Claude file matches reviewed bytes, and the before-release
+  check. The install step still verifies package integrity, pins a hash over the promoted tree and
+  re-hashes after promote; it does not re-hash at launch. Build plan must read the launch code and
+  state exactly what guards the file between install and use before the PR says "integrity verified".
+- Residual risk, accepted by Ben's direction: a new build that breaks isolation is live until a
+  summary run detects it. The run-time check stops transcript exposure for that run; it does not
+  stop the build from being live.
+- No secrets or transcript content in logs, alerts, job payloads or the new codes.
 
 ## Tests
 
 Each guard seen failing with the guard removed.
 
-- Live check: a fake build that offers a tool fails with `summary_tools_offered` and is held back; a
-  build that cannot answer fails `summary_profile_failed`; a good build promotes.
-- `deriveCliToolsDto` shows `held_back` with the new reason text.
+- Any Claude version string (including one never seen, such as `9.9.9`) runs a summary; no code path
+  consults a version or hash.
+- A Claude candidate that fails the advisory live check still promotes and raises the admin alert,
+  on first install and on upgrade.
+- Isolation check: a fake adapter that offers a tool, reads project files or persists a session
+  stops that run before any transcript is sent, with `meeting_output_isolation_failed`; the next run
+  with a good adapter succeeds. Removing the check makes the first test fail.
 - Runtime: each cause maps to its own code; the old catch-all no longer covers the other two.
-- Summary panel: each code renders its message; button only for admins; members see the ask-an-admin line.
+- Summary panel: each code renders its message; button only for admins; members see the ask-an-admin
+  line.
 - App map tests and `pnpm check:design-tokens`, `pnpm check:ui-classes`, `pnpm verify:static`.
 
 ## Live-path proof (required before Done)
@@ -161,13 +174,13 @@ Each guard seen failing with the guard removed.
 On a disposable instance through the real UI, no faked responses:
 
 1. Read and record the real error on the failing Ring recordings (step zero).
-2. Stage a Claude build that fails the summary check; the AI providers card shows it held back with
-   the reason, and chat and a fresh summary still work on the live build.
+2. Install a Claude version that was never on any list; a new recording's summary is written.
 3. Break the runner connection; a new recording's summary shows the offline message, not the old one.
-4. Restore it; a new recording's summary is written. Ben re-runs older failed summaries himself with
-   Rewrite summary, and the 2 November recordings are checked that way.
+4. Use a test adapter that offers a tool; that run stops with the isolation message, an admin alert
+   fires, no transcript reaches the model, and the next run on the real adapter succeeds.
+5. Ben re-runs the 2 November recordings with Rewrite summary and confirms summaries appear.
 
 ## Out of scope
 
-Gemini and OpenCode summaries, API-key model route, chat behaviour, transcription, provider and
-model settings, and prod deploys.
+Codex update behaviour, Gemini and OpenCode summaries, the API-key model route, chat behaviour,
+transcription, provider and model settings, automatic re-run of failed summaries, and prod deploys.
