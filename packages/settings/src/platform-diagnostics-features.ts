@@ -37,7 +37,7 @@ export const platformDiagnosticsFeatures: readonly Feature[] = [
   {
     id: "settings.platformDiagnostics.logs",
     description:
-      "Stored warnings and errors, instance admins only. Filter by time, level, component. Full text only for records tied to your own account; other records show time, component and level only.",
+      "Stored warnings and errors, instance admins only. Filter by time, level, component. Text shows for your own records and unowned platform records; another user's records show metadata only.",
     errors: [
       {
         code: "log_store_empty_or_gap",
@@ -57,6 +57,16 @@ export const platformDiagnosticsFeatures: readonly Feature[] = [
     ]
   },
   {
+    id: "settings.platformDiagnostics.logs.privacy",
+    description:
+      "Unowned text may hold private data a pattern cannot recognise, such as a mail subject in an error. The 7-day cap and 2 KB storage cut limit exposure; stored context is never returned. Deleted-owner warnings are dropped."
+  },
+  {
+    id: "settings.platformDiagnostics.logs.upgrade",
+    description:
+      "Upgrade removes existing unowned warnings because older writers could lose ownership. Owned warnings survive. Stop old writers before upgrading; an old writer left running can still expose private text."
+  },
+  {
     id: "settings.platformDiagnostics.logs.retention",
     description:
       "Logs keep about 7 days and about 50,000 records, enforced hourly, so the store can briefly hold more. A heavy burst may drop records, and some records have no known owner."
@@ -64,6 +74,6 @@ export const platformDiagnosticsFeatures: readonly Feature[] = [
   {
     id: "settings.platformDiagnostics.limits",
     description:
-      "Each list holds at most 10 items, and the jobs, connections and logs sections hold at most 16 KB each. Log text shows only for the asking admin's own records, 500 characters each, never stored context."
+      "Each list holds at most 10 items, and the jobs, connections and logs sections hold at most 16 KB each. Log text shows for the asking admin's own and unowned records, 500 characters each, never stored context."
   }
 ];

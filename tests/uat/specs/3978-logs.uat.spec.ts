@@ -29,6 +29,7 @@ const TURN_DEADLINE_MS = 300_000;
 const WORKER_WARNING = "google-sync stored connection invalid";
 const SECOND_OWNER_WARNING = "google-sync auth failed";
 const SECOND_ACCOUNT_ID = "70000000-0000-4000-8000-000000003979";
+const PLATFORM_WARNING = "platform warning: background health check delayed";
 const NOTIFY_WARNING = "upgrade notification write failed";
 const ADMIN_ACCOUNT_ID = "70000000-0000-4000-8000-000000003978";
 const PLANTED_SECRET = "sk-uat3978-planted-secret-token-0001";
@@ -109,6 +110,31 @@ function plantBrokenConnection(
       `SELECT count(*) FROM app.connector_accounts WHERE owner_user_id='${ownerId}' AND ${family}`
     )
   ).toBe("1");
+}
+
+/** Emit a controlled unowned warning through the production worker logger and sink. */
+function emitPlatformWarning(): void {
+  const script = `import { createDatabase, getMossDatabaseUrls } from "@moss/db";
+    import { createWorkerLogging } from "/app/apps/worker/src/worker.ts";
+    const db = createDatabase({ connectionString: getMossDatabaseUrls().worker });
+    const { logger, sink } = createWorkerLogging(db);
+    logger.warn(${JSON.stringify(PLATFORM_WARNING)});
+    await sink.close(); await db.destroy();`;
+  execFileSync(
+    "docker",
+    buildUatComposeArgs(requireUatProjectName(), [
+      "exec",
+      "-T",
+      "jarv1s",
+      "node",
+      "--import",
+      "tsx",
+      "--input-type=module",
+      "-e",
+      script
+    ]),
+    { encoding: "utf8", maxBuffer: 256 * 1024 }
+  );
 }
 
 function workerWarningCount(ownerId: string): number {
@@ -259,10 +285,44 @@ test("Moss reads both processes' warnings, hides other owners' text, and survive
   );
   expect(otherReply.toLowerCase()).not.toContain(SECOND_OWNER_WARNING);
   const adminView = await readLogs(page.request);
-  const others = adminView.records.filter((r) => !r.owned && r.component === "worker");
+  const others = adminView.records.filter(
+    (r) => !r.owned && r.ownerKnown && r.component === "worker"
+  );
   expect(others.length).toBeGreaterThan(0);
   expect(others.every((r) => r.message === null)).toBe(true);
   expect(others.some((r) => r.ownerKnown)).toBe(true);
+
+  // Slice 2E: a controlled platform warning has no owner. The production logger and sink
+  // persist it; no row or response is fabricated. Chat must quote it while B stays metadata-only.
+  emitPlatformWarning();
+  const platformView = await readLogs(page.request);
+  expect(platformView.records.find((r) => r.message === PLATFORM_WARNING)).toMatchObject({
+    owned: false,
+    ownerKnown: false
+  });
+  expect(platformView.records.filter((r) => !r.owned && r.ownerKnown).length).toBeGreaterThan(0);
+  expect(
+    platformView.records.filter((r) => !r.owned && r.ownerKnown).every((r) => r.message === null)
+  ).toBe(true);
+  const diagnosticsTurnsBefore = Number(
+    sql(
+      `SELECT count(*) FROM app.chat_messages WHERE owner_user_id='${UAT_ADMIN_ID}' AND tool_metadata::text LIKE '%settings_platformDiagnostics%'`
+    )
+  );
+  const platformReply = await ask(
+    page,
+    "Read the logs again now: a new platform warning may have appeared since your last read. Leave the log filters unset. Quote the current platform warnings with no user and any other user's warning text you can see."
+  );
+  expect(
+    Number(
+      sql(
+        `SELECT count(*) FROM app.chat_messages WHERE owner_user_id='${UAT_ADMIN_ID}' AND tool_metadata::text LIKE '%settings_platformDiagnostics%'`
+      )
+    ),
+    "the platform turn made a fresh diagnostics call"
+  ).toBeGreaterThan(diagnosticsTurnsBefore);
+  expect(platformReply.toLowerCase()).toContain("background health check delayed");
+  expect(platformReply.toLowerCase()).not.toContain(SECOND_OWNER_WARNING);
 
   // 4. A non-admin asks in chat and gets neither owner's text. The server reports a redaction.
   await signIn(page, UAT_SECOND_OWNER_EMAIL, UAT_SECOND_OWNER_PASSWORD);
@@ -277,6 +337,7 @@ test("Moss reads both processes' warnings, hides other owners' text, and survive
   );
   expect(plainReply.toLowerCase()).not.toContain(SECOND_OWNER_WARNING);
   expect(plainReply.toLowerCase()).not.toContain("stored connection invalid");
+  expect(plainReply.toLowerCase()).not.toContain("background health check delayed");
   const plainView = await readLogs(page.request);
   expect(plainView.records).toEqual([]);
   expect(plainView.redactions).toContain("logs");

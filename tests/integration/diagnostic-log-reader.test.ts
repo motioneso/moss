@@ -3,7 +3,11 @@ import type { Kysely } from "kysely";
 import pg from "pg";
 
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
-import { readDiagnosticLogs } from "@moss/settings";
+import {
+  createDiagnosticLogDestination,
+  createDiagnosticLogSink,
+  readDiagnosticLogs
+} from "@moss/settings";
 
 import { connectionStrings, resetEmptyFoundationDatabase } from "./test-database.js";
 
@@ -18,6 +22,7 @@ const plainUser = "00000000-0000-4000-8000-000000003b03";
 let appDb: Kysely<MossDatabase>;
 let appContext: DataContextRunner;
 let boot: pg.Client;
+let workerDb: Kysely<MossDatabase>;
 
 const wide = () => ({
   limit: 10,
@@ -73,9 +78,11 @@ beforeAll(async () => {
   );
   appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
   appContext = new DataContextRunner(appDb);
+  workerDb = createDatabase({ connectionString: connectionStrings.worker, maxConnections: 1 });
 });
 
 afterAll(async () => {
+  await workerDb?.destroy();
   await appDb?.destroy();
   await boot?.end();
 });
@@ -84,12 +91,13 @@ describe("readDiagnosticLogs", () => {
   it("gives a non-admin nothing, with null coverage", async () => {
     await boot.query("DELETE FROM app.diagnostic_log_records");
     await insert({ owner: plainUser, message: "PLAIN-OWN-MARKER" });
+    await insert({ message: "PLATFORM-MARKER" });
     const section = await readAs(plainUser);
     expect(section.records).toEqual([]);
     expect(section.coverage).toEqual({ oldestAt: null, newestAt: null });
   });
 
-  it("shows an admin their own text and only metadata for other or unowned rows", async () => {
+  it("shows an admin own and unowned text but only metadata for another owner", async () => {
     await boot.query("DELETE FROM app.diagnostic_log_records");
     await insert({ owner: adminA, message: "OWN-MARKER", context: '{"k":"CTX-SECRET-MARKER"}' });
     await insert({ owner: adminB, message: "OTHER-MARKER" });
@@ -99,12 +107,86 @@ describe("readDiagnosticLogs", () => {
     expect(section.records).toHaveLength(3);
     expect(text).toContain("OWN-MARKER");
     expect(text).not.toContain("OTHER-MARKER");
-    expect(text).not.toContain("UNOWNED-MARKER");
+    expect(text).toContain("UNOWNED-MARKER");
     expect(text).not.toContain("CTX-SECRET-MARKER");
-    const other = section.records.filter((r) => !r.owned);
-    expect(other.every((r) => r.message === null)).toBe(true);
-    expect(other.some((r) => r.ownerKnown)).toBe(true);
-    expect(other.some((r) => !r.ownerKnown)).toBe(true);
+    expect(section.records.find((r) => !r.owned && r.ownerKnown)?.message).toBeNull();
+    expect(section.records.find((r) => !r.ownerKnown)).toMatchObject({
+      owned: false,
+      message: "UNOWNED-MARKER"
+    });
+  });
+
+  it("returns masked text from an unowned warning through the real sink", async () => {
+    await boot.query("DELETE FROM app.diagnostic_log_records");
+    const sink = createDiagnosticLogSink({ db: workerDb, process: "worker" });
+    const destination = createDiagnosticLogDestination({
+      process: "worker",
+      sink,
+      target: { write: () => true }
+    });
+    try {
+      destination.write(
+        JSON.stringify({
+          level: 40,
+          time: Date.now(),
+          msg: "platform warning Authorization: Bearer CANARY-2E-73491"
+        }) + "\n"
+      );
+      await sink.flush();
+      const section = await readAs(adminA);
+      expect(section.records).toHaveLength(1);
+      expect(section.records[0]).toMatchObject({
+        owned: false,
+        ownerKnown: false,
+        message: "platform warning Authorization: [redacted]"
+      });
+      expect(JSON.stringify(section)).not.toContain("CANARY-2E-73491");
+    } finally {
+      await sink.close();
+    }
+  });
+
+  it("keeps another owner's text private when a mixed batch includes a deleted owner", async () => {
+    await boot.query("DELETE FROM app.diagnostic_log_records");
+    const deletedOwner = "00000000-0000-4000-8000-000000003b04";
+    await boot.query(
+      "INSERT INTO app.users (id, email, name, status) VALUES ($1, 'rd-deleted@example.test', 'Deleted', 'active')",
+      [deletedOwner]
+    );
+    // Pin the state at flush without racing the sink's periodic timer: this owner has gone
+    // away by the time their queued warning reaches the database.
+    await boot.query("DELETE FROM app.users WHERE id=$1", [deletedOwner]);
+    const sink = createDiagnosticLogSink({ db: workerDb, process: "worker" });
+    const destination = createDiagnosticLogDestination({
+      process: "worker",
+      sink,
+      target: { write: () => true }
+    });
+    try {
+      for (const [actorUserId, msg] of [
+        [deletedOwner, "DELETED-OWNER-MARKER"],
+        [adminB, "B-PRIVATE-MIXED-BATCH"],
+        [null, "GENUINE-PLATFORM-MARKER"]
+      ]) {
+        destination.write(JSON.stringify({ level: 40, time: Date.now(), actorUserId, msg }) + "\n");
+      }
+      await sink.flush();
+      const section = await readAs(adminA);
+      expect(JSON.stringify(section)).not.toContain("B-PRIVATE-MIXED-BATCH");
+      expect(JSON.stringify(section)).not.toContain("DELETED-OWNER-MARKER");
+      expect(section.records).toHaveLength(2);
+      expect(section.records.find((r) => r.ownerKnown)).toMatchObject({
+        owned: false,
+        message: null
+      });
+      expect(section.records.find((r) => !r.ownerKnown)?.message).toBe("GENUINE-PLATFORM-MARKER");
+      expect((await readAs(adminB)).records.find((r) => r.owned)?.message).toBe(
+        "B-PRIVATE-MIXED-BATCH"
+      );
+      expect(sink.stats()).toMatchObject({ written: 2, dropped: 1, queued: 0 });
+    } finally {
+      await sink.close();
+    }
   });
 
   it("applies the level, component and time filters", async () => {
@@ -138,13 +220,16 @@ describe("readDiagnosticLogs", () => {
     expect(new Date(cov.newestAt!).getTime()).toBeGreaterThan(new Date(cov.oldestAt!).getTime());
   });
 
-  it("cuts a long own message to 500 characters", async () => {
-    await boot.query("DELETE FROM app.diagnostic_log_records");
-    await insert({ owner: adminA, message: "m".repeat(2000) });
-    const section = await readAs(adminA);
-    expect(section.records[0]!.message).toHaveLength(500);
-    expect(section.records[0]!.truncated).toBe(true);
-  });
+  it.each([adminA, null])(
+    "cuts a long visible message to 500 characters (owner %s)",
+    async (owner) => {
+      await boot.query("DELETE FROM app.diagnostic_log_records");
+      await insert({ owner, message: "m".repeat(2000) });
+      const section = await readAs(adminA);
+      expect(section.records[0]!.message).toHaveLength(500);
+      expect(section.records[0]!.truncated).toBe(true);
+    }
+  );
 
   it("reports the stored truncation flag, and false for a whole short message", async () => {
     await boot.query("DELETE FROM app.diagnostic_log_records");

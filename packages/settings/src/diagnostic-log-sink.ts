@@ -1,4 +1,4 @@
-import { sql, type Kysely } from "kysely";
+import { sql, type Kysely, type Transaction } from "kysely";
 
 import type { MossDatabase } from "@moss/db";
 
@@ -228,38 +228,57 @@ export function createDiagnosticLogSink(opts: CreateDiagnosticLogSinkOptions): D
     }
   }
 
-  async function insert(batch: readonly DiagnosticLogRow[], keepOwners: boolean): Promise<void> {
+  async function insert(
+    trx: Transaction<MossDatabase>,
+    batch: readonly DiagnosticLogRow[]
+  ): Promise<void> {
     const values = sql.join(
       batch.map(
         (row) => sql`(
           ${row.occurredAt}::timestamptz, ${row.process}, ${row.level}::smallint,
           ${row.component}, ${row.connectionKind}, ${row.eventCode},
-          ${keepOwners ? row.ownerUserId : null}::uuid, ${row.message},
+          ${row.ownerUserId}::uuid, ${row.message},
           ${JSON.stringify(row.context)}::jsonb, ${row.truncated}
         )`
       )
     );
-    await opts.db.transaction().execute(async (trx) => {
+    await sql`
+      INSERT INTO app.diagnostic_log_records
+        (occurred_at, process, level, component, connection_kind, event_code,
+         owner_user_id, message, context, truncated)
+      VALUES ${values}
+    `.execute(trx);
+  }
+
+  async function writeBatch(batch: readonly DiagnosticLogRow[]): Promise<number> {
+    return opts.db.transaction().execute(async (trx) => {
       await sql`SELECT set_config('statement_timeout', ${String(LOG_SINK_LIMITS.statementTimeoutMs)}, true)`.execute(
         trx
       );
-      await sql`
-        INSERT INTO app.diagnostic_log_records
-          (occurred_at, process, level, component, connection_kind, event_code,
-           owner_user_id, message, context, truncated)
-        VALUES ${values}
-      `.execute(trx);
+      await sql`SAVEPOINT diagnostic_log_batch`.execute(trx);
+      try {
+        await insert(trx, batch);
+        return batch.length;
+      } catch (error) {
+        if (sqlState(error) !== FOREIGN_KEY_VIOLATION) throw error;
+        await sql`ROLLBACK TO SAVEPOINT diagnostic_log_batch`.execute(trx);
+      }
+      // A deleted owner must not turn another user's warning into public platform text.
+      // Keep valid owners and genuine unowned rows; only stale-owner rows are discarded.
+      let stored = 0;
+      for (const row of batch) {
+        await sql`SAVEPOINT diagnostic_log_row`.execute(trx);
+        try {
+          await insert(trx, [row]);
+          stored += 1;
+        } catch (error) {
+          if (sqlState(error) !== FOREIGN_KEY_VIOLATION) throw error;
+          await sql`ROLLBACK TO SAVEPOINT diagnostic_log_row`.execute(trx);
+        }
+        await sql`RELEASE SAVEPOINT diagnostic_log_row`.execute(trx);
+      }
+      return stored;
     });
-  }
-
-  async function writeBatch(batch: readonly DiagnosticLogRow[]): Promise<void> {
-    try {
-      await insert(batch, true);
-    } catch (error) {
-      if (sqlState(error) !== FOREIGN_KEY_VIOLATION) throw error;
-      // A stale owner id must not lose the batch. Retry without owners.
-      await insert(batch, false);
-    }
   }
 
   async function runFlush(): Promise<void> {
@@ -310,14 +329,15 @@ export function createDiagnosticLogSink(opts: CreateDiagnosticLogSinkOptions): D
       });
       let timeout: ReturnType<typeof setTimeout> | undefined;
       try {
-        await Promise.race([
+        const stored = await Promise.race([
           write,
           new Promise<never>((_, reject) => {
             timeout = setTimeout(() => reject(new Error("log flush deadline")), left);
             timeout.unref?.();
           })
         ]);
-        written += rows.length;
+        written += stored;
+        if (stored < rows.length) drop(rows.length - stored);
       } catch (error) {
         failed += 1;
         drop(rows.length);
