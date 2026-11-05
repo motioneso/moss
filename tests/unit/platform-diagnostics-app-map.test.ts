@@ -17,14 +17,24 @@ describe("app map entries for settings.platformDiagnostics (#3978)", () => {
 
   it("states the limits, the log gap and the Outlook partial-state gap", () => {
     expect(feature("settings.platformDiagnostics.limits")?.description).toContain(
-      "at most 10 items, and the jobs and connections sections hold at most 16 KB each"
+      "at most 10 items, and the jobs, connections and logs sections hold at most 16 KB each"
     );
-    expect(feature("settings.platformDiagnostics.limits")?.description).toContain(
-      "cannot yet show application log lines"
+    expect(feature("settings.platformDiagnostics.limits")?.description).not.toContain(
+      "cannot yet show"
     );
     expect(feature("settings.platformDiagnostics.connections")?.description).toContain(
       "cannot tell an incomplete scan from an unreachable helper"
     );
+  });
+
+  it("declares the admin-only logs section, its owner rule and the gap error", () => {
+    const logs = feature("settings.platformDiagnostics.logs");
+    expect(logs?.description).toContain("instance admins only");
+    expect(logs?.description).toContain("only for records tied to your own account");
+    expect(logs?.description).toContain("about 50,000 records");
+    const error = logs?.errors?.find((entry) => entry.code === "log_store_empty_or_gap");
+    expect(error?.class).toBe("prerequisite");
+    expect(logs?.remediations?.some((entry) => entry.id === error?.remediationRef)).toBe(true);
   });
 
   it("declares the hidden-for-non-admins outcome with a remediation", () => {
