@@ -32,18 +32,20 @@ async function insert(opts: {
   component?: string;
   ageMinutes?: number;
   context?: string;
+  truncated?: boolean;
 }): Promise<void> {
   await boot.query(
     `INSERT INTO app.diagnostic_log_records
-       (occurred_at, process, level, component, owner_user_id, message, context)
-     VALUES (now() - make_interval(mins => $1), 'worker', $2, $3, $4, $5, $6::jsonb)`,
+       (occurred_at, process, level, component, owner_user_id, message, context, truncated)
+     VALUES (now() - make_interval(mins => $1), 'worker', $2, $3, $4, $5, $6::jsonb, $7)`,
     [
       opts.ageMinutes ?? 0,
       opts.level ?? 40,
       opts.component ?? "google-sync",
       opts.owner ?? null,
       opts.message,
-      opts.context ?? "{}"
+      opts.context ?? "{}",
+      opts.truncated ?? false
     ]
   );
 }
@@ -141,5 +143,17 @@ describe("readDiagnosticLogs", () => {
     await insert({ owner: adminA, message: "m".repeat(2000) });
     const section = await readAs(adminA);
     expect(section.records[0]!.message).toHaveLength(500);
+    expect(section.records[0]!.truncated).toBe(true);
+  });
+
+  it("reports the stored truncation flag, and false for a whole short message", async () => {
+    await boot.query("DELETE FROM app.diagnostic_log_records");
+    await insert({ owner: adminA, message: "whole", ageMinutes: 2 });
+    await insert({ owner: adminA, message: "cut at storage", truncated: true, ageMinutes: 1 });
+    await insert({ owner: adminB, message: "other owner cut", truncated: true });
+    const byMessage = Object.fromEntries(
+      (await readAs(adminA)).records.map((r) => [r.message ?? "hidden", r.truncated])
+    );
+    expect(byMessage).toMatchObject({ whole: false, "cut at storage": true, hidden: true });
   });
 });

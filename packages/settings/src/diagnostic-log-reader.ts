@@ -26,6 +26,7 @@ interface LogRow {
   readonly owned: boolean;
   readonly owner_known: boolean;
   readonly message: string | null;
+  readonly truncated: boolean;
 }
 
 interface CoverageRow {
@@ -52,6 +53,10 @@ function iso(value: Date | string | null): string | null {
  * own. The stored context is never selected. Reads one row more than the limit to detect
  * truncation.
  */
+function shown(row: LogRow): string | null {
+  return row.owned && row.message !== null ? row.message.slice(0, LOG_MESSAGE_RETURN_MAX) : null;
+}
+
 export async function readDiagnosticLogs(
   scopedDb: DataContextDb,
   options: ReadDiagnosticLogsOptions
@@ -60,7 +65,7 @@ export async function readDiagnosticLogs(
   const limit = Math.max(1, Math.min(10, Math.floor(options.limit)));
   const rows = await sql<LogRow>`
     SELECT occurred_at, process, level, component, connection_kind, event_code,
-           owned, owner_known, message
+           owned, owner_known, message, truncated
     FROM app.read_diagnostic_log(
       ${options.since.toISOString()}::timestamptz,
       ${LEVEL_NUMBER[options.minLevel]}::smallint,
@@ -82,9 +87,8 @@ export async function readDiagnosticLogs(
     eventCode: row.event_code,
     ownerKnown: row.owner_known,
     owned: row.owned,
-    message:
-      row.owned && row.message !== null ? row.message.slice(0, LOG_MESSAGE_RETURN_MAX) : null,
-    truncated: false
+    message: shown(row),
+    truncated: row.truncated || (row.owned && (row.message?.length ?? 0) > LOG_MESSAGE_RETURN_MAX)
   }));
   const cov = coverage.rows[0];
   return {

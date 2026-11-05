@@ -7,6 +7,7 @@ export * from "./diagnostic-log-destination.js";
 export * from "./diagnostic-log-purge.js";
 export * from "./diagnostic-log-sink.js";
 export * from "./diagnostic-log-reader.js";
+export * from "./log-owner-scope.js";
 export * from "./data-export-repository.js";
 export * from "./onboarding-routes.js";
 export * from "./preferences-port.js";

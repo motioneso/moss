@@ -74,6 +74,7 @@ import {
 } from "@moss/module-registry";
 import { parsePositiveIntEnv, type HostDiagnosticsInfo } from "@moss/shared";
 import { createModuleLogger, CORE_VERSION } from "@moss/module-sdk";
+import { createOwnerAwareErrorLogger } from "./owner-aware-logger.js";
 import { actAsRateLimitKey, installActAsActorLookup } from "@moss/module-sdk/server";
 // #917: /api/modules reads enablement through the public settings API; this is legitimate
 // composition-root wiring, not a module cross-import.
@@ -552,22 +553,16 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     // Logger adapters wire server.log into the connectors package's minimal logger
     // interfaces (observability spec: no console.* in production — the clients' noop
     // defaults must be overridden at the composition root).
-    const connectorsModuleLogger = createModuleLogger(server.log, "connectors");
+    const connectorClientLogger = createOwnerAwareErrorLogger(
+      createModuleLogger(server.log, "connectors")
+    );
     const connectorsRepository = new ConnectorsRepository();
     const googleConnectionService = new GoogleConnectionService({
       repository: connectorsRepository,
       cipher: createConnectorSecretCipher(),
-      oauthClient: new GoogleOAuthClient({
-        logger: {
-          error: (data, msg) => connectorsModuleLogger.error(data, msg)
-        }
-      })
+      oauthClient: new GoogleOAuthClient({ logger: connectorClientLogger })
     });
-    const googleApiClient = new GoogleApiClient({
-      logger: {
-        error: (data, msg) => connectorsModuleLogger.error(data, msg)
-      }
-    });
+    const googleApiClient = new GoogleApiClient({ logger: connectorClientLogger });
 
     // Host diagnostics (#255): a read-only, secret-safe runtime-facts provider injected
     // into the settings admin route. info() returns only explicit, non-secret config
