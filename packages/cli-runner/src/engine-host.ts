@@ -181,6 +181,10 @@ export class CliChatEngineHost {
     return this.acp.read(sessionKey, afterSeq);
   }
 
+  acpResolvePaths(sessionKey: string, paths: readonly string[]): Promise<string[]> {
+    return this.acp.resolvePaths(sessionKey, paths);
+  }
+
   acpKill(sessionKey: string, opts: { generation?: number } = {}): Promise<void> {
     return this.acp.kill(sessionKey, opts.generation);
   }

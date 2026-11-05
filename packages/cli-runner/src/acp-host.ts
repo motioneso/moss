@@ -83,6 +83,7 @@ import {
 import { sanitizeSessionKey } from "@moss/chat/live";
 import { applyAgentCredential, type AcpCredential } from "./acp-launch-credential.js";
 import { logRedactedStderr } from "./stderr-redactor.js";
+import { resolveRealPaths } from "./acp-resolve-paths.js";
 import { credentialValuesIn, maskSecretsInLine } from "./stdout-redactor.js";
 
 // Re-exported so callers that only know acp-host.ts keep working unchanged;
@@ -627,6 +628,13 @@ export class AcpHost {
     this.sweepIdle();
     const session = this.requireLive(sessionKey);
     return sendAcpLine(session, line, MAX_LINE_BYTES);
+  }
+
+  /** Real locations of paths a tool call names, so the policy sees through symlinks. */
+  async resolvePaths(sessionKey: string, paths: readonly string[]): Promise<string[]> {
+    const session = this.sessions.get(sanitizeSessionKey(sessionKey));
+    if (!session) throw new Error("ACP session is not running");
+    return resolveRealPaths(session.cwd, paths);
   }
 
   read(sessionKey: string, afterSeq: number): AcpReadResult {

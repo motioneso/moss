@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { AcpSessionOpenError, MossAcpClient } from "./client.js";
+import { classifyAcpPermission } from "./permissions.js";
 import type { AcpTunnel } from "./tunnel.js";
 
 /**
@@ -23,6 +24,8 @@ class ScriptedAgent implements AcpTunnel {
   hangPrompt = false;
   failInitialize = false;
   killFailure: Error | null = null;
+  /** Set by a test to stand in for the runner's symlink resolution. */
+  resolvePaths?: (sessionKey: string, paths: readonly string[]) => Promise<string[]>;
 
   async spawn(): Promise<{
     cwd: string;
@@ -784,4 +787,83 @@ describe("Codex native command permission identity", () => {
       await client.close(handle);
     }
   );
+});
+
+describe("MossAcpClient symlink-aware read checks (#3557)", () => {
+  const CWD = "/runner/session/acp/proj";
+  const HOME = "/home/agent";
+  const readAsk = async (agent: ScriptedAgent, id: number, file: string) => {
+    agent.agentAnnouncesToolCall({
+      toolCallId: "call-9",
+      title: "Read",
+      kind: "read",
+      rawInput: { file_path: file },
+      _meta: { claudeCode: { toolName: "Read" } }
+    });
+    agent.agentAsksPermission(id, { title: "Read", rawInput: { file_path: file } });
+    return (await waitForAnswer(agent, id)).result.outcome;
+  };
+  const policyDecider = () => ({
+    decide: vi.fn(async (builtIn: Parameters<typeof classifyAcpPermission>[0]) =>
+      classifyAcpPermission(builtIn, { cwd: CWD, home: HOME }).verdict === "allow"
+        ? ("allow" as const)
+        : ("deny" as const)
+    )
+  });
+
+  it("refuses a link inside the session folder that points at the process environment", async () => {
+    const agent = new ScriptedAgent();
+    agent.resolvePaths = async (_key, paths) =>
+      paths.map((path) => (path === "notes.txt" ? "/proc/4242/environ" : path));
+    const client = new MossAcpClient(agent, {}, policyDecider());
+    const handle = await client.openSession(
+      "chat:user:proj",
+      "proj",
+      "anthropic",
+      "user-1",
+      "chat"
+    );
+    expect(await readAsk(agent, 21, "notes.txt")).toEqual({ outcome: "cancelled" });
+    await client.close(handle);
+  });
+
+  it("still allows an ordinary file when the session folder itself sits behind a link", async () => {
+    const agent = new ScriptedAgent();
+    agent.resolvePaths = async (_key, paths) =>
+      paths.map((path) =>
+        path === CWD ? "/real/place" : path === HOME ? HOME : `/real/place/${path}`
+      );
+    const client = new MossAcpClient(agent, {}, policyDecider());
+    const handle = await client.openSession(
+      "chat:user:proj",
+      "proj",
+      "anthropic",
+      "user-1",
+      "chat"
+    );
+    expect(await readAsk(agent, 22, "src/a.ts")).toEqual({
+      outcome: "selected",
+      optionId: "allow"
+    });
+    await client.close(handle);
+  });
+
+  it("refuses when the runner cannot resolve the paths", async () => {
+    const agent = new ScriptedAgent();
+    agent.resolvePaths = async () => {
+      throw new Error("runner unreachable");
+    };
+    const decider = policyDecider();
+    const client = new MossAcpClient(agent, {}, decider);
+    const handle = await client.openSession(
+      "chat:user:proj",
+      "proj",
+      "anthropic",
+      "user-1",
+      "chat"
+    );
+    expect(await readAsk(agent, 23, "src/a.ts")).toEqual({ outcome: "cancelled" });
+    expect(decider.decide).not.toHaveBeenCalled();
+    await client.close(handle);
+  });
 });

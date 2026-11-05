@@ -50,6 +50,8 @@ import {
   decodeFrame,
   encodeFrame,
   type RpcAcpKillParams,
+  type RpcAcpResolvePathsParams,
+  type RpcAcpResolvePathsResult,
   type RpcAcpKillResult,
   type RpcAcpReadParams,
   type RpcAcpReadResult,
@@ -351,6 +353,13 @@ export class RpcConnection {
 
   acpRead(sessionKey: string, params: RpcAcpReadParams): Promise<RpcAcpReadResult> {
     return this.call<RpcAcpReadResult>("acpRead", sessionKey, params);
+  }
+
+  acpResolvePaths(
+    sessionKey: string,
+    params: RpcAcpResolvePathsParams
+  ): Promise<RpcAcpResolvePathsResult> {
+    return this.call<RpcAcpResolvePathsResult>("acpResolvePaths", sessionKey, params);
   }
 
   acpKill(sessionKey: string, params: RpcAcpKillParams = {}): Promise<RpcAcpKillResult> {

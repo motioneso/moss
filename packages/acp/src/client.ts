@@ -41,6 +41,8 @@ import { getAcpProviderRow, type AcpProviderKind } from "./providers.js";
 import { launchOffList } from "./tool-table.js";
 import { isCodexCommandPermission } from "./codex-command-permission.js";
 import {
+  extractAcpPaths,
+  rebaseResolvedPath,
   selectAllowOptionId,
   toolNameFromMeta,
   toolNameFromRawInput,
@@ -674,7 +676,8 @@ export class MossAcpClient {
       );
       return denyPermission();
     }
-    const builtIn: AcpBuiltInRequest = {
+    const sessionKey = this.sessionKeys.get(params.sessionId);
+    let builtIn: AcpBuiltInRequest = {
       sessionId: params.sessionId,
       turnId,
       toolCallId,
@@ -684,6 +687,30 @@ export class MossAcpClient {
       kind: announced.kind,
       locations: announced.locations
     };
+    // Judge where each named path really lands, not just how it is spelled.
+    // A failed lookup refuses: no answer is not a safe answer.
+    if (this.tunnel.resolvePaths) {
+      const named = extractAcpPaths(builtIn);
+      if (named.length > 0) {
+        if (!sessionKey) return denyPermission();
+        try {
+          const folders = home ? [cwd, home] : [cwd];
+          const real = await this.tunnel.resolvePaths(sessionKey, [...folders, ...named]);
+          if (real.length !== folders.length + named.length) return denyPermission();
+          const extra = real.slice(folders.length).map((path) => ({
+            path: rebaseResolvedPath(path, {
+              cwd,
+              realCwd: real[0]!,
+              home,
+              realHome: home ? real[1]! : null
+            })
+          }));
+          builtIn = { ...builtIn, locations: [...(announced.locations ?? []), ...extra] };
+        } catch {
+          return denyPermission();
+        }
+      }
+    }
     try {
       const rawVerdict = await this.permissionDecider.decide(builtIn, {
         sessionId: params.sessionId,

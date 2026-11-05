@@ -111,6 +111,27 @@ export function extractAcpPaths(request: AcpBuiltInRequest): string[] {
   return [...paths];
 }
 
+/**
+ * Maps a real (symlink-free) path back into the spelling the folders use, so a
+ * path inside the session folder or the agent's home still reads as inside
+ * when those folders themselves sit behind a link.
+ */
+export function rebaseResolvedPath(
+  real: string,
+  folders: {
+    readonly cwd: string;
+    readonly realCwd: string;
+    readonly home: string | null;
+    readonly realHome: string | null;
+  }
+): string {
+  if (isUnder(folders.realCwd, real)) return resolve(folders.cwd, relative(folders.realCwd, real));
+  if (folders.home && folders.realHome && isUnder(folders.realHome, real)) {
+    return resolve(folders.home, relative(folders.realHome, real));
+  }
+  return real;
+}
+
 /** The shell command a request names, for the card only; never stored. */
 export function extractAcpCommand(request: AcpBuiltInRequest): string | null {
   const input = request.rawInput;
