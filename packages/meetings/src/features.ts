@@ -393,7 +393,7 @@ export const meetingFeatures = [
         code: "meeting_output_isolation_failed",
         class: "validation",
         description:
-          "The summary was stopped before the transcript was sent, because the AI session reported a protection that was off or its report could not be read. Only that run stops, and the next run checks again. Tools were requested off and accepted, but only the tool list is observed. Setting files and session saving are requested and accepted, not observed. Admins also get an alert with the cause."
+          "Stopped before the transcript was sent: a protection was off or could not be checked. Only the tool list is observed. Setting files and session saving are requested and accepted, not observed. Admins get an alert."
       },
       {
         code: "meeting_output_route_unavailable",
