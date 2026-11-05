@@ -156,18 +156,21 @@ describe("diagnostic log reader privacy", () => {
     expect(JSON.stringify(rows)).not.toContain("B-PRIVATE-TEXT");
   });
 
-  it("returns metadata only for an unowned row, even to an admin", async () => {
+  it("returns text but no context for an unowned row to an admin", async () => {
     await clearRecords();
     await insertRecord(workerDb, { owner: null, message: "UNOWNED-TEXT" });
     const rows = await readAs(adminA);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.owner_known).toBe(false);
-    expect(rows[0]?.message).toBeNull();
+    expect(rows[0]?.owned).toBe(false);
+    expect(rows[0]?.message).toBe("UNOWNED-TEXT");
+    expect(rows[0]?.context).toBeNull();
   });
 
   it("returns nothing to a non-admin, a deactivated admin and a demoted bootstrap owner", async () => {
     await clearRecords();
     await insertRecord(workerDb, { owner: plainUser, message: "PLAIN-TEXT" });
+    await insertRecord(workerDb, { owner: null, message: "PLATFORM-TEXT" });
     await insertRecord(workerDb, { owner: deactivatedAdmin, message: "DEACT-TEXT" });
     await insertRecord(workerDb, { owner: demotedOwner, message: "DEMOTED-TEXT" });
     expect(await readAs(plainUser)).toEqual([]);
@@ -278,11 +281,14 @@ describe("diagnostic log row security and migration", () => {
       return { policies: policies.rows, functions: functions.rows, table: table.rows };
     };
     const before = await snapshot();
-    const migration = readFileSync("packages/settings/sql/0357_diagnostic_log_records.sql", "utf8");
+    const migrations = [
+      readFileSync("packages/settings/sql/0357_diagnostic_log_records.sql", "utf8"),
+      readFileSync("packages/settings/sql/0358_diagnostic_log_platform_text.sql", "utf8")
+    ];
     await boot.query("BEGIN");
     try {
-      await boot.query(migration);
-      await boot.query(migration);
+      for (const migration of migrations) await boot.query(migration);
+      for (const migration of migrations) await boot.query(migration);
       expect(await snapshot()).toEqual(before);
     } finally {
       await boot.query("ROLLBACK");

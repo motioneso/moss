@@ -30,9 +30,14 @@ describe("app map entries for settings.platformDiagnostics (#3978)", () => {
   it("declares the admin-only logs section, its owner rule and the gap error", () => {
     const logs = feature("settings.platformDiagnostics.logs");
     expect(logs?.description).toContain("instance admins only");
-    expect(logs?.description).toContain("Full text only for records tied to your own account");
+    expect(logs?.description).toContain(
+      "Text shows for your own records and unowned platform records"
+    );
     expect(feature("settings.platformDiagnostics.logs.retention")?.description).toContain(
       "about 50,000 records"
+    );
+    expect(feature("settings.platformDiagnostics.logs.privacy")?.description).toContain(
+      "Unowned text may hold private data a pattern cannot recognise"
     );
     const error = logs?.errors?.find((entry) => entry.code === "log_store_empty_or_gap");
     expect(error?.class).toBe("prerequisite");

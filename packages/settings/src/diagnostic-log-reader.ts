@@ -49,12 +49,11 @@ function iso(value: Date | string | null): string | null {
 
 /**
  * Reads stored warnings and errors through the two admin-checked database functions. The
- * functions return nothing to a non-admin and withhold message text from rows the caller does not
- * own. The stored context is never selected. Reads one row more than the limit to detect
- * truncation.
+ * functions return nothing to a non-admin and show text for own and unowned rows only. The stored
+ * context is never selected. Reads one row more than the limit to detect truncation.
  */
 function shown(row: LogRow): string | null {
-  return row.owned && row.message !== null ? row.message.slice(0, LOG_MESSAGE_RETURN_MAX) : null;
+  return row.message !== null ? row.message.slice(0, LOG_MESSAGE_RETURN_MAX) : null;
 }
 
 export async function readDiagnosticLogs(
@@ -88,7 +87,7 @@ export async function readDiagnosticLogs(
     ownerKnown: row.owner_known,
     owned: row.owned,
     message: shown(row),
-    truncated: row.truncated || (row.owned && (row.message?.length ?? 0) > LOG_MESSAGE_RETURN_MAX)
+    truncated: row.truncated || (row.message?.length ?? 0) > LOG_MESSAGE_RETURN_MAX
   }));
   const cov = coverage.rows[0];
   return {
