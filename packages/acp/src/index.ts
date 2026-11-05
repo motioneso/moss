@@ -62,11 +62,14 @@ export type {
   Usage as AcpUsage
 } from "@agentclientprotocol/sdk";
 export {
+  AcpIsolationError,
   CLAUDE_NO_TOOLS_OPTIONS,
   assertClaudeNoToolsOptions,
   assertZeroToolsProof,
-  codexNoToolsConfig
+  codexNoToolsConfig,
+  evaluateClaudeIsolationReadback
 } from "./no-tools.js";
+export type { IsolationProperty, IsolationReadback, IsolationState } from "./no-tools.js";
 export { MOSS_OPENCODE_API_KEY_ENV, MOSS_OPENCODE_PROVIDER_ID } from "./opencode-provider.js";
 export { createTunnelStream } from "./stream.js";
 export type { AcpExecPoll, AcpTunnel } from "./tunnel.js";

@@ -4,8 +4,16 @@ import type { AcpProviderKind } from "./providers.js";
 export const CLAUDE_NO_TOOLS_OPTIONS = {
   tools: [] as readonly string[],
   settingSources: [] as readonly string[],
-  persistSession: false
+  persistSession: false,
+  // Without this the account's cloud connectors (mail, drive, calendar) are offered as tools.
+  strictMcpConfig: true
 } as const;
+
+/** Asks the adapter to forward the session's init report, which lists the tools it offers. */
+export const CLAUDE_INIT_REPORT_FILTER = [{ type: "system", subtype: "init" }] as const;
+
+/** Sent before any transcript so the session reports what it offers. Carries no user data. */
+export const ISOLATION_PROBE_PROMPT = "Reply with the single word OK.";
 
 const CODEX_FEATURES_OFF = [
   "shell_tool",
@@ -54,7 +62,8 @@ export function assertClaudeNoToolsOptions(options: unknown): void {
     tools.length !== 0 ||
     !Array.isArray(sources) ||
     sources.length !== 0 ||
-    value.persistSession !== false
+    value.persistSession !== false ||
+    value.strictMcpConfig !== true
   ) {
     throw new AcpCapabilityError(
       "no-tools",
@@ -76,4 +85,60 @@ export function assertZeroToolsProof(input: {
       `the ${input.providerKind} agent offered tools under the no-tools profile (${names}), so the call was blocked.`
     );
   }
+}
+
+export type IsolationProperty = "tools" | "setting_sources" | "session_persistence" | "readback";
+export type IsolationState = "observed_ok" | "observed_violation" | "not_observed";
+
+export interface IsolationReadback {
+  readonly tools: IsolationState;
+  readonly settingSources: IsolationState;
+  readonly sessionPersistence: IsolationState;
+}
+
+/**
+ * Raised when a no-tools session shows a violation (`violation`) or when its report cannot be
+ * read at all (`unverifiable`). Carries a property name only, never session or transcript text.
+ */
+export class AcpIsolationError extends AcpCapabilityError {
+  constructor(
+    readonly cause: "violation" | "unverifiable",
+    readonly property: IsolationProperty
+  ) {
+    super(
+      "no-tools",
+      cause === "violation"
+        ? `the session reported ${property} that the no-tools profile forbids.`
+        : "the session's isolation report could not be read."
+    );
+    this.name = "AcpIsolationError";
+  }
+}
+
+/**
+ * Reads the init report a running Claude session sent. Only `tools`, `mcp_servers` and
+ * `plugins` are observable. The session reports nothing about setting sources or persistence
+ * beyond plugins, so those two stay `not_observed` and are requested options only.
+ */
+export function evaluateClaudeIsolationReadback(init: unknown): IsolationReadback {
+  if (!init || typeof init !== "object" || Array.isArray(init))
+    throw new AcpIsolationError("unverifiable", "readback");
+  const report = init as Record<string, unknown>;
+  if (report.type !== "system" || report.subtype !== "init")
+    throw new AcpIsolationError("unverifiable", "readback");
+  if (!Array.isArray(report.tools) || report.tools.some((tool) => typeof tool !== "string"))
+    throw new AcpIsolationError("unverifiable", "readback");
+  for (const optional of [report.mcp_servers, report.plugins])
+    if (optional !== undefined && !Array.isArray(optional))
+      throw new AcpIsolationError("unverifiable", "readback");
+  if (report.tools.length > 0) throw new AcpIsolationError("violation", "tools");
+  if (Array.isArray(report.mcp_servers) && report.mcp_servers.length > 0)
+    throw new AcpIsolationError("violation", "tools");
+  if (Array.isArray(report.plugins) && report.plugins.length > 0)
+    throw new AcpIsolationError("violation", "setting_sources");
+  return {
+    tools: "observed_ok",
+    settingSources: "not_observed",
+    sessionPersistence: "not_observed"
+  };
 }
