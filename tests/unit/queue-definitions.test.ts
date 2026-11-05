@@ -17,6 +17,7 @@ describe("registered queue definitions", () => {
       "system.focus-judgment-purge",
       "export.build",
       "export.cleanup",
+      "diagnostics.log_purge",
       "connectors.google-sync",
       "connectors.google-sync-continuation",
       "connectors.google-sync-sweep",

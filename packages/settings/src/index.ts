@@ -3,6 +3,7 @@ export * from "./repository.js";
 export * from "./routes.js";
 export * from "./data-export-jobs.js";
 export * from "./data-export-schedule.js";
+export * from "./diagnostic-log-purge.js";
 export * from "./data-export-repository.js";
 export * from "./onboarding-routes.js";
 export * from "./preferences-port.js";
