@@ -6,7 +6,35 @@ import {
   writeSanitizedFatal
 } from "@moss/shared/log-sanitizer";
 
+import { createFatalLineWriter, type DiagnosticLogSink } from "@moss/settings";
+
+import { currentApiLogSink } from "./recording-logger-options.js";
+
 type LineWriter = (line: string) => void;
+
+type SinkSource = () => DiagnosticLogSink | null;
+
+/** Fatal lines go to stderr and, when a sink exists, to the log table before the process exits. */
+async function reportFatal(
+  eventCode: "startup-failed" | "shutdown-failed",
+  label: string,
+  err: unknown,
+  msg: string,
+  opts: { log?: LineWriter; sink?: SinkSource }
+): Promise<void> {
+  const sink = (opts.sink ?? currentApiLogSink)();
+  writeSanitizedFatal(
+    label,
+    err,
+    createFatalLineWriter({ process: "api", eventCode, sink, stderr: opts.log }),
+    msg
+  );
+  try {
+    await sink?.close();
+  } catch {
+    // Draining is best effort and bounded.
+  }
+}
 
 /**
  * Run the startup work and report a failure as one sanitized line, then exit 1. A rejected
@@ -14,13 +42,13 @@ type LineWriter = (line: string) => void;
  */
 export async function runApiStartup(
   start: () => Promise<unknown>,
-  opts: { log?: LineWriter; exit?: (code: number) => never } = {}
+  opts: { log?: LineWriter; exit?: (code: number) => never; sink?: SinkSource } = {}
 ): Promise<void> {
   const exit = opts.exit ?? ((code: number) => process.exit(code));
   try {
     await start();
   } catch (err) {
-    writeSanitizedFatal("startup", err, opts.log, "API startup failed");
+    await reportFatal("startup-failed", "startup", err, "API startup failed", opts);
     exit(1);
   }
 }
@@ -36,15 +64,20 @@ export async function runApiStartup(
  */
 export async function shutdownOnSignal(
   server: { close(cb: (err?: Error) => void): void },
-  opts: { timeoutMs?: number; exit?: (code: number) => never; log?: LineWriter } = {}
+  opts: {
+    timeoutMs?: number;
+    exit?: (code: number) => never;
+    log?: LineWriter;
+    sink?: SinkSource;
+  } = {}
 ): Promise<void> {
   const timeoutMs = opts.timeoutMs ?? 10_000;
   const exit = opts.exit ?? ((code: number) => process.exit(code));
   await Promise.race([
     new Promise<void>((resolve) => {
       server.close((err) => {
-        if (err) writeSanitizedFatal("shutdown", err, opts.log, "Shutdown failed");
-        resolve();
+        if (!err) return resolve();
+        void reportFatal("shutdown-failed", "shutdown", err, "Shutdown failed", opts).then(resolve);
       });
     }),
     new Promise<void>((resolve) => {
@@ -69,7 +102,12 @@ export function createCrashHandler(
     log: { error(obj: Record<string, unknown>, msg: string): void };
     close(cb: (err?: Error) => void): void;
   },
-  opts: { timeoutMs?: number; exit?: (code: number) => never } = {}
+  opts: {
+    timeoutMs?: number;
+    exit?: (code: number) => never;
+    log?: LineWriter;
+    sink?: SinkSource;
+  } = {}
 ): (label: string, err: unknown) => void {
   const timeoutMs = opts.timeoutMs ?? 2000;
   const exit = opts.exit ?? ((code: number) => process.exit(code));
@@ -78,21 +116,40 @@ export function createCrashHandler(
     if (crashing) return;
     crashing = true;
     try {
-      server.log.error({ err: sanitizeLogValue(err), label }, "Process crash — exiting");
+      server.log.error(
+        { err: sanitizeLogValue(err), label, eventCode: "crash" },
+        "Process crash — exiting"
+      );
     } catch {
       // A hostile error (a throwing getter) or a failing logger drops the record. Shutdown and
       // the exit below still run, and nothing raw is written.
       LOG_DROP_COUNTER.count += 1;
     }
-    const drain = Promise.race([
+    // stderr gets its own copy. The logger call above already queued the table row.
+    try {
+      writeSanitizedFatal(
+        label,
+        err instanceof Error ? err : "unknown",
+        // log-safe: writeSanitizedFatal masks the line before it reaches this writer
+        opts.log ?? ((line: string) => void process.stderr.write(line)),
+        "Process crash — exiting"
+      );
+    } catch {
+      LOG_DROP_COUNTER.count += 1;
+    }
+    // The sink drains alongside server close, so stalled runtime cleanup cannot hold it back.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const bound = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeoutMs);
+    });
+    const work = Promise.allSettled([
+      Promise.resolve().then(() => (opts.sink ?? currentApiLogSink)()?.close()),
       new Promise<void>((resolve) => {
         server.close(() => resolve());
-      }),
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, timeoutMs);
       })
     ]);
-    void drain.then(() => {
+    void Promise.race([work, bound]).then(() => {
+      clearTimeout(timer);
       exit(1);
     });
   };
