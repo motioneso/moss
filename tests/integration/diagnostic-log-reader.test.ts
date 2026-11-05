@@ -146,6 +146,49 @@ describe("readDiagnosticLogs", () => {
     }
   });
 
+  it("keeps another owner's text private when a mixed batch includes a deleted owner", async () => {
+    await boot.query("DELETE FROM app.diagnostic_log_records");
+    const deletedOwner = "00000000-0000-4000-8000-000000003b04";
+    await boot.query(
+      "INSERT INTO app.users (id, email, name, status) VALUES ($1, 'rd-deleted@example.test', 'Deleted', 'active')",
+      [deletedOwner]
+    );
+    // Pin the state at flush without racing the sink's periodic timer: this owner has gone
+    // away by the time their queued warning reaches the database.
+    await boot.query("DELETE FROM app.users WHERE id=$1", [deletedOwner]);
+    const sink = createDiagnosticLogSink({ db: workerDb, process: "worker" });
+    const destination = createDiagnosticLogDestination({
+      process: "worker",
+      sink,
+      target: { write: () => true }
+    });
+    try {
+      for (const [actorUserId, msg] of [
+        [deletedOwner, "DELETED-OWNER-MARKER"],
+        [adminB, "B-PRIVATE-MIXED-BATCH"],
+        [null, "GENUINE-PLATFORM-MARKER"]
+      ]) {
+        destination.write(JSON.stringify({ level: 40, time: Date.now(), actorUserId, msg }) + "\n");
+      }
+      await sink.flush();
+      const section = await readAs(adminA);
+      expect(JSON.stringify(section)).not.toContain("B-PRIVATE-MIXED-BATCH");
+      expect(JSON.stringify(section)).not.toContain("DELETED-OWNER-MARKER");
+      expect(section.records).toHaveLength(2);
+      expect(section.records.find((r) => r.ownerKnown)).toMatchObject({
+        owned: false,
+        message: null
+      });
+      expect(section.records.find((r) => !r.ownerKnown)?.message).toBe("GENUINE-PLATFORM-MARKER");
+      expect((await readAs(adminB)).records.find((r) => r.owned)?.message).toBe(
+        "B-PRIVATE-MIXED-BATCH"
+      );
+      expect(sink.stats()).toMatchObject({ written: 2, dropped: 1, queued: 0 });
+    } finally {
+      await sink.close();
+    }
+  });
+
   it("applies the level, component and time filters", async () => {
     await boot.query("DELETE FROM app.diagnostic_log_records");
     await insert({ owner: adminA, message: "warn-new", level: 40, component: "oauth" });

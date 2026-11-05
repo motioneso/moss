@@ -184,7 +184,7 @@ describe("diagnostic log sink", () => {
     expect(sink.stats()).toMatchObject({ queued: 0, dropped: 1 });
   });
 
-  it("retries a batch without owners after a foreign-key failure", async () => {
+  it("preserves owners when retrying after a foreign-key failure", async () => {
     let first = true;
     const { db, inserts } = fakeDb((q) => {
       if (/insert into/i.test(q.sql) && first) {
@@ -198,7 +198,27 @@ describe("diagnostic log sink", () => {
     await sink.flush();
     expect(sink.stats().written).toBe(1);
     expect(JSON.stringify(inserts[0]!.parameters)).toContain(owner);
-    expect(JSON.stringify(inserts[1]!.parameters)).not.toContain(owner);
+    expect(JSON.stringify(inserts[1]!.parameters)).toContain(owner);
+  });
+
+  it("counts only stored rows when a deleted owner shares a batch with valid records", async () => {
+    const staleOwner = "00000000-0000-4000-8000-0000000000aa";
+    const validOwner = "00000000-0000-4000-8000-0000000000bb";
+    const { db, inserts } = fakeDb((q) => {
+      if (/insert into/i.test(q.sql) && q.parameters.includes(staleOwner)) {
+        throw Object.assign(new Error("fk"), { code: "23503" });
+      }
+    });
+    const sink = createDiagnosticLogSink({ db, process: "worker", stderr: () => {} });
+    sink.enqueue(row(1, { ownerUserId: staleOwner }));
+    sink.enqueue(row(2, { ownerUserId: validOwner }));
+    sink.enqueue(row(3));
+    await sink.flush();
+    expect(sink.stats()).toMatchObject({ written: 2, dropped: 1, queued: 0, failed: 0 });
+    expect(inserts).toHaveLength(4);
+    expect(inserts[2]!.parameters).toContain(validOwner);
+    expect(inserts[3]!.parameters).toContain(null);
+    await sink.close();
   });
 
   it("pauses 30 seconds on a missing table, then recovers", async () => {

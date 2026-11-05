@@ -59,7 +59,7 @@ export const platformDiagnosticsFeatures: readonly Feature[] = [
   {
     id: "settings.platformDiagnostics.logs.privacy",
     description:
-      "Unowned text may hold private data a pattern cannot recognise, such as a mail subject in an error. The 7-day cap and 2 KB storage cut limit exposure; stored context is never returned."
+      "Unowned text may hold private data a pattern cannot recognise, such as a mail subject in an error. The 7-day cap and 2 KB storage cut limit exposure; stored context is never returned. Deleted-owner warnings are dropped."
   },
   {
     id: "settings.platformDiagnostics.logs.retention",
