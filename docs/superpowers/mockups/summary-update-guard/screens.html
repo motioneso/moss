@@ -5,23 +5,29 @@
 <span class="mk-group"><span class="mk-label">Screen</span><span class="jds-segmented">
 <button class="jds-segmented__opt" data-pick="view:member">Meeting: safety check failed (member)</button>
 <button class="jds-segmented__opt" data-pick="view:admin" aria-pressed="true">Meeting: safety check failed (admin)</button>
+<button class="jds-segmented__opt" data-pick="view:unverified">Meeting: safety check could not run</button>
 <button class="jds-segmented__opt" data-pick="view:offline">Meeting: connection offline</button>
 <button class="jds-segmented__opt" data-pick="view:nomodel">Meeting: no model set</button></span></span>
 <span class="mk-group"><span class="mk-label">Theme</span><span class="jds-segmented"><button class="jds-segmented__opt" data-pick="theme:light" aria-pressed="true">Light</button><button class="jds-segmented__opt" data-pick="theme:dark">Dark</button></span></span></div>
 <div class="mk-page">
 
-<div data-show="view:member admin offline nomodel">
+<div data-show="view:member admin unverified offline nomodel">
 <h1 class="mk-h">Meetings / Weekly planning</h1>
 <p class="mk-help">The summary panel on one meeting. The transcript and notes above it are unchanged.</p>
 <div class="stack">
  <div class="jds-card jds-card--pad-lg fail" data-show="view:member">
   <div class="card-h">Summary</div>
-  <p>This summary could not be written because the safety check before this run found the model could use tools, read files or save a session, so nothing was sent to it. Use Rewrite summary once that is fixed.</p>
+  <p>This summary could not be written because a safety check on the AI connection did not pass. Nothing was sent to the model. Use Rewrite summary once that is fixed.</p>
   <div class="row"><span class="sub">Ask an admin to check the AI connection.</span> <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button></div>
  </div>
  <div class="jds-card jds-card--pad-lg fail" data-show="view:admin">
   <div class="card-h">Summary</div>
-  <p>This summary could not be written because the safety check before this run found the model could use tools, read files or save a session, so nothing was sent to it. Use Rewrite summary once that is fixed.</p>
+  <p>This summary could not be written because the safety check found the model was offered tools. Nothing was sent to it. Use Rewrite summary once that is fixed.</p>
+  <div class="row"><button class="jds-btn jds-btn--secondary jds-btn--sm">Open AI providers</button> <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button></div>
+ </div>
+ <div class="jds-card jds-card--pad-lg fail" data-show="view:unverified">
+  <div class="card-h">Summary</div>
+  <p>This summary could not be written because the safety check could not confirm the model has no tools. Nothing was sent to it. Use Rewrite summary once that is fixed.</p>
   <div class="row"><button class="jds-btn jds-btn--secondary jds-btn--sm">Open AI providers</button> <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button></div>
  </div>
  <div class="jds-card jds-card--pad-lg fail" data-show="view:offline">
@@ -38,6 +44,6 @@
 </div>
 
 <h2 class="mk-h" style="margin-top:var(--space-6)">States covered</h2>
-<p class="mk-help">Loading: the existing summary-in-progress state. Empty: no summary yet, unchanged. Broken: the four failure views above. The AI providers screen does not change.</p>
+<p class="mk-help">Loading: the existing summary-in-progress state. Empty: no summary yet, unchanged. Broken: the five failure views above. The AI providers screen does not change.</p>
 </div>
 <script src="../classifier-gate/switcher.js"></script></body></html>

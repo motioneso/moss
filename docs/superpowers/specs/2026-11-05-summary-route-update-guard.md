@@ -19,6 +19,9 @@ Mockups: `docs/superpowers/mockups/summary-update-guard/screens.html` (not yet a
 5. **No automatic re-run of failed summaries.** Ben re-runs them himself with Rewrite summary.
 6. **Failures use the existing admin alert.** Nothing new (no email or push).
 7. **Retire the version hash lists and the old summary route.**
+8. **Open, needs Ben:** if the session cannot report one of the three properties, the run goes ahead
+   on "requested and accepted" wording. The alternative is to stop every Claude run, which breaks
+   summaries. Recommended: go ahead, and word it honestly.
 
 This spec supersedes decision 5 of the approved plan ("the update system's live check runs the
 profile before a build goes live"). The build PR amends that document to match.
@@ -54,13 +57,13 @@ three properties on every run instead, so no list is needed and an update cannot
 
 ## Options
 
-| Option                                                                 | Stops the break?                         | Cost                                                                          | Verdict                  |
-| ---------------------------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------- | ------------------------ |
-| A. Hold updates to a hand-kept list of versions                        | Until someone forgets                    | A person edits the list for every release; delays security fixes              | Ben rejected. No.        |
-| B. Keep a separate pinned Claude only for summaries                    | Yes                                      | A second large install and update story; keeps the private route being retired | No.                      |
-| C. Only show the mismatch on AI providers, with a fix button           | No                                       | Small                                                                         | No.                      |
-| D. Test each new build before it goes live, hold back failures         | Mostly, but a bad check blocks updates   | The approved plan's slice 3                                                   | Ben rejected. No.        |
-| E. Let every update go live and check isolation on each summary run   | Yes: no build is ever refused up front   | Moderate; a run-time check plus clear failure messages                        | **Recommended, chosen.** |
+| Option                                                              | Stops the break?                       | Cost                                                                           | Verdict                  |
+| ------------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------ | ------------------------ |
+| A. Hold updates to a hand-kept list of versions                     | Until someone forgets                  | A person edits the list for every release; delays security fixes               | Ben rejected. No.        |
+| B. Keep a separate pinned Claude only for summaries                 | Yes                                    | A second large install and update story; keeps the private route being retired | No.                      |
+| C. Only show the mismatch on AI providers, with a fix button        | No                                     | Small                                                                          | No.                      |
+| D. Test each new build before it goes live, hold back failures      | Mostly, but a bad check blocks updates | The approved plan's slice 3                                                    | Ben rejected. No.        |
+| E. Let every update go live and check isolation on each summary run | Yes: no build is ever refused up front | Moderate; a run-time check plus clear failure messages                         | **Recommended, chosen.** |
 
 E trades a before-release gate for a per-run gate. A build that offers a tool stops the summaries
 that run on it, with a named cause and an admin alert, instead of being kept out. Ben chose this
@@ -70,9 +73,11 @@ trade.
 
 ### 1. Updates never held back for Claude
 
-- A staged Claude build always promotes. The existing live check may still run and its result is
-  recorded and shown, but it is advisory: a failure raises the existing admin alert and never blocks
-  promotion. First install and upgrade behave the same.
+- A staged Claude build always promotes, with no check on the path. After promotion, the existing
+  live check runs in the background with a time limit. Its result is recorded and shown. A failure,
+  an exception or a timeout is logged and raises the existing admin alert, and never changes or
+  delays the promotion. Build moves the call out of the awaited path in `cli-version-check.ts`
+  (today the upgrade path awaits it before promoting). First install and upgrade behave the same.
 - The AI providers screen has no "held back" state for Claude. Its Claude update text keeps the
   existing "Updating to ..." and current-version states.
 - Codex is out of scope and keeps its current behaviour.
@@ -86,22 +91,40 @@ manifest are unchanged; they decide what gets installed, not whether summaries r
 
 ### 3. Isolation check on every run
 
+Today the adapter cannot report this. The client builds the session options itself and validates the
+outgoing object (`packages/acp/src/no-tools.ts`, `client.ts`). The offered-tools list defaults to
+empty, and the proof counts tool calls seen, not tools offered. Checking those would pass every
+run, so the build must first add a real readback.
+
 Each summary run, before any transcript text is sent:
 
 1. Opens the session under the no-tools profile.
-2. Reads back what the adapter reports: tools offered (must be none), setting sources and project
-   files (must be none), session persistence (must be off).
-3. Sends the transcript only if all three hold. Otherwise it closes the session, sends nothing and
-   fails that run with `meeting_output_isolation_failed`.
+2. Reads back from the running Claude session what it reports about tools offered (must be none),
+   setting sources and project files (must be none), and session persistence (must be off).
+3. Sends the transcript only if no property shows a violation. Otherwise it closes the session,
+   sends nothing and fails that run with `meeting_output_isolation_failed`.
+
+Each property ends in one of three states.
+
+| State                 | Meaning                                              | Run                                                 |
+| --------------------- | ---------------------------------------------------- | --------------------------------------------------- |
+| Observed ok           | The session reported the safe value                  | Proceeds                                            |
+| Observed violation    | The session reported a tool, a source or persistence | Stops before the prompt; message names the property |
+| Could not be observed | The session has no way to report this property       | Proceeds if the option was accepted; worded as such |
+
+A readback that errors, times out or returns malformed data is not "could not be observed". It
+stops the run before the prompt with the same code and a "could not verify" message, so a broken
+check cannot pass silently.
+
+Build step zero-b: read the Claude adapter and the launch code and fill in the table above per
+property, with the file and line that supplies the value. Any property that lands in "could not be
+observed" is worded as "requested and accepted, not observed" in the PR and the app map (Claims
+About Security Properties rule). Failing closed on unobservable properties is not an option here,
+because it would stop every Claude run and break summaries, which is what Ben ruled out. Ben must
+confirm this trade (see Decisions, item 8).
 
 Only that run stops. The next run checks again, so a later fix or update recovers without any
 reset. Each failure raises the existing admin alert, with the cause but no transcript text.
-
-Limit to settle in the build plan: the check can only prove what the adapter reports. Build must
-read the adapter and the launch code and list, per property, whether the check observes the real
-state or only confirms the option was accepted. Any property that is only confirmed as accepted is
-worded that way in the PR and the app map (Claims About Security Properties rule). If a property
-cannot be observed at all for a Claude version, the run fails closed with the same code.
 
 ### 4. Say what is wrong
 
@@ -133,8 +156,9 @@ check stops and names the cause). A stale entry blocks the PR.
 
 One, in the mockup file, reusing existing components (card, badge, button).
 
-1. **Meeting summary panel.** Cause-specific failure text and an admin-only button, for four
-   states: isolation check failed, connection offline, no model set, and the member view.
+1. **Meeting summary panel.** Cause-specific failure text and an admin-only button, for five
+   states: safety check found a violation, safety check could not run, connection offline, no model
+   set, and the member view.
 
 The AI providers screen does not change: there is no held-back state to show. Empty, loading and
 broken states of the panel are listed at the bottom of the mockup. Ben must agree the mockup before
@@ -142,8 +166,9 @@ build.
 
 ## Safety
 
-- Kept: no tools, no project files, no saved session, enforced by the profile options and proven on
-  every run before the transcript leaves Moss.
+- Kept: no tools, no project files, no saved session, requested by the profile options and checked
+  on every run before the transcript leaves Moss. "Checked" means observed only for properties the
+  session reports (Design 3 table). The rest are requested and accepted, and the PR says so.
 - Removed: the launch-time check that the Claude file matches reviewed bytes, and the before-release
   check. The install step still verifies package integrity, pins a hash over the promoted tree and
   re-hashes after promote; it does not re-hash at launch. Build plan must read the launch code and
@@ -159,11 +184,14 @@ Each guard seen failing with the guard removed.
 
 - Any Claude version string (including one never seen, such as `9.9.9`) runs a summary; no code path
   consults a version or hash.
-- A Claude candidate that fails the advisory live check still promotes and raises the admin alert,
-  on first install and on upgrade.
+- A Claude candidate whose live check fails, throws or never returns still promotes on first
+  install and on upgrade, and the failure raises the admin alert. Putting the check back on the
+  awaited path makes the throw and hang cases fail.
 - Isolation check: a fake adapter that offers a tool, reads project files or persists a session
   stops that run before any transcript is sent, with `meeting_output_isolation_failed`; the next run
-  with a good adapter succeeds. Removing the check makes the first test fail.
+  with a good adapter succeeds. A readback that errors or returns junk also stops the run, with the
+  "could not verify" message. Removing the check makes these fail. The test adapter reports through
+  the real readback path, so a client that only echoes its own options cannot satisfy it.
 - Runtime: each cause maps to its own code; the old catch-all no longer covers the other two.
 - Summary panel: each code renders its message; button only for admins; members see the ask-an-admin
   line.
