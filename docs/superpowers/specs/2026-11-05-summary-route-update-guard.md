@@ -16,9 +16,9 @@ Mockups: `docs/superpowers/mockups/summary-update-guard/screens.html` (not yet a
    those recordings. OK to make that step zero, and to change the plan if the cause is different?
 3. **How far back should failed summaries re-run?** Proposed: 14 days, which covers the 2 November
    recordings. Longer means more model use when a connection comes back.
-4. **Should a held-back Claude version also alert an admin?** Proposed: the badge on the AI
-   providers screen plus the existing admin alert path if one exists. No email or push unless you
-   say so.
+4. **Is the existing admin alert enough for a held-back Claude version?** A failed check already
+   raises an admin alert, so the proposal is that alert plus the badge on the AI providers screen,
+   with nothing new (no email or push).
 5. **Is dropping the per-version file hash check at launch acceptable?** The old route refused any
    Claude file whose hash was not listed. The new route relies on the install step's own checks
    instead (see Safety). Slice 4 of the approved plan already says to retire the hash lists; this
@@ -79,8 +79,17 @@ The only change to that flow is what the check runs.
   the no-tools profile, proves zero tools are offered, and gets a valid structured answer.
 - Failure reasons added to `cliToolReasonText`: `summary_tools_offered` ("would let a model use
   tools during Meeting summaries"), `summary_profile_failed` ("could not write a Meeting summary").
+- **Which controls gate every build.** The check proves, per build, each protection the approved
+  spec calls independent: no tools offered, no project files or settings read (setting sources off),
+  no saved session left behind, and that cancel ends the process. Each has a failure reason and a
+  removal control in the build's tests (guard off makes the check fail). The one-time native test
+  suite is migration evidence and is not repeated per update.
 - Order: tool turn, structured turn, then the summary profile. A build must pass all three to
   promote. Failure leaves the live build in place (existing `held_back` state).
+- **First install is different today.** `cli-version-check.ts` promotes a first install before the
+  live check, so a failing first build would stay live. The build must run the check before
+  promotion for first installs too, or mark an unverified first install unusable for summaries until
+  it passes. Test: a failing first install never serves a summary.
 - Codex runs the same step. Its real-model run waits on the usage reset noted in the approved spec.
 
 ### 2. Retire the old route (slice 4)
@@ -101,8 +110,14 @@ Split `meeting_output_route_unavailable` into causes the user can act on:
 
 Mockup copy (see screens): the summary panel names the cause in one sentence, says Moss will retry,
 and shows an "Open AI providers" button to admins only. Members are told to ask an admin. The
-runtime check is exposed to the Meetings UI through the existing readiness probe's result, not a
-new endpoint.
+Today's readiness probe (`acp-no-tools-readiness.ts`) ignores the user and returns only available
+or unavailable, so it cannot tell these apart. The build widens its result to a typed reason:
+`no_model`, `runner_offline`, `not_signed_in`, or `runtime_unsupported`. Sources: the model selection
+for the first, the runner connection for the second, the provider sign-in state for the third, and
+the update system's stored check result for the fourth. A rejected candidate does not count:
+`runtime_unsupported` applies only when the build that is actually live fails the check, so a
+held-back update never makes working summaries look unsupported. The reason travels in the summary
+failure record and reaches the panel with the existing error code field.
 
 ### 4. Moss can explain it
 
@@ -116,11 +131,18 @@ the Meetings feature text for the automatic re-run. A stale entry blocks the PR.
 - A worker sweep (hourly) looks for meetings whose latest automatic summary failed with one of the
   three codes within the window (14 days, Question 3) and has no later success.
 - For each, it checks the owner's readiness probe. If ready, it enqueues the existing automatic
-  summary job. Payload is meeting id, actor id and idempotency key `recover:<meeting>:<failure id>`
-  only (metadata-only rule).
+  summary job. Payload stays three UUIDs (meeting id, actor id, request id), as the worker requires
+  today (`stop-summary-jobs.ts`).
+- **A plain re-enqueue does nothing.** Admission requires the stored request id to match, and
+  replaying the original request returns its stored failure without calling the model
+  (`stop-summary-repository.ts`, `output-service.ts`). Recovery therefore needs one atomic step that
+  allocates a fresh request id, resets the automatic-summary record and input to pending, keeps the
+  revision protections, and counts the attempt. Test through the real worker that a fresh model call
+  happens.
 - Runs under each owner's own context. No admin bypass, no cross-user read.
-- At most 3 recovery attempts per meeting, capped per sweep so a returning connection does not burst
-  the model. Manual Rewrite is unchanged and always available.
+- At most 3 recovery attempts per meeting. After the third the panel says Moss has stopped retrying
+  and points to Rewrite summary. Capped per sweep so a returning connection does not burst the
+  model. Manual Rewrite is unchanged and always available.
 - Success shows the "written automatically" note in the mockup.
 - Build plan must confirm which existing job/sweep infrastructure to reuse before adding any.
 
