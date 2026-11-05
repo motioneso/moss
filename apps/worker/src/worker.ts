@@ -174,6 +174,21 @@ async function drainSink(sink: SinkSource = () => currentSink): Promise<void> {
   }
 }
 
+const STARTUP_CLEANUP_TIMEOUT_MS = 5000;
+
+/** Resolves when the work settles or the deadline passes, whichever comes first. Never rejects. */
+async function withDeadline(work: Promise<unknown>, ms: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, ms);
+  });
+  try {
+    await Promise.race([work.catch(() => {}), deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Last shutdown step. Queued records are written, then the pool is destroyed, and only then
  * is the sink closed. A destroy failure therefore rejects while the sink still accepts the
@@ -264,7 +279,11 @@ export function createWorkerLogging(workerDb: Kysely<MossDatabase>): {
  * Exported for tests; the module-level IIFE below is the production entry point
  * and keeps the same observable behaviour.
  */
-export async function buildWorker(deps?: { connectionString?: string }): Promise<WorkerHandle> {
+export async function buildWorker(deps?: {
+  connectionString?: string;
+  /** Upper bound on cleaning up after a failed startup. */
+  startupCleanupTimeoutMs?: number;
+}): Promise<WorkerHandle> {
   const urls = getMossDatabaseUrls();
   const connectionString = deps?.connectionString ?? urls.worker;
 
@@ -330,8 +349,14 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
       }),
       "Worker startup failed"
     );
-    await logSink.close();
-    await workerDb.destroy();
+    // Neither step can cancel an outstanding query, so the whole cleanup has a hard deadline.
+    await withDeadline(
+      (async () => {
+        await logSink.close();
+        await workerDb.destroy();
+      })(),
+      deps?.startupCleanupTimeoutMs ?? STARTUP_CLEANUP_TIMEOUT_MS
+    );
     throw startupError;
   }
 
