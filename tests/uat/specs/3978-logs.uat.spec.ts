@@ -23,7 +23,13 @@ export const uatLevel = { level: "multi-user", without: [] } as const;
 
 const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED);
 const TURN_DEADLINE_MS = 300_000;
+// Owner A (the admin) and owner B (the second user) get warnings with different text, so a chat
+// answer shows whose text escaped.
 const WORKER_WARNING = "google-sync stored connection invalid";
+const SECOND_OWNER_WARNING = "imap-sync auth failed";
+const NOTIFY_WARNING = "upgrade notification write failed";
+const ADMIN_ACCOUNT_ID = "70000000-0000-4000-8000-000000003978";
+const SECOND_ACCOUNT_ID = "70000000-0000-4000-8000-000000003979";
 const PLANTED_SECRET = "sk-uat3978-planted-secret-token-0001";
 
 // A well-formed encrypted envelope that the instance key cannot open. The key id carries the
@@ -65,12 +71,50 @@ function sql(statement: string): string {
   ).trim();
 }
 
-function plantBrokenConnection(ownerId: string, accountId: string): void {
+/**
+ * Leaves the owner with exactly one account of this provider family, the planted one, so a sync
+ * job cannot pick a seeded account and produce the same warning without the planted envelope.
+ */
+function plantBrokenConnection(
+  ownerId: string,
+  accountId: string,
+  providerId: "google" | "imap-fastmail"
+): void {
+  const family = providerId === "google" ? "provider_id = 'google'" : "provider_id LIKE 'imap-%'";
+  sql(`DELETE FROM app.connector_accounts WHERE owner_user_id='${ownerId}' AND ${family}`);
   sql(
     `INSERT INTO app.connector_accounts (id, provider_id, owner_user_id, scopes, status, encrypted_secret)
-     VALUES ('${accountId}', 'google', '${ownerId}', ARRAY['https://www.googleapis.com/auth/gmail.modify'], 'active', '${BROKEN_ENVELOPE}'::jsonb)
-     ON CONFLICT (id) DO NOTHING`
+     VALUES ('${accountId}', '${providerId}', '${ownerId}', ARRAY['${providerId === "google" ? "https://www.googleapis.com/auth/gmail.modify" : "email.read"}'], 'active', '${BROKEN_ENVELOPE}'::jsonb)`
   );
+  expect(
+    sql(
+      `SELECT count(*) FROM app.connector_accounts WHERE owner_user_id='${ownerId}' AND ${family}`
+    )
+  ).toBe("1");
+}
+
+function workerWarningCount(ownerId: string): number {
+  return Number(
+    sql(
+      `SELECT count(*) FROM app.diagnostic_log_records WHERE process='worker' AND owner_user_id='${ownerId}' AND level >= 40`
+    )
+  );
+}
+
+/** Queues a job the way the scheduler would, straight into the job table. */
+function enqueueJob(queue: string, data: Record<string, unknown>): void {
+  sql(
+    `INSERT INTO pgboss.job (name, data) VALUES ('${queue}', '${JSON.stringify(data).replace(/'/g, "''")}'::jsonb)`
+  );
+}
+
+async function waitForNewWorkerWarning(ownerId: string, before: number): Promise<void> {
+  await expect
+    .poll(() => workerWarningCount(ownerId), {
+      timeout: 120_000,
+      message: "the worker never stored its warning"
+    })
+    .toBeGreaterThan(before);
 }
 
 async function signIn(page: Page, email: string, password: string): Promise<void> {
@@ -83,24 +127,10 @@ async function signIn(page: Page, email: string, password: string): Promise<void
 }
 
 async function triggerWorkerWarning(request: APIRequestContext, ownerId: string): Promise<void> {
-  const before = Number(
-    sql(
-      `SELECT count(*) FROM app.diagnostic_log_records WHERE process='worker' AND owner_user_id='${ownerId}' AND level >= 40`
-    )
-  );
+  const before = workerWarningCount(ownerId);
   const response = await request.post("/api/connectors/google/sync");
   expect(response.status()).toBe(202);
-  await expect
-    .poll(
-      () =>
-        Number(
-          sql(
-            `SELECT count(*) FROM app.diagnostic_log_records WHERE process='worker' AND owner_user_id='${ownerId}' AND level >= 40`
-          )
-        ),
-      { timeout: 120_000, message: "the worker never stored its warning" }
-    )
-    .toBeGreaterThan(before);
+  await waitForNewWorkerWarning(ownerId, before);
 }
 
 async function readLogs(
@@ -150,52 +180,79 @@ test("Moss reads both processes' warnings, hides other owners' text, and survive
   );
   test.setTimeout(900_000);
 
-  // 1. A real worker warning owned by the admin, and a real one owned by the second user.
-  plantBrokenConnection(UAT_ADMIN_ID, "70000000-0000-4000-8000-000000003978");
-  plantBrokenConnection(UAT_SECOND_OWNER_ID, "70000000-0000-4000-8000-000000003979");
+  // 1. A real worker warning for each owner, with different text. The admin's comes from a Google
+  //    sync job that cannot open its stored connection. The second user's comes from an IMAP sync
+  //    job queued for a broken IMAP connection. Each owner has only the planted account.
+  plantBrokenConnection(UAT_ADMIN_ID, ADMIN_ACCOUNT_ID, "google");
+  plantBrokenConnection(UAT_SECOND_OWNER_ID, SECOND_ACCOUNT_ID, "imap-fastmail");
   await signInUatAdmin(page);
   await triggerWorkerWarning(page.request, UAT_ADMIN_ID);
   const adminCookies = await page.context().cookies();
-  await signIn(page, UAT_SECOND_OWNER_EMAIL, UAT_SECOND_OWNER_PASSWORD);
-  await triggerWorkerWarning(page.request, UAT_SECOND_OWNER_ID);
-  await page.context().clearCookies();
-  await page.context().addCookies(adminCookies);
+  const secondBefore = workerWarningCount(UAT_SECOND_OWNER_ID);
+  enqueueJob("connectors.imap-sync", {
+    kind: "imap-sync",
+    actorUserId: UAT_SECOND_OWNER_ID,
+    connectorAccountId: SECOND_ACCOUNT_ID,
+    trigger: "schedule"
+  });
+  await waitForNewWorkerWarning(UAT_SECOND_OWNER_ID, secondBefore);
+  expect(
+    sql(
+      `SELECT count(*) FROM app.diagnostic_log_records WHERE process='worker' AND owner_user_id='${UAT_SECOND_OWNER_ID}' AND message='${SECOND_OWNER_WARNING}'`
+    )
+  ).not.toBe("0");
 
-  // 2. Admin asks in plain words. The answer quotes the worker warning, and the tool call
-  //    called the diagnostics tool. The warning text only exists in its logs section.
+  // 2. Admin asks in chat. The answer quotes the admin's own worker warning and nothing from the
+  //    second owner, and the tool call called the diagnostics tool.
   await page.goto(requireUatBaseURL());
   await bringUpRealChatModel(page);
   const reply = await ask(page, "Why did my Google connection sync fail? What do the logs show?");
   expect(reply.toLowerCase()).toContain("stored connection invalid");
+  expect(reply.toLowerCase()).not.toContain(SECOND_OWNER_WARNING);
   const activity = sql(
     `SELECT count(*) FROM app.chat_messages WHERE owner_user_id='${UAT_ADMIN_ID}' AND tool_metadata::text LIKE '%settings_platformDiagnostics%'`
   );
   expect(Number(activity)).toBeGreaterThan(0);
 
-  // 3. The second owner's record shows up as metadata only for the admin.
+  // 3. Other-owner exclusion in chat. The admin asks about the second owner's mail connection
+  //    and may learn that a record exists, but never its text.
+  const otherReply = await ask(
+    page,
+    "Did any other user's email connection fail to sync? Quote the exact log line if you can see it."
+  );
+  expect(otherReply.toLowerCase()).not.toContain(SECOND_OWNER_WARNING);
   const adminView = await readLogs(page.request);
-  const own = adminView.records.filter((r) => r.owned && r.message?.includes("stored connection"));
   const others = adminView.records.filter((r) => !r.owned && r.component === "worker");
-  expect(own.length).toBeGreaterThan(0);
   expect(others.length).toBeGreaterThan(0);
   expect(others.every((r) => r.message === null)).toBe(true);
   expect(others.some((r) => r.ownerKnown)).toBe(true);
 
-  // 4. A non-admin gets nothing and a server-side redaction notice.
+  // 4. A non-admin asks in chat and gets neither owner's text. The server reports a redaction.
   await signIn(page, UAT_SECOND_OWNER_EMAIL, UAT_SECOND_OWNER_PASSWORD);
   sql(`UPDATE app.users SET is_instance_admin=false WHERE id='${UAT_SECOND_OWNER_ID}'`);
+  await page.goto(requireUatBaseURL());
+  const plainReply = await ask(
+    page,
+    "Why did my email connection fail to sync? What do the server logs show?"
+  );
+  expect(plainReply.toLowerCase()).not.toContain(SECOND_OWNER_WARNING);
+  expect(plainReply.toLowerCase()).not.toContain("stored connection invalid");
   const plainView = await readLogs(page.request);
   expect(plainView.records).toEqual([]);
   expect(plainView.redactions).toContain("logs");
 
-  // 5. The store survives a restart of the API and worker.
+  // 5. The store survives a restart of the API and worker, and chat still finds the admin's
+  //    warning afterwards.
   await restartUatStack(requireUatProjectName(), requireUatBaseURL());
   await page.context().clearCookies();
   await page.context().addCookies(adminCookies);
-  const afterRestart = await readLogs(page.request);
-  expect(
-    afterRestart.records.some((r) => r.owned && r.message?.includes("stored connection"))
-  ).toBe(true);
+  await page.goto(requireUatBaseURL());
+  const afterRestartReply = await ask(
+    page,
+    "After the restart, what do the logs still show about my Google connection?"
+  );
+  expect(afterRestartReply.toLowerCase()).toContain("stored connection invalid");
+  expect(afterRestartReply.toLowerCase()).not.toContain(SECOND_OWNER_WARNING);
 
   // 6. A real API warning carries the planted secret in its error text. The failing request
   //    echoes the unknown input key, so the secret reaches the logger inside an error object.
@@ -218,16 +275,58 @@ test("Moss reads both processes' warnings, hides other owners' text, and survive
     )
     .not.toBe("0");
 
-  // The planted envelope names the secret as its key id, so the decrypt error the worker
-  // swallows would carry it. The worker's warning prints no error text by design, so the proof
-  // for it is that the real worker warning exists in the store and in the worker's own output
-  // while the secret appears in neither. A control row shows the detector sees a secret.
+  // 7. A real worker warning carries the planted secret in its error text. An upgrade-notice job
+  //    tries to write a notification, and a database rule rejects the write with a message that
+  //    contains the secret. The worker logs that error text through its own logger.
+  sql(
+    `CREATE OR REPLACE FUNCTION app.uat3978_block() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN RAISE EXCEPTION 'uat3978 notification blocked ${PLANTED_SECRET}'; END $f$`
+  );
+  sql(
+    "CREATE TRIGGER uat3978_block_trigger BEFORE INSERT ON app.notifications FOR EACH ROW EXECUTE FUNCTION app.uat3978_block()"
+  );
+  try {
+    const notifyBefore = Number(
+      sql(
+        `SELECT count(*) FROM app.diagnostic_log_records WHERE process='worker' AND message='${NOTIFY_WARNING}'`
+      )
+    );
+    enqueueJob("system.upgrade-notify", {
+      kind: "upgrade-notify",
+      actorUserId: UAT_ADMIN_ID,
+      version: "v0.0.0-uat3978"
+    });
+    await expect
+      .poll(
+        () =>
+          Number(
+            sql(
+              `SELECT count(*) FROM app.diagnostic_log_records WHERE process='worker' AND message='${NOTIFY_WARNING}'`
+            )
+          ),
+        { timeout: 120_000, message: "the worker never stored the warning that carried the secret" }
+      )
+      .toBeGreaterThan(notifyBefore);
+  } finally {
+    sql("DROP TRIGGER IF EXISTS uat3978_block_trigger ON app.notifications");
+    sql("DROP FUNCTION IF EXISTS app.uat3978_block()");
+  }
+
+  // The stored worker row kept the error text and masked only the secret, so the error really
+  // reached the worker logger. Neither the stored rows nor the output of either process may hold
+  // the secret. A control row shows the detector sees a secret when one is present.
   const secretInRows = (process: "api" | "worker") =>
     Number(
       sql(
         `SELECT count(*) FROM app.diagnostic_log_records WHERE process='${process}' AND (message LIKE '%${PLANTED_SECRET}%' OR context::text LIKE '%${PLANTED_SECRET}%')`
       )
     );
+  expect(
+    Number(
+      sql(
+        `SELECT count(*) FROM app.diagnostic_log_records WHERE process='worker' AND message='${NOTIFY_WARNING}' AND context::text LIKE '%uat3978 notification blocked%'`
+      )
+    )
+  ).toBeGreaterThan(0);
   const output = execFileSync(
     "docker",
     buildUatComposeArgs(requireUatProjectName(), ["logs", "--no-color", "--tail", "4000"]),
@@ -242,7 +341,8 @@ test("Moss reads both processes' warnings, hides other owners' text, and survive
       )
     )
   ).toBeGreaterThan(0);
-  expect(workerLines.some((line) => line.includes(WORKER_WARNING))).toBe(true);
+  expect(workerLines.some((line) => line.includes(NOTIFY_WARNING))).toBe(true);
+  expect(workerLines.some((line) => line.includes("uat3978 notification blocked"))).toBe(true);
   expect(secretInRows("worker")).toBe(0);
   expect(workerLines.some((line) => line.includes(PLANTED_SECRET))).toBe(false);
 
