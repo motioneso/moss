@@ -4,11 +4,14 @@ import type { AppMapReadService, SourceSearchResult, SourceInspector } from "@mo
 import {
   aggregateModuleDiagnostics,
   EMPTY_CONNECTIONS_SECTION,
-  EMPTY_JOBS_SECTION
+  EMPTY_JOBS_SECTION,
+  EMPTY_LOGS_SECTION
 } from "@moss/module-sdk";
 import type {
   ConnectionsSection,
   JobsSection,
+  LogLevelName,
+  LogsSection,
   ModuleDiagnosticContextRunner,
   ModuleDiagnosticObservation,
   RegisteredModuleDiagnosticProvider
@@ -45,7 +48,10 @@ export type {
   ConnectionsSection,
   JobRunObservation,
   JobsSection,
-  JobSummaryObservation
+  JobSummaryObservation,
+  LogLevelName,
+  LogRecordObservation,
+  LogsSection
 } from "@moss/module-sdk";
 
 export interface PlatformDiagnosticsQuery {
@@ -58,10 +64,19 @@ export interface PlatformDiagnosticsQuery {
     | "actions"
     | "jobs"
     | "connections"
+    | "logs"
     | "source"
   )[];
   readonly query?: string;
   readonly limit?: number;
+  readonly logs?: PlatformDiagnosticsLogsQuery;
+}
+
+export interface PlatformDiagnosticsLogsQuery {
+  readonly sinceMinutes?: number;
+  readonly minLevel?: LogLevelName;
+  readonly component?: string;
+  readonly connectionKind?: string;
 }
 
 export interface PlatformDiagnosticsReport {
@@ -73,6 +88,7 @@ export interface PlatformDiagnosticsReport {
   readonly actions: readonly ActionAuditObservation[];
   readonly jobs: JobsSection;
   readonly connections: ConnectionsSection;
+  readonly logs: LogsSection;
   readonly source: SourceSearchResult | null;
   readonly redactions: readonly string[];
 }
@@ -182,6 +198,17 @@ export function createPlatformDiagnosticsService(dependencies: {
     ctx: { readonly actorUserId: string; readonly requestId: string },
     opts: { readonly limit: number }
   ) => Promise<ConnectionsSection>;
+  readonly readLogs?: (
+    scopedDb: DataContextDb,
+    ctx: { readonly actorUserId: string; readonly requestId: string },
+    opts: {
+      readonly limit: number;
+      readonly since: Date;
+      readonly minLevel: LogLevelName;
+      readonly component?: string;
+      readonly connectionKind?: string;
+    }
+  ) => Promise<LogsSection>;
   readonly onProviderError?: (moduleId: string, errorName: string) => void;
 }): PlatformDiagnosticsService {
   return {
@@ -237,7 +264,8 @@ export function createPlatformDiagnosticsService(dependencies: {
       // Live lookup on every call. Never cached, never read from tool arguments.
       let jobs: JobsSection = EMPTY_JOBS_SECTION;
       let connections: ConnectionsSection = EMPTY_CONNECTIONS_SECTION;
-      if (include.has("jobs") || include.has("connections")) {
+      let logs: LogsSection = EMPTY_LOGS_SECTION;
+      if (include.has("jobs") || include.has("connections") || include.has("logs")) {
         const admin = await dependencies.isInstanceAdmin(scopedDb, ctx.actorUserId);
         if (include.has("jobs")) {
           if (admin && dependencies.readJobs) {
@@ -261,6 +289,23 @@ export function createPlatformDiagnosticsService(dependencies: {
             );
           } else redactions.push("connections");
         }
+        if (include.has("logs")) {
+          if (admin && dependencies.readLogs) {
+            const filters = query?.logs;
+            const minutes = Math.max(1, Math.min(1440, Math.floor(filters?.sinceMinutes ?? 60)));
+            logs = capSection(
+              await dependencies.readLogs(scopedDb, ctx, {
+                limit,
+                since: new Date(Date.now() - minutes * 60 * 1000),
+                minLevel: filters?.minLevel ?? "warn",
+                ...(filters?.component ? { component: filters.component } : {}),
+                ...(filters?.connectionKind ? { connectionKind: filters.connectionKind } : {})
+              }),
+              ["records"],
+              limit
+            );
+          } else redactions.push("logs");
+        }
       }
       const source =
         include.has("source") && query?.query && dependencies.sourceInspector
@@ -277,6 +322,7 @@ export function createPlatformDiagnosticsService(dependencies: {
         actions,
         jobs,
         connections,
+        logs,
         source,
         redactions
       };

@@ -55,3 +55,34 @@ export interface ConnectionsSection {
 
 export const EMPTY_JOBS_SECTION: JobsSection = { recent: [], summaries: [], truncated: false };
 export const EMPTY_CONNECTIONS_SECTION: ConnectionsSection = { items: [], truncated: false };
+
+export type LogLevelName = "warn" | "error" | "fatal";
+
+/** One stored warning or error. `message` is null unless the caller owns the record. */
+export interface LogRecordObservation {
+  readonly occurredAt: string;
+  readonly process: "api" | "worker";
+  readonly level: LogLevelName;
+  readonly component: string;
+  readonly connectionKind: string | null;
+  readonly eventCode: string | null;
+  readonly ownerKnown: boolean;
+  readonly owned: boolean;
+  readonly message: string | null;
+  readonly truncated: boolean;
+}
+
+export interface LogsSection {
+  readonly records: readonly LogRecordObservation[];
+  readonly coverage: { readonly oldestAt: string | null; readonly newestAt: string | null };
+  readonly truncated: boolean;
+}
+
+/** Maximum characters of a log message returned to the caller. */
+export const LOG_MESSAGE_RETURN_MAX = 500;
+
+export const EMPTY_LOGS_SECTION: LogsSection = {
+  records: [],
+  coverage: { oldestAt: null, newestAt: null },
+  truncated: false
+};
