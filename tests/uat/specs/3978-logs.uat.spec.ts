@@ -97,7 +97,7 @@ async function readLogs(
 ): Promise<{ records: LogRecord[]; redactions: string[] }> {
   const response = await request.post(
     "/api/ai/assistant-tools/settings.platformDiagnostics/invoke",
-    { data: { input: { include: ["logs"], minLevel: "warn" } } }
+    { data: { input: { include: ["logs"], logs: { minLevel: "warn" } } } }
   );
   const text = await response.text();
   expect(response.ok(), `platformDiagnostics -> ${response.status()}: ${text}`).toBeTruthy();
