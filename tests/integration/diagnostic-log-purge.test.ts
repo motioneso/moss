@@ -34,7 +34,7 @@ describe("diagnostic log purge job", () => {
   }
 
   async function waitFor(check: () => Promise<boolean>, what: string): Promise<void> {
-    const deadline = Date.now() + 40_000;
+    const deadline = Date.now() + 70_000;
     while (Date.now() < deadline) {
       if (await check()) return;
       await new Promise((resolve) => setTimeout(resolve, 250));
@@ -102,7 +102,8 @@ describe("diagnostic log purge job", () => {
     expect(await count()).toBe(DIAGNOSTIC_LOG_MAX_ROWS);
     expect(await count("message LIKE 'aged%'")).toBe(0);
     expect(await count("message LIKE 'fresh%'")).toBe(5);
-  });
+    // The worker polls every 30 s, so allow for one full poll plus the purge itself.
+  }, 90_000);
 });
 
 describe("diagnostic log purge ownership", () => {
