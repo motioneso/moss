@@ -1,49 +1,41 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Summary update guard - mockup</title><link rel="stylesheet" href="../classifier-gate/app.css">
-<style>.row{display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;margin-top:var(--space-2)}.sub{color:var(--text-muted);font-size:var(--text-sm)}.card-h{font-family:var(--font-display);font-weight:var(--weight-bold);font-size:var(--text-lg)}.stack{display:grid;gap:var(--space-4)}.fail{border-left:3px solid var(--danger)}.ok{border-left:3px solid var(--accent)}</style></head>
+<style></style></head>
 <body data-view="admin">
 <div class="mk-bar"><b>Mockup: summary update guard</b>
 <span class="mk-group"><span class="mk-label">Screen</span><span class="jds-segmented">
-<button class="jds-segmented__opt" data-pick="view:member">Meeting: safety check failed (member)</button>
-<button class="jds-segmented__opt" data-pick="view:admin" aria-pressed="true">Meeting: safety check failed (admin)</button>
-<button class="jds-segmented__opt" data-pick="view:unverified">Meeting: safety check could not run</button>
-<button class="jds-segmented__opt" data-pick="view:offline">Meeting: connection offline</button>
-<button class="jds-segmented__opt" data-pick="view:nomodel">Meeting: no model set</button></span></span>
+<button class="jds-segmented__opt" data-pick="view:member">Settings refused (member)</button>
+<button class="jds-segmented__opt" data-pick="view:admin" aria-pressed="true">Settings refused (admin)</button>
+<button class="jds-segmented__opt" data-pick="view:offline">Claude unreachable (admin)</button>
+<button class="jds-segmented__opt" data-pick="view:nomodel">No AI chosen (admin)</button></span></span>
 <span class="mk-group"><span class="mk-label">Theme</span><span class="jds-segmented"><button class="jds-segmented__opt" data-pick="theme:light" aria-pressed="true">Light</button><button class="jds-segmented__opt" data-pick="theme:dark">Dark</button></span></span></div>
 <div class="mk-page">
 
-<div data-show="view:member admin unverified offline nomodel">
+<div data-show="view:member admin offline nomodel">
 <h1 class="mk-h">Meetings / Weekly planning</h1>
-<p class="mk-help">The summary panel on one meeting. The transcript and notes above it are unchanged.</p>
-<div class="stack">
- <div class="jds-card jds-card--pad-lg fail" data-show="view:member">
-  <div class="card-h">Summary</div>
-  <p>This summary could not be written because a safety check on the AI connection did not pass. Nothing was sent to the model. Use Rewrite summary once that is fixed.</p>
-  <div class="row"><span class="sub">Ask an admin to check the AI connection.</span> <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button></div>
+<p class="mk-help">The summary area on one meeting, drawn like the live failed-summary text. The transcript and notes above it are unchanged.</p>
+ <div data-show="view:member">
+  <p role="status" class="jds-hint">Moss couldn’t write this summary because Claude didn’t accept the settings that keep your meeting private. Your transcript and notes are kept; try Rewrite summary later.</p>
+  <p class="jds-hint">Ask an admin to check the AI settings.</p>
+  <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button>
  </div>
- <div class="jds-card jds-card--pad-lg fail" data-show="view:admin">
-  <div class="card-h">Summary</div>
-  <p>This summary could not be written because the safety check found the model was offered tools. Nothing was sent to it. Use Rewrite summary once that is fixed.</p>
-  <div class="row"><button class="jds-btn jds-btn--secondary jds-btn--sm">Open AI providers</button> <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button></div>
+ <div data-show="view:admin">
+  <p role="status" class="jds-hint">Moss couldn’t write this summary because Claude didn’t accept the settings that keep your meeting private. Your transcript and notes are kept; try Rewrite summary later.</p>
+  <p class="jds-hint">Check your AI settings in <a href="#">Settings → AI providers</a>.</p>
+  <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button>
  </div>
- <div class="jds-card jds-card--pad-lg fail" data-show="view:unverified">
-  <div class="card-h">Summary</div>
-  <p>This summary could not be written because the safety check could not confirm the model has no tools. Nothing was sent to it. Use Rewrite summary once that is fixed.</p>
-  <div class="row"><button class="jds-btn jds-btn--secondary jds-btn--sm">Open AI providers</button> <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button></div>
+ <div data-show="view:offline">
+  <p role="status" class="jds-hint">Moss couldn’t write this summary because it couldn’t reach Claude. Your transcript and notes are kept; try Rewrite summary once it’s back.</p>
+  <p class="jds-hint">Check your AI settings in <a href="#">Settings → AI providers</a>.</p>
+  <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button>
  </div>
- <div class="jds-card jds-card--pad-lg fail" data-show="view:offline">
-  <div class="card-h">Summary</div>
-  <p>This summary could not be written because Moss cannot reach the Claude connection right now. Use Rewrite summary when it is back.</p>
-  <div class="row"><button class="jds-btn jds-btn--secondary jds-btn--sm">Open AI providers</button> <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button></div>
+ <div data-show="view:nomodel">
+  <p role="status" class="jds-hint">Moss couldn’t write this summary because no AI is chosen for summaries yet. Your transcript and notes are kept; try Rewrite summary after one is chosen.</p>
+  <p class="jds-hint">Check your AI settings in <a href="#">Settings → AI providers</a>.</p>
+  <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button>
  </div>
- <div class="jds-card jds-card--pad-lg fail" data-show="view:nomodel">
-  <div class="card-h">Summary</div>
-  <p>This summary could not be written because no model is set up for summaries.</p>
-  <div class="row"><button class="jds-btn jds-btn--secondary jds-btn--sm">Open AI providers</button> <button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button></div>
- </div>
-</div>
 </div>
 
 <h2 class="mk-h" style="margin-top:var(--space-6)">States covered</h2>
-<p class="mk-help">Loading: the existing summary-in-progress state. Empty: no summary yet, unchanged. Broken: the five failure views above. The AI providers screen does not change.</p>
+<p class="mk-help">Loading: the existing summary-in-progress state. Empty: no summary yet, unchanged. Broken: the four failure views above. The AI providers screen does not change.</p>
 </div>
 <script src="../classifier-gate/switcher.js"></script></body></html>

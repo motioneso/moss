@@ -135,7 +135,7 @@ Split `meeting_output_route_unavailable` into causes the user can act on:
 | Run-time isolation check failed                | `meeting_output_isolation_failed` (new) | Admin          |
 
 The panel names the cause in one sentence, points to Rewrite summary for when it is fixed, and shows
-"Open AI providers" to admins only. Members are told to ask an admin.
+the settings link to admins only. Members are told to ask an admin.
 
 Today's readiness probe (`acp-no-tools-readiness.ts`) ignores the user and returns only available or
 unavailable. The build widens it to a typed reason: `no_model`, `runner_offline`, `not_signed_in`.
@@ -152,15 +152,29 @@ check stops and names the cause). A stale entry blocks the PR.
 
 ## Screens that change
 
-One, in the mockup file, reusing existing components (card, badge, button).
+One, in the mockup file, drawn exactly as the live failed-summary text is today (a plain hint line, a recovery hint line and the Rewrite summary button). No card, no coloured border, no new styling.
 
-1. **Meeting summary panel.** Cause-specific failure text and an admin-only button, for five
-   states: safety check found a violation, safety check could not run, connection offline, no model
-   set, and the member view.
+1. **Meeting summary panel.** Cause-specific failure text, for four views: settings refused
+   (member and admin), Claude unreachable, and no AI chosen. The "could not verify" stop uses the
+   settings-refused text, because a run that cannot be checked at all is stopped for the same
+   reason from the reader's side.
 
 The AI providers screen does not change: there is no held-back state to show. Empty, loading and
 broken states of the panel are listed at the bottom of the mockup. Ben must agree the mockup before
 build.
+
+Final wording (the panel appends nothing after these):
+
+- Settings refused (`meeting_output_isolation_failed`): "Moss couldn't write this summary because
+  Claude didn't accept the settings that keep your meeting private. Your transcript and notes are
+  kept; try Rewrite summary later."
+- Claude unreachable (`meeting_output_runner_offline`): "Moss couldn't write this summary because it
+  couldn't reach Claude. Your transcript and notes are kept; try Rewrite summary once it's back."
+- No AI chosen (`meeting_output_route_unavailable`): "Moss couldn't write this summary because no AI
+  is chosen for summaries yet. Your transcript and notes are kept; try Rewrite summary after one is
+  chosen."
+- Recovery line, admins: "Check your AI settings in Settings -> AI providers." Members: "Ask an
+  admin to check the AI settings."
 
 ## Safety
 
