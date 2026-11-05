@@ -182,7 +182,16 @@ function classifyZone(paths: readonly string[], folders: AcpSessionFolders): Pat
   const root = resolve(folders.cwd);
   let worst: PathZone = "inside";
   for (const target of named) {
-    const absolute = resolve(root, target);
+    // A leading "~" is expanded by the CLI against the agent's home, so judge it there.
+    // "~user" forms and a missing home have no safe meaning and are refused.
+    let absolute: string;
+    if (target.startsWith("~")) {
+      const rest = target === "~" ? "" : target.startsWith("~/") ? target.slice(2) : null;
+      if (rest === null || !folders.home || folders.home.trim() === "") return "forbidden";
+      absolute = resolve(folders.home, rest);
+    } else {
+      absolute = resolve(root, target);
+    }
     if (!isUnder(root, absolute)) {
       if (inForbiddenZone(absolute, folders.home)) return "forbidden";
       worst = "outside";
