@@ -2,7 +2,7 @@ import {
   createMeetingCaptureMaintenanceRuntime,
   type MeetingCaptureMaintenanceRuntime
 } from "./meeting-capture-maintenance-runtime.js";
-import { recordingLoggerOptions } from "./recording-logger-options.js";
+import { createApiLogSink, recordingLoggerOptions } from "./recording-logger-options.js";
 import { createRingRecordingResolver } from "./ring-recording-auth.js";
 import { createHash, randomUUID } from "node:crypto";
 
@@ -258,6 +258,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       maxConnections: Number(resolveMossEnv(process.env, "JARVIS_API_WORKER_DB_POOL_SIZE") ?? 2)
     });
   const ownsWorkerDb = options.workerDb === undefined;
+  const logSink = createApiLogSink(options.logger, workerDb);
   const workerDataContext = new DataContextRunner(workerDb);
   let externalWorkerRuntime: ExternalModuleWorkerRuntime | undefined;
   let companionDelivery: CompanionDeliveryRuntime | undefined;
@@ -265,7 +266,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
   const dataContext = new DataContextRunner(appDb);
   const aiRepository = new AiRepository();
   const server = Fastify({
-    logger: recordingLoggerOptions(options.logger),
+    logger: recordingLoggerOptions(options.logger, { sink: logSink }),
     // Honor XFF only when an explicit opt-in confirms a trusted reverse proxy is in
     // front. Without this, XFF is attacker-controlled and must not key the rate limiter.
     trustProxy
@@ -843,8 +844,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
   });
 
   server.addHook("onReady", async () => {
-    // Only the composition root starts its own producer. Injected queue clients retain
-    // their caller-owned lifecycle; maintenance borrows send and owns its consumer.
+    // Only the composition root starts its own producer; injected clients keep their lifecycle.
     if (ownsBoss) await boss.start();
     await captureMaintenance.start();
     await companionDelivery?.start();
@@ -852,6 +852,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
 
   server.addHook("onClose", async () => {
     await externalWorkerRuntime?.close();
+    await logSink?.close();
     await Promise.allSettled([
       ownsBoss ? boss.stop({ graceful: false }) : Promise.resolve(),
       ownsAuthRuntime ? authRuntime.close() : Promise.resolve(),

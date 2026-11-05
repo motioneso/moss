@@ -5,7 +5,6 @@ import { pino, type Logger as PinoLogger } from "pino";
 import type { FastifyBaseLogger } from "fastify";
 import { sql } from "kysely";
 import {
-  createSanitizedLogDestination,
   sanitizeLogText,
   createSanitizingFormatters,
   writeSanitizedFatal
@@ -82,7 +81,9 @@ import {
   touchModuleBuildActivity,
   updateModuleBuildStatus,
   appendModuleBuildFetchedUrl,
-  appendModuleBuildWrittenFile
+  appendModuleBuildWrittenFile,
+  createDiagnosticLogDestination,
+  createDiagnosticLogSink
 } from "@moss/settings";
 import { getVaultBaseDir, VaultContextRunner } from "@moss/vault";
 
@@ -210,6 +211,13 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   // each module's worker registration so no `console.*` lands in production
   // worker logs; module-tagged children are created by the registry. Level honors
   // LOG_LEVEL (pino default is "info"). Suppressed in unit tests via LOG_LEVEL.
+  const meetingSummaryCli = createWorkerMeetingSummaryCli();
+  const workerDb = createDatabase({
+    connectionString,
+    maxConnections: Number(resolveMossEnv(process.env, "JARVIS_WORKER_DB_POOL_SIZE") ?? 4)
+  });
+  // Warn-and-above records also go to the log table through this handle (insert-only role).
+  const logSink = createDiagnosticLogSink({ db: workerDb, process: "worker" });
   const workerLogger: PinoLogger = pino(
     {
       level: process.env.LOG_LEVEL ?? "info",
@@ -217,14 +225,8 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
       formatters: createSanitizingFormatters()
     },
     // log-safe: the sanitizing destination wraps the raw stream
-    createSanitizedLogDestination(process.stdout)
+    createDiagnosticLogDestination({ process: "worker", target: process.stdout, sink: logSink })
   );
-
-  const meetingSummaryCli = createWorkerMeetingSummaryCli();
-  const workerDb = createDatabase({
-    connectionString,
-    maxConnections: Number(resolveMossEnv(process.env, "JARVIS_WORKER_DB_POOL_SIZE") ?? 4)
-  });
   const dataContext = new DataContextRunner(workerDb);
   const repository = new RlsProbeRepository();
   // The worker is the SOLE pg-boss cron + supervisor owner (F14, #650): enable
@@ -638,6 +640,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
       })
     ]);
     meetingSummaryCli.close();
+    await logSink.close();
     await workerDb.destroy();
   }
 

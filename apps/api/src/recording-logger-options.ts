@@ -1,9 +1,13 @@
 import type { FastifyServerOptions } from "fastify";
+import type { Kysely } from "kysely";
+
+import type { MossDatabase } from "@moss/db";
 import {
-  createSanitizedLogDestination,
-  createSanitizingFormatters,
-  type LogWriteTarget
-} from "@moss/shared/log-sanitizer";
+  createDiagnosticLogDestination,
+  createDiagnosticLogSink,
+  type DiagnosticLogSink
+} from "@moss/settings";
+import { createSanitizingFormatters, type LogWriteTarget } from "@moss/shared/log-sanitizer";
 const recordingSecretPaths = [
   "req.headers.authorization",
   "headers.authorization",
@@ -25,7 +29,8 @@ const recordingSecretPaths = [
  * serializers or existing policy. Every line is masked before it reaches the stream.
  */
 export function recordingLoggerOptions(
-  logger: FastifyServerOptions["logger"]
+  logger: FastifyServerOptions["logger"],
+  deps: { sink?: DiagnosticLogSink | null } = {}
 ): FastifyServerOptions["logger"] {
   if (logger === false) return false;
   const configured = typeof logger === "object" ? logger : {};
@@ -37,7 +42,11 @@ export function recordingLoggerOptions(
   return {
     ...configured,
     // log-safe: the sanitizing destination wraps the raw stream
-    stream: createSanitizedLogDestination(target ?? process.stdout),
+    stream: createDiagnosticLogDestination({
+      process: "api",
+      target: target ?? process.stdout,
+      sink: deps.sink ?? null
+    }),
     formatters: {
       ...configured.formatters,
       ...createSanitizingFormatters({
@@ -50,4 +59,12 @@ export function recordingLoggerOptions(
       paths: [...new Set([...paths, ...recordingSecretPaths])]
     }
   };
+}
+
+/** The API's table writer. `logger: false` means no logging at all, so no sink either. */
+export function createApiLogSink(
+  logger: FastifyServerOptions["logger"],
+  workerDb: Kysely<MossDatabase>
+): DiagnosticLogSink | null {
+  return logger === false ? null : createDiagnosticLogSink({ db: workerDb, process: "api" });
 }

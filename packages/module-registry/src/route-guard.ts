@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import type { AccessContext } from "@moss/db";
 import type { MossModuleManifest } from "@moss/module-sdk";
+import { withLogOwner } from "@moss/settings";
 
 import type { ActiveModulesResolver } from "@moss/ai";
 
@@ -321,6 +322,9 @@ export function registerRouteEnablementGuard(server: FastifyInstance, deps: Rout
     try {
       const access = await deps.resolveAccessContext(request);
       actorUserId = access.actorUserId;
+      // Every later record for this request carries its owner.
+      request.log = withLogOwner(request.log, actorUserId);
+      reply.log = request.log;
     } catch {
       // Not authenticated — let the route's own handler return its normal 401.
       return;
