@@ -37,4 +37,12 @@ describe("1909 sports UAT spec sends natural chat requests (static)", () => {
       "confirmation id ${confirmationId} and authorization acknowledgement"
     );
   });
+
+  // #3476: the approval card shows the action title and the source's readable
+  // name, not the old summary wording with the source id.
+  it("finds the retry approval card by its current title and source name", () => {
+    expect(specSource).not.toContain("Retry sports source ${failing.id}");
+    expect(specSource).toContain("Retry sports news source");
+    expect(specSource).toContain("failing.label");
+  });
 });

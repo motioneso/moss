@@ -373,7 +373,9 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
       page,
       "sports.retrySource",
       `One of my sports sources (id ${failing.id}) is showing a partial target failure — please retry it.`,
-      new RegExp(`Retry sports source ${failing.id}`)
+      // The card shows the current action title, then the source's readable
+      // name. It does not show the old summary or the source id.
+      new RegExp(`Retry sports news source[\\s\\S]*${failing.label}`)
     );
     const recovered = (await listSources(page)).find((source) => source.id === failing.id);
     expect(recovered?.healthState).toBe("healthy");
