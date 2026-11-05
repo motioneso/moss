@@ -139,3 +139,4 @@ export * from "./module-notice-api.js";
 export * from "./heartbeat-source-api.js";
 export { readChatHeartbeatOrigin } from "./chat-heartbeat-origin.js";
 export * from "./log-sanitizer.js";
+export * from "./log-labels.js";

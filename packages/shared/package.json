@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./chat-action-outcome": "./src/chat-action-outcome.ts",
     "./email-otp-rule": "./src/email-otp-rule.ts",
-    "./log-sanitizer": "./src/log-sanitizer.ts"
+    "./log-sanitizer": "./src/log-sanitizer.ts",
+    "./log-labels": "./src/log-labels.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

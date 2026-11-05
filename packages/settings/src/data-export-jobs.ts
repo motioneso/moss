@@ -13,6 +13,12 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 import { sql, type Kysely } from "kysely";
 
 import { exportUserData } from "./data-export.js";
+import {
+  DIAGNOSTIC_LOG_PURGE_QUEUE,
+  purgeDiagnosticLog,
+  reconcileDiagnosticLogPurgeSchedule,
+  type DiagnosticLogPurgeJobPayload
+} from "./diagnostic-log-purge.js";
 import { collectOwnedMarkdownNotes } from "./data-export-vault.js";
 import { DataExportRepository } from "./data-export-repository.js";
 import {
@@ -43,6 +49,14 @@ export const EXPORT_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
   },
   {
     name: EXPORT_CLEANUP_QUEUE,
+    options: {
+      retryLimit: 0,
+      deleteAfterSeconds: 300,
+      retentionSeconds: 300
+    }
+  },
+  {
+    name: DIAGNOSTIC_LOG_PURGE_QUEUE,
     options: {
       retryLimit: 0,
       deleteAfterSeconds: 300,
@@ -257,6 +271,7 @@ export async function registerSettingsJobWorkers(
   listModuleManifests: () => readonly MossModuleManifest[]
 ): Promise<readonly string[]> {
   await reconcileDataExportCleanupSchedule(boss);
+  await reconcileDiagnosticLogPurgeSchedule(boss);
   const workId = await registerDataContextWorker<ExportBuildJobPayload, void>(
     boss,
     EXPORT_BUILD_QUEUE,
@@ -273,5 +288,15 @@ export async function registerSettingsJobWorkers(
       await handleExportCleanupJob(job, workerDb, dataContext);
     }
   );
-  return [workId, cleanupWorkId];
+  const logPurgeWorkId = await boss.work<DiagnosticLogPurgeJobPayload, void>(
+    DIAGNOSTIC_LOG_PURGE_QUEUE,
+    { pollingIntervalSeconds: 30 },
+    async ([job]) => {
+      if (!job) {
+        throw new Error(`pg-boss invoked ${DIAGNOSTIC_LOG_PURGE_QUEUE} without a job`);
+      }
+      await purgeDiagnosticLog(workerDb);
+    }
+  );
+  return [workId, cleanupWorkId, logPurgeWorkId];
 }
