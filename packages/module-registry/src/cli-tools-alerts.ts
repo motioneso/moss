@@ -10,7 +10,12 @@ import { NotificationsRepository } from "@moss/notifications";
  * notification, the audit log or the health record.
  */
 
-export type CliToolAlertKind = "held_back" | "cannot_check" | "too_old";
+export type CliToolAlertKind =
+  | "held_back"
+  | "cannot_check"
+  | "too_old"
+  | "update_check_failed"
+  | "summary_stopped";
 
 export interface CliToolAlert {
   readonly kind: CliToolAlertKind;
@@ -37,6 +42,24 @@ export function cliToolAlertCopy(alert: CliToolAlert): { title: string; body: st
       body:
         `The newer ${name} tools ${cliToolReasonText(alert.reason ?? "")}, so Moss kept the ` +
         `current ones. Open AI providers and press Retry to check again.`
+    };
+  }
+  if (alert.kind === "update_check_failed") {
+    const version = alert.version ? ` ${alert.version}` : "";
+    return {
+      title: `${name} update${version} is installed, but its check failed`,
+      body:
+        `Moss installed the newer ${name} tools and is using them. The follow-up check ` +
+        `${cliToolReasonText(alert.reason ?? "")}. Nothing was rolled back. Open AI providers and press Retry to check again.`
+    };
+  }
+  if (alert.kind === "summary_stopped") {
+    return {
+      title: `A ${name} summary was stopped`,
+      body:
+        `Moss stopped a meeting summary before sending the transcript, because the ${name} ` +
+        `session ${alert.reason === "unverifiable" ? "could not be verified as locked down" : "reported a protection that was off"}. ` +
+        `Only that run stopped. No transcript text is in this alert.`
     };
   }
   if (alert.kind === "cannot_check") {
@@ -125,6 +148,22 @@ export function buildCliToolAlertRaiser(
         .catch(() => undefined);
     }
   };
+}
+
+let summaryStoppedListener:
+  | ((info: { readonly cause: "violation" | "unverifiable"; readonly property: string }) => void)
+  | undefined;
+
+/** The summary runtime reports a stopped run here. The alert raiser is attached at startup. */
+export function setSummaryStoppedListener(listener: typeof summaryStoppedListener): void {
+  summaryStoppedListener = listener;
+}
+
+export function notifySummaryStopped(info: {
+  readonly cause: "violation" | "unverifiable";
+  readonly property: string;
+}): void {
+  summaryStoppedListener?.(info);
 }
 
 /** What a chat turn refused for an old tool triggers: an alert, then an update pass right away. */

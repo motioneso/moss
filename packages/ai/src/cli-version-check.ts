@@ -1,8 +1,9 @@
 import type { ProviderKind } from "./cli-availability.js";
 
 /**
- * #2689 slice 4: the version check. It runs the live check against a staged candidate and
- * either promotes it or holds it back. Every collaborator is injected. The outcome comes from
+ * #2689 slice 4: the version check. For Codex it runs the live check against a staged candidate
+ * and either promotes it or holds it back. For Claude the update always goes live first and the
+ * check runs afterwards in the background (#3689). Every collaborator is injected. The outcome comes from
  * the stored check record and the live check's pass or fail, never from model words.
  */
 
@@ -56,20 +57,72 @@ export interface CliVersionCheckPorts {
     versions: readonly string[],
     reason: string
   ) => Promise<void>;
+  /**
+   * Claude only. Called when the background check after a promotion fails, throws or times out.
+   * The update stays live either way.
+   */
+  readonly raisePostPromoteFailure?: (
+    provider: ProviderKind,
+    versions: readonly string[],
+    reason: string
+  ) => Promise<void>;
+  /** Time limit for the background check. */
+  readonly postPromoteTimeoutMs?: number;
   readonly now?: () => Date;
 }
+
+/** Providers whose updates always go live before their check runs. */
+const PROMOTE_FIRST_PROVIDERS: ReadonlySet<ProviderKind> = new Set(["anthropic"]);
+
+const POST_PROMOTE_TIMEOUT_MS = 120_000;
 
 export type VersionCheckOutcome =
   | { readonly status: "no-candidate" }
   | { readonly status: "skipped-recent-failure" }
   | { readonly status: "runner-unavailable" }
-  | { readonly status: "promoted"; readonly firstInstall: boolean }
+  | {
+      readonly status: "promoted";
+      readonly firstInstall: boolean;
+      /** Claude only. Settles when the background check is done. Never rejects. */
+      readonly backgroundCheck?: Promise<void>;
+    }
   | { readonly status: "held-back"; readonly reason: string };
 
 const RETRY_AFTER_MS = 24 * 60 * 60 * 1000;
 
 function sameVersions(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+async function runBackgroundCheck(
+  provider: ProviderKind,
+  ports: CliVersionCheckPorts,
+  versions: readonly string[],
+  record: (result: "passed" | "failed", reason: string) => Promise<void>
+): Promise<void> {
+  const limitMs = ports.postPromoteTimeoutMs ?? POST_PROMOTE_TIMEOUT_MS;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const live = await Promise.race([
+      ports.runLiveCheck(provider),
+      new Promise<LiveCheckResult>((resolve) => {
+        timer = setTimeout(() => resolve({ passed: false, reason: "timeout" }), limitMs);
+      })
+    ]);
+    if (live.passed) {
+      await record("passed", "ok");
+      return;
+    }
+    await record("failed", live.reason);
+    await ports.raisePostPromoteFailure?.(provider, versions, live.reason);
+  } catch {
+    await record("failed", "structured_call_failed").catch(() => undefined);
+    await ports
+      .raisePostPromoteFailure?.(provider, versions, "structured_call_failed")
+      .catch(() => undefined);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /**
@@ -106,9 +159,19 @@ export async function runCliVersionCheck(
       return { status: "held-back", reason };
     };
 
+    const firstInstall = state.liveVersion === null;
+
+    // Claude: first install and upgrade behave the same. The update goes live, then the check
+    // runs off to the side. Its result can alert but never undoes or delays the promotion.
+    if (PROMOTE_FIRST_PROVIDERS.has(provider)) {
+      const promoted = await ports.promote(provider);
+      if (promoted.state === "error") return fail("promote_failed");
+      const backgroundCheck = runBackgroundCheck(provider, ports, versions, record);
+      return { status: "promoted", firstInstall, backgroundCheck };
+    }
+
     // With nothing live there is nothing to fall back to, so the candidate goes live first.
     // A failed check still alerts.
-    const firstInstall = state.liveVersion === null;
     if (firstInstall) {
       const promoted = await ports.promote(provider);
       if (promoted.state === "error") return fail("promote_failed");

@@ -123,7 +123,12 @@ import {
   type TerminalRpcConnectOptions,
   type TerminalRpcHandle
 } from "@moss/ai";
-import { buildCliToolAlertRaiser, buildCliVersionTooOldHandler } from "./cli-tools-alerts.js";
+import {
+  buildCliToolAlertRaiser,
+  buildCliVersionTooOldHandler,
+  notifySummaryStopped,
+  setSummaryStoppedListener
+} from "./cli-tools-alerts.js";
 import { forwardEmbeddingActivity } from "./embedding-activity.js";
 import { buildCliToolsRefresh, buildCliVersionCheck } from "./cli-tools-refresh-wiring.js";
 import { createClassifierPreparationPort } from "./classifier-preparation-port.js";
@@ -3105,7 +3110,10 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext
       });
-      const outputRuntime = createMeetingOutputRuntime(deps);
+      const outputRuntime = createMeetingOutputRuntime({
+        ...deps,
+        onIsolationFailed: notifySummaryStopped
+      });
       registerMeetingOutputRoutes(server, {
         ...outputRuntime,
         enqueueRecordingNotice: createRecordingNoticeRuntime({
@@ -3151,6 +3159,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           probeConstrainedCli: deps.probeConstrainedCli,
           createAcpCliStructuredAdapter: deps.createAcpCliStructuredAdapter,
           probeAcpCli: deps.probeAcpCli,
+          onIsolationFailed: notifySummaryStopped,
           resolveActiveModules
         }).generator,
         notices.enqueue(boss)
@@ -4151,6 +4160,13 @@ export function registerBuiltInApiRoutes(
             provider,
             ...(versions[0] ? { version: versions[0] } : {}),
             reason
+          }),
+        raisePostPromoteFailure: async (provider, versions, reason) =>
+          raiseAlert({
+            kind: "update_check_failed",
+            provider,
+            ...(versions[0] ? { version: versions[0] } : {}),
+            reason
           })
       });
       const checkTracked = async (provider: ProviderKind, opts?: { force?: boolean }) => {
@@ -4186,6 +4202,14 @@ export function registerBuiltInApiRoutes(
       stopCliToolsRefresh = startCliToolsRefreshTimer(pass);
       // A chat turn refused for an old tool asks for a pass now instead of waiting for the timer.
       setCliVersionTooOldListener(buildCliVersionTooOldHandler({ raiseAlert, pass }));
+      // A summary stopped by the isolation check alerts admins with the cause and no transcript.
+      setSummaryStoppedListener((info) => {
+        void raiseAlert({
+          kind: "summary_stopped",
+          provider: "anthropic",
+          reason: info.cause
+        }).catch(() => undefined);
+      });
       // Retry is an admin pressing the button, so the 24-hour wait does not apply.
       setCliToolsRetry(async (provider) => {
         await refreshTracked();
@@ -4194,6 +4218,7 @@ export function registerBuiltInApiRoutes(
     });
     server.addHook("onClose", async () => {
       setCliVersionTooOldListener(undefined);
+      setSummaryStoppedListener(undefined);
       setCliToolsRetry(undefined);
       stopCliToolsRefresh?.();
       getRpcConnection()?.close();
