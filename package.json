@@ -74,7 +74,7 @@
     "test:unit": "tsx scripts/test-unit.ts",
     "test:uat-seed": "vitest run tests/uat/seed",
     "test:integration:front-door-slice-1": "tsx scripts/test-integration.ts tests/integration/front-door-guarded-devices.test.ts tests/integration/chat-settings.test.ts tests/integration/chat-response-style-tool.test.ts",
-    "test:integration:3978-logs": "tsx scripts/test-integration.ts tests/integration/diagnostic-log-store.test.ts tests/integration/diagnostic-log-purge.test.ts",
+    "test:integration:3978-logs": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/diagnostic-log-store.test.ts tests/integration/diagnostic-log-purge.test.ts tests/integration/diagnostic-log-sink-processes.test.ts",
     "test:integration:3978": "tsx scripts/test-integration.ts tests/integration/job-diagnostics.test.ts tests/integration/connection-diagnostics.test.ts tests/integration/platform-diagnostics.test.ts tests/integration/platform-diagnostics-composition.test.ts",
     "test:integration:3978-news": "tsx scripts/test-integration.ts tests/integration/news-provenance-diagnostics.test.ts tests/integration/news-diagnostics-provider.test.ts tests/integration/platform-diagnostics.test.ts",
     "test:integration:3722": "tsx scripts/test-integration.ts tests/integration/module-worker-queue-enqueue.test.ts",

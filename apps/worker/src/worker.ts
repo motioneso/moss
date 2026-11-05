@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import type { ConstructorOptions, PgBoss } from "pg-boss";
 import { pino, type Logger as PinoLogger } from "pino";
 import type { FastifyBaseLogger } from "fastify";
-import { sql } from "kysely";
+import { sql, type Kysely } from "kysely";
 import {
   sanitizeLogText,
   createSanitizingFormatters,
@@ -16,7 +16,8 @@ import {
   getMossDatabaseUrls,
   readScopedActorUserId,
   resolveMossEnv,
-  type AccessContext
+  type AccessContext,
+  type MossDatabase
 } from "@moss/db";
 import { RlsProbeRepository } from "@moss/db/probes";
 import {
@@ -83,7 +84,8 @@ import {
   appendModuleBuildFetchedUrl,
   appendModuleBuildWrittenFile,
   createDiagnosticLogDestination,
-  createDiagnosticLogSink
+  createDiagnosticLogSink,
+  type DiagnosticLogSink
 } from "@moss/settings";
 import { getVaultBaseDir, VaultContextRunner } from "@moss/vault";
 
@@ -194,6 +196,27 @@ export function buildModuleBuildNotification(
 }
 
 /**
+ * The worker's logger. Every line is sanitized, then written to stdout, and warn-and-above
+ * lines are also queued for the log table through the worker-role handle (insert-only).
+ */
+export function createWorkerLogging(workerDb: Kysely<MossDatabase>): {
+  logger: PinoLogger;
+  sink: DiagnosticLogSink;
+} {
+  const sink = createDiagnosticLogSink({ db: workerDb, process: "worker" });
+  const logger: PinoLogger = pino(
+    {
+      level: process.env.LOG_LEVEL ?? "info",
+      base: { process: "worker" },
+      formatters: createSanitizingFormatters()
+    },
+    // log-safe: the sanitizing destination wraps the raw stream
+    createDiagnosticLogDestination({ process: "worker", target: process.stdout, sink })
+  );
+  return { logger, sink };
+}
+
+/**
  * Build and wire the worker.
  *
  * Extracted from the module-level bootstrap so the lifecycle (boss.start →
@@ -216,17 +239,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     connectionString,
     maxConnections: Number(resolveMossEnv(process.env, "JARVIS_WORKER_DB_POOL_SIZE") ?? 4)
   });
-  // Warn-and-above records also go to the log table through this handle (insert-only role).
-  const logSink = createDiagnosticLogSink({ db: workerDb, process: "worker" });
-  const workerLogger: PinoLogger = pino(
-    {
-      level: process.env.LOG_LEVEL ?? "info",
-      base: { process: "worker" },
-      formatters: createSanitizingFormatters()
-    },
-    // log-safe: the sanitizing destination wraps the raw stream
-    createDiagnosticLogDestination({ process: "worker", target: process.stdout, sink: logSink })
-  );
+  const { logger: workerLogger, sink: logSink } = createWorkerLogging(workerDb);
   const dataContext = new DataContextRunner(workerDb);
   const repository = new RlsProbeRepository();
   // The worker is the SOLE pg-boss cron + supervisor owner (F14, #650): enable
