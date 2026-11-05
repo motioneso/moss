@@ -1077,3 +1077,48 @@ database apps/worker/src/worker.ts:212, API entry scripts/start-jarv1s.ts:200, m
 packages/ai/sql/0356_module_page_activity_surface.sql, and the manual next-number search covers
 `packages/*/src/sql` as well (scripts/check-migration-collisions.ts:11). The builder re-runs the
 number search against origin/main and open pull requests at the start of slice 2B.
+
+### 12.11 Platform warning text (slice 2E, Ben's ruling 2026-11-05)
+
+Ruling on 12.9 item 1: unowned records (no `owner_user_id`) show their message text to admins.
+Records owned by another user stay metadata-only for admins. 12.9 item 2 stands (retention as
+built). Item 3 is answered: the source reader is not admin-only (Phase 3 plans for that).
+
+Decisions:
+
+- **Classification.** `app.diagnostic_log_records` stays owner-or-unowned. Message text is returned
+  when the row's owner is the caller, or when the row has no owner and the caller is a live admin.
+  No admin exception for rows owned by someone else. No BYPASSRLS.
+- **Change surface.** One new migration in `packages/settings/sql/` (next free number, checked
+  against origin/main and open pull requests) that does `CREATE OR REPLACE FUNCTION
+app.read_diagnostic_log` with the same signature and return columns. The `message` expression
+  becomes `CASE WHEN r.owner_user_id = app.current_actor_user_id() OR r.owner_user_id IS NULL THEN
+r.message END`. The admin check in WHERE is unchanged, so a non-admin still gets nothing. The
+  applied migration 0357 is not edited.
+- **Context.** The stored context JSON is still never selected. Only the cleaned message text is
+  added.
+- **Reader.** `packages/settings/src/diagnostic-log-reader.ts` stops gating message text on
+  `owned` and returns whatever the function returned. `owned` and `ownerKnown` keep their meaning.
+- **Secret cleaner.** Unchanged and already applied before storage. The new text exposure raises the
+  stakes, so the secret-path tests are re-run against an unowned row and observed failing with the
+  cleaner removed.
+- **Known limit.** An unowned message can still hold private data a pattern cannot recognise (a
+  mail subject inside an error). Mitigations stay the 7-day cap and the 2 KB cut. The app map says
+  so.
+- **Tool wording.** The `logs` tool description and the persona line stop saying unowned text is
+  withheld. Guidance stays under 150 words.
+
+Tests (behaviour, and why each fails against a broken build):
+
+1. Admin A reads an unowned row with full text. Fails if the function still withholds it.
+2. Admin A reads user B's owned row as metadata only. Fails if the new CASE drops the owner test.
+3. A non-admin gets no rows at all, including unowned ones. Fails if the admin check moves.
+4. An unowned row carrying a secret-shaped string comes back masked.
+5. The two-process live proof (`pnpm test:uat:3978-logs`) gains one case: a platform warning with no
+   user shows its text to the admin in a real chat turn, and a second user's warning still shows
+   metadata only.
+
+App map: update the logs feature declaration in the same PR. Release note: Category N/A (admin
+diagnostics, not yet user-visible) unless the PR template says otherwise.
+
+Then the kill gate (section 8) runs on the real faults.

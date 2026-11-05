@@ -46,6 +46,10 @@ Anti-goals (failure even if it technically works):
   content.
 - Admin gate: the log, job queue, source and repair tools, and starting a code change, are
   household-admin actions. A family member can see warnings about their own connections.
+- Platform warnings (Ben, 2026-11-05): a warning the platform itself produced, with no user
+  attached, is not private user data. Admins and Moss read its text, after the secret cleaner has
+  run. Warnings tied to another user stay metadata-only for admins. The source reader is not
+  admin-only. Moss must never see a problem without being able to learn why.
 - Review: every code change is reviewed by a person before it takes effect.
 - Ask first: Moss asks before each repair and before each code change. No unattended repairs.
 - Shared accounts: self-editing code is the user's call, off by default, switched on by the admin.
