@@ -218,19 +218,43 @@ test("Moss reads both processes' warnings, hides other owners' text, and survive
     )
     .not.toBe("0");
 
-  // Neither the stored rows nor the output of any process may hold the secret. The worker's
-  // own warnings never print error text, so for it the check is that its output stays clean
-  // while the planted envelope sits in the database it reads.
-  const stored = sql(
-    `SELECT count(*) FROM app.diagnostic_log_records WHERE message LIKE '%${PLANTED_SECRET}%' OR context::text LIKE '%${PLANTED_SECRET}%'`
-  );
-  expect(stored).toBe("0");
+  // The planted envelope names the secret as its key id, so the decrypt error the worker
+  // swallows would carry it. The worker's warning prints no error text by design, so the proof
+  // for it is that the real worker warning exists in the store and in the worker's own output
+  // while the secret appears in neither. A control row shows the detector sees a secret.
+  const secretInRows = (process: "api" | "worker") =>
+    Number(
+      sql(
+        `SELECT count(*) FROM app.diagnostic_log_records WHERE process='${process}' AND (message LIKE '%${PLANTED_SECRET}%' OR context::text LIKE '%${PLANTED_SECRET}%')`
+      )
+    );
   const output = execFileSync(
     "docker",
-    buildUatComposeArgs(requireUatProjectName(), ["logs", "--no-color", "--tail", "2000"]),
-    { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 }
+    buildUatComposeArgs(requireUatProjectName(), ["logs", "--no-color", "--tail", "4000"]),
+    { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }
   );
+  const workerLines = output.split("\n").filter((line) => line.includes('"process":"worker"'));
+
+  expect(
+    Number(
+      sql(
+        `SELECT count(*) FROM app.diagnostic_log_records WHERE process='worker' AND message='${WORKER_WARNING}'`
+      )
+    )
+  ).toBeGreaterThan(0);
+  expect(workerLines.some((line) => line.includes(WORKER_WARNING))).toBe(true);
+  expect(secretInRows("worker")).toBe(0);
+  expect(workerLines.some((line) => line.includes(PLANTED_SECRET))).toBe(false);
+
+  expect(secretInRows("api")).toBe(0);
   expect(output).toContain("Unhandled route error");
   expect(output).not.toContain(PLANTED_SECRET);
-  expect(WORKER_WARNING).toContain("connection invalid");
+
+  // Control: the same detector reports a row that does carry the secret.
+  sql(
+    `INSERT INTO app.diagnostic_log_records (process, level, component, message, occurred_at) VALUES ('worker', 40, 'worker', 'control ${PLANTED_SECRET}', now())`
+  );
+  expect(secretInRows("worker")).toBe(1);
+  sql(`DELETE FROM app.diagnostic_log_records WHERE message='control ${PLANTED_SECRET}'`);
+  expect(secretInRows("worker")).toBe(0);
 });
