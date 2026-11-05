@@ -15,7 +15,6 @@ import {
   CliChatUnavailableError,
   VerifiedSubmitError,
   createStructuredEngine,
-  probeConstrainedClaudeProvider,
   findConstrainedCodexExecutable,
   deriveNeutralDir,
   invalidateProviderProbeCache,
@@ -695,9 +694,13 @@ export class CliChatEngineHost {
     const opts = typeof userIdOrOpts === "string" ? maybeOpts : userIdOrOpts;
     if (opts?.constrainedStructured)
       return this.deps.perUserUid && this.deps.homeBase && userId
-        ? provider === "openai-compatible"
-          ? { status: (await findConstrainedCodexExecutable()) ? "ready" : "not_installed" }
-          : probeConstrainedClaudeProvider(provider)
+        ? {
+            // Only Codex has a constrained route. Claude summaries use the ACP no-tools profile.
+            status:
+              provider === "openai-compatible" && (await findConstrainedCodexExecutable())
+                ? "ready"
+                : "not_installed"
+          }
         : { status: "error", constrainedUnavailableReason: "per_user_isolation_required" };
     const cacheScope = provider === "openai-compatible" ? userId : undefined;
     const runtime = cacheScope ? await this.deps.resolveUserRuntime?.(cacheScope) : undefined;

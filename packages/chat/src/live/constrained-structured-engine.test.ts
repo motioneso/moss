@@ -7,7 +7,6 @@ import {
   ConstrainedProcessError,
   runConstrainedStructuredProcess
 } from "./constrained-structured-process.js";
-import { prepareConstrainedClaudeProfile } from "./constrained-claude-profile.js";
 import { prepareConstrainedCodexProfile } from "./constrained-codex-profile.js";
 vi.mock("./constrained-codex-profile.js", () => ({
   prepareConstrainedCodexProfile: vi.fn(async () => ({
@@ -25,19 +24,13 @@ vi.mock("./constrained-structured-process.js", async (original) => ({
   ...(await original<typeof ProcessModule>()),
   runConstrainedStructuredProcess: vi.fn()
 }));
-vi.mock("./constrained-claude-profile.js", () => ({
-  prepareConstrainedClaudeProfile: vi.fn(),
-  findConstrainedClaudeExecutable: vi.fn(async () => "/managed/claude"),
-  ConstrainedClaudeUnsupportedError: class extends Error {},
-  parseConstrainedClaudeOutput: (value: string) => JSON.parse(value).result
-}));
 const opts = {
   neutralDir: "/neutral/fresh",
   personaPath: "/neutral/fresh/persona",
   model: "exact-model",
   schema: { type: "object" }
 };
-function fixture(kind: "anthropic" | "openai-compatible") {
+function fixture(kind: "anthropic" | "openai-compatible" = "openai-compatible") {
   const identity: StructuredChildIdentity = {
     wrap: (command, args) => ({ command, args: [...args] }),
     signalGroup: vi.fn(async () => {}),
@@ -49,25 +42,20 @@ function fixture(kind: "anthropic" | "openai-compatible") {
     }
   };
   const io = { run: vi.fn(async () => ({ code: 0, stdout: "", stderr: "" })) } as unknown as TmuxIo;
-  vi.mocked(prepareConstrainedClaudeProfile).mockResolvedValue({
-    command: "/managed/claude",
-    args: ["--print"],
-    env: { HOME: "/fresh", CLAUDE_CODE_OAUTH_TOKEN: "synthetic-only" }
-  });
   vi.mocked(runConstrainedStructuredProcess).mockResolvedValue({
-    stdout: kind === "anthropic" ? '{"result":"{}"}' : '{"text":"{}"}',
+    stdout: '{"text":"{}"}',
     exitCode: 0,
     signal: null
   });
   return {
     identity,
     io,
-    engine: new ConstrainedStructuredEngine(kind, io, "/owner-home", identity)
+    engine: new ConstrainedStructuredEngine(kind, io, "/neutral/fresh/constrained-home", identity)
   };
 }
 afterEach(() => vi.clearAllMocks());
 describe("constrained runner engine", () => {
-  it.each(["anthropic"] as const)(
+  it.each(["openai-compatible"] as const)(
     "prepares %s before accepting a transcript, then starts one bounded process",
     async (kind) => {
       const { engine } = fixture(kind);
@@ -92,13 +80,13 @@ describe("constrained runner engine", () => {
     { mcpServerUrl: "https://tools.invalid" },
     { replayBatch: "prior transcript" }
   ])("rejects a tool/replay launch (%j)", async (extra) => {
-    const { engine } = fixture("anthropic");
+    const { engine } = fixture();
     await expect(engine.launchStructured({ ...opts, ...extra })).rejects.toThrow();
-    expect(prepareConstrainedClaudeProfile).not.toHaveBeenCalled();
+    expect(prepareConstrainedCodexProfile).not.toHaveBeenCalled();
     expect(runConstrainedStructuredProcess).not.toHaveBeenCalled();
   });
   it("never reports a successful stop when process termination is unconfirmed", async () => {
-    const { engine, identity } = fixture("anthropic");
+    const { engine, identity } = fixture();
     vi.mocked(runConstrainedStructuredProcess).mockRejectedValue(
       new ConstrainedProcessError("termination")
     );
@@ -109,7 +97,7 @@ describe("constrained runner engine", () => {
     await expect(engine.kill()).rejects.toMatchObject({ code: "termination" });
   });
   it("retains and retries the cleanup handle before acknowledging a later stop", async () => {
-    const { engine } = fixture("anthropic");
+    const { engine } = fixture();
     const retry = vi.fn(async () => {});
     const error = new ConstrainedProcessError("termination", retry);
     vi.mocked(runConstrainedStructuredProcess).mockRejectedValue(error);
@@ -121,7 +109,7 @@ describe("constrained runner engine", () => {
     expect(retry).toHaveBeenCalledTimes(1);
   });
   it("retries failed identity cleanup through public kill until it succeeds", async () => {
-    const { engine, identity } = fixture("anthropic");
+    const { engine, identity } = fixture();
     let unavailable = true;
     vi.mocked(identity.release).mockImplementation(async () => {
       if (unavailable) throw new Error("storage unavailable");
@@ -135,14 +123,14 @@ describe("constrained runner engine", () => {
     expect(identity.release).toHaveBeenCalledTimes(3);
   });
   it("retries cleanup that failed at the end of a running request before acknowledging stop", async () => {
-    const { engine, identity } = fixture("anthropic");
+    const { engine, identity } = fixture();
     let unavailable = true;
     vi.mocked(identity.release).mockImplementation(async () => {
       if (unavailable) throw new Error("storage unavailable");
     });
     vi.mocked(runConstrainedStructuredProcess).mockImplementation(async (options) => {
       await options.identity?.release();
-      return { stdout: '{"result":"{}"}', exitCode: 0, signal: null };
+      return { stdout: '{"text":"{}"}', exitCode: 0, signal: null };
     });
     await engine.launchStructured(opts);
     await engine.submitStructured("synthetic transcript");
@@ -152,14 +140,26 @@ describe("constrained runner engine", () => {
     expect(identity.release).toHaveBeenCalledTimes(3);
   });
   it("shares identity cleanup between concurrent stop requests", async () => {
-    const { engine, identity } = fixture("anthropic");
+    const { engine, identity } = fixture();
     await Promise.all([engine.kill(), engine.kill()]);
     expect(identity.release).toHaveBeenCalledOnce();
   });
-  it("rejects Codex without the runner-created private home before transcript dispatch", async () => {
-    const { engine } = fixture("openai-compatible");
+  it("has no Claude route, whatever its version", async () => {
+    const { engine } = fixture("anthropic");
     await expect(engine.launchStructured(opts)).rejects.toThrow();
-    expect(prepareConstrainedClaudeProfile).not.toHaveBeenCalled();
+    expect(prepareConstrainedCodexProfile).not.toHaveBeenCalled();
+    expect(runConstrainedStructuredProcess).not.toHaveBeenCalled();
+  });
+  it("rejects Codex without the runner-created private home before transcript dispatch", async () => {
+    const { io, identity } = fixture();
+    const engine = new ConstrainedStructuredEngine(
+      "openai-compatible",
+      io,
+      "/owner-home",
+      identity
+    );
+    await expect(engine.launchStructured(opts)).rejects.toThrow();
+    expect(prepareConstrainedCodexProfile).not.toHaveBeenCalled();
     expect(runConstrainedStructuredProcess).not.toHaveBeenCalled();
   });
   it("runs Codex using the temporary login home and exact selected model", async () => {
@@ -178,14 +178,13 @@ describe("constrained runner engine", () => {
         schema: opts.schema
       })
     );
-    expect(prepareConstrainedClaudeProfile).not.toHaveBeenCalled();
     await engine.submitStructured("synthetic transcript");
     await vi.waitFor(async () => expect((await engine.readStructured(0)).complete).toBe(true));
     expect((await engine.readStructured(0)).text).toBe("{}");
     await engine.kill();
   });
   it("refuses execution without the runner's owner identity", async () => {
-    const { io } = fixture("anthropic");
+    const { io } = fixture();
     await expect(
       new ConstrainedStructuredEngine("anthropic", io, "/home", undefined).launchStructured(opts)
     ).rejects.toThrow();
