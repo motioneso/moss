@@ -168,6 +168,21 @@ describe("recorded capture gaps in meeting summaries", () => {
   });
 });
 
+function useClaudeAcp(h: ReturnType<typeof setup>) {
+  h.route.mockResolvedValue({
+    ...model,
+    provider_kind: "anthropic",
+    provider_auth_method: "cli",
+    provider_acp_agent_id: "claude-acp"
+  });
+  h.credential.mockResolvedValue({
+    ...provider,
+    provider_kind: "anthropic",
+    auth_method: "cli",
+    acp_agent_id: "claude-acp"
+  });
+}
+
 describe("meeting summary generation availability", () => {
   it("uses the same strict selected route and safe provider metadata without reading credentials or dispatching", async () => {
     const h = setup();
@@ -767,18 +782,7 @@ it("checks constrained binary presence outside actor transactions before enablin
 it("rejects shared-account Claude readiness before any model dispatch and preserves the specific reason", async () => {
   const generate = vi.fn();
   const h = setup(() => ({ generateStructured: generate }));
-  h.route.mockResolvedValue({
-    ...model,
-    provider_kind: "anthropic",
-    provider_auth_method: "cli",
-    provider_acp_agent_id: "claude-acp"
-  });
-  h.credential.mockResolvedValue({
-    ...provider,
-    provider_kind: "anthropic",
-    auth_method: "cli",
-    acp_agent_id: "claude-acp"
-  });
+  useClaudeAcp(h);
   vi.spyOn(AiRepository.prototype, "listProviders").mockResolvedValue([
     { ...provider, provider_kind: "anthropic", auth_method: "cli" }
   ]);
@@ -798,18 +802,7 @@ it("rejects shared-account Claude readiness before any model dispatch and preser
 it("preserves user cancellation during the constrained readiness probe without dispatch", async () => {
   const generate = vi.fn();
   const h = setup(() => ({ generateStructured: generate }));
-  h.route.mockResolvedValue({
-    ...model,
-    provider_kind: "anthropic",
-    provider_auth_method: "cli",
-    provider_acp_agent_id: "claude-acp"
-  });
-  h.credential.mockResolvedValue({
-    ...provider,
-    provider_kind: "anthropic",
-    auth_method: "cli",
-    acp_agent_id: "claude-acp"
-  });
+  useClaudeAcp(h);
   const controller = new AbortController();
   h.probe.mockImplementation(async () => {
     controller.abort();
@@ -828,18 +821,7 @@ describe("meeting output rejection diagnostics", () => {
     const h = setup(() => ({
       generateStructured: async () => ({ rawText, usage: { inputTokens: 0, outputTokens: 0 } })
     }));
-    h.route.mockResolvedValue({
-      ...model,
-      provider_kind: "anthropic",
-      provider_auth_method: "cli",
-      provider_acp_agent_id: "claude-acp"
-    });
-    h.credential.mockResolvedValue({
-      ...provider,
-      provider_kind: "anthropic",
-      auth_method: "cli",
-      acp_agent_id: "claude-acp"
-    });
+    useClaudeAcp(h);
     return h;
   }
   const bound = {
@@ -933,18 +915,7 @@ describe("meeting output rejection diagnostics", () => {
         throw new ConstrainedProcessError("timeout");
       }
     }));
-    h.route.mockResolvedValue({
-      ...model,
-      provider_kind: "anthropic",
-      provider_auth_method: "cli",
-      provider_acp_agent_id: "claude-acp"
-    });
-    h.credential.mockResolvedValue({
-      ...provider,
-      provider_kind: "anthropic",
-      auth_method: "cli",
-      acp_agent_id: "claude-acp"
-    });
+    useClaudeAcp(h);
     await expect(h.generator(actor, input())).rejects.toMatchObject({
       code: "meeting_output_timed_out"
     });
@@ -962,18 +933,7 @@ describe("meeting output rejection diagnostics", () => {
         }),
         alert
       );
-      h.route.mockResolvedValue({
-        ...model,
-        provider_kind: "anthropic",
-        provider_auth_method: "cli",
-        provider_acp_agent_id: "claude-acp"
-      });
-      h.credential.mockResolvedValue({
-        ...provider,
-        provider_kind: "anthropic",
-        auth_method: "cli",
-        acp_agent_id: "claude-acp"
-      });
+      useClaudeAcp(h);
       await expect(h.generator(actor, input())).rejects.toMatchObject({
         code: "meeting_output_isolation_failed"
       });

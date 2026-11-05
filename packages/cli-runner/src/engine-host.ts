@@ -695,7 +695,6 @@ export class CliChatEngineHost {
     if (opts?.constrainedStructured)
       return this.deps.perUserUid && this.deps.homeBase && userId
         ? {
-            // Only Codex has a constrained route. Claude summaries use the ACP no-tools profile.
             status:
               provider === "openai-compatible" && (await findConstrainedCodexExecutable())
                 ? "ready"
