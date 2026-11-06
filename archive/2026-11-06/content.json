@@ -1,0 +1,167 @@
+{
+  "issue": 44,
+  "slug": "2026-11-06",
+  "weekOf": "November 2, 2026",
+  "summary": "Meals arrives as a full meal-planning module, Finance gets a big round of polish, and Moss learns to explain its own problems. Here's the week.",
+  "intro": "This was a big week for the kitchen. Meals grew from an idea into something you can plan, shop, and cook with, Finance picked up a long list of improvements, and I got better at telling you what is going wrong when something breaks. Fixes are at the bottom if that's all you're here for.",
+  "headline": {
+    "title": "Meals: plan the week, shop for it, cook it",
+    "body": [
+      "Meals is now a complete place to run your household's food. Moss can draft a week of meals through chat, and the Plan tab shows each recipe. You can lock the dishes you like, regenerate or swap the ones you don't, rearrange days, and re-plan mid-week when life changes.",
+      "Around the plan sits the rest of the kitchen. A shopping list with a Bought button subtracts what you already have in your pantry, you can rate meals and mark favourites as you cook, and each person's Never serve list is respected. Meals also replaces Food for new installs, while installed copies of Food keep working."
+    ],
+    "prs": [
+      3900,
+      3901,
+      3917,
+      3927,
+      3931,
+      3940,
+      3941,
+      3942,
+      3945,
+      3946,
+      3948,
+      3949
+    ]
+  },
+  "sections": [
+    {
+      "title": "New",
+      "items": [
+        {
+          "title": "Finance, much closer to complete",
+          "body": "Budgeting gets exact envelope amounts, carry-over, and savings targets. Transactions gain search, filters, split purchases, bulk categorising, and merchant rules you can preview and undo. Reports, settings activity, and the phone layout got a polish pass too.",
+          "prs": [
+            3874,
+            3964
+          ]
+        },
+        {
+          "title": "Ask Moss why something is broken",
+          "body": "Admins can ask Moss why a background job or a connection is failing, and Moss can read its own recent logs to find out. Moss can also explain why particular stories appear in your news feed.",
+          "prs": [
+            3981,
+            3988,
+            3983
+          ]
+        },
+        {
+          "title": "Finance rules from chat",
+          "body": "Ask Moss to always file a merchant under a category and it saves the rule right away, then tells you exactly what it did. Moss still asks before changing individual categories.",
+          "prs": [
+            3933,
+            3928
+          ]
+        },
+        {
+          "title": "A quicker route for simple chat requests",
+          "body": "Simple requests like turning on lights can be handled by a faster model, and Moss shows a short activity line when it does. Each account can switch this off, and locks, doors, and garage openers are left out unless you opt in.",
+          "prs": [
+            3959,
+            3962,
+            3965
+          ]
+        },
+        {
+          "title": "Meetings home table",
+          "body": "The Meetings page is now a table showing when each meeting was recorded and how long it ran, with a dash where the length is not known.",
+          "prs": [
+            3851
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Improved",
+      "items": [
+        {
+          "title": "Finance starts the month sensibly",
+          "body": "Early in the month Finance now opens on the right view, and shows a loading placeholder instead of a blank page. Category saving takes one step, and review rows start collapsed.",
+          "prs": [
+            3954,
+            3920
+          ]
+        },
+        {
+          "title": "Meeting summaries survive Claude updates",
+          "body": "Updates to Claude no longer stop Moss from writing your meeting summaries.",
+          "prs": [
+            4006
+          ]
+        },
+        {
+          "title": "Settings header stays on one row",
+          "body": "The Personal and Admin switch sits beside the search box and only stacks on narrow windows.",
+          "prs": [
+            3915
+          ]
+        },
+        {
+          "title": "Modules can use more detailed app maps",
+          "body": "Installed modules can describe all of their screens and settings, so Moss knows more about them.",
+          "prs": [
+            3969
+          ]
+        }
+      ]
+    }
+  ],
+  "fixes": [
+    {
+      "text": "One page that fails to load no longer takes the whole app down. You get Reload page and Try again, and the menu keeps working.",
+      "prs": [
+        4005
+      ]
+    },
+    {
+      "text": "The email digest can be switched on again without a server error.",
+      "prs": [
+        3996
+      ]
+    },
+    {
+      "text": "Dismissing a reminder is quick again, even while a notification is still being sent to your devices.",
+      "prs": [
+        3998
+      ]
+    },
+    {
+      "text": "The medication schedule preview now respects the 24-hour clock setting.",
+      "prs": [
+        4004
+      ]
+    },
+    {
+      "text": "Meal plans no longer fail every day for people who avoid gluten and certain meats.",
+      "prs": [
+        3956
+      ]
+    },
+    {
+      "text": "Outlook calendar sync works again when the calendar tab is closed or Settings is hidden in a menu.",
+      "prs": [
+        3974,
+        3934
+      ]
+    },
+    {
+      "text": "Chat sessions can no longer schedule future turns on their own.",
+      "prs": [
+        4007
+      ]
+    },
+    {
+      "text": "A module page that saves a very large result now says it was saved instead of inviting a second write.",
+      "prs": [
+        3911
+      ]
+    },
+    {
+      "text": "Empty-state buttons now have proper spacing.",
+      "prs": [
+        3908
+      ]
+    }
+  ]
+}

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moss weekly — Week of November 2, 2026</title>
+<meta name="description" content="Meals arrives as a full meal-planning module, Finance gets a big round of polish, and Moss learns to explain its own problems. Here's the week.">
+<link rel="stylesheet" href="../../weekly.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="shell">
+    <span class="wordmark">Moss weekly</span>
+    <span class="issue">Issue #44</span>
+  </div>
+</header>
+
+<main class="shell">
+
+  <div class="lede">
+    <h1>Week of November 2, 2026</h1>
+    <p>This was a big week for the kitchen. Meals grew from an idea into something you can plan, shop, and cook with, Finance picked up a long list of improvements, and I got better at telling you what is going wrong when something breaks. Fixes are at the bottom if that's all you're here for.</p>
+  </div>
+
+  <section class="hero">
+    <div>
+      <p class="eyebrow">This week's headline</p>
+      <h2>Meals: plan the week, shop for it, cook it</h2>
+    </div>
+    <div class="hero-body">
+      <p>Meals is now a complete place to run your household's food. Moss can draft a week of meals through chat, and the Plan tab shows each recipe. You can lock the dishes you like, regenerate or swap the ones you don't, rearrange days, and re-plan mid-week when life changes.</p>
+      <p>Around the plan sits the rest of the kitchen. A shopping list with a Bought button subtracts what you already have in your pantry, you can rate meals and mark favourites as you cook, and each person's Never serve list is respected. Meals also replaces Food for new installs, while installed copies of Food keep working.</p>
+      <p class="refs"><a href="https://github.com/motioneso/moss/pull/3900">PR&nbsp;#3900</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3901">PR&nbsp;#3901</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3917">PR&nbsp;#3917</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3927">PR&nbsp;#3927</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3931">PR&nbsp;#3931</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3940">PR&nbsp;#3940</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3941">PR&nbsp;#3941</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3942">PR&nbsp;#3942</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3945">PR&nbsp;#3945</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3946">PR&nbsp;#3946</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3948">PR&nbsp;#3948</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3949">PR&nbsp;#3949</a></p>
+    </div>
+  </section>
+
+  <section class="band">
+    <h3>New</h3>
+    <hr class="hr">
+    <div class="items">
+      <article class="item">
+        <h4>Finance, much closer to complete</h4>
+        <p>Budgeting gets exact envelope amounts, carry-over, and savings targets. Transactions gain search, filters, split purchases, bulk categorising, and merchant rules you can preview and undo. Reports, settings activity, and the phone layout got a polish pass too.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3874">PR&nbsp;#3874</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3964">PR&nbsp;#3964</a></p>
+      </article>
+      <article class="item">
+        <h4>Ask Moss why something is broken</h4>
+        <p>Admins can ask Moss why a background job or a connection is failing, and Moss can read its own recent logs to find out. Moss can also explain why particular stories appear in your news feed.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3981">PR&nbsp;#3981</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3988">PR&nbsp;#3988</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3983">PR&nbsp;#3983</a></p>
+      </article>
+      <article class="item">
+        <h4>Finance rules from chat</h4>
+        <p>Ask Moss to always file a merchant under a category and it saves the rule right away, then tells you exactly what it did. Moss still asks before changing individual categories.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3933">PR&nbsp;#3933</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3928">PR&nbsp;#3928</a></p>
+      </article>
+      <article class="item">
+        <h4>A quicker route for simple chat requests</h4>
+        <p>Simple requests like turning on lights can be handled by a faster model, and Moss shows a short activity line when it does. Each account can switch this off, and locks, doors, and garage openers are left out unless you opt in.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3959">PR&nbsp;#3959</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3962">PR&nbsp;#3962</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3965">PR&nbsp;#3965</a></p>
+      </article>
+      <article class="item">
+        <h4>Meetings home table</h4>
+        <p>The Meetings page is now a table showing when each meeting was recorded and how long it ran, with a dash where the length is not known.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3851">PR&nbsp;#3851</a></p>
+      </article>
+    </div>
+  </section>
+
+  <section class="band">
+    <h3>Improved</h3>
+    <hr class="hr">
+    <div class="items">
+      <article class="item">
+        <h4>Finance starts the month sensibly</h4>
+        <p>Early in the month Finance now opens on the right view, and shows a loading placeholder instead of a blank page. Category saving takes one step, and review rows start collapsed.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3954">PR&nbsp;#3954</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3920">PR&nbsp;#3920</a></p>
+      </article>
+      <article class="item">
+        <h4>Meeting summaries survive Claude updates</h4>
+        <p>Updates to Claude no longer stop Moss from writing your meeting summaries.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/4006">PR&nbsp;#4006</a></p>
+      </article>
+      <article class="item">
+        <h4>Settings header stays on one row</h4>
+        <p>The Personal and Admin switch sits beside the search box and only stacks on narrow windows.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3915">PR&nbsp;#3915</a></p>
+      </article>
+      <article class="item">
+        <h4>Modules can use more detailed app maps</h4>
+        <p>Installed modules can describe all of their screens and settings, so Moss knows more about them.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3969">PR&nbsp;#3969</a></p>
+      </article>
+    </div>
+  </section>
+
+  <section class="band">
+    <h3>Fixed</h3>
+    <hr class="hr">
+    <ul class="fixes">
+      <li>One page that fails to load no longer takes the whole app down. You get Reload page and Try again, and the menu keeps working. <a href="https://github.com/motioneso/moss/pull/4005">#4005</a></li>
+      <li>The email digest can be switched on again without a server error. <a href="https://github.com/motioneso/moss/pull/3996">#3996</a></li>
+      <li>Dismissing a reminder is quick again, even while a notification is still being sent to your devices. <a href="https://github.com/motioneso/moss/pull/3998">#3998</a></li>
+      <li>The medication schedule preview now respects the 24-hour clock setting. <a href="https://github.com/motioneso/moss/pull/4004">#4004</a></li>
+      <li>Meal plans no longer fail every day for people who avoid gluten and certain meats. <a href="https://github.com/motioneso/moss/pull/3956">#3956</a></li>
+      <li>Outlook calendar sync works again when the calendar tab is closed or Settings is hidden in a menu. <a href="https://github.com/motioneso/moss/pull/3974">#3974</a> <span class="sep">·</span> <a href="https://github.com/motioneso/moss/pull/3934">#3934</a></li>
+      <li>Chat sessions can no longer schedule future turns on their own. <a href="https://github.com/motioneso/moss/pull/4007">#4007</a></li>
+      <li>A module page that saves a very large result now says it was saved instead of inviting a second write. <a href="https://github.com/motioneso/moss/pull/3911">#3911</a></li>
+      <li>Empty-state buttons now have proper spacing. <a href="https://github.com/motioneso/moss/pull/3908">#3908</a></li>
+    </ul>
+  </section>
+
+  <div class="cta">
+    <a href="https://github.com/motioneso/moss">View Moss on GitHub</a>
+  </div>
+
+</main>
+
+<footer class="colophon">
+  <div class="shell">
+    Moss · a weekly record of what shipped. <a href="../">Past issues</a>.
+  </div>
+</footer>
+
+</body>
+</html>
