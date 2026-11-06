@@ -361,9 +361,14 @@ export const meetingFeatures = [
     errors: []
   },
   {
+    id: "meetings.instruction_flag",
+    description:
+      "Best effort: Moss flags recording lines that look like orders to the AI and quotes them above the summary for the owner. The AI cannot act on them, but they can still bend a summary, so check it against the quotes."
+  },
+  {
     id: "meetings.grounded_outputs",
     description:
-      "Generate evidence-checked summaries, without fallback, through the same no-tools route as chat. Long recordings are summarised piece by piece. Compare versions and sources; refresh to check availability without generating. Moss scans the recording for lines that look like orders to the AI (a best-effort check that a cleverly worded order can pass). Any it finds are quoted above the summary, visible only to the owner, with the note that the AI has no way to act on them; check the summary against the quotes, because such text can still bend what a summary says.",
+      "Generate evidence-checked summaries, without fallback, through the same no-tools route as chat. Long recordings are summarised piece by piece. Compare versions and sources; refresh to check availability without generating.",
     errors: [
       {
         code: "meeting_output_unavailable",
@@ -393,13 +398,13 @@ export const meetingFeatures = [
         code: "meeting_output_isolation_failed",
         class: "validation",
         description:
-          "Moss couldn’t write this summary because Claude didn’t accept the settings that keep the meeting private. Stopped before the transcript was sent. Only the tool list is observed; setting files and session saving are requested and accepted, not observed. Transcript and notes are kept. Admins get an alert and check Settings → AI providers; members ask an admin. Then use Rewrite summary."
+          "Claude didn’t accept the settings that keep the meeting private, so nothing was sent. Only the tool list is observed; the rest is requested and accepted. Admins get an alert and check AI providers; members ask an admin. Then Rewrite."
       },
       {
         code: "meeting_output_runner_offline",
         class: "transient",
         description:
-          "Moss couldn’t write this summary because it couldn’t reach Claude (the helper is not connected or the provider is not signed in). Transcript and notes are kept. Admins check Settings → AI providers; members ask an admin. Then use Rewrite summary."
+          "Moss couldn’t reach Claude (helper not connected or not signed in). Transcript and notes are kept. Admins check Settings → AI providers; members ask an admin. Then use Rewrite summary."
       },
       {
         code: "meeting_output_route_unavailable",

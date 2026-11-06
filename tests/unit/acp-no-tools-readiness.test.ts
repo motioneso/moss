@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createAcpNoToolsReadinessProbe } from "./acp-no-tools-readiness.js";
+import { createAcpNoToolsReadinessProbe } from "../../packages/module-registry/src/acp-no-tools-readiness.js";
 
 const ready = { assertReady: () => undefined };
 const down = {
