@@ -18,6 +18,10 @@ import type { AiProviderExecutionMode } from "@moss/shared";
 import { modelOverrideFlag, shellQuote } from "./cli-engine-helpers.js";
 import { writeClaudePermissionHook } from "./persistent-claude-permission-hook.js";
 import type { EngineLaunchOpts } from "./types.js";
+import {
+  CLAUDE_SELF_SCHEDULING_DISALLOW_FLAG,
+  CLAUDE_SELF_SCHEDULING_TOOLS
+} from "./claude-self-scheduling-tools.js";
 import { vaultReadOnlyToolPatterns } from "./vault-allowlist.js";
 
 const PERSONA_FILENAME = "persona.md";
@@ -110,7 +114,16 @@ async function buildClaudeCommand(
   } else {
     parts.push('--tools ""');
   }
-  if (opts.workspaceWrite) parts.push("--disallowedTools Bash");
+  // The empty --tools list above already removes every built-in, so the deny list only
+  // matters on the branches that leave built-ins on.
+  const builtInsOn = Boolean(opts.mcpToken && opts.mcpServerUrl) || opts.workspaceWrite;
+  if (builtInsOn) {
+    parts.push(
+      opts.workspaceWrite
+        ? `--disallowedTools Bash ${CLAUDE_SELF_SCHEDULING_TOOLS.join(" ")}`
+        : CLAUDE_SELF_SCHEDULING_DISALLOW_FLAG
+    );
+  }
 
   parts.push(
     `--append-system-prompt-file ${shellQuote(personaPath)}`,
