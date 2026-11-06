@@ -13,16 +13,32 @@ describe("ACP no-tools readiness probe", () => {
     await expect(createAcpNoToolsReadinessProbe(() => ready)("user-1")).resolves.toBe("available");
   });
 
-  it("reports unavailable when the runner is down", async () => {
+  it("reports the runner offline when it is down", async () => {
     await expect(createAcpNoToolsReadinessProbe(() => down)("user-1")).resolves.toBe(
-      "model-unavailable"
+      "runner-offline"
     );
   });
 
-  it("reports unavailable when there is no runner connection", async () => {
+  it("reports the runner offline when there is no runner connection", async () => {
     await expect(createAcpNoToolsReadinessProbe(() => undefined)("user-1")).resolves.toBe(
-      "model-unavailable"
+      "runner-offline"
     );
+  });
+
+  it("reports not signed in when the runner says the provider needs a login", async () => {
+    const probeProvider = async () => ({ status: "needs_login" as const });
+    await expect(
+      createAcpNoToolsReadinessProbe(() => ({ ...ready, probeProvider }) as never)("user-1")
+    ).resolves.toBe("not-signed-in");
+  });
+
+  it("does not stop on a sign-in lookup that fails", async () => {
+    const probeProvider = async () => {
+      throw new Error("timeout");
+    };
+    await expect(
+      createAcpNoToolsReadinessProbe(() => ({ ...ready, probeProvider }) as never)("user-1")
+    ).resolves.toBe("available");
   });
 
   it("reports unavailable for a provider that has not been proven with tools off", async () => {

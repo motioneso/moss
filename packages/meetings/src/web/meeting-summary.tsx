@@ -55,7 +55,7 @@ export function ArtifactContent({
               <li key={index}>“{line}”</li>
             ))}
             {artifact.instructionFlag.more > 0 ? (
-              <li>and {artifact.instructionFlag.more} more</li>
+              <li>{`and ${artifact.instructionFlag.more} more`}</li>
             ) : null}
           </ul>
         </>

@@ -113,7 +113,13 @@ function setup(
   vi.stubGlobal("fetch", fetch);
   let activeTransactions = 0;
   const probe = vi.fn<
-    () => Promise<"available" | "model-unavailable" | "subscription-isolation-unavailable">
+    () => Promise<
+      | "available"
+      | "model-unavailable"
+      | "runner-offline"
+      | "not-signed-in"
+      | "subscription-isolation-unavailable"
+    >
   >(async () => "available");
   const runtime = createMeetingOutputRuntime({
     probeConstrainedCli: probe,
@@ -777,6 +783,18 @@ it("checks constrained binary presence outside actor transactions before enablin
   expect(h.credential).not.toHaveBeenCalled();
   expect(h.fetch).not.toHaveBeenCalled();
   expect(generate).not.toHaveBeenCalled();
+});
+
+it.each([
+  ["model-unavailable", "meeting_output_route_unavailable"],
+  ["runner-offline", "meeting_output_runner_offline"],
+  ["not-signed-in", "meeting_output_runner_offline"]
+] as const)("maps readiness %s to its own code %s", async (readiness, code) => {
+  const h = setup(() => ({ generateStructured: vi.fn() }));
+  useClaudeAcp(h);
+  h.probe.mockResolvedValue(readiness);
+  await expect(h.generator(actor, input())).rejects.toMatchObject({ code });
+  expect(h.fetch).not.toHaveBeenCalled();
 });
 
 it("rejects shared-account Claude readiness before any model dispatch and preserves the specific reason", async () => {
