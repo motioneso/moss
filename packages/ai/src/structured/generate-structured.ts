@@ -167,9 +167,24 @@ export class StructuredTransportUnavailableError extends Error {
   }
 }
 
+/**
+ * The session's own isolation report showed a protection off (`violation`), or the report could
+ * not be read (`unverifiable`). Raised before any transcript is sent.
+ */
+export class StructuredIsolationFailedError extends Error {
+  constructor(
+    readonly isolationCause: "violation" | "unverifiable",
+    readonly property: "tools" | "setting_sources" | "session_persistence" | "readback"
+  ) {
+    super("Session isolation check failed");
+    this.name = "StructuredIsolationFailedError";
+  }
+}
+
 /** Fixed diagnostic codes; never provider messages, prompts, or output. */
 export type StructuredFailureReason =
   | "unsupported_transport"
+  | "isolation_failed"
   | "timeout"
   | "json_parse"
   | "schema_validation"
@@ -191,6 +206,11 @@ export type GenerateStructuredResult =
       readonly ok: false;
       readonly error: StructuredFailure;
       readonly reason?: StructuredFailureReason;
+      /** Set with reason `isolation_failed`. Fixed codes only. */
+      readonly isolation?: {
+        readonly cause: "violation" | "unverifiable";
+        readonly property: "tools" | "setting_sources" | "session_persistence" | "readback";
+      };
       readonly validation?: { readonly keyword: string; readonly schemaPath: string };
     };
 
@@ -530,6 +550,14 @@ async function runPreparedModel(
       }
       if (error instanceof StructuredTransportUnavailableError) {
         return { ok: false, error: "provider_error", reason: "unsupported_transport" };
+      }
+      if (error instanceof StructuredIsolationFailedError) {
+        return {
+          ok: false,
+          error: "provider_error",
+          reason: "isolation_failed",
+          isolation: { cause: error.isolationCause, property: error.property }
+        };
       }
       if (error instanceof StructuredOutputParseError) {
         validationReason = "json_parse";

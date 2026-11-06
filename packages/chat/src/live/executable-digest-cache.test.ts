@@ -2,13 +2,13 @@ import { mkdtemp, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { createExecutableDigestCache } from "./constrained-claude-profile.js";
+import { createExecutableDigestCache } from "./executable-digest-cache.js";
 const roots: string[] = [];
 afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), "claude-digest-cache-"));
+  const root = await mkdtemp(join(tmpdir(), "executable-digest-cache-"));
   roots.push(root);
   const file = join(root, "binary");
   await writeFile(file, "old");

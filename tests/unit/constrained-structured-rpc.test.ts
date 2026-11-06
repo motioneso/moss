@@ -7,7 +7,7 @@ import {
 } from "../../packages/chat/src/live/chat-engine-rpc-client.js";
 import { createStructuredEngine } from "../../packages/chat/src/live/structured-engine-selection.js";
 import { ConstrainedStructuredEngine } from "../../packages/chat/src/live/constrained-structured-engine.js";
-import { ConstrainedClaudeUnsupportedError } from "../../packages/chat/src/live/constrained-claude-profile.js";
+import { ConstrainedCodexUnsupportedError } from "../../packages/chat/src/live/constrained-codex-profile.js";
 import { CliChatUnavailableError, mapRpcError } from "../../packages/chat/src/live/errors.js";
 import { toErrFrame } from "../../packages/cli-runner/src/connection.js";
 import { createConstrainedCliStructuredAdapterFactory } from "../../packages/chat/src/live/constrained-structured-adapter.js";
@@ -62,7 +62,7 @@ describe("constrained profile RPC boundary", () => {
     ).toBeInstanceOf(ConstrainedStructuredEngine);
   });
   it("retains only the fixed unsupported discriminator through runner error framing and adapter", async () => {
-    const original = new ConstrainedClaudeUnsupportedError();
+    const original = new ConstrainedCodexUnsupportedError();
     expect(original).toBeInstanceOf(CliChatUnavailableError);
     const frame = toErrFrame(1, "boot", original);
     expect(frame.error.code).toBe("unavailable");

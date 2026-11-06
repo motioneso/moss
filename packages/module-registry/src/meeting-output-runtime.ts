@@ -159,6 +159,11 @@ export function createMeetingOutputRuntime(deps: {
     signal?: AbortSignal,
     providerKind?: AiProviderKind
   ) => Promise<ConstrainedCliReadiness>;
+  /** Tells admins a run was stopped by the isolation check. Carries fixed codes only. */
+  readonly onIsolationFailed?: (info: {
+    readonly cause: "violation" | "unverifiable";
+    readonly property: string;
+  }) => void;
 }) {
   const createCliAdapter =
     deps.createAcpCliStructuredAdapter ?? deps.createConstrainedCliStructuredAdapter;
@@ -397,6 +402,16 @@ export function createMeetingOutputRuntime(deps: {
             if (result.error === "aborted") throw interruption(input.signal);
             if (result.reason === "timeout")
               throw new MeetingOutputError("meeting_output_timed_out");
+            if (result.reason === "isolation_failed") {
+              // Only this run stops. The next run checks again from scratch.
+              if (result.isolation) {
+                console.warn(
+                  `[meeting-output] isolation check stopped a run cause=${result.isolation.cause} property=${result.isolation.property}`
+                );
+                deps.onIsolationFailed?.(result.isolation);
+              }
+              throw new MeetingOutputError("meeting_output_isolation_failed");
+            }
             if (
               result.reason === "unsupported_transport" &&
               selected.model.provider_kind === "anthropic"

@@ -35,7 +35,12 @@ import {
 import {
   CLAUDE_NO_TOOLS_OPTIONS,
   assertClaudeNoToolsOptions,
-  assertZeroToolsProof
+  assertZeroToolsProof,
+  AcpIsolationError,
+  CLAUDE_INIT_REPORT_FILTER,
+  ISOLATION_PROBE_PROMPT,
+  evaluateClaudeIsolationReadback,
+  type IsolationReadback
 } from "./no-tools.js";
 import { getAcpProviderRow, type AcpProviderKind } from "./providers.js";
 import { launchOffList } from "./tool-table.js";
@@ -279,6 +284,8 @@ export function acceptedOptionValues(option: SessionConfigOption): Set<string> |
   return ids;
 }
 
+const DEFAULT_ISOLATION_PROBE_TIMEOUT_MS = 60_000;
+
 export class MossAcpClient {
   private readonly connections = new Map<string, ClientSideConnection>();
   private readonly sessionKeys = new Map<string, string>();
@@ -294,6 +301,8 @@ export class MossAcpClient {
   private readonly sessionKinds = new Map<string, AcpProviderKind>();
   private readonly sessionProfiles = new Map<string, AcpProfile>();
   private readonly sessionOptions = new Map<string, readonly SessionConfigOption[]>();
+  /** Latest init report the adapter forwarded per session; read only by verifyIsolation. */
+  private readonly initReports = new Map<string, unknown>();
   private readonly turnIds = new Map<string, string>();
   private readonly announcements = new Map<string, Map<string, AcpToolAnnouncement>>();
   private readonly announcementWaiters = new Map<string, () => void>();
@@ -352,7 +361,8 @@ export class MossAcpClient {
               disallowedTools: launchOffList(surface),
               tools: [...CLAUDE_NO_TOOLS_OPTIONS.tools],
               settingSources: [...CLAUDE_NO_TOOLS_OPTIONS.settingSources],
-              persistSession: CLAUDE_NO_TOOLS_OPTIONS.persistSession
+              persistSession: CLAUDE_NO_TOOLS_OPTIONS.persistSession,
+              strictMcpConfig: CLAUDE_NO_TOOLS_OPTIONS.strictMcpConfig
             }
           : { disallowedTools: launchOffList(surface) };
       if (surface === "no-tools" && providerKind === "anthropic") {
@@ -362,7 +372,12 @@ export class MossAcpClient {
         cwd,
         mcpServers: toolServer ? [toMcpServerEntry(toolServer)] : [],
         _meta: {
-          claudeCode: { options: claudeOptions },
+          claudeCode: {
+            options: claudeOptions,
+            ...(surface === "no-tools" && providerKind === "anthropic"
+              ? { emitRawSDKMessages: [...CLAUDE_INIT_REPORT_FILTER] }
+              : {})
+          },
           ...(personaText !== undefined ? { systemPrompt: personaText } : {})
         }
       });
@@ -370,6 +385,8 @@ export class MossAcpClient {
       // session was opening is already recorded against this session id.
       const announcedAtOpen = this.toolCalls.get(session.sessionId) ?? 0;
       if (surface === "no-tools") {
+        if (providerKind === "anthropic" && announcedAtOpen > 0)
+          throw new AcpIsolationError("violation", "tools");
         assertZeroToolsProof({ providerKind, toolCallsSeen: announcedAtOpen });
       }
       this.connections.set(session.sessionId, connection);
@@ -457,6 +474,36 @@ export class MossAcpClient {
     } finally {
       if (timer) clearTimeout(timer);
     }
+  }
+
+  /**
+   * Reads back what a running no-tools Claude session says it offers, before any transcript is
+   * sent. The session only reports once a turn starts, so this sends a fixed probe prompt that
+   * carries no user data. Throws AcpIsolationError on a violation, and also when the report
+   * cannot be read (error, timeout, malformed), so a broken check never passes silently.
+   */
+  async verifyIsolation(
+    handle: AcpSessionHandle,
+    options: { readonly timeoutMs?: number } = {}
+  ): Promise<IsolationReadback> {
+    if (
+      this.sessionProfiles.get(handle.sessionId) !== "no-tools" ||
+      this.sessionKinds.get(handle.sessionId) !== "anthropic"
+    )
+      throw new AcpIsolationError("unverifiable", "readback");
+    this.initReports.delete(handle.sessionId);
+    try {
+      await this.prompt(handle, ISOLATION_PROBE_PROMPT, {
+        timeoutMs: options.timeoutMs ?? DEFAULT_ISOLATION_PROBE_TIMEOUT_MS
+      });
+    } catch (error) {
+      if (error instanceof AcpCapabilityError) throw new AcpIsolationError("violation", "tools");
+      throw new AcpIsolationError("unverifiable", "readback");
+    }
+    // The report is a notification, so it may land just after the prompt answer.
+    for (let waited = 0; waited < 2_000 && !this.initReports.has(handle.sessionId); waited += 20)
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    return evaluateClaudeIsolationReadback(this.initReports.get(handle.sessionId));
   }
 
   async cancel(handle: AcpSessionHandle): Promise<void> {
@@ -561,6 +608,7 @@ export class MossAcpClient {
     this.sessionKinds.delete(handle.sessionId);
     this.sessionProfiles.delete(handle.sessionId);
     this.sessionOptions.delete(handle.sessionId);
+    this.initReports.delete(handle.sessionId);
     this.announcements.delete(handle.sessionId);
     // Wake any questions still waiting: they re-check, find nothing, refuse.
     for (const [key, wake] of [...this.announcementWaiters]) {
@@ -735,6 +783,17 @@ export class MossAcpClient {
   private createClientHandler(): Client {
     return {
       requestPermission: async (params) => this.answerPermission(params),
+      extNotification: async (method, params) => {
+        if (method !== "_claude/sdkMessage") return;
+        const sessionId = params.sessionId;
+        const message = params.message as { type?: unknown; subtype?: unknown } | undefined;
+        if (
+          typeof sessionId === "string" &&
+          message?.type === "system" &&
+          message.subtype === "init"
+        )
+          this.initReports.set(sessionId, message);
+      },
       sessionUpdate: async (params) => {
         this.events.onSessionUpdate?.(params);
         const update = params.update;

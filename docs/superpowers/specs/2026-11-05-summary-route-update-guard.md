@@ -121,6 +121,27 @@ observed" is worded as "requested and accepted, not observed" in the PR and the 
 About Security Properties rule). Failing closed on unobservable properties is not an option here,
 because it would stop every Claude run and break summaries, which is what Ben ruled out. This is Decisions item 8.
 
+#### Result of step zero-b (probed on Claude 2.1.257 with adapter 0.75.1)
+
+The adapter forwards the session's own startup report when the client asks for it
+(`emitRawSDKMessages`, `packages/acp/src/client.ts:376`). The report arrives only once a prompt turn
+starts, so the check sends the fixed sentence "Reply with the single word OK." first
+(`ISOLATION_PROBE_PROMPT`, `packages/acp/src/no-tools.ts:16`) and waits up to 2 seconds for it. No
+transcript text is in that turn. The evaluation is `evaluateClaudeIsolationReadback`
+(`packages/acp/src/no-tools.ts:123`).
+
+| Property            | State                              | Source of the value                                                                                                                                                                                        |
+| ------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tools offered       | Observed (ok, or violation)        | Startup report fields `tools` and `mcp_servers`, `no-tools.ts:123` onward                                                                                                                                  |
+| Setting sources     | Not observed; plugins are observed | Only `plugins` is checked, and entries whose source ends `@builtin` (the CLI's own `agents-md` and `telemetry`, seen on the live copy) are allowed. `skills`, `agents`, `slash_commands` include built-ins |
+| Session persistence | Not observed                       | The report carries no persistence field. Checked by hand once: with persistence off only an empty `memory` folder appeared under the project folder                                                        |
+
+Setting sources and persistence are worded "requested and accepted, not observed".
+
+Finding from the probe. Without `strictMcpConfig`, 123 claude.ai connector tools reached the
+session. The no-tools options now include it (`no-tools.ts:9`), and the startup check catches any
+return of such tools.
+
 Only that run stops. The next run checks again, so a later fix or update recovers without any
 reset. Each failure raises the existing admin alert, with the cause but no transcript text.
 

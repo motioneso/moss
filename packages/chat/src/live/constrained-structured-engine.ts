@@ -8,12 +8,6 @@ import {
   runConstrainedStructuredProcess
 } from "./constrained-structured-process.js";
 import {
-  prepareConstrainedClaudeProfile,
-  findConstrainedClaudeExecutable,
-  ConstrainedClaudeUnsupportedError,
-  parseConstrainedClaudeOutput
-} from "./constrained-claude-profile.js";
-import {
   prepareConstrainedCodexProfile,
   parseConstrainedCodexOutput
 } from "./constrained-codex-profile.js";
@@ -63,7 +57,7 @@ export class ConstrainedStructuredEngine implements CliChatEngine {
       !this.identity ||
       !this.homeBase ||
       process.platform !== "linux" ||
-      (this.provider !== "anthropic" && this.provider !== "openai-compatible") ||
+      this.provider !== "openai-compatible" ||
       opts.mcpToken ||
       opts.mcpServerUrl ||
       opts.nativeSearch ||
@@ -75,32 +69,17 @@ export class ConstrainedStructuredEngine implements CliChatEngine {
     this.opts = { ...opts, schema: structuredClone(opts.schema) };
     const model = opts.model === DEFAULT_MODEL_SENTINEL ? null : opts.model;
     const privateHome = join(opts.neutralDir, "constrained-home");
-    if (this.provider === "openai-compatible") {
-      if (!model || this.homeBase !== privateHome) throw unavailable();
-      this.launchProfile = await prepareConstrainedCodexProfile({
-        privateHome,
-        model,
-        schema: opts.schema,
-        io: this.io,
-        signal: this.controller.signal
-      });
-      return { offset: 0 };
-    }
-    const made = await this.io.run("mkdir", ["-m", "700", privateHome]);
-    if (made.code !== 0) throw unavailable();
-    const command = await findConstrainedClaudeExecutable();
-    if (!command) throw new ConstrainedClaudeUnsupportedError();
-    const token = this.identity.env?.CLAUDE_CODE_OAUTH_TOKEN;
-    if (!token) throw unavailable();
-    this.launchProfile = await prepareConstrainedClaudeProfile({
-      token,
+    if (!model || this.homeBase !== privateHome) throw unavailable();
+    this.launchProfile = await prepareConstrainedCodexProfile({
       privateHome,
       model,
       schema: opts.schema,
-      signal: this.controller.signal,
-      executablePath: command
+      io: this.io,
+      signal: this.controller.signal
     });
     return { offset: 0 };
+    // Claude has no constrained route. Its summaries run through the ACP no-tools profile.
+    throw unavailable();
   }
 
   /** Starts the child and returns promptly, so the runner can receive cancellation over RPC. */
@@ -136,10 +115,7 @@ export class ConstrainedStructuredEngine implements CliChatEngine {
       maxStderrBytes: 65_536
     })
       .then((result) => {
-        this.reply =
-          this.provider === "anthropic"
-            ? parseConstrainedClaudeOutput(result.stdout)
-            : parseConstrainedCodexOutput(result.stdout);
+        this.reply = parseConstrainedCodexOutput(result.stdout);
       })
       .catch((error: unknown) => {
         if (error instanceof ConstrainedProcessError && error.code === "termination")

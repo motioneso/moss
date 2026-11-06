@@ -488,7 +488,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "aiproviders-cli-software",
     label: "AI providers - CLI software",
     description:
-      "Shared CLI software is usable by separate Moss accounts; runner startup automatically repairs the older installation-directory permission defect using the pinned version, so users need no reinstall action. Only administrators can connect CLI providers. The line under each CLI provider's name shows the installed tool and its version, for example 'Claude CLI 2.1.282'. Installing Claude or Codex also installs the small chat helper that connects it to Moss chat; if that step fails the install reports an error naming the chat helper, the tool itself stays installed, and installing again retries the helper. Until the helper is installed, chat uses the copy that shipped with Moss. Moss checks every six hours for a newer signed version of Claude and Codex and tests it in a throwaway chat before using it. While that runs the card shows 'Updating to X'. If the test fails the card shows 'Version X held back' (hover for the reason) with a Retry button, and admins get a notification. 'Version X needs a newer Moss' means the update waits for a Moss upgrade. 'Can't check for updates' appears after three days without reaching the update list, also with Retry. Retry checks again right away.",
+      "Shared CLI software is usable by separate Moss accounts; runner startup automatically repairs the older installation-directory permission defect using the pinned version, so users need no reinstall action. Only administrators can connect CLI providers. The line under each CLI provider's name shows the installed tool and its version, for example 'Claude CLI 2.1.282'. Installing Claude or Codex also installs the small chat helper that connects it to Moss chat; if that step fails the install reports an error naming the chat helper, the tool itself stays installed, and installing again retries the helper. Until the helper is installed, chat uses the copy that shipped with Moss. Moss checks every six hours for a newer signed version of Claude and Codex. A new Claude version goes live right away, first install and upgrade alike, and Moss then tests it in a throwaway chat in the background; if that test fails, admins get a notification and Claude stays on the new version. A new Codex version is tested in a throwaway chat before use. While that runs the card shows 'Updating to X'. If the Codex test fails the card shows 'Version X held back' (hover for the reason) with a Retry button, and admins get a notification. Claude never shows a held back version. 'Version X needs a newer Moss' means the update waits for a Moss upgrade. 'Can't check for updates' appears after three days without reaching the update list, also with Retry. Retry checks again right away.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },
@@ -588,8 +588,8 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     class: "prerequisite",
     remediationRef: "core.ai.retry_cli_update",
     description:
-      "A newer Claude or Codex version failed Moss's test chat, so Moss kept the current one. " +
-      "Nothing is broken."
+      "A newer Codex version failed Moss's test chat, so Moss kept the current one. " +
+      "Nothing is broken. Claude updates are never held back."
   },
   {
     code: "core.ai.cli_update_needs_newer_moss",
@@ -788,7 +788,8 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
     id: "core.ai.retry_cli_update",
     description:
       "Open Settings > AI providers and press Retry beside the provider's update notice. If it " +
-      "is held back again, it stays on the current version until a later release passes.",
+      "is held back again, it stays on the current version until a later release passes. " +
+      "This applies to Codex only.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },
