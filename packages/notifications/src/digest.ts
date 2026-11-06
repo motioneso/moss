@@ -116,8 +116,12 @@ export async function reconcileDigestSchedule(
   const key = digestScheduleKey(actorUserId);
   if (!preference.enabled) {
     await boss.unschedule(DIGEST_COMPOSE_QUEUE, key);
+    await boss.unschedule(DIGEST_COMPOSE_QUEUE, legacyDigestScheduleKey(actorUserId));
     return;
   }
+  // Drop any schedule stored under the old colon key before writing the new one.
+  // Unscheduling a key with no stored schedule is a no-op.
+  await boss.unschedule(DIGEST_COMPOSE_QUEUE, legacyDigestScheduleKey(actorUserId));
   const data = digestScheduleData(actorUserId);
   assertDigestPayload(data);
   await boss.schedule(
@@ -129,6 +133,14 @@ export async function reconcileDigestSchedule(
 }
 
 export function digestScheduleKey(actorUserId: string): string {
+  // pg-boss rejects a colon in a schedule key. It allows letters, digits,
+  // underscore, hyphen, period and slash only.
+  return `digest-${actorUserId}`;
+}
+
+// The key shape used before the dash fix. Schedules stored under it must still
+// be removed, or they would keep firing after the digest is switched off.
+function legacyDigestScheduleKey(actorUserId: string): string {
   return `digest:${actorUserId}`;
 }
 
