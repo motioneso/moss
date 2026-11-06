@@ -9,12 +9,17 @@ const KIND_BY_PROVIDER: Partial<Record<AiProviderKind, AcpProviderKind>> = {
   google: "google"
 };
 
+type ProbeConnection = Pick<RpcConnection, "assertReady"> &
+  Partial<Pick<RpcConnection, "probeProvider">>;
+
 /**
- * Cheap reachability only: the runner connection must be ready, and the
- * provider row must serve the no-tools profile. No model call runs here.
+ * Reachability with a typed reason. "model-unavailable" means no usable model for the
+ * profile, "runner-offline" means the runner connection is not ready, and "not-signed-in"
+ * means the runner reports the provider needs a login. A failed or slow sign-in lookup is
+ * ignored so a flaky check never stops summaries on its own.
  */
 export function createAcpNoToolsReadinessProbe(
-  getConnection: () => Pick<RpcConnection, "assertReady"> | undefined
+  getConnection: () => ProbeConnection | undefined
 ): (
   actorUserId: string,
   signal?: AbortSignal,
@@ -25,11 +30,23 @@ export function createAcpNoToolsReadinessProbe(
     if (!kind) return "model-unavailable";
     if (!getAcpProviderRow(kind).noToolsReady) return "model-unavailable";
     const connection = getConnection();
-    if (!connection) return "model-unavailable";
+    if (!connection) return "runner-offline";
     try {
       connection.assertReady();
     } catch {
-      return "model-unavailable";
+      return "runner-offline";
+    }
+    if (connection.probeProvider) {
+      try {
+        const result = await connection.probeProvider(
+          { provider: providerKind as "anthropic" | "openai-compatible" | "google" },
+          _actorUserId,
+          { timeoutMs: 5_000, signal: _signal }
+        );
+        if (result.status === "needs_login") return "not-signed-in";
+      } catch {
+        // Unknown sign-in state does not stop the run; the run itself reports real failures.
+      }
     }
     return "available";
   };
