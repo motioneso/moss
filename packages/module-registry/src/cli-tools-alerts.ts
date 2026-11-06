@@ -166,6 +166,17 @@ export function notifySummaryStopped(info: {
   summaryStoppedListener?.(info);
 }
 
+/** Turns a stopped-summary report into an admin alert. Used by the API and the worker process. */
+export function buildSummaryStoppedListener(
+  raiseAlert: (alert: CliToolAlert) => Promise<void>
+): (info: { readonly cause: "violation" | "unverifiable"; readonly property: string }) => void {
+  return (info) => {
+    void raiseAlert({ kind: "summary_stopped", provider: "anthropic", reason: info.cause }).catch(
+      () => undefined
+    );
+  };
+}
+
 /** What a chat turn refused for an old tool triggers: an alert, then an update pass right away. */
 export function buildCliVersionTooOldHandler(deps: {
   readonly raiseAlert: (alert: CliToolAlert) => Promise<void>;
