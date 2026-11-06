@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { resolveRealPaths } from "../../packages/cli-runner/src/acp-resolve-paths.js";
+import { execProgram, resolveRealPaths } from "../../packages/cli-runner/src/acp-resolve-paths.js";
 
 describe("resolveRealPaths (#3557)", () => {
   it("follows a link inside the session folder to where it really points", async () => {
@@ -90,5 +90,20 @@ describe("resolveRealPaths (#3557)", () => {
         throw new Error("boom");
       })
     ).rejects.toThrow("boom");
+  });
+
+  it("starts the lookup child with none of the runner's environment", async () => {
+    process.env.ACP_RESOLVE_TEST_SECRET = "runner-secret";
+    process.env.NODE_OPTIONS = "--no-warnings";
+    try {
+      const seen = await execProgram(process.execPath, [
+        "-e",
+        "process.stdout.write(JSON.stringify([Object.keys(process.env), process.cwd()]))"
+      ]);
+      expect(JSON.parse(seen)).toEqual([["PATH"], "/"]);
+    } finally {
+      delete process.env.ACP_RESOLVE_TEST_SECRET;
+      delete process.env.NODE_OPTIONS;
+    }
   });
 });

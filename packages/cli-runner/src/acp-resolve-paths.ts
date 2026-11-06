@@ -47,10 +47,23 @@ function walk(input) {
 process.stdout.write(process.argv.slice(1).map((p) => walk(p) + "\\0").join(""));
 `;
 
-const execProgram: RunProgram = (command, args) =>
+/**
+ * The lookup child gets only a fixed PATH (to find setpriv) and "/" as its folder. It runs
+ * as the session account, whose other processes can read its /proc entry, so
+ * it must not carry the runner's secrets or startup hooks.
+ */
+export const execProgram: RunProgram = (command, args) =>
   new Promise((done, fail) => {
-    execFile(command, [...args], { encoding: "utf8", timeout: 5000 }, (err, stdout) =>
-      err ? fail(err) : done(stdout)
+    execFile(
+      command,
+      [...args],
+      {
+        encoding: "utf8",
+        timeout: 5000,
+        env: { PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" },
+        cwd: "/"
+      },
+      (err, stdout) => (err ? fail(err) : done(stdout))
     );
   });
 
