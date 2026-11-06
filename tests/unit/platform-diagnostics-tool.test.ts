@@ -15,6 +15,9 @@ describe("settings.platformDiagnostics", () => {
     modules: [],
     errors: [],
     actions: [],
+    jobs: { recent: [], summaries: [], truncated: false },
+    connections: { items: [], truncated: false },
+    logs: { records: [], coverage: { oldestAt: null, newestAt: null }, truncated: false },
     source: null,
     redactions: ["runtime"]
   };
@@ -102,9 +105,126 @@ describe("settings.platformDiagnostics", () => {
         "modules",
         "errors",
         "actions",
+        "jobs",
+        "connections",
+        "logs",
         "source",
         "redactions"
       ]
+    });
+  });
+
+  it("accepts jobs and connections as sections and rejects an unknown one", async () => {
+    const observe = vi.fn().mockResolvedValue(report);
+    const ctx = { actorUserId: "user-1", requestId: "request-1" } as never;
+    await platformDiagnosticsExecute({} as never, { include: ["jobs", "connections"] }, ctx, {
+      platformDiagnostics: { observe }
+    });
+    expect(observe).toHaveBeenCalledWith({}, ctx, { include: ["jobs", "connections"] });
+    expect(platformDiagnosticsInputSchema.properties.include.items.enum).toEqual(
+      expect.arrayContaining(["jobs", "connections"])
+    );
+    await expect(
+      platformDiagnosticsExecute({} as never, { include: ["bogus"] }, ctx, {
+        platformDiagnostics: { observe }
+      })
+    ).rejects.toThrow("unsupported section");
+  });
+
+  it("keeps jobs and connections in the output and strips undeclared fields inside them", () => {
+    const sanitized = sanitizeAssistantToolResult(platformDiagnosticsOutputSchema, {
+      data: {
+        ...report,
+        jobs: {
+          recent: [
+            {
+              occurredAt: report.observedAt,
+              queue: "connectors.sync",
+              state: "failed",
+              retryCount: 1,
+              ownerKnown: true,
+              kind: "sync",
+              connectorAccountId: null,
+              errorLabel: "failed",
+              data: "must not cross the tool boundary"
+            }
+          ],
+          summaries: [],
+          truncated: false
+        }
+      }
+    });
+    expect(JSON.stringify(sanitized.data)).not.toContain("must not cross");
+    expect(sanitized.data.jobs).toMatchObject({ recent: [{ queue: "connectors.sync" }] });
+  });
+
+  describe("logs section", () => {
+    const ctx = { actorUserId: "user-1", requestId: "request-1" } as never;
+    const record = {
+      occurredAt: "2026-11-04T10:00:00.000Z",
+      process: "worker",
+      level: "warn",
+      component: "google-sync",
+      connectionKind: "google",
+      eventCode: "auth-failed",
+      ownerKnown: true,
+      owned: true,
+      message: "token fetch failed",
+      truncated: false
+    };
+
+    it("passes validated filters to the read service", async () => {
+      const observe = vi.fn().mockResolvedValue(report);
+      await platformDiagnosticsExecute(
+        {} as never,
+        {
+          include: ["logs"],
+          logs: { sinceMinutes: 30, minLevel: "error", component: " google-sync " }
+        },
+        ctx,
+        { platformDiagnostics: { observe } }
+      );
+      expect(observe).toHaveBeenCalledWith({}, ctx, {
+        include: ["logs"],
+        logs: { sinceMinutes: 30, minLevel: "error", component: "google-sync" }
+      });
+    });
+
+    it.each([
+      [{ sinceMinutes: 0 }],
+      [{ sinceMinutes: 1441 }],
+      [{ sinceMinutes: 1.5 }],
+      [{ minLevel: "info" }],
+      [{ component: "x".repeat(81) }],
+      [{ connectionKind: "x".repeat(41) }],
+      [{ isInstanceAdmin: true }]
+    ])("rejects bad log filters %j", async (logs) => {
+      const observe = vi.fn().mockResolvedValue(report);
+      await expect(
+        platformDiagnosticsExecute({} as never, { include: ["logs"], logs }, ctx, {
+          platformDiagnostics: { observe }
+        })
+      ).rejects.toThrow();
+      expect(observe).not.toHaveBeenCalled();
+    });
+
+    it("keeps logs through the real output filter and strips extra fields", () => {
+      const sanitized = sanitizeAssistantToolResult(platformDiagnosticsOutputSchema, {
+        data: {
+          ...report,
+          logs: {
+            records: [{ ...record, context: { secret: "SECRET-MARKER" }, ownerUserId: "u-2" }],
+            coverage: { oldestAt: record.occurredAt, newestAt: record.occurredAt },
+            truncated: false
+          }
+        }
+      });
+      const text = JSON.stringify(sanitized.data);
+      expect(text).not.toContain("SECRET-MARKER");
+      expect(text).not.toContain("u-2");
+      expect(sanitized.data.logs).toMatchObject({
+        records: [{ component: "google-sync", message: "token fetch failed" }]
+      });
     });
   });
 });

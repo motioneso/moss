@@ -25,7 +25,7 @@ import type { EmailReadProvider } from "./email-read-provider.js";
 import { ImapEmailReadProvider, IMAP_DEFAULT_FOLDER } from "./imap-email-read-provider.js";
 import { decryptImapConnectionSecret, type ImapConnectionSecret } from "./imap-secret.js";
 import { ConnectorsRepository, type ConnectorSyncTrigger } from "./repository.js";
-import { withSavepoint, type SyncLogger } from "./sync-jobs.js";
+import { bindSyncLoggerOwner, withSavepoint, type SyncLogger } from "./sync-jobs.js";
 
 export const IMAP_SYNC_QUEUE = "connectors.imap-sync";
 
@@ -149,7 +149,7 @@ export async function runImapSync(
     }
     secret = decryptImapConnectionSecret(deps.cipher, secretRow.encryptedSecret);
   } catch {
-    logger.warn({ actorScoped: true, stage: "auth" }, "imap-sync auth failed");
+    logger.warn({ stage: "auth" }, "imap-sync auth failed");
     await deps.repository.markSyncFinished(scopedDb, connectorAccountId, {
       finishedAt: now(),
       status: "failed",
@@ -240,7 +240,7 @@ export async function runImapSync(
   } catch (error) {
     if (isImapSignInRefused(error)) {
       // Never log the error object itself — it can carry the mailbox password.
-      logger.warn({ actorScoped: true, stage: "auth" }, "imap-sync sign-in refused");
+      logger.warn({ stage: "auth" }, "imap-sync sign-in refused");
       await deps.repository.markSyncFinished(scopedDb, connectorAccountId, {
         finishedAt: now(),
         status: "failed",
@@ -288,16 +288,19 @@ export async function registerImapSyncWorker(
     IMAP_SYNC_QUEUE,
     deps.dataContext,
     async (job, scopedDb) => {
+      const jobLogger = deps.logger
+        ? bindSyncLoggerOwner(deps.logger, job.data.actorUserId)
+        : undefined;
       const emailExtractDeps = buildEmailExtractDeps(scopedDb, aiRepo, aiCipher, {
         createCliStructuredAdapter: deps.createCliStructuredAdapter,
-        logger: deps.logger
+        logger: jobLogger
       });
 
       const result = await runImapSync(scopedDb, job.data.connectorAccountId, {
         repository,
         cipher,
         emailExtractDeps,
-        logger: deps.logger,
+        logger: jobLogger,
         trigger: job.data.trigger,
         actorUserId: job.data.actorUserId,
         threadJudgementRequester: deps.threadJudgementRequester,

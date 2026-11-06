@@ -49,6 +49,7 @@ function cookieHeader(headers: OutgoingHttpHeaders): string {
 }
 
 interface FakeRpc {
+  holdProbe?: () => Promise<void>;
   installResult: {
     state: "installed" | "error";
     version?: string;
@@ -74,9 +75,18 @@ function makeFakeConnection(state: FakeRpc): RpcConnection {
     probeProvider: async ({ provider, forceFresh }: { provider: string; forceFresh?: boolean }) => {
       state.probeCalls.push(provider);
       state.probeCallParams.push({ provider, forceFresh });
+      await state.holdProbe?.();
       return { status: state.probeStatus };
     }
   } as unknown as RpcConnection;
+}
+
+function deferred() {
+  let resolve = () => {};
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve: () => resolve() };
 }
 
 describe("Phase 2 onboarding — provider-install seam (REAL wiring)", () => {
@@ -178,6 +188,12 @@ describe("Phase 2 onboarding — provider-install seam (REAL wiring)", () => {
 
     server = Fastify({ logger: false });
     registerOnboardingRoutes(server, dependencies);
+    server.get("/pool-check", async () =>
+      dataContext.withDataContext(
+        { actorUserId: ownerUserId, requestId: "req-pool-check" },
+        (scopedDb) => repository.readOnboardingState(scopedDb)
+      )
+    );
     await server.ready();
   });
 
@@ -196,6 +212,69 @@ describe("Phase 2 onboarding — provider-install seam (REAL wiring)", () => {
       (scopedDb) => repository.readProviderInstallState(scopedDb, provider as never)
     );
   }
+
+  it.each(["ready", "installing"] as const)(
+    "#3442: serves another DB request while a %s row's runner probe is pending",
+    async (state) => {
+      await dataContext.withDataContext(
+        { actorUserId: ownerUserId, requestId: "req-seed-pool-check" },
+        (scopedDb) =>
+          repository.upsertProviderInstallState(scopedDb, { provider: "anthropic", state })
+      );
+      const started = deferred();
+      const release = deferred();
+      fake.holdProbe = async () => {
+        started.resolve();
+        await release.promise;
+      };
+      const status = server.inject({ method: "GET", url: "/api/onboarding/status" }).then((r) => r);
+      let poolCheck: Promise<{ statusCode: number }> | undefined;
+      try {
+        await started.promise;
+        poolCheck = server.inject({ method: "GET", url: "/pool-check" });
+        const servedWhileProbePending = await Promise.race([
+          poolCheck.then((response) => response.statusCode === 200),
+          new Promise<false>((resolve) => setTimeout(() => resolve(false), 1000))
+        ]);
+        expect(servedWhileProbePending).toBe(true);
+      } finally {
+        fake.holdProbe = undefined;
+        release.resolve();
+        await poolCheck;
+        expect((await status).statusCode).toBe(200);
+      }
+    }
+  );
+
+  it("keeps a newer install state written while the runner probe waited", async () => {
+    const context = { actorUserId: ownerUserId, requestId: "req-concurrent-install" };
+    await dataContext.withDataContext(context, (scopedDb) =>
+      repository.upsertProviderInstallState(scopedDb, { provider: "anthropic", state: "ready" })
+    );
+    const started = deferred();
+    const release = deferred();
+    fake.probeStatus = "needs_login";
+    fake.holdProbe = async () => {
+      started.resolve();
+      await release.promise;
+    };
+    const status = server.inject({ method: "GET", url: "/api/onboarding/status" }).then((r) => r);
+    try {
+      await started.promise;
+      await dataContext.withDataContext(context, (scopedDb) =>
+        repository.upsertProviderInstallState(scopedDb, {
+          provider: "anthropic",
+          state: "installing"
+        })
+      );
+    } finally {
+      fake.holdProbe = undefined;
+      release.resolve();
+      expect((await status).statusCode).toBe(200);
+      fake.probeStatus = "ready";
+    }
+    expect(await readPersisted("anthropic")).toMatchObject({ state: "installing" });
+  });
 
   it("triggers installProvider and persists a REAL installed row under admin RLS", async () => {
     fake.installResult = { state: "installed", version: "2.1.183" };

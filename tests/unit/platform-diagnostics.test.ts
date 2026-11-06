@@ -204,4 +204,267 @@ describe("platform diagnostics service", () => {
     expect(report.source).toBe(source);
     expect(search).toHaveBeenCalledWith({ query: "news", limit: 2 });
   });
+
+  describe("admin-only jobs and connections", () => {
+    const jobsSection = {
+      recent: [
+        {
+          occurredAt: "2026-08-27T10:00:00.000Z",
+          queue: "connectors.sync",
+          state: "failed",
+          retryCount: 2,
+          ownerKnown: true,
+          kind: "sync",
+          connectorAccountId: null,
+          errorLabel: "failed"
+        }
+      ],
+      summaries: [],
+      truncated: false
+    };
+    const connectionsSection = {
+      items: [
+        {
+          provider: "google",
+          accountId: "acct-1",
+          status: "error",
+          lastAttemptAt: "2026-08-27T10:00:00.000Z",
+          lastGoodAt: null,
+          failureCount: 1,
+          errorLabel: "sync-failed"
+        }
+      ],
+      truncated: false
+    };
+
+    function build(options: {
+      isInstanceAdmin: () => Promise<boolean>;
+      readJobs?: ReturnType<typeof vi.fn>;
+      readConnections?: ReturnType<typeof vi.fn>;
+    }) {
+      return createPlatformDiagnosticsService({
+        appMap: { getBuildInfo: () => ({ version: "1.2.3", buildId: "build-1" }) },
+        repository: {
+          listRecentErrors: vi.fn().mockResolvedValue([]),
+          listActionAuditLog: vi.fn().mockResolvedValue([])
+        },
+        moduleProviders: async () => [],
+        runInContext: async (work) => work({}),
+        isInstanceAdmin: options.isInstanceAdmin,
+        assertDiagnosticsSafe: vi.fn(),
+        readJobs: options.readJobs as never,
+        readConnections: options.readConnections as never
+      });
+    }
+
+    const ctx = { actorUserId: "user-a", requestId: "req-1" };
+    const both = { include: ["jobs", "connections"] as const };
+
+    it("returns empty sections and redactions to a non-admin without reading", async () => {
+      const readJobs = vi.fn().mockResolvedValue(jobsSection);
+      const readConnections = vi.fn().mockResolvedValue(connectionsSection);
+      const service = build({
+        isInstanceAdmin: async () => false,
+        readJobs,
+        readConnections
+      });
+      const report = await service.observe(scopedDb, ctx, both);
+      expect(report.redactions).toEqual(["jobs", "connections"]);
+      expect(report.jobs).toEqual({ recent: [], summaries: [], truncated: false });
+      expect(report.connections).toEqual({ items: [], truncated: false });
+      expect(readJobs).not.toHaveBeenCalled();
+      expect(readConnections).not.toHaveBeenCalled();
+    });
+
+    it("gives an admin both sections and passes the actor and a 24 hour window", async () => {
+      const readJobs = vi.fn().mockResolvedValue(jobsSection);
+      const readConnections = vi.fn().mockResolvedValue(connectionsSection);
+      const service = build({ isInstanceAdmin: async () => true, readJobs, readConnections });
+      const report = await service.observe(scopedDb, ctx, both);
+      expect(report.jobs).toEqual(jobsSection);
+      expect(report.connections).toEqual(connectionsSection);
+      expect(report.redactions).toEqual([]);
+      expect(readJobs).toHaveBeenCalledWith(
+        scopedDb,
+        ctx,
+        expect.objectContaining({ limit: 10, since: expect.any(Date) })
+      );
+    });
+
+    describe("logs", () => {
+      const logsSection = {
+        records: [],
+        coverage: { oldestAt: null, newestAt: null },
+        truncated: false
+      };
+      const withLogs = (readLogs?: ReturnType<typeof vi.fn>, admin = true) =>
+        createPlatformDiagnosticsService({
+          appMap: { getBuildInfo: () => ({ version: "1.2.3", buildId: "build-1" }) },
+          repository: {
+            listRecentErrors: vi.fn().mockResolvedValue([]),
+            listActionAuditLog: vi.fn().mockResolvedValue([])
+          },
+          moduleProviders: async () => [],
+          runInContext: async (work) => work({}),
+          isInstanceAdmin: async () => admin,
+          assertDiagnosticsSafe: vi.fn(),
+          readLogs: readLogs as never
+        });
+
+      it("redacts logs for a non-admin without reading", async () => {
+        const readLogs = vi.fn().mockResolvedValue(logsSection);
+        const report = await withLogs(readLogs, false).observe(scopedDb, ctx, {
+          include: ["logs"]
+        });
+        expect(report.redactions).toEqual(["logs"]);
+        expect(readLogs).not.toHaveBeenCalled();
+      });
+
+      it("redacts logs for an admin when no reader is wired", async () => {
+        const report = await withLogs(undefined).observe(scopedDb, ctx, { include: ["logs"] });
+        expect(report.redactions).toEqual(["logs"]);
+      });
+
+      it("passes filters with defaults and caps the list", async () => {
+        const record = (n: number) => ({
+          occurredAt: "2026-11-04T10:00:00.000Z",
+          process: "api" as const,
+          level: "warn" as const,
+          component: `c${n}`,
+          connectionKind: null,
+          eventCode: null,
+          ownerKnown: false,
+          owned: false,
+          message: null,
+          truncated: false
+        });
+        const readLogs = vi.fn().mockResolvedValue({
+          ...logsSection,
+          records: Array.from({ length: 30 }, (_, n) => record(n))
+        });
+        const report = await withLogs(readLogs).observe(scopedDb, ctx, {
+          include: ["logs"],
+          logs: { component: "oauth" }
+        });
+        expect(readLogs).toHaveBeenCalledWith(
+          scopedDb,
+          ctx,
+          expect.objectContaining({ minLevel: "warn", component: "oauth", limit: 10 })
+        );
+        const since = readLogs.mock.calls[0]![2].since as Date;
+        expect(Date.now() - since.getTime()).toBeGreaterThan(59 * 60 * 1000);
+        expect(Date.now() - since.getTime()).toBeLessThan(61 * 60 * 1000);
+        expect(report.logs.records).toHaveLength(10);
+        expect(report.logs.truncated).toBe(true);
+      });
+    });
+
+    it("leaves the sections out unless asked, so default calls are unchanged", async () => {
+      const readJobs = vi.fn();
+      const service = build({ isInstanceAdmin: async () => true, readJobs });
+      const report = await service.observe(scopedDb, ctx);
+      expect(readJobs).not.toHaveBeenCalled();
+      expect(report.jobs.recent).toEqual([]);
+      expect(report.redactions).not.toContain("jobs");
+    });
+
+    it("redacts a section whose reader is not wired", async () => {
+      const service = build({ isInstanceAdmin: async () => true });
+      const report = await service.observe(scopedDb, ctx, both);
+      expect(report.redactions).toEqual(["jobs", "connections"]);
+    });
+
+    it("checks admin status live on every call, so a demotion takes effect", async () => {
+      const isInstanceAdmin = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+      const readJobs = vi.fn().mockResolvedValue(jobsSection);
+      const service = build({ isInstanceAdmin, readJobs });
+      const first = await service.observe(scopedDb, ctx, { include: ["jobs"] });
+      const second = await service.observe(scopedDb, ctx, { include: ["jobs"] });
+      expect(first.jobs.recent).toHaveLength(1);
+      expect(second.jobs.recent).toEqual([]);
+      expect(second.redactions).toEqual(["jobs"]);
+      expect(isInstanceAdmin).toHaveBeenCalledTimes(2);
+      expect(readJobs).toHaveBeenCalledTimes(1);
+    });
+
+    it("refuses a missing identity before any read", async () => {
+      const readJobs = vi.fn();
+      const isInstanceAdmin = vi.fn().mockResolvedValue(true);
+      const service = build({ isInstanceAdmin, readJobs });
+      await expect(
+        service.observe(scopedDb, { actorUserId: "", requestId: "r" }, both)
+      ).rejects.toThrow("actor");
+      expect(readJobs).not.toHaveBeenCalled();
+      expect(isInstanceAdmin).not.toHaveBeenCalled();
+    });
+
+    it("removes items by byte size when a section is within the row limit but over 16 KB", async () => {
+      const wide = "\u65e5".repeat(120);
+      const recent = Array.from({ length: 10 }, (_, i) => ({
+        ...jobsSection.recent[0]!,
+        queue: `${i}${wide}`,
+        kind: wide,
+        connectorAccountId: wide,
+        errorLabel: wide
+      }));
+      const summaries = Array.from({ length: 10 }, (_, i) => ({
+        queue: `${i}${wide}`,
+        lastSuccessAt: null,
+        lastFailureAt: null,
+        failedLast24h: 1,
+        stuckCount: 0,
+        activeCount: 0
+      }));
+      const raw = { recent, summaries, truncated: false };
+      expect(Buffer.byteLength(JSON.stringify(raw), "utf8")).toBeGreaterThan(16 * 1024);
+      const service = build({
+        isInstanceAdmin: async () => true,
+        readJobs: vi.fn().mockResolvedValue(raw),
+        readConnections: vi.fn().mockResolvedValue(connectionsSection)
+      });
+      const report = await service.observe(scopedDb, ctx, both);
+      expect(Buffer.byteLength(JSON.stringify(report.jobs), "utf8")).toBeLessThanOrEqual(16 * 1024);
+      expect(report.jobs.truncated).toBe(true);
+      expect(report.jobs.recent.length + report.jobs.summaries.length).toBeLessThan(20);
+      expect(report.jobs.recent.length).toBeGreaterThan(0);
+    });
+
+    it("drops items from the end of an oversized section and flags it", async () => {
+      const big = Array.from({ length: 10 }, (_, i) => ({
+        ...jobsSection.recent[0]!,
+        queue: `queue-${i}-${"x".repeat(100)}`,
+        kind: "k".repeat(120),
+        connectorAccountId: "c".repeat(120),
+        errorLabel: "e".repeat(120)
+      }));
+      const summaries = Array.from({ length: 10 }, (_, i) => ({
+        queue: `q${i}-${"y".repeat(100)}`,
+        lastSuccessAt: null,
+        lastFailureAt: null,
+        failedLast24h: 1,
+        stuckCount: 0,
+        activeCount: 0
+      }));
+      const items = Array.from({ length: 10 }, (_, i) => ({
+        ...connectionsSection.items[0]!,
+        provider: "p".repeat(120),
+        accountId: `${i}-${"a".repeat(120)}`
+      }));
+      const service = build({
+        isInstanceAdmin: async () => true,
+        readJobs: vi.fn().mockResolvedValue({
+          recent: big.concat(big),
+          summaries: summaries.concat(summaries),
+          truncated: false
+        }),
+        readConnections: vi.fn().mockResolvedValue({ items, truncated: false })
+      });
+      const report = await service.observe(scopedDb, ctx, both);
+      expect(report.jobs.truncated).toBe(true);
+      expect(report.jobs.recent.length).toBeLessThanOrEqual(10);
+      expect(JSON.stringify(report.jobs).length).toBeLessThanOrEqual(16 * 1024);
+      expect(JSON.stringify(report.connections).length).toBeLessThanOrEqual(16 * 1024);
+      expect(report.jobs.recent[0]?.queue).toBe(big[0]!.queue);
+    });
+  });
 });

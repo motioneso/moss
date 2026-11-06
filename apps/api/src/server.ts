@@ -2,7 +2,7 @@ import {
   createMeetingCaptureMaintenanceRuntime,
   type MeetingCaptureMaintenanceRuntime
 } from "./meeting-capture-maintenance-runtime.js";
-import { recordingLoggerOptions } from "./recording-logger-options.js";
+import { createApiLogSink, recordingLoggerOptions } from "./recording-logger-options.js";
 import { createRingRecordingResolver } from "./ring-recording-auth.js";
 import { createHash, randomUUID } from "node:crypto";
 
@@ -74,6 +74,7 @@ import {
 } from "@moss/module-registry";
 import { parsePositiveIntEnv, type HostDiagnosticsInfo } from "@moss/shared";
 import { createModuleLogger, CORE_VERSION } from "@moss/module-sdk";
+import { createOwnerAwareErrorLogger } from "./owner-aware-logger.js";
 import { actAsRateLimitKey, installActAsActorLookup } from "@moss/module-sdk/server";
 // #917: /api/modules reads enablement through the public settings API; this is legitimate
 // composition-root wiring, not a module cross-import.
@@ -89,7 +90,7 @@ import { focusService, type FocusGenerate } from "./focus-service.js";
 import { resolveApiE2eFetchOverride } from "./e2e-fetch-override.js";
 import { createModuleAiBridge } from "./external-module-ai-bridge.js";
 import { createModuleDistributionPort } from "./module-distribution-port.js";
-import { createCrashHandler, shutdownOnSignal } from "./process-lifecycle.js";
+import { createCrashHandler, runApiStartup, shutdownOnSignal } from "./process-lifecycle.js";
 import { resolveHerdrInstall } from "./herdr-install-port.js";
 import { mapEnvMode, resolveDeployMode, restartCommandFor } from "./host-diagnostics-env.js";
 import type { HerdrInstallDependencies } from "@moss/settings";
@@ -258,6 +259,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       maxConnections: Number(resolveMossEnv(process.env, "JARVIS_API_WORKER_DB_POOL_SIZE") ?? 2)
     });
   const ownsWorkerDb = options.workerDb === undefined;
+  const logSink = createApiLogSink(options.logger, workerDb);
   const workerDataContext = new DataContextRunner(workerDb);
   let externalWorkerRuntime: ExternalModuleWorkerRuntime | undefined;
   let companionDelivery: CompanionDeliveryRuntime | undefined;
@@ -265,7 +267,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
   const dataContext = new DataContextRunner(appDb);
   const aiRepository = new AiRepository();
   const server = Fastify({
-    logger: recordingLoggerOptions(options.logger),
+    logger: recordingLoggerOptions(options.logger, { sink: logSink }),
     // Honor XFF only when an explicit opt-in confirms a trusted reverse proxy is in
     // front. Without this, XFF is attacker-controlled and must not key the rate limiter.
     trustProxy
@@ -551,22 +553,16 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     // Logger adapters wire server.log into the connectors package's minimal logger
     // interfaces (observability spec: no console.* in production — the clients' noop
     // defaults must be overridden at the composition root).
-    const connectorsModuleLogger = createModuleLogger(server.log, "connectors");
+    const connectorClientLogger = createOwnerAwareErrorLogger(
+      createModuleLogger(server.log, "connectors")
+    );
     const connectorsRepository = new ConnectorsRepository();
     const googleConnectionService = new GoogleConnectionService({
       repository: connectorsRepository,
       cipher: createConnectorSecretCipher(),
-      oauthClient: new GoogleOAuthClient({
-        logger: {
-          error: (data, msg) => connectorsModuleLogger.error(data, msg)
-        }
-      })
+      oauthClient: new GoogleOAuthClient({ logger: connectorClientLogger })
     });
-    const googleApiClient = new GoogleApiClient({
-      logger: {
-        error: (data, msg) => connectorsModuleLogger.error(data, msg)
-      }
-    });
+    const googleApiClient = new GoogleApiClient({ logger: connectorClientLogger });
 
     // Host diagnostics (#255): a read-only, secret-safe runtime-facts provider injected
     // into the settings admin route. info() returns only explicit, non-secret config
@@ -843,8 +839,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
   });
 
   server.addHook("onReady", async () => {
-    // Only the composition root starts its own producer. Injected queue clients retain
-    // their caller-owned lifecycle; maintenance borrows send and owns its consumer.
+    // Only the composition root starts its own producer; injected clients keep their lifecycle.
     if (ownsBoss) await boss.start();
     await captureMaintenance.start();
     await companionDelivery?.start();
@@ -852,6 +847,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
 
   server.addHook("onClose", async () => {
     await externalWorkerRuntime?.close();
+    await logSink?.close();
     await Promise.allSettled([
       ownsBoss ? boss.stop({ graceful: false }) : Promise.resolve(),
       ownsAuthRuntime ? authRuntime.close() : Promise.resolve(),
@@ -864,30 +860,29 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const apiServerConfig = resolveApiServerConfig();
-  // TEST-ONLY e2e fixture bypass (absent without the UAT env): host-scoped to the
-  // briefing sources, everything else keeps global fetch.
-  const server = createApiServer({ apiServerConfig, ...resolveApiE2eFetchOverride() });
-  const port = apiServerConfig.port;
-  const host = apiServerConfig.host;
+  await runApiStartup(async () => {
+    const apiServerConfig = resolveApiServerConfig();
+    // TEST-ONLY e2e fixture bypass (absent without the UAT env): host-scoped to the
+    // briefing sources, everything else keeps global fetch.
+    const server = createApiServer({ apiServerConfig, ...resolveApiE2eFetchOverride() });
+    const port = apiServerConfig.port;
+    const host = apiServerConfig.host;
 
-  const handleCrash = createCrashHandler(server);
+    const handleCrash = createCrashHandler(server);
 
-  process.on("unhandledRejection", (reason) => {
-    handleCrash("unhandledRejection", reason);
-  });
-  process.on("uncaughtException", (err: Error) => {
-    handleCrash("uncaughtException", err);
-  });
+    process.on("unhandledRejection", (reason) => {
+      handleCrash("unhandledRejection", reason);
+    });
+    process.on("uncaughtException", (err: Error) => {
+      handleCrash("uncaughtException", err);
+    });
 
-  process.once("SIGTERM", () => {
-    void shutdownOnSignal(server);
-  });
-  process.once("SIGINT", () => {
-    void shutdownOnSignal(server);
-  });
+    for (const signal of ["SIGTERM", "SIGINT"] as const) {
+      process.once(signal, () => void shutdownOnSignal(server));
+    }
 
-  await server.listen({ host, port });
+    await server.listen({ host, port });
+  });
 }
 
 // Credential POST paths that must be throttled.

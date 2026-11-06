@@ -58,7 +58,10 @@ import {
   summarizeNewsRefresh
 } from "./chat-tools.js";
 import { collectNewsExportSection } from "./data-lifecycle.js";
-import { createNewsDiagnosticsProvider } from "./diagnostics-provider.js";
+import {
+  createNewsDiagnosticsProvider,
+  createNewsProvenanceDiagnosticsProvider
+} from "./diagnostics-provider.js";
 import type { NEWS_MODULE_ID } from "./module-id.js";
 import { NEWS_FETCH_HOSTS, NEWS_IMAGE_HOSTS } from "./source/catalog.js";
 
@@ -87,6 +90,7 @@ export const newsModuleManifest = {
   publisher: "Moss",
   lifecycle: "user-toggleable",
   diagnosticsProvider: createNewsDiagnosticsProvider(),
+  additionalDiagnosticsProviders: [createNewsProvenanceDiagnosticsProvider()],
   compatibility: {
     jarv1s: ">=0.0.0"
   },
@@ -577,6 +581,11 @@ export const newsModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "news.provenance_diagnostics",
+      description:
+        "Moss explains why stories are in your feed from counts only: built-in versus added sources, topic matches, followed topics and excluded sources. No headlines, and nothing about one single story."
+    },
     {
       id: "news.heartbeat_source",
       description:

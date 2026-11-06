@@ -49,6 +49,7 @@ export {
   type ModuleDiagnosticProvider,
   type RegisteredModuleDiagnosticProvider
 } from "./diagnostics.js";
+export * from "./platform-diagnostics-types.js";
 export * from "./module-params.js";
 export * from "./route-chat.js";
 export * from "./action-presentation.js";
@@ -803,6 +804,11 @@ export interface MossModuleManifest {
    * which is why "diagnosticsProvider" is in the external validator's FORBIDDEN_FIELDS.
    */
   readonly diagnosticsProvider?: ModuleDiagnosticProvider;
+  /**
+   * More diagnostic views for the same module, for when one provider's fact cap
+   * (MODULE_DIAGNOSTIC_LIMITS.maxFactKeys) is too small. Built-in modules only, same as above.
+   */
+  readonly additionalDiagnosticsProviders?: readonly ModuleDiagnosticProvider[];
   readonly proactiveMonitor?: ProactiveMonitorProvider;
   readonly personContextProvider?: PersonContextProvider;
   readonly dataLifecycle?: ModuleDataLifecycleManifest;

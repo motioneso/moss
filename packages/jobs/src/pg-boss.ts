@@ -8,6 +8,7 @@ import {
   type WorkOptions
 } from "pg-boss";
 import { sql, type Kysely } from "kysely";
+import { sanitizeLogText } from "@moss/shared/log-sanitizer";
 
 export type { Job, PgBoss };
 
@@ -260,15 +261,16 @@ export interface PgBossClientHooks {
   readonly onError?: (error: Error) => void;
 }
 
-function defaultOnPgBossError(error: Error): void {
-  // Single-line structured JSON for log scrapers. We deliberately serialise only name+message,
-  // never the raw error object — some driver errors carry the connection string.
+export function defaultOnPgBossError(error: Error): void {
+  // Single-line structured JSON for log scrapers. We serialise only name+message, never the raw
+  // error object, and mask the text because some driver errors carry the connection string.
+  // log-safe: name and message pass through sanitizeLogText inside the JSON object
   process.stderr.write(
     `${JSON.stringify({
       level: "error",
       event: "pgboss.internal_error",
-      name: error.name,
-      message: error.message
+      name: sanitizeLogText(error.name),
+      message: sanitizeLogText(error.message)
     })}\n`
   );
 }
@@ -305,7 +307,7 @@ export function createPgBossClient(
 
   const onError = hooks.onError ?? defaultOnPgBossError;
   boss.on("error", (error: unknown) => {
-    onError(error instanceof Error ? error : new Error(String(error)));
+    onError(error instanceof Error ? error : new Error(sanitizeLogText(String(error))));
   });
 
   return boss;
@@ -341,6 +343,7 @@ export async function migratePgBoss(
         // policy column matches. The only way to flip policy is to drop and recreate
         // the queue. Safe in this pre-prod project where queued jobs are ephemeral;
         // logged so the one-time drop of any in-flight jobs is visible.
+        // log-safe: queue names and policy names only
         process.stderr.write(
           `${JSON.stringify({
             level: "warn",

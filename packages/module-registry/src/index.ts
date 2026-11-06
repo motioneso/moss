@@ -243,6 +243,7 @@ import {
   registerSourceMonitorWorkers,
   sharesSubjectToken,
   parseEmailSourceRef,
+  readConnectionDiagnostics,
   type ActionRowRelevancePort,
   type EmailTaskCreationPort,
   type GoogleApiClient,
@@ -282,6 +283,7 @@ import {
   assertMetadataOnlyPayload,
   createPushQueuePort,
   FOUNDATION_QUEUES,
+  readJobDiagnostics,
   registerDataContextWorker,
   sendJob,
   MODULE_BUILD_QUEUE,
@@ -368,7 +370,8 @@ import {
   updateModuleBuildStatus,
   INTEGRATIONS_FAMILY,
   loadFamilyKeyring,
-  resolveAlertsQuietPolicy
+  resolveAlertsQuietPolicy,
+  readDiagnosticLogs
 } from "@moss/settings";
 import {
   TASKS_QUEUE_DEFINITIONS,
@@ -457,6 +460,7 @@ import {
   newsModuleSqlMigrationDirectory,
   registerNewsJobWorkers,
   registerNewsRoutes,
+  setNewsDiagnosticsStoryFeedback,
   NewsCredentialRepository,
   createNewsCredentialedSourceReader,
   NEWSAPI_CONNECTION_ID,
@@ -2914,6 +2918,12 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         deps.fetchFn
       );
       const previewOverride = buildUatNewsPreviewOverride();
+      const newsStoryFeedback = buildNewsStoryFeedbackPort(
+        discovery.ai,
+        createModuleLogger(server.log, "news")
+      );
+      // The provenance diagnostics apply the same "less like this" dismissals as the feed.
+      setNewsDiagnosticsStoryFeedback(newsStoryFeedback);
       registerNewsRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
@@ -2923,10 +2933,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         previewOverride,
         // #2018: the overview records the stories it showed, so the feedback API can accept a
         // preference on one. Nothing else writes those rows.
-        storyFeedback: buildNewsStoryFeedbackPort(
-          discovery.ai,
-          createModuleLogger(server.log, "news")
-        ),
+        storyFeedback: newsStoryFeedback,
         // #2005/#2322: the composition root owns key resolution; News only
         // holds a per-use resolver, never key material.
         resolveCredentialCipher: (scopedDb) => resolveNewsCredentialCipherPort(scopedDb),
@@ -3645,9 +3652,9 @@ export function moduleDiagnosticProvidersFor(
   manifests: readonly MossModuleManifest[]
 ): RegisteredModuleDiagnosticProvider[] {
   return manifests.flatMap((manifest) =>
-    manifest.diagnosticsProvider
-      ? [{ moduleId: manifest.id, provider: manifest.diagnosticsProvider }]
-      : []
+    [manifest.diagnosticsProvider, ...(manifest.additionalDiagnosticsProviders ?? [])]
+      .filter((provider) => provider !== undefined)
+      .map((provider) => ({ moduleId: manifest.id, provider }))
   );
 }
 
@@ -3951,6 +3958,15 @@ export function registerBuiltInApiRoutes(
       return user?.is_instance_admin === true;
     },
     assertDiagnosticsSafe,
+    readJobs: (scopedDb, ctx, opts) =>
+      readJobDiagnostics(scopedDb.db, {
+        actorUserId: ctx.actorUserId,
+        limit: opts.limit,
+        queuePrefix: opts.queuePrefix,
+        since: opts.since
+      }),
+    readConnections: (scopedDb, _ctx, opts) => readConnectionDiagnostics(scopedDb, opts),
+    readLogs: (scopedDb, _ctx, opts) => readDiagnosticLogs(scopedDb, opts),
     onProviderError: (moduleId, errorName) =>
       server.log.warn({ moduleId, errorName }, "module diagnostics provider was dropped")
   });

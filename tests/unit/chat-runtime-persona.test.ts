@@ -142,6 +142,20 @@ describe("MOSS_PERSONA_TOOL_GUIDANCE", () => {
     expect(MOSS_PERSONA_TOOL_GUIDANCE).toContain("wrong-tool choice");
   });
 
+  // #3978: "why is X broken" questions must reach the diagnostics tool, which the model does not
+  // find on its own. The added guidance stays small.
+  it("points why-is-it-broken questions at settings.platformDiagnostics within the word cap", () => {
+    const sentence = MOSS_PERSONA_TOOL_GUIDANCE.split("\n").find((line) =>
+      line.includes("settings.platformDiagnostics")
+    );
+    expect(sentence).toBeDefined();
+    expect(sentence).toContain("jobs");
+    expect(sentence).toContain("connections");
+    expect(sentence).toContain("news story");
+    expect(sentence).toContain("modules section for news");
+    expect(sentence!.split(/\s+/).length).toBeLessThan(75);
+  });
+
   // #2280 live proof: the drawer launches the CLI without its own search tool, so the model
   // guessed at a built-in "Web Search" tool, got "No such tool", and reached web.search last
   // with a poor query. The persona must name web.search as the only way to search the web.

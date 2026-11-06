@@ -3,7 +3,12 @@ import { homedir } from "node:os";
 import type { ConstructorOptions, PgBoss } from "pg-boss";
 import { pino, type Logger as PinoLogger } from "pino";
 import type { FastifyBaseLogger } from "fastify";
-import { sql } from "kysely";
+import { sql, type Kysely } from "kysely";
+import {
+  sanitizeLogText,
+  createSanitizingFormatters,
+  writeSanitizedFatal
+} from "@moss/shared/log-sanitizer";
 
 import {
   DataContextRunner,
@@ -11,7 +16,8 @@ import {
   getMossDatabaseUrls,
   readScopedActorUserId,
   resolveMossEnv,
-  type AccessContext
+  type AccessContext,
+  type MossDatabase
 } from "@moss/db";
 import { RlsProbeRepository } from "@moss/db/probes";
 import {
@@ -76,7 +82,11 @@ import {
   touchModuleBuildActivity,
   updateModuleBuildStatus,
   appendModuleBuildFetchedUrl,
-  appendModuleBuildWrittenFile
+  appendModuleBuildWrittenFile,
+  createDiagnosticLogDestination,
+  createFatalLineWriter,
+  createDiagnosticLogSink,
+  type DiagnosticLogSink
 } from "@moss/settings";
 import { getVaultBaseDir, VaultContextRunner } from "@moss/vault";
 
@@ -133,12 +143,64 @@ export const WORKER_BOSS_OPTIONS: Partial<ConstructorOptions> = {
  * worker binary.
  */
 export function logScheduleMode(): void {
+  // log-safe: constant event line
   console.log(JSON.stringify({ event: "pgboss.schedule_mode", schedule: true }));
 }
 
 export interface WorkerHandle {
   readonly boss: PgBoss;
   shutdown(): Promise<void>;
+}
+
+let currentSink: DiagnosticLogSink | null = null;
+
+/** Fatal lines go to stderr and, when a sink exists, to the log table. */
+function fatalWriter(
+  eventCode: "crash" | "startup-failed" | "shutdown-failed",
+  log: ((line: string) => void) | undefined,
+  sink: SinkSource = () => currentSink
+): (line: string) => void {
+  return createFatalLineWriter({ process: "worker", eventCode, sink: sink(), stderr: log });
+}
+
+type SinkSource = () => DiagnosticLogSink | null;
+
+/** Bounded drain of the log table writer before the process exits. */
+async function drainSink(sink: SinkSource = () => currentSink): Promise<void> {
+  try {
+    await sink()?.close();
+  } catch {
+    // Draining is best effort and bounded.
+  }
+}
+
+const STARTUP_CLEANUP_TIMEOUT_MS = 5000;
+
+/** Resolves when the work settles or the deadline passes, whichever comes first. Never rejects. */
+async function withDeadline(work: Promise<unknown>, ms: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, ms);
+  });
+  try {
+    await Promise.race([work.catch(() => {}), deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Last shutdown step. Queued records are written, then the pool is destroyed, and only then
+ * is the sink closed. A destroy failure therefore rejects while the sink still accepts the
+ * shutdown-failed record, which the shutdown handler drains.
+ */
+export async function finishShutdown(
+  logSink: Pick<DiagnosticLogSink, "flush" | "close">,
+  workerDb: { destroy(): Promise<void> }
+): Promise<void> {
+  await logSink.flush();
+  await workerDb.destroy();
+  await logSink.close();
 }
 
 export function resolveExternalWorkerConfig(env: NodeJS.ProcessEnv = process.env): {
@@ -186,6 +248,28 @@ export function buildModuleBuildNotification(
 }
 
 /**
+ * The worker's logger. Every line is sanitized, then written to stdout, and warn-and-above
+ * lines are also queued for the log table through the worker-role handle (insert-only).
+ */
+export function createWorkerLogging(workerDb: Kysely<MossDatabase>): {
+  logger: PinoLogger;
+  sink: DiagnosticLogSink;
+} {
+  const sink = createDiagnosticLogSink({ db: workerDb, process: "worker" });
+  currentSink = sink;
+  const logger: PinoLogger = pino(
+    {
+      level: process.env.LOG_LEVEL ?? "info",
+      base: { process: "worker" },
+      formatters: createSanitizingFormatters()
+    },
+    // log-safe: the sanitizing destination wraps the raw stream
+    createDiagnosticLogDestination({ process: "worker", target: process.stdout, sink })
+  );
+  return { logger, sink };
+}
+
+/**
  * Build and wire the worker.
  *
  * Extracted from the module-level bootstrap so the lifecycle (boss.start →
@@ -195,7 +279,11 @@ export function buildModuleBuildNotification(
  * Exported for tests; the module-level IIFE below is the production entry point
  * and keeps the same observable behaviour.
  */
-export async function buildWorker(deps?: { connectionString?: string }): Promise<WorkerHandle> {
+export async function buildWorker(deps?: {
+  connectionString?: string;
+  /** Upper bound on cleaning up after a failed startup. */
+  startupCleanupTimeoutMs?: number;
+}): Promise<WorkerHandle> {
   const urls = getMossDatabaseUrls();
   const connectionString = deps?.connectionString ?? urls.worker;
 
@@ -203,16 +291,12 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   // each module's worker registration so no `console.*` lands in production
   // worker logs; module-tagged children are created by the registry. Level honors
   // LOG_LEVEL (pino default is "info"). Suppressed in unit tests via LOG_LEVEL.
-  const workerLogger: PinoLogger = pino({
-    level: process.env.LOG_LEVEL ?? "info",
-    base: { process: "worker" }
-  });
-
   const meetingSummaryCli = createWorkerMeetingSummaryCli();
   const workerDb = createDatabase({
     connectionString,
     maxConnections: Number(resolveMossEnv(process.env, "JARVIS_WORKER_DB_POOL_SIZE") ?? 4)
   });
+  const { logger: workerLogger, sink: logSink } = createWorkerLogging(workerDb);
   const dataContext = new DataContextRunner(workerDb);
   const repository = new RlsProbeRepository();
   // The worker is the SOLE pg-boss cron + supervisor owner (F14, #650): enable
@@ -247,12 +331,33 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   }
   if (missingQueues.length > 0) {
     await boss.stop({ graceful: false });
-    await workerDb.destroy();
-    throw new Error(
+    const startupError = new Error(
       `Worker startup failed — the following pg-boss queues do not exist: ` +
         `${missingQueues.join(", ")}. ` +
         `Run \`pnpm db:migrate\` to create them before starting the worker.`
     );
+    // The record must reach the table while the pool is still open. The entrypoint writes
+    // the stderr line, so this copy is table-only.
+    writeSanitizedFatal(
+      "startup",
+      startupError,
+      createFatalLineWriter({
+        process: "worker",
+        eventCode: "startup-failed",
+        sink: logSink,
+        stderr: () => {}
+      }),
+      "Worker startup failed"
+    );
+    // Neither step can cancel an outstanding query, so the whole cleanup has a hard deadline.
+    await withDeadline(
+      (async () => {
+        await logSink.close();
+        await workerDb.destroy();
+      })(),
+      deps?.startupCleanupTimeoutMs ?? STARTUP_CLEANUP_TIMEOUT_MS
+    );
+    throw startupError;
   }
 
   const moduleBuildsDir = resolveModuleBuildsDir(process.env);
@@ -610,7 +715,10 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   // against, so it must outlive the drain (pg-boss owns a separate connection).
   // -------------------------------------------------------------------------
   const captureSupervision = startMeetingCaptureSupervision(boss, (error) => {
-    workerLogger.warn({ event: "capture_maintenance.supervision", message: error.message });
+    workerLogger.warn({
+      event: "capture_maintenance.supervision",
+      message: sanitizeLogText(error.message)
+    });
   });
   async function shutdown(): Promise<void> {
     const supervisionClosed = captureSupervision.close();
@@ -623,7 +731,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
       })
     ]);
     meetingSummaryCli.close();
-    await workerDb.destroy();
+    await finishShutdown(logSink, workerDb);
   }
 
   return { boss, shutdown };
@@ -659,46 +767,113 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
  */
 export function createCrashHandler(
   handle: { shutdown(): Promise<void> },
-  opts: { timeoutMs?: number; exit?: (code: number) => never; log?: (line: string) => void } = {}
+  opts: {
+    timeoutMs?: number;
+    exit?: (code: number) => never;
+    log?: (line: string) => void;
+    sink?: SinkSource;
+  } = {}
 ): (label: string, err: unknown) => void {
   const timeoutMs = opts.timeoutMs ?? 2000;
   const exit = opts.exit ?? ((code: number) => process.exit(code));
-  const log = opts.log ?? ((line: string) => console.error(line));
+  const log = opts.log;
   let crashing = false;
   return (label: string, err: unknown): void => {
     if (crashing) return;
     crashing = true;
-    // LOW (#165): log err.message for Error values instead of String(err), which
-    // would stringify a non-Error object (e.g. a config/pool object) and could
-    // surface a connection string. Non-Error rejection reasons collapse to
-    // "unknown" — blunt, but never leaks.
-    const message = err instanceof Error ? err.message : "unknown";
-    log(JSON.stringify({ level: "fatal", label, err: message, msg: "Process crash — exiting" }));
-    const drain = Promise.race([
-      handle.shutdown(),
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, timeoutMs);
-      })
-    ]);
-    void drain.then(() => {
+    // Only the message of an Error is written, masked by the shared sanitizer. A non-Error
+    // rejection reason collapses to "unknown" because stringifying it could surface a
+    // connection string (#165).
+    writeSanitizedFatal(
+      label,
+      err instanceof Error ? err : "unknown",
+      fatalWriter("crash", log, opts.sink),
+      "Process crash — exiting"
+    );
+    // The sink drains alongside shutdown, not behind it, and a failed shutdown still exits.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const bound = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeoutMs);
+    });
+    const work = Promise.allSettled([drainSink(opts.sink), (async () => handle.shutdown())()]);
+    void Promise.race([work, bound]).then(() => {
+      clearTimeout(timer);
       exit(1);
     });
   };
 }
 
-async function bootstrap(): Promise<void> {
-  const handle = await buildWorker();
+/**
+ * Shutdown on signal. A failed shutdown writes one sanitized line and exits 1 instead of
+ * surfacing as an unhandled rejection with the raw error.
+ */
+export function createShutdownHandler(
+  handle: { shutdown(): Promise<void> },
+  opts: { exit?: (code: number) => never; log?: (line: string) => void; sink?: SinkSource } = {}
+): () => Promise<void> {
+  const exit = opts.exit ?? ((code: number) => process.exit(code));
+  return async () => {
+    try {
+      await handle.shutdown();
+    } catch (err) {
+      writeSanitizedFatal(
+        "shutdown",
+        err,
+        fatalWriter("shutdown-failed", opts.log, opts.sink),
+        "Shutdown failed"
+      );
+      await drainSink(opts.sink);
+      exit(1);
+      return;
+    }
+    exit(0);
+  };
+}
 
+export async function bootstrap(
+  opts: {
+    build?: () => Promise<WorkerHandle>;
+    log?: (line: string) => void;
+    exit?: (code: number) => never;
+    sink?: SinkSource;
+  } = {}
+): Promise<void> {
+  const exit = opts.exit ?? ((code: number) => process.exit(code));
+  let handle: WorkerHandle;
+  try {
+    handle = await (opts.build ?? buildWorker)();
+  } catch (err) {
+    writeSanitizedFatal(
+      "startup",
+      err,
+      fatalWriter("startup-failed", opts.log, opts.sink),
+      "Worker startup failed"
+    );
+    await drainSink(opts.sink);
+    exit(1);
+    return;
+  }
+
+  // log-safe: constant text
   console.log(`Jarv1s worker listening on ${RLS_PROBE_QUEUE} and built-in module queues`);
 
-  const handleCrash = createCrashHandler(handle);
+  const handleCrash = createCrashHandler(handle, {
+    log: opts.log,
+    exit: opts.exit,
+    sink: opts.sink
+  });
+  const shutdownOnSignal = createShutdownHandler(handle, {
+    log: opts.log,
+    exit: opts.exit,
+    sink: opts.sink
+  });
 
   process.once("SIGINT", () => {
-    void handle.shutdown().then(() => process.exit(0));
+    void shutdownOnSignal();
   });
 
   process.once("SIGTERM", () => {
-    void handle.shutdown().then(() => process.exit(0));
+    void shutdownOnSignal();
   });
 
   process.on("unhandledRejection", (reason) => {
