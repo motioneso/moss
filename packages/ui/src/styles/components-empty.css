@@ -27,16 +27,8 @@
   color: var(--text-subtle);
   margin-top: 6px;
 }
-.jds-route-error {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: var(--space-4);
-  background: var(--bg);
-  color: var(--text);
-  padding: var(--space-7);
-  font-family: var(--font-sans);
+.jds-crash--page {
+  min-height: 0;
 }
 .jds-route-error__actions {
   display: flex;

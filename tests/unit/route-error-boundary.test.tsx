@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
-import { act, createElement, type ReactNode } from "react";
+import { act, createElement, Suspense, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { loadWithRetry } from "../../apps/web/src/shell/lazy-with-retry.js";
+import { lazyWithRetry, loadWithRetry } from "../../apps/web/src/shell/lazy-with-retry.js";
 import { RouteErrorBoundary } from "../../apps/web/src/shell/route-error-boundary.js";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function BrokenPage(): never {
   throw new Error("Failed to fetch dynamically imported module");
@@ -20,7 +22,14 @@ function mount(children: ReactNode) {
   act(() => root?.render(children));
 }
 
+let consoleSpy: ReturnType<typeof vi.spyOn> | undefined;
+
+beforeEach(() => {
+  consoleSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+});
+
 afterEach(() => {
+  consoleSpy?.mockRestore();
   act(() => root?.unmount());
   host?.remove();
   document.body.replaceChildren();
@@ -30,58 +39,77 @@ afterEach(() => {
 describe("RouteErrorBoundary", () => {
   it("renders the page when nothing goes wrong", () => {
     mount(
-      createElement(
-        RouteErrorBoundary,
-        { resetKey: "/today" },
-        createElement("p", null, "Today page")
-      )
+      <RouteErrorBoundary resetKey="/today">
+        <p>Today page</p>
+      </RouteErrorBoundary>
     );
     expect(host?.textContent).toContain("Today page");
     expect(host?.textContent).not.toContain("This page could not be loaded");
   });
 
   it("shows a page-only error with a reload offer when a page fails to load", () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    try {
-      mount(
-        createElement(
-          RouteErrorBoundary,
-          { resetKey: "/today" },
-          createElement(
-            "div",
-            null,
-            createElement(BrokenPage),
-            createElement("p", null, "Today page")
-          )
-        )
-      );
-      expect(host?.textContent).toContain("This page could not be loaded");
-      expect(host?.textContent).toContain("Reload page");
-      expect(host?.textContent).not.toContain("Today page");
-    } finally {
-      consoleSpy.mockRestore();
-    }
+    mount(
+      <RouteErrorBoundary resetKey="/today">
+        <div>
+          <BrokenPage />
+          <p>Today page</p>
+        </div>
+      </RouteErrorBoundary>
+    );
+    expect(host?.textContent).toContain("This page could not be loaded");
+    expect(host?.textContent).toContain("Reload page");
+    expect(host?.textContent).not.toContain("Today page");
   });
 
   it("clears the error when the person moves to another page", () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    try {
-      mount(createElement(RouteErrorBoundary, { resetKey: "/today" }, createElement(BrokenPage)));
-      expect(host?.textContent).toContain("This page could not be loaded");
-      act(() =>
-        root?.render(
-          createElement(
-            RouteErrorBoundary,
-            { resetKey: "/tasks" },
-            createElement("p", null, "Tasks page")
-          )
-        )
-      );
-      expect(host?.textContent).toContain("Tasks page");
-      expect(host?.textContent).not.toContain("This page could not be loaded");
-    } finally {
-      consoleSpy.mockRestore();
-    }
+    mount(
+      <RouteErrorBoundary resetKey="/today">
+        <BrokenPage />
+      </RouteErrorBoundary>
+    );
+    expect(host?.textContent).toContain("This page could not be loaded");
+    act(() =>
+      root?.render(
+        <RouteErrorBoundary resetKey="/tasks">
+          <p>Tasks page</p>
+        </RouteErrorBoundary>
+      )
+    );
+    expect(host?.textContent).toContain("Tasks page");
+    expect(host?.textContent).not.toContain("This page could not be loaded");
+  });
+
+  it("loads the page on Try again after a failed import", async () => {
+    let calls = 0;
+    const RecoveredPage = lazyWithRetry(
+      async () => {
+        calls += 1;
+        if (calls === 1) throw new Error("Failed to fetch dynamically imported module");
+        return { default: () => createElement("p", null, "Recovered page") };
+      },
+      { attempts: 1, delayMs: 0 }
+    );
+    mount(
+      <RouteErrorBoundary resetKey="/today">
+        <Suspense fallback={<p>Loading</p>}>
+          <RecoveredPage />
+        </Suspense>
+      </RouteErrorBoundary>
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(host?.textContent).toContain("This page could not be loaded");
+    const tryAgain = [...(host?.querySelectorAll("button") ?? [])].find(
+      (button) => button.textContent === "Try again"
+    );
+    await act(async () => {
+      tryAgain?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(host?.textContent).toContain("Recovered page");
+    expect(host?.textContent).not.toContain("This page could not be loaded");
+    expect(calls).toBe(2);
   });
 });
 

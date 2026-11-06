@@ -100,7 +100,7 @@ const WORKSHOP_PATH =
 const moduleRoutes = MODULE_WEB_ROUTES.map((route) => ({
   path: route.path,
   moduleId: route.moduleId,
-  Component: lazy(async (): Promise<{ default: ComponentType }> => {
+  Component: lazyWithRetry(async (): Promise<{ default: ComponentType }> => {
     const entry = MODULE_WEB_CONTRIBUTIONS.find(
       (candidate) => candidate.moduleId === route.moduleId
     );
@@ -416,7 +416,11 @@ function NotFoundRedirect(props: {
 // is the reset key, so moving to another page clears the error and loads fresh.
 function RoutedPageBoundary(props: { readonly children: ReactNode }) {
   const location = useLocation();
-  return <RouteErrorBoundary resetKey={location.pathname}>{props.children}</RouteErrorBoundary>;
+  return (
+    <RouteErrorBoundary resetKey={location.pathname + location.search}>
+      {props.children}
+    </RouteErrorBoundary>
+  );
 }
 
 function ModuleGatedRoute(props: {

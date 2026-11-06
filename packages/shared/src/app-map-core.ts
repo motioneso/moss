@@ -551,7 +551,7 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     class: "transient",
     remediationRef: "core.page.reload_page",
     description:
-      "One page file failed to load, most often because Moss was updated and the open app still holds the old page list. Only that page shows an error screen with a Reload page button. The rest of Moss keeps working, and the menu can be used to go somewhere else. Moving to another page clears the error."
+      "One page failed to load or stopped while drawing, most often because Moss was updated and the open app still holds the old page list. Only that page shows an error screen with Reload page and Try again buttons. The rest of Moss keeps working, and the menu can be used to go somewhere else. Moving to another page clears the error."
   },
   {
     code: "core.modules.page_write_unavailable",
