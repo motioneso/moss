@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-11-06
+
+#### Fixed
+
+- **Meeting summaries survive Claude updates.** Updating Claude no longer stops Meeting summaries from working, and each summary now checks that Claude's tools are switched off before your notes are sent. [PR #4006](https://github.com/motioneso/moss/pull/4006)
+
 ### 2026-11-05
 
 #### Fixed
