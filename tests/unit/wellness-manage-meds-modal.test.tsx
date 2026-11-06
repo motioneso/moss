@@ -11,7 +11,13 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CreateMedicationRequest, MedicationDto, UpdateMedicationRequest } from "@moss/shared";
+import type {
+  CreateMedicationRequest,
+  LocaleSettingsDto,
+  MedicationDto,
+  UpdateMedicationRequest
+} from "@moss/shared";
+import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 
 const createMedicationMock = vi.fn(async (input: CreateMedicationRequest) => ({
   medication: { id: "m1", ...input }
@@ -46,8 +52,9 @@ async function flush(): Promise<void> {
   });
 }
 
-async function renderModal(): Promise<ReactTestRenderer> {
+async function renderModal(locale?: LocaleSettingsDto): Promise<ReactTestRenderer> {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  if (locale) client.setQueryData(queryKeys.settings.locale, { locale });
   let renderer!: ReactTestRenderer;
   await act(async () => {
     renderer = create(
@@ -233,6 +240,29 @@ describe("the six schedule choices each show their own fields", () => {
 });
 
 describe("the preview is computed from what is on screen", () => {
+  it.each(["12", "24"] as const)(
+    "uses the saved %s-hour setting throughout the preview (#3372)",
+    async (dateFormat) => {
+      const renderer = await renderModal({ timezone: "UTC", region: "en-US", dateFormat });
+      try {
+        await setField(renderer, "Dose time 1", "21:45");
+        const sentence = renderedText(
+          renderer.root.findByProps({ className: "wl-medform__previewline" }).props.children
+        );
+        const doses = renderedText(
+          renderer.root.findByProps({ className: "wl-medform__previewdoses" }).props.children
+        );
+        const expected = dateFormat === "24" ? "21:45" : "9:45 PM";
+        expect(sentence).toContain(`Once a day, at ${expected}, starting `);
+        expect(doses).toContain(expected);
+        expect(doses.split("·")).toHaveLength(3);
+        if (dateFormat === "24") expect(`${sentence} ${doses}`).not.toMatch(/AM|PM/);
+      } finally {
+        await act(async () => renderer.unmount());
+      }
+    }
+  );
+
   it("shows the sentence and three dose times, and both follow the clock time", async () => {
     const renderer = await renderModal();
     await setField(renderer, "Medication name", "Bupropion");

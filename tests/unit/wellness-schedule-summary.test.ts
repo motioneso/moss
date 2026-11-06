@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { describeSchedule, nextDoses } from "@moss/wellness";
 import type { Medication } from "@moss/db";
+import type { LocaleSettingsDto } from "@moss/shared";
 
 /**
  * #1969 — plain-language schedule summary and next-three-doses preview. Covers every
@@ -264,6 +265,40 @@ describe("describeSchedule and nextDoses", () => {
       // Both: the anchor is only where the on/off count begins, so it is worded differently.
       expect(describeSchedule(med({ ...cycle, schedule_start_date: "2026-09-01" }))).toBe(
         "2 days on, 3 days off, counting from 15 June 2026, at 7:00 AM, starting 1 September 2026."
+      );
+    });
+
+    it("uses the saved 24-hour setting in the preview sentence (#3372)", () => {
+      const locale24: LocaleSettingsDto = { timezone: "UTC", region: "en-US", dateFormat: "24" };
+      expect(
+        describeSchedule(
+          med({
+            frequency_type: "times_per_day",
+            times_per_day: 2,
+            schedule_times: ["21:00", "08:00"]
+          }),
+          locale24
+        )
+      ).toBe("Twice a day, at 21:00 and 08:00.");
+      expect(describeSchedule(med({ schedule_times: ["00:05"] }), locale24)).toBe(
+        "Once a day, at 00:05."
+      );
+    });
+
+    it("uses the saved 12-hour setting in the preview sentence (#3372)", () => {
+      const locale12: LocaleSettingsDto = { timezone: "UTC", region: "en-US", dateFormat: "12" };
+      expect(
+        describeSchedule(
+          med({
+            frequency_type: "times_per_day",
+            times_per_day: 2,
+            schedule_times: ["21:00", "08:00"]
+          }),
+          locale12
+        )
+      ).toBe("Twice a day, at 9:00 PM and 8:00 AM.");
+      expect(describeSchedule(med({ schedule_times: ["00:05"] }), locale12)).toBe(
+        "Once a day, at 12:05 AM."
       );
     });
 

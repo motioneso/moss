@@ -1,4 +1,5 @@
 import type { Medication } from "@moss/db";
+import { formatLocaleClockTime, type LocaleSettingsDto } from "@moss/shared";
 
 import {
   expandOccurrences,
@@ -40,8 +41,19 @@ export function nextDoses(medication: Medication, from: Date, count = 3): Date[]
     .map((o) => o.at);
 }
 
-/** Returns a plain-language sentence describing when `medication` is taken. */
-export function describeSchedule(medication: Medication): string {
+const TWELVE_HOUR_LOCALE: LocaleSettingsDto = {
+  timezone: "UTC",
+  region: "en-US",
+  dateFormat: "12"
+};
+
+/** Returns a plain-language sentence describing when `medication` is taken. Clock times use
+ *  the person's saved 12/24-hour setting; callers that know it pass their locale. Without one
+ *  the sentence keeps its original 12-hour wording. */
+export function describeSchedule(
+  medication: Medication,
+  locale: LocaleSettingsDto = TWELVE_HOUR_LOCALE
+): string {
   const tz = medication.time_zone ?? "UTC";
   const times = medication.schedule_times ?? [];
 
@@ -52,21 +64,21 @@ export function describeSchedule(medication: Medication): string {
     case "once_daily":
     case "times_per_day":
       return withScheduleWindow(
-        `${countPhrase(times.length)}, at ${formatTimeList(times, tz)}.`,
+        `${countPhrase(times.length)}, at ${formatTimeList(times, locale)}.`,
         medication,
         tz
       );
 
     case "specific_weekdays":
       return withScheduleWindow(
-        `Every ${formatWeekdayList((medication.weekdays ?? []) as Weekday[])}, at ${formatTimeList(times, tz)}.`,
+        `Every ${formatWeekdayList((medication.weekdays ?? []) as Weekday[])}, at ${formatTimeList(times, locale)}.`,
         medication,
         tz
       );
 
     case "every_n_hours":
       return withScheduleWindow(
-        `Every ${medication.interval_hours} hours, starting at ${formatTimeList(times, tz)}.`,
+        `Every ${medication.interval_hours} hours, starting at ${formatTimeList(times, locale)}.`,
         medication,
         tz
       );
@@ -84,7 +96,7 @@ export function describeSchedule(medication: Medication): string {
           : `, starting ${anchorDate}`
         : "";
       return withScheduleWindow(
-        `${medication.cycle_days_on} days on, ${medication.cycle_days_off} days off${anchorPhrase}, at ${formatTimeList(times, tz)}.`,
+        `${medication.cycle_days_on} days on, ${medication.cycle_days_off} days off${anchorPhrase}, at ${formatTimeList(times, locale)}.`,
         medication,
         tz
       );
@@ -95,7 +107,7 @@ export function describeSchedule(medication: Medication): string {
         ? formatDate(dateKeyFromColumn(medication.schedule_start_date), tz)
         : null;
       const startPhrase = start ? `, starting ${start}` : "";
-      const timePhrase = `, at ${formatTimeList(times, tz)}`;
+      const timePhrase = `, at ${formatTimeList(times, locale)}`;
 
       let intervalPhrase: string;
       if (medication.interval_unit === "weeks") {
@@ -111,7 +123,7 @@ export function describeSchedule(medication: Medication): string {
     }
 
     case "monthly": {
-      const timePhrase = `, at ${formatTimeList(times, tz)}`;
+      const timePhrase = `, at ${formatTimeList(times, locale)}`;
       if (medication.month_kind === "weekdayPosition") {
         const position = medication.month_weekday_position ?? "first";
         const weekday = weekdayName((medication.month_weekday ?? 1) as Weekday);
@@ -273,21 +285,12 @@ function formatWeekdayList(weekdays: readonly Weekday[]): string {
   return joinWithAnd(sorted.map(weekdayName));
 }
 
-/** Formats a list of "HH:MM" civil clock times as `h:mm AM/PM`, joined with an Oxford comma for
- *  three or more. The times are already civil-local (they come straight off the medication row,
- *  interpreted in the medication's own time zone), so this only needs 24h -> 12h formatting, not
- *  a zone conversion. */
-function formatTimeList(times: readonly string[], tz: string): string {
-  return joinWithAnd(times.map(formatClockTime));
-}
-
-function formatClockTime(time: string): string {
-  const [hourStr, minuteStr] = time.split(":");
-  const hour = Number(hourStr ?? 0);
-  const minute = Number(minuteStr ?? 0);
-  const period = hour < 12 ? "AM" : "PM";
-  const displayHour = hour % 12 === 0 ? 12 : hour % 12;
-  return `${displayHour}:${String(minute).padStart(2, "0")} ${period}`;
+/** Formats a list of "HH:MM" civil clock times in the person's 12/24-hour setting, joined
+ *  with an Oxford comma for three or more. The times are already civil-local (they come
+ *  straight off the medication row, interpreted in the medication's own time zone), so this
+ *  only changes how the clock reads, never the zone. */
+function formatTimeList(times: readonly string[], locale: LocaleSettingsDto): string {
+  return joinWithAnd(times.map((time) => formatLocaleClockTime(time, locale)));
 }
 
 function joinWithAnd(items: readonly string[]): string {
