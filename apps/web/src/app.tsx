@@ -45,39 +45,41 @@ import { shouldShowOnboarding } from "./onboarding/resume";
 import { OnboardingWizard } from "./onboarding/onboarding-wizard";
 import { AppShell } from "./shell/app-shell";
 import { useChatControls } from "./shell/chat-controls-context";
+import { lazyWithRetry } from "./shell/lazy-with-retry";
+import { RouteErrorBoundary } from "./shell/route-error-boundary";
 
 // #918: install the host React runtime before any external module bundle can ever be
 // imported (module scope — runs once at app boot, well before the first lazy() fires).
 installModuleHostRuntime();
 
-const CalendarPage = lazy(() =>
+const CalendarPage = lazyWithRetry(() =>
   import("./calendar/calendar-page").then((module) => ({ default: module.CalendarPage }))
 );
-const NotificationsPage = lazy(() =>
+const NotificationsPage = lazyWithRetry(() =>
   import("./notifications/notifications-page").then((module) => ({
     default: module.NotificationsPage
   }))
 );
-const SettingsPage = lazy(() =>
+const SettingsPage = lazyWithRetry(() =>
   import("./settings/settings-page").then((module) => ({ default: module.SettingsPage }))
 );
-const LinkTrailMarkerPage = lazy(() =>
+const LinkTrailMarkerPage = lazyWithRetry(() =>
   import("./companion/link-trail-marker-page").then((module) => ({
     default: module.LinkTrailMarkerPage
   }))
 );
-const ChatMessageLinkPage = lazy(() =>
+const ChatMessageLinkPage = lazyWithRetry(() =>
   import("./chat/chat-message-link-page").then((module) => ({
     default: module.ChatMessageLinkPage
   }))
 );
-const TodayPage = lazy(() =>
+const TodayPage = lazyWithRetry(() =>
   import("./today/today-page").then((module) => ({ default: module.TodayPage }))
 );
-const TasksPage = lazy(() =>
+const TasksPage = lazyWithRetry(() =>
   import("./tasks/tasks-page").then((module) => ({ default: module.TasksPage }))
 );
-const WellnessPage = lazy(() =>
+const WellnessPage = lazyWithRetry(() =>
   import("./wellness/wellness-page").then((module) => ({ default: module.WellnessPage }))
 );
 
@@ -303,76 +305,81 @@ export function App() {
         modulesLoading={modulesQuery.isLoading}
         disabledModuleIds={disabledModuleIds}
       >
-        <Suspense fallback={<LoadingScreen />}>
-          <Routes>
-            <Route index element={<HomeRedirect />} />
-            <Route
-              path={webRoutePath("today")}
-              element={
-                <TodayPage
-                  me={meQuery.data}
-                  wellnessEnabled={wellnessGate === "enabled"}
-                  disabledModuleIds={disabledModuleIds}
-                />
-              }
-            />
-            <Route path={webRoutePath("tasks")} element={<TasksPage />} />
-            <Route path={webRoutePath("notifications")} element={<NotificationsPage />} />
-            <Route path={webRoutePath("calendar")} element={<CalendarPage />} />
-            <Route
-              path={webRoutePath("wellness")}
-              element={
-                <ModuleGatedRoute gate={wellnessGate} onRetry={() => void myModulesQuery.refetch()}>
-                  <WellnessPage />
-                </ModuleGatedRoute>
-              }
-            />
-            {moduleRoutes.map(({ path, moduleId, Component }) => (
+        <RoutedPageBoundary>
+          <Suspense fallback={<LoadingScreen />}>
+            <Routes>
+              <Route index element={<HomeRedirect />} />
               <Route
-                key={path}
-                path={moduleId === WORKSHOP_MODULE_ID ? `${path}/*` : path}
+                path={webRoutePath("today")}
                 element={
-                  <ModuleGatedRoute
-                    gate={myModulesEnabled(moduleId)}
-                    onRetry={() => void myModulesQuery.refetch()}
-                  >
-                    <Component />
-                  </ModuleGatedRoute>
-                }
-              />
-            ))}
-            {externalModuleRoutes.map((route) => (
-              <Route
-                key={`ext:${route.moduleId}`}
-                path={route.path}
-                element={
-                  <ExternalModuleMount
-                    moduleId={route.moduleId}
-                    Component={route.Component}
-                    actorScopeKey={meQuery.data.user.id}
-                    isDraft={route.isDraft}
+                  <TodayPage
+                    me={meQuery.data}
+                    wellnessEnabled={wellnessGate === "enabled"}
+                    disabledModuleIds={disabledModuleIds}
                   />
                 }
               />
-            ))}
-            <Route path={webRoutePath("settings")} element={<SettingsPage me={meQuery.data} />} />
-            <Route path={webRoutePath("link-trail-marker")} element={<LinkTrailMarkerPage />} />
-            <Route
-              path={`${webRoutePath("chat-message")}/:messageId`}
-              element={<ChatMessageLinkPage />}
-            />
-            <Route
-              path="*"
-              element={
-                <NotFoundRedirect
-                  modulesLoading={modulesQuery.isLoading}
-                  modulesError={modulesQuery.isError}
-                  onRetry={() => void modulesQuery.refetch()}
+              <Route path={webRoutePath("tasks")} element={<TasksPage />} />
+              <Route path={webRoutePath("notifications")} element={<NotificationsPage />} />
+              <Route path={webRoutePath("calendar")} element={<CalendarPage />} />
+              <Route
+                path={webRoutePath("wellness")}
+                element={
+                  <ModuleGatedRoute
+                    gate={wellnessGate}
+                    onRetry={() => void myModulesQuery.refetch()}
+                  >
+                    <WellnessPage />
+                  </ModuleGatedRoute>
+                }
+              />
+              {moduleRoutes.map(({ path, moduleId, Component }) => (
+                <Route
+                  key={path}
+                  path={moduleId === WORKSHOP_MODULE_ID ? `${path}/*` : path}
+                  element={
+                    <ModuleGatedRoute
+                      gate={myModulesEnabled(moduleId)}
+                      onRetry={() => void myModulesQuery.refetch()}
+                    >
+                      <Component />
+                    </ModuleGatedRoute>
+                  }
                 />
-              }
-            />
-          </Routes>
-        </Suspense>
+              ))}
+              {externalModuleRoutes.map((route) => (
+                <Route
+                  key={`ext:${route.moduleId}`}
+                  path={route.path}
+                  element={
+                    <ExternalModuleMount
+                      moduleId={route.moduleId}
+                      Component={route.Component}
+                      actorScopeKey={meQuery.data.user.id}
+                      isDraft={route.isDraft}
+                    />
+                  }
+                />
+              ))}
+              <Route path={webRoutePath("settings")} element={<SettingsPage me={meQuery.data} />} />
+              <Route path={webRoutePath("link-trail-marker")} element={<LinkTrailMarkerPage />} />
+              <Route
+                path={`${webRoutePath("chat-message")}/:messageId`}
+                element={<ChatMessageLinkPage />}
+              />
+              <Route
+                path="*"
+                element={
+                  <NotFoundRedirect
+                    modulesLoading={modulesQuery.isLoading}
+                    modulesError={modulesQuery.isError}
+                    onRetry={() => void modulesQuery.refetch()}
+                  />
+                }
+              />
+            </Routes>
+          </Suspense>
+        </RoutedPageBoundary>
       </AppShell>
     </BrowserRouter>
   );
@@ -403,6 +410,13 @@ function NotFoundRedirect(props: {
       return <FatalState message="Could not load modules. Try again." onRetry={props.onRetry} />;
   }
   return <Navigate to={webRoutePath("today")} replace />;
+}
+
+// One failed page shows its own error screen inside the shell. The page address
+// is the reset key, so moving to another page clears the error and loads fresh.
+function RoutedPageBoundary(props: { readonly children: ReactNode }) {
+  const location = useLocation();
+  return <RouteErrorBoundary resetKey={location.pathname}>{props.children}</RouteErrorBoundary>;
 }
 
 function ModuleGatedRoute(props: {
