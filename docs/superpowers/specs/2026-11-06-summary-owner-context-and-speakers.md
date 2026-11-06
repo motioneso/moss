@@ -135,16 +135,16 @@ introduced-in-talk`.
 
 ### 8. Invariants check
 
-| Invariant                  | How it holds                                                                    |
-| -------------------------- | ------------------------------------------------------------------------------- |
-| Private by default         | Pack is built under the owner's access; RLS applies; shared items follow grants |
-| Secrets never in prompts   | Pack sources are display text only; no credentials, tokens or mail bodies       |
-| Metadata-only job payloads | The job carries the meeting id and request key. The pack is built in the worker |
-| No hardcoded provider      | No change to model selection; same router and no-tools path                     |
-| Module isolation           | Meetings calls public APIs of memory, people and calendar, never their tables   |
-| Instruction scan (3689)    | Extended to the pack text; flag only, never blocks                              |
-| Prompt size                | Per-source caps and warn-and-trim, never refuse                                 |
-| Stored output | Pack text is not saved. Only the speakers list, warnings and pack-hit counts are |
+| Invariant                  | How it holds                                                                     |
+| -------------------------- | -------------------------------------------------------------------------------- |
+| Private by default         | Pack is built under the owner's access; RLS applies; shared items follow grants  |
+| Secrets never in prompts   | Pack sources are display text only; no credentials, tokens or mail bodies        |
+| Metadata-only job payloads | The job carries the meeting id and request key. The pack is built in the worker  |
+| No hardcoded provider      | No change to model selection; same router and no-tools path                      |
+| Module isolation           | Meetings calls public APIs of memory, people and calendar, never their tables    |
+| Instruction scan (3689)    | Extended to the pack text; flag only, never blocks                               |
+| Prompt size                | Per-source caps and warn-and-trim, never refuse                                  |
+| Stored output              | Pack text is not saved. Only the speakers list, warnings and pack-hit counts are |
 
 ### 9. App map
 
