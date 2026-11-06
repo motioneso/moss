@@ -254,6 +254,7 @@ describe("meetings composition", () => {
       "meetings.referenced_evidence",
       "meetings.private_exports",
       "meetings.summary.validation",
+      "meetings.instruction_flag",
       "meetings.grounded_outputs",
       "meetings.reviewed_tasks",
       "meetings.questions",
