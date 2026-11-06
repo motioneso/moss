@@ -404,7 +404,12 @@ export function createMeetingOutputRuntime(deps: {
               throw new MeetingOutputError("meeting_output_timed_out");
             if (result.reason === "isolation_failed") {
               // Only this run stops. The next run checks again from scratch.
-              if (result.isolation) deps.onIsolationFailed?.(result.isolation);
+              if (result.isolation) {
+                console.warn(
+                  `[meeting-output] isolation check stopped a run cause=${result.isolation.cause} property=${result.isolation.property}`
+                );
+                deps.onIsolationFailed?.(result.isolation);
+              }
               throw new MeetingOutputError("meeting_output_isolation_failed");
             }
             if (
