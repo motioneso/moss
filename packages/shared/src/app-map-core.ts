@@ -547,6 +547,13 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
 
 export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
   {
+    code: "core.page.page_load_failed",
+    class: "transient",
+    remediationRef: "core.page.reload_page",
+    description:
+      "One page failed to load or stopped while drawing, most often because Moss was updated and the open app still holds the old page list. Only that page shows an error screen with Reload page and Try again buttons. The rest of Moss keeps working, and the menu can be used to go somewhere else. Moving to another page clears the error."
+  },
+  {
     code: "core.modules.page_write_unavailable",
     class: "transient",
     remediationRef: "core.modules.check_page_result",
@@ -727,6 +734,13 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
 ];
 
 export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
+  {
+    id: "core.page.reload_page",
+    description:
+      "Press Reload page on the page error screen. The reload loads the current page files. Nothing else needs to be done, and other pages keep working without a reload.",
+    path: "/",
+    scope: "user"
+  },
   {
     id: "core.modules.check_page_result",
     description:
