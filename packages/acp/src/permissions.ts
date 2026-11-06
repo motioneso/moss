@@ -111,6 +111,27 @@ export function extractAcpPaths(request: AcpBuiltInRequest): string[] {
   return [...paths];
 }
 
+/**
+ * Maps a real (symlink-free) path back into the spelling the folders use, so a
+ * path inside the session folder or the agent's home still reads as inside
+ * when those folders themselves sit behind a link.
+ */
+export function rebaseResolvedPath(
+  real: string,
+  folders: {
+    readonly cwd: string;
+    readonly realCwd: string;
+    readonly home: string | null;
+    readonly realHome: string | null;
+  }
+): string {
+  if (isUnder(folders.realCwd, real)) return resolve(folders.cwd, relative(folders.realCwd, real));
+  if (folders.home && folders.realHome && isUnder(folders.realHome, real)) {
+    return resolve(folders.home, relative(folders.realHome, real));
+  }
+  return real;
+}
+
 /** The shell command a request names, for the card only; never stored. */
 export function extractAcpCommand(request: AcpBuiltInRequest): string | null {
   const input = request.rawInput;
@@ -182,7 +203,16 @@ function classifyZone(paths: readonly string[], folders: AcpSessionFolders): Pat
   const root = resolve(folders.cwd);
   let worst: PathZone = "inside";
   for (const target of named) {
-    const absolute = resolve(root, target);
+    // A leading "~" is expanded by the CLI against the agent's home, so judge it there.
+    // "~user" forms and a missing home have no safe meaning and are refused.
+    let absolute: string;
+    if (target.startsWith("~")) {
+      const rest = target === "~" ? "" : target.startsWith("~/") ? target.slice(2) : null;
+      if (rest === null || !folders.home || folders.home.trim() === "") return "forbidden";
+      absolute = resolve(folders.home, rest);
+    } else {
+      absolute = resolve(root, target);
+    }
     if (!isUnder(root, absolute)) {
       if (inForbiddenZone(absolute, folders.home)) return "forbidden";
       worst = "outside";

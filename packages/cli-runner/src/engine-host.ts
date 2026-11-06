@@ -97,9 +97,8 @@ import {
 } from "./engine-host-types.js";
 
 export class CliChatEngineHost {
-  // #1350: widened from CliChatEngineImpl — a `non_interactive` session is now backed by a
-  // one-shot print engine, which implements CliChatEngine but has no multiplexer pane and so
-  // no `verifiedSubmit`/`purgeTranscripts`. Both call sites feature-detect rather than assume.
+  // #1350: widened for `non_interactive` one-shot print engines, which have no pane and so no
+  // `verifiedSubmit`/`purgeTranscripts`; call sites feature-detect.
   private readonly engines = new Map<string, CliChatEngine>();
   /** §4.0 per-sessionKey serialization queues (submit can't interleave a kill). */
   private readonly queues = new Map<string, Promise<unknown>>();
@@ -110,9 +109,7 @@ export class CliChatEngineHost {
   private readonly launchTimeoutMs: number;
   private readonly verifiedSubmitTimeoutMs: number;
   private readonly submitAttempts = new Map<string, Map<string, SubmitAttempt>>();
-  /** #1525: FIFO of attemptIds created as cancel-before-submit tombstones (digest === null at
-   *  creation) per session key. Bounds only synthetic tombstones — never touches real submitted
-   *  attempts or active-attempt abortion. */
+  /** #1525: per-session FIFO of cancel-before-submit tombstone attemptIds; bounds only those. */
   private readonly tombstoneOrder = new Map<string, string[]>();
   private static readonly MAX_SYNTHETIC_TOMBSTONES = 128;
   private readonly replayLaunches = new Map<string, Map<string, ReplayLaunchAttempt>>();
@@ -179,6 +176,10 @@ export class CliChatEngineHost {
 
   acpRead(sessionKey: string, afterSeq: number): AcpReadResult {
     return this.acp.read(sessionKey, afterSeq);
+  }
+
+  acpResolvePaths(sessionKey: string, paths: readonly string[]): Promise<string[]> {
+    return this.acp.resolvePaths(sessionKey, paths);
   }
 
   acpKill(sessionKey: string, opts: { generation?: number } = {}): Promise<void> {

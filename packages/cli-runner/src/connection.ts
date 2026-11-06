@@ -18,6 +18,7 @@ import {
   encodeFrame,
   MAX_FRAME_BYTES,
   type RpcAcpKillParams,
+  type RpcAcpResolvePathsParams,
   type RpcAcpReadParams,
   type RpcAcpSendParams,
   type RpcAcpSpawnParams,
@@ -692,6 +693,18 @@ async function invoke(
         throw new BadRequestError("acpRead.afterSeq out of range");
       }
       return host.acpRead(key, params.afterSeq);
+    }
+    case "acpResolvePaths": {
+      const key = requireSessionKey(req);
+      const params = (isRecord(req.params) ? req.params : {}) as Partial<RpcAcpResolvePathsParams>;
+      if (
+        !Array.isArray(params.paths) ||
+        params.paths.length > 16 ||
+        !params.paths.every((p) => typeof p === "string" && p.length > 0 && p.length <= 4096)
+      ) {
+        throw new BadRequestError("acpResolvePaths.paths must be up to 16 non-empty strings");
+      }
+      return { paths: await host.acpResolvePaths(key, params.paths) };
     }
     case "acpKill": {
       // For a chat-profile session, AcpHost also purges the scratch working
