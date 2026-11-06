@@ -9,6 +9,14 @@ Remove an entry once he rules and the ruling is recorded where the work lives. *
 only currently-open questions — not a historical log.** Resolved entries are removed outright; the
 full record survives in git history (`git log -p -- docs/coordination/AWAITING-BEN.md`).
 
+## #3383 / JS-17 — additional review round
+
+Both allowed review rounds covered earlier commits and found issues; the final implementation
+commit `c019da40b` has no review recorded. Recommend that the Assistant add one review round so
+the final implementation can receive independent review before Ready. Otherwise the task must
+remain blocked under its review limit. The two previously failing unit files pass in isolation
+(83 tests); CI passes, but a fresh local gate died during lint and live proof remains outstanding.
+
 **Protocol (mandatory since 2026-08-05):** no agent idles waiting on Ben without doing BOTH of:
 
 1. Add an entry here — what is blocked, the options, your recommendation.
