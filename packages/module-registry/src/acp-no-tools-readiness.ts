@@ -9,12 +9,38 @@ const KIND_BY_PROVIDER: Partial<Record<AiProviderKind, AcpProviderKind>> = {
   google: "google"
 };
 
+type ProbeConnection = Pick<RpcConnection, "assertReady"> &
+  Partial<Pick<RpcConnection, "ensureConnected">>;
+
+const CONNECT_WAIT_MS = 5_000;
+
+/** Connects an idle runner connection, waiting at most CONNECT_WAIT_MS. Never throws. */
+async function connectBriefly(connection: ProbeConnection, signal?: AbortSignal): Promise<void> {
+  if (!connection.ensureConnected) return;
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      connection.ensureConnected(),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, CONNECT_WAIT_MS);
+        signal?.addEventListener("abort", () => resolve(), { once: true });
+      })
+    ]);
+  } catch {
+    // The readiness check below reports the connection as offline.
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
- * Cheap reachability only: the runner connection must be ready, and the
- * provider row must serve the no-tools profile. No model call runs here.
+ * Reachability with a typed reason. "model-unavailable" means no usable model for the
+ * profile and "runner-offline" means the runner connection could not be made ready. The
+ * worker opens its connection on first use, so an idle one is connected here before it is
+ * judged. Sign-in state is not checked, because the check can reject a working session.
  */
 export function createAcpNoToolsReadinessProbe(
-  getConnection: () => Pick<RpcConnection, "assertReady"> | undefined
+  getConnection: () => ProbeConnection | undefined
 ): (
   actorUserId: string,
   signal?: AbortSignal,
@@ -25,11 +51,12 @@ export function createAcpNoToolsReadinessProbe(
     if (!kind) return "model-unavailable";
     if (!getAcpProviderRow(kind).noToolsReady) return "model-unavailable";
     const connection = getConnection();
-    if (!connection) return "model-unavailable";
+    if (!connection) return "runner-offline";
+    await connectBriefly(connection, _signal);
     try {
       connection.assertReady();
     } catch {
-      return "model-unavailable";
+      return "runner-offline";
     }
     return "available";
   };

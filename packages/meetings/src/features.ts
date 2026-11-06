@@ -361,6 +361,11 @@ export const meetingFeatures = [
     errors: []
   },
   {
+    id: "meetings.instruction_flag",
+    description:
+      "Best effort: Moss flags recording lines that look like orders to the AI and quotes them above the summary for the owner. The AI cannot act on them, but they can still bend a summary, so check it against the quotes."
+  },
+  {
     id: "meetings.grounded_outputs",
     description:
       "Generate evidence-checked summaries, without fallback, through the same no-tools route as chat. Long recordings are summarised piece by piece. Compare versions and sources; refresh to check availability without generating.",
@@ -393,13 +398,19 @@ export const meetingFeatures = [
         code: "meeting_output_isolation_failed",
         class: "validation",
         description:
-          "Stopped before the transcript was sent: a protection was off or could not be checked. Only the tool list is observed. Setting files and session saving are requested and accepted, not observed. Admins get an alert."
+          "Claude didn’t accept the settings that keep the meeting private, so nothing was sent. Only the tool list is observed; the rest is requested and accepted. Admins get an alert and check AI providers; members ask an admin. Then Rewrite."
+      },
+      {
+        code: "meeting_output_runner_offline",
+        class: "transient",
+        description:
+          "Moss couldn’t reach Claude (helper not connected). Transcript and notes are kept. Admins check Settings → AI providers; members ask an admin. Then use Rewrite summary."
       },
       {
         code: "meeting_output_route_unavailable",
         class: "validation",
         description:
-          "Your default model is unavailable for structured summaries. No replacement is used. Check AI providers, then refresh summaries and retry."
+          "Moss couldn’t write this summary because no AI is chosen for summaries yet. Transcript and notes are kept. Admins choose one in Settings → AI providers; members ask an admin. Then use Rewrite summary."
       },
       {
         code: "meeting_output_route_changed",

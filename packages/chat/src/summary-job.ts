@@ -37,6 +37,7 @@ export interface SummaryJobPayload {
 export type ConstrainedCliReadiness =
   | "available"
   | "model-unavailable"
+  | "runner-offline"
   | "subscription-isolation-unavailable";
 
 export type SummaryJobOutcome =

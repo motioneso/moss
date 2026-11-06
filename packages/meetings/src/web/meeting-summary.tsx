@@ -18,7 +18,12 @@ import { OutputEvidence } from "./output-evidence.js";
 import { MeetingCandidateSource } from "./meeting-candidate-source.js";
 import { MeetingOutputEditor, hasKeptOutputEdits } from "./meeting-output-editor.js";
 import { MeetingVaultExport } from "./meeting-vault-export.js";
-import { summaryGenerationFailure, SummaryModelRecovery } from "./summary-generation-error.js";
+import {
+  SELF_CONTAINED_FAILURE_CODES,
+  summaryGenerationFailure,
+  SummaryAiSettingsHint,
+  SummaryModelRecovery
+} from "./summary-generation-error.js";
 import { type getRecording, recordingKeys } from "./recording-client.js";
 export type SummaryTool = "rewrite" | "versions" | "vault" | "copy";
 interface SummaryState {
@@ -26,7 +31,7 @@ interface SummaryState {
   readonly pinnedArtifact?: MeetingOutputArtifact;
   readonly templateId: GenerateMeetingOutputInput["templateId"] | "";
   readonly operation?: OutputOperation<GenerateMeetingOutputInput> & {
-    readonly remediation?: "ai-providers";
+    readonly remediation?: "ai-providers" | "ai-settings";
   };
 }
 export function ArtifactContent({
@@ -39,6 +44,22 @@ export function ArtifactContent({
   const groupHeading = typeId === "brain-dump" || typeId === "idea" ? "Ideas" : "Topics";
   return (
     <div className="meetings-section">
+      {artifact.instructionFlag ? (
+        <>
+          <p role="status" className="jds-hint">
+            This recording contained lines that looked like orders to the AI. The AI has no way to
+            act on them. Quoted below so you can check the summary.
+          </p>
+          <ul className="jds-hint">
+            {artifact.instructionFlag.lines.map((line, index) => (
+              <li key={index}>“{line}”</li>
+            ))}
+            {artifact.instructionFlag.more > 0 ? (
+              <li>{`and ${artifact.instructionFlag.more} more`}</li>
+            ) : null}
+          </ul>
+        </>
+      ) : null}
       <p className="meetings-transcript-text">{artifact.content.overview}</p>
       {artifact.content.recording?.ideaGroups.length ? (
         <Eyebrow as="h3">{groupHeading}</Eyebrow>
@@ -321,11 +342,13 @@ export function MeetingSummary({
           {data.automaticSummary?.status === "failed" ? (
             <div>
               <p role="status" className="jds-hint">
-                {summaryGenerationFailure(data.automaticSummary.code).message} Use Rewrite summary
-                to try again.
+                {summaryGenerationFailure(data.automaticSummary.code).message}
+                {SELF_CONTAINED_FAILURE_CODES.has(data.automaticSummary.code ?? "")
+                  ? ""
+                  : " Use Rewrite summary to try again."}
               </p>
-              {data.automaticSummary.code === "meeting_output_route_unavailable" ? (
-                <SummaryModelRecovery />
+              {SELF_CONTAINED_FAILURE_CODES.has(data.automaticSummary.code ?? "") ? (
+                <SummaryAiSettingsHint />
               ) : null}
             </div>
           ) : null}
@@ -398,7 +421,9 @@ export function MeetingSummary({
                         .message
                     : generationAvailability === "model-unavailable"
                       ? summaryGenerationFailure("meeting_output_route_unavailable").message
-                      : "Couldn’t check summary model availability. Refresh summaries to try again."}
+                      : generationAvailability === "runner-offline"
+                        ? summaryGenerationFailure("meeting_output_runner_offline").message
+                        : "Couldn’t check summary model availability. Refresh summaries to try again."}
             </p>
           ) : null}
           {unsavedNotes && tool === "rewrite" ? (
@@ -411,10 +436,13 @@ export function MeetingSummary({
               {state.operation.message}
             </p>
           ) : null}
-          {(generationAvailability === "model-unavailable" && tool === "rewrite") ||
-          state.operation?.remediation === "ai-providers" ? (
-            <SummaryModelRecovery />
+          {((generationAvailability === "model-unavailable" ||
+            generationAvailability === "runner-offline") &&
+            tool === "rewrite") ||
+          state.operation?.remediation === "ai-settings" ? (
+            <SummaryAiSettingsHint />
           ) : null}
+          {state.operation?.remediation === "ai-providers" ? <SummaryModelRecovery /> : null}
           {state.generatedVersion && artifact?.version !== state.generatedVersion ? (
             <div className="meetings-actions">
               <p className="jds-hint">

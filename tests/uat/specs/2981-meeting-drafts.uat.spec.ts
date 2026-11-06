@@ -143,7 +143,7 @@ test("Minimal meeting workspace edits titles, autosaves notes, resolves conflict
     await expect(page.getByRole("button", { name: "Write summary", exact: true })).toBeDisabled();
     await expect(
       page.getByText(
-        "Your default model is unavailable or cannot produce structured summaries. Check its connection and try again. No other model will be used.",
+        "Moss couldn’t write this summary because no AI is chosen for summaries yet. Your transcript and notes are kept; try Rewrite summary after one is chosen.",
         { exact: true }
       )
     ).toBeVisible();

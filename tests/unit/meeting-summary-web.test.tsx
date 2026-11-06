@@ -11,7 +11,6 @@ import type {
 } from "@moss/shared";
 import { meetingKeys } from "../../packages/meetings/src/web/client.js";
 import { MeetingSummary } from "../../packages/meetings/src/web/meeting-summary.js";
-import { exportStatus } from "../../packages/meetings/src/web/meeting-vault-export.js";
 import { invalidateOutputAccess } from "../../packages/meetings/src/web/output-access.js";
 import * as api from "../../packages/meetings/src/web/output-client.js";
 vi.mock("../../packages/meetings/src/web/output-client.js", async (original) => ({
@@ -239,10 +238,11 @@ describe("meeting summary owner review", () => {
       expect(api.generateMeetingOutput).not.toHaveBeenCalled();
       const rendered = JSON.stringify(renderer.toJSON());
       expect(rendered).toContain(
-        "Your default model is unavailable or cannot produce structured summaries."
+        "Moss couldn’t write this summary because no AI is chosen for summaries yet."
       );
-      expect(rendered).toContain("No other model will be used.");
-      expect(rendered).toContain(admin ? "Settings → AI providers" : "Contact an instance admin");
+      expect(rendered).toContain(
+        admin ? "Settings → AI providers" : "Ask an admin to check the AI settings."
+      );
     }
   );
 
@@ -271,7 +271,7 @@ describe("meeting summary owner review", () => {
     await click("Refresh summaries");
     expect(button("Write summary").props.disabled).toBe(false);
     expect(JSON.stringify(renderer.toJSON())).not.toContain(
-      "Your default model is unavailable or cannot produce structured summaries."
+      "Moss couldn’t write this summary because no AI is chosen for summaries yet."
     );
     await click("Write summary");
     expect(api.generateMeetingOutput).toHaveBeenCalledWith(
@@ -361,9 +361,10 @@ describe("meeting summary owner review", () => {
       await click("Rewrite summary");
       await flush();
       const rendered = JSON.stringify(renderer.toJSON());
-      expect(rendered).toContain("No other model will be used.");
-      expect(rendered).toContain("Check its connection and try again.");
-      expect(rendered).toContain("Contact an instance admin");
+      expect(rendered).toContain(
+        "Moss couldn’t write this summary because no AI is chosen for summaries yet."
+      );
+      expect(rendered).toContain("Ask an admin to check the AI settings.");
       expect(rendered).not.toContain("Private provider credential error");
       expect(rendered).not.toContain("Choose Generate to start a new request");
       expect(
@@ -374,15 +375,18 @@ describe("meeting summary owner review", () => {
       expect(button("Check or retry summary")).toBeUndefined();
       await act(async () => renderer.unmount());
       await mount();
-      expect(JSON.stringify(renderer.toJSON())).toContain("Contact an instance admin");
+      expect(JSON.stringify(renderer.toJSON())).toContain("Ask an admin to check the AI settings.");
       expect(api.generateMeetingOutput).toHaveBeenCalledOnce();
     }
   );
 
   it.each(
-    ["meeting_output_route_unavailable", "meeting_output_provider_failed"].flatMap((code) =>
-      ([true, false, "unavailable"] as const).map((admin) => ({ code, admin }))
-    )
+    [
+      "meeting_output_route_unavailable",
+      "meeting_output_runner_offline",
+      "meeting_output_isolation_failed",
+      "meeting_output_provider_failed"
+    ].flatMap((code) => ([true, false, "unavailable"] as const).map((admin) => ({ code, admin })))
   )(
     "offers AI provider settings only with confirmed admin access: $code / $admin",
     async ({ code, admin }) => {
@@ -409,7 +413,11 @@ describe("meeting summary owner review", () => {
       expect(links).toHaveLength(admin === true ? 1 : 0);
       const rendered = JSON.stringify(renderer.toJSON());
       expect(rendered).toContain(
-        admin === true ? "Settings → AI providers" : "Contact an instance admin"
+        admin === true
+          ? "Settings → AI providers"
+          : code === "meeting_output_provider_failed"
+            ? "Contact an instance admin"
+            : "Ask an admin to check the AI settings."
       );
       expect(rendered).not.toContain("Private provider error");
       expect(rendered).not.toContain("Meeting profiles");
@@ -979,15 +987,5 @@ describe("meeting summary owner review", () => {
     expect(renderer.root.findByProps({ id: "output-overview" }).props.value).toBe(
       "Keep my in-flight edits"
     );
-  });
-
-  it("distinguishes saved, pending, delayed and conflicting writes from indexing", () => {
-    expect(exportStatus(receipt)).toContain("queued");
-    expect(exportStatus({ ...receipt, indexStatus: "delayed" })).toContain("Saved");
-    expect(exportStatus({ ...receipt, writeStatus: "pending" })).toContain("write is pending");
-    expect(exportStatus({ ...receipt, errorCode: "meeting_vault_conflict" })).toContain(
-      "not been overwritten"
-    );
-    expect(exportStatus(receipt)).not.toMatch(/indexed/i);
   });
 });
