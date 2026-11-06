@@ -26,7 +26,7 @@ import {
   X,
   type LucideIcon
 } from "lucide-react";
-import { Fragment, lazy, Suspense, useEffect, useRef, useState, type ComponentType } from "react";
+import { Fragment, Suspense, useEffect, useRef, useState, type ComponentType } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { MODULE_SETTINGS_SURFACES, MODULE_SETTING_KEYWORDS } from "virtual:moss-module-settings";
@@ -45,6 +45,7 @@ import {
   type SettingsSectionGroup
 } from "./settings-navigation";
 import { CAT_BY_ID } from "./settings-module-availability";
+import { lazyWithRetry } from "../shell/lazy-with-retry";
 import { buildModuleSettingsSearchItems, MODULE_SEARCH_ID_PREFIX } from "./settings-module-search";
 import {
   browserSettingsStorage,
@@ -100,7 +101,7 @@ type AdminSectionId =
   | "enckeys";
 
 function lazyPane(loader: () => Promise<{ default: SettingsPane }>) {
-  return lazy(loader);
+  return lazyWithRetry(loader);
 }
 
 const AssistantPane = lazyPane(() =>
