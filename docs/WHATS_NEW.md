@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Email digest can be switched on again.** Saving the email digest setting no longer fails with a server error, so the digest can be switched on and off as expected. [PR #3996](https://github.com/motioneso/moss/pull/3996)
 - **Keep Moss responsive during setup checks.** A slow connection check during setup no longer prevents other pages from loading. [PR #3995](https://github.com/motioneso/moss/pull/3995)
 
 ### 2026-11-03
