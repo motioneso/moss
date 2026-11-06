@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-11-05
+
+#### Fixed
+
+- **Keep Moss responsive during setup checks.** A slow connection check during setup no longer prevents other pages from loading. [PR #3995](https://github.com/motioneso/moss/pull/3995)
+
 ### 2026-11-03
 
 #### Changed
