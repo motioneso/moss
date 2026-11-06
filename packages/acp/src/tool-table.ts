@@ -53,7 +53,24 @@ const ACP_TOOL_TABLE: readonly AcpToolRow[] = [
   ...rowsFor(["Bash", "KillShell"], "shell", false, false),
   ...rowsFor([`${ACP_TOOL_PREFIX}Bash`, `${ACP_TOOL_PREFIX}KillShell`], "shell", false, false),
   ...rowsFor(["ExitPlanMode", "EnterPlanMode"], "mode", false, false),
-  ...rowsFor(["Task", "Skill", "SlashCommand", "AskUserQuestion"], "not-offered", false, false)
+  ...rowsFor(
+    [
+      "Task",
+      "Skill",
+      "SlashCommand",
+      "AskUserQuestion",
+      // Self-scheduling built-ins: a chat must never start its own later turn.
+      "ScheduleWakeup",
+      "CronCreate",
+      "CronDelete",
+      "CronList",
+      "RemoteTrigger",
+      "Monitor"
+    ],
+    "not-offered",
+    false,
+    false
+  )
 ];
 
 /** Family for a real tool name, "moss" for our own tools, else unknown. */

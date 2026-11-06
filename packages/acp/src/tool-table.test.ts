@@ -111,7 +111,13 @@ describe("tool table agreement", () => {
         "Task",
         "Skill",
         "SlashCommand",
-        "AskUserQuestion"
+        "AskUserQuestion",
+        "ScheduleWakeup",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "RemoteTrigger",
+        "Monitor"
       ])
     );
     expect(new Set(launchOffList("workshop"))).toEqual(
@@ -125,7 +131,13 @@ describe("tool table agreement", () => {
         "Task",
         "Skill",
         "SlashCommand",
-        "AskUserQuestion"
+        "AskUserQuestion",
+        "ScheduleWakeup",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "RemoteTrigger",
+        "Monitor"
       ])
     );
   });
