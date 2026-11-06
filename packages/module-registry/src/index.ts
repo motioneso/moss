@@ -126,6 +126,7 @@ import {
 } from "@moss/ai";
 import {
   buildCliToolAlertRaiser,
+  buildSummaryStoppedListener,
   buildCliVersionTooOldHandler,
   notifySummaryStopped,
   setSummaryStoppedListener
@@ -4174,13 +4175,7 @@ export function registerBuiltInApiRoutes(
       // A chat turn refused for an old tool asks for a pass now instead of waiting for the timer.
       setCliVersionTooOldListener(buildCliVersionTooOldHandler({ raiseAlert, pass }));
       // A summary stopped by the isolation check alerts admins with the cause and no transcript.
-      setSummaryStoppedListener((info) => {
-        void raiseAlert({
-          kind: "summary_stopped",
-          provider: "anthropic",
-          reason: info.cause
-        }).catch(() => undefined);
-      });
+      setSummaryStoppedListener(buildSummaryStoppedListener(raiseAlert));
       // Retry is an admin pressing the button, so the 24-hour wait does not apply.
       setCliToolsRetry(async (provider) => {
         await refreshTracked();
@@ -4220,6 +4215,24 @@ export async function registerBuiltInModuleWorkers(
     // #2956: the forward maps the source onto the `embed.<source>` line code.
     installEmbeddingActivityRecorder(forwardEmbeddingActivity(recorder));
   }
+  // Automatic summaries run in this process, so it raises the stopped-summary alert itself.
+  setSummaryStoppedListener(
+    buildSummaryStoppedListener(
+      buildCliToolAlertRaiser({
+        dataContext: dependencies.dataContext,
+        // The worker role cannot write the action audit log.
+        writeAuditRow: false,
+        // The worker role cannot list users. It may read the bootstrap owner ids, as the upgrade
+        // check does, so the alert reaches the instance owner.
+        listAdminIds: async () =>
+          (
+            await sql<{ id: string }>`SELECT id FROM app.upgrade_notify_owner_ids()`.execute(
+              dependencies.rootDb
+            )
+          ).rows.map((row) => row.id)
+      })
+    )
+  );
   const workerIds = await Promise.all(
     BUILT_IN_MODULES.map(
       (module) => module.registerWorkers?.(boss, dependencies) ?? Promise.resolve([])

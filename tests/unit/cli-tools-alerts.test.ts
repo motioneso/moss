@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildCliToolAlertRaiser,
   buildCliVersionTooOldHandler,
+  buildSummaryStoppedListener,
   cliToolAlertCopy,
   cliToolAlertKey
 } from "../../packages/module-registry/src/cli-tools-alerts.js";
@@ -94,6 +95,19 @@ describe("buildCliToolAlertRaiser", () => {
   });
 });
 
+describe("buildCliToolAlertRaiser without the audit row", () => {
+  it("still writes the notification when the audit row is turned off", async () => {
+    const withDataContext = vi.fn(async () => undefined);
+    const raise = buildCliToolAlertRaiser({
+      dataContext: { withDataContext } as never,
+      listAdminIds: async () => ["owner-1"],
+      writeAuditRow: false
+    });
+    await raise({ kind: "summary_stopped", provider: "anthropic", reason: "violation" });
+    expect(withDataContext).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("buildCliVersionTooOldHandler", () => {
   it("raises a too-old alert and starts an update pass right away", () => {
     const raise = vi.fn(async () => undefined);
@@ -114,5 +128,23 @@ describe("buildCliVersionTooOldHandler", () => {
     await new Promise((resolve) => setImmediate(resolve));
     process.off("unhandledRejection", unhandled);
     expect(unhandled).not.toHaveBeenCalled();
+  });
+});
+
+describe("buildSummaryStoppedListener", () => {
+  it("raises a summary-stopped alert carrying the cause", () => {
+    const raise = vi.fn(async () => undefined);
+    buildSummaryStoppedListener(raise)({ cause: "violation", property: "tools" });
+    expect(raise).toHaveBeenCalledWith({
+      kind: "summary_stopped",
+      provider: "anthropic",
+      reason: "violation"
+    });
+  });
+
+  it("does not throw when the alert fails", async () => {
+    const listener = buildSummaryStoppedListener(async () => Promise.reject(new Error("db down")));
+    expect(() => listener({ cause: "unverifiable", property: "tools" })).not.toThrow();
+    await new Promise((resolve) => setImmediate(resolve));
   });
 });

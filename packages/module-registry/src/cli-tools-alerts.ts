@@ -88,6 +88,8 @@ export interface CliToolAlertDeps {
   readonly dataContext: DataContextRunner;
   readonly listAdminIds: () => Promise<readonly string[]>;
   readonly now?: () => Date;
+  /** The worker role cannot write the action audit log, so it turns this off. */
+  readonly writeAuditRow?: boolean;
 }
 
 /** Builds the raiser. Each admin gets a notification, an audit row and a health record. */
@@ -117,22 +119,24 @@ export function buildCliToolAlertRaiser(
             href: SETTINGS_HREF,
             metadata: { kind: alert.kind, provider: alert.provider }
           });
-          await ai.insertActionAuditLog(scopedDb, {
-            id: randomUUID(),
-            ownerUserId: actorUserId,
-            toolModuleId: "ai",
-            toolName: "cli-tools.update",
-            actionFamilyId: null,
-            actionKind: "write",
-            approvalMode: "auto",
-            outcome: alert.kind === "held_back" ? "refused" : "failed",
-            errorClass: alert.reason ?? alert.kind,
-            requestId,
-            chatSessionId: null,
-            sourceSurface: "scheduled",
-            inputSummary: { inputKeys: ["provider"], inputKeyCount: 1, truncated: false },
-            durationMs: null
-          });
+          if (deps.writeAuditRow !== false) {
+            await ai.insertActionAuditLog(scopedDb, {
+              id: randomUUID(),
+              ownerUserId: actorUserId,
+              toolModuleId: "ai",
+              toolName: "cli-tools.update",
+              actionFamilyId: null,
+              actionKind: "write",
+              approvalMode: "auto",
+              outcome: alert.kind === "held_back" ? "refused" : "failed",
+              errorClass: alert.reason ?? alert.kind,
+              requestId,
+              chatSessionId: null,
+              sourceSurface: "scheduled",
+              inputSummary: { inputKeys: ["provider"], inputKeyCount: 1, truncated: false },
+              durationMs: null
+            });
+          }
           await ai.recordError(scopedDb, {
             id: randomUUID(),
             feature: "cli-tools",
@@ -145,7 +149,11 @@ export function buildCliToolAlertRaiser(
             requestId
           });
         })
-        .catch(() => undefined);
+        .catch((error: unknown) => {
+          console.warn(
+            `[cli-tools] alert write failed kind=${alert.kind}: ${error instanceof Error ? error.message : "unknown"}`
+          );
+        });
     }
   };
 }
@@ -164,6 +172,21 @@ export function notifySummaryStopped(info: {
   readonly property: string;
 }): void {
   summaryStoppedListener?.(info);
+}
+
+/** Turns a stopped-summary report into an admin alert. Used by the API and the worker process. */
+export function buildSummaryStoppedListener(
+  raiseAlert: (alert: CliToolAlert) => Promise<void>
+): (info: { readonly cause: "violation" | "unverifiable"; readonly property: string }) => void {
+  return (info) => {
+    void raiseAlert({ kind: "summary_stopped", provider: "anthropic", reason: info.cause }).catch(
+      (error: unknown) => {
+        console.warn(
+          `[cli-tools] summary-stopped alert failed: ${error instanceof Error ? error.message : "unknown"}`
+        );
+      }
+    );
+  };
 }
 
 /** What a chat turn refused for an old tool triggers: an alert, then an update pass right away. */
