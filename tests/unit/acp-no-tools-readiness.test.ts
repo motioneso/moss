@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createAcpNoToolsReadinessProbe } from "../../packages/module-registry/src/acp-no-tools-readiness.js";
 
 const ready = { assertReady: () => undefined };
@@ -25,12 +25,49 @@ describe("ACP no-tools readiness probe", () => {
     );
   });
 
-  it("stays available when the runner's sign-in check says needs login", async () => {
-    const probeProvider = vi.fn(async () => ({ status: "needs_login" as const }));
+  it("reports not signed in when the runner says the provider needs a login", async () => {
+    const probeProvider = async () => ({ status: "needs_login" as const });
+    await expect(
+      createAcpNoToolsReadinessProbe(() => ({ ...ready, probeProvider }) as never)("user-1")
+    ).resolves.toBe("not-signed-in");
+  });
+
+  it("does not stop on a sign-in lookup that fails", async () => {
+    const probeProvider = async () => {
+      throw new Error("timeout");
+    };
     await expect(
       createAcpNoToolsReadinessProbe(() => ({ ...ready, probeProvider }) as never)("user-1")
     ).resolves.toBe("available");
-    expect(probeProvider).not.toHaveBeenCalled();
+  });
+
+  it("connects an idle runner connection before judging it", async () => {
+    let connected = false;
+    const idle = {
+      ensureConnected: async () => {
+        connected = true;
+      },
+      assertReady: () => {
+        if (!connected) throw new Error("not ready");
+      }
+    };
+    await expect(createAcpNoToolsReadinessProbe(() => idle as never)("user-1")).resolves.toBe(
+      "available"
+    );
+  });
+
+  it("reports the runner offline when connecting fails", async () => {
+    const broken = {
+      ensureConnected: async () => {
+        throw new Error("ENOENT");
+      },
+      assertReady: () => {
+        throw new Error("not ready");
+      }
+    };
+    await expect(createAcpNoToolsReadinessProbe(() => broken as never)("user-1")).resolves.toBe(
+      "runner-offline"
+    );
   });
 
   it("reports unavailable for a provider that has not been proven with tools off", async () => {

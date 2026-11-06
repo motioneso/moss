@@ -9,14 +9,39 @@ const KIND_BY_PROVIDER: Partial<Record<AiProviderKind, AcpProviderKind>> = {
   google: "google"
 };
 
+type ProbeConnection = Pick<RpcConnection, "assertReady"> &
+  Partial<Pick<RpcConnection, "ensureConnected" | "probeProvider">>;
+
+const CONNECT_WAIT_MS = 5_000;
+
+/** Connects an idle runner connection, waiting at most CONNECT_WAIT_MS. Never throws. */
+async function connectBriefly(connection: ProbeConnection, signal?: AbortSignal): Promise<void> {
+  if (!connection.ensureConnected) return;
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      connection.ensureConnected(),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, CONNECT_WAIT_MS);
+        signal?.addEventListener("abort", () => resolve(), { once: true });
+      })
+    ]);
+  } catch {
+    // The readiness check below reports the connection as offline.
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Reachability with a typed reason. "model-unavailable" means no usable model for the
- * profile and "runner-offline" means the runner connection is not ready. The runner's
- * sign-in check is not consulted. On a live copy it answered "needs login" while chat worked,
- * so using it blocked summaries that would have run.
+ * profile, "runner-offline" means the runner connection could not be made ready, and
+ * "not-signed-in" means the runner reports the provider needs a login. The worker opens its
+ * connection on first use, so an idle one is connected here before it is judged. A failed or
+ * slow sign-in lookup is ignored so a flaky check never stops summaries on its own.
  */
 export function createAcpNoToolsReadinessProbe(
-  getConnection: () => Pick<RpcConnection, "assertReady"> | undefined
+  getConnection: () => ProbeConnection | undefined
 ): (
   actorUserId: string,
   signal?: AbortSignal,
@@ -28,10 +53,23 @@ export function createAcpNoToolsReadinessProbe(
     if (!getAcpProviderRow(kind).noToolsReady) return "model-unavailable";
     const connection = getConnection();
     if (!connection) return "runner-offline";
+    await connectBriefly(connection, _signal);
     try {
       connection.assertReady();
     } catch {
       return "runner-offline";
+    }
+    if (connection.probeProvider) {
+      try {
+        const result = await connection.probeProvider(
+          { provider: providerKind as "anthropic" | "openai-compatible" | "google" },
+          _actorUserId,
+          { timeoutMs: 5_000, signal: _signal }
+        );
+        if (result.status === "needs_login") return "not-signed-in";
+      } catch {
+        // Unknown sign-in state does not stop the run; the run itself reports real failures.
+      }
     }
     return "available";
   };
