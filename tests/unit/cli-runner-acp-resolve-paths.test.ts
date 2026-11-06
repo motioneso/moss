@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -30,5 +38,43 @@ describe("resolveRealPaths (#3557)", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it.skipIf(process.getuid?.() === 0)(
+    "refuses instead of guessing when a folder cannot be entered",
+    async () => {
+      const dir = realpathSync(mkdtempSync(join(tmpdir(), "acp-resolve-")));
+      try {
+        const locked = join(dir, "locked");
+        mkdirSync(locked);
+        chmodSync(locked, 0o000);
+        await expect(resolveRealPaths(dir, ["locked/inner/env-link"])).rejects.toThrow();
+      } finally {
+        chmodSync(join(dir, "locked"), 0o700);
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it("looks paths up as the session account and rejects an odd answer", async () => {
+    const calls: string[][] = [];
+    const run = async (command: string, args: readonly string[]) => {
+      calls.push([command, ...args]);
+      return "/proc/1/environ\0/tmp/x\0";
+    };
+    const out = await resolveRealPaths("/s", ["env-link", "/tmp/x"], { uid: 4001, gid: 4002 }, run);
+    expect(out).toEqual(["/proc/1/environ", "/tmp/x"]);
+    expect(calls[0]).toEqual(
+      expect.arrayContaining(["setpriv", "--reuid=4001", "--regid=4002", "realpath", "-m", "-z"])
+    );
+    expect(calls[0]).toEqual(expect.arrayContaining(["/s/env-link", "/tmp/x"]));
+    await expect(
+      resolveRealPaths("/s", ["a", "b"], { uid: 1, gid: 1 }, async () => "only-one\0")
+    ).rejects.toThrow();
+    await expect(
+      resolveRealPaths("/s", ["a"], { uid: 1, gid: 1 }, async () => {
+        throw new Error("boom");
+      })
+    ).rejects.toThrow("boom");
   });
 });

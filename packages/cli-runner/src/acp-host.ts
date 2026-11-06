@@ -631,9 +631,9 @@ export class AcpHost {
   }
 
   async resolvePaths(sessionKey: string, paths: readonly string[]): Promise<string[]> {
-    const cwd = this.sessions.get(sanitizeSessionKey(sessionKey))?.cwd;
-    if (cwd === undefined) throw new Error("ACP session is not running");
-    return resolveRealPaths(cwd, paths);
+    const session = this.sessions.get(sanitizeSessionKey(sessionKey));
+    if (!session) throw new Error("ACP session is not running");
+    return resolveRealPaths(session.cwd, paths, session.identity);
   }
 
   read(sessionKey: string, afterSeq: number): AcpReadResult {
