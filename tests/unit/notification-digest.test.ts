@@ -60,7 +60,7 @@ describe("notification digest scheduling", () => {
         DIGEST_COMPOSE_QUEUE,
         "30 9 * * 2",
         digestScheduleData("11111111-1111-4111-8111-111111111111"),
-        { tz: "America/New_York", key: "digest:11111111-1111-4111-8111-111111111111" }
+        { tz: "America/New_York", key: "digest-11111111-1111-4111-8111-111111111111" }
       ]
     ]);
   });
@@ -83,7 +83,10 @@ describe("notification digest scheduling", () => {
       }
     );
 
-    expect(calls).toEqual([[DIGEST_COMPOSE_QUEUE, "digest:11111111-1111-4111-8111-111111111111"]]);
+    expect(calls).toEqual([
+      [DIGEST_COMPOSE_QUEUE, "digest-11111111-1111-4111-8111-111111111111"],
+      [DIGEST_COMPOSE_QUEUE, "digest:11111111-1111-4111-8111-111111111111"]
+    ]);
   });
 });
 
