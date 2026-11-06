@@ -45,4 +45,18 @@ describe("1909 sports UAT spec sends natural chat requests (static)", () => {
     expect(specSource).toContain("Retry sports news source");
     expect(specSource).toContain("failing.label");
   });
+
+  // Same stale-wording problem in the later confirm steps: each card shows its
+  // current action title (and, where the card names a source, its readable
+  // name), not the old summary wording with the source id.
+  it("finds every later approval card by its current title", () => {
+    expect(specSource).not.toContain("Replace the recipe for sports source");
+    expect(specSource).not.toContain("Replace assignments for sports source");
+    expect(specSource).not.toContain("/Add sports source/");
+    expect(specSource).toContain("Change sports source instructions");
+    expect(specSource).toContain("fotmob.label");
+    expect(specSource).toContain("drift.label");
+    expect(specSource).toContain("Add sports news source");
+    expect(specSource).toContain("Change sports source coverage");
+  });
 });
