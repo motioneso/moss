@@ -65,6 +65,7 @@ import { withLaunchTimeout } from "./engine-host-timeout.js";
 import {
   BadSubmitAttemptError,
   NotLaunchedError,
+  boundSyntheticTombstones,
   hasStructuredMethods,
   hasVerifiedSubmit
 } from "./engine-host-guards.js";
@@ -549,31 +550,16 @@ export class CliChatEngineHost {
     if (!attempt) {
       attempt = { digest: null, controller: new AbortController() };
       ledger.set(params.attemptId, attempt);
-      this.boundSyntheticTombstones(key, ledger, params.attemptId);
+      let order = this.tombstoneOrder.get(key);
+      if (!order) this.tombstoneOrder.set(key, (order = []));
+      boundSyntheticTombstones(
+        order,
+        ledger,
+        params.attemptId,
+        CliChatEngineHost.MAX_SYNTHETIC_TOMBSTONES
+      );
     }
     attempt.controller.abort();
-  }
-
-  /** #1525: track a freshly created cancel-before-submit tombstone and evict the oldest one(s)
-   *  once the per-session FIFO exceeds the 128 ceiling. Only evicts entries still `digest ===
-   *  null` — an entry `submit()` has since upgraded to a real digest is no longer a synthetic
-   *  tombstone and survives. */
-  private boundSyntheticTombstones(
-    key: string,
-    ledger: Map<string, SubmitAttempt>,
-    attemptId: string
-  ): void {
-    let order = this.tombstoneOrder.get(key);
-    if (!order) {
-      order = [];
-      this.tombstoneOrder.set(key, order);
-    }
-    order.push(attemptId);
-    while (order.length > CliChatEngineHost.MAX_SYNTHETIC_TOMBSTONES) {
-      const oldestId = order.shift() as string;
-      const oldest = ledger.get(oldestId);
-      if (oldest && oldest.digest === null) ledger.delete(oldestId);
-    }
   }
 
   readNew(sessionKey: string, afterOffset: number): Promise<RpcReadNewResult> {
