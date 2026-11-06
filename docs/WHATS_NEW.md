@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Stopped summaries now alert the owner.** When Moss stops a meeting summary to keep your meeting private, the owner now gets a notification even when the summary was made automatically. [PR #4015](https://github.com/motioneso/moss/pull/4015)
 - **Clearer meeting summary failures.** When a meeting summary cannot be written, Moss now says whether the AI helper is offline, not signed in or refused to start, and flags recording lines that look like orders to the AI. [PR #4011](https://github.com/motioneso/moss/pull/4011)
 - **Keep working when a page cannot load.** If a page fails to load, Moss now shows a reload option for that page while keeping the menu and other pages available. [PR #4005](https://github.com/motioneso/moss/pull/4005)
 - **Chat can no longer schedule its own turns.** Moss's chat can no longer set itself wake-ups or timed jobs, so it only replies when you write to it or a reminder you set goes off. [PR #4007](https://github.com/motioneso/moss/pull/4007)
