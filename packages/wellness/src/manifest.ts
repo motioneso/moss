@@ -386,6 +386,11 @@ export const wellnessModuleManifest = {
       ]
     },
     {
+      id: "wellness.medication_schedule_preview",
+      description:
+        "Manage medications previews the schedule sentence and upcoming doses in the saved 12-hour or 24-hour time format."
+    },
+    {
       id: "wellness.dose_write_reentry",
       description:
         "Pending dose writes stay visible and block another write after account-scoped route re-entry. The optional as-needed reason is restored from memory. Late uncertain outcomes keep the guard until saved doses are checked successfully."
