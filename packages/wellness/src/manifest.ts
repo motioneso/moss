@@ -367,7 +367,7 @@ export const wellnessModuleManifest = {
     {
       id: "wellness.medication_tracking",
       description:
-        "Keep schedules and optional-reason as-needed doses. Rows show Pending, Taken or Skipped with a clock. Mark skipped replaces Taken. Thirty-day adherence appears in insights and briefings when allowed.",
+        "Keep schedules and optional-reason as-needed doses. Manage medications previews the schedule sentence and upcoming doses in the saved 12-hour or 24-hour time format. Rows show Pending, Taken or Skipped with a clock. Mark skipped replaces Taken. Thirty-day adherence appears in insights and briefings when allowed.",
       errors: [
         {
           code: "wellness_dose_save_failed",
