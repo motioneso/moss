@@ -281,11 +281,28 @@ describe("Claude isolation readback", () => {
     expect(agent.prompts).toEqual(["Reply with the single word OK."]);
   });
 
+  it("accepts the built-in plugins the real Claude CLI reports", async () => {
+    const agent = new SilentAgent();
+    agent.initReport = init({
+      plugins: [
+        { name: "agents-md", source: "agents-md@builtin" },
+        { name: "telemetry", source: "telemetry@builtin" }
+      ]
+    });
+    const { client, handle } = await open(agent);
+    await expect(client.verifyIsolation(handle)).resolves.toMatchObject({ tools: "observed_ok" });
+  });
+
   it.each([
     ["offers a tool", { tools: ["Read"] }, "tools"],
     ["offers a connector tool", { tools: ["mcp__claude_ai_Gmail__send_message"] }, "tools"],
     ["has an MCP server", { mcp_servers: [{ name: "x", status: "connected" }] }, "tools"],
-    ["loads a plugin", { plugins: [{ name: "p", path: "/p" }] }, "setting_sources"]
+    ["loads a plugin", { plugins: [{ name: "p", path: "/p" }] }, "setting_sources"],
+    [
+      "loads a marketplace plugin",
+      { plugins: [{ name: "p", source: "p@marketplace" }] },
+      "setting_sources"
+    ]
   ])("stops when the session %s", async (_name, extra, property) => {
     const agent = new SilentAgent();
     agent.initReport = init(extra);

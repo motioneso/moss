@@ -130,11 +130,11 @@ starts, so the check sends the fixed sentence "Reply with the single word OK." f
 transcript text is in that turn. The evaluation is `evaluateClaudeIsolationReadback`
 (`packages/acp/src/no-tools.ts:123`).
 
-| Property            | State                              | Source of the value                                                                                                                                 |
-| ------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Tools offered       | Observed (ok, or violation)        | Startup report fields `tools` and `mcp_servers`, `no-tools.ts:123` onward                                                                           |
-| Setting sources     | Not observed; plugins are observed | Only `plugins` is checked. `skills`, `agents`, `slash_commands` include built-ins                                                                   |
-| Session persistence | Not observed                       | The report carries no persistence field. Checked by hand once: with persistence off only an empty `memory` folder appeared under the project folder |
+| Property            | State                              | Source of the value                                                                                                                                                                                        |
+| ------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tools offered       | Observed (ok, or violation)        | Startup report fields `tools` and `mcp_servers`, `no-tools.ts:123` onward                                                                                                                                  |
+| Setting sources     | Not observed; plugins are observed | Only `plugins` is checked, and entries whose source ends `@builtin` (the CLI's own `agents-md` and `telemetry`, seen on the live copy) are allowed. `skills`, `agents`, `slash_commands` include built-ins |
+| Session persistence | Not observed                       | The report carries no persistence field. Checked by hand once: with persistence off only an empty `memory` folder appeared under the project folder                                                        |
 
 Setting sources and persistence are worded "requested and accepted, not observed".
 

@@ -134,13 +134,17 @@ export function evaluateClaudeIsolationReadback(init: unknown): IsolationReadbac
   if (report.tools.length > 0) throw new AcpIsolationError("violation", "tools");
   if (Array.isArray(report.mcp_servers) && report.mcp_servers.length > 0)
     throw new AcpIsolationError("violation", "tools");
-  if (Array.isArray(report.plugins) && report.plugins.length > 0) {
-    // TEMP-DIAG: remove after the live proof.
-    console.warn(
-      `[isolation-diag] plugins=${JSON.stringify((report.plugins as Array<Record<string, unknown>>).map((plugin) => ({ name: plugin?.name, source: plugin?.source })))}`
-    );
+  // The CLI ships built-in plugins (`<name>@builtin`) that no setting source loads.
+  // Any other plugin means a setting source leaked in.
+  if (
+    Array.isArray(report.plugins) &&
+    report.plugins.some(
+      (plugin) =>
+        typeof (plugin as { source?: unknown } | null)?.source !== "string" ||
+        !(plugin as { source: string }).source.endsWith("@builtin")
+    )
+  )
     throw new AcpIsolationError("violation", "setting_sources");
-  }
   return {
     tools: "observed_ok",
     settingSources: "not_observed",
