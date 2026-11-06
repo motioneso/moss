@@ -145,7 +145,11 @@ export function buildCliToolAlertRaiser(
             requestId
           });
         })
-        .catch(() => undefined);
+        .catch((error: unknown) => {
+          console.warn(
+            `[cli-tools] alert write failed kind=${alert.kind}: ${error instanceof Error ? error.message : "unknown"}`
+          );
+        });
     }
   };
 }
@@ -172,7 +176,11 @@ export function buildSummaryStoppedListener(
 ): (info: { readonly cause: "violation" | "unverifiable"; readonly property: string }) => void {
   return (info) => {
     void raiseAlert({ kind: "summary_stopped", provider: "anthropic", reason: info.cause }).catch(
-      () => undefined
+      (error: unknown) => {
+        console.warn(
+          `[cli-tools] summary-stopped alert failed: ${error instanceof Error ? error.message : "unknown"}`
+        );
+      }
     );
   };
 }
