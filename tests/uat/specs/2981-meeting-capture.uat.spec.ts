@@ -359,7 +359,9 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
     await page.getByRole("tab", { name: "Summary", exact: true }).click();
     await expect(
       page.getByRole("region", { name: "Summary and actions", exact: true })
-    ).toContainText("Use Rewrite summary to try again.");
+    ).toContainText(
+      "Moss couldnâ€™t write this summary because no AI is chosen for summaries yet. Your transcript and notes are kept; try Rewrite summary after one is chosen."
+    );
     await native.close();
     await connection.refresh();
     await panel.getByRole("link", { name: "New meeting", exact: true }).click();
