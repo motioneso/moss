@@ -10,6 +10,8 @@ import { createNotificationPreferencePort } from "@moss/module-registry";
 import {
   NotificationsRepository,
   PushSubscriptionsRepository,
+  createPushSigningCipher,
+  getOrGeneratePushSigningKey,
   runPushDeliverJob,
   type QuietHoursPort
 } from "@moss/notifications";
@@ -150,6 +152,63 @@ class UnexpectedSubscriptions extends PushSubscriptionsRepository {
     throw new Error("removed reminder reached push effects");
   }
 }
+
+it("dismisses promptly while a device notification send is held open", async () => {
+  const payload = await due("dismiss during push");
+  await notify(payload);
+  const notification = await asOwner((db) =>
+    notifications.findByEventKey(db, "chat", payload.idempotencyKey)
+  );
+  const subscriptions = new PushSubscriptionsRepository();
+  await asOwner((db) => getOrGeneratePushSigningKey(db, createPushSigningCipher()));
+  const device = await asOwner((db) =>
+    subscriptions.upsert(db, {
+      endpoint: `https://push.example.test/${randomUUID()}`,
+      p256dh: "test-key",
+      auth: "test-auth",
+      userAgentLabel: "dismissal regression"
+    })
+  );
+  const started = barrier();
+  const release = barrier();
+  const push = worker.withDataContext({ actorUserId: ids.userA }, (db) =>
+    runPushDeliverJob(
+      {
+        data: {
+          actorUserId: ids.userA,
+          recipientUserId: ids.userA,
+          notificationId: notification!.id
+        }
+      },
+      db,
+      {
+        isNotificationActive: isReminderNotificationActive,
+        sendWebPush: async () => {
+          started.resolve();
+          await release.promise;
+          return { statusCode: 201, body: "", headers: {} };
+        }
+      }
+    )
+  );
+  await Promise.race([
+    started.promise,
+    push.then(() => {
+      throw new Error("push ended before send");
+    })
+  ]);
+  try {
+    await asOwner(async (db) => {
+      await sql`SET LOCAL lock_timeout = '150ms'`.execute(db.db);
+      await reminders.lockForCancel(db, payload.resourceId);
+      await reminders.dismissContext(db, payload.resourceId);
+    });
+  } finally {
+    release.resolve();
+    await push;
+    await asOwner((db) => subscriptions.delete(db, device.id));
+  }
+});
 
 it("deletion suppresses queued notification creation while keeping the chat result", async () => {
   const payload = await due("deleted before notification");
