@@ -142,8 +142,10 @@ export async function runCliVersionCheck(
     const versions = state.candidate.map((c) => c.version);
 
     const last = state.lastCheck;
+    // The cooldown protects Codex's held-back candidate. Claude is never held back.
     if (
       !opts.force &&
+      !PROMOTE_FIRST_PROVIDERS.has(provider) &&
       last?.result === "failed" &&
       sameVersions(last.versions, versions) &&
       now().getTime() - Date.parse(last.at) < RETRY_AFTER_MS

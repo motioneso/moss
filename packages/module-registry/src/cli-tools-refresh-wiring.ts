@@ -124,6 +124,9 @@ export function buildCliVersionCheck(deps: {
         provider,
         userId,
         sessionKey: key,
+        // Claude is promoted before its check, so the candidate is already cleared and the
+        // check must run the live build.
+        useCandidate: provider !== "anthropic",
         ...(toolServer ? { toolServer } : {})
       });
       return await runCheckTurn({

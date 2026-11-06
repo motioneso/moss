@@ -383,6 +383,8 @@ export class MossAcpClient {
       // session was opening is already recorded against this session id.
       const announcedAtOpen = this.toolCalls.get(session.sessionId) ?? 0;
       if (surface === "no-tools") {
+        if (providerKind === "anthropic" && announcedAtOpen > 0)
+          throw new AcpIsolationError("violation", "tools");
         assertZeroToolsProof({ providerKind, toolCallsSeen: announcedAtOpen });
       }
       this.connections.set(session.sessionId, connection);

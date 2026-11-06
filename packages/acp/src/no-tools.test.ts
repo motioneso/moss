@@ -229,7 +229,7 @@ describe("MossAcpClient no-tools session", () => {
     const client = new MossAcpClient(agent);
     await expect(
       client.openSession("summary:1", "summary", "anthropic", "user-1", "no-tools")
-    ).rejects.toThrow(/offered tools/);
+    ).rejects.toMatchObject({ name: "AcpIsolationError", cause: "violation", property: "tools" });
   });
 
   it("fails the prompt when the agent announces a tool call", async () => {

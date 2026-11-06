@@ -93,6 +93,19 @@ describe("runCliVersionCheck (Codex: check before promote)", () => {
     expect((await runCliVersionCheck(CODEX, b.ports, { force: true })).status).toBe("promoted");
   });
 
+  it("promotes a Claude candidate even when its last check failed recently", async () => {
+    const lastCheck = {
+      at: "2026-09-30T06:00:00Z",
+      result: "failed" as const,
+      reason: "timeout",
+      versions: ["2.0.0"]
+    };
+    const { ports, calls } = setup({ lastCheck });
+    const out = await runCliVersionCheck("anthropic", ports);
+    expect(out.status).toBe("promoted");
+    expect(calls[0]).toBe("promote");
+  });
+
   it("retries after a day, and retries at once for a different candidate version", async () => {
     const old = {
       at: "2026-09-29T06:00:00Z",

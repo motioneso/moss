@@ -114,16 +114,22 @@ async function runCheckTurnInner(
   }
 }
 
-/** An engine for one throwaway check session that runs the staged candidate tools. */
+/**
+ * An engine for one throwaway check session. It runs the staged candidate tools unless
+ * `useCandidate` is false, which checks the build that is already live.
+ */
 export function createCandidateCheckEngine(opts: {
   readonly connection: RpcConnection;
   readonly provider: ProviderKind;
   readonly userId: string;
   readonly sessionKey: string;
   readonly toolServer?: AcpToolServer;
+  readonly useCandidate?: boolean;
 }): CliChatEngine {
   return new AcpChatEngine(opts.provider, opts.sessionKey, {
-    tunnel: new RpcAcpTunnel(opts.connection, opts.sessionKey, { useCandidate: true }),
+    tunnel: new RpcAcpTunnel(opts.connection, opts.sessionKey, {
+      useCandidate: opts.useCandidate ?? true
+    }),
     userId: opts.userId,
     projectId: opts.sessionKey,
     ...(opts.toolServer ? { toolServer: opts.toolServer } : {})
