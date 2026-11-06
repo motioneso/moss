@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TmuxIo } from "../../packages/ai/src/adapters/tmux-bridge.js";
-import { CONSTRAINED_CLAUDE_VERSION } from "../../packages/chat/src/live/constrained-claude-profile.js";
 import {
   CONSTRAINED_CODEX_VERSION,
   ConstrainedCodexUnsupportedError,
@@ -59,7 +58,7 @@ async function fixture(installation: Installation, perUserUid = true) {
               installation === "wrong-package"
                 ? "unrelated-package"
                 : `@anthropic-ai/claude-code-linux-${process.arch}`,
-            version: installation === "stale" ? "0.0.0" : CONSTRAINED_CLAUDE_VERSION
+            version: installation === "stale" ? "0.0.0" : "9.9.9"
           })
     );
   }
@@ -197,7 +196,7 @@ describe("constrained structured availability is an advisory metadata-only probe
     }
     await assertReadOnly();
   });
-  it("rejects shared-account runners even when the pinned binary is present", async () => {
+  it("rejects shared-account runners even when a Claude binary is present", async () => {
     const { host, assertReadOnly } = await fixture("ready", false);
     await expect(
       host.probeProvider("anthropic", "synthetic-owner", { constrainedStructured: true })
@@ -208,7 +207,7 @@ describe("constrained structured availability is an advisory metadata-only probe
     await assertReadOnly();
   });
   it.each(["ready", "missing", "stale", "wrong-package", "malformed", "not-executable"] as const)(
-    "reports %s without credentials, tmux or execution",
+    "has no old Claude route whatever is installed (%s, any version), and never runs it",
     async (installation) => {
       const { host, assertReadOnly } = await fixture(installation);
       await expect(
@@ -216,7 +215,7 @@ describe("constrained structured availability is an advisory metadata-only probe
           constrainedStructured: true,
           forceFresh: true
         })
-      ).resolves.toEqual({ status: installation === "ready" ? "ready" : "not_installed" });
+      ).resolves.toEqual({ status: "not_installed" });
       await assertReadOnly();
     }
   );
@@ -267,7 +266,7 @@ describe("constrained structured availability is an advisory metadata-only probe
             result:
               installation === "shared-account"
                 ? { status: "error", constrainedUnavailableReason: "per_user_isolation_required" }
-                : { status: installation === "ready" ? "ready" : "not_installed" }
+                : { status: "not_installed" }
           });
         });
         expect(probe).toHaveBeenCalledExactlyOnceWith("anthropic", "synthetic-owner", {

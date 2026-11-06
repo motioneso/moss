@@ -9,6 +9,7 @@ import {
   type ActiveModulesResolver,
   type GenerateStructuredDeps,
   type StructuredProviderAdapter,
+  StructuredIsolationFailedError,
   StructuredTransportUnavailableError,
   type AiConfiguredModelSafeRow,
   type AiProviderWithSealedCredential
@@ -19,7 +20,6 @@ import {
   meetingsModuleManifest
 } from "@moss/meetings";
 import { ConstrainedProcessError } from "../../packages/chat/src/live/constrained-structured-process.js";
-import { parseConstrainedClaudeOutput } from "../../packages/chat/src/live/constrained-claude-profile.js";
 import * as meetings from "@moss/meetings";
 import { TasksRepository, tasksModuleManifest } from "@moss/tasks";
 import {
@@ -93,7 +93,10 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
-function setup(createCliStructuredAdapter?: GenerateStructuredDeps["createCliStructuredAdapter"]) {
+function setup(
+  createCliStructuredAdapter?: GenerateStructuredDeps["createCliStructuredAdapter"],
+  onIsolationFailed?: (info: { cause: "violation" | "unverifiable"; property: string }) => void
+) {
   const route = vi.spyOn(AiRepository.prototype, "selectChatModelForUser").mockResolvedValue(model);
   const coverage = vi
     .spyOn(meetings, "readMeetingCaptureCompleteness")
@@ -115,6 +118,7 @@ function setup(createCliStructuredAdapter?: GenerateStructuredDeps["createCliStr
   const runtime = createMeetingOutputRuntime({
     probeConstrainedCli: probe,
     createConstrainedCliStructuredAdapter: createCliStructuredAdapter,
+    ...(onIsolationFailed ? { onIsolationFailed } : {}),
     resolveActiveModules: modules,
     dataContext: {
       withDataContext: async <T>(
@@ -163,6 +167,21 @@ describe("recorded capture gaps in meeting summaries", () => {
     expect(String(h.fetch.mock.calls[0]?.[1]?.body)).toContain("Capture has recorded gaps");
   });
 });
+
+function useClaudeAcp(h: ReturnType<typeof setup>) {
+  h.route.mockResolvedValue({
+    ...model,
+    provider_kind: "anthropic",
+    provider_auth_method: "cli",
+    provider_acp_agent_id: "claude-acp"
+  });
+  h.credential.mockResolvedValue({
+    ...provider,
+    provider_kind: "anthropic",
+    auth_method: "cli",
+    acp_agent_id: "claude-acp"
+  });
+}
 
 describe("meeting summary generation availability", () => {
   it("uses the same strict selected route and safe provider metadata without reading credentials or dispatching", async () => {
@@ -763,18 +782,7 @@ it("checks constrained binary presence outside actor transactions before enablin
 it("rejects shared-account Claude readiness before any model dispatch and preserves the specific reason", async () => {
   const generate = vi.fn();
   const h = setup(() => ({ generateStructured: generate }));
-  h.route.mockResolvedValue({
-    ...model,
-    provider_kind: "anthropic",
-    provider_auth_method: "cli",
-    provider_acp_agent_id: "claude-acp"
-  });
-  h.credential.mockResolvedValue({
-    ...provider,
-    provider_kind: "anthropic",
-    auth_method: "cli",
-    acp_agent_id: "claude-acp"
-  });
+  useClaudeAcp(h);
   vi.spyOn(AiRepository.prototype, "listProviders").mockResolvedValue([
     { ...provider, provider_kind: "anthropic", auth_method: "cli" }
   ]);
@@ -794,18 +802,7 @@ it("rejects shared-account Claude readiness before any model dispatch and preser
 it("preserves user cancellation during the constrained readiness probe without dispatch", async () => {
   const generate = vi.fn();
   const h = setup(() => ({ generateStructured: generate }));
-  h.route.mockResolvedValue({
-    ...model,
-    provider_kind: "anthropic",
-    provider_auth_method: "cli",
-    provider_acp_agent_id: "claude-acp"
-  });
-  h.credential.mockResolvedValue({
-    ...provider,
-    provider_kind: "anthropic",
-    auth_method: "cli",
-    acp_agent_id: "claude-acp"
-  });
+  useClaudeAcp(h);
   const controller = new AbortController();
   h.probe.mockImplementation(async () => {
     controller.abort();
@@ -824,18 +821,7 @@ describe("meeting output rejection diagnostics", () => {
     const h = setup(() => ({
       generateStructured: async () => ({ rawText, usage: { inputTokens: 0, outputTokens: 0 } })
     }));
-    h.route.mockResolvedValue({
-      ...model,
-      provider_kind: "anthropic",
-      provider_auth_method: "cli",
-      provider_acp_agent_id: "claude-acp"
-    });
-    h.credential.mockResolvedValue({
-      ...provider,
-      provider_kind: "anthropic",
-      auth_method: "cli",
-      acp_agent_id: "claude-acp"
-    });
+    useClaudeAcp(h);
     return h;
   }
   const bound = {
@@ -911,27 +897,14 @@ describe("meeting output rejection diagnostics", () => {
       expect(observed).not.toContain(secret);
     expect(h.fetch).not.toHaveBeenCalled();
   });
-  it.each(["result", "structured_output"])(
-    "accepts a full JSON fence from the actual Claude %s envelope through summary validation",
-    async (field) => {
-      const rawText = parseConstrainedClaudeOutput(
-        JSON.stringify({
-          type: "result",
-          subtype: "success",
-          is_error: false,
-          [field]: "```json\n" + JSON.stringify(content) + "\n```"
-        })
-      );
-      expect((await cli(rawText).generator(actor, input())).content).toEqual(content);
-    }
-  );
+  it("accepts a full JSON fence through summary validation", async () => {
+    const rawText = "```json\n" + JSON.stringify(content) + "\n```";
+    expect((await cli(rawText).generator(actor, input())).content).toEqual(content);
+  });
   it.each(["```json\n{}\n```\n{}", "prose\n```json\n{}\n```", "```json\n{} {}\n```"])(
-    "rejects surrounding or multiple JSON from the native envelope",
+    "rejects surrounding or multiple JSON in the model reply",
     async (value) => {
-      const rawText = parseConstrainedClaudeOutput(
-        JSON.stringify({ type: "result", subtype: "success", is_error: false, result: value })
-      );
-      await expect(cli(rawText).generator(actor, input())).rejects.toMatchObject({
+      await expect(cli(value).generator(actor, input())).rejects.toMatchObject({
         code: "meeting_output_rejected_json_parse"
       });
     }
@@ -942,23 +915,33 @@ describe("meeting output rejection diagnostics", () => {
         throw new ConstrainedProcessError("timeout");
       }
     }));
-    h.route.mockResolvedValue({
-      ...model,
-      provider_kind: "anthropic",
-      provider_auth_method: "cli",
-      provider_acp_agent_id: "claude-acp"
-    });
-    h.credential.mockResolvedValue({
-      ...provider,
-      provider_kind: "anthropic",
-      auth_method: "cli",
-      acp_agent_id: "claude-acp"
-    });
+    useClaudeAcp(h);
     await expect(h.generator(actor, input())).rejects.toMatchObject({
       code: "meeting_output_timed_out"
     });
     expect(h.fetch).not.toHaveBeenCalled();
   });
+  it.each(["violation", "unverifiable"] as const)(
+    "stops the run with the isolation code and alerts with the cause only (%s)",
+    async (cause) => {
+      const alert = vi.fn();
+      const h = setup(
+        () => ({
+          generateStructured: async () => {
+            throw new StructuredIsolationFailedError(cause, "tools");
+          }
+        }),
+        alert
+      );
+      useClaudeAcp(h);
+      await expect(h.generator(actor, input())).rejects.toMatchObject({
+        code: "meeting_output_isolation_failed"
+      });
+      expect(alert).toHaveBeenCalledExactlyOnceWith({ cause, property: "tools" });
+      expect(JSON.stringify(alert.mock.calls)).not.toContain("transcript");
+      expect(h.fetch).not.toHaveBeenCalled();
+    }
+  );
 });
 
 it("keeps an outer deadline distinct from user cancellation before dispatch", async () => {

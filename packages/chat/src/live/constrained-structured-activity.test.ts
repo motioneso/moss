@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, access } from "node:fs/promises";
+import { mkdtemp, rm, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -11,15 +11,15 @@ import {
 } from "@moss/ai";
 import { createConstrainedCliStructuredAdapterFactory } from "./constrained-structured-adapter.js";
 import { ConstrainedStructuredEngine } from "./constrained-structured-engine.js";
-import { prepareConstrainedClaudeProfile } from "./constrained-claude-profile.js";
-import type * as ProfileModule from "./constrained-claude-profile.js";
+import { prepareConstrainedCodexProfile } from "./constrained-codex-profile.js";
+import type * as ProfileModule from "./constrained-codex-profile.js";
 
 // Only replace provider discovery/preparation. Adapter, engine, parser, child lifecycle and recorder
 // run unchanged; the executable is a synthetic Node program with no network or real credentials.
-vi.mock("./constrained-claude-profile.js", async (original) => ({
+vi.mock("./constrained-codex-profile.js", async (original) => ({
   ...(await original<typeof ProfileModule>()),
-  findConstrainedClaudeExecutable: async () => process.execPath,
-  prepareConstrainedClaudeProfile: vi.fn()
+  findConstrainedCodexExecutable: async () => process.execPath,
+  prepareConstrainedCodexProfile: vi.fn()
 }));
 const PROMPT = "private-synthetic-meeting-transcript";
 const TOKEN = "synthetic-oauth-canary";
@@ -76,14 +76,15 @@ describe("constrained adapter real-child activity recording", () => {
         process.stdin.on("data", chunk => { prompt += chunk; });
         process.stdin.on("end", () => {
           require("node:fs").writeFileSync(${JSON.stringify(ready)}, "ready");
-          process.stderr.write(prompt + process.env.CLAUDE_CODE_OAUTH_TOKEN);
+          process.stderr.write(prompt + process.env.SYNTHETIC_TOKEN);
           if (${JSON.stringify(outcome)} === "aborted" || ${timedOut}) { setInterval(() => {}, 1000); return; }
           if (${JSON.stringify(outcome)} === "error") { process.exitCode = 1; return; }
-          process.stdout.write(JSON.stringify({ type: "result", subtype: "success", is_error: false,
-            structured_output: { overview: "done" } }));
+          process.stdout.write(JSON.stringify({ type: "item.completed",
+            item: { type: "agent_message", text: JSON.stringify({ overview: "done" }) } }) + "\\n");
+          process.stdout.write(JSON.stringify({ type: "turn.completed" }) + "\\n");
         });
       `;
-      vi.mocked(prepareConstrainedClaudeProfile).mockImplementation(async () => {
+      vi.mocked(prepareConstrainedCodexProfile).mockImplementation(async () => {
         if (duringLaunch) {
           if (timedOut) expire();
           else controller.abort();
@@ -93,7 +94,14 @@ describe("constrained adapter real-child activity recording", () => {
         return {
           command: process.execPath,
           args: ["-e", program],
-          env: { CLAUDE_CODE_OAUTH_TOKEN: TOKEN }
+          env: {
+            PATH: process.env.PATH ?? "",
+            LANG: "C",
+            HOME: cwd,
+            CODEX_HOME: cwd,
+            TMPDIR: cwd,
+            SYNTHETIC_TOKEN: TOKEN
+          }
         };
       });
       const release = vi.fn(async () => {});
@@ -102,16 +110,11 @@ describe("constrained adapter real-child activity recording", () => {
         args: [...args]
       }));
       const engine = new ConstrainedStructuredEngine(
-        "anthropic",
+        "openai-compatible",
+        { run: async () => ({ code: 0, stdout: "", stderr: "" }) } as unknown as TmuxIo,
+        join(cwd, "constrained-home"),
         {
-          run: async (_command: string, args: readonly string[]) => {
-            await mkdir(args[2]!);
-            return { code: 0, stdout: "", stderr: "" };
-          }
-        } as unknown as TmuxIo,
-        cwd,
-        {
-          env: { CLAUDE_CODE_OAUTH_TOKEN: TOKEN },
+          env: { SYNTHETIC_TOKEN: TOKEN },
           wrap,
           signalGroup: async (pid, signal) => {
             process.kill(-pid, signal);
@@ -124,12 +127,12 @@ describe("constrained adapter real-child activity recording", () => {
       engine.launchStructured = (opts) => launch({ ...opts, neutralDir: cwd });
       const factory = vi.fn(async () => engine);
       const result = createConstrainedCliStructuredAdapterFactory(factory)(
-        "anthropic"
+        "openai-compatible"
       ).generateStructured({
         actorUserId: "synthetic-owner",
         service: "module.meetings",
         actionCode: "meetings.summary",
-        model: { provider_kind: "anthropic", provider_model_id: "chosen-model" },
+        model: { provider_kind: "openai-compatible", provider_model_id: "chosen-model" },
         schema: { type: "object", properties: { overview: { type: "string" } } },
         messages: [{ role: "user", content: PROMPT }],
         maxOutputTokens: 8192,
@@ -157,7 +160,7 @@ describe("constrained adapter real-child activity recording", () => {
         expect(release).toHaveBeenCalledTimes(1);
         expect(factory).toHaveBeenCalledTimes(1);
         expect(factory).toHaveBeenCalledWith(
-          "anthropic",
+          "openai-compatible",
           expect.stringMatching(/^constrained-/),
           expect.objectContaining({ userId: "synthetic-owner", constrainedStructured: true })
         );

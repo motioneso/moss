@@ -37,6 +37,12 @@ export function summaryGenerationFailure(code?: string): {
         message:
           "Summaries on this Claude subscription aren’t supported yet. No other model was used."
       };
+    case "meeting_output_isolation_failed":
+      return {
+        status: "failed",
+        message:
+          "The summary was stopped because Moss could not confirm the AI session was locked down. Nothing was sent. No other model was used."
+      };
     case "meeting_output_route_unavailable":
       return {
         status: "failed",

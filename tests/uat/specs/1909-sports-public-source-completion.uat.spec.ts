@@ -373,7 +373,9 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
       page,
       "sports.retrySource",
       `One of my sports sources (id ${failing.id}) is showing a partial target failure — please retry it.`,
-      new RegExp(`Retry sports source ${failing.id}`)
+      // The card shows the current action title, then the source's readable
+      // name. It does not show the old summary or the source id.
+      new RegExp(`Retry sports news source[\\s\\S]*${failing.label}`)
     );
     const recovered = (await listSources(page)).find((source) => source.id === failing.id);
     expect(recovered?.healthState).toBe("healthy");
@@ -404,7 +406,9 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
         page,
         "sports.confirmSourceRecipe",
         `Please go ahead and rebuild the recipe for sports source ${fotmob.id} exactly as you just previewed it, using ${describeConfirmation(preview, { sourceId: fotmob.id })}.`,
-        new RegExp(`Replace the recipe for sports source ${fotmob.id}`)
+        // The card shows the current action title, then the source's readable
+        // name. It does not show the old summary or the source id.
+        new RegExp(`Change sports source instructions[\\s\\S]*${fotmob.label}`)
       );
       const rebuilt = (await listSources(page)).find((source) => source.id === fotmob.id);
       expect(["feed", "ready"]).toContain(rebuilt?.recipeStatus);
@@ -425,7 +429,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
         page,
         "sports.confirmSourceRecipe",
         `Please go ahead and rebuild the recipe for sports source ${drift.id} exactly as you just previewed it, using ${describeConfirmation(preview, { sourceId: drift.id })}.`,
-        new RegExp(`Replace the recipe for sports source ${drift.id}`)
+        new RegExp(`Change sports source instructions[\\s\\S]*${drift.label}`)
       );
       const rebuilt = (await listSources(page)).find((source) => source.id === drift.id);
       expect(rebuilt?.recipeStatus).toBe("feed");
@@ -452,7 +456,8 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
       page,
       "sports.confirmSource",
       `Please go ahead and add the sports source you just previewed, using ${describeConfirmation(preview)}.`,
-      /Add sports source/
+      // The card shows the current action title. It does not show the old summary.
+      /Add sports news source/
     );
     const created = (await listSources(page)).find(
       (source) => source.canonicalDomain === "cdn.jsdelivr.net"
@@ -471,7 +476,11 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
       page,
       "sports.confirmSourceAssignments",
       `Please go ahead and replace the assignments for sports source ${mirroredSourceId} exactly as you just previewed it, using ${describeConfirmation(preview, { sourceId: mirroredSourceId })}.`,
-      new RegExp(`Replace assignments for sports source ${mirroredSourceId}`)
+      // The card shows the current action title, then the source's readable
+      // name. It does not show the old summary or the source id.
+      new RegExp(
+        `Change sports source coverage[\\s\\S]*${(await listSources(page)).find((source) => source.id === mirroredSourceId)?.label}`
+      )
     );
     const replaced = (await listSources(page)).find((source) => source.id === mirroredSourceId);
     expect(replaced?.assignments.map((assignment) => assignment.followId)).toEqual([

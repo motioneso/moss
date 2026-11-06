@@ -93,6 +93,7 @@ export function buildCliVersionCheck(deps: {
   readonly versionReader: CliToolVersionReader | undefined;
   readonly listAdminIds: () => Promise<readonly string[]>;
   readonly raiseFailure?: CliVersionCheckPorts["raiseFailure"];
+  readonly raisePostPromoteFailure?: CliVersionCheckPorts["raisePostPromoteFailure"];
 }): (provider: ProviderKind, opts?: { force?: boolean }) => Promise<VersionCheckOutcome> {
   const runTurn = async (
     provider: ProviderKind,
@@ -123,6 +124,9 @@ export function buildCliVersionCheck(deps: {
         provider,
         userId,
         sessionKey: key,
+        // Claude is promoted before its check, so the candidate is already cleared and the
+        // check must run the live build.
+        useCandidate: provider !== "anthropic",
         ...(toolServer ? { toolServer } : {})
       });
       return await runCheckTurn({
@@ -176,7 +180,10 @@ export function buildCliVersionCheck(deps: {
         recordCheck: async (p, check) => {
           await deps.getConnection()?.recordCliCheck({ provider: p, ...check });
         },
-        ...(deps.raiseFailure ? { raiseFailure: deps.raiseFailure } : {})
+        ...(deps.raiseFailure ? { raiseFailure: deps.raiseFailure } : {}),
+        ...(deps.raisePostPromoteFailure
+          ? { raisePostPromoteFailure: deps.raisePostPromoteFailure }
+          : {})
       },
       opts
     );

@@ -20,8 +20,9 @@ const quiet: CliToolsStatusSnapshot = {
 const derive = (
   update: Parameters<typeof deriveCliToolsDto>[0]["update"],
   status: CliToolsStatusSnapshot = quiet,
-  version: string | null = "2.1.282"
-) => deriveCliToolsDto({ provider: "anthropic", version, update, status });
+  version: string | null = "2.1.282",
+  provider: "anthropic" | "openai-compatible" = "anthropic"
+) => deriveCliToolsDto({ provider, version, update, status });
 
 const failed = {
   candidateVersion: "2.1.290",
@@ -58,8 +59,12 @@ describe("deriveCliToolsDto", () => {
     expect(derive(failed, running).state).toBe("checking");
   });
 
-  it("holds back a failed candidate with a plain reason from the fixed list", () => {
-    expect(derive(failed)).toEqual({
+  it("never holds back a Claude candidate, because Claude updates always go live", () => {
+    expect(derive(failed).state).toBe("current");
+  });
+
+  it("holds back a failed Codex candidate with a plain reason from the fixed list", () => {
+    expect(derive(failed, quiet, "2.1.282", "openai-compatible")).toEqual({
       version: "2.1.282",
       state: "held_back",
       candidateVersion: "2.1.290",
@@ -88,7 +93,7 @@ describe("deriveCliToolsDto", () => {
 
   it("puts a held back candidate ahead of a newer-Moss wait", () => {
     const status = { ...quiet, needsNewerMoss: { anthropic: "2.1.300" } };
-    expect(derive(failed, status).state).toBe("held_back");
+    expect(derive(failed, status, "2.1.282", "openai-compatible").state).toBe("held_back");
   });
 });
 

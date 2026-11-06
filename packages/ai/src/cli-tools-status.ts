@@ -118,7 +118,8 @@ export function deriveCliToolsDto(input: {
   if (status.checking.has(provider) || awaitingCheck) {
     return { ...base, state: "checking", ...(candidate ? { candidateVersion: candidate } : {}) };
   }
-  if (candidate && last?.result === "failed") {
+  // Claude updates always go live, so a failed check never leaves a held back candidate.
+  if (candidate && last?.result === "failed" && provider !== "anthropic") {
     return {
       ...base,
       state: "held_back",

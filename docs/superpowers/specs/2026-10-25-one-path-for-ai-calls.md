@@ -50,9 +50,11 @@ Both adapters can run with no tools. The evidence doc has the tables.
    accepted. A failed check blocks the call and tells the user why.
 4. **Structured answers are validated after the fact.** ACP does not force the shape. Meeting code
    asks for JSON, parses it and runs the existing evidence validation. One retry on a bad shape.
-5. **The update system's live check runs the same profile.** A new Claude or Codex build must
-   offer no tools under the no-tools profile and answer a structured prompt before it goes live.
-   This replaces the per-build allowlist. A build that fails stays out and an admin alert fires.
+5. **A Claude update always goes live, and the live check runs afterwards.** Superseded by
+   `2026-11-05-summary-route-update-guard.md`. A new Claude build is promoted at once. The no-tools
+   check then runs in the background with a time limit and can raise an admin alert, but it never
+   holds the update back. Every summary run reads back the session's own isolation report before
+   any transcript is sent. Codex keeps the earlier rule: it must pass the check before it goes live.
 6. **Retire the constrained runner after parity.** Delete `constrained-*` and the hash tables once
    the ACP profile passes the same tests. Until then both routes stay and the allowlist from #3690
    keeps production working.

@@ -390,6 +390,12 @@ export const meetingFeatures = [
           "Summaries on this Claude subscription cannot run with tools off yet. No other model is used. Ask an admin to check the provider in Settings."
       },
       {
+        code: "meeting_output_isolation_failed",
+        class: "validation",
+        description:
+          "Stopped before the transcript was sent: a protection was off or could not be checked. Only the tool list is observed. Setting files and session saving are requested and accepted, not observed. Admins get an alert."
+      },
+      {
         code: "meeting_output_route_unavailable",
         class: "validation",
         description:

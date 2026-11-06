@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { MossAcpClient, AcpCapabilityError, type AcpProviderKind, type AcpTunnel } from "@moss/acp";
+import {
+  AcpCapabilityError,
+  AcpIsolationError,
+  MossAcpClient,
+  type AcpProviderKind,
+  type AcpTunnel
+} from "@moss/acp";
 import {
   CONSTRAINED_CLAUDE_TIMEOUT_MS,
+  StructuredIsolationFailedError,
   StructuredTransportUnavailableError,
   abortErrorFor,
   assertBoundedStructuredPrompt,
@@ -100,6 +107,10 @@ async function generate(
     const modelId = input.model.provider_model_id;
     if (modelId) await client.setModelForChat(handle, modelId);
     if (input.signal?.aborted) throw abortErrorFor(input.signal);
+    // Claude reports its own tools, plugins and servers. The transcript is sent only after that
+    // report shows the session is locked down.
+    if (acpKind === "anthropic") await client.verifyIsolation(handle);
+    if (input.signal?.aborted) throw abortErrorFor(input.signal);
     const result = await client.prompt(handle, prompt, {
       timeoutMs: CONSTRAINED_CLAUDE_TIMEOUT_MS
     });
@@ -114,6 +125,8 @@ async function generate(
     };
   } catch (error) {
     if (input.signal?.aborted) throw abortErrorFor(input.signal);
+    if (error instanceof AcpIsolationError)
+      throw new StructuredIsolationFailedError(error.cause, error.property);
     if (error instanceof AcpCapabilityError) throw new StructuredTransportUnavailableError();
     throw error;
   } finally {

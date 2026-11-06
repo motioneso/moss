@@ -2,7 +2,7 @@ import { constants } from "node:fs";
 import { access, readFile, realpath, stat } from "node:fs/promises";
 import { delimiter, dirname, isAbsolute, join } from "node:path";
 import type { TmuxIo } from "@moss/ai";
-import { createExecutableDigestCache } from "./constrained-claude-profile.js";
+import { createExecutableDigestCache } from "./executable-digest-cache.js";
 import { ConstrainedProcessError } from "./constrained-structured-process.js";
 import { CliChatUnavailableError } from "./errors.js";
 
