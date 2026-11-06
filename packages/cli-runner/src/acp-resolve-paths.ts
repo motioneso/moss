@@ -1,6 +1,4 @@
 import { execFile } from "node:child_process";
-import { realpath } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
 
 import { buildSetprivDropCommand } from "./setpriv.js";
 
@@ -12,7 +10,42 @@ export interface ResolveIdentity {
   readonly gid: number;
 }
 
-const MISSING_CODES = new Set(["ENOENT", "ENOTDIR"]);
+/**
+ * Walks each path one piece at a time the way the kernel does, so a link
+ * followed before ".." sends ".." to the link's target. A missing piece ends
+ * the walk and the rest is kept as written. Any other failure (no permission,
+ * link loop) exits non-zero so the caller refuses. Runs in its own process so
+ * it can run as the session account.
+ */
+const WALKER = `
+const fs = require("node:fs");
+const path = require("node:path");
+function walk(input) {
+  const todo = input.split("/").filter(Boolean).reverse();
+  let cur = "/";
+  let links = 0;
+  let missing = false;
+  while (todo.length) {
+    const piece = todo.pop();
+    if (piece === ".") continue;
+    if (missing) { cur = path.join(cur, piece); continue; }
+    if (piece === "..") { cur = path.dirname(cur); continue; }
+    const next = path.join(cur, piece);
+    let stat;
+    try { stat = fs.lstatSync(next); } catch (err) {
+      if (err.code === "ENOENT" || err.code === "ENOTDIR") { missing = true; cur = next; continue; }
+      throw err;
+    }
+    if (!stat.isSymbolicLink()) { cur = next; continue; }
+    if (++links > 40) throw new Error("too many links");
+    const target = fs.readlinkSync(next);
+    if (target.startsWith("/")) cur = "/";
+    todo.push(...target.split("/").filter(Boolean).reverse());
+  }
+  return cur;
+}
+process.stdout.write(process.argv.slice(1).map((p) => walk(p) + "\\0").join(""));
+`;
 
 const execProgram: RunProgram = (command, args) =>
   new Promise((done, fail) => {
@@ -20,29 +53,6 @@ const execProgram: RunProgram = (command, args) =>
       err ? fail(err) : done(stdout)
     );
   });
-
-/**
- * Follows symlinks for one path. A path that does not exist yet resolves its
- * deepest existing ancestor and keeps the rest, so a link in the middle of a
- * new path is still seen. Only a missing path is walked past; any other
- * failure (for example no permission) throws so the caller refuses.
- */
-async function realLocation(absolute: string): Promise<string> {
-  const rest: string[] = [];
-  let current = absolute;
-  for (;;) {
-    try {
-      return join(await realpath(current), ...rest.reverse());
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code === undefined || !MISSING_CODES.has(code)) throw err;
-      const parent = dirname(current);
-      if (parent === current) return absolute;
-      rest.push(current.slice(parent.length).replace(/^\/+/, ""));
-      current = parent;
-    }
-  }
-}
 
 /**
  * Real absolute path for each input, resolved against the session folder.
@@ -55,16 +65,15 @@ export async function resolveRealPaths(
   identity: ResolveIdentity | null = null,
   run: RunProgram = execProgram
 ): Promise<string[]> {
-  const absolutes = paths.map((target) => resolve(cwd, target));
-  if (identity === null) return Promise.all(absolutes.map(realLocation));
-  if (absolutes.length === 0) return [];
-  const { command, args } = buildSetprivDropCommand(
-    "realpath",
-    ["-m", "-z", "--", ...absolutes],
-    identity
-  );
+  if (paths.length === 0) return [];
+  const inputs = paths.map((target) => (target.startsWith("/") ? target : `${cwd}/${target}`));
+  const walkerArgs = ["-e", WALKER, "--", ...inputs];
+  const { command, args } =
+    identity === null
+      ? { command: process.execPath, args: walkerArgs }
+      : buildSetprivDropCommand(process.execPath, walkerArgs, identity);
   const parts = (await run(command, args)).split("\0");
-  if (parts.pop() !== "" || parts.length !== absolutes.length) {
+  if (parts.pop() !== "" || parts.length !== inputs.length) {
     throw new Error("path lookup returned an unexpected answer");
   }
   return parts;

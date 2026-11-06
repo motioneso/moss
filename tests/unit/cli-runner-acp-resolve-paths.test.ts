@@ -40,6 +40,20 @@ describe("resolveRealPaths (#3557)", () => {
     }
   });
 
+  it("sends .. through a link to the link's target, not back up the session folder", async () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "acp-resolve-")));
+    try {
+      const cwd = join(dir, "session");
+      mkdirSync(cwd);
+      mkdirSync(join(dir, "home", "inner"), { recursive: true });
+      symlinkSync(join(dir, "home", "inner"), join(cwd, "jump"));
+      const [up] = await resolveRealPaths(cwd, ["jump/../credentials"]);
+      expect(up).toBe(join(dir, "home", "credentials"));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it.skipIf(process.getuid?.() === 0)(
     "refuses instead of guessing when a folder cannot be entered",
     async () => {
@@ -65,7 +79,7 @@ describe("resolveRealPaths (#3557)", () => {
     const out = await resolveRealPaths("/s", ["env-link", "/tmp/x"], { uid: 4001, gid: 4002 }, run);
     expect(out).toEqual(["/proc/1/environ", "/tmp/x"]);
     expect(calls[0]).toEqual(
-      expect.arrayContaining(["setpriv", "--reuid=4001", "--regid=4002", "realpath", "-m", "-z"])
+      expect.arrayContaining(["setpriv", "--reuid=4001", "--regid=4002", process.execPath])
     );
     expect(calls[0]).toEqual(expect.arrayContaining(["/s/env-link", "/tmp/x"]));
     await expect(
