@@ -149,18 +149,19 @@ reset. Each failure raises the existing admin alert, with the cause but no trans
 
 Split `meeting_output_route_unavailable` into causes the user can act on:
 
-| Cause                                          | Code                                    | Who can fix it |
-| ---------------------------------------------- | --------------------------------------- | -------------- |
-| No usable default model or credential          | keep `meeting_output_route_unavailable` | Admin          |
-| Runner not connected or provider not signed in | `meeting_output_runner_offline` (new)   | Admin          |
-| Run-time isolation check failed                | `meeting_output_isolation_failed` (new) | Admin          |
+| Cause                                 | Code                                    | Who can fix it |
+| ------------------------------------- | --------------------------------------- | -------------- |
+| No usable default model or credential | keep `meeting_output_route_unavailable` | Admin          |
+| Runner not connected                  | `meeting_output_runner_offline` (new)   | Admin          |
+| Run-time isolation check failed       | `meeting_output_isolation_failed` (new) | Admin          |
 
 The panel names the cause in one sentence, points to Rewrite summary for when it is fixed, and shows
 the settings link to admins only. Members are told to ask an admin.
 
 Today's readiness probe (`acp-no-tools-readiness.ts`) ignores the user and returns only available or
-unavailable. The build widens it to a typed reason: `no_model`, `runner_offline`, `not_signed_in`.
-Sources: model selection, the runner connection, and the provider sign-in state. The isolation
+unavailable. The build widens it to a typed reason: `no_model`, `runner_offline`.
+Sources: model selection and the runner connection. Sign-in state is not checked up front, because
+that lookup can reject a working session (Ben, 2026-11-06). The isolation
 failure comes from the run itself, not the probe. The reason travels in the summary failure record
 and reaches the panel with the existing error code field.
 

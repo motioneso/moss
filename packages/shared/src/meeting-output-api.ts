@@ -45,6 +45,11 @@ export interface GenerateMeetingOutputInput {
   readonly templateId: "general" | "one-to-one" | "project-review" | "interview";
   readonly templateVersion: number;
 }
+/** Best-effort flag for lines that looked like orders to the AI. Owner-only, stored with the summary. */
+export interface MeetingInstructionFlag {
+  readonly lines: readonly string[];
+  readonly more: number;
+}
 export interface MeetingOutputArtifact {
   readonly id: string;
   readonly meetingId: string;
@@ -56,6 +61,7 @@ export interface MeetingOutputArtifact {
   readonly content: MeetingOutputContent;
   readonly origin: "generated" | "manual";
   readonly stale: boolean;
+  readonly instructionFlag?: MeetingInstructionFlag;
   readonly createdAt: string;
 }
 export interface MeetingActionCandidate {
@@ -93,6 +99,7 @@ export type MeetingOutputResult =
 export type MeetingOutputGenerationAvailability =
   | "available"
   | "model-unavailable"
+  | "runner-offline"
   | "subscription-unsupported"
   | "subscription-isolation-unavailable"
   | "check-failed";

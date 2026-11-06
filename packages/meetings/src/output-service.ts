@@ -14,6 +14,7 @@ import {
   validateMeetingOutput,
   MeetingOutputValidationError
 } from "./output-validation.js";
+import { scanForInstructions } from "./instruction-scan.js";
 
 export type MeetingOutputGenerator = (
   actor: AccessContext,
@@ -144,6 +145,8 @@ export class MeetingOutputService {
         ? { ...reservation.result, replayed: true }
         : reservation.result;
     const inputs = reservation.inputs;
+    // Runs in Moss before the transcript leaves. Result is stored with the summary only.
+    const instructionFlag = scanForInstructions(inputs);
     try {
       // Transport must honor this deadline. It must resolve live routing/credential state
       // itself and reject tool-capable transports; the service never retries or falls back.
@@ -203,6 +206,7 @@ export class MeetingOutputService {
           templateVersion: effectiveTemplate.version,
           modelRoute: generated.modelRoute,
           content: validateMeetingOutput({ ...validated, warnings }, inputs),
+          ...(instructionFlag ? { instructionFlag } : {}),
           origin: "generated",
           stale
         });

@@ -7,7 +7,7 @@ import type { MeResponse } from "@moss/shared";
 export function summaryGenerationFailure(code?: string): {
   readonly status: "failed";
   readonly message: string;
-  readonly remediation?: "ai-providers";
+  readonly remediation?: "ai-providers" | "ai-settings";
 } {
   switch (code) {
     case "meeting_output_queue_unavailable":
@@ -41,14 +41,22 @@ export function summaryGenerationFailure(code?: string): {
       return {
         status: "failed",
         message:
-          "The summary was stopped because Moss could not confirm the AI session was locked down. Nothing was sent. No other model was used."
+          "Moss couldn’t write this summary because Claude didn’t accept the settings that keep your meeting private. Your transcript and notes are kept; try Rewrite summary later.",
+        remediation: "ai-settings"
+      };
+    case "meeting_output_runner_offline":
+      return {
+        status: "failed",
+        message:
+          "Moss couldn’t write this summary because it couldn’t reach Claude. Your transcript and notes are kept; try Rewrite summary once it’s back.",
+        remediation: "ai-settings"
       };
     case "meeting_output_route_unavailable":
       return {
         status: "failed",
         message:
-          "Your default model is unavailable or cannot produce structured summaries. Check its connection and try again. No other model will be used.",
-        remediation: "ai-providers"
+          "Moss couldn’t write this summary because no AI is chosen for summaries yet. Your transcript and notes are kept; try Rewrite summary after one is chosen.",
+        remediation: "ai-settings"
       };
     case "meeting_output_provider_failed":
       return {
@@ -76,6 +84,38 @@ export function summaryGenerationFailure(code?: string): {
           "The summary could not be generated. Try again when you’re ready. No other model was used."
       };
   }
+}
+
+/** Codes whose message already ends with the Rewrite summary pointer. */
+export const SELF_CONTAINED_FAILURE_CODES: ReadonlySet<string> = new Set([
+  "meeting_output_isolation_failed",
+  "meeting_output_runner_offline",
+  "meeting_output_route_unavailable"
+]);
+
+/** Admins get the settings link; members are told to ask an admin. */
+export function SummaryAiSettingsHint() {
+  const me = useQuery({
+    queryKey: ["meetings", "summary-settings-access"],
+    queryFn: ({ signal }) => requestJson<MeResponse>("/api/me", { signal }),
+    retry: false,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnWindowFocus: "always"
+  });
+  const admin = me.isSuccess && !me.isFetching && me.data.user.isInstanceAdmin;
+  return (
+    <p className="jds-hint">
+      {admin ? (
+        <>
+          Check your AI settings in{" "}
+          <Link to="/settings?section=aiproviders">Settings → AI providers</Link>.
+        </>
+      ) : (
+        "Ask an admin to check the AI settings."
+      )}
+    </p>
+  );
 }
 
 export function SummaryModelRecovery() {

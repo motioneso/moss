@@ -16,12 +16,24 @@ it("explains a stopped deadline without exposing implementation details", () => 
   });
 });
 
-it("offers the same settings recovery for provider failure and unavailable models", () => {
-  expect(summaryGenerationFailure("meeting_output_provider_failed")).toEqual({
+it.each([
+  [
+    "meeting_output_isolation_failed",
+    "Moss couldn’t write this summary because Claude didn’t accept the settings that keep your meeting private. Your transcript and notes are kept; try Rewrite summary later."
+  ],
+  [
+    "meeting_output_runner_offline",
+    "Moss couldn’t write this summary because it couldn’t reach Claude. Your transcript and notes are kept; try Rewrite summary once it’s back."
+  ],
+  [
+    "meeting_output_route_unavailable",
+    "Moss couldn’t write this summary because no AI is chosen for summaries yet. Your transcript and notes are kept; try Rewrite summary after one is chosen."
+  ]
+])("shows the exact wording for %s and nothing else", (code, message) => {
+  expect(summaryGenerationFailure(code)).toEqual({
     status: "failed",
-    message:
-      "Your model couldn’t complete the summary. Check its connection and try again. No other model was used.",
-    remediation: summaryGenerationFailure("meeting_output_route_unavailable").remediation
+    message,
+    remediation: "ai-settings"
   });
 });
 

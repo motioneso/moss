@@ -310,7 +310,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
           page.getByRole("button", { name: "Write summary", exact: true })
         ).toBeDisabled();
         await expect(summary).toContainText(
-          "Your default model is unavailable or cannot produce structured summaries. Check its connection and try again. No other model will be used."
+          "Moss couldn’t write this summary because no AI is chosen for summaries yet. Your transcript and notes are kept; try Rewrite summary after one is chosen."
         );
       } finally {
         expect(
@@ -350,9 +350,9 @@ test("reviewed summary versions create independent Tasks and private vault copie
             code: "meeting_output_route_unavailable"
           });
           await expect(summary).toContainText(
-            "Your default model is unavailable or cannot produce structured summaries. Check its connection and try again. No other model will be used."
+            "Moss couldn’t write this summary because no AI is chosen for summaries yet. Your transcript and notes are kept; try Rewrite summary after one is chosen."
           );
-          await expect(summary).toContainText("Check your default model in");
+          await expect(summary).toContainText("Check your AI settings in");
           await expect(summary).not.toContainText("Choose Generate to start a new request");
           expect(await readOutputs(page, path)).toMatchObject({ headVersion: 0, artifacts: [] });
           const recovery = summary.getByRole("link", {
@@ -382,13 +382,13 @@ test("reviewed summary versions create independent Tasks and private vault copie
           await expect(
             summary.getByText("Checking summary model availability…", { exact: true })
           ).toHaveCount(0);
-          await expect(summary).toContainText("Check your default model in");
+          await expect(summary).toContainText("Check your AI settings in");
           await expect(page.getByLabel("Summary style", { exact: true })).toHaveValue("general");
           await expect(
             page.getByRole("button", { name: "Write summary", exact: true })
           ).toBeDisabled();
           await expect(summary).toContainText(
-            "Refresh summaries after the configuration is updated, then generate again."
+            "Moss couldn’t write this summary because no AI is chosen for summaries yet."
           );
           return requestKey;
         } finally {
@@ -405,9 +405,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
       // The API-only repair above happens after returning to the focused review, so it
       // creates no mount or visibility event. Follow the disabled-state recovery hint.
       await expect(page.getByRole("button", { name: "Write summary", exact: true })).toBeDisabled();
-      await expect(summary).toContainText(
-        "Refresh summaries after the configuration is updated, then generate again."
-      );
+      await expect(summary).toContainText("Check your AI settings in Settings → AI providers.");
       const refreshed = await clickCommand(page, "Refresh summaries", `${path}/outputs`, "GET");
       expect((await refreshed.json()).generationAvailability).toBe("available");
       await expect(page.getByRole("button", { name: "Write summary", exact: true })).toBeEnabled();

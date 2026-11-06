@@ -141,6 +141,7 @@ const interruption = (signal: AbortSignal) =>
 export type ConstrainedCliReadiness =
   | "available"
   | "model-unavailable"
+  | "runner-offline"
   | "subscription-isolation-unavailable";
 
 /** Composition only. Uses bounded structured transports, without sorting or native search. */
@@ -241,11 +242,12 @@ export function createMeetingOutputRuntime(deps: {
       });
       if (!selected.usable) return "model-unavailable";
       // Filesystem metadata only; no actor transaction remains open during the runner RPC.
-      if (selected.cli)
+      if (selected.cli) {
         return (
           (await probeCli?.(actor.actorUserId, undefined, selected.providerKind)) ??
           "model-unavailable"
         );
+      }
       return "available";
     } catch (error) {
       // Keep retained summaries readable when configuration checks are temporarily unavailable.
@@ -339,7 +341,9 @@ export function createMeetingOutputRuntime(deps: {
           throw new MeetingOutputError(
             readiness === "subscription-isolation-unavailable"
               ? "meeting_output_subscription_isolation_unavailable"
-              : "meeting_output_route_unavailable"
+              : readiness === "runner-offline"
+                ? "meeting_output_runner_offline"
+                : "meeting_output_route_unavailable"
           );
       }
       const runOnce = async (prompt: string) => {
