@@ -4220,13 +4220,13 @@ export async function registerBuiltInModuleWorkers(
     buildSummaryStoppedListener(
       buildCliToolAlertRaiser({
         dataContext: dependencies.dataContext,
+        // The worker role cannot list users. It may read the bootstrap owner ids, as the upgrade
+        // check does, so the alert reaches the instance owner.
         listAdminIds: async () =>
           (
-            await sql<{ id: string }>`
-              SELECT id FROM app.list_all_users()
-              WHERE is_instance_admin = true AND status = 'active'
-              ORDER BY is_bootstrap_owner DESC, id
-            `.execute(dependencies.rootDb)
+            await sql<{ id: string }>`SELECT id FROM app.upgrade_notify_owner_ids()`.execute(
+              dependencies.rootDb
+            )
           ).rows.map((row) => row.id)
       })
     )
