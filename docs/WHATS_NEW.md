@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Keep working when a page cannot load.** If a page fails to load, Moss now shows a reload option for that page while keeping the menu and other pages available. [PR #4005](https://github.com/motioneso/moss/pull/4005)
 - **Chat can no longer schedule its own turns.** Moss's chat can no longer set itself wake-ups or timed jobs, so it only replies when you write to it or a reminder you set goes off. [PR #4007](https://github.com/motioneso/moss/pull/4007)
 - **Medication schedule preview follows your time setting.** The medication schedule preview now uses your saved 12-hour or 24-hour time format, the same as the rest of the app. [PR #4004](https://github.com/motioneso/moss/pull/4004)
 - **Meeting summaries survive Claude updates.** Updating Claude no longer stops Meeting summaries from working, and each summary now checks that Claude's tools are switched off before your notes are sent. [PR #4006](https://github.com/motioneso/moss/pull/4006)
