@@ -859,6 +859,11 @@ export class RpcAcpTunnel implements AcpTunnel {
     return this.connection.acpRead(sessionKey, { afterSeq });
   }
 
+  async resolvePaths(sessionKey: string, paths: readonly string[]): Promise<string[]> {
+    const result = await this.connection.acpResolvePaths(sessionKey, { paths });
+    return [...result.paths];
+  }
+
   async kill(sessionKey: string, _opts?: RpcAcpKillParams): Promise<void> {
     await this.connection.acpKill(sessionKey, _opts ?? {});
   }
