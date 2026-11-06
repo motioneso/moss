@@ -25,6 +25,17 @@ vi.mock("../../packages/notifications/src/push-crypto.js", async (importOriginal
   };
 });
 
+vi.mock("../../packages/notifications/src/push-delivery-claims.js", () => ({
+  PushDeliveryClaimsRepository: class {
+    async claim() {
+      return "claim-token";
+    }
+    async release() {
+      return true;
+    }
+  }
+}));
+
 // The real deferred-cohort repository query runs through this database boundary.
 let mockDeferredRows: readonly Record<string, unknown>[] = [];
 vi.mock("kysely", () => ({
@@ -40,6 +51,12 @@ const fakeScopedDb = {
   [dataContextBrand]: true as const,
   db: {}
 } as unknown as DataContextDb;
+const fakeDataContext = {
+  withDataContext: async <T>(
+    _access: { actorUserId: string },
+    work: (db: DataContextDb) => Promise<T>
+  ) => work(fakeScopedDb)
+};
 
 // `attempt` mirrors the retry metadata pg-boss attaches when a worker is registered with
 // includeMetadata; a job without it is treated as its final attempt (#743 finding 8).
@@ -81,7 +98,7 @@ describe("runPushDeliverJob", () => {
     const isNotificationActive = vi.fn().mockResolvedValue(false);
     await runPushDeliverJob(
       deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         notificationsRepository: {
           getById: vi
@@ -117,7 +134,7 @@ describe("runPushDeliverJob", () => {
         const enqueueDeliver = vi.fn();
         await runPushDeliverJob(
           deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
-          fakeScopedDb,
+          fakeDataContext,
           {
             notificationsRepository: {
               getById: vi.fn().mockResolvedValue(notification),
@@ -159,7 +176,7 @@ describe("runPushDeliverJob", () => {
     const sendWebPush = vi.fn().mockResolvedValue(undefined);
     await runPushDeliverJob(
       deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         notificationsRepository: {
           getById: vi.fn().mockResolvedValue({
@@ -200,7 +217,7 @@ describe("runPushDeliverJob", () => {
     const isModuleEnabled = vi.fn().mockResolvedValue(false);
     await runPushDeliverJob(
       deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         notificationsRepository: { getById } as never,
         subscriptionsRepository: { listActiveForDelivery } as never,
@@ -224,7 +241,7 @@ describe("runPushDeliverJob", () => {
 
     await runPushDeliverJob(
       deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         notificationsRepository: { getById } as never,
         subscriptionsRepository: { listActiveForDelivery } as never,
@@ -245,7 +262,7 @@ describe("runPushDeliverJob", () => {
 
     await runPushDeliverJob(
       deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         notificationsRepository: { getById } as never,
         subscriptionsRepository: { listActiveForDelivery } as never,
@@ -269,7 +286,7 @@ describe("runPushDeliverJob", () => {
 
     await runPushDeliverJob(
       deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         notificationsRepository: { getById } as never,
         subscriptionsRepository: {
@@ -299,7 +316,7 @@ describe("runPushDeliverJob", () => {
     try {
       await runPushDeliverJob(
         deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
-        fakeScopedDb,
+        fakeDataContext,
         {
           notificationsRepository: {
             getById: vi.fn().mockResolvedValue({ id: "n1", title: "Hi", body: "there", href: null })
@@ -337,7 +354,7 @@ describe("runPushDeliverJob", () => {
 
     await runPushDeliverJob(
       deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         notificationsRepository: {
           getById: vi.fn().mockResolvedValue({ id: "n1", title: "Hi", body: "there", href: null })
@@ -366,7 +383,7 @@ describe("runPushDeliverJob", () => {
 
     await runPushDeliverJob(
       deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         notificationsRepository: {
           getById: vi.fn().mockResolvedValue({ id: "n1", title: "Hi", body: "there", href: null })
@@ -396,7 +413,7 @@ describe("runPushDeliverJob", () => {
 
     await runPushDeliverJob(
       deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         notificationsRepository: {
           getById: vi.fn().mockResolvedValue({ id: "n1", title: "Hi", body: "there", href: null })
@@ -433,7 +450,7 @@ describe("runPushDeliverJob", () => {
 
     await runPushDeliverJob(
       deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         notificationsRepository: { getById } as never,
         subscriptionsRepository: {
@@ -465,7 +482,7 @@ describe("runPushDeliverJob", () => {
 
     await runPushDeliverJob(
       deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         notificationsRepository: { getById } as never,
         subscriptionsRepository: {
@@ -496,7 +513,7 @@ describe("runPushDeliverJob", () => {
 
     await runPushDeliverJob(
       deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         notificationsRepository: { getById } as never,
         subscriptionsRepository: {
@@ -530,7 +547,7 @@ describe("runPushDeliverJob", () => {
 
     await runPushDeliverJob(
       deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         notificationsRepository: { getById } as never,
         subscriptionsRepository: {
@@ -560,7 +577,7 @@ describe("runPushSummaryJob", () => {
     ];
     await runPushSummaryJob(
       summaryJob({ actorUserId: "u1", recipientUserId: "u1", releaseAt: "2026-09-04T08:00:00Z" }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         notificationsRepository: { listUnreadDeferred: async () => rows } as never,
         notificationPreferencePort: {
@@ -586,7 +603,7 @@ describe("runPushSummaryJob", () => {
     const recordDeliverySuccess = vi.fn();
     await runPushSummaryJob(
       summaryJob({ actorUserId: "u1", recipientUserId: "u1", releaseAt: "2026-09-04T08:00:00Z" }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         notificationsRepository: {
           listUnreadDeferred: async () => [
@@ -635,7 +652,7 @@ describe("runPushSummaryJob", () => {
         recipientUserId: "u1",
         releaseAt: "2026-09-04T08:00:00.000Z"
       }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         subscriptionsRepository: { listActiveForDelivery } as never,
         cipher: {} as never,
@@ -664,7 +681,7 @@ describe("runPushSummaryJob", () => {
         recipientUserId: "u1",
         releaseAt: "2026-09-04T08:00:00.000Z"
       }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         subscriptionsRepository: { listActiveForDelivery } as never,
         cipher: {} as never,
@@ -693,7 +710,7 @@ describe("runPushSummaryJob", () => {
         recipientUserId: "u1",
         releaseAt: "2026-09-04T08:00:00.000Z"
       }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         subscriptionsRepository: {
           listActiveForDelivery,
@@ -731,7 +748,7 @@ describe("runPushSummaryJob", () => {
         recipientUserId: "u1",
         releaseAt: "2026-09-04T08:00:00.000Z"
       }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         subscriptionsRepository: {
           listActiveForDelivery,
@@ -779,7 +796,7 @@ describe("push delivery retries (#743 security finding 8)", () => {
     sendWebPush: ReturnType<typeof vi.fn>
   ) {
     const { runPushDeliverJob } = await import("@moss/notifications");
-    return runPushDeliverJob(job, fakeScopedDb, {
+    return runPushDeliverJob(job, fakeDataContext, {
       notificationsRepository: {
         getById: vi.fn().mockResolvedValue({ id: "n1", title: "Hi", body: "there", href: null })
       } as never,
@@ -964,7 +981,7 @@ describe("push delivery retries (#743 security finding 8)", () => {
         recipientUserId: "u1",
         releaseAt: "2026-09-04T08:00:00.000Z"
       }),
-      fakeScopedDb,
+      fakeDataContext,
       {
         subscriptionsRepository: repository as never,
         cipher: {} as never,

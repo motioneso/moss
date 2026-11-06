@@ -2,7 +2,24 @@ import { describe, expect, it, vi } from "vitest";
 import { dataContextBrand, type DataContextDb } from "@moss/db";
 import type { PushDeliverJobPayload, PushSummaryJobPayload } from "@moss/notifications";
 
+vi.mock("../../packages/notifications/src/push-delivery-claims.js", () => ({
+  PushDeliveryClaimsRepository: class {
+    async claim() {
+      return "claim-token";
+    }
+    async release() {
+      return true;
+    }
+  }
+}));
 const fakeScopedDb = { [dataContextBrand]: true, db: {} } as unknown as DataContextDb;
+const fakeDataContext = {
+  withDataContext: async <T>(
+    _access: { actorUserId: string },
+    work: (db: DataContextDb) => Promise<T>
+  ) => work(fakeScopedDb)
+};
+
 const deliverJob = (data: PushDeliverJobPayload) => ({ data });
 const summaryJob = (data: PushSummaryJobPayload) => ({ data });
 
@@ -16,6 +33,7 @@ describe("live quiet-hours allowance at push dispatch", () => {
       try {
         const row = {
           id: "n1",
+          title: "Reminder",
           module_id: "chat",
           urgency: "normal",
           recipient_user_id: "u1",
@@ -53,12 +71,12 @@ describe("live quiet-hours allowance at push dispatch", () => {
                   recipientUserId: "u1",
                   releaseAt: "2026-10-11T08:00:00Z"
                 }),
-                fakeScopedDb,
+                fakeDataContext,
                 deps
               )
             : runPushDeliverJob(
                 deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
-                fakeScopedDb,
+                fakeDataContext,
                 deps
               );
         await run();
@@ -84,7 +102,7 @@ describe("live quiet-hours allowance at push dispatch", () => {
       const isAllowedDuringQuietHours = vi.fn().mockResolvedValue(true);
       await runPushDeliverJob(
         deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
-        fakeScopedDb,
+        fakeDataContext,
         {
           notificationsRepository: {
             getById: async () => ({ id: "n1", module_id: "chat", urgency: "normal", metadata: {} })

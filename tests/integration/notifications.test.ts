@@ -209,7 +209,8 @@ describe("Notifications module M5", () => {
       "app.notifications",
       "app.notification_reads",
       "app.push_subscriptions",
-      "app.push_signing_key"
+      "app.push_signing_key",
+      "app.push_delivery_claims"
     ]);
     // No sidebar nav entry: notifications are reached via the topbar bell (AppShell).
     // The route + APIs remain registered; only the module-nav link was retired.
