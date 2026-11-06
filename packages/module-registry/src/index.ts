@@ -4220,6 +4220,8 @@ export async function registerBuiltInModuleWorkers(
     buildSummaryStoppedListener(
       buildCliToolAlertRaiser({
         dataContext: dependencies.dataContext,
+        // The worker role cannot write the action audit log.
+        writeAuditRow: false,
         // The worker role cannot list users. It may read the bootstrap owner ids, as the upgrade
         // check does, so the alert reaches the instance owner.
         listAdminIds: async () =>

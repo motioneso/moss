@@ -95,6 +95,19 @@ describe("buildCliToolAlertRaiser", () => {
   });
 });
 
+describe("buildCliToolAlertRaiser without the audit row", () => {
+  it("still writes the notification when the audit row is turned off", async () => {
+    const withDataContext = vi.fn(async () => undefined);
+    const raise = buildCliToolAlertRaiser({
+      dataContext: { withDataContext } as never,
+      listAdminIds: async () => ["owner-1"],
+      writeAuditRow: false
+    });
+    await raise({ kind: "summary_stopped", provider: "anthropic", reason: "violation" });
+    expect(withDataContext).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("buildCliVersionTooOldHandler", () => {
   it("raises a too-old alert and starts an update pass right away", () => {
     const raise = vi.fn(async () => undefined);

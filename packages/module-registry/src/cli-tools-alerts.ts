@@ -88,6 +88,8 @@ export interface CliToolAlertDeps {
   readonly dataContext: DataContextRunner;
   readonly listAdminIds: () => Promise<readonly string[]>;
   readonly now?: () => Date;
+  /** The worker role cannot write the action audit log, so it turns this off. */
+  readonly writeAuditRow?: boolean;
 }
 
 /** Builds the raiser. Each admin gets a notification, an audit row and a health record. */
@@ -117,22 +119,24 @@ export function buildCliToolAlertRaiser(
             href: SETTINGS_HREF,
             metadata: { kind: alert.kind, provider: alert.provider }
           });
-          await ai.insertActionAuditLog(scopedDb, {
-            id: randomUUID(),
-            ownerUserId: actorUserId,
-            toolModuleId: "ai",
-            toolName: "cli-tools.update",
-            actionFamilyId: null,
-            actionKind: "write",
-            approvalMode: "auto",
-            outcome: alert.kind === "held_back" ? "refused" : "failed",
-            errorClass: alert.reason ?? alert.kind,
-            requestId,
-            chatSessionId: null,
-            sourceSurface: "scheduled",
-            inputSummary: { inputKeys: ["provider"], inputKeyCount: 1, truncated: false },
-            durationMs: null
-          });
+          if (deps.writeAuditRow !== false) {
+            await ai.insertActionAuditLog(scopedDb, {
+              id: randomUUID(),
+              ownerUserId: actorUserId,
+              toolModuleId: "ai",
+              toolName: "cli-tools.update",
+              actionFamilyId: null,
+              actionKind: "write",
+              approvalMode: "auto",
+              outcome: alert.kind === "held_back" ? "refused" : "failed",
+              errorClass: alert.reason ?? alert.kind,
+              requestId,
+              chatSessionId: null,
+              sourceSurface: "scheduled",
+              inputSummary: { inputKeys: ["provider"], inputKeyCount: 1, truncated: false },
+              durationMs: null
+            });
+          }
           await ai.recordError(scopedDb, {
             id: randomUUID(),
             feature: "cli-tools",
