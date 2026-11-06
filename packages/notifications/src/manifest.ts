@@ -70,14 +70,16 @@ export const notificationsModuleManifest = {
       "sql/0101_notifications_metadata_size_check.sql",
       "sql/0102_notifications_defense_in_depth_comments.sql",
       "sql/0142_notifications_module_id.sql",
-      "sql/0225_push_notifications.sql"
+      "sql/0225_push_notifications.sql",
+      "sql/0359_push_delivery_claims.sql"
     ],
     migrationDirectories: ["packages/notifications/sql"],
     ownedTables: [
       "app.notifications",
       "app.notification_reads",
       "app.push_subscriptions",
-      "app.push_signing_key"
+      "app.push_signing_key",
+      "app.push_delivery_claims"
     ]
   },
   // No sidebar nav entry: notifications are reached via the topbar bell (AppShell), which

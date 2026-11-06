@@ -52,6 +52,11 @@ export interface AcpTunnel {
     exited: boolean;
     truncated: boolean;
   }>;
+  /**
+   * Follow symlinks runner-side for paths a tool call names; returns one real
+   * absolute path per input, in order. Rejects when the session is gone.
+   */
+  resolvePaths?(sessionKey: string, paths: readonly string[]): Promise<string[]>;
   /** Stop the adapter for a session key. Idempotent. */
   kill(sessionKey: string): Promise<void>;
   /**

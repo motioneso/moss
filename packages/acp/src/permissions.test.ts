@@ -148,6 +148,29 @@ describe("classifyAcpPermission", () => {
     }
   });
 
+  it("refuses home-relative reads that reach the forbidden zone", () => {
+    for (const target of [
+      "~/../../proc/self/environ",
+      "~/../../../../proc/self/environ",
+      "~/.claude.json",
+      "~",
+      "~root/.ssh/id_rsa"
+    ]) {
+      expect(
+        classifyAcpPermission(
+          request({ title: "t", toolName: "Read", rawInput: { file_path: target } }),
+          FOLDERS
+        )
+      ).toEqual({ verdict: "deny", reason: "forbidden_zone" });
+    }
+    expect(
+      classifyAcpPermission(
+        request({ title: "t", toolName: "Read", rawInput: { file_path: "~/x" } }),
+        { cwd: FOLDERS.cwd, home: null }
+      )
+    ).toEqual({ verdict: "deny", reason: "forbidden_zone" });
+  });
+
   it("asks for secret-shaped names inside the folder instead of reading quietly", () => {
     for (const target of ["src/../.env", ".env.production", "keys/id_rsa", "cert.p12"]) {
       expect(

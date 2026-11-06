@@ -172,6 +172,10 @@ const PROCESS_START_ALLOWLIST = new Map<string, string>([
     "spawns the ACP model adapter and the process-kill stoppers; the adapter's turns are recorded by the chat session manager's answer line"
   ],
   [
+    "packages/cli-runner/src/acp-resolve-paths.ts",
+    "runs a small node script that follows symlinks for the path policy, not a model program"
+  ],
+  [
     "packages/cli-runner/src/acp-transcript-purge.ts",
     "runs filesystem purge commands, not a model program"
   ],

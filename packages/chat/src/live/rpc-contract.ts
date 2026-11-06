@@ -188,6 +188,7 @@ export type RpcMethod =
   | "acpSend"
   | "acpRead"
   | "acpKill"
+  | "acpResolvePaths"
   // Slice 1 task 3 — runner-side builds. The caller names a
   // project, never a folder; the runner locks the working directory to the
   // session project folder, caps output at 256 KiB, and kills past the deadline.
@@ -713,6 +714,18 @@ export interface RpcAcpReadResult {
   readonly exitCode: number | null;
   /** True when this reply — or an earlier one — was cut (see AcpHost). */
   readonly truncated: boolean;
+}
+/**
+ * params for method "acpResolvePaths": file paths a tool call names, relative to the
+ * session folder or absolute. The runner follows symlinks on its own filesystem and returns
+ * the real location of each, in order, so the policy judges where a read would land.
+ */
+export interface RpcAcpResolvePathsParams {
+  readonly paths: readonly string[];
+}
+/** result for method "acpResolvePaths": one real absolute path per input path. */
+export interface RpcAcpResolvePathsResult {
+  readonly paths: readonly string[];
 }
 /**
  * params for method "acpKill": stop the adapter for this session key. For a

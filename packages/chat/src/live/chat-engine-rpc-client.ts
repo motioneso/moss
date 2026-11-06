@@ -50,6 +50,8 @@ import {
   decodeFrame,
   encodeFrame,
   type RpcAcpKillParams,
+  type RpcAcpResolvePathsParams,
+  type RpcAcpResolvePathsResult,
   type RpcAcpKillResult,
   type RpcAcpReadParams,
   type RpcAcpReadResult,
@@ -328,9 +330,7 @@ export class RpcConnection {
     return this.call<RpcKillResult>("kill", sessionKey, opts);
   }
 
-  // #744 — private-chat transcript purge over RPC. Runs server-side (the api can't reach the
-  // cli-runner's home dir on the split topology); the manager gates its bookkeeping-row delete
-  // on this resolving, so a rejection here keeps the row for the boot sweep to retry.
+  // #744 — transcript purge runs runner-side; the manager deletes its row only once this resolves.
   purgeTranscripts(sessionKey: string): Promise<RpcPurgeTranscriptsResult> {
     return this.call<RpcPurgeTranscriptsResult>("purgeTranscripts", sessionKey, {});
   }
@@ -339,8 +339,7 @@ export class RpcConnection {
     return this.call<RpcInterruptResult>("interrupt", sessionKey, {});
   }
 
-  // Slice 1 task 3 — ACP tunnel verbs. Session-scoped like the turn verbs; acpRead is a
-  // quick poll (the API-side client in @moss/acp paces it), so the default deadline applies.
+  // ACP tunnel verbs: session-scoped; acpRead is a quick poll, so the default deadline applies.
   acpSpawn(sessionKey: string, params: RpcAcpSpawnParams): Promise<RpcAcpSpawnResult> {
     return this.call<RpcAcpSpawnResult>("acpSpawn", sessionKey, params);
   }
@@ -353,13 +352,16 @@ export class RpcConnection {
     return this.call<RpcAcpReadResult>("acpRead", sessionKey, params);
   }
 
+  acpResolvePaths(
+    sessionKey: string,
+    params: RpcAcpResolvePathsParams
+  ): Promise<RpcAcpResolvePathsResult> {
+    return this.call<RpcAcpResolvePathsResult>("acpResolvePaths", sessionKey, params);
+  }
+
   acpKill(sessionKey: string, params: RpcAcpKillParams = {}): Promise<RpcAcpKillResult> {
     return this.call<RpcAcpKillResult>("acpKill", sessionKey, params);
   }
-
-  // The runner speaks acpExecStart/acpExecPoll/acpExecKill
-  // (server side is live); the matching client verbs land with the API-side
-  // tunnel backing, which is their first caller.
 
   /**
    * #456 — re-arm the response deadline for any in-flight turn verb.

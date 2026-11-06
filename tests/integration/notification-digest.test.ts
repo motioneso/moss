@@ -297,7 +297,7 @@ describe("notification digest settings", () => {
           reason: "scheduled-digest",
           idempotencyKey: `digest:${ids.userA}`
         },
-        { tz: "America/New_York", key: `digest:${ids.userA}` }
+        { tz: "America/New_York", key: `digest-${ids.userA}` }
       ]
     ]);
   });
