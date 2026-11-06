@@ -79,7 +79,7 @@ function PlusIcon() {
   );
 }
 
-/** Options for one upcoming dose, written the way it reads in the preview: "Mon 1 Sep, 08:00". */
+/** Upcoming dose date and time; the clock follows the person's saved 12/24-hour setting. */
 const DOSE_TIME_OPTS: Intl.DateTimeFormatOptions = {
   weekday: "short",
   day: "numeric",
