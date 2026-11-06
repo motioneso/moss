@@ -404,7 +404,7 @@ export const meetingFeatures = [
         code: "meeting_output_runner_offline",
         class: "transient",
         description:
-          "Moss couldn’t reach Claude (helper not connected or not signed in). Transcript and notes are kept. Admins check Settings → AI providers; members ask an admin. Then use Rewrite summary."
+          "Moss couldn’t reach Claude (helper not connected). Transcript and notes are kept. Admins check Settings → AI providers; members ask an admin. Then use Rewrite summary."
       },
       {
         code: "meeting_output_route_unavailable",

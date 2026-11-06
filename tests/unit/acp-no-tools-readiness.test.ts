@@ -25,17 +25,8 @@ describe("ACP no-tools readiness probe", () => {
     );
   });
 
-  it("reports not signed in when the runner says the provider needs a login", async () => {
+  it("does not consult sign-in state, so a signed-out helper still reads as available", async () => {
     const probeProvider = async () => ({ status: "needs_login" as const });
-    await expect(
-      createAcpNoToolsReadinessProbe(() => ({ ...ready, probeProvider }) as never)("user-1")
-    ).resolves.toBe("not-signed-in");
-  });
-
-  it("does not stop on a sign-in lookup that fails", async () => {
-    const probeProvider = async () => {
-      throw new Error("timeout");
-    };
     await expect(
       createAcpNoToolsReadinessProbe(() => ({ ...ready, probeProvider }) as never)("user-1")
     ).resolves.toBe("available");

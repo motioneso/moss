@@ -114,11 +114,7 @@ function setup(
   let activeTransactions = 0;
   const probe = vi.fn<
     () => Promise<
-      | "available"
-      | "model-unavailable"
-      | "runner-offline"
-      | "not-signed-in"
-      | "subscription-isolation-unavailable"
+      "available" | "model-unavailable" | "runner-offline" | "subscription-isolation-unavailable"
     >
   >(async () => "available");
   const runtime = createMeetingOutputRuntime({
@@ -787,8 +783,7 @@ it("checks constrained binary presence outside actor transactions before enablin
 
 it.each([
   ["model-unavailable", "meeting_output_route_unavailable"],
-  ["runner-offline", "meeting_output_runner_offline"],
-  ["not-signed-in", "meeting_output_runner_offline"]
+  ["runner-offline", "meeting_output_runner_offline"]
 ] as const)("maps readiness %s to its own code %s", async (readiness, code) => {
   const h = setup(() => ({ generateStructured: vi.fn() }));
   useClaudeAcp(h);

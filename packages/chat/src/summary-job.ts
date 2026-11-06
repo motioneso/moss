@@ -38,7 +38,6 @@ export type ConstrainedCliReadiness =
   | "available"
   | "model-unavailable"
   | "runner-offline"
-  | "not-signed-in"
   | "subscription-isolation-unavailable";
 
 export type SummaryJobOutcome =
