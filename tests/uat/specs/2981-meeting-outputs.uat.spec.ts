@@ -387,7 +387,9 @@ test("reviewed summary versions create independent Tasks and private vault copie
           await expect(
             page.getByRole("button", { name: "Write summary", exact: true })
           ).toBeDisabled();
-          await expect(summary).toContainText("Check your AI settings in Settings → AI providers.");
+          await expect(summary).toContainText(
+            "Moss couldn’t write this summary because no AI is chosen for summaries yet."
+          );
           return requestKey;
         } finally {
           expect(

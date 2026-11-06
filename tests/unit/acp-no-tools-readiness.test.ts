@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createAcpNoToolsReadinessProbe } from "../../packages/module-registry/src/acp-no-tools-readiness.js";
 
 const ready = { assertReady: () => undefined };
@@ -26,10 +26,11 @@ describe("ACP no-tools readiness probe", () => {
   });
 
   it("does not consult sign-in state, so a signed-out helper still reads as available", async () => {
-    const probeProvider = async () => ({ status: "needs_login" as const });
+    const probeProvider = vi.fn(async () => ({ status: "needs_login" as const }));
     await expect(
       createAcpNoToolsReadinessProbe(() => ({ ...ready, probeProvider }) as never)("user-1")
     ).resolves.toBe("available");
+    expect(probeProvider).not.toHaveBeenCalled();
   });
 
   it("connects an idle runner connection before judging it", async () => {
