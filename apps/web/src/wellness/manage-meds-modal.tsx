@@ -130,8 +130,11 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
     const named = { ...form, name: form.name.trim() ? form.name : "Medication" };
     if (describeFormProblems(named).length > 0) return null;
     const medication = previewMedication(named, timeZone);
-    return { sentence: describeSchedule(medication), doses: nextDoses(medication, new Date(), 3) };
-  }, [form, timeZone]);
+    return {
+      sentence: describeSchedule(medication, locale),
+      doses: nextDoses(medication, new Date(), 3)
+    };
+  }, [form, timeZone, locale]);
 
   const setTimeAt = (index: number, value: string) =>
     setForm((current) => {

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import {
+  formatLocaleClockTime,
   formatLocaleDate,
   formatLocaleDateTime,
   formatLocaleTime,
@@ -59,14 +60,7 @@ export const formatTime = formatLocaleTime;
  * per the user's 12/24-hour preference. No zone conversion happens. Input that is not an
  * "HH:MM" clock, or that the formatter cannot render, is returned unchanged.
  */
-export function formatClockTime(clock: string, locale: LocaleSettingsDto): string {
-  const match = /^(\d{1,2}):(\d{2})/.exec(clock);
-  if (!match) return clock;
-  const hour = Number(match[1]);
-  const minute = Number(match[2]);
-  if (hour > 23 || minute > 59) return clock;
-  return formatTime(Date.UTC(2000, 0, 1, hour, minute), { ...locale, timezone: "UTC" }) || clock;
-}
+export const formatClockTime = formatLocaleClockTime;
 
 export { isValidTimeZone };
 
