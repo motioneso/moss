@@ -10,7 +10,24 @@ vi.mock("../../packages/notifications/src/push-crypto.js", async (importOriginal
     .mockResolvedValue({ publicKey: "public", privateKey: "private" }),
   createPushSigningCipher: vi.fn()
 }));
+vi.mock("../../packages/notifications/src/push-delivery-claims.js", () => ({
+  PushDeliveryClaimsRepository: class {
+    async claim() {
+      return "claim-token";
+    }
+    async release() {
+      return true;
+    }
+  }
+}));
 const scopedDb = { [dataContextBrand]: true, db: {} } as unknown as DataContextDb;
+const dataContext = {
+  withDataContext: async <T>(
+    _access: { actorUserId: string },
+    work: (db: DataContextDb) => Promise<T>
+  ) => work(scopedDb)
+};
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
@@ -68,7 +85,7 @@ describe("push release clock skew", () => {
       const job = { id: "j1", name: kind, data };
       const outcome = await (kind === "summary" ? runPushSummaryJob : runPushDeliverJob)(
         job,
-        scopedDb,
+        dataContext,
         deps
       );
       expect(outcome.delivered).toBe(1);

@@ -13,6 +13,8 @@ import {
   createPushSigningCipher,
   getOrGeneratePushSigningKey,
   runPushDeliverJob,
+  runPushSummaryJob,
+  throwIfPushRetryNeeded,
   type QuietHoursPort
 } from "@moss/notifications";
 import { PreferencesRepository } from "@moss/structured-state";
@@ -153,60 +155,149 @@ class UnexpectedSubscriptions extends PushSubscriptionsRepository {
   }
 }
 
-it("dismisses promptly while a device notification send is held open", async () => {
-  const payload = await due("dismiss during push");
+it.each(["deliver", "summary"] as const)(
+  "dismisses promptly while a device notification send is held open (%s)",
+  async (kind) => {
+    const payload = await due("dismiss during push");
+    await notify(payload);
+    const notification = await asOwner((db) =>
+      notifications.findByEventKey(db, "chat", payload.idempotencyKey)
+    );
+    const releaseAt = new Date(Date.now() - 1000);
+    if (kind === "summary")
+      await worker.withDataContext({ actorUserId: ids.userA }, (db) =>
+        notifications.deferDelivery(db, notification!.id, releaseAt)
+      );
+    const subscriptions = new PushSubscriptionsRepository();
+    await asOwner((db) => getOrGeneratePushSigningKey(db, createPushSigningCipher()));
+    const device = await asOwner((db) =>
+      subscriptions.upsert(db, {
+        endpoint: `https://push.example.test/${randomUUID()}`,
+        p256dh: "test-key",
+        auth: "test-auth",
+        userAgentLabel: "dismissal regression"
+      })
+    );
+    const started = barrier();
+    const release = barrier();
+    let sends = 0;
+    let lifecycleChecks = 0;
+    const deps = {
+      isNotificationActive: async (
+        db: DataContextDb,
+        row: Parameters<typeof isReminderNotificationActive>[1]
+      ) => {
+        lifecycleChecks++;
+        return isReminderNotificationActive(db, row);
+      },
+      sendWebPush: async () => {
+        sends++;
+        started.resolve();
+        await release.promise;
+        throw Object.assign(new Error("temporary push failure"), { statusCode: 503 });
+      }
+    };
+    const job = {
+      data: {
+        actorUserId: ids.userA,
+        recipientUserId: ids.userA,
+        notificationId: notification!.id,
+        releaseAt: releaseAt.toISOString()
+      },
+      retryCount: 0,
+      retryLimit: 3
+    };
+    const run = () =>
+      kind === "deliver"
+        ? runPushDeliverJob(job, worker, deps)
+        : runPushSummaryJob(job, worker, deps);
+    const push = run();
+    await Promise.race([
+      started.promise,
+      push.then(() => {
+        throw new Error("push ended before send");
+      })
+    ]);
+    try {
+      // A competing job sees the committed claim and never starts another send.
+      expect((await run()).reasons).toEqual(["in-flight"]);
+      expect(sends).toBe(1);
+      await asOwner(async (db) => {
+        await sql`SET LOCAL lock_timeout = '150ms'`.execute(db.db);
+        await reminders.lockForCancel(db, payload.resourceId);
+        await reminders.dismissContext(db, payload.resourceId);
+      });
+    } finally {
+      release.resolve();
+      try {
+        // Finalization rechecks the real reminder lifecycle and suppresses retry.
+        expect((await push).temporaryFailures).toBe(0);
+        expect(lifecycleChecks).toBe(3);
+        expect((await run()).delivered).toBe(0);
+        expect(sends).toBe(1);
+      } finally {
+        await asOwner((db) => subscriptions.delete(db, device.id));
+      }
+    }
+  }
+);
+
+it("commits device successes before retrying only the failed device", async () => {
+  const payload = await due("retry just one device");
   await notify(payload);
   const notification = await asOwner((db) =>
     notifications.findByEventKey(db, "chat", payload.idempotencyKey)
   );
   const subscriptions = new PushSubscriptionsRepository();
   await asOwner((db) => getOrGeneratePushSigningKey(db, createPushSigningCipher()));
-  const device = await asOwner((db) =>
-    subscriptions.upsert(db, {
-      endpoint: `https://push.example.test/${randomUUID()}`,
-      p256dh: "test-key",
-      auth: "test-auth",
-      userAgentLabel: "dismissal regression"
-    })
-  );
-  const started = barrier();
-  const release = barrier();
-  const push = worker.withDataContext({ actorUserId: ids.userA }, (db) =>
-    runPushDeliverJob(
-      {
-        data: {
-          actorUserId: ids.userA,
-          recipientUserId: ids.userA,
-          notificationId: notification!.id
-        }
-      },
-      db,
-      {
-        isNotificationActive: isReminderNotificationActive,
-        sendWebPush: async () => {
-          started.resolve();
-          await release.promise;
-          return { statusCode: 201, body: "", headers: {} };
-        }
-      }
-    )
-  );
-  await Promise.race([
-    started.promise,
-    push.then(() => {
-      throw new Error("push ended before send");
-    })
-  ]);
+  const endpoints = [0, 1].map(() => `https://push.example.test/${randomUUID()}`);
+  const devices = await asOwner(async (db) => {
+    const devices = [];
+    for (const endpoint of endpoints)
+      devices.push(
+        await subscriptions.upsert(db, {
+          endpoint,
+          p256dh: "test-key",
+          auth: "test-auth",
+          userAgentLabel: "retry regression"
+        })
+      );
+    return devices;
+  });
+  const sent: string[] = [];
+  let fail = true;
+  const job = {
+    data: { actorUserId: ids.userA, recipientUserId: ids.userA, notificationId: notification!.id },
+    retryCount: 0,
+    retryLimit: 3
+  };
+  const deps = {
+    isNotificationActive: isReminderNotificationActive,
+    sendWebPush: async (target: { endpoint: string }) => {
+      sent.push(target.endpoint);
+      if (fail && target.endpoint === endpoints[1])
+        throw Object.assign(new Error("unavailable"), { statusCode: 503 });
+      return { statusCode: 201, body: "", headers: {} };
+    }
+  };
   try {
-    await asOwner(async (db) => {
-      await sql`SET LOCAL lock_timeout = '150ms'`.execute(db.db);
-      await reminders.lockForCancel(db, payload.resourceId);
-      await reminders.dismissContext(db, payload.resourceId);
-    });
+    const first = await runPushDeliverJob(job, worker, deps);
+    expect(first).toMatchObject({ delivered: 1, temporaryFailures: 1 });
+    expect(() => throwIfPushRetryNeeded(first)).toThrow("failed temporarily");
+    expect(
+      (await asOwner((db) => subscriptions.listActiveForDelivery(db))).find(
+        (row) => row.id === devices[0]!.id
+      )?.lastDeliveredKey
+    ).toBe(notification!.id);
+    sent.length = 0;
+    fail = false;
+    const second = await runPushDeliverJob({ ...job, retryCount: 1 }, worker, deps);
+    expect(second).toMatchObject({ delivered: 1, alreadyDelivered: 1, temporaryFailures: 0 });
+    expect(sent).toEqual([endpoints[1]]);
   } finally {
-    release.resolve();
-    await push;
-    await asOwner((db) => subscriptions.delete(db, device.id));
+    await asOwner(async (db) => {
+      for (const device of devices) await subscriptions.delete(db, device.id);
+    });
   }
 });
 
@@ -236,17 +327,15 @@ it("an in-flight push and later retries recheck deletion through the public life
     retryCount: 1,
     retryLimit: 8
   };
-  const push = worker.withDataContext({ actorUserId: ids.userA }, (db) =>
-    runPushDeliverJob(job, db, {
-      notificationsRepository: notifications,
-      subscriptionsRepository: new UnexpectedSubscriptions(),
-      isNotificationActive: async (scopedDb, row) => {
-        started.resolve();
-        await release.promise;
-        return isReminderNotificationActive(scopedDb, row);
-      }
-    })
-  );
+  const push = runPushDeliverJob(job, worker, {
+    notificationsRepository: notifications,
+    subscriptionsRepository: new UnexpectedSubscriptions(),
+    isNotificationActive: async (scopedDb, row) => {
+      started.resolve();
+      await release.promise;
+      return isReminderNotificationActive(scopedDb, row);
+    }
+  });
   await started.promise;
   try {
     expect((await asOwner((db) => deleteReminderById(db, payload.resourceId))).kind).toBe(
@@ -257,13 +346,11 @@ it("an in-flight push and later retries recheck deletion through the public life
   }
   expect((await push).delivered).toBe(0);
   expect(await notify(payload)).toBe("inactive");
-  const retry = await worker.withDataContext({ actorUserId: ids.userA }, (db) =>
-    runPushDeliverJob(job, db, {
-      notificationsRepository: notifications,
-      subscriptionsRepository: new UnexpectedSubscriptions(),
-      isNotificationActive: isReminderNotificationActive
-    })
-  );
+  const retry = await runPushDeliverJob(job, worker, {
+    notificationsRepository: notifications,
+    subscriptionsRepository: new UnexpectedSubscriptions(),
+    isNotificationActive: isReminderNotificationActive
+  });
   expect(retry.delivered).toBe(0);
 });
 
@@ -511,30 +598,28 @@ it("keeps an already-visible Tasks bell item while delaying its device alert", a
   releaseAt.setUTCSeconds(0, 0);
   releaseAt.setUTCMinutes(releaseAt.getUTCMinutes() + 2);
   const hhmm = (date: Date) => date.toISOString().slice(11, 16);
-  await worker.withDataContext({ actorUserId: ids.userA }, (db) =>
-    runPushDeliverJob(
-      {
-        data: {
-          actorUserId: ids.userA,
-          recipientUserId: ids.userA,
-          notificationId: notification!.id
-        }
-      },
-      db,
-      {
-        notificationsRepository: notifications,
-        pushQueuePort: createPushQueuePort(boss),
-        quietHoursPort: {
-          getSettings: async () => ({
-            enabled: true,
-            start: hhmm(new Date(now.getTime() - 300_000)),
-            end: hhmm(releaseAt),
-            timezone: "UTC"
-          }),
-          getLocaleTimezone: async () => null
-        }
+  await runPushDeliverJob(
+    {
+      data: {
+        actorUserId: ids.userA,
+        recipientUserId: ids.userA,
+        notificationId: notification!.id
       }
-    )
+    },
+    worker,
+    {
+      notificationsRepository: notifications,
+      pushQueuePort: createPushQueuePort(boss),
+      quietHoursPort: {
+        getSettings: async () => ({
+          enabled: true,
+          start: hhmm(new Date(now.getTime() - 300_000)),
+          end: hhmm(releaseAt),
+          timezone: "UTC"
+        }),
+        getLocaleTimezone: async () => null
+      }
+    }
   );
   const visible = await asOwner((db) => notifications.getById(db, notification!.id));
   expect(visible?.id).toBe(notification!.id);
@@ -615,19 +700,17 @@ it("only a live owner allowance skips quiet hours, without urgency promotion or 
   ).toBe(false);
   await setAllowed(false);
   expect(await check()).toBe(false);
-  const pushed = await worker.withDataContext({ actorUserId: ids.userA }, (db) =>
-    runPushDeliverJob(
-      { data: { actorUserId: ids.userA, recipientUserId: ids.userA, notificationId: row!.id } },
-      db,
-      {
-        notificationsRepository: repository,
-        subscriptionsRepository: new UnexpectedSubscriptions(),
-        quietHoursPort: quiet,
-        pushQueuePort: createPushQueuePort(boss),
-        isNotificationActive: isReminderNotificationActive,
-        isAllowedDuringQuietHours: isReminderNotificationAllowedDuringQuietHours
-      }
-    )
+  const pushed = await runPushDeliverJob(
+    { data: { actorUserId: ids.userA, recipientUserId: ids.userA, notificationId: row!.id } },
+    worker,
+    {
+      notificationsRepository: repository,
+      subscriptionsRepository: new UnexpectedSubscriptions(),
+      quietHoursPort: quiet,
+      pushQueuePort: createPushQueuePort(boss),
+      isNotificationActive: isReminderNotificationActive,
+      isAllowedDuringQuietHours: isReminderNotificationAllowedDuringQuietHours
+    }
   );
   expect(pushed.delivered).toBe(0);
   expect(await notify(allowed, repository)).toBe("already_created");

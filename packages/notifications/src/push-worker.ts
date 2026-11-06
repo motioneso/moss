@@ -2,9 +2,10 @@ import type https from "node:https";
 
 import webpush from "web-push";
 
-import type { DataContextDb } from "@moss/db";
+import type { DataContextDb, DataContextRunner } from "@moss/db";
 import { assertDataContextDb } from "@moss/db";
 
+import { PushDeliveryClaimsRepository } from "./push-delivery-claims.js";
 import { buildPushPayload } from "./push-payload.js";
 import {
   createPushSigningCipher,
@@ -69,6 +70,7 @@ function resolveHttpsAgent(deps: PushWorkerDependencies): https.Agent {
  * depends on this package, so importing its `Job` type here would form a package cycle.
  */
 export interface PushJob<T> {
+  readonly id?: string;
   readonly data: T;
   /**
    * pg-boss retry metadata, present only when the worker was registered with
@@ -208,145 +210,188 @@ function buildVapidDetails(signingKey: {
 type DeviceResult =
   | { readonly kind: "delivered" }
   | { readonly kind: "alreadyDelivered" }
-  | { readonly kind: "temporary"; readonly reason: string }
-  | { readonly kind: "settled" };
+  | SendFailure;
 
-/**
- * Sends one payload to every given subscription, independently: a send failure for one
- * subscription never blocks another. 404/410 (the push service says the subscription is
- * gone) deletes that row outright. A temporary failure leaves the row alone while pg-boss
- * attempts remain and is reported in the outcome so the after-commit hook can ask for a
- * retry; on the final attempt, and for any failure a retry cannot fix, it increments
- * `failure_count`, and a fifth consecutive failure disables the row instead of deleting it,
- * so the settings page can still show it (spec 5.4). A success resets the count and records
- * the payload id, and a device already holding that id is skipped (#743 finding 8).
- */
+interface DeviceAttempt {
+  readonly subscriptionId: string;
+  readonly result: DeviceResult;
+}
+
+/** Network only: no scoped database or repository can escape into a send. */
 async function deliverToSubscriptions(
-  scopedDb: DataContextDb,
-  subscriptionsRepository: PushSubscriptionsRepository,
   sendWebPush: typeof webpush.sendNotification,
   httpsAgent: https.Agent,
   subscriptions: readonly PushDeliveryTarget[],
   vapidDetails: VapidDetails,
   payload: WebPushPayload,
-  finalAttempt: boolean,
   summaryNotificationIds?: readonly string[]
-): Promise<PushDeliveryOutcome> {
-  const results = await Promise.all(
-    subscriptions.map(async (subscription): Promise<DeviceResult> => {
-      if (subscription.lastDeliveredKey === payload.id) {
-        return { kind: "alreadyDelivered" };
-      }
+): Promise<readonly DeviceAttempt[]> {
+  return Promise.all(
+    subscriptions.map(async (subscription): Promise<DeviceAttempt> => {
+      const attempt = (result: DeviceResult): DeviceAttempt => ({
+        subscriptionId: subscription.id,
+        result
+      });
+      if (subscription.lastDeliveredKey === payload.id)
+        return attempt({ kind: "alreadyDelivered" });
       let devicePayload = payload;
       if (summaryNotificationIds) {
         const count = summaryNotificationIds.filter(
           (id) => id !== subscription.lastDeliveredKey
         ).length;
-        if (count === 0) return { kind: "alreadyDelivered" };
+        if (count === 0) return attempt({ kind: "alreadyDelivered" });
         devicePayload = {
           ...payload,
           body: `${count} notification${count === 1 ? "" : "s"} while you were away`
         };
       }
       try {
-        // Re-check the stored address at send time so a row written before the policy
-        // existed, or under a weaker one, can never turn a send into a private request.
         const endpoint = validatePushEndpoint(subscription.endpoint);
         await withDeadline(
           sendWebPush(
-            {
-              endpoint,
-              keys: { p256dh: subscription.p256dh, auth: subscription.auth }
-            },
+            { endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
             JSON.stringify(devicePayload),
             { vapidDetails, timeout: PUSH_SEND_TIMEOUT_MS, agent: httpsAgent }
           ),
           PUSH_SEND_DEADLINE_MS
         );
-        await subscriptionsRepository.recordDeliverySuccess(scopedDb, subscription.id, payload.id);
-        return { kind: "delivered" };
+        return attempt({ kind: "delivered" });
       } catch (error) {
-        const failure = classifySendFailure(error);
-        if (failure.kind === "gone") {
-          // Gone, or an address the policy will never send to: drop the row.
-          await subscriptionsRepository.delete(scopedDb, subscription.id);
-          return { kind: "settled" };
-        }
-        if (failure.kind === "temporary" && !finalAttempt) {
-          // Leave the row for the next attempt; the after-commit hook asks pg-boss for it.
-          return failure;
-        }
-        await subscriptionsRepository.recordDeliveryFailure(scopedDb, subscription.id);
-        return failure.kind === "temporary" ? failure : { kind: "settled" };
+        return attempt(classifySendFailure(error));
       }
     })
   );
-
-  const reasons = results.flatMap((result) => (result.kind === "temporary" ? [result.reason] : []));
-  return {
-    delivered: results.filter((result) => result.kind === "delivered").length,
-    alreadyDelivered: results.filter((result) => result.kind === "alreadyDelivered").length,
-    temporaryFailures: reasons.length,
-    reasons
-  };
 }
 
-/**
- * Delivers one notification to every non-disabled subscription of its recipient.
- */
-export async function runPushDeliverJob(
-  job: PushJob<PushDeliverJobPayload>,
-  scopedDb: DataContextDb,
-  deps: PushWorkerDependencies = {}
-): Promise<PushDeliveryOutcome> {
-  assertDataContextDb(scopedDb);
+/** A runner, rather than a scoped transaction: sends must happen after the claim commits. */
+export type PushDataContext = Pick<DataContextRunner, "withDataContext">;
 
+interface PushContent {
+  readonly notifications: readonly NotificationWithReadState[];
+  readonly payload: WebPushPayload;
+  readonly summaryNotificationIds?: readonly string[];
+}
+
+async function runPushJob(
+  job: PushJob<PushDeliverJobPayload | PushSummaryJobPayload>,
+  dataContext: PushDataContext,
+  deps: PushWorkerDependencies,
+  load: (db: DataContextDb, repository: NotificationsRepository) => Promise<PushContent | undefined>
+): Promise<PushDeliveryOutcome> {
   const notificationsRepository = deps.notificationsRepository ?? new NotificationsRepository();
   const subscriptionsRepository = deps.subscriptionsRepository ?? new PushSubscriptionsRepository();
-  const cipher = deps.cipher ?? createPushSigningCipher();
-  const sendWebPush = deps.sendWebPush ?? webpush.sendNotification;
+  const claims = new PushDeliveryClaimsRepository();
+  const access = {
+    actorUserId: job.data.actorUserId,
+    requestId: job.id ? `pgboss:${job.id}` : undefined
+  };
+  const prepared = await dataContext.withDataContext(access, async (db) => {
+    assertDataContextDb(db);
+    const content = await load(db, notificationsRepository);
+    if (!content) return NOTHING_TO_DELIVER;
+    // Lifecycle locks order this admission against dismissal. Persist a lease before
+    // releasing those locks so another worker cannot admit the same payload concurrently.
+    const claimToken = await claims.claim(db, content.payload.id);
+    if (!claimToken) return CLAIM_BUSY;
+    const subscriptions = await subscriptionsRepository.listActiveForDelivery(db);
+    if (subscriptions.length === 0) {
+      await claims.release(db, content.payload.id, claimToken);
+      return NOTHING_TO_DELIVER;
+    }
+    const signingKey = await getOrGeneratePushSigningKey(
+      db,
+      deps.cipher ?? createPushSigningCipher()
+    );
+    return { ...content, claimToken, subscriptions, vapidDetails: buildVapidDetails(signingKey) };
+  });
+  if (!("claimToken" in prepared)) return prepared;
 
-  const notification = await notificationsRepository.getById(scopedDb, job.data.notificationId);
-  if (!notification) {
-    // Deleted, or not visible under the recipient's RLS context — nothing to deliver.
-    return NOTHING_TO_DELIVER;
-  }
-
-  if (
-    !(await canDeliverPush(
-      scopedDb,
-      notification,
-      notificationsRepository,
-      deps,
-      new Date(Math.max(Date.now(), job.data.releaseAt ? Date.parse(job.data.releaseAt) : 0)),
-      false
-    ))
-  )
-    return NOTHING_TO_DELIVER;
-
-  const subscriptions = await subscriptionsRepository.listActiveForDelivery(scopedDb);
-  if (subscriptions.length === 0) {
-    return NOTHING_TO_DELIVER;
-  }
-
-  const signingKey = await getOrGeneratePushSigningKey(scopedDb, cipher);
-
-  return deliverToSubscriptions(
-    scopedDb,
-    subscriptionsRepository,
-    sendWebPush,
+  const attempts = await deliverToSubscriptions(
+    deps.sendWebPush ?? webpush.sendNotification,
     resolveHttpsAgent(deps),
-    subscriptions,
-    buildVapidDetails(signingKey),
-    buildPushPayload({
-      id: notification.id,
-      title: notification.title,
-      body: notification.body,
-      href: notification.href
-    }),
-    isFinalAttempt(job)
+    prepared.subscriptions,
+    prepared.vapidDetails,
+    prepared.payload,
+    prepared.summaryNotificationIds
   );
+
+  return dataContext.withDataContext(access, async (db) => {
+    // Reacquire the source lifecycle locks in the same order as admission. A send
+    // admitted before dismissal may finish, but a dismissed source cannot ask for retries.
+    let active = false;
+    for (const notification of prepared.notifications) {
+      if (!deps.isNotificationActive || (await deps.isNotificationActive(db, notification)))
+        active = true;
+    }
+    if (!(await claims.release(db, prepared.payload.id, prepared.claimToken))) {
+      return active ? CLAIM_BUSY : NOTHING_TO_DELIVER;
+    }
+    for (const { subscriptionId, result } of attempts) {
+      if (result.kind === "delivered") {
+        await subscriptionsRepository.recordDeliverySuccess(
+          db,
+          subscriptionId,
+          prepared.payload.id
+        );
+      } else if (result.kind === "gone") {
+        await subscriptionsRepository.delete(db, subscriptionId);
+      } else if (
+        result.kind === "permanent" ||
+        (result.kind === "temporary" && isFinalAttempt(job))
+      ) {
+        await subscriptionsRepository.recordDeliveryFailure(db, subscriptionId);
+      }
+    }
+    const reasons = active
+      ? attempts.flatMap(({ result }) => (result.kind === "temporary" ? [result.reason] : []))
+      : [];
+    return {
+      delivered: attempts.filter(({ result }) => result.kind === "delivered").length,
+      alreadyDelivered: attempts.filter(({ result }) => result.kind === "alreadyDelivered").length,
+      temporaryFailures: reasons.length,
+      reasons
+    };
+  });
 }
+
+/** Delivers one notification; all database transactions finish before network I/O. */
+export function runPushDeliverJob(
+  job: PushJob<PushDeliverJobPayload>,
+  dataContext: PushDataContext,
+  deps: PushWorkerDependencies = {}
+): Promise<PushDeliveryOutcome> {
+  return runPushJob(job, dataContext, deps, async (db, repository) => {
+    const notification = await repository.getById(db, job.data.notificationId);
+    if (
+      !notification ||
+      !(await canDeliverPush(
+        db,
+        notification,
+        repository,
+        deps,
+        new Date(Math.max(Date.now(), job.data.releaseAt ? Date.parse(job.data.releaseAt) : 0)),
+        false
+      ))
+    )
+      return undefined;
+    return {
+      notifications: [notification],
+      payload: buildPushPayload({
+        id: notification.id,
+        title: notification.title,
+        body: notification.body,
+        href: notification.href
+      })
+    };
+  });
+}
+
+const CLAIM_BUSY: PushDeliveryOutcome = {
+  delivered: 0,
+  alreadyDelivered: 0,
+  temporaryFailures: 1,
+  reasons: ["in-flight"]
+};
 
 const NOTHING_TO_DELIVER: PushDeliveryOutcome = {
   delivered: 0,
@@ -415,53 +460,31 @@ async function canDeliverPush(
  * deferredUntil instant (computeDeferredUntil is deterministic per window), which is why
  * an exact match — not a range — is the right cohort for one release. Zero sends nothing.
  */
-export async function runPushSummaryJob(
+export function runPushSummaryJob(
   job: PushJob<PushSummaryJobPayload>,
-  scopedDb: DataContextDb,
+  dataContext: PushDataContext,
   deps: PushWorkerDependencies = {}
 ): Promise<PushDeliveryOutcome> {
-  assertDataContextDb(scopedDb);
-
-  const subscriptionsRepository = deps.subscriptionsRepository ?? new PushSubscriptionsRepository();
-  const cipher = deps.cipher ?? createPushSigningCipher();
-  const sendWebPush = deps.sendWebPush ?? webpush.sendNotification;
-
-  const releaseAt = new Date(job.data.releaseAt);
-  // pg-boss has released the job using the database clock.
-  const now = new Date(Math.max(Date.now(), releaseAt.getTime()));
-  const notificationsRepository = deps.notificationsRepository ?? new NotificationsRepository();
-  const cohort = await notificationsRepository.listUnreadDeferred(scopedDb, releaseAt);
-  const eligibleIds: string[] = [];
-  for (const notification of cohort) {
-    if (await canDeliverPush(scopedDb, notification, notificationsRepository, deps, now, true))
-      eligibleIds.push(notification.id);
-  }
-  const count = eligibleIds.length;
-  if (count === 0) {
-    return NOTHING_TO_DELIVER;
-  }
-
-  const subscriptions = await subscriptionsRepository.listActiveForDelivery(scopedDb);
-  if (subscriptions.length === 0) {
-    return NOTHING_TO_DELIVER;
-  }
-
-  const signingKey = await getOrGeneratePushSigningKey(scopedDb, cipher);
-
-  return deliverToSubscriptions(
-    scopedDb,
-    subscriptionsRepository,
-    sendWebPush,
-    resolveHttpsAgent(deps),
-    subscriptions,
-    buildVapidDetails(signingKey),
-    {
-      id: `summary:${job.data.releaseAt}`,
-      title: "Moss",
-      body: `${count} notification${count === 1 ? "" : "s"} while you were away`,
-      href: "/notifications"
-    },
-    isFinalAttempt(job),
-    eligibleIds
-  );
+  return runPushJob(job, dataContext, deps, async (db, repository) => {
+    const releaseAt = new Date(job.data.releaseAt);
+    const now = new Date(Math.max(Date.now(), releaseAt.getTime()));
+    const cohort = await repository.listUnreadDeferred(db, releaseAt);
+    const notifications: NotificationWithReadState[] = [];
+    // Stable lock order across overlapping summary cohorts and finalization.
+    for (const notification of [...cohort].sort((a, b) => a.id.localeCompare(b.id))) {
+      if (await canDeliverPush(db, notification, repository, deps, now, true))
+        notifications.push(notification);
+    }
+    if (notifications.length === 0) return undefined;
+    return {
+      notifications,
+      summaryNotificationIds: notifications.map((row) => row.id),
+      payload: {
+        id: `summary:${job.data.releaseAt}`,
+        title: "Moss",
+        body: `${notifications.length} notification${notifications.length === 1 ? "" : "s"} while you were away`,
+        href: "/notifications"
+      }
+    };
+  });
 }

@@ -1,3 +1,4 @@
+import { registerPushWorkers } from "./push-workers.js";
 import { registerRecordingNoticeWorker, RECORDING_NOTICE_QUEUES } from "@moss/meetings";
 import { createRecordingNoticeRuntime } from "./recording-notice-runtime.js";
 import {
@@ -310,13 +311,6 @@ import {
   PUSH_DELIVER_QUEUE,
   PUSH_QUEUE_RETRY_OPTIONS,
   PUSH_SUMMARY_QUEUE,
-  PUSH_WORK_OPTIONS,
-  runPushDeliverJob,
-  runPushSummaryJob,
-  throwIfPushRetryNeeded,
-  type PushDeliverJobPayload,
-  type PushDeliveryOutcome,
-  type PushSummaryJobPayload,
   type NotificationPreferencePort,
   runNotificationDigestCompose,
   NOTIFICATION_SENSITIVITY_PREFERENCE_KEY,
@@ -2176,36 +2170,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             sender: createNotificationDigestSender()
           })
       ),
-      await registerDataContextWorker<PushDeliverJobPayload, PushDeliveryOutcome>(
-        boss,
-        PUSH_DELIVER_QUEUE,
-        deps.dataContext,
-        (job, scopedDb) =>
-          runPushDeliverJob(job, scopedDb, {
-            notificationPreferencePort: createNotificationPreferencePort(),
-            quietHoursPort: quietHoursPortImpl,
-            pushQueuePort: createPushQueuePort(boss),
-            isNotificationActive: isReminderNotificationActive,
-            isAllowedDuringQuietHours: isReminderNotificationAllowedDuringQuietHours
-          }),
-        PUSH_WORK_OPTIONS,
-        { afterCommit: throwIfPushRetryNeeded }
-      ),
-      await registerDataContextWorker<PushSummaryJobPayload, PushDeliveryOutcome>(
-        boss,
-        PUSH_SUMMARY_QUEUE,
-        deps.dataContext,
-        (job, scopedDb) =>
-          runPushSummaryJob(job, scopedDb, {
-            notificationPreferencePort: createNotificationPreferencePort(),
-            quietHoursPort: quietHoursPortImpl,
-            pushQueuePort: createPushQueuePort(boss),
-            isNotificationActive: isReminderNotificationActive,
-            isAllowedDuringQuietHours: isReminderNotificationAllowedDuringQuietHours
-          }),
-        PUSH_WORK_OPTIONS,
-        { afterCommit: throwIfPushRetryNeeded }
-      )
+      ...(await registerPushWorkers(boss, deps.dataContext, {
+        notificationPreferencePort: createNotificationPreferencePort(),
+        quietHoursPort: quietHoursPortImpl,
+        pushQueuePort: createPushQueuePort(boss),
+        isNotificationActive: isReminderNotificationActive,
+        isAllowedDuringQuietHours: isReminderNotificationAllowedDuringQuietHours
+      }))
     ]
   },
   {
