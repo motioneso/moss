@@ -63,7 +63,9 @@ every piece when the transcript is split, and counted in the byte budget.
 
 Calendar titles, memory facts and person notes are free text others may have written, so they get
 the same instruction scan as the transcript. A hit adds to the existing reader-facing flag and
-never stops a run.
+never stops a run. The existing flag stores verbatim excerpts with the artifact, so a hit in
+the pack stores only the source kind and a count ("1 line in a calendar title looked like an
+order"), never the text. That keeps owner context out of stored output.
 
 ### 3. Prompt size
 
@@ -71,6 +73,12 @@ The pack is capped at about 17 KB in total, and every source has its own cap. If
 its cap, the lowest-ranked items are dropped and the summary carries a warning ("Some background
 was left out to fit"). Nothing refuses. When the pack plus the transcript piece would exceed the
 cap, the transcript piece shrinks (existing splitting), never the guidance.
+
+Splitting has an end. A single transcript segment cannot be split further, and today that case
+throws `meeting_output_input_too_large`. Build adds a terminating order of trims, each adding a
+warning: (1) drop pack items lowest rank first, (2) drop the whole pack, (3) truncate the running
+summary's oldest evidence, (4) truncate the unsplittable segment with a visible marker. The pack
+is dropped before any evidence is. The refusal stays only when the guidance alone exceeds the cap.
 
 ### 4. Speaker naming
 
@@ -87,18 +95,25 @@ Rules for the model, enforced by validation in Moss:
 - A name needs at least one evidence segment, or the entry is dropped.
 - A name from the calendar alone, with no speech evidence, is `low`.
 - Unclear means `name: null`. The summary then says "Speaker 2". It never invents a name.
-- Names in the summary text follow the speakers list. A low-confidence name is written with a
-  mark in the stored text ("Sam (guess)") so a copy to another app keeps the doubt.
+- Summary text never holds a speaker's name. It holds a speaker reference (the speaker id), and
+  the screen, copy and export resolve it from the speakers list plus owner labels. A correction
+  therefore changes one stored label and needs no new model call. Unrelated mentions of the same
+  name in the text are left alone.
+- Every name that is inferred and not owner-confirmed renders with "(guess)", on screen and in
+  copy and export alike, whatever the model's confidence.
 - Validation rejects a name not found in the pack or the transcript (no invented people).
 
 Owner-assigned names are stored separately and always win over any guess.
 
 ### 5. Showing a guess as a guess
 
-- High confidence: the name shows with a small "from meeting" note on hover.
-- Low confidence: the name shows with a dotted underline and "(guess)" and a Confirm / Change action.
+- Any inferred name, high or low confidence: shown with "(guess)" and a Confirm / Change action.
+  Confidence only changes the wording of the hover note. Confirm turns it into an owner label and
+  removes the mark.
+- Owner-set names: shown plain.
 - Unknown: "Speaker 2".
 - The summary header says "Names guessed from your calendar and notes" when any guess was used.
+  The per-name mark is what survives copy and export.
 
 ### 6. Correcting a speaker
 
@@ -129,7 +144,7 @@ introduced-in-talk`.
 | Module isolation           | Meetings calls public APIs of memory, people and calendar, never their tables   |
 | Instruction scan (3689)    | Extended to the pack text; flag only, never blocks                              |
 | Prompt size                | Per-source caps and warn-and-trim, never refuse                                 |
-| Stored output              | Pack is not saved with the summary. Only the speakers list and warnings are     |
+| Stored output | Pack text is not saved. Only the speakers list, warnings and pack-hit counts are |
 
 ### 9. App map
 
@@ -176,14 +191,14 @@ Meeting settings row:
 1. **Where names come from.**
    (a) Calendar + talk only. (b) Calendar + talk + people + memory. (c) Add voice matching.
    Recommend (b). Voice matching is a separate privacy decision and out of scope.
-2. **Guess display.** (a) Mark every guess. (b) Mark low confidence only.
-   Recommend (b), so a clean summary is not buried in "(guess)" tags.
+2. **Guess display.** (a) Mark every inferred name until confirmed. (b) Mark low confidence only.
+   Recommend (a). Model confidence is not owner confirmation, and a mark that vanishes on copy
+   passes a guess off as fact. Confirm is one click.
 3. **How the context reaches the model.** (a) Pre-built pack in the prompt, no tools.
    (b) Give the model read tools. Recommend (a). Tools break the no-tools guarantee from 3689.
-4. **Stored name in summary text.** (a) Names baked into text, re-rendered on correction by
-   rewriting. (b) Text holds speaker ids and the screen resolves names at display.
-   Recommend (b). A correction then needs no new model call and copy-out resolves names too.
-   Costs a render step and a change to the stored shape.
+4. **Stored name in summary text.** (a) Names baked into text, fixed by rewriting. (b) Text holds
+   speaker references and display, copy and export resolve names. Recommend (b), and section 4
+   is written that way. Costs a render step and a change to the stored shape.
 5. **Calendar match.** (a) Best single overlap only. (b) Let the owner pick when several match.
    Recommend (a) now, (b) later.
 6. **Setting default.** On by default, with an off switch. Recommend on.
