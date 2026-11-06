@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createAcpNoToolsReadinessProbe } from "../../packages/module-registry/src/acp-no-tools-readiness.js";
 
 const ready = { assertReady: () => undefined };
@@ -25,20 +25,12 @@ describe("ACP no-tools readiness probe", () => {
     );
   });
 
-  it("reports not signed in when the runner says the provider needs a login", async () => {
-    const probeProvider = async () => ({ status: "needs_login" as const });
-    await expect(
-      createAcpNoToolsReadinessProbe(() => ({ ...ready, probeProvider }) as never)("user-1")
-    ).resolves.toBe("not-signed-in");
-  });
-
-  it("does not stop on a sign-in lookup that fails", async () => {
-    const probeProvider = async () => {
-      throw new Error("timeout");
-    };
+  it("stays available when the runner's sign-in check says needs login", async () => {
+    const probeProvider = vi.fn(async () => ({ status: "needs_login" as const }));
     await expect(
       createAcpNoToolsReadinessProbe(() => ({ ...ready, probeProvider }) as never)("user-1")
     ).resolves.toBe("available");
+    expect(probeProvider).not.toHaveBeenCalled();
   });
 
   it("reports unavailable for a provider that has not been proven with tools off", async () => {
