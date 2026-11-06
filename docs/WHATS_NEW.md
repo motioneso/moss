@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Dismiss reminders without waiting.** Dismissing a reminder responds promptly even while its phone or browser alert is still sending. [PR #3998](https://github.com/motioneso/moss/pull/3998)
 - **Email digest can be switched on again.** Saving the email digest setting no longer fails with a server error, so the digest can be switched on and off as expected. [PR #3996](https://github.com/motioneso/moss/pull/3996)
 - **Keep Moss responsive during setup checks.** A slow connection check during setup no longer prevents other pages from loading. [PR #3995](https://github.com/motioneso/moss/pull/3995)
 
