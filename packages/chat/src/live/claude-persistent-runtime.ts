@@ -33,6 +33,7 @@ import type {
   RuntimeTurnEvent
 } from "./provider-runtime.js";
 import type { EngineLaunchOpts } from "./types.js";
+import { CLAUDE_SELF_SCHEDULING_DISALLOW_FLAG } from "./claude-self-scheduling-tools.js";
 import { vaultReadOnlyToolPatterns } from "./vault-allowlist.js";
 
 const PERSONA_FILENAME = "persona.md";
@@ -280,6 +281,7 @@ export class ClaudePersistentRuntime implements ProviderChatRuntime {
       `--mcp-config ${shellQuote(mcpConfigPath)}`,
       `--settings ${shellQuote(settingsPath)}`,
       `--allowedTools ${shellQuote(allowedTools)}`,
+      CLAUDE_SELF_SCHEDULING_DISALLOW_FLAG,
       `--append-system-prompt-file ${shellQuote(personaPath)}`,
       "--strict-mcp-config"
     ];

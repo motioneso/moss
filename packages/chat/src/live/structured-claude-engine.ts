@@ -19,6 +19,7 @@ import { CLI_VERSION_TOO_OLD_MESSAGE, isCliVersionTooOldText } from "./cli-versi
 import { CliChatUnavailableError, CliTranscriptLocationMismatchError } from "./errors.js";
 import type { ChatRecordKind, CliChatEngine, EngineLaunchOpts, TranscriptRecord } from "./types.js";
 import { writeClaudeOneShotPermissionHook } from "./persistent-claude-permission-hook.js";
+import { CLAUDE_SELF_SCHEDULING_DISALLOW_FLAG } from "./claude-self-scheduling-tools.js";
 import { vaultReadOnlyToolPatterns } from "./vault-allowlist.js";
 
 const PROMPT_FILENAME = ".jarvis-claude-print-prompt.txt";
@@ -567,6 +568,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     }
 
     parts.push(
+      CLAUDE_SELF_SCHEDULING_DISALLOW_FLAG,
       `--append-system-prompt-file ${shellQuote(this.personaPath ?? opts.personaPath)}`,
       "--strict-mcp-config"
     );

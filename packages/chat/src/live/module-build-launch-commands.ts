@@ -18,6 +18,7 @@ import type { AiProviderExecutionMode } from "@moss/shared";
 import { modelOverrideFlag, shellQuote } from "./cli-engine-helpers.js";
 import { writeClaudePermissionHook } from "./persistent-claude-permission-hook.js";
 import type { EngineLaunchOpts } from "./types.js";
+import { CLAUDE_SELF_SCHEDULING_DISALLOW_FLAG } from "./claude-self-scheduling-tools.js";
 import { vaultReadOnlyToolPatterns } from "./vault-allowlist.js";
 
 const PERSONA_FILENAME = "persona.md";
@@ -110,7 +111,11 @@ async function buildClaudeCommand(
   } else {
     parts.push('--tools ""');
   }
-  if (opts.workspaceWrite) parts.push("--disallowedTools Bash");
+  parts.push(
+    opts.workspaceWrite
+      ? `${CLAUDE_SELF_SCHEDULING_DISALLOW_FLAG} Bash`
+      : CLAUDE_SELF_SCHEDULING_DISALLOW_FLAG
+  );
 
   parts.push(
     `--append-system-prompt-file ${shellQuote(personaPath)}`,
