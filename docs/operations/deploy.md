@@ -4,7 +4,55 @@ Moss runs with Docker Compose: PostgreSQL with pgvector stores the database, the
 
 ## Installation
 
-Follow the [README installation steps](../../README.md#install-with-docker-compose) to download the production Compose file, generate secrets, set your first account's email, and start Moss.
+You need Docker Engine or Docker Desktop, **Docker Compose v2.24 or newer**, and a terminal with `curl`. These commands use a POSIX shell (Linux, macOS, or WSL). No source checkout or host Node.js installation is needed.
+
+### 1. Download the deployment file
+
+```sh
+mkdir moss
+cd moss
+curl -fL https://raw.githubusercontent.com/motioneso/moss/main/infra/docker-compose.prod.yml \
+  -o docker-compose.prod.yml
+```
+
+### 2. Generate your configuration and secrets
+
+```sh
+JARVIS_IMAGE_TAG=stable POSTGRES_PASSWORD=setup JARVIS_CLI_RUNNER_RPC_SECRET=setup \
+  docker compose -p moss -f docker-compose.prod.yml --profile setup \
+  run --rm --no-deps --pull always --user "$(id -u):$(id -g)" setup
+```
+
+This writes `env.production.local` beside the Compose file, readable only by your user. The two `setup` values let Compose parse the file before secrets exist; the setup service generates fresh passwords and encryption keys instead of using those placeholders. Back up this file securely and keep it out of Git. Run setup only once.
+
+Before starting, add this line to `env.production.local`, replacing the example with the email you will use for your first Moss account:
+
+```dotenv
+MOSS_RECONCILE_CONFIRM_OWNER_EMAIL=you@example.com
+```
+
+Moss checks this identity when reconciling modules after an owner exists. It must match your first account so subsequent starts can complete.
+
+### 3. Start Moss
+
+```sh
+docker compose -p moss -f docker-compose.prod.yml --env-file env.production.local \
+  up -d --no-build
+```
+
+Open **[http://localhost:1533](http://localhost:1533)**, create your first account with the email above, and follow the setup wizard to connect your AI provider. Then choose your modules and connect any accounts you want Moss to use. If a feature reports it needs attention, an admin opens Settings, Admin / Setup, Encryption keys, and presses Generate. Keys are created there, never by editing the env file.
+
+Database migrations and module reconciliation run automatically during app startup. Allow a few minutes for the first boot. Check startup status or recent app logs:
+
+```sh
+docker compose -p moss -f docker-compose.prod.yml --env-file env.production.local ps
+docker compose -p moss -f docker-compose.prod.yml --env-file env.production.local \
+  logs --tail=100 jarv1s
+```
+
+For access from another device, see [Access from another device](#access-from-another-device) before starting.
+
+### Working from your installation directory
 
 All commands below run from **your installation directory**, containing `docker-compose.prod.yml` and `env.production.local`. They use `moss` as the Compose project name for a new installation. **If you already run Moss, retain your existing project name in every command.** Changing it selects a different set of volumes.
 
