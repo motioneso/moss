@@ -4,6 +4,8 @@
 //! - `JARVIS_GATE_RUN=1`, or the server refuses to start
 //! - `MOSS_APP_DATABASE_URL` and `MOSS_WORKER_DATABASE_URL`, the two runtime roles
 //! - `TASKS_SPIKE_PORT`, served on 127.0.0.1 only
+//! - `TASKS_SPIKE_STATIC_DIR` (optional), a folder of built UI files served for every path the
+//!   API does not claim, so one process serves the API and the screen from one origin
 
 use std::net::SocketAddr;
 
@@ -32,7 +34,11 @@ async fn main() -> Result<(), String> {
     let address = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = tokio::net::TcpListener::bind(address).await.map_err(|error| error.to_string())?;
     eprintln!("tasks spike listening on {address}");
-    axum::serve(listener, routes::router(routes::AppState { app }))
+    let mut router = routes::router(routes::AppState { app });
+    if let Ok(dir) = std::env::var("TASKS_SPIKE_STATIC_DIR") {
+        router = router.fallback_service(tower_http::services::ServeDir::new(dir));
+    }
+    axum::serve(listener, router)
         .with_graceful_shutdown(shutdown_signal())
         .await
         .map_err(|error| error.to_string())?;
