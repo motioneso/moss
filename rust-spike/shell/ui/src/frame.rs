@@ -162,6 +162,9 @@ fn Frame(shell: ShellView) -> impl IntoView {
     window().set_onpopstate(Some(on_pop.as_ref().unchecked_ref()));
     on_pop.forget();
 
+    let nav_ref = NodeRef::<html::Aside>::new();
+    let open_nav_button = NodeRef::<html::Button>::new();
+
     let navigate = move |to: String| {
         let route = to.split('?').next().unwrap_or_default().to_string();
         if current_url() != to {
@@ -170,14 +173,17 @@ fn Frame(shell: ShellView) -> impl IntoView {
                 .and_then(|h| h.push_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(&to)));
         }
         path.set(route);
+        if mobile_nav_open.get_untracked() {
+            if let Some(button) = open_nav_button.get_untracked() {
+                let _ = button.focus();
+            }
+        }
         mobile_nav_open.set(false);
         chat_expanded_wish.set(false);
     };
 
     provide_context(Navigate(Callback::new(navigate)));
 
-    let nav_ref = NodeRef::<html::Aside>::new();
-    let open_nav_button = NodeRef::<html::Button>::new();
     let chat_button = NodeRef::<html::Button>::new();
 
     // Closing the phone navigation by hand returns focus to the menu button.

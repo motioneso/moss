@@ -75,6 +75,13 @@ fn Hero(hero: TodayHero) -> impl IntoView {
                     <p class="cmd-empty" role="status">{note} " " <a
                         href=WEATHER_SETTINGS
                         on:click=move |event: leptos::ev::MouseEvent| {
+                            let new_tab = event.button() != 0
+                                || event.ctrl_key()
+                                || event.meta_key()
+                                || event.shift_key();
+                            if new_tab {
+                                return;
+                            }
                             if let Some(Navigate(go)) = use_context::<Navigate>() {
                                 event.prevent_default();
                                 go.run(WEATHER_SETTINGS.to_string());

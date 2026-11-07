@@ -79,8 +79,12 @@ Ben's rule: Moss must work from a phone, a laptop or another computer on the LAN
 | Sign-in and sessions           | Not in this part. The trait is per signed-in account by contract, but no sign-in exists yet                                                                                                                                      |
 | Trusted origins and https      | Not in this part. No check of the Host header yet, so a page on another site could reach a loopback server by DNS rebinding. No https listener                                                                                   |
 
-Desktop mode refuses `--host`; it always binds 127.0.0.1. The desktop window binds only to 127.0.0.1, but anyone else signed in to the same computer could
-reach that port while sign-in is missing. Sign-in must land before this ships.
+Desktop mode always binds 127.0.0.1 and refuses `--host`. Anyone else signed in to the same
+computer could still reach that port while sign-in is missing, so sign-in must land before this
+ships.
+
+The server answers 404 for any path whose last part contains a dot, so missing files fail
+cleanly. A future screen address with a dot in its last part would need an exception.
 
 ## Evidence
 
