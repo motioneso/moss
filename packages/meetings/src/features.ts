@@ -371,6 +371,11 @@ export const meetingFeatures = [
       "Summaries always use background about you: your name, the matching calendar event, notes on people named in the recording and related memories. Only your own data, capped, never quoted as evidence, dropped first with a warning if too long."
   },
   {
+    id: "meetings.speaker_guesses",
+    description:
+      "Summaries may refer to speakers by a guessed name. A guess is marked (guess) in copy and export, and an unknown speaker shows as Speaker 2 and so on. Moss drops any name that is not in the talk or your own context."
+  },
+  {
     id: "meetings.grounded_outputs",
     description:
       "Generate evidence-checked summaries, without fallback, through the same no-tools route as chat. Long recordings are summarised piece by piece. Compare versions and sources; refresh to check availability without generating.",

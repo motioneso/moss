@@ -26,7 +26,8 @@ import type {
 import { MeetingRecordsRepository } from "./repository.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
 import { RECORDING_OUTPUT_TRANSCRIPT_LIMITS } from "./transcript.js";
-import { validateMeetingOutput } from "./output-validation.js";
+import { resolveSpeakerReferences } from "./speaker-references.js";
+import { storedSpeakerNames, validateMeetingOutput } from "./output-validation.js";
 
 export class MeetingOutputError extends Error {
   constructor(
@@ -328,7 +329,12 @@ export class MeetingOutputsRepository {
     input: Omit<MeetingOutputArtifact, "id" | "version" | "createdAt">
   ): Promise<MeetingOutputArtifact> {
     await this.lock(db, input.meetingId);
-    input = { ...input, content: validateMeetingOutput(input.content, input.inputs) };
+    input = {
+      ...input,
+      content: validateMeetingOutput(input.content, input.inputs, {
+        knownNames: storedSpeakerNames(input.content)
+      })
+    };
     const previous = await db.db
       .selectFrom("app.meeting_output_artifacts")
       .select("version")
@@ -350,7 +356,9 @@ export class MeetingOutputsRepository {
         meeting_id: input.meetingId,
         version,
         artifact_json: JSON.stringify(artifact),
-        history_overview: projectMeetingOverview(artifact.content.overview),
+        history_overview: projectMeetingOverview(
+          resolveSpeakerReferences(artifact.content.overview, artifact.content.speakers, new Map())
+        ),
         history_origin: artifact.origin,
         history_notes_revision: artifact.inputs.notesRevision,
         history_transcript_revision: artifact.inputs.transcript?.transcriptRevision ?? 0,
@@ -362,7 +370,12 @@ export class MeetingOutputsRepository {
       const existing = await this.candidates(db, input.meetingId);
       if (existing.length + input.content.actions.length > 1000)
         throw new MeetingOutputError("meeting_output_limit", 400);
-      for (const action of input.content.actions) {
+      for (const stored of input.content.actions) {
+        // Task suggestions carry plain text, so a speaker token never reaches a Task title.
+        const action = {
+          ...stored,
+          text: resolveSpeakerReferences(stored.text, input.content.speakers, new Map())
+        };
         // Only prior versions are review candidates; siblings in this artifact are not
         // declared semantic duplicates of one another.
         await db.db
@@ -398,7 +411,9 @@ export class MeetingOutputsRepository {
       });
     let content: MeetingOutputContent;
     try {
-      content = validateMeetingOutput(input.content, head.inputs);
+      content = validateMeetingOutput(input.content, head.inputs, {
+        knownNames: storedSpeakerNames(head.content)
+      });
     } catch {
       throw new MeetingOutputError("meeting_output_invalid_input", 400);
     }

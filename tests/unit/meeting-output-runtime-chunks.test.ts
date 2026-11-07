@@ -46,7 +46,8 @@ const content = {
   decisions: [],
   openQuestions: [],
   actions: [],
-  warnings: []
+  warnings: [],
+  speakers: []
 };
 const response = (value: unknown = content) =>
   new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(value) } }] }), {

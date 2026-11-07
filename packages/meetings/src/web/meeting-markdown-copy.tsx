@@ -3,6 +3,7 @@ import { Button, Field, FormLabel } from "@moss/ui";
 import type { MeetingOutputArtifact, MeetingRecord } from "@moss/shared";
 import { useMeetingTranscript } from "./meeting-transcript.js";
 import { isMeetingAccessDenied } from "./client.js";
+import { resolveSummarySpeakerText } from "../speaker-references.js";
 import { transcriptTime } from "./transcript-time.js";
 export function MeetingMarkdownCopy({
   meeting,
@@ -14,14 +15,15 @@ export function MeetingMarkdownCopy({
   const transcript = useMeetingTranscript(meeting.id);
   const visibleTranscript = isMeetingAccessDenied(transcript.error) ? undefined : transcript.data;
   const [status, setStatus] = useState("");
+  const summary = artifact ? resolveSummarySpeakerText(artifact.content) : undefined;
   const body = [
     `# ${meeting.title}`,
     `## Notes\n\n${meeting.personalNotes}`,
-    ...(artifact
+    ...(summary
       ? [
-          `## Summary\n\n${artifact.content.overview}`,
-          ...artifact.content.decisions.map((claim) => `- ${claim.text}`),
-          ...artifact.content.actions.map((action) => `- [ ] ${action.text}`)
+          `## Summary\n\n${summary.overview}`,
+          ...summary.decisions.map((claim) => `- ${claim.text}`),
+          ...summary.actions.map((action) => `- [ ] ${action.text}`)
         ]
       : []),
     ...(visibleTranscript

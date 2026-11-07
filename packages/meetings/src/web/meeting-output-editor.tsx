@@ -7,6 +7,7 @@ import type {
   MeetingOutputArtifact,
   MeetingOutputContent
 } from "@moss/shared";
+import { resolveSummarySpeakerText } from "../speaker-references.js";
 import { editMeetingOutput, outputKeys } from "./output-client.js";
 import { operationError, useOutputSession, type OutputOperation } from "./output-session.js";
 interface EditState {
@@ -23,7 +24,9 @@ export function hasKeptOutputEdits(client: QueryClient, artifact: MeetingOutputA
     !!editor &&
     JSON.stringify(editor.content) !==
       JSON.stringify(
-        editor.operation?.status === "done" ? editor.operation.input.content : artifact.content
+        editor.operation?.status === "done"
+          ? editor.operation.input.content
+          : resolveSummarySpeakerText(artifact.content)
       )
   );
 }
@@ -48,14 +51,16 @@ export function MeetingOutputEditor({
   const session = useOutputSession<EditState>(
     artifact.meetingId,
     `edit:${artifact.version}`,
-    () => ({ content: artifact.content })
+    () => ({ content: resolveSummarySpeakerText(artifact.content) })
   );
   const { state, update, client } = session;
   const dirty =
     !!state &&
     JSON.stringify(state.content) !==
       JSON.stringify(
-        state.operation?.status === "done" ? state.operation.input.content : artifact.content
+        state.operation?.status === "done"
+          ? state.operation.input.content
+          : resolveSummarySpeakerText(artifact.content)
       );
   useEffect(() => {
     setSessionUnsavedChanges(
@@ -196,7 +201,7 @@ export function MeetingOutputEditor({
           variant="quiet"
           disabled={busy}
           onClick={() => {
-            update(() => ({ content: artifact.content }));
+            update(() => ({ content: resolveSummarySpeakerText(artifact.content) }));
             setSessionUnsavedChanges(
               client,
               `meetings:${artifact.meetingId}:output:${artifact.version}`,

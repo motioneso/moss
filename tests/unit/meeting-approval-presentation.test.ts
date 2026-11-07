@@ -687,6 +687,29 @@ describe("Meetings authored action disclosures", () => {
     noInternalIds(result);
   });
 
+  it("shows a speaker list and resolves speaker tokens in the card text", async () => {
+    const body = summaryBody();
+    body.content.overview = "{{speaker:S1}} will ship it.";
+    (body.content as Record<string, unknown>).speakers = [
+      {
+        speakerId: "internal-speaker",
+        name: null,
+        basis: "inference",
+        confidence: "low",
+        evidence: []
+      }
+    ];
+    const result = await meetingSummaryPresentation(db, call(body), ctx);
+    expect(result).not.toBeNull();
+    const shown = result!.fields.map((field) => field.value).join("\n");
+    expect(shown).not.toContain("{{speaker:");
+    expect(shown).toContain("Speaker 1 will ship it.");
+    expect(result!.fields).toContainEqual({
+      label: "Speaker guess 1 · Name",
+      value: "Not specified"
+    });
+  });
+
   it("supports empty lists and explicit null owner/due phrases", async () => {
     const body = summaryBody();
     body.content.decisions = [];

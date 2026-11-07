@@ -59,7 +59,8 @@ const content = {
   decisions: [],
   openQuestions: [],
   actions: [],
-  warnings: []
+  warnings: [],
+  speakers: []
 };
 const input = () => ({
   inputs: {
