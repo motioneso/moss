@@ -1,0 +1,939 @@
+{
+  "provenance": {
+    "commit": "1411cc42e4694560c9293cf12bdb17cd3b706e51",
+    "node": "22.22.2",
+    "unicode": "17.0"
+  },
+  "cases": [
+    {
+      "label": "plain-lf",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "Q1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_edge.sql",
+            "version": "0001",
+            "checksum": "be4de03571fccb41d890de9e4339a10af5c41736a73d816c43811acb0a2c3855",
+            "backfill": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "crlf",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "Q1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7DQo="
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_edge.sql",
+            "version": "0001",
+            "checksum": "dab04e01086314bfda1187e423bc126f52d0dad02028981a514ab06a06e61e5f",
+            "backfill": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "bom-lf",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "77u/Q1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_edge.sql",
+            "version": "0001",
+            "checksum": "dd978e2120446d5c98be4888c121e680d6ceccbac25181718ceb9fbf208d0f85",
+            "backfill": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "bom-crlf",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "77u/LS0gYw0KQ1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_edge.sql",
+            "version": "0001",
+            "checksum": "ad0f8f338fa89402a043c6f23517c8f478e98c428bef961620ea922811508cdd",
+            "backfill": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "empty-file",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": ""
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_edge.sql",
+            "version": "0001",
+            "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "backfill": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "backfill-lf",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "LS0gbW9zczpiYWNrZmlsbCAwMDAxX2VkZ2UuYmFja2ZpbGwubWpzCkNSRUFURSBUQUJMRSBlZGdlX2Nhc2UgKGlkIGludGVnZXIpOwo="
+        },
+        {
+          "name": {
+            "text": "0001_edge.backfill.mjs"
+          },
+          "base64": "77u/ZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGJhY2tmaWxsKGRiKSB7DQogIGF3YWl0IGRiLnF1ZXJ5KCdzZWxlY3QgMScpOw0KfQ0K"
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_edge.sql",
+            "version": "0001",
+            "checksum": "b047152277f22dcc4fa4c3c0343b8b3b3bf9e5f6481733b0dd2c0578bc30c10b",
+            "backfill": "0001_edge.backfill.mjs"
+          }
+        ]
+      }
+    },
+    {
+      "label": "backfill-crlf",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "LS0gbW9zczpiYWNrZmlsbCAwMDAxX2VkZ2UuYmFja2ZpbGwubWpzDQpDUkVBVEUgVEFCTEUgZWRnZV9jYXNlIChpZCBpbnRlZ2VyKTsK"
+        },
+        {
+          "name": {
+            "text": "0001_edge.backfill.mjs"
+          },
+          "base64": "77u/ZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGJhY2tmaWxsKGRiKSB7DQogIGF3YWl0IGRiLnF1ZXJ5KCdzZWxlY3QgMScpOw0KfQ0K"
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_edge.sql",
+            "version": "0001",
+            "checksum": "4a533582b607dba0edf65dba749e32ac1344f7f9c953f868dafa45d492430f25",
+            "backfill": "0001_edge.backfill.mjs"
+          }
+        ]
+      }
+    },
+    {
+      "label": "backfill-after-comments-and-blanks",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "LS0gaGVhZGVyCgogICAtLSBpbmRlbnRlZCBjb21tZW50CgktLSBtb3NzOmJhY2tmaWxsIDAwMDFfZWRnZS5iYWNrZmlsbC5tanMgIApDUkVBVEUgVEFCTEUgZWRnZV9jYXNlIChpZCBpbnRlZ2VyKTsK"
+        },
+        {
+          "name": {
+            "text": "0001_edge.backfill.mjs"
+          },
+          "base64": "77u/ZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGJhY2tmaWxsKGRiKSB7DQogIGF3YWl0IGRiLnF1ZXJ5KCdzZWxlY3QgMScpOw0KfQ0K"
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_edge.sql",
+            "version": "0001",
+            "checksum": "3e7b9c6a1e8eeec8d70ba6664bac8d28b68d65ec24cf9bbc76c07f5963c2f77c",
+            "backfill": "0001_edge.backfill.mjs"
+          }
+        ]
+      }
+    },
+    {
+      "label": "backfill-bom-first-line",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "77u/LS0gbW9zczpiYWNrZmlsbCAwMDAxX2VkZ2UuYmFja2ZpbGwubWpzCkNSRUFURSBUQUJMRSBlZGdlX2Nhc2UgKGlkIGludGVnZXIpOwo="
+        },
+        {
+          "name": {
+            "text": "0001_edge.backfill.mjs"
+          },
+          "base64": "77u/ZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGJhY2tmaWxsKGRiKSB7DQogIGF3YWl0IGRiLnF1ZXJ5KCdzZWxlY3QgMScpOw0KfQ0K"
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_edge.sql",
+            "version": "0001",
+            "checksum": "5854ccf753130b767782c65f11ff95e0dbb78ffb8646574a1ce31a3d66eaa8fb",
+            "backfill": "0001_edge.backfill.mjs"
+          }
+        ]
+      }
+    },
+    {
+      "label": "backfill-feff-indent",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "77u/77u/LS0gbW9zczpiYWNrZmlsbCAwMDAxX2VkZ2UuYmFja2ZpbGwubWpzCkNSRUFURSBUQUJMRSBlZGdlX2Nhc2UgKGlkIGludGVnZXIpOwo="
+        },
+        {
+          "name": {
+            "text": "0001_edge.backfill.mjs"
+          },
+          "base64": "77u/ZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGJhY2tmaWxsKGRiKSB7DQogIGF3YWl0IGRiLnF1ZXJ5KCdzZWxlY3QgMScpOw0KfQ0K"
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_edge.sql",
+            "version": "0001",
+            "checksum": "ef53373101e0d3358613030c51934f6de7ac4061166539a2472594855b52bad5",
+            "backfill": "0001_edge.backfill.mjs"
+          }
+        ]
+      }
+    },
+    {
+      "label": "backfill-nel-trailing",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "LS0gbW9zczpiYWNrZmlsbCAwMDAxX2VkZ2UuYmFja2ZpbGwubWpzwoUKQ1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        },
+        {
+          "name": {
+            "text": "0001_edge.backfill.mjs"
+          },
+          "base64": "77u/ZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGJhY2tmaWxsKGRiKSB7DQogIGF3YWl0IGRiLnF1ZXJ5KCdzZWxlY3QgMScpOw0KfQ0K"
+        }
+      ],
+      "expect": {
+        "error": "Migration 0001_edge.sql has an invalid backfill declaration"
+      }
+    },
+    {
+      "label": "backfill-nbsp-indent",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "wqAtLSBtb3NzOmJhY2tmaWxsIDAwMDFfZWRnZS5iYWNrZmlsbC5tanPjgIAKQ1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        },
+        {
+          "name": {
+            "text": "0001_edge.backfill.mjs"
+          },
+          "base64": "77u/ZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGJhY2tmaWxsKGRiKSB7DQogIGF3YWl0IGRiLnF1ZXJ5KCdzZWxlY3QgMScpOw0KfQ0K"
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_edge.sql",
+            "version": "0001",
+            "checksum": "d5ed504c4e2b8316d6a6d895bc1386ec3490e7c6460984bc6193085d70f6cfb7",
+            "backfill": "0001_edge.backfill.mjs"
+          }
+        ]
+      }
+    },
+    {
+      "label": "backfill-lone-cr-is-not-a-break",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "LS0gYQ0tLSBtb3NzOmJhY2tmaWxsIDAwMDFfZWRnZS5iYWNrZmlsbC5tanMKQ1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        },
+        {
+          "name": {
+            "text": "0001_edge.backfill.mjs"
+          },
+          "base64": "77u/ZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGJhY2tmaWxsKGRiKSB7DQogIGF3YWl0IGRiLnF1ZXJ5KCdzZWxlY3QgMScpOw0KfQ0K"
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_edge.sql",
+            "version": "0001",
+            "checksum": "753c2c951432593552d66b9d3b258db19a5a58884dc0414c066e2a4df45069f2",
+            "backfill": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "declaration-after-sql",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "Q1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Ci0tIG1vc3M6YmFja2ZpbGwgMDAwMV9lZGdlLmJhY2tmaWxsLm1qcwo="
+        },
+        {
+          "name": {
+            "text": "0001_edge.backfill.mjs"
+          },
+          "base64": "77u/ZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGJhY2tmaWxsKGRiKSB7DQogIGF3YWl0IGRiLnF1ZXJ5KCdzZWxlY3QgMScpOw0KfQ0K"
+        }
+      ],
+      "expect": {
+        "error": "Migration 0001_edge.sql has an invalid backfill declaration"
+      }
+    },
+    {
+      "label": "declaration-twice",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "LS0gbW9zczpiYWNrZmlsbCAwMDAxX2VkZ2UuYmFja2ZpbGwubWpzCi0tIG1vc3M6YmFja2ZpbGwgMDAwMV9lZGdlLmJhY2tmaWxsLm1qcwpDUkVBVEUgVEFCTEUgZWRnZV9jYXNlIChpZCBpbnRlZ2VyKTsK"
+        },
+        {
+          "name": {
+            "text": "0001_edge.backfill.mjs"
+          },
+          "base64": "77u/ZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGJhY2tmaWxsKGRiKSB7DQogIGF3YWl0IGRiLnF1ZXJ5KCdzZWxlY3QgMScpOw0KfQ0K"
+        }
+      ],
+      "expect": {
+        "error": "Migration 0001_edge.sql has an invalid backfill declaration"
+      }
+    },
+    {
+      "label": "declaration-wrong-name",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "LS0gbW9zczpiYWNrZmlsbCBvdGhlci5iYWNrZmlsbC5tanMKQ1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        },
+        {
+          "name": {
+            "text": "0001_edge.backfill.mjs"
+          },
+          "base64": "77u/ZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGJhY2tmaWxsKGRiKSB7DQogIGF3YWl0IGRiLnF1ZXJ5KCdzZWxlY3QgMScpOw0KfQ0K"
+        }
+      ],
+      "expect": {
+        "error": "Migration 0001_edge.sql has an invalid backfill declaration"
+      }
+    },
+    {
+      "label": "declaration-no-space",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "LS1tb3NzOmJhY2tmaWxsIDAwMDFfZWRnZS5iYWNrZmlsbC5tanMKQ1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        },
+        {
+          "name": {
+            "text": "0001_edge.backfill.mjs"
+          },
+          "base64": "77u/ZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGJhY2tmaWxsKGRiKSB7DQogIGF3YWl0IGRiLnF1ZXJ5KCdzZWxlY3QgMScpOw0KfQ0K"
+        }
+      ],
+      "expect": {
+        "error": "Migration 0001_edge.sql has an invalid backfill declaration"
+      }
+    },
+    {
+      "label": "declaration-nbsp-after-dashes",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "LS3CoG1vc3M6YmFja2ZpbGwgMDAwMV9lZGdlLmJhY2tmaWxsLm1qcwpDUkVBVEUgVEFCTEUgZWRnZV9jYXNlIChpZCBpbnRlZ2VyKTsK"
+        },
+        {
+          "name": {
+            "text": "0001_edge.backfill.mjs"
+          },
+          "base64": "77u/ZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGJhY2tmaWxsKGRiKSB7DQogIGF3YWl0IGRiLnF1ZXJ5KCdzZWxlY3QgMScpOw0KfQ0K"
+        }
+      ],
+      "expect": {
+        "error": "Migration 0001_edge.sql has an invalid backfill declaration"
+      }
+    },
+    {
+      "label": "declaration-feff-after-dashes",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "LS3vu79tb3NzOmJhY2tmaWxsIDAwMDFfZWRnZS5iYWNrZmlsbC5tanMKQ1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        },
+        {
+          "name": {
+            "text": "0001_edge.backfill.mjs"
+          },
+          "base64": "77u/ZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGJhY2tmaWxsKGRiKSB7DQogIGF3YWl0IGRiLnF1ZXJ5KCdzZWxlY3QgMScpOw0KfQ0K"
+        }
+      ],
+      "expect": {
+        "error": "Migration 0001_edge.sql has an invalid backfill declaration"
+      }
+    },
+    {
+      "label": "declaration-prefix-only",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "LS0gbW9zczpiYWNrZmlsbGFibGUgbm90ZQpDUkVBVEUgVEFCTEUgZWRnZV9jYXNlIChpZCBpbnRlZ2VyKTsK"
+        },
+        {
+          "name": {
+            "text": "0001_edge.backfill.mjs"
+          },
+          "base64": "77u/ZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGJhY2tmaWxsKGRiKSB7DQogIGF3YWl0IGRiLnF1ZXJ5KCdzZWxlY3QgMScpOw0KfQ0K"
+        }
+      ],
+      "expect": {
+        "error": "Migration 0001_edge.sql has an invalid backfill declaration"
+      }
+    },
+    {
+      "label": "declaration-bad-file-name",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_bad.name.sql"
+          },
+          "base64": "LS0gbW9zczpiYWNrZmlsbCAwMDAxX2JhZC5uYW1lLmJhY2tmaWxsLm1qcwpDUkVBVEUgVEFCTEUgZWRnZV9jYXNlIChpZCBpbnRlZ2VyKTsK"
+        },
+        {
+          "name": {
+            "text": "0001_bad.name.backfill.mjs"
+          },
+          "base64": "ZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGJhY2tmaWxsKGRiKSB7DQogIGF3YWl0IGRiLnF1ZXJ5KCdzZWxlY3QgMScpOw0KfQ0K"
+        }
+      ],
+      "expect": {
+        "error": "Migration 0001_bad.name.sql has an invalid backfill declaration"
+      }
+    },
+    {
+      "label": "missing-sidecar",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "LS0gbW9zczpiYWNrZmlsbCAwMDAxX2VkZ2UuYmFja2ZpbGwubWpzCkNSRUFURSBUQUJMRSBlZGdlX2Nhc2UgKGlkIGludGVnZXIpOwo="
+        }
+      ],
+      "expect": {
+        "error": "ENOENT: no such file or directory, open '<dir>/0001_edge.backfill.mjs'"
+      }
+    },
+    {
+      "label": "invalid-utf8-sql",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "LS0gwyhDUkVBVEUgVEFCTEUgZWRnZV9jYXNlIChpZCBpbnRlZ2VyKTsK"
+        }
+      ],
+      "expect": {
+        "error": "Migration file 0001_edge.sql must contain valid UTF-8"
+      }
+    },
+    {
+      "label": "invalid-utf8-sidecar",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0001_edge.sql"
+          },
+          "base64": "LS0gbW9zczpiYWNrZmlsbCAwMDAxX2VkZ2UuYmFja2ZpbGwubWpzCkNSRUFURSBUQUJMRSBlZGdlX2Nhc2UgKGlkIGludGVnZXIpOwo="
+        },
+        {
+          "name": {
+            "text": "0001_edge.backfill.mjs"
+          },
+          "base64": "Ly//Cg=="
+        }
+      ],
+      "expect": {
+        "error": "Migration file 0001_edge.backfill.mjs must contain valid UTF-8"
+      }
+    },
+    {
+      "label": "version-and-order",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "0010_c.sql"
+          },
+          "base64": "Q1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        },
+        {
+          "name": {
+            "text": "0002_b.sql"
+          },
+          "base64": "Q1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        },
+        {
+          "name": {
+            "text": "0002_B.sql"
+          },
+          "base64": "Q1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        },
+        {
+          "name": {
+            "text": "noversion.sql"
+          },
+          "base64": "Q1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        },
+        {
+          "name": {
+            "text": "0004_😀.sql"
+          },
+          "base64": "Q1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        },
+        {
+          "name": {
+            "text": "0004_ｚ.sql"
+          },
+          "base64": "Q1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        },
+        {
+          "name": {
+            "text": "notes.txt"
+          },
+          "base64": "bm90IGEgbWlncmF0aW9u"
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0002_B.sql",
+            "version": "0002",
+            "checksum": "be4de03571fccb41d890de9e4339a10af5c41736a73d816c43811acb0a2c3855",
+            "backfill": null
+          },
+          {
+            "name": "0002_b.sql",
+            "version": "0002",
+            "checksum": "be4de03571fccb41d890de9e4339a10af5c41736a73d816c43811acb0a2c3855",
+            "backfill": null
+          },
+          {
+            "name": "0004_😀.sql",
+            "version": "0004",
+            "checksum": "be4de03571fccb41d890de9e4339a10af5c41736a73d816c43811acb0a2c3855",
+            "backfill": null
+          },
+          {
+            "name": "0004_ｚ.sql",
+            "version": "0004",
+            "checksum": "be4de03571fccb41d890de9e4339a10af5c41736a73d816c43811acb0a2c3855",
+            "backfill": null
+          },
+          {
+            "name": "0010_c.sql",
+            "version": "0010",
+            "checksum": "be4de03571fccb41d890de9e4339a10af5c41736a73d816c43811acb0a2c3855",
+            "backfill": null
+          },
+          {
+            "name": "noversion.sql",
+            "version": "noversion.sql",
+            "checksum": "be4de03571fccb41d890de9e4339a10af5c41736a73d816c43811acb0a2c3855",
+            "backfill": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "empty-version",
+      "runner": "core",
+      "files": [
+        {
+          "name": {
+            "text": "_leading.sql"
+          },
+          "base64": "Q1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        }
+      ],
+      "expect": {
+        "error": "Migration file _leading.sql is missing a version prefix"
+      }
+    },
+    {
+      "label": "module-plain",
+      "runner": "module",
+      "files": [
+        {
+          "name": {
+            "text": "0001_module_edge.sql"
+          },
+          "base64": "Q1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_module_edge.sql",
+            "version": "0001",
+            "checksum": "be4de03571fccb41d890de9e4339a10af5c41736a73d816c43811acb0a2c3855",
+            "backfill": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "module-bom-crlf",
+      "runner": "module",
+      "files": [
+        {
+          "name": {
+            "text": "0001_module_edge.sql"
+          },
+          "base64": "77u/Q1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7DQo="
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_module_edge.sql",
+            "version": "0001",
+            "checksum": "639a41682a8d3bbacb041d98f11deb5a57f033efe750eef1a4bf5b0005abeb04",
+            "backfill": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "module-lone-continuation",
+      "runner": "module",
+      "files": [
+        {
+          "name": {
+            "text": "0001_module_edge.sql"
+          },
+          "base64": "LS0gbm90ZSCACkNSRUFURSBUQUJMRSBlZGdlX2Nhc2UgKGlkIGludGVnZXIpOwo="
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_module_edge.sql",
+            "version": "0001",
+            "checksum": "4b4cac7e64df56fed7d533afab34732165c8beaf9ed91a564760a3335d7bc7ef",
+            "backfill": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "module-overlong",
+      "runner": "module",
+      "files": [
+        {
+          "name": {
+            "text": "0001_module_edge.sql"
+          },
+          "base64": "LS0gbm90ZSDArwpDUkVBVEUgVEFCTEUgZWRnZV9jYXNlIChpZCBpbnRlZ2VyKTsK"
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_module_edge.sql",
+            "version": "0001",
+            "checksum": "7f045df427f5083ecd9fc87c8496ae033fba71e47e2bff1fc87f9b68a59b7a23",
+            "backfill": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "module-truncated-3-byte",
+      "runner": "module",
+      "files": [
+        {
+          "name": {
+            "text": "0001_module_edge.sql"
+          },
+          "base64": "LS0gbm90ZSDiggpDUkVBVEUgVEFCTEUgZWRnZV9jYXNlIChpZCBpbnRlZ2VyKTsK"
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_module_edge.sql",
+            "version": "0001",
+            "checksum": "4b4cac7e64df56fed7d533afab34732165c8beaf9ed91a564760a3335d7bc7ef",
+            "backfill": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "module-encoded-surrogate",
+      "runner": "module",
+      "files": [
+        {
+          "name": {
+            "text": "0001_module_edge.sql"
+          },
+          "base64": "LS0gbm90ZSDtoIAKQ1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_module_edge.sql",
+            "version": "0001",
+            "checksum": "bb4a72f18dc867a02a3ba6f7983a2254c06f32c5fd6ce01926550f3b3359af7f",
+            "backfill": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "module-above-max",
+      "runner": "module",
+      "files": [
+        {
+          "name": {
+            "text": "0001_module_edge.sql"
+          },
+          "base64": "LS0gbm90ZSD0kICACkNSRUFURSBUQUJMRSBlZGdlX2Nhc2UgKGlkIGludGVnZXIpOwo="
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_module_edge.sql",
+            "version": "0001",
+            "checksum": "d6459a48a3de8019edd69b371322a7f7a94bdbb3ac79fb04c285003badb61d29",
+            "backfill": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "module-ff-fe",
+      "runner": "module",
+      "files": [
+        {
+          "name": {
+            "text": "0001_module_edge.sql"
+          },
+          "base64": "LS0gbm90ZSD//gpDUkVBVEUgVEFCTEUgZWRnZV9jYXNlIChpZCBpbnRlZ2VyKTsK"
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_module_edge.sql",
+            "version": "0001",
+            "checksum": "7f045df427f5083ecd9fc87c8496ae033fba71e47e2bff1fc87f9b68a59b7a23",
+            "backfill": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "module-mixed",
+      "runner": "module",
+      "files": [
+        {
+          "name": {
+            "text": "0001_module_edge.sql"
+          },
+          "base64": "LS0gbm90ZSDiKKHwn5jigqwKQ1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_module_edge.sql",
+            "version": "0001",
+            "checksum": "57d558bab266bbf7d38dba6712f07e30a8a542a6bcf5a203e52df54c5cd23f9a",
+            "backfill": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "module-truncated-at-end",
+      "runner": "module",
+      "files": [
+        {
+          "name": {
+            "text": "0001_module_edge.sql"
+          },
+          "base64": "Q1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Ci0tIPCfmA=="
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001_module_edge.sql",
+            "version": "0001",
+            "checksum": "6c575321e9ca70f5b4e49a2c4a146fef890277035bf6bf807fd27a8d8596f01d",
+            "backfill": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "module-version-no-underscore",
+      "runner": "module",
+      "files": [
+        {
+          "name": {
+            "text": "0001.sql"
+          },
+          "base64": "Q1JFQVRFIFRBQkxFIGVkZ2VfY2FzZSAoaWQgaW50ZWdlcik7Cg=="
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "value": [
+          {
+            "name": "0001.sql",
+            "version": "0001.sql",
+            "checksum": "be4de03571fccb41d890de9e4339a10af5c41736a73d816c43811acb0a2c3855",
+            "backfill": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "module-refused-statement",
+      "runner": "module",
+      "files": [
+        {
+          "name": {
+            "text": "0001_module_edge.sql"
+          },
+          "base64": "RFJPUCBUQUJMRSBmaW5hbmNlX2l0ZW1zOwo="
+        }
+      ],
+      "expect": {
+        "error": "module migration 0001_module_edge.sql violates the wire contract: first command must be one of: CREATE TABLE, CREATE [UNIQUE] INDEX, ALTER TABLE, DROP INDEX, COMMENT ON, UPDATE, DELETE"
+      }
+    }
+  ]
+}

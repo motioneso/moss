@@ -1,0 +1,20 @@
+[package]
+name = "portability"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+description = "Phase 0a spike: password, credential and migration-hash parity with the TypeScript app"
+
+[dependencies]
+aes-gcm = "0.10"
+base64 = "0.22"
+hex = "0.4"
+rand = "0.8"
+scrypt = { version = "0.11", default-features = false }
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+subtle = "2"
+unicode-normalization = "0.1"
+
+[dev-dependencies]
+tempfile = "3"
