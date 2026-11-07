@@ -1,0 +1,128 @@
+//! The keychain probe against a real, private D-Bus session bus for each test.
+
+use std::io::{BufRead, BufReader};
+use std::path::Path;
+use std::process::{Child, Command, Stdio};
+use std::time::{Duration, Instant};
+
+use keystore::fake::{hold_secret_service, Behaviour};
+use keystore::probe::{probe_address, Keychain};
+
+struct Bus {
+    daemon: Child,
+    address: String,
+    _dir: tempfile::TempDir,
+}
+
+impl Drop for Bus {
+    fn drop(&mut self) {
+        let _ = self.daemon.kill();
+        let _ = self.daemon.wait();
+    }
+}
+
+/// A session bus with no service folders, or with one holding a single service file.
+fn start_bus(service_file: Option<&str>) -> Bus {
+    let dir = tempfile::tempdir().unwrap();
+    let service_dir = match service_file {
+        Some(contents) => {
+            let folder = dir.path().join("services");
+            std::fs::create_dir(&folder).unwrap();
+            std::fs::write(folder.join("org.freedesktop.secrets.service"), contents).unwrap();
+            format!("<servicedir>{}</servicedir>", folder.display())
+        }
+        None => String::new(),
+    };
+    let config = dir.path().join("session.conf");
+    std::fs::write(
+        &config,
+        format!(
+            r#"<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>
+  <type>session</type>
+  <listen>unix:path={}</listen>
+  <auth>EXTERNAL</auth>
+  <policy context="default">
+    <allow send_destination="*" eavesdrop="true"/>
+    <allow eavesdrop="true"/>
+    <allow own="*"/>
+  </policy>
+  {service_dir}
+</busconfig>"#,
+            dir.path().join("bus").display()
+        ),
+    )
+    .unwrap();
+    let mut daemon = Command::new("dbus-daemon")
+        .arg(format!("--config-file={}", config.display()))
+        .args(["--nofork", "--print-address=1"])
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("dbus-daemon is installed");
+    let mut address = String::new();
+    BufReader::new(daemon.stdout.take().unwrap()).read_line(&mut address).unwrap();
+    Bus { daemon, address: address.trim().to_string(), _dir: dir }
+}
+
+#[test]
+fn no_session_bus_allows_the_key_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let missing = format!("unix:path={}", dir.path().join("no-bus").display());
+    let result = probe_address(&missing);
+    assert!(matches!(result, Keychain::NoSessionBus(_)), "{result:?}");
+    assert!(result.allows_key_file());
+}
+
+#[test]
+fn a_bus_without_a_keychain_allows_the_key_file() {
+    let bus = start_bus(None);
+    assert_eq!(probe_address(&bus.address), Keychain::NotInstalled);
+    assert!(Keychain::NotInstalled.allows_key_file());
+}
+
+#[test]
+fn a_working_keychain_is_used_and_the_key_file_is_not_offered() {
+    let bus = start_bus(None);
+    let _held = hold_secret_service(Some(&bus.address), Behaviour::Working).unwrap();
+    let result = probe_address(&bus.address);
+    assert_eq!(result, Keychain::Working { already_running: true });
+    assert!(!result.allows_key_file());
+}
+
+#[test]
+fn a_keychain_that_holds_the_name_but_fails_is_broken_not_absent() {
+    let bus = start_bus(None);
+    let _held = hold_secret_service(Some(&bus.address), Behaviour::Broken).unwrap();
+    let result = probe_address(&bus.address);
+    assert!(matches!(result, Keychain::Broken(_)), "{result:?}");
+    assert!(!result.allows_key_file());
+}
+
+#[test]
+fn a_keychain_that_never_answers_is_broken_within_seconds() {
+    let bus = start_bus(None);
+    let _held = hold_secret_service(Some(&bus.address), Behaviour::Hangs).unwrap();
+    let started = Instant::now();
+    let result = probe_address(&bus.address);
+    assert!(matches!(result, Keychain::Broken(_)), "{result:?}");
+    assert!(started.elapsed() < Duration::from_secs(10), "{:?}", started.elapsed());
+}
+
+#[test]
+fn a_keychain_that_fails_to_start_is_broken() {
+    let bus = start_bus(Some("[D-BUS Service]\nName=org.freedesktop.secrets\nExec=/bin/false\n"));
+    let result = probe_address(&bus.address);
+    assert!(matches!(result, Keychain::Broken(_)), "{result:?}");
+    assert!(!result.allows_key_file());
+}
+
+#[test]
+fn a_keychain_started_on_demand_is_used() {
+    let fake = env!("CARGO_BIN_EXE_fake-secret-service");
+    assert!(Path::new(fake).exists());
+    let bus = start_bus(Some(&format!(
+        "[D-BUS Service]\nName=org.freedesktop.secrets\nExec={fake} --working\n"
+    )));
+    assert_eq!(probe_address(&bus.address), Keychain::Working { already_running: false });
+}

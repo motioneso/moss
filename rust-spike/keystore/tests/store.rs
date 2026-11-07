@@ -1,0 +1,190 @@
+use std::fs;
+use std::os::unix::fs::{symlink, PermissionsExt};
+
+use keystore::recovery::RecoveryKey;
+use keystore::store::{recover, secure, set_up, status, CredentialKeys, Paths, RecoverError, State};
+
+struct Setup {
+    _dir: tempfile::TempDir,
+    paths: Paths,
+    recovery: RecoveryKey,
+    fingerprint: String,
+}
+
+fn new_setup() -> Setup {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = Paths::under(&dir.path().join("config"), &dir.path().join("data"));
+    let recovery = RecoveryKey::generate();
+    let keys = CredentialKeys::generate();
+    let fingerprint = keys.fingerprint();
+    set_up(&paths, &recovery, &keys).unwrap();
+    Setup { _dir: dir, paths, recovery, fingerprint }
+}
+
+fn mode(path: &std::path::Path) -> u32 {
+    fs::metadata(path).unwrap().permissions().mode() & 0o777
+}
+
+fn unlocked_fingerprint(state: State) -> String {
+    match state {
+        State::Unlocked(unlocked) => unlocked.keys.fingerprint(),
+        _ => panic!("expected unlocked, got {}", name(&state)),
+    }
+}
+
+fn name(state: &State) -> &'static str {
+    match state {
+        State::NotSetUp => "NotSetUp",
+        State::Unlocked(_) => "Unlocked",
+        State::KeyFileMissing { .. } => "KeyFileMissing",
+        State::KeyFileDamaged { .. } => "KeyFileDamaged",
+        State::KeyFileExposed { .. } => "KeyFileExposed",
+        State::KeyFileNotOurs { .. } => "KeyFileNotOurs",
+        State::KeyFileForAnotherKey { .. } => "KeyFileForAnotherKey",
+        State::BundleMissing => "BundleMissing",
+        State::BundleDamaged(_) => "BundleDamaged",
+        State::KeysDoNotMatch(_) => "KeysDoNotMatch",
+    }
+}
+
+#[test]
+fn setup_writes_private_files_and_unlocks_at_every_start() {
+    let s = new_setup();
+    assert_eq!(mode(&s.paths.key_folder), 0o700);
+    assert_eq!(mode(&s.paths.key_file), 0o600);
+    assert_eq!(mode(&s.paths.bundle), 0o600);
+    assert!(!s.paths.key_file.starts_with(s.paths.bundle.parent().unwrap().parent().unwrap()));
+    // Each call reads from disk, as a restart would.
+    assert_eq!(unlocked_fingerprint(status(&s.paths)), s.fingerprint);
+    assert_eq!(unlocked_fingerprint(status(&s.paths)), s.fingerprint);
+    assert!(set_up(&s.paths, &RecoveryKey::generate(), &CredentialKeys::generate()).is_err());
+}
+
+#[test]
+fn lost_key_file_comes_back_from_the_words() {
+    let s = new_setup();
+    fs::remove_file(&s.paths.key_file).unwrap();
+    let State::KeyFileMissing { needs } = status(&s.paths) else { panic!() };
+    assert_eq!(needs, s.recovery.id());
+
+    let typed = RecoveryKey::from_bytes(*s.recovery.bytes());
+    let unlocked = recover(&s.paths, &typed).ok().unwrap();
+    assert_eq!(unlocked.keys.fingerprint(), s.fingerprint);
+    assert_eq!(mode(&s.paths.key_file), 0o600);
+    assert_eq!(unlocked_fingerprint(status(&s.paths)), s.fingerprint);
+}
+
+#[test]
+fn words_for_another_setup_are_refused_and_change_nothing() {
+    let s = new_setup();
+    fs::remove_file(&s.paths.key_file).unwrap();
+    let other = RecoveryKey::generate();
+    match recover(&s.paths, &other) {
+        Err(RecoverError::NotThisSetup { typed, needs }) => {
+            assert_eq!((typed, needs), (other.id(), s.recovery.id()));
+        }
+        _ => panic!("expected a refusal"),
+    }
+    assert!(!s.paths.key_file.exists());
+}
+
+#[test]
+fn damaged_key_file_is_refused_then_replaced_by_recovery() {
+    let s = new_setup();
+    fs::write(&s.paths.key_file, b"\x00garbage").unwrap();
+    assert!(matches!(status(&s.paths), State::KeyFileDamaged { .. }));
+
+    let unlocked = recover(&s.paths, &RecoveryKey::from_bytes(*s.recovery.bytes())).ok().unwrap();
+    assert_eq!(unlocked.keys.fingerprint(), s.fingerprint);
+    let kept: Vec<_> = fs::read_dir(&s.paths.key_folder)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .filter(|name| name.starts_with("recovery-store.replaced-"))
+        .collect();
+    assert_eq!(kept.len(), 1, "the damaged file is kept aside");
+    assert_eq!(mode(&s.paths.key_folder.join(&kept[0])), 0o600);
+}
+
+#[test]
+fn a_changed_key_with_its_old_name_is_damage() {
+    let s = new_setup();
+    let text = fs::read_to_string(&s.paths.key_file).unwrap();
+    let mut value: serde_json::Value = serde_json::from_str(&text).unwrap();
+    value["recoveryKey"] = base64_of(&[9; 32]).into();
+    fs::write(&s.paths.key_file, serde_json::to_vec(&value).unwrap()).unwrap();
+    let State::KeyFileDamaged { detail, .. } = status(&s.paths) else { panic!() };
+    assert_eq!(detail, "the key does not match its name");
+}
+
+fn base64_of(bytes: &[u8]) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD.encode(bytes)
+}
+
+#[test]
+fn readable_by_others_is_refused_until_secured() {
+    for target in ["file", "folder"] {
+        let s = new_setup();
+        let (path, loose) = match target {
+            "file" => (&s.paths.key_file, 0o644),
+            _ => (&s.paths.key_folder, 0o755),
+        };
+        fs::set_permissions(path, fs::Permissions::from_mode(loose)).unwrap();
+        assert!(matches!(status(&s.paths), State::KeyFileExposed { .. }), "{target}");
+        secure(&s.paths).unwrap();
+        assert_eq!(unlocked_fingerprint(status(&s.paths)), s.fingerprint, "{target}");
+    }
+}
+
+#[test]
+fn a_linked_key_file_is_not_followed() {
+    let s = new_setup();
+    let real = s.paths.key_folder.join("elsewhere");
+    fs::rename(&s.paths.key_file, &real).unwrap();
+    symlink(&real, &s.paths.key_file).unwrap();
+    assert!(matches!(status(&s.paths), State::KeyFileNotOurs { .. }));
+    assert!(secure(&s.paths).is_err());
+}
+
+#[test]
+fn key_file_from_another_setup_is_named_as_such() {
+    let a = new_setup();
+    let b = new_setup();
+    fs::copy(&b.paths.key_file, &a.paths.key_file).unwrap();
+    let State::KeyFileForAnotherKey { has, needs } = status(&a.paths) else { panic!() };
+    assert_eq!((has, needs), (b.recovery.id(), a.recovery.id()));
+}
+
+#[test]
+fn bundle_changes_are_caught() {
+    let s = new_setup();
+    let text = fs::read_to_string(&s.paths.bundle).unwrap();
+    let mut value: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let header = value["header"].as_str().unwrap().replace("\"key-file\"", "\"keychain\"");
+    value["header"] = header.into();
+    fs::write(&s.paths.bundle, serde_json::to_vec(&value).unwrap()).unwrap();
+    assert!(matches!(status(&s.paths), State::BundleDamaged(_)));
+    assert!(matches!(
+        recover(&s.paths, &RecoveryKey::from_bytes(*s.recovery.bytes())),
+        Err(RecoverError::Unrecoverable(State::BundleDamaged(_)))
+    ));
+
+    // Swapping the two sealed parts fails too, because they use different keys.
+    let mut swapped: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let data_key = swapped["dataKey"].clone();
+    swapped["dataKey"] = swapped["payload"].clone();
+    swapped["payload"] = data_key;
+    fs::write(&s.paths.bundle, serde_json::to_vec(&swapped).unwrap()).unwrap();
+    assert!(matches!(status(&s.paths), State::BundleDamaged(_)));
+
+    fs::remove_file(&s.paths.bundle).unwrap();
+    assert!(matches!(status(&s.paths), State::BundleMissing));
+}
+
+#[test]
+fn a_test_credential_from_another_setup_means_mixed_files() {
+    let a = new_setup();
+    let b = new_setup();
+    fs::copy(&b.paths.test_credential, &a.paths.test_credential).unwrap();
+    assert!(matches!(status(&a.paths), State::KeysDoNotMatch(_)));
+}
