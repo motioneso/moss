@@ -56,7 +56,7 @@ async function outcome(run: () => unknown): Promise<Outcome> {
 
 /** A plain string when well formed; UTF-16 code units when a lone surrogate would break JSON readers. */
 function text(value: string): { text: string } | { utf16: number[] } {
-  return value.isWellFormed()
+  return !/\p{Cs}/u.test(value)
     ? { text: value }
     : { utf16: Array.from({ length: value.length }, (_, index) => value.charCodeAt(index)) };
 }
@@ -744,14 +744,16 @@ function moduleCases(): { label: string; files: EdgeFile[] }[] {
   ];
 }
 
+type LoadedFile = { name: string; version: string; checksum: string; backfill?: { name: string } };
+
 async function runEdgeCases(): Promise<unknown> {
-  const results = [];
+  const results: unknown[] = [];
   const run = async (runner: "core" | "module", label: string, files: EdgeFile[]) => {
     const directory = await mkdtemp(join(tmpdir(), "js34-edge-"));
     try {
       for (const file of files) await writeFile(join(directory, file.name), file.bytes);
       const loaded = await outcome(async () => {
-        const list =
+        const list: readonly LoadedFile[] =
           runner === "core"
             ? await loadMigrationFiles(directory)
             : await loadModuleMigrationFiles(directory);
@@ -759,7 +761,7 @@ async function runEdgeCases(): Promise<unknown> {
           name: file.name,
           version: file.version,
           checksum: file.checksum,
-          backfill: "backfill" in file && file.backfill ? file.backfill.name : null
+          backfill: file.backfill?.name ?? null
         }));
       });
       const expect =
