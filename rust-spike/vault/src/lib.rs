@@ -1,5 +1,6 @@
-//! The only file access in the Rust server. `tools/check-safety-rules.sh` fails the build if
-//! `std::fs` or `tokio::fs` appears in the server crates outside this one.
+//! Confined file access for the server code. `tools/check-safety-rules.sh` fails if `std::fs` or
+//! `tokio::fs` appears in the platform or tasks crates. The built screens served from
+//! `tasks/src/main.rs` and the migration files read by the portability crate sit outside it.
 //!
 //! A [`Root`] is a directory that access is confined to. Paths are relative, use `/` between
 //! names, and may not hold `..`, `.`, empty names, backslashes or NUL. No symbolic link is
