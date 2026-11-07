@@ -64,6 +64,12 @@ describe("owner context reads", () => {
     );
   }
 
+  const dayWindow = (d: string) => ({
+    start: new Date(`2026-11-${d}T10:00:00Z`),
+    end: new Date(`2026-11-${d}T11:00:00Z`),
+    toleranceMinutes: 10
+  });
+
   describe("calendar listEventsOverlapping", () => {
     const window = {
       start: new Date("2026-11-02T10:00:00Z"),
@@ -71,15 +77,42 @@ describe("owner context reads", () => {
       toleranceMinutes: 10
     };
 
-    it("returns the owner's event with names, never a second user's", async () => {
+    it("returns the owner's event with names, never a visible event of a second user", async () => {
       const a = await seedAccount(ids.userA);
       const b = await seedAccount(ids.userB);
       await addEvent(ids.userA, a, "Mine", "2026-11-02T10:00:00Z", "2026-11-02T11:00:00Z", [
         "Ann Lee"
       ]);
-      await addEvent(ids.userB, b, "Theirs", "2026-11-02T10:00:00Z", "2026-11-02T11:00:00Z", [
-        "Spy"
-      ]);
+      const theirs = await runner.withDataContext(as(ids.userB), (db) =>
+        new CalendarRepository().upsertCachedEvent(db, {
+          connectorAccountId: b,
+          externalId: `theirs-${randomUUID()}`,
+          title: "Theirs",
+          startsAt: new Date("2026-11-02T10:00:00Z"),
+          endsAt: new Date("2026-11-02T11:00:00Z"),
+          externalMetadata: { attendeeNames: ["Spy"] }
+        })
+      );
+      // B shares the event with A, so row policy lets A read it. Only the owner filter hides it.
+      await runner.withDataContext(as(ids.userB), (db) =>
+        db.db
+          .insertInto("app.shares")
+          .values({
+            id: randomUUID(),
+            resource_type: "calendar_event",
+            resource_id: theirs.id,
+            owner_user_id: ids.userB,
+            grantee_user_id: ids.userA,
+            level: "view",
+            created_at: new Date(),
+            updated_at: new Date()
+          })
+          .execute()
+      );
+      const visible = await runner.withDataContext(as(ids.userA), (db) =>
+        new CalendarRepository().listVisible(db)
+      );
+      expect(visible.map((e) => e.title)).toContain("Theirs");
       const out = await runner.withDataContext(as(ids.userA), (db) =>
         new CalendarRepository().listEventsOverlapping(db, window)
       );
@@ -96,23 +129,37 @@ describe("owner context reads", () => {
       const out = await runner.withDataContext(as(ids.userA), (db) =>
         new CalendarRepository().listEventsOverlapping(db, window)
       );
-      const leaky = out.find((e) => e.title === "Leaky")!;
-      expect(leaky.attendeeNames).toEqual(["Fine Name"]);
+      expect(out.find((e) => e.title === "Leaky")!.attendeeNames).toEqual(["Fine Name"]);
     });
 
-    it("excludes events outside the tolerance and caps at three", async () => {
+    it("applies the tolerance window exactly", async () => {
       const a = await seedAccount(ids.userA);
-      await addEvent(ids.userA, a, "Far", "2026-11-02T12:00:00Z", "2026-11-02T13:00:00Z");
-      await addEvent(ids.userA, a, "Near", "2026-11-02T11:05:00Z", "2026-11-02T11:30:00Z");
-      for (let i = 0; i < 4; i += 1) {
-        await addEvent(ids.userA, a, `Over${i}`, "2026-11-02T10:00:00Z", "2026-11-02T11:00:00Z");
-      }
+      // Window 10:00-11:00, tolerance 10 min. Inside: ends 09:55. Outside: ends 09:45, starts 11:15.
+      await addEvent(ids.userA, a, "InTolBefore", "2026-11-03T09:30:00Z", "2026-11-03T09:55:00Z");
+      await addEvent(ids.userA, a, "InTolAfter", "2026-11-03T11:05:00Z", "2026-11-03T11:30:00Z");
+      await addEvent(ids.userA, a, "OutBefore", "2026-11-03T09:00:00Z", "2026-11-03T09:45:00Z");
+      await addEvent(ids.userA, a, "OutAfter", "2026-11-03T11:15:00Z", "2026-11-03T12:00:00Z");
       const out = await runner.withDataContext(as(ids.userA), (db) =>
-        new CalendarRepository().listEventsOverlapping(db, window)
+        new CalendarRepository().listEventsOverlapping(db, dayWindow("03"))
       );
-      expect(out).toHaveLength(3);
-      expect(out.map((e) => e.title)).not.toContain("Far");
-      expect(out.map((e) => e.title)).not.toContain("Near");
+      const titles = out.map((e) => e.title);
+      expect(titles).toContain("InTolBefore");
+      expect(titles).toContain("InTolAfter");
+      expect(titles).not.toContain("OutBefore");
+      expect(titles).not.toContain("OutAfter");
+    });
+
+    it("orders by overlap and caps at three", async () => {
+      const a = await seedAccount(ids.userA);
+      await addEvent(ids.userA, a, "Full", "2026-11-04T10:00:00Z", "2026-11-04T11:00:00Z");
+      await addEvent(ids.userA, a, "Half", "2026-11-04T10:00:00Z", "2026-11-04T10:30:00Z");
+      await addEvent(ids.userA, a, "Quarter", "2026-11-04T10:45:00Z", "2026-11-04T11:30:00Z");
+      await addEvent(ids.userA, a, "Tiny", "2026-11-04T10:55:00Z", "2026-11-04T11:20:00Z");
+      const out = await runner.withDataContext(as(ids.userA), (db) =>
+        new CalendarRepository().listEventsOverlapping(db, dayWindow("04"))
+      );
+      expect(out.map((e) => e.title).slice(0, 3)).toEqual(["Full", "Half", "Quarter"]);
+      expect(out.length).toBeLessThanOrEqual(3);
     });
   });
 
