@@ -54,7 +54,7 @@ What it will take:
 | Server          | Fastify API, pg-boss worker, CLI-runner sidecar, scripts | One Rust program with internal services: web server, job runner, agent runner, migrator |
 | Screens         | React 19 app built by Vite, served as static files       | Rust UI compiled to WebAssembly, served by the same program to any browser              |
 | Desktop         | None (browser only)                                      | Rust desktop shell (tray, window, start at login) that opens the same UI                |
-| Database        | Postgres with pgvector in Docker                         | Same Postgres and pgvector, bundled and managed by Moss on desktop (see 3.2)            |
+| Database        | Postgres with pgvector in Docker                         | Same Postgres and pgvector, bundled and managed by Moss on every install (see 3.2)      |
 | Add-on modules  | Node processes over JSON-RPC, React bundles in the host  | WebAssembly components with the same host ports, UI in a sandboxed frame (see 3.4)      |
 | Server installs | Docker Compose                                           | Same program as a Linux service or a Docker image                                       |
 
@@ -173,12 +173,12 @@ Postgres with pgvector and RLS is the security model. 633 policies, 93 security-
 and four locked-down roles carry the privacy guarantees. The desktop question is how to get that
 database onto a Windows or Mac machine.
 
-| Option                               | Keeps RLS and roles                    | Keeps migrations and data          | Desktop cost                                                     | Verdict                        |
-| ------------------------------------ | -------------------------------------- | ---------------------------------- | ---------------------------------------------------------------- | ------------------------------ |
-| Bundled Postgres plus pgvector       | Yes, unchanged                         | Yes, same files, same dump format  | Ship and manage a Postgres per OS, sign its files                | **Recommended**                |
-| Embedded Postgres-compatible engine  | Partly; RLS and extension support vary | Unproven for 84 PL/pgSQL functions | Smaller, but every policy needs re-proof                         | Reject                         |
-| SQLite with a new isolation model    | No; SQLite has no RLS or roles         | No; every SQL file rewritten       | Smallest, but the privacy model must be redesigned and re-proven | Reject                         |
-| Desktop as a thin client to a server | Yes                                    | Yes                                | No local database                                                | Fallback only if Phase 1 fails |
+| Option                                       | Keeps RLS and roles                    | Keeps migrations and data          | Desktop cost                                                     | Verdict                        |
+| -------------------------------------------- | -------------------------------------- | ---------------------------------- | ---------------------------------------------------------------- | ------------------------------ |
+| Bundled Postgres plus pgvector               | Yes, unchanged                         | Yes, same files, same dump format  | Ship and manage a Postgres per OS, sign its files                | **Recommended**                |
+| Embedded Postgres-compatible engine          | Partly; RLS and extension support vary | Unproven for 84 PL/pgSQL functions | Smaller, but every policy needs re-proof                         | Reject                         |
+| SQLite with a new isolation model            | No; SQLite has no RLS or roles         | No; every SQL file rewritten       | Smallest, but the privacy model must be redesigned and re-proven | Reject                         |
+| Thin client to an install on another machine | Yes                                    | Yes                                | No local database                                                | Fallback only if Phase 1 fails |
 
 Recommendation: bundle Postgres and pgvector on every OS. The deferred desktop plan reached the
 same answer (`docs/superpowers/plans/2026-09-05-moss-desktop-install.md`, "Postgres stays"), and so
@@ -444,7 +444,7 @@ the plain snapshot. They are never re-generated, because a new key cannot read t
 
 A source with several accounts imports whole into any install, and no account is dropped. If the
 destination runs every agent as one OS user, the import screen shows the shared-install notice
-(3.5) before the owner approves the move.
+(3.5) before the owner approves the move, and every imported account sees it at first sign-in.
 
 ### 4.3 Rolling back
 
