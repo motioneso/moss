@@ -57,7 +57,7 @@ function who(k){return k==='s3'?'unknown':k}
 function sp(k,inner){return '<span class="spk" data-who="'+who(k)+'" data-state="'+ST[k]+'">'+inner+'</span>'}
 function chip(k){return sp(k,'<span class="nm" title="'+(ST[k]==='guess'?'Guessed from your calendar':ST[k]==='set'?'Set by you':'Not identified')+'">'+S[k].n+'</span>')}
 function nm(k){return chip(k)}
-function sec(n,t,body,meta){return '<section class="sec"><div class="jds-section-head"><span class="jds-section-head__number">'+n+'</span><h2 class="jds-section-head__title">'+t+'</h2>'+(meta?'<span class="jds-section-head__meta">'+meta+'</span>':'')+'</div>'+body+'</section>'}
+function sec(n,t,body,meta){return '<section class="sec"><div class="jds-section-head"><h2 class="jds-section-head__title">'+t+'</h2>'+(meta?'<span class="jds-section-head__meta">'+meta+'</span>':'')+'</div>'+body+'</section>'}
 function facts(a){return a.map(function(f){return '<div class="fact"><p>'+f[0]+(f[2]?'<small>'+f[2]+'</small>':'')+'</p>'+nm(f[1])+'</div>'}).join('')}
 function tx(){return [['priya','Thanks all. Where are we on the launch date?','10:02'],['sam','Priya, the vendor slipped, so March is realistic.','10:03'],['s3','Budget stays as is, I checked with finance.','10:05'],['priya','Fine. I will update the plan by Friday.','10:06']].map(function(t){return '<div class="line"><span>'+chip(t[0])+'<br><small>'+t[2]+'</small></span><p>'+t[1]+'</p></div>'}).join('')}
 function draw(){var seg=[['priya',10],['sam',7],['you',6],['priya',9],['s3',3],['sam',8],['priya',6],['you',5]];
