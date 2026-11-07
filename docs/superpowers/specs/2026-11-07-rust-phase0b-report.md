@@ -15,11 +15,14 @@ part that is hard or costly, and ends with a plan to proceed.
 
 - **Go.** Nothing in Tasks turned out to be something Rust cannot do.
 - **The Rust server gives the same answers as the TypeScript one.** All 67 side-by-side cases
-  match on the final run, including the row-security cases.
-- **64 of the 146 Tasks integration tests converted cleanly**, and none of them found a
-  difference. Of the 66 tests that go through HTTP and cover the ported part, 64 converted. The
-  other 82 test features the spike left out (46), call AI tools directly (24), test plain
-  functions (10), or need a runner step that does not exist yet (2).
+  match on the final run. 19 of them send requests as user B or the admin as well as user A (28
+  requests in all), and those are the cases that test whether the Rust server acts for the right
+  user. Another 20 cases also query the database directly as each runtime role. Those queries
+  check the database's row-security rules, not either server.
+- **64 of the 146 Tasks integration tests converted, 62 in full and 2 in part**, and none of
+  them found a difference. Of the 66 tests that go through HTTP and cover the ported part, 64
+  converted. The other 82 test features the spike left out (46), call AI tools directly (23), test
+  plain functions (10), or need a runner step that does not exist yet (3).
 - **The runner catches a wrong server.** Three planted one-line bugs in the Rust server all made
   the run fail, including one that ran every request as the same user.
 - **The Rust server refuses unsafe database roles.** It will not start on the migration role, on
@@ -30,7 +33,8 @@ part that is hard or costly, and ends with a plan to proceed.
   module reuses.
 - **The whole port would cost about 37M to 81M output tokens**, roughly 600 to 1,600 context
   windows. The hard parts (chat, AI, the CLI runner, connectors and the rest) cause most of the
-  spread, because nothing like them was ported here.
+  spread, because nothing like them was ported here. Like every cost in this report, this counts
+  only the tokens agents write, not the far larger number they read.
 - **The side-by-side runner is cheap.** Building it and converting every test would cost about
   1.9M to 4.1M output tokens, 2% to 11% of the port. The plan's stop line was a runner that costs
   as much as the port.
@@ -68,7 +72,8 @@ part that is hard or costly, and ends with a plan to proceed.
 - A case is a JSON list of steps. A step is one of three kinds.
   - An HTTP request, sent as user A, B, the admin or nobody.
   - A SQL statement run as the app or worker runtime role, for a given user or for no user, then
-    rolled back. This is how row-security cases are checked.
+    rolled back. The runner sends it straight to each database copy, so it checks the
+    database's row-security rules, not either server.
   - A wait for a background job to finish.
 - Each step's answer is checked against the case's expected values on each server separately.
   So a case cannot pass because both servers are wrong in the same way.
@@ -215,22 +220,22 @@ list is in `rust-spike/parity/conversion-ledger.md`.
   because the case was wrong (a guessed order, a probe the app role cannot run, ties), and both
   servers agreed once the case was right.
 
-| Test file                     | Tests | Converted               |
-| ----------------------------- | ----- | ----------------------- |
-| tasks                         | 29    | 15                      |
-| tasks-verticals               | 38    | 30                      |
-| tasks-rename-recurrence       | 11    | 7                       |
-| tasks-drift                   | 4     | 4                       |
-| tasks-update-fixes            | 3     | 3                       |
-| tasks-web-contract            | 5     | 3                       |
-| tasks-suggested-status        | 9     | 2                       |
-| tasks-tools                   | 17    | 0 (all call AI tools)   |
-| tasks-agency-tools            | 7     | 0 (all call AI tools)   |
-| tasks-view                    | 4     | 0 (all plain functions) |
-| tasks-email-feedback          | 7     | 0 (outside)             |
-| task-summary                  | 5     | 0 (outside)             |
-| tasks-action-policy-self-heal | 5     | 0 (outside)             |
-| tasks-manage-share-regression | 2     | 0 (outside)             |
+| Test file                     | Tests | Converted                            |
+| ----------------------------- | ----- | ------------------------------------ |
+| tasks                         | 29    | 15                                   |
+| tasks-verticals               | 38    | 30                                   |
+| tasks-rename-recurrence       | 11    | 7                                    |
+| tasks-drift                   | 4     | 4                                    |
+| tasks-update-fixes            | 3     | 3                                    |
+| tasks-web-contract            | 5     | 3                                    |
+| tasks-suggested-status        | 9     | 2                                    |
+| tasks-tools                   | 17    | 0 (16 call AI tools, 1 needs a step) |
+| tasks-agency-tools            | 7     | 0 (all call AI tools)                |
+| tasks-view                    | 4     | 0 (all plain functions)              |
+| tasks-email-feedback          | 7     | 0 (outside)                          |
+| task-summary                  | 5     | 0 (outside)                          |
+| tasks-action-policy-self-heal | 5     | 0 (outside)                          |
+| tasks-manage-share-regression | 2     | 0 (outside)                          |
 
 The side-by-side suite now holds 67 cases in 8 files: the 64 converted tests and 3 smoke cases
 written first.
@@ -258,7 +263,8 @@ written first.
 ### Effort
 
 Measured from each agent's own session record. Output tokens are the tokens an agent wrote. A
-reset is a cleared context window.
+reset is a cleared context window. The tokens an agent read are not counted, and they are far
+larger. The two helpers read 7.0M and 9.6M tokens from cache while writing about 60,000 each.
 
 | Work                                                                | Agent             | Output tokens         | Resets  |
 | ------------------------------------------------------------------- | ----------------- | --------------------- | ------- |
@@ -281,7 +287,7 @@ reset is a cleared context window.
 | Part                        | Size                                                                                | Output tokens                      |
 | --------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------- |
 | Runner                      | 1,307 lines (1,215 of Rust, a 54-line TypeScript launcher, a 38-line shell wrapper) | 74,655, with the smoke cases       |
-| 64 converted cases          | 3,954 lines of JSON, about 62 per test                                              | 59,766, with sorting all 146 tests |
+| 64 converted cases          | 3,930 lines of JSON, about 61 per test                                              | 59,766, with sorting all 146 tests |
 | Planted-bug and role checks | two shell scripts in `rust-spike/tools`                                             | in the last row of Effort          |
 
 - The 14 TypeScript Tasks test files hold 4,787 lines for 146 tests, about 33 lines a test. A
@@ -289,11 +295,13 @@ reset is a cleared context window.
   and expected value.
 - Converting cost about 930 output tokens for each converted test, counting the sorting.
 - The runner still needs a few new step kinds before it covers everything Tasks tests.
-  - A step that calls a module's AI tool on both servers (24 Tasks tests).
+  - A step that calls a module's AI tool on both servers (23 Tasks tests).
   - A step that queues a job and reads its payload (2 Tasks tests), once the Rust queue is
     chosen.
   - A step that runs SQL as the superuser, for tests that add a policy to prove a negative
     (task-summary 109).
+  - A direct call to a module's query code on both servers, for the one test that filters in a
+    way no route offers (tasks-tools 306).
   - Cookie sign-in, once the Rust server has it.
   - A tolerance check on fresh timestamps and a cross-check on ids, so the labels hide less.
 - Each step kind is smaller than the runner itself, so all of them should cost about 0.1M to
@@ -301,13 +309,16 @@ reset is a cleared context window.
 
 Scaled to the whole codebase:
 
-| Part                   | Basis                                                                                                   | Output tokens    |
-| ---------------------- | ------------------------------------------------------------------------------------------------------- | ---------------- |
-| Runner as built        | measured                                                                                                | 0.07M            |
-| New step kinds         | the list above                                                                                          | 0.1M to 0.4M     |
-| Converting tests, low  | 4,281 integration tests are 29.3 times the Tasks count; Tasks rate                                      | 1.8M             |
-| Converting tests, high | every HTTP or tool test converts (90% of tests that cover ported code, as in Tasks), at 930 tokens each | 3.6M             |
-| **Total**              |                                                                                                         | **1.9M to 4.1M** |
+| Part                   | Basis                                                                                                                                             | Output tokens    |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| Runner as built        | measured                                                                                                                                          | 0.07M            |
+| New step kinds         | the list above                                                                                                                                    | 0.1M to 0.4M     |
+| Converting tests, low  | 29.3 times what converting Tasks cost (4,281 integration tests against 146), so the same 44% share converts                                       | 1.8M             |
+| Converting tests, high | about 90% of 4,281 tests convert, at 930 tokens each. In Tasks, 93% of tests go through HTTP or a tool, and 97% of the ported HTTP ones converted | 3.6M             |
+| **Total**              |                                                                                                                                                   | **1.9M to 4.1M** |
+
+Both test counts treat a table-driven test (`it.each`) as one test. The integration suite has 175
+of them. Each may become several cases, so the conversion rows may run somewhat low.
 
 That is 2% to 11% of the port's 37M to 81M. The plan's stop line was a runner that costs as much
 as the port.
@@ -448,8 +459,8 @@ The brief asked for a look at Herdr's app and core. Both are Rust.
   automatic execution, email feedback, suggested tasks, the task summary and the action policy
   were not ported. Their tests are counted as outside the ported part.
 - **Browser sign-in.** The Rust server accepts the sign-in session as a bearer token only. The
-  browser's cookie sign-in, rate limits, body size limits and path-parameter checks were not
-  ported.
+  browser's cookie sign-in, rate limits and path-parameter checks were not ported. The 1 MiB body
+  limit was ported and has a Rust unit test, but no side-by-side case.
 - **The real job queue.** The Rust job runs on a small queue table made for the spike, not on
   pg-boss. The TypeScript side uses pg-boss. Plan section 3.3 still has to choose the Rust queue.
 - **Load and concurrency.** Every case ran one request at a time.
@@ -461,9 +472,11 @@ The brief asked for a look at Herdr's app and core. Both are Rust.
   shows only when the order changes.
 - **Server errors.** No case made either server fail with a 500, so those bodies were not
   compared.
-- **Tests not converted.** 24 tests that call AI tools, 10 plain-function tests and 2 tests that
-  read job payloads have no side-by-side case yet. Two conversions are partial (tasks 765 and
-  verticals 284).
+- **Response headers.** Only status codes and bodies were compared. Content type, caching
+  headers and cookies were not.
+- **Tests not converted.** 23 tests that call AI tools, 10 plain-function tests, 2 tests that
+  read job payloads and 1 that filters in a way no route offers have no side-by-side case yet.
+  Two conversions are partial (tasks 765 and verticals 284).
 - **Rows seeded by SQL.** The create route cannot set a position or the suggested status, so
   some cases insert those rows by SQL. Those rows skip the create code on both servers.
 - **Job payloads.** No case reads a queued job's payload, so the rule that payloads carry only
@@ -479,7 +492,8 @@ The brief asked for a look at Herdr's app and core. Both are Rust.
 
 - The UI helper's toolchain install updated the user-wide rustup program to 1.29.3, because a
   fresh rustup home turns self-update on by default. `rust-spike/ui/README.md` now turns it off
-  first.
+  first. The newer rustup works the same. To go back, reinstall the earlier release from
+  rustup.rs. The separate toolchain home sat in this task's scratch folder and goes with it.
 - The browser used for screenshots ran Chrome with its sandbox off, on localhost pages only.
 
 ## How to proceed
@@ -499,7 +513,7 @@ measured, and the runner that proves it is cheap next to it.
 | Risk                                                             | What it takes                                                                                                 |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | The hard parts port slower than Tasks                            | Port one hard part first in Phase 1, such as the CLI runner or chat, and re-scale with its measured rate      |
-| 24 Tasks tests call AI tools, with no HTTP request to compare    | Add a runner step that calls a module tool on both servers and compares the results                           |
+| 23 Tasks tests call AI tools, with no HTTP request to compare    | Add a runner step that calls a module tool on both servers and compares the results                           |
 | 10 Tasks tests check plain functions                             | Port them as Rust unit tests beside the code                                                                  |
 | No case reads a queued job's payload                             | Choose the Rust queue (plan 3.3) early, then add a runner step that reads job payloads on both sides          |
 | Matching error text word for word took 564 lines                 | Match status codes and error codes exactly, and match message text only where a screen or API client shows it |
