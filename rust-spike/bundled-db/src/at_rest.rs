@@ -166,7 +166,12 @@ fn unescape(field: &str) -> String {
     let mut out = Vec::with_capacity(bytes.len());
     let mut at = 0;
     while at < bytes.len() {
-        if bytes[at] == b'\\' && at + 3 < bytes.len() && bytes[at + 1..at + 4].iter().all(|b| (b'0'..=b'7').contains(b)) {
+        let octal = |b: &u8| (b'0'..=b'7').contains(b);
+        if bytes[at] == b'\\'
+            && at + 3 < bytes.len()
+            && (b'0'..=b'3').contains(&bytes[at + 1])
+            && bytes[at + 2..at + 4].iter().all(octal)
+        {
             let value = (bytes[at + 1] - b'0') * 64 + (bytes[at + 2] - b'0') * 8 + (bytes[at + 3] - b'0');
             out.push(value);
             at += 4;
@@ -230,11 +235,11 @@ pub fn block_device(sys: &Path, major: u32, minor: u32, depth: u32) -> Verdict {
         ));
     }
     let layer = if uuid.starts_with("LVM-") {
-        "LVM volume"
+        "an LVM volume"
     } else if name.starts_with("md") {
-        "RAID array"
+        "a RAID array"
     } else {
-        "mapped device"
+        "a mapped device"
     };
     let mut below = Vec::new();
     for slave in &slaves {
@@ -245,7 +250,7 @@ pub fn block_device(sys: &Path, major: u32, minor: u32, depth: u32) -> Verdict {
             None => Verdict::unknown(format!("{slave}: no device number")),
         });
     }
-    let mut evidence = vec![format!("{name} is a {layer} on {}", slaves.join(", "))];
+    let mut evidence = vec![format!("{name} is {layer} on {}", slaves.join(", "))];
     evidence.extend(below.iter().flat_map(|v| v.evidence.clone()));
     let status = if below.iter().all(|v| v.status == Status::Verified) {
         Status::Verified
@@ -425,16 +430,21 @@ pub mod linux {
     /// pipes a dump to a crash-handler program.
     fn crash_dump_verdict(database_pids: &[i32]) -> Verdict {
         let pattern = std::fs::read_to_string("/proc/sys/kernel/core_pattern").unwrap_or_default();
-        let pattern = pattern.trim();
+        let states: Vec<(i32, DumpState)> = database_pids.iter().map(|&pid| (pid, dump_state(pid))).collect();
+        decide(&states, pattern.trim())
+    }
+
+    /// The crash-dump verdict from each database process's dump state and the kernel's
+    /// `core_pattern`.
+    fn decide(states: &[(i32, DumpState)], pattern: &str) -> Verdict {
         let destination = format!("the system sends crash dumps to: {pattern}");
-        if database_pids.is_empty() {
+        if states.is_empty() {
             return Verdict {
                 status: Status::Unknown,
                 method: None,
                 evidence: vec!["the database is not running, so its processes were not checked".into(), destination],
             };
         }
-        let states: Vec<(i32, DumpState)> = database_pids.iter().map(|&pid| (pid, dump_state(pid))).collect();
         let count = states.len();
         if states.iter().all(|(_, state)| *state == DumpState::NonDumpable) {
             return Verdict {
@@ -490,22 +500,89 @@ pub mod linux {
     /// cause is a setuid program, which Postgres is not. A root-run database cannot be judged
     /// this way, so it falls back to the core limit.
     fn dump_state(pid: i32) -> DumpState {
-        let status = Path::new("/proc").join(pid.to_string()).join("status");
+        let dir = Path::new("/proc").join(pid.to_string());
+        let status = dir.join("status");
         let (Ok(text), Ok(meta)) = (std::fs::read_to_string(&status), std::fs::metadata(&status)) else {
             return DumpState::Unreadable;
         };
-        let real_uid = text
+        let limits = std::fs::read_to_string(dir.join("limits")).unwrap_or_default();
+        classify(&text, meta.uid(), &limits)
+    }
+
+    /// A process's dump state from its `status` text, the owner the kernel shows for that
+    /// file, and its `limits` text.
+    fn classify(status: &str, status_owner: u32, limits: &str) -> DumpState {
+        let real_uid = status
             .lines()
             .find_map(|line| line.strip_prefix("Uid:"))
             .and_then(|ids| ids.split_whitespace().next())
             .and_then(|id| id.parse::<u32>().ok());
-        if real_uid.is_some_and(|uid| uid != 0) && meta.uid() == 0 {
+        if real_uid.is_some_and(|uid| uid != 0) && status_owner == 0 {
             return DumpState::NonDumpable;
         }
-        match core_limit(&std::fs::read_to_string(format!("/proc/{pid}/limits")).unwrap_or_default()) {
+        match core_limit(limits) {
             Some(limit) if limit == "0" => DumpState::ZeroLimit,
             Some(limit) => DumpState::Limit(limit),
             None => DumpState::Unreadable,
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        const PIPE: &str = "|/usr/share/apport/apport -p%p -s%s -c%c -d%d -P%P -u%u -g%g -F%F -- %E";
+        const STATUS: &str = "Name:\tpostgres\nUmask:\t0077\nUid:\t1000\t1000\t1000\t1000\n";
+
+        fn limits(soft: &str) -> String {
+            format!(
+                "Limit                     Soft Limit           Hard Limit           Units     \n\
+                 Max core file size        {soft:<21}unlimited            bytes     \n"
+            )
+        }
+
+        #[test]
+        fn classify_reads_the_dump_state() {
+            assert_eq!(classify(STATUS, 0, &limits("0")), DumpState::NonDumpable);
+            assert_eq!(classify(STATUS, 1000, &limits("0")), DumpState::ZeroLimit);
+            assert_eq!(classify(STATUS, 1000, &limits("unlimited")), DumpState::Limit("unlimited".into()));
+            assert_eq!(classify(STATUS, 1000, ""), DumpState::Unreadable);
+
+            // A database run as root shows root as owner either way, so only its limit counts.
+            let root = STATUS.replace("1000", "0");
+            assert_eq!(classify(&root, 0, &limits("unlimited")), DumpState::Limit("unlimited".into()));
+        }
+
+        #[test]
+        fn non_dumpable_everywhere_is_verified_even_with_a_crash_handler() {
+            let verdict = decide(&[(10, DumpState::NonDumpable), (11, DumpState::NonDumpable)], PIPE);
+            assert_eq!(verdict.status, Status::Verified);
+            assert_eq!(verdict.method.as_deref(), Some("database cannot be dumped"));
+        }
+
+        #[test]
+        fn a_zero_limit_is_verified_only_when_dumps_go_to_a_file() {
+            let states = [(10, DumpState::NonDumpable), (11, DumpState::ZeroLimit)];
+            assert_eq!(decide(&states, PIPE).status, Status::Unknown);
+            let verdict = decide(&states, "core");
+            assert_eq!(verdict.status, Status::Verified);
+            assert_eq!(verdict.method.as_deref(), Some("crash-dump limit of 0"));
+        }
+
+        #[test]
+        fn a_dumpable_process_is_off_and_an_unreadable_one_unknown() {
+            let off = decide(&[(10, DumpState::NonDumpable), (11, DumpState::Limit("unlimited".into()))], PIPE);
+            assert_eq!(off.status, Status::Off);
+            assert_eq!(decide(&[(10, DumpState::ZeroLimit), (11, DumpState::Unreadable)], "core").status, Status::Unknown);
+
+            // A dumpable process outranks an unreadable one.
+            let both = decide(&[(10, DumpState::Unreadable), (11, DumpState::Limit("1024".into()))], "core");
+            assert_eq!(both.status, Status::Off);
+        }
+
+        #[test]
+        fn a_stopped_database_is_unknown() {
+            assert_eq!(decide(&[], "core").status, Status::Unknown);
         }
     }
 }
@@ -560,39 +637,359 @@ pub fn parse_swapusage(text: &str) -> Verdict {
     }
 }
 
-/// macOS: FileVault per folder from `diskutil`, swap from `sysctl`. Not compiled or run in
-/// this spike because the Mac has no Rust toolchain. The parsers above are tested on Linux
-/// against output captured on the test Mac.
+/// macOS: FileVault per folder from `diskutil`, swap from `sysctl`, and both kinds of crash
+/// file. Not compiled or run in this spike because the Mac has no Rust toolchain. The parsers
+/// above are tested on Linux against output captured on the test Mac, and the facts the crash
+/// checks read were confirmed there by hand.
 #[cfg(target_os = "macos")]
 pub mod macos {
     use super::*;
     use std::process::Command;
 
     pub fn report(paths: &[(String, PathBuf)]) -> Report {
-        let mut checks = Vec::new();
-        for (item, path) in paths {
-            let folder = path.ancestors().find(|p| p.exists()).unwrap_or(Path::new("/"));
-            let verdict = match Command::new("/usr/sbin/diskutil").arg("info").arg("-plist").arg(folder).output() {
-                Ok(out) if out.status.success() => parse_diskutil_plist(&String::from_utf8_lossy(&out.stdout)),
-                _ => Verdict::unknown(format!("diskutil could not describe {}", folder.display())),
-            };
-            checks.push(Check::new(item, Some(path), verdict));
-        }
-        let swap = match Command::new("/usr/sbin/sysctl").arg("vm.swapusage").output() {
-            Ok(out) if out.status.success() => parse_swapusage(&String::from_utf8_lossy(&out.stdout)),
-            _ => Verdict::unknown("sysctl vm.swapusage failed".into()),
+        let mut checks: Vec<Check> =
+            paths.iter().map(|(item, path)| Check::new(item, Some(path), folder_verdict(path))).collect();
+        let swap = match sysctl("vm.swapusage") {
+            Some(text) => parse_swapusage(&text),
+            None => Verdict::unknown("sysctl vm.swapusage failed".into()),
         };
         checks.push(Check::new("Swap", None, swap));
-        // macOS cannot read another process's limits back. The supervisor sets the limit in
-        // the child before Postgres runs, and the start fails if it cannot.
-        checks.push(Check::new(
-            "Crash dumps",
-            None,
-            Verdict::verified(
-                "turned off for the database",
-                "the supervisor starts the database with a crash-dump size limit of 0".into(),
-            ),
-        ));
+        checks.push(Check::new("Core files", None, core_file_verdict()));
+        let reports = std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Logs/DiagnosticReports"));
+        checks.push(Check::new("Crash reports", reports.as_deref(), crash_report_verdict(reports.as_deref())));
         Report::from_checks(checks)
+    }
+
+    /// FileVault state of the volume holding `path`, or of its nearest existing folder.
+    fn folder_verdict(path: &Path) -> Verdict {
+        let folder = path.ancestors().find(|p| p.exists()).unwrap_or(Path::new("/"));
+
+        // diskutil accepts a mount point, not an arbitrary folder.
+        let Some(volume) = mount_point(folder) else {
+            return Verdict::unknown(format!("no volume found for {}", folder.display()));
+        };
+        match Command::new("/usr/sbin/diskutil").arg("info").arg("-plist").arg(&volume).output() {
+            Ok(out) if out.status.success() => parse_diskutil_plist(&String::from_utf8_lossy(&out.stdout)),
+            _ => Verdict::unknown(format!("diskutil could not describe {}", volume.display())),
+        }
+    }
+
+    /// A core file needs `kern.coredump` on, a non-zero core limit and a core folder this user
+    /// can write. The supervisor starts Postgres with a limit of 0, but macOS cannot read a
+    /// running process's limit back, so the verdict rests on the two facts it can read. Core
+    /// files that can be written must land on an encrypted volume.
+    fn core_file_verdict() -> Verdict {
+        match (sysctl("kern.coredump").as_deref(), sysctl("kern.corefile")) {
+            (Some("0"), _) => {
+                Verdict::verified("core files off", "core files are off for the whole system (kern.coredump=0)".into())
+            }
+            (Some(_), Some(pattern)) => {
+                let folder = Path::new(&pattern).parent().unwrap_or(Path::new("/"));
+                if !writable(folder) {
+                    return Verdict::verified(
+                        "core files cannot be written",
+                        format!("core files go to {}, which this user cannot write", folder.display()),
+                    );
+                }
+                let mut verdict = folder_verdict(folder);
+                verdict.evidence.insert(0, format!("core files go to {}, which this user can write", folder.display()));
+                verdict
+            }
+            _ => Verdict::unknown("sysctl did not say whether or where core files are written".into()),
+        }
+    }
+
+    /// macOS writes a crash report for every crashed process. It holds call stacks and register
+    /// values but no memory contents. Register values can carry a few bytes of whatever the
+    /// process was handling, so the report folder must be on an encrypted volume.
+    fn crash_report_verdict(folder: Option<&Path>) -> Verdict {
+        let Some(folder) = folder else {
+            return Verdict::unknown("no home folder, so the crash report folder is unknown".into());
+        };
+        let mut verdict = folder_verdict(folder);
+        verdict.evidence.push("a crash report holds call stacks and register values, not memory contents".into());
+        verdict
+    }
+
+    fn sysctl(name: &str) -> Option<String> {
+        let out = Command::new("/usr/sbin/sysctl").arg("-n").arg(name).output().ok()?;
+        out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+    }
+
+    fn writable(folder: &Path) -> bool {
+        use std::os::unix::ffi::OsStrExt;
+        std::ffi::CString::new(folder.as_os_str().as_bytes())
+            .is_ok_and(|path| unsafe { libc::access(path.as_ptr(), libc::W_OK) } == 0)
+    }
+
+    /// The mount point of the volume holding `path`, from `statfs`.
+    fn mount_point(path: &Path) -> Option<PathBuf> {
+        use std::ffi::{CStr, CString, OsStr};
+        use std::os::unix::ffi::OsStrExt;
+        let c_path = CString::new(path.as_os_str().as_bytes()).ok()?;
+        let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
+        if unsafe { libc::statfs(c_path.as_ptr(), &mut fs) } != 0 {
+            return None;
+        }
+        let name = unsafe { CStr::from_ptr(fs.f_mntonname.as_ptr()) };
+        Some(PathBuf::from(OsStr::from_bytes(name.to_bytes())))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::symlink;
+
+    /// A fake sysfs. Each device is a folder under `devices/` holding its `dev` file, linked
+    /// from `dev/block/<major:minor>` and `class/block/<name>` the way the kernel links them.
+    struct Sys(tempfile::TempDir);
+
+    impl Sys {
+        fn new() -> Sys {
+            let dir = tempfile::tempdir().unwrap();
+            for sub in ["devices", "dev/block", "class/block"] {
+                std::fs::create_dir_all(dir.path().join(sub)).unwrap();
+            }
+            Sys(dir)
+        }
+
+        fn root(&self) -> &Path {
+            self.0.path()
+        }
+
+        fn device(&self, name: &str, major: u32, minor: u32) -> PathBuf {
+            let dir = self.root().join("devices").join(name);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("dev"), format!("{major}:{minor}\n")).unwrap();
+            symlink(&dir, self.root().join(format!("dev/block/{major}:{minor}"))).unwrap();
+            symlink(&dir, self.root().join("class/block").join(name)).unwrap();
+            dir
+        }
+
+        fn partition(&self, name: &str, major: u32, minor: u32) {
+            let dir = self.device(name, major, minor);
+            std::fs::write(dir.join("partition"), "3\n").unwrap();
+        }
+
+        /// A device-mapper device (major 253) stacked on `slaves`.
+        fn mapped(&self, name: &str, minor: u32, uuid: &str, slaves: &[&str]) {
+            let dir = self.device(name, 253, minor);
+            std::fs::create_dir_all(dir.join("dm")).unwrap();
+            std::fs::write(dir.join("dm/uuid"), format!("{uuid}\n")).unwrap();
+            std::fs::write(dir.join("dm/name"), format!("{name}-mapped\n")).unwrap();
+            self.slaves(&dir, slaves);
+        }
+
+        fn slaves(&self, dir: &Path, slaves: &[&str]) {
+            std::fs::create_dir_all(dir.join("slaves")).unwrap();
+            for slave in slaves {
+                symlink(self.root().join("devices").join(slave), dir.join("slaves").join(slave)).unwrap();
+            }
+        }
+
+        fn verdict(&self, major: u32, minor: u32) -> Verdict {
+            block_device(self.root(), major, minor, 0)
+        }
+
+        /// LUKS2 on an NVMe partition, as `dm-0`.
+        fn luks(&self) {
+            self.partition("nvme0n1p3", 259, 3);
+            self.mapped("dm-0", 0, "CRYPT-LUKS2-0123456789abcdef-luks-0123", &["nvme0n1p3"]);
+        }
+    }
+
+    #[test]
+    fn luks_is_verified() {
+        let sys = Sys::new();
+        sys.luks();
+        let verdict = sys.verdict(253, 0);
+        assert_eq!(verdict.status, Status::Verified);
+        assert_eq!(verdict.method.as_deref(), Some("LUKS2 (dm-crypt)"));
+    }
+
+    #[test]
+    fn lvm_on_luks_is_verified() {
+        let sys = Sys::new();
+        sys.luks();
+        sys.mapped("dm-1", 1, "LVM-abcdef", &["dm-0"]);
+        let verdict = sys.verdict(253, 1);
+        assert_eq!(verdict.status, Status::Verified);
+        assert_eq!(verdict.evidence[0], "dm-1 is an LVM volume on dm-0");
+    }
+
+    #[test]
+    fn a_plain_partition_is_off() {
+        let sys = Sys::new();
+        sys.partition("sda2", 8, 2);
+        let verdict = sys.verdict(8, 2);
+        assert_eq!(verdict.status, Status::Off);
+        assert!(verdict.evidence[0].starts_with("sda2 is a plain partition"));
+    }
+
+    #[test]
+    fn lvm_on_a_plain_partition_is_off() {
+        let sys = Sys::new();
+        sys.partition("sda2", 8, 2);
+        sys.mapped("dm-1", 1, "LVM-abcdef", &["sda2"]);
+        assert_eq!(sys.verdict(253, 1).status, Status::Off);
+    }
+
+    #[test]
+    fn raid_is_verified_only_when_every_member_is() {
+        let sys = Sys::new();
+        sys.luks();
+        sys.partition("nvme1n1p3", 259, 7);
+        sys.mapped("dm-2", 2, "CRYPT-LUKS2-fedcba9876543210-luks-4567", &["nvme1n1p3"]);
+        sys.partition("sdb1", 8, 17);
+        let both_encrypted = sys.device("md0", 9, 0);
+        sys.slaves(&both_encrypted, &["dm-0", "dm-2"]);
+        let one_plain = sys.device("md1", 9, 1);
+        sys.slaves(&one_plain, &["dm-0", "sdb1"]);
+        assert_eq!(sys.verdict(9, 0).status, Status::Verified);
+        assert_eq!(sys.verdict(9, 1).status, Status::Off);
+    }
+
+    #[test]
+    fn a_missing_layer_or_device_is_unknown() {
+        let sys = Sys::new();
+        sys.mapped("dm-1", 1, "LVM-abcdef", &["ghost"]);
+        assert_eq!(sys.verdict(253, 1).status, Status::Unknown);
+        assert_eq!(sys.verdict(8, 99).status, Status::Unknown);
+    }
+
+    #[test]
+    fn a_loop_device_is_unknown() {
+        let sys = Sys::new();
+        let dir = sys.device("loop0", 7, 0);
+        std::fs::create_dir_all(dir.join("loop")).unwrap();
+        std::fs::write(dir.join("loop/backing_file"), "/home/someone/disk.img\n").unwrap();
+        assert_eq!(sys.verdict(7, 0).status, Status::Unknown);
+    }
+
+    fn mount(point: &str, fs_type: &str, major: u32, minor: u32) -> Mount {
+        Mount { major, minor, mount_point: PathBuf::from(point), fs_type: fs_type.into(), source: "/dev/x".into() }
+    }
+
+    #[test]
+    fn filesystem_kinds() {
+        let sys = Sys::new();
+        assert_eq!(filesystem(sys.root(), &mount("/home/a", "ecryptfs", 0, 40), None).status, Status::Verified);
+        let fuse = filesystem(sys.root(), &mount("/home/a/vault", "fuse.gocryptfs", 0, 41), None);
+        assert_eq!((fuse.status, fuse.method.as_deref()), (Status::Verified, Some("gocryptfs")));
+        for fs_type in ["nfs4", "tmpfs", "overlay", "zfs", "fuse.sshfs", "fuse.other"] {
+            assert_eq!(filesystem(sys.root(), &mount("/x", fs_type, 0, 42), None).status, Status::Unknown, "{fs_type}");
+        }
+        assert_eq!(filesystem(sys.root(), &mount("/", "ext4", 8, 2), None).status, Status::Unknown);
+
+        sys.partition("sda2", 8, 2);
+        let ext4 = filesystem(sys.root(), &mount("/", "ext4", 8, 2), Some((8, 2)));
+        assert_eq!(ext4.status, Status::Off);
+        assert_eq!(ext4.evidence[0], "/ (ext4) is on block device 8:2");
+    }
+
+    #[test]
+    fn mountinfo_lines() {
+        let text = "22 1 8:2 / / rw,relatime shared:1 - ext4 /dev/sda2 rw,errors=remount-ro\n\
+                    36 22 98:0 /mnt1 /mnt/parent rw,noatime master:1 shared:7 - ext3 /dev/root rw\n\
+                    40 22 0:45 / /media/my\\040disk rw - vfat /dev/sdb1 rw\n\
+                    not a mountinfo line\n\
+                    41 22 x:y / /bad rw - ext4 /dev/sdc rw\n";
+        let mounts = parse_mountinfo(text);
+        assert_eq!(mounts.len(), 3);
+        assert_eq!((mounts[0].major, mounts[0].minor, mounts[0].fs_type.as_str()), (8, 2, "ext4"));
+        assert_eq!((mounts[1].mount_point.as_path(), mounts[1].fs_type.as_str()), (Path::new("/mnt/parent"), "ext3"));
+        assert_eq!((mounts[2].mount_point.as_path(), mounts[2].source.as_str()), (Path::new("/media/my disk"), "/dev/sdb1"));
+    }
+
+    #[test]
+    fn unescape_takes_one_byte_escapes_only() {
+        assert_eq!(unescape("a\\040b\\011c\\134d"), "a b\tc\\d");
+        assert_eq!(unescape("x\\777"), "x\\777");
+        assert_eq!(unescape("cut\\04"), "cut\\04");
+    }
+
+    #[test]
+    fn mount_for_takes_the_deepest_then_the_latest() {
+        let mounts = vec![mount("/", "ext4", 8, 2), mount("/home", "ext4", 8, 3), mount("/home", "ecryptfs", 0, 50)];
+        assert_eq!(mount_for(&mounts, Path::new("/home/someone/x")).unwrap().fs_type, "ecryptfs");
+        assert_eq!(mount_for(&mounts, Path::new("/homework")).unwrap().mount_point, Path::new("/"));
+        assert!(mount_for(&[], Path::new("/x")).is_none());
+    }
+
+    #[test]
+    fn swaps_and_core_limits() {
+        let swaps = "Filename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority\n\
+                     /swapfile                               file\t\t2097148\t\t0\t\t-2\n\
+                     /dev/dm-1                               partition\t8388604\t\t0\t\t-3\n";
+        assert_eq!(
+            parse_swaps(swaps),
+            vec![
+                Swap { path: "/swapfile".into(), kind: "file".into() },
+                Swap { path: "/dev/dm-1".into(), kind: "partition".into() },
+            ]
+        );
+        assert!(parse_swaps("Filename\tType\tSize\tUsed\tPriority\n").is_empty());
+
+        let limits = "Limit                     Soft Limit           Hard Limit           Units     \n\
+                      Max cpu time              unlimited            unlimited            seconds   \n\
+                      Max core file size        0                    unlimited            bytes     \n";
+        assert_eq!(core_limit(limits).as_deref(), Some("0"));
+        assert_eq!(core_limit("Max core file size        unlimited            unlimited            bytes\n").as_deref(), Some("unlimited"));
+        assert_eq!(core_limit("Limit  Soft Limit\n"), None);
+    }
+
+    #[test]
+    fn split_dev_unpacks_glibc_device_numbers() {
+        assert_eq!(split_dev(2242), (8, 194));
+        assert_eq!(split_dev(66307), (259, 3));
+        assert_eq!(split_dev(1113388), (253, 300));
+    }
+
+    /// `diskutil info -plist` lines as printed on the test Mac. Apple Silicon reports
+    /// `Encryption` true even with FileVault off, so only the `FileVault` key counts.
+    fn plist(filevault: &str) -> String {
+        format!(
+            "<plist version=\"1.0\">\n<dict>\n\t<key>Encryption</key>\n\t<true/>\n\
+             \t<key>EncryptionThisVolumeProper</key>\n\t<true/>\n\t<key>FileVault</key>\n\t{filevault}\n\
+             \t<key>VolumeName</key>\n\t<string>Data</string>\n</dict>\n</plist>\n"
+        )
+    }
+
+    #[test]
+    fn mac_command_output() {
+        assert_eq!(parse_fdesetup("FileVault is On.\n").status, Status::Verified);
+        assert_eq!(parse_fdesetup("FileVault is Off.\n").status, Status::Off);
+        assert_eq!(parse_fdesetup("").status, Status::Unknown);
+
+        let on = parse_diskutil_plist(&plist("<true/>"));
+        assert_eq!((on.status, on.evidence[0].as_str()), (Status::Verified, "Data has FileVault on"));
+        assert_eq!(parse_diskutil_plist(&plist("<false/>")).status, Status::Off);
+        assert_eq!(parse_diskutil_plist(&plist("<string>odd</string>")).status, Status::Unknown);
+        assert_eq!(parse_diskutil_plist("<plist><dict></dict></plist>").status, Status::Unknown);
+
+        let swap = "total = 5120.00M  used = 4089.88M  free = 1030.12M  (encrypted)\n";
+        assert_eq!(parse_swapusage(swap).status, Status::Verified);
+        assert_eq!(parse_swapusage(&swap.replace("  (encrypted)", "")).status, Status::Unknown);
+    }
+
+    fn check(item: &str, status: Status) -> Check {
+        Check { item: item.into(), path: None, status, method: None, evidence: Vec::new() }
+    }
+
+    #[test]
+    fn protection_is_claimed_only_when_every_check_is_verified() {
+        let verified = Report::from_checks(vec![check("Data", Status::Verified), check("Swap", Status::Verified)]);
+        assert_eq!((verified.status, verified.claim_protection), (Status::Verified, true));
+
+        let unknown = Report::from_checks(vec![check("Data", Status::Verified), check("Swap", Status::Unknown)]);
+        assert_eq!((unknown.status, unknown.claim_protection), (Status::Unknown, false));
+        assert!(unknown.message.contains("for: Swap."));
+
+        let off = Report::from_checks(vec![check("Data", Status::Off), check("Swap", Status::Unknown)]);
+        assert_eq!((off.status, off.claim_protection), (Status::Off, false));
+        assert!(off.message.contains("off for: Data."));
+
+        assert!(!Report::from_checks(Vec::new()).claim_protection);
     }
 }
