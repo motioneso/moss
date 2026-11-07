@@ -69,49 +69,16 @@
   {
     "name": "web-contract 165: subtasks come back in order",
     "source": "tasks-web-contract.test.ts:165 GET /api/tasks/:id/subtasks returns the parent's children in order",
+    "seed": [
+      "insert into app.task_lists (id, owner_user_id, name) values ('20000000-0000-4000-8000-000000000001','{{userA}}','Personal')",
+      "insert into app.tasks (id, owner_user_id, title, status, list_id) values ('30000000-0000-4000-8000-0000000000c0','{{userA}}','clean kitchen','todo','20000000-0000-4000-8000-000000000001')",
+      "insert into app.tasks (id, owner_user_id, title, status, list_id, parent_task_id, position) values ('30000000-0000-4000-8000-0000000000c2','{{userA}}','unload dishwasher','todo','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-0000000000c0',0),('30000000-0000-4000-8000-0000000000c1','{{userA}}','wipe counters','todo','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-0000000000c0',1)"
+    ],
     "steps": [
-      {
-        "id": "parent",
-        "method": "POST",
-        "path": "/api/tasks",
-        "as": "A",
-        "body": {
-          "title": "clean kitchen"
-        },
-        "expect": {
-          "status": 201
-        }
-      },
-      {
-        "id": "c1",
-        "method": "POST",
-        "path": "/api/tasks",
-        "as": "A",
-        "body": {
-          "title": "unload dishwasher",
-          "parentTaskId": "{{parent:/body/task/id}}"
-        },
-        "expect": {
-          "status": 201
-        }
-      },
-      {
-        "id": "c2",
-        "method": "POST",
-        "path": "/api/tasks",
-        "as": "A",
-        "body": {
-          "title": "wipe counters",
-          "parentTaskId": "{{parent:/body/task/id}}"
-        },
-        "expect": {
-          "status": 201
-        }
-      },
       {
         "id": "subs",
         "method": "GET",
-        "path": "/api/tasks/{{parent:/body/task/id}}/subtasks",
+        "path": "/api/tasks/30000000-0000-4000-8000-0000000000c0/subtasks",
         "as": "A",
         "expect": {
           "body": {
@@ -129,7 +96,7 @@
       }
     ],
     "rows": ["app.tasks"],
-    "note": "Children are made by create with a parent id; the test uses the breakdown route, which is not ported."
+    "note": "Children are seeded by SQL with positions and ids in opposite order, because the test uses the breakdown route (not ported) and the create route cannot set a position."
   },
   {
     "name": "web-contract 223: create keeps effort, do-at and priority; patch changes them",
