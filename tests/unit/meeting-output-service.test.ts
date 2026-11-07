@@ -350,6 +350,27 @@ describe("meeting output generation service", () => {
     expect(harness.generator.mock.calls[0]![1].inputs.personalNotes).toContain(order);
   });
 
+  it("stores owner-context order counts by source and never the text or known names", async () => {
+    const harness = setup();
+    const first = await harness.generator.getMockImplementation()!(ACTOR, {} as never);
+    harness.generator.mockResolvedValue({
+      ...first,
+      context: {
+        packHits: [{ source: "calendar", count: 1 }],
+        trimmed: false,
+        knownNames: ["Dana Cole"]
+      }
+    });
+    const result = await harness.service.generate(ACTOR, MEETING_ID, INPUT);
+    expect(result).toMatchObject({
+      status: "saved",
+      artifact: {
+        instructionFlag: { lines: [], more: 0, packHits: [{ source: "calendar", count: 1 }] }
+      }
+    });
+    expect(JSON.stringify(result)).not.toContain("Dana Cole");
+  });
+
   it("stores no flag for an ordinary recording", async () => {
     const harness = setup();
     harness.state.inputs = {

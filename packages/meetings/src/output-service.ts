@@ -5,6 +5,7 @@ import { MeetingStopSummaryRepository } from "./stop-summary-repository.js";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import type {
   GenerateMeetingOutputInput,
+  MeetingInstructionFlag,
   MeetingOutputInputs,
   MeetingOutputResult
 } from "@moss/shared";
@@ -23,7 +24,16 @@ export type MeetingOutputGenerator = (
     template: { id: string; version: number; name: string; guidance: string };
     signal: AbortSignal;
   }
-) => Promise<{ content: unknown; modelRoute: string }>;
+) => Promise<{
+  content: unknown;
+  modelRoute: string;
+  /** Owner context facts. knownNames stays in memory and is never stored. */
+  context?: {
+    packHits: NonNullable<MeetingInstructionFlag["packHits"]>;
+    trimmed: boolean;
+    knownNames: readonly string[];
+  };
+}>;
 
 /** Provider work stays outside transactions; only a reserved request may dispatch once. */
 export class MeetingOutputService {
@@ -165,6 +175,11 @@ export class MeetingOutputService {
       } finally {
         if (rejectAbort) signal.removeEventListener("abort", rejectAbort);
       }
+      const packHits = generated.context?.packHits ?? [];
+      const storedFlag: MeetingInstructionFlag | undefined =
+        packHits.length === 0
+          ? instructionFlag
+          : { lines: [], more: 0, ...instructionFlag, packHits };
       const validated = validateMeetingOutput(generated.content, inputs);
       if (inputs.recording && !validated.recording)
         throw new MeetingOutputValidationError("schema_invalid");
@@ -206,7 +221,7 @@ export class MeetingOutputService {
           templateVersion: effectiveTemplate.version,
           modelRoute: generated.modelRoute,
           content: validateMeetingOutput({ ...validated, warnings }, inputs),
-          ...(instructionFlag ? { instructionFlag } : {}),
+          ...(storedFlag ? { instructionFlag: storedFlag } : {}),
           origin: "generated",
           stale
         });

@@ -49,6 +49,11 @@ export interface GenerateMeetingOutputInput {
 export interface MeetingInstructionFlag {
   readonly lines: readonly string[];
   readonly more: number;
+  /** Lines in the owner context (calendar, people, memory) that looked like orders. Counts only. */
+  readonly packHits?: readonly {
+    readonly source: "calendar" | "people" | "memory";
+    readonly count: number;
+  }[];
 }
 export interface MeetingOutputArtifact {
   readonly id: string;

@@ -34,6 +34,12 @@ interface SummaryState {
     readonly remediation?: "ai-providers" | "ai-settings";
   };
 }
+const PACK_SOURCE_LABEL = {
+  calendar: "a calendar event",
+  people: "a note about a person",
+  memory: "a saved memory"
+} as const;
+
 export function ArtifactContent({
   artifact,
   typeId = artifact.content.recording?.typeId
@@ -44,7 +50,7 @@ export function ArtifactContent({
   const groupHeading = typeId === "brain-dump" || typeId === "idea" ? "Ideas" : "Topics";
   return (
     <div className="meetings-section">
-      {artifact.instructionFlag ? (
+      {artifact.instructionFlag?.lines.length ? (
         <>
           <p role="status" className="jds-hint">
             This recording contained lines that looked like orders to the AI. The AI has no way to
@@ -60,6 +66,11 @@ export function ArtifactContent({
           </ul>
         </>
       ) : null}
+      {artifact.instructionFlag?.packHits?.map((hit) => (
+        <p key={hit.source} role="status" className="jds-hint">
+          {`${hit.count} ${hit.count === 1 ? "line" : "lines"} in ${PACK_SOURCE_LABEL[hit.source]} looked like ${hit.count === 1 ? "an order" : "orders"} to the AI. The AI has no way to act on ${hit.count === 1 ? "it" : "them"}, so check the summary.`}
+        </p>
+      ))}
       <p className="meetings-transcript-text">{artifact.content.overview}</p>
       {artifact.content.recording?.ideaGroups.length ? (
         <Eyebrow as="h3">{groupHeading}</Eyebrow>
