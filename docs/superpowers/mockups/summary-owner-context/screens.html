@@ -44,7 +44,12 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
 .acts{grid-column:1/-1;display:flex;gap:var(--space-4)}
 .acts:empty{display:none}
 .pick{margin-bottom:var(--space-5)}
-.pick .jds-radio-cards{display:grid;grid-template-columns:1fr;gap:var(--space-2);margin-bottom:var(--space-3)}.pick .jds-radio-card input{opacity:0}
+.pick .jds-radio-cards{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-1);margin-bottom:var(--space-3)}
+.pick .jds-radio-card{grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3)}
+.pick .jds-radio-card__label{font-size:var(--text-sm);grid-column:1;white-space:nowrap}
+.pick .jds-radio-card__description,.pick .jds-radio-card:has(input:checked) .jds-radio-card__description{grid-column:2;grid-row:1;font-size:var(--text-xs);color:var(--text-muted)}
+.pick .jds-radio-card input{grid-column:3}
+.pick .jds-input{display:block;width:100%;min-width:0;box-sizing:border-box;padding:var(--space-2) var(--space-3)}
 .pick .jds-field{margin-bottom:var(--space-3)}
 .btns{display:flex;gap:var(--space-2);flex-wrap:wrap;margin-top:var(--space-3)}
 .offer{padding:var(--space-3) 0;border-bottom:1px solid var(--border);font-size:var(--text-sm)}
@@ -88,7 +93,7 @@ a+='<button class="link" data-p="'+k+'">'+(ST[k]==='unknown'?'Name':'Change')+'<
 function list(){return ORDER.map(function(k){return '<div class="rp"><b>'+nm(k)+'</b><small>'+S[k].w+'</small><div class="acts">'+acts(k)+'</div></div>'}).join('')}
 function strip(){var seg=[['priya',10],['sam',7],['you',6],['priya',9],['s3',3],['sam',8],['priya',6],['you',5]];
 return '<div class="strip">'+seg.map(function(g){return '<i class="spk" data-who="'+who(g[0])+'" data-state="'+ST[g[0]]+'" style="--f:'+g[1]+'" title="'+name(g[0])+'"></i>'}).join('')+'</div><div class="ticks"><span>10:02</span><span>10:41</span></div><div style="height:var(--space-4)"></div>'}
-function picker(){var o=[['priya','Priya Nair','from your calendar'],['sam','Sam Okoye','from your calendar'],['else','Someone else',''],['sure','Not sure','']];
+function picker(){var o=[['priya','Priya Nair','calendar'],['sam','Sam Okoye','calendar'],['else','Someone else',''],['sure','Not sure','']];
 return '<div class="pick"><div class="railhead"><span class="jds-brief__kicker">'+name(PK)+'</span><h3 class="jds-brief__title">Who is this?</h3></div><div class="jds-radio-cards" role="radiogroup" aria-label="Who is this?">'+o.map(function(x){return '<label class="jds-radio-card"><input type="radio" name="who" value="'+x[0]+'"'+(PICK===x[0]?' checked':'')+'><span class="jds-radio-card__label">'+x[1]+'</span>'+(x[2]?'<span class="jds-radio-card__description">'+x[2]+'</span>':'')+'</label>'}).join('')+'</div>'
 +(PICK==='else'?'<div class="jds-field"><label class="jds-label" for="newn">Name</label><input class="jds-input" id="newn" value="'+NEWN+'"></div>':'')
 +'<div class="btns"><button class="jds-btn jds-btn--quiet jds-btn--sm" id="cancel">Cancel</button><button class="jds-btn jds-btn--primary jds-btn--sm" id="apply">Apply to all lines</button></div></div>'}
