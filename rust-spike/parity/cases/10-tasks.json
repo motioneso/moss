@@ -137,5 +137,588 @@
     ],
     "rows": ["app.tasks"],
     "note": "The test checks the message contains 'recurrence'; this case compares both servers' messages exactly."
+  },
+  {
+    "name": "tasks.test 102: tasks tables have forced row security",
+    "source": "tasks.test.ts:102 applies Tasks migrations from an empty database with forced RLS",
+    "steps": [
+      {
+        "id": "tables",
+        "sql": "select c.relname, c.relrowsecurity, c.relforcerowsecurity, pg_get_userbyid(c.relowner) as owner from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'app' and c.relname in ('tasks','task_activity') order by c.relname",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "relname": "task_activity",
+              "relrowsecurity": true,
+              "relforcerowsecurity": true,
+              "owner": "jarvis_migration_owner"
+            },
+            {
+              "relname": "tasks",
+              "relrowsecurity": true,
+              "relforcerowsecurity": true,
+              "owner": "jarvis_migration_owner"
+            }
+          ]
+        }
+      },
+      {
+        "id": "negative control: a table without forced row security",
+        "sql": "select relforcerowsecurity from pg_class where oid = 'pg_catalog.pg_class'::regclass",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "relforcerowsecurity": false
+            }
+          ]
+        }
+      }
+    ],
+    "note": "Runs against the database copy both servers use, so it proves the migrations, not either server. Read as the app role. The migration-record check is dropped because the app role cannot read the migration table."
+  },
+  {
+    "name": "tasks.test 207: no actor set means no task rows",
+    "source": "tasks.test.ts:207 denies task reads when no data context is set",
+    "seed": [
+      "insert into app.task_lists (id, owner_user_id, name) values ('20000000-0000-4000-8000-000000000001','{{userA}}','Personal'),('20000000-0000-4000-8000-000000000002','{{userB}}','Personal')",
+      "insert into app.tasks (id, owner_user_id, title, status, list_id) values ('30000000-0000-4000-8000-000000000001','{{userA}}','User A seeded private task','todo','20000000-0000-4000-8000-000000000001')"
+    ],
+    "steps": [
+      {
+        "id": "owner sees it",
+        "sql": "select count(*)::int as n from app.tasks",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "n": 1
+            }
+          ]
+        }
+      },
+      {
+        "id": "no actor",
+        "sql": "select count(*)::int as n from app.tasks",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      },
+      {
+        "id": "no actor, worker role",
+        "sql": "select count(*)::int as n from app.tasks",
+        "role": "worker",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      }
+    ],
+    "note": "The test reads through the app connection with no actor; the case adds the worker role and an owner control that does see the row."
+  },
+  {
+    "name": "tasks.test 211: create then read own task",
+    "source": "tasks.test.ts:211 lets a user create and read their own private task",
+    "steps": [
+      {
+        "id": "make",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "User A private task",
+          "description": "private description"
+        },
+        "expect": {
+          "body": {
+            "task": {
+              "ownerUserId": "{{userA}}",
+              "description": "private description"
+            }
+          },
+          "status": 201
+        }
+      },
+      {
+        "id": "read",
+        "method": "GET",
+        "path": "/api/tasks/{{make:/body/task/id}}",
+        "as": "A",
+        "expect": {
+          "body": {
+            "task": {
+              "id": "{{make:/body/task/id}}"
+            }
+          },
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.tasks"]
+  },
+  {
+    "name": "tasks.test 226: another user's private task reads as missing",
+    "source": "tasks.test.ts:226 prevents a user from reading another user's unshared private task",
+    "seed": [
+      "insert into app.task_lists (id, owner_user_id, name) values ('20000000-0000-4000-8000-000000000001','{{userA}}','Personal'),('20000000-0000-4000-8000-000000000002','{{userB}}','Personal')",
+      "insert into app.tasks (id, owner_user_id, title, description, status, list_id) values ('30000000-0000-4000-8000-000000000001','{{userA}}','User A seeded private task','A private description','todo','20000000-0000-4000-8000-000000000001'),('30000000-0000-4000-8000-000000000002','{{userB}}','User B seeded private task','B private description','todo','20000000-0000-4000-8000-000000000002')"
+    ],
+    "steps": [
+      {
+        "id": "read",
+        "method": "GET",
+        "path": "/api/tasks/30000000-0000-4000-8000-000000000002",
+        "as": "A",
+        "expect": {
+          "status": 404
+        }
+      },
+      {
+        "id": "list",
+        "method": "GET",
+        "path": "/api/tasks",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "id": "30000000-0000-4000-8000-000000000001"
+              }
+            ]
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "owner control",
+        "method": "GET",
+        "path": "/api/tasks/30000000-0000-4000-8000-000000000002",
+        "as": "B",
+        "expect": {
+          "status": 200
+        }
+      }
+    ]
+  },
+  {
+    "name": "tasks.test 234: an admin cannot read a private task by role",
+    "source": "tasks.test.ts:234 does not let an instance admin read another user's private task by role alone",
+    "seed": [
+      "insert into app.task_lists (id, owner_user_id, name) values ('20000000-0000-4000-8000-000000000001','{{userA}}','Personal'),('20000000-0000-4000-8000-000000000002','{{userB}}','Personal')",
+      "insert into app.tasks (id, owner_user_id, title, description, status, list_id) values ('30000000-0000-4000-8000-000000000001','{{userA}}','User A seeded private task','A private description','todo','20000000-0000-4000-8000-000000000001'),('30000000-0000-4000-8000-000000000002','{{userB}}','User B seeded private task','B private description','todo','20000000-0000-4000-8000-000000000002')"
+    ],
+    "steps": [
+      {
+        "id": "admin read",
+        "method": "GET",
+        "path": "/api/tasks/30000000-0000-4000-8000-000000000002",
+        "as": "admin",
+        "expect": {
+          "status": 404
+        }
+      },
+      {
+        "id": "admin list",
+        "method": "GET",
+        "path": "/api/tasks",
+        "as": "admin",
+        "expect": {
+          "body": {
+            "tasks": []
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "owner control",
+        "method": "GET",
+        "path": "/api/tasks/30000000-0000-4000-8000-000000000002",
+        "as": "B",
+        "expect": {
+          "status": 200
+        }
+      }
+    ]
+  },
+  {
+    "name": "tasks.test 243: a view share lets the grantee read",
+    "source": "tasks.test.ts:243 allows task read through a view share",
+    "seed": [
+      "insert into app.task_lists (id, owner_user_id, name) values ('20000000-0000-4000-8000-000000000001','{{userA}}','Personal'),('20000000-0000-4000-8000-000000000002','{{userB}}','Personal')",
+      "insert into app.tasks (id, owner_user_id, title, description, status, list_id) values ('30000000-0000-4000-8000-000000000001','{{userA}}','User A seeded private task','A private description','todo','20000000-0000-4000-8000-000000000001'),('30000000-0000-4000-8000-000000000002','{{userB}}','User B seeded private task','B private description','todo','20000000-0000-4000-8000-000000000002')",
+      "insert into app.tasks (id, owner_user_id, title, status, list_id) values ('30000000-0000-4000-8000-000000000003','{{userA}}','Shared task','todo','20000000-0000-4000-8000-000000000001')",
+      "insert into app.shares (id, resource_type, resource_id, owner_user_id, grantee_user_id, level) values (gen_random_uuid(),'task','30000000-0000-4000-8000-000000000003','{{userA}}','{{userB}}','view')"
+    ],
+    "steps": [
+      {
+        "id": "read",
+        "method": "GET",
+        "path": "/api/tasks/30000000-0000-4000-8000-000000000003",
+        "as": "B",
+        "expect": {
+          "body": {
+            "task": {
+              "id": "30000000-0000-4000-8000-000000000003",
+              "title": "Shared task"
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "grantee row count",
+        "sql": "select count(*)::int as n from app.tasks",
+        "as": "B",
+        "expect": {
+          "rows": [
+            {
+              "n": 2
+            }
+          ]
+        }
+      },
+      {
+        "id": "stranger",
+        "method": "GET",
+        "path": "/api/tasks/30000000-0000-4000-8000-000000000003",
+        "as": "admin",
+        "expect": {
+          "status": 404
+        }
+      }
+    ],
+    "note": "Share row is seeded by SQL (the test grants it through the shares repository). Adds a stranger check."
+  },
+  {
+    "name": "tasks.test 263: a view share does not allow update",
+    "source": "tasks.test.ts:263 does not let a view-share grantee update the task",
+    "seed": [
+      "insert into app.task_lists (id, owner_user_id, name) values ('20000000-0000-4000-8000-000000000001','{{userA}}','Personal'),('20000000-0000-4000-8000-000000000002','{{userB}}','Personal')",
+      "insert into app.tasks (id, owner_user_id, title, description, status, list_id) values ('30000000-0000-4000-8000-000000000001','{{userA}}','User A seeded private task','A private description','todo','20000000-0000-4000-8000-000000000001'),('30000000-0000-4000-8000-000000000002','{{userB}}','User B seeded private task','B private description','todo','20000000-0000-4000-8000-000000000002')",
+      "insert into app.tasks (id, owner_user_id, title, status, list_id) values ('30000000-0000-4000-8000-000000000003','{{userA}}','Shared task','todo','20000000-0000-4000-8000-000000000001')",
+      "insert into app.shares (id, resource_type, resource_id, owner_user_id, grantee_user_id, level) values (gen_random_uuid(),'task','30000000-0000-4000-8000-000000000003','{{userA}}','{{userB}}','view')"
+    ],
+    "steps": [
+      {
+        "id": "update",
+        "method": "PATCH",
+        "path": "/api/tasks/30000000-0000-4000-8000-000000000003",
+        "as": "B",
+        "body": {
+          "title": "hijacked"
+        },
+        "expect": {
+          "status": 404
+        }
+      },
+      {
+        "id": "owner sees original",
+        "method": "GET",
+        "path": "/api/tasks/30000000-0000-4000-8000-000000000003",
+        "as": "A",
+        "expect": {
+          "body": {
+            "task": {
+              "title": "Shared task"
+            }
+          },
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.tasks", "app.task_activity"]
+  },
+  {
+    "name": "tasks.test 283: a manage share allows update",
+    "source": "tasks.test.ts:283 lets a manage-share grantee update the task",
+    "seed": [
+      "insert into app.task_lists (id, owner_user_id, name) values ('20000000-0000-4000-8000-000000000001','{{userA}}','Personal'),('20000000-0000-4000-8000-000000000002','{{userB}}','Personal')",
+      "insert into app.tasks (id, owner_user_id, title, description, status, list_id) values ('30000000-0000-4000-8000-000000000001','{{userA}}','User A seeded private task','A private description','todo','20000000-0000-4000-8000-000000000001'),('30000000-0000-4000-8000-000000000002','{{userB}}','User B seeded private task','B private description','todo','20000000-0000-4000-8000-000000000002')",
+      "insert into app.tasks (id, owner_user_id, title, status, list_id) values ('30000000-0000-4000-8000-000000000003','{{userA}}','Shared task','todo','20000000-0000-4000-8000-000000000001')",
+      "insert into app.shares (id, resource_type, resource_id, owner_user_id, grantee_user_id, level) values (gen_random_uuid(),'task','30000000-0000-4000-8000-000000000003','{{userA}}','{{userB}}','manage')"
+    ],
+    "steps": [
+      {
+        "id": "update",
+        "method": "PATCH",
+        "path": "/api/tasks/30000000-0000-4000-8000-000000000003",
+        "as": "B",
+        "body": {
+          "title": "Managed title"
+        },
+        "expect": {
+          "body": {
+            "task": {
+              "title": "Managed title"
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "owner sees it",
+        "method": "GET",
+        "path": "/api/tasks/30000000-0000-4000-8000-000000000003",
+        "as": "A",
+        "expect": {
+          "body": {
+            "task": {
+              "title": "Managed title"
+            }
+          },
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.tasks", "app.task_activity"]
+  },
+  {
+    "name": "tasks.test 303: activity follows the task's visibility",
+    "source": "tasks.test.ts:303 keeps task activity governed by parent task visibility via owner-or-share inheritance",
+    "seed": [
+      "insert into app.task_lists (id, owner_user_id, name) values ('20000000-0000-4000-8000-000000000001','{{userA}}','Personal'),('20000000-0000-4000-8000-000000000002','{{userB}}','Personal')",
+      "insert into app.tasks (id, owner_user_id, title, description, status, list_id) values ('30000000-0000-4000-8000-000000000001','{{userA}}','User A seeded private task','A private description','todo','20000000-0000-4000-8000-000000000001'),('30000000-0000-4000-8000-000000000002','{{userB}}','User B seeded private task','B private description','todo','20000000-0000-4000-8000-000000000002')",
+      "insert into app.tasks (id, owner_user_id, title, status, list_id) values ('30000000-0000-4000-8000-000000000003','{{userA}}','Shared task','todo','20000000-0000-4000-8000-000000000001')",
+      "insert into app.shares (id, resource_type, resource_id, owner_user_id, grantee_user_id, level) values (gen_random_uuid(),'task','30000000-0000-4000-8000-000000000003','{{userA}}','{{userB}}','view')"
+    ],
+    "steps": [
+      {
+        "id": "comment",
+        "method": "POST",
+        "path": "/api/tasks/30000000-0000-4000-8000-000000000003/activity",
+        "as": "A",
+        "body": {
+          "activityType": "comment",
+          "body": "Activity on shared task"
+        },
+        "expect": {
+          "body": {
+            "activity": {
+              "body": "Activity on shared task",
+              "actorUserId": "{{userA}}"
+            }
+          },
+          "status": 201
+        }
+      },
+      {
+        "id": "grantee reads",
+        "method": "GET",
+        "path": "/api/tasks/30000000-0000-4000-8000-000000000003/activity",
+        "as": "B",
+        "expect": {
+          "body": {
+            "activity": [
+              {
+                "body": "Activity on shared task"
+              }
+            ]
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "admin reads",
+        "method": "GET",
+        "path": "/api/tasks/30000000-0000-4000-8000-000000000003/activity",
+        "as": "admin",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "admin sees no rows",
+        "sql": "select count(*)::int as n from app.task_activity",
+        "as": "admin",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      },
+      {
+        "id": "grantee sees the row",
+        "sql": "select count(*)::int as n from app.task_activity",
+        "as": "B",
+        "expect": {
+          "rows": [
+            {
+              "n": 1
+            }
+          ]
+        }
+      }
+    ],
+    "rows": ["app.task_activity"],
+    "note": "The test lists activity through the repository (empty list for the admin). The route's answer for the admin is compared between servers; the row-level result is checked by SQL."
+  },
+  {
+    "name": "tasks.test 765: create takes the new fields and defaults to the Personal list",
+    "source": "tasks.test.ts:765 create defaults to Personal list, accepts new fields, and is idempotent on (source, external_key)",
+    "steps": [
+      {
+        "id": "first",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "first"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "lists",
+        "method": "GET",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "full",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "ship the deck",
+          "priority": 4,
+          "effort": "medium",
+          "doAt": "2026-06-10T00:00:00.000Z",
+          "listId": "{{lists:/body/lists/0/id}}"
+        },
+        "expect": {
+          "body": {
+            "task": {
+              "priority": 4,
+              "effort": "medium",
+              "doAt": "2026-06-10T00:00:00.000Z",
+              "source": "manual"
+            }
+          },
+          "status": 201
+        }
+      },
+      {
+        "id": "auto",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "auto-list task"
+        },
+        "expect": {
+          "body": {
+            "task": {
+              "listId": "{{lists:/body/lists/0/id}}",
+              "source": "manual"
+            }
+          },
+          "status": 201
+        }
+      }
+    ],
+    "rows": ["app.tasks", "app.task_lists"],
+    "note": "The source and external-key part (a repeat create returns the same task) is not reachable: the Rust server leaves out the external-key create path. Everything else in the test is checked."
+  },
+  {
+    "name": "tasks.test 882: Personal list is get-or-create; tags belong to the list",
+    "source": "tasks.test.ts:882 lists: get-or-create Personal is idempotent; tags are list-scoped",
+    "steps": [
+      {
+        "id": "a",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Personal"
+        },
+        "expect": {
+          "body": {
+            "list": {
+              "name": "Personal"
+            }
+          },
+          "status": 201
+        }
+      },
+      {
+        "id": "b",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Personal"
+        },
+        "expect": {
+          "body": {
+            "list": {
+              "id": "{{a:/body/list/id}}"
+            }
+          },
+          "status": 201
+        }
+      },
+      {
+        "id": "tag",
+        "method": "POST",
+        "path": "/api/tasks/lists/{{a:/body/list/id}}/tags",
+        "as": "A",
+        "body": {
+          "name": "Visa"
+        },
+        "expect": {
+          "body": {
+            "tag": {
+              "name": "Visa",
+              "listId": "{{a:/body/list/id}}"
+            }
+          },
+          "status": 201
+        }
+      },
+      {
+        "id": "tags",
+        "method": "GET",
+        "path": "/api/tasks/lists/{{a:/body/list/id}}/tags",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tags": [
+              {
+                "name": "Visa"
+              }
+            ]
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "owner",
+        "sql": "select owner_user_id::text as owner from app.task_tags",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "owner": "{{userA}}"
+            }
+          ]
+        }
+      }
+    ],
+    "rows": ["app.task_lists", "app.task_tags"],
+    "note": "Exact tag list instead of 'contains'. Owner is read by SQL because the tag response may not carry it."
   }
 ]
