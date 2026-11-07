@@ -2,7 +2,7 @@
 //!
 //! Handler errors follow `handleRouteError`. Errors raised before the handler (body parsing,
 //! schema checks) follow `setMossErrorHandler`, which answers `{ error }` with the error's own
-//! status and hides the text of any 5xx.
+//! status and hides the text of any 5xx. Internal detail goes to the log, redacted.
 
 use axum::http::header::CONTENT_TYPE;
 use axum::http::StatusCode;
@@ -75,7 +75,7 @@ impl ApiError {
                 (403, json!({ "error": message, "code": code }))
             }
             ApiError::Internal(detail) => {
-                eprintln!("tasks: unhandled route error: {detail}");
+                eprintln!("server: unhandled route error: {}", crate::redact::redact_text(&detail));
                 (500, json!({ "error": "Internal server error" }))
             }
         }
