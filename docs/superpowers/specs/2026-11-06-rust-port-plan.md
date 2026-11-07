@@ -4,7 +4,8 @@
 - **Route:** full rewrite of server and UI in Rust. Ben ruled this on 2026-11-06.
 - **Companion doc:** `docs/superpowers/specs/2026-11-06-rust-port-data-and-install-rules.md`
   (task JS-32) sets the detailed rules for data, keys, install and cutover. Where the two overlap,
-  that doc owns the rule and this plan points to it.
+  that doc owns the rule and this plan points to it. It lands in its own pull request, which should
+  merge before or with this one.
 - **Grounded on:** `main` at `1cb86c8b2`. Every count below comes from that tree.
 
 ## 1. Summary
@@ -72,14 +73,14 @@ live app) were set aside by Ben's ruling and are not planned here.
 | TypeScript tests             | about 625,000 lines in 2,581 files                             | same, `*.test.ts`, `*.spec.ts`                                  |
 | Web app source               | about 59,000 lines; about 400 non-test `.tsx` files repo-wide  | `apps/web/src`; `git ls-files '*.tsx'` minus tests              |
 | CSS outside docs and mockups | about 38,000 lines                                             | `*.css`                                                         |
-| Core screens and settings    | 75 declared paths                                              | `packages/shared/src/app-map-core.ts`                           |
+| Core screens and settings    | 28 distinct paths in 77 path entries                           | `packages/shared/src/app-map-core.ts`                           |
 | SQL files                    | 35 core, 381 module-owned, about 19,400 lines                  | `infra/postgres/`, `packages/*/sql/`, `external-modules/*/sql/` |
 | Row-level security           | 121 files enable it, 633 policies                              | `CREATE POLICY` across all SQL                                  |
 | Database functions           | 84 PL/pgSQL, 93 security-definer, 51 triggers                  | same                                                            |
 | JavaScript data backfills    | 2, part of the migration hash                                  | `packages/meetings/sql/0280_*.backfill.mjs`, `0292_*`           |
 | API paths                    | 430 to 570 `/api/...` strings, by counting method              | distinct strings vs all declarations in `apps/api`, `packages/` |
 | Job queues                   | 70 to 75 named queues, 17 to 44 schedules, by counting method  | queue and cron constants in `packages/jobs/src`, worker file    |
-| Integration tests            | 538 files; 500 import TypeScript packages; 178 call in-process | `tests/integration`; imports and `.inject(` calls               |
+| Integration tests            | 538 `.ts` files; 500 import repo packages; 178 call in-process | `tests/integration`; imports and `.inject(` calls               |
 | Browser tests                | 55 specs, tied to today's React page structure                 | `tests/e2e`                                                     |
 | Prod containers              | Postgres, migrate, module install, app, sports renderer, Caddy | `infra/docker-compose.prod.yml`                                 |
 
@@ -134,13 +135,13 @@ Phase 0 measures what that harness costs and how many existing cases convert.
 | No admin bypass of private data         | `NOBYPASSRLS` runtime roles in `infra/postgres/bootstrap/0000_roles.sql`; RLS reads `app.actor_user_id` | Same roles and policies, unchanged. The Rust app never connects as the migration owner or a superuser at runtime. A startup check refuses to run if the runtime role can bypass RLS.                                                                                                                                |
 | Private by default                      | Owner-only RLS policies; module tables get generated policies (`packages/db/src/module-rls-emitter.ts`) | Same SQL. The Rust module installer emits the same policy text, compared against the TypeScript output in a test.                                                                                                                                                                                                   |
 | Data access only through a data context | `DataContextDb` brand set inside a transaction (`packages/db/src/data-context.ts:64`)                   | A `DataContext` type whose only constructor opens a transaction and sets the actor GUC. Repositories take `&DataContext`. The raw pool type is private to the db crate, so other crates cannot name it.                                                                                                             |
-| Vault only through `VaultContext`       | `packages/vault/src/vault-context.ts`; no compile-time guard on the filesystem half                     | `VaultContext` holds the only directory handle (capability-style API). A lint denies `std::fs` and `tokio::fs` outside the vault crate. This is stronger than today.                                                                                                                                                |
+| Vault only through `VaultContext`       | `packages/vault/src/vault-context.ts`; no compile-time guard on the filesystem half                     | `VaultContext` holds the only directory handle (capability-style API). A lint denies `std::fs` and `tokio::fs` outside the vault crate. This adds a guard today lacks, though a dependency could still bypass a lint.                                                                                               |
 | Secrets never escape                    | AES-256-GCM in `packages/db/src/secret-cipher.ts`; log redaction; review                                | Secret values live in a type with no `Debug`, `Display` or `Serialize`. Same cipher and on-disk format so existing ciphertext decrypts. Keys per the companion doc (OS keychain on desktop, no plaintext fallback). Sentinel tests plant a marker secret and check logs, errors, job payloads, exports and prompts. |
 | Metadata-only job payloads              | `assertModuleJobPayload` in `packages/jobs/src/module-jobs.ts:53`; review                               | Each queue has a typed payload built only from an allowlist of field kinds (IDs, job kind, idempotency key, enums, small numbers). Free text is not an allowed kind, because a short secret fits in any string. Sentinel leak tests cover enqueue, logs and error paths for every queue.                            |
 | `AccessContext` stays two fields        | Type definition and review                                                                              | A struct with private fields and exactly `actor_user_id` and `request_id`. Adding a field changes a type every crate sees, which review catches.                                                                                                                                                                    |
 | Provider-agnostic AI                    | Capability router in `packages/ai/src/capability-route-map.ts`                                          | Features call a capability trait. A lint rejects provider and model name strings outside the adapters crate.                                                                                                                                                                                                        |
 | Module isolation                        | Two boundary gates (`docs/module-developer-guide.md` §10)                                               | Each module is a crate that may depend only on other modules' public API crates. A workspace check fails the build on any other edge. Table access stays guarded by RLS and per-module roles (`module-role-broker.ts`). Module SQL from add-ons passes a parsed-statement check (3.4).                              |
-| Never edit an applied migration         | Hash check in `packages/db/src/migrations/sql-runner.ts:220-235`; applied-check in `pending.ts:54`      | Rust reproduces the same hashes, including the backfill hash domain. Unknown or changed files block startup. See 3.2.                                                                                                                                                                                               |
+| Never edit an applied migration         | Hash check in `packages/db/src/migrations/sql-runner.ts:220-235`; applied-check in `pending.ts:54`      | Rust must reproduce the same hashes, including the backfill hash domain (proved in Phase 0a). Unknown or changed files block startup. See 3.2.                                                                                                                                                                      |
 | pgvector image                          | Compose image choice                                                                                    | The bundled Postgres always includes pgvector. Startup checks `CREATE EXTENSION vector` succeeded.                                                                                                                                                                                                                  |
 | A PR must never break prod              | Process rule                                                                                            | Unchanged. The Rust app reads the same setting names, and any new required setting gets a way to set it in the app.                                                                                                                                                                                                 |
 
@@ -188,6 +189,9 @@ Migrations:
 - Every applied file stays byte for byte. No checksum reset, ever.
 - A frozen manifest lists every legacy file and its hash. The Rust runner computes the same
   hashes, including the `moss:sql-migration+backfill:v1` domain over SQL plus backfill bytes.
+  Module files are hashed differently today. The module runner hashes the text after decoding it
+  as UTF-8 (`packages/db/src/migrations/module-sql-runner.ts:151-159`), while the core runner hashes
+  raw bytes. Rust reproduces each rule for its own ledger.
 - The two JavaScript backfills get Rust replacements, tested against the JavaScript on copies of
   real data. The hash of the legacy pair stays recorded; the Rust replacement only runs where the
   legacy pair has not run.
@@ -311,7 +315,7 @@ served by Moss, opened in a Rust desktop shell on desktop. Reasons:
 
 - Phone chat, LAN access and the companions depend on a browser UI today.
 - About 38,000 lines of CSS and the design tokens carry over, so Park Press does not get re-drawn.
-- Every one of the 75 core screens and every module screen is still rebuilt. The CSS saves styling,
+- Every core screen and every module screen is still rebuilt. The CSS saves styling,
   not components.
 
 The design-system audit (`docs/design-system.md`) must be re-implemented against the new component
@@ -369,7 +373,8 @@ Two of these change behaviour, not just paths:
 - **Vault names.** On a case-insensitive disk, "Note.md" and "note.md" are the same file. A vault
   moved from Linux can hold both. The importer must find clashes and ask before merging.
 - **Antivirus and file locks.** Windows Defender scanning the Postgres data folder can slow or
-  block it. The installer sets the documented exclusion or warns.
+  block it. Moss detects the slowdown and explains it. An exclusion is the owner's explicit choice,
+  never set by the installer and never needed to install.
 
 ### 3.11 Other parts that need their own answer
 
@@ -402,8 +407,10 @@ The detailed rules live in the companion doc. This section fixes the shape.
 Every move, server installs and Ben's prod included, works on a copy. The original stays put.
 
 1. Fence and stop jobs in the 3.3 order. Stop the TypeScript app.
-2. Take the frozen snapshot: database dump, vault folder, keys and settings, with a manifest of
-   hashes. The original Docker database and vault stay stopped and untouched.
+2. Take the frozen snapshot: database dump, vault folder and settings, with a manifest of hashes,
+   in one encrypted archive. Keys go in a separately wrapped recovery bundle. The source database
+   stays fenced and read-only for the dump, then stops. The original database and vault are never
+   changed.
 3. Restore the snapshot into a new Postgres cluster that the Rust program owns.
 4. The Rust program checks the legacy migration manifest against that copy, then applies its own
    new SQL files. Any unknown file or key blocks the move.
@@ -502,8 +509,9 @@ Phase 7.
 - The build checks from 3.1 (module dependency edges, file access, provider names, payload shapes).
 
 **Kill gate.** The RLS, secrets-never-escape and admin-no-bypass cases, converted to the parity
-harness, pass against both servers. The sentinel leak tests and module SQL refusal tests pass. Any
-one failing stops Phase 5 from starting.
+harness, pass against both servers. The sentinel leak tests and module SQL refusal tests pass, and
+each is first seen failing with its protection removed. Any one failing stops Phase 5 from
+starting.
 
 ### Phase 3: chat and agents (L)
 
@@ -544,8 +552,9 @@ express what finance needs, redesign it before rebuilding meals.
 - Per-OS packages, signing, signed updates, start at login, LAN sharing prompt, backup and restore,
   the Docker-to-desktop import screen.
 
-**Kill gate.** A clean install on a fresh machine on each OS, using clicks only, passes the parity
-checklist. A failed update on each OS falls back to the old cluster.
+**Kill gate.** A clean install on a fresh machine on each OS, using clicks only, starts, signs in,
+opens Today, and backs up and restores. A failed update on each OS falls back to the old cluster.
+The full parity checklist runs in Phase 8, once modules exist.
 
 ### Phase 8: cutover (M)
 
