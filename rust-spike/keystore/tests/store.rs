@@ -250,6 +250,31 @@ fn setup_refuses_the_key_file_while_a_keychain_is_there() {
 }
 
 #[test]
+fn setup_makes_an_existing_key_folder_private() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = Paths::under(&dir.path().join("config"), &dir.path().join("data"));
+    fs::create_dir_all(&paths.key_folder).unwrap();
+    fs::set_permissions(&paths.key_folder, fs::Permissions::from_mode(0o755)).unwrap();
+    let keys = CredentialKeys::generate();
+    set_up(&paths, &NO_KEYCHAIN, &RecoveryKey::generate(), &keys).unwrap();
+    assert_eq!(mode(&paths.key_folder), 0o700);
+    assert_eq!(unlocked_fingerprint(status(&paths)), keys.fingerprint());
+}
+
+#[test]
+fn setup_refuses_a_key_folder_that_is_a_link() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = Paths::under(&dir.path().join("config"), &dir.path().join("data"));
+    let elsewhere = dir.path().join("elsewhere");
+    fs::create_dir(&elsewhere).unwrap();
+    fs::create_dir_all(paths.key_folder.parent().unwrap()).unwrap();
+    symlink(&elsewhere, &paths.key_folder).unwrap();
+    assert!(set_up(&paths, &NO_KEYCHAIN, &RecoveryKey::generate(), &CredentialKeys::generate()).is_err());
+    assert_eq!(fs::read_dir(&elsewhere).unwrap().count(), 0);
+    assert!(matches!(status(&paths), State::NotSetUp));
+}
+
+#[test]
 fn each_damaged_key_file_is_kept_even_within_one_second() {
     let s = new_setup();
     for round in 1..=2 {

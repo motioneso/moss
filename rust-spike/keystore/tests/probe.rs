@@ -2,12 +2,12 @@
 
 use std::io::{BufRead, BufReader};
 use std::os::unix::net::UnixListener;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
 use keystore::fake::{hold_secret_service, Behaviour};
-use keystore::probe::{probe_address, probe_session, Keychain};
+use keystore::probe::{probe_address, probe_session, runtime_dir, Keychain};
 
 struct Bus {
     daemon: Child,
@@ -81,6 +81,15 @@ fn no_session_bus_allows_the_key_file() {
     let result = probe_session(None, runtime.path());
     assert!(matches!(result, Keychain::NoSessionBus(_)), "{result:?}");
     assert!(result.allows_key_file());
+}
+
+#[test]
+fn an_empty_or_relative_runtime_folder_falls_back_to_the_login_folder() {
+    let login = PathBuf::from("/run/user/1000");
+    assert_eq!(runtime_dir(None, 1000), login);
+    assert_eq!(runtime_dir(Some("".into()), 1000), login);
+    assert_eq!(runtime_dir(Some("run".into()), 1000), login);
+    assert_eq!(runtime_dir(Some("/tmp/session".into()), 1000), PathBuf::from("/tmp/session"));
 }
 
 #[test]

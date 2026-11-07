@@ -246,7 +246,12 @@ fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     File::open(folder)?.sync_all()
 }
 
+/// An existing key folder is made private first. A link or plain file in its place is refused.
 fn write_key_file(paths: &Paths, recovery: &RecoveryKey, installation_id: &str) -> std::io::Result<()> {
+    if fs::symlink_metadata(&paths.key_folder).is_ok() {
+        make_private(&paths.key_folder, 0o700, true)
+            .map_err(|detail| std::io::Error::other(format!("key folder: {detail}")))?;
+    }
     let contents = json!({
         "kind": KEY_FILE_KIND,
         "encodingVersion": ENCODING_VERSION,

@@ -1,6 +1,7 @@
 //! Is there a keychain? Asks the D-Bus session bus for the Secret Service
 //! (`org.freedesktop.secrets`), which GNOME Keyring and KWallet both provide.
 
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::Duration;
@@ -38,10 +39,17 @@ impl Keychain {
 /// Probes the session bus this process was started with.
 pub fn probe() -> Keychain {
     let address = std::env::var("DBUS_SESSION_BUS_ADDRESS").ok().filter(|a| !a.is_empty());
-    let runtime_dir = std::env::var_os("XDG_RUNTIME_DIR")
+    let folder = runtime_dir(std::env::var_os("XDG_RUNTIME_DIR"), unsafe { libc::geteuid() });
+    probe_session(address.as_deref(), &folder)
+}
+
+/// The runtime folder `XDG_RUNTIME_DIR` names, else the login's usual one. An empty or relative
+/// value is ignored, as the XDG spec asks, so it never points the bus check at the current folder.
+pub fn runtime_dir(value: Option<OsString>, euid: u32) -> PathBuf {
+    value
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(format!("/run/user/{}", unsafe { libc::geteuid() })));
-    probe_session(address.as_deref(), &runtime_dir)
+        .filter(|folder| folder.is_absolute())
+        .unwrap_or_else(|| PathBuf::from(format!("/run/user/{euid}")))
 }
 
 /// Finds the session bus the way D-Bus clients do: the address if one is set, else the `bus`
