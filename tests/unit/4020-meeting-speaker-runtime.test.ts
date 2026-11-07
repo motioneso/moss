@@ -12,7 +12,7 @@ import {
 import { getMeetingOutputTemplate, meetingsModuleManifest } from "@moss/meetings";
 import * as meetings from "@moss/meetings";
 import { tasksModuleManifest } from "@moss/tasks";
-import type { MeetingTranscriptSnapshot } from "@moss/shared";
+import type { MeetingOutputContent, MeetingTranscriptSnapshot } from "@moss/shared";
 import {
   createMeetingOutputRuntime,
   MEETING_OUTPUT_SCHEMA
@@ -152,7 +152,7 @@ describe("speakers in the summary run", () => {
       calls += 1;
       return response(summary(calls === 1 ? [jamie] : []));
     });
-    const generated = await h.generator(actor, request());
+    const generated = (await h.generator(actor, request())) as { content: MeetingOutputContent };
     expect(calls).toBeGreaterThan(1);
     expect(generated.content.speakers).toEqual([jamie]);
   });
@@ -160,7 +160,7 @@ describe("speakers in the summary run", () => {
   it("stores the speaker guess and the token as the model wrote them", async () => {
     const h = setup();
     h.fetch.mockImplementation(async () => response(summary([jamie])));
-    const generated = await h.generator(actor, request());
+    const generated = (await h.generator(actor, request())) as { content: MeetingOutputContent };
     expect(generated.content.overview).toContain("{{speaker:S1}}");
     expect(generated.content.speakers?.[0]?.name).toBe("Jamie");
   });
@@ -168,7 +168,7 @@ describe("speakers in the summary run", () => {
   it("drops an invented name without failing the run", async () => {
     const h = setup();
     h.fetch.mockImplementation(async () => response(summary([{ ...jamie, name: "Zed" }])));
-    const generated = await h.generator(actor, request());
+    const generated = (await h.generator(actor, request())) as { content: MeetingOutputContent };
     expect(generated.content.speakers).toEqual([]);
     expect(generated.content.warnings).toContain(
       "Some speaker names could not be checked and were left out."

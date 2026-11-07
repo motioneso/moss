@@ -25,6 +25,11 @@ const SPEAKER_BASES: readonly MeetingSpeakerBasis[] = [
 ];
 const SPEAKERS_DROPPED_WARNING = "Some speaker names could not be checked and were left out.";
 
+/** Names already accepted into a stored summary. Re-validating that summary must not drop them. */
+export function storedSpeakerNames(content: MeetingOutputContent | undefined): string[] {
+  return (content?.speakers ?? []).flatMap((entry) => (entry.name ? [entry.name] : []));
+}
+
 export interface MeetingOutputValidationOptions {
   /** Names from the owner context (profile, calendar, people). A speaker name must come from here or the talk. */
   readonly knownNames?: Iterable<string>;

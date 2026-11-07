@@ -28,7 +28,11 @@ import { MeetingRecordsRepository } from "./repository.js";
 import { MeetingOutputsRepository } from "./output-repository.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
 import { encodeMeetingTranscriptBatch } from "./transcript-batch.js";
-import { getMeetingOutputTemplate, validateMeetingOutput } from "./output-validation.js";
+import {
+  getMeetingOutputTemplate,
+  storedSpeakerNames,
+  validateMeetingOutput
+} from "./output-validation.js";
 import { MeetingPreferencesRepository, savedCaptureSelection } from "./preferences.js";
 import { MeetingCaptureConnectionRepository } from "./capture-connection-repository.js";
 
@@ -508,7 +512,9 @@ export const meetingSummaryPresentation: RouteApprovalPresentation = async (db, 
   if (!artifact || artifact.meetingId !== meeting.id || artifact.inputs.meetingId !== meeting.id)
     return null;
   try {
-    validateMeetingOutput(body.content, artifact.inputs);
+    validateMeetingOutput(body.content, artifact.inputs, {
+      knownNames: storedSpeakerNames(artifact.content)
+    });
   } catch {
     return null;
   }

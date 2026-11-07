@@ -180,7 +180,9 @@ export class MeetingOutputService {
         packHits.length === 0
           ? instructionFlag
           : { lines: [], more: 0, ...instructionFlag, packHits };
-      const validated = validateMeetingOutput(generated.content, inputs);
+      const validated = validateMeetingOutput(generated.content, inputs, {
+        knownNames: generated.context?.knownNames ?? []
+      });
       if (inputs.recording && !validated.recording)
         throw new MeetingOutputValidationError("schema_invalid");
       const effectiveType =
@@ -220,7 +222,9 @@ export class MeetingOutputService {
           templateId: effectiveTemplate.id,
           templateVersion: effectiveTemplate.version,
           modelRoute: generated.modelRoute,
-          content: validateMeetingOutput({ ...validated, warnings }, inputs),
+          content: validateMeetingOutput({ ...validated, warnings }, inputs, {
+            knownNames: generated.context?.knownNames ?? []
+          }),
           ...(storedFlag ? { instructionFlag: storedFlag } : {}),
           origin: "generated",
           stale
