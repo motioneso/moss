@@ -1,11 +1,15 @@
 # rust-spike (throwaway)
 
-Phase 0a of the Rust port plan (`docs/superpowers/specs/2026-11-06-rust-port-plan.md`). This
-folder proves four portability facts and nothing else. It is not the start of the Rust app:
-delete it once the report is accepted. Findings live in
-`docs/superpowers/specs/2026-11-07-rust-phase0a-report.md`.
+Phase 0 of the Rust port plan (`docs/superpowers/specs/2026-11-06-rust-port-plan.md`). It is not
+the start of the Rust app. Delete it once both reports are accepted.
 
-Nothing here touches the TypeScript app, its tests, a real secret or any database.
+- Phase 0a proves four portability facts. Findings are in
+  `docs/superpowers/specs/2026-11-07-rust-phase0a-report.md`.
+- Phase 0b rebuilds Tasks in Rust and checks it against the TypeScript server side by side.
+  Findings are in `docs/superpowers/specs/2026-11-07-rust-phase0b-report.md`.
+
+Nothing here changes the TypeScript app or its tests. Phase 0b uses only throwaway databases made
+by `scripts/run-gate.sh`, never the dev or prod database.
 
 ## Layout
 
@@ -20,6 +24,11 @@ Nothing here touches the TypeScript app, its tests, a real secret or any databas
 | `keystore/src/bin/fake-secret-service.rs` | A stand-in keychain on a private session bus                         |
 | `keystore/proof/drive.ts`                 | Drives the screens in Chromium and records each check                |
 | `tools/plant-keystore-bugs.py`            | Plants one bug at a time and records which test catches it           |
+| `tasks/`                                  | Phase 0b: the Tasks server in Rust                                   |
+| `parity/`                                 | Phase 0b: runs both servers side by side and compares them           |
+| `parity/cases/`                           | The side-by-side cases, as JSON                                      |
+| `parity/conversion-ledger.md`             | Every Tasks test, how it was converted, and the counts               |
+| `ui/`                                     | Phase 0b: the Tasks screen in Leptos and in Dioxus                   |
 
 ## Running
 
@@ -65,3 +74,30 @@ start it from a clean tree:
 ```
 python3 -I tools/plant-keystore-bugs.py . <output file>
 ```
+
+## Running Phase 0b
+
+The side-by-side run needs a migrated throwaway database, so it only runs inside a gate run. From
+the repo root:
+
+```
+scripts/run-gate.sh start --gate rust-spike/parity/run-parity.sh
+```
+
+```
+scripts/run-gate.sh wait --follow
+```
+
+The run builds both Rust crates, builds the app map the TypeScript server reads at startup, claims
+two ports with `devports`, and prints PASS or FAIL per case and a final PARITY line. Exit 0 means
+every case matched. Extra arguments pass through to the runner, for example `--only "lists"`.
+Output goes to `<cargo target folder>/parity` unless `PARITY_OUT` says otherwise.
+`PARITY_COPY_PREFIX` names the two database copies, so two runs can share one throwaway server.
+
+The Rust Tasks unit tests, from this folder:
+
+```
+cargo test -p tasks
+```
+
+`ui/README.md` says how to build and run the two screens.

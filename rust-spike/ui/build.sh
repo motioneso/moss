@@ -5,8 +5,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 export PATH="$HOME/.cargo/bin:$PATH"
-export RUSTUP_HOME="${RUSTUP_HOME:-/media/ben/Downloads/unity-scratch/js-36/rustup}"
-export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/media/ben/Downloads/unity-scratch/js-36/cargo-target-ui}"
+: "${RUSTUP_HOME:?set RUSTUP_HOME to the rustup home that has the wasm target (see README.md)}"
+export RUSTUP_HOME
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$PWD/../target/ui}"
 name="$1"; out="$2"
 mkdir -p "$out"
 (cd bindgen && cargo build --release --quiet)

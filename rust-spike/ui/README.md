@@ -17,20 +17,26 @@ Shared logic (types, grouping, due-date labels, API calls, focus helper, icons) 
 
 ## Build
 
-Task-local wasm toolchain (leaves `~/.rustup` alone):
+A separate rustup home holds the wasm toolchain, so the main `~/.rustup` is left alone. Turn off
+self-update in that home first. A new home defaults to it, and the install would otherwise
+replace the shared `~/.cargo/bin/rustup`.
 
 ```
-RUSTUP_HOME=/media/ben/Downloads/unity-scratch/js-36/rustup ~/.cargo/bin/rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown
+RUSTUP_HOME=$HOME/.rustup-wasm ~/.cargo/bin/rustup set auto-self-update disable
+```
+
+```
+RUSTUP_HOME=$HOME/.rustup-wasm ~/.cargo/bin/rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown
 ```
 
 Build a candidate:
 
 ```
-rust-spike/ui/build.sh leptos /path/to/dist-leptos
+RUSTUP_HOME=$HOME/.rustup-wasm rust-spike/ui/build.sh leptos /path/to/dist-leptos
 ```
 
 ```
-rust-spike/ui/build.sh dioxus /path/to/dist-dioxus
+RUSTUP_HOME=$HOME/.rustup-wasm rust-spike/ui/build.sh dioxus /path/to/dist-dioxus
 ```
 
 ## Run
@@ -84,6 +90,11 @@ completed ones have status `done` and a `completed_at`).
   would need an HTTP client swap in `shared/api.rs`. That was not done.
 
 ## Recommendation
+
+The Phase 0b report (`docs/superpowers/specs/2026-11-07-rust-phase0b-report.md`) makes the final
+pick: Leptos. It weighs the same measurements differently, because plan section 3.7 has the
+desktop app open the same served page as the browser. The screen builder's recommendation
+follows as written.
 
 Pick Dioxus, with one caveat about download size.
 
