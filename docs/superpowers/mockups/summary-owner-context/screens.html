@@ -8,7 +8,7 @@
 .spk[data-who=sam]{--c:var(--steel);--cs:var(--steel-soft);--ci:var(--steel-ink)}
 .chip{position:relative;display:inline-grid;place-items:center;flex:none;width:var(--s,28px);height:var(--s,28px);border-radius:50%;background:var(--cs);color:var(--ci);border:2px solid var(--c);font:900 calc(var(--s,28px)*.38)/1 var(--font-display);letter-spacing:.02em;vertical-align:middle}
 .spk[data-state=guess] .chip{border-style:dashed;background:repeating-linear-gradient(135deg,var(--cs) 0 5px,color-mix(in srgb,var(--cs) 70%,var(--surface)) 5px 10px)}
-.spk[data-state=guess] .chip::after{content:"?";position:absolute;right:-5px;bottom:-5px;width:max(13px,calc(var(--s,28px)*.38));height:max(13px,calc(var(--s,28px)*.38));border-radius:50%;background:var(--gold);color:var(--surface);font:900 max(9px,calc(var(--s,28px)*.26))/1 var(--font-sans);display:grid;place-items:center;border:2px solid var(--surface)}
+.spk[data-state=guess] .chip::after{content:"?";position:absolute;right:-5px;bottom:-5px;width:max(13px,calc(var(--s,28px)*.38));height:max(13px,calc(var(--s,28px)*.38));border-radius:50%;background:var(--gold-light,var(--gold));color:var(--gold-ink);font:900 max(9px,calc(var(--s,28px)*.26))/1 var(--font-sans);display:grid;place-items:center;border:2px solid var(--surface)}
 .spk[data-state=set] .chip::after{content:"";position:absolute;right:-3px;bottom:-3px;width:max(10px,calc(var(--s,28px)*.3));height:max(10px,calc(var(--s,28px)*.3));border-radius:50%;background:var(--c);border:2px solid var(--surface)}
 .spk[data-state=unknown] .chip{border-style:dotted;background:var(--cs)}
 .nm{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
@@ -83,7 +83,7 @@ function A(){return '<div class="A"><aside class="roster"><div class="sh"><h2>Sp
 +'<div class="sh"><span class="num">02</span><h2>Decisions</h2></div>'+rows()+'<hr class="rule"><div class="sh"><span class="num">03</span><h2>Action items</h2></div>'+acts()+'</main>'
 +'<section><div class="sh"><h2>Transcript</h2></div>'+tx()+'</section></div>'}
 function B(){var seg=[['priya',10],['sam',7],['you',6],['priya',9],['s3',3],['sam',8],['priya',6],['you',5]];
-return '<div class="hero"><div><span class="jds-eyebrow">Tuesday 4 Nov · 39 min</span><h1>Launch planning</h1><div class="meta">Summary written from your calendar and notes</div></div><div class="stack">'+['you','priya','sam','s3'].map(function(k){return '<div class="spk" data-who="'+who(k)+'" data-state="'+ST[k]+'">'+chip(k,54)+'<span>'+S[k].n+'</span><button class="conf" data-c="'+k+'">Confirm</button></div>'}).join('')+'</div></div>'
+return '<div class="hero"><div><span class="jds-eyebrow">Tuesday 4 Nov · 39 min</span><h1>Launch planning</h1></div><div class="stack">'+['you','priya','sam','s3'].map(function(k){return '<div class="spk" data-who="'+who(k)+'" data-state="'+ST[k]+'">'+chip(k,54)+'<span>'+S[k].n+'</span><button class="conf" data-c="'+k+'">Confirm</button></div>'}).join('')+'</div></div>'
 +'<div class="tl">'+seg.map(function(s){return '<i class="spk" data-who="'+who(s[0])+'" data-state="'+ST[s[0]]+'" style="--f:'+s[1]+'" title="'+S[s[0]].n+'"></i>'}).join('')+'</div><div class="ticks"><span>10:02</span><span>10:15</span><span>10:30</span><span>10:41</span></div>'
 +'<div class="B"><div><div class="sh"><h2>Overview</h2></div><p class="big">'+nm('priya')+' and '+nm('sam')+' agreed to move the launch to March.</p></div><div><div class="sh"><h2>Decisions</h2></div>'+rows()+'</div><div><div class="sh"><h2>Action items</h2></div>'+acts()+'</div></div>'
 +'<div class="tx2">'+tx()+'</div>'}
