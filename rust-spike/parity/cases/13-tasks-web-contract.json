@@ -1,0 +1,182 @@
+[
+  {
+    "name": "web-contract 49: preferences default to priority and round-trip",
+    "source": "tasks-web-contract.test.ts:49 GET /api/tasks/preferences defaults to priority; PATCH round-trips matrix",
+    "steps": [
+      {
+        "id": "initial",
+        "method": "GET",
+        "path": "/api/tasks/preferences",
+        "as": "A",
+        "expect": {
+          "body": {
+            "preferences": {
+              "defaultView": "priority"
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "set",
+        "method": "PATCH",
+        "path": "/api/tasks/preferences",
+        "as": "A",
+        "body": {
+          "defaultView": "matrix"
+        },
+        "expect": {
+          "body": {
+            "preferences": {
+              "defaultView": "matrix"
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "again",
+        "method": "GET",
+        "path": "/api/tasks/preferences",
+        "as": "A",
+        "expect": {
+          "body": {
+            "preferences": {
+              "defaultView": "matrix"
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "other",
+        "method": "GET",
+        "path": "/api/tasks/preferences",
+        "as": "B",
+        "expect": {
+          "body": {
+            "preferences": {
+              "defaultView": "priority"
+            }
+          },
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.task_preferences"],
+    "note": "Adds a check that user B still sees the default."
+  },
+  {
+    "name": "web-contract 165: subtasks come back in order",
+    "source": "tasks-web-contract.test.ts:165 GET /api/tasks/:id/subtasks returns the parent's children in order",
+    "steps": [
+      {
+        "id": "parent",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "clean kitchen"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "c1",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "unload dishwasher",
+          "parentTaskId": "{{parent:/body/task/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "c2",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "wipe counters",
+          "parentTaskId": "{{parent:/body/task/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "subs",
+        "method": "GET",
+        "path": "/api/tasks/{{parent:/body/task/id}}/subtasks",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "title": "unload dishwasher"
+              },
+              {
+                "title": "wipe counters"
+              }
+            ]
+          },
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.tasks"],
+    "note": "Children are made by create with a parent id; the test uses the breakdown route, which is not ported."
+  },
+  {
+    "name": "web-contract 223: create keeps effort, do-at and priority; patch changes them",
+    "source": "tasks-web-contract.test.ts:223 POST /api/tasks persists listId, doAt, and effort",
+    "steps": [
+      {
+        "id": "make",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "ship the deck",
+          "priority": 4,
+          "effort": "medium",
+          "doAt": "2026-06-10T12:00:00.000Z"
+        },
+        "expect": {
+          "body": {
+            "task": {
+              "effort": "medium",
+              "doAt": "2026-06-10T12:00:00.000Z",
+              "priority": 4
+            }
+          },
+          "status": 201
+        }
+      },
+      {
+        "id": "patch",
+        "method": "PATCH",
+        "path": "/api/tasks/{{make:/body/task/id}}",
+        "as": "A",
+        "body": {
+          "effort": "quick",
+          "doAt": null
+        },
+        "expect": {
+          "body": {
+            "task": {
+              "effort": "quick",
+              "doAt": null
+            }
+          },
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.tasks"]
+  }
+]
