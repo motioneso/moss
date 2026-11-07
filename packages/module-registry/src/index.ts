@@ -19,6 +19,7 @@ import {
   createMeetingCaptureRuntime,
   type MeetingCaptureAuthorization
 } from "./meeting-capture-runtime.js";
+import { createOwnerContextSources } from "./owner-context-sources.js";
 import { createApprovalSourceReferences } from "./approval-source-references.js";
 import {
   createMeetingOutputRuntime,
@@ -3084,6 +3085,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       });
       const outputRuntime = createMeetingOutputRuntime({
         ...deps,
+        ownerContextSources: createOwnerContextSources(),
         onIsolationFailed: notifySummaryStopped
       });
       registerMeetingOutputRoutes(server, {
@@ -3132,6 +3134,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           createAcpCliStructuredAdapter: deps.createAcpCliStructuredAdapter,
           probeAcpCli: deps.probeAcpCli,
           onIsolationFailed: notifySummaryStopped,
+          ownerContextSources: createOwnerContextSources(),
           resolveActiveModules
         }).generator,
         notices.enqueue(boss)

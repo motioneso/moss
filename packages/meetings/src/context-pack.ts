@@ -113,8 +113,8 @@ export function fitContextPack(
   budgetBytes: number
 ): { pack: OwnerContextPack | null; trimmed: boolean } {
   if (bytes(pack) <= budgetBytes) return { pack, trimmed: false };
-  let facts = [...pack.facts];
-  let people = [...pack.people];
+  const facts = [...pack.facts];
+  const people = [...pack.people];
   let event = pack.event;
   const current = (): OwnerContextPack => ({ owner: pack.owner, event, people, facts });
   while (bytes(current()) > budgetBytes && facts.length > 0) facts.pop();
