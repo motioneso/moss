@@ -2,8 +2,8 @@
 
 Phases 0a and 1 of the Rust port plan (`docs/superpowers/specs/2026-11-06-rust-port-plan.md`).
 Phase 0a proves four portability facts. Phase 1 (`bundled-db/`) proves that Rust can run a
-private, bundled Postgres with pgvector for one install. This is not the start of the Rust app:
-delete it once the reports are accepted. Findings live in
+private, bundled Postgres with pgvector for one install. This is not the start of the Rust app.
+Delete it once the reports are accepted. Findings live in
 `docs/superpowers/specs/2026-11-07-rust-phase0a-report.md` and
 `docs/superpowers/specs/2026-11-07-rust-phase1-report.md`.
 
