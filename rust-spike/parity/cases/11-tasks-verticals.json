@@ -1630,5 +1630,84 @@
       }
     ],
     "rows": ["app.task_tags"]
+  },
+  {
+    "name": "verticals 314: at-risk keeps Medium and above only",
+    "source": "tasks-verticals.test.ts:314 drift: overdue + at-risk surface Medium+ only; focus orders them",
+    "steps": [
+      {
+        "id": "crit",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "overdue-critical",
+          "priority": 5,
+          "dueAt": "2000-01-01T00:00:00.000Z"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "some",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "overdue-someday",
+          "priority": 1,
+          "dueAt": "2000-01-02T00:00:00.000Z"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "overdue",
+        "method": "GET",
+        "path": "/api/tasks/overdue",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "title": "overdue-critical"
+              },
+              {
+                "title": "overdue-someday"
+              }
+            ]
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "risk",
+        "method": "GET",
+        "path": "/api/tasks/at-risk",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "title": "overdue-critical"
+              }
+            ]
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "focus",
+        "method": "GET",
+        "path": "/api/tasks/focus",
+        "as": "A",
+        "expect": {
+          "status": 200
+        }
+      }
+    ],
+    "note": "Read through the drift routes. Overdue has no priority filter (both tasks show); at-risk drops the Someday task, which is what the test asserts. The test does not assert the focus order, so the case only compares both servers' focus answers."
   }
 ]
