@@ -1,0 +1,875 @@
+[
+  {
+    "name": "verticals 284: task list returns a tags array on every task",
+    "source": "tasks-verticals.test.ts:284 GET /api/tasks returns tags and rolls a stale recurring series forward (lazy-on-view)",
+    "steps": [
+      {
+        "id": "make",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "lazy roll"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "list",
+        "method": "GET",
+        "path": "/api/tasks",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "title": "lazy roll",
+                "tags": []
+              }
+            ]
+          },
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.tasks"],
+    "note": "Tags part only. The test also makes a weekly series with a stale date and checks a read rolls it forward; roll-forward is not ported, so the task here is not recurring."
+  },
+  {
+    "name": "verticals 334: lists route returns the actor's lists",
+    "source": "tasks-verticals.test.ts:334 GET /api/tasks/lists returns the actor's lists",
+    "steps": [
+      {
+        "id": "seed",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "first task"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "lists",
+        "method": "GET",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "expect": {
+          "body": {
+            "lists": [
+              {
+                "name": "Personal"
+              }
+            ]
+          },
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.task_lists"],
+    "note": "Exact one-list check instead of 'contains Personal'. Personal is made by the first task create (the test's seed data makes tasks first), so the case creates one."
+  },
+  {
+    "name": "verticals 346: creating a list is get-or-create",
+    "source": "tasks-verticals.test.ts:346 POST /api/tasks/lists creates a list (idempotent)",
+    "steps": [
+      {
+        "id": "one",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Work"
+        },
+        "expect": {
+          "body": {
+            "list": {
+              "name": "Work"
+            }
+          },
+          "status": 201
+        }
+      },
+      {
+        "id": "two",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Work"
+        },
+        "expect": {
+          "body": {
+            "list": {
+              "id": "{{one:/body/list/id}}"
+            }
+          },
+          "status": 201
+        }
+      }
+    ],
+    "rows": ["app.task_lists"]
+  },
+  {
+    "name": "verticals 369: tag created on a list",
+    "source": "tasks-verticals.test.ts:369 POST /api/tasks/lists/:listId/tags creates a tag on the list",
+    "steps": [
+      {
+        "id": "seed",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "first task"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "lists",
+        "method": "GET",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "tag",
+        "method": "POST",
+        "path": "/api/tasks/lists/{{lists:/body/lists/0/id}}/tags",
+        "as": "A",
+        "body": {
+          "name": "urgent"
+        },
+        "expect": {
+          "body": {
+            "tag": {
+              "name": "urgent",
+              "listId": "{{lists:/body/lists/0/id}}"
+            }
+          },
+          "status": 201
+        }
+      }
+    ],
+    "rows": ["app.task_lists", "app.task_tags"],
+    "note": "The test reads the Personal list through the repository; this case reads it through the lists route."
+  },
+  {
+    "name": "verticals 408: focus route returns an overdue high-priority task",
+    "source": "tasks-verticals.test.ts:408 GET /api/tasks/focus returns overdue/at-risk tasks",
+    "steps": [
+      {
+        "id": "make",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "focus-route-test",
+          "priority": 5,
+          "dueAt": "2000-01-01T00:00:00.000Z"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "focus",
+        "method": "GET",
+        "path": "/api/tasks/focus",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "title": "focus-route-test"
+              }
+            ]
+          },
+          "status": 200
+        }
+      }
+    ],
+    "note": "Exact one-task check instead of 'contains'."
+  },
+  {
+    "name": "verticals 429: at-risk route answers with a task array",
+    "source": "tasks-verticals.test.ts:429 GET /api/tasks/at-risk returns at-risk tasks",
+    "steps": [
+      {
+        "id": "risk",
+        "method": "GET",
+        "path": "/api/tasks/at-risk",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": []
+          },
+          "status": 200
+        }
+      }
+    ],
+    "note": "Fresh database, so the array is empty; the test only checks it is an array."
+  },
+  {
+    "name": "verticals 440: quadrant filter keeps the important and urgent task",
+    "source": "tasks-verticals.test.ts:440 GET /api/tasks?quadrant=do filters by Eisenhower quadrant",
+    "steps": [
+      {
+        "id": "do",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "quadrant-do-test",
+          "priority": 5,
+          "dueAt": "{{now+1h}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "later",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "quadrant-schedule-test",
+          "priority": 5,
+          "dueAt": "{{now+10d}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "filtered",
+        "method": "GET",
+        "path": "/api/tasks?quadrant=do",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "title": "quadrant-do-test"
+              }
+            ]
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "bad",
+        "method": "GET",
+        "path": "/api/tasks?quadrant=nope",
+        "as": "A",
+        "expect": {
+          "status": 400
+        }
+      }
+    ],
+    "note": "Adds a second task in another quadrant and a bad quadrant value, so the filter is shown to filter."
+  },
+  {
+    "name": "verticals 592: create with a foreign list id is 404",
+    "source": "tasks-verticals.test.ts:592 POST /api/tasks with a foreign listId returns 404",
+    "steps": [
+      {
+        "id": "bseed",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "B",
+        "body": {
+          "title": "B first task"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "blists",
+        "method": "GET",
+        "path": "/api/tasks/lists",
+        "as": "B",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "cross",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "cross-list via API",
+          "listId": "{{blists:/body/lists/0/id}}"
+        },
+        "expect": {
+          "body": {
+            "error": "List not found or not accessible"
+          },
+          "status": 404
+        }
+      }
+    ],
+    "rows": ["app.tasks"]
+  },
+  {
+    "name": "verticals 462: children come back in order",
+    "source": "tasks-verticals.test.ts:462 repository: listByParentId returns direct children in position order",
+    "seed": [
+      "insert into app.task_lists (id, owner_user_id, name) values ('20000000-0000-4000-8000-000000000001','{{userA}}','Personal')",
+      "insert into app.tasks (id, owner_user_id, title, status, list_id) values ('30000000-0000-4000-8000-0000000000c0','{{userA}}','plan the trip','todo','20000000-0000-4000-8000-000000000001')",
+      "insert into app.tasks (id, owner_user_id, title, status, list_id, parent_task_id, position) values ('30000000-0000-4000-8000-0000000000c3','{{userA}}','book flights','todo','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-0000000000c0',0),('30000000-0000-4000-8000-0000000000c2','{{userA}}','book hotel','todo','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-0000000000c0',1),('30000000-0000-4000-8000-0000000000c1','{{userA}}','pack bags','todo','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-0000000000c0',2)"
+    ],
+    "steps": [
+      {
+        "id": "subs",
+        "method": "GET",
+        "path": "/api/tasks/30000000-0000-4000-8000-0000000000c0/subtasks",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "title": "book flights",
+                "parentTaskId": "30000000-0000-4000-8000-0000000000c0"
+              },
+              {
+                "title": "book hotel",
+                "parentTaskId": "30000000-0000-4000-8000-0000000000c0"
+              },
+              {
+                "title": "pack bags",
+                "parentTaskId": "30000000-0000-4000-8000-0000000000c0"
+              }
+            ]
+          },
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.tasks"],
+    "note": "Parent and children are seeded by SQL with positions 0, 1, 2 and ids in the opposite order. The test uses the breakdown helper, which is not ported, and the create route cannot set a position."
+  },
+  {
+    "name": "verticals 482: create with another user's list is 404",
+    "source": "tasks-verticals.test.ts:482 rejects task create with a listId that belongs to another user (404)",
+    "steps": [
+      {
+        "id": "bseed",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "B",
+        "body": {
+          "title": "B task"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "blists",
+        "method": "GET",
+        "path": "/api/tasks/lists",
+        "as": "B",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "cross",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "cross-list task",
+          "listId": "{{blists:/body/lists/0/id}}"
+        },
+        "expect": {
+          "body": {
+            "error": "List not found or not accessible"
+          },
+          "status": 404
+        }
+      }
+    ],
+    "rows": ["app.tasks"],
+    "note": "The test calls the repository and expects it to throw; the case sends the matching route request and expects the status the route gives."
+  },
+  {
+    "name": "verticals 497: create under another user's task is 404",
+    "source": "tasks-verticals.test.ts:497 rejects task create with a parentTaskId owned by another user (404)",
+    "steps": [
+      {
+        "id": "bt",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "B",
+        "body": {
+          "title": "B private"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "cross",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "cross-parent task",
+          "parentTaskId": "{{bt:/body/task/id}}"
+        },
+        "expect": {
+          "body": {
+            "error": "Parent task not found or not accessible"
+          },
+          "status": 404
+        }
+      }
+    ],
+    "rows": ["app.tasks"],
+    "note": "The test calls the repository and expects it to throw; the case sends the matching route request and expects the status the route gives."
+  },
+  {
+    "name": "verticals 508: moving a task to another user's list is 404",
+    "source": "tasks-verticals.test.ts:508 rejects task update with a listId that belongs to another user (404)",
+    "steps": [
+      {
+        "id": "bseed",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "B",
+        "body": {
+          "title": "B task"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "blists",
+        "method": "GET",
+        "path": "/api/tasks/lists",
+        "as": "B",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "t",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "will be moved to wrong list"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "cross",
+        "method": "PATCH",
+        "path": "/api/tasks/{{t:/body/task/id}}",
+        "as": "A",
+        "body": {
+          "listId": "{{blists:/body/lists/0/id}}"
+        },
+        "expect": {
+          "body": {
+            "error": "List not found or not accessible"
+          },
+          "status": 404
+        }
+      }
+    ],
+    "rows": ["app.tasks"],
+    "note": "The test calls the repository and expects it to throw; the case sends the matching route request and expects the status the route gives."
+  },
+  {
+    "name": "verticals 523: re-parenting under another user's task is 404",
+    "source": "tasks-verticals.test.ts:523 rejects task update with a parentTaskId owned by another user (404)",
+    "steps": [
+      {
+        "id": "bt",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "B",
+        "body": {
+          "title": "B private"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "t",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "will be re-parented to wrong task"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "cross",
+        "method": "PATCH",
+        "path": "/api/tasks/{{t:/body/task/id}}",
+        "as": "A",
+        "body": {
+          "parentTaskId": "{{bt:/body/task/id}}"
+        },
+        "expect": {
+          "body": {
+            "error": "Parent task not found or not accessible"
+          },
+          "status": 404
+        }
+      }
+    ],
+    "rows": ["app.tasks"],
+    "note": "The test calls the repository and expects it to throw; the case sends the matching route request and expects the status the route gives."
+  },
+  {
+    "name": "verticals 535: create with own list and own parent works",
+    "source": "tasks-verticals.test.ts:535 allows task create with own listId and own parentTaskId",
+    "steps": [
+      {
+        "id": "parent",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "parent task"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "lists",
+        "method": "GET",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "child",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "child task",
+          "listId": "{{lists:/body/lists/0/id}}",
+          "parentTaskId": "{{parent:/body/task/id}}"
+        },
+        "expect": {
+          "body": {
+            "task": {
+              "listId": "{{lists:/body/lists/0/id}}",
+              "parentTaskId": "{{parent:/body/task/id}}"
+            }
+          },
+          "status": 201
+        }
+      }
+    ],
+    "rows": ["app.tasks"]
+  },
+  {
+    "name": "verticals 554: a view share does not allow parenting under it",
+    "source": "tasks-verticals.test.ts:554 rejects parenting under a task that is only VIEW-SHARED to the actor (ownership, not visibility)",
+    "seed": [
+      "insert into app.task_lists (id, owner_user_id, name) values ('20000000-0000-4000-8000-000000000002','{{userB}}','Personal')",
+      "insert into app.tasks (id, owner_user_id, title, status, list_id) values ('30000000-0000-4000-8000-000000000003','{{userB}}','userB task, view-shared to A','todo','20000000-0000-4000-8000-000000000002')",
+      "insert into app.shares (id, resource_type, resource_id, owner_user_id, grantee_user_id, level) values (gen_random_uuid(),'task','30000000-0000-4000-8000-000000000003','{{userB}}','{{userA}}','view')"
+    ],
+    "steps": [
+      {
+        "id": "sanity",
+        "method": "GET",
+        "path": "/api/tasks/30000000-0000-4000-8000-000000000003",
+        "as": "A",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "create under",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "child under foreign parent",
+          "parentTaskId": "30000000-0000-4000-8000-000000000003"
+        },
+        "expect": {
+          "body": {
+            "error": "Parent task not found or not accessible"
+          },
+          "status": 404
+        }
+      },
+      {
+        "id": "own",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "userA own task"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "reparent",
+        "method": "PATCH",
+        "path": "/api/tasks/{{own:/body/task/id}}",
+        "as": "A",
+        "body": {
+          "parentTaskId": "30000000-0000-4000-8000-000000000003"
+        },
+        "expect": {
+          "body": {
+            "error": "Parent task not found or not accessible"
+          },
+          "status": 404
+        }
+      }
+    ],
+    "rows": ["app.tasks"],
+    "note": "Share row is seeded by SQL. The test calls the repository and expects it to throw; the case sends the matching route request and expects the status the route gives."
+  },
+  {
+    "name": "verticals 616: tasks come back with their tags",
+    "source": "tasks-verticals.test.ts:616 getById and listVisible return joined tags (direct-insert assignment)",
+    "seed": [
+      "insert into app.task_lists (id, owner_user_id, name) values ('20000000-0000-4000-8000-000000000001','{{userA}}','Travel')",
+      "insert into app.task_tags (id, owner_user_id, list_id, name) values ('30000000-0000-4000-8000-0000000000b1','{{userA}}','20000000-0000-4000-8000-000000000001','Urgent')",
+      "insert into app.tasks (id, owner_user_id, title, status, list_id) values ('30000000-0000-4000-8000-0000000000a1','{{userA}}','book flights','todo','20000000-0000-4000-8000-000000000001')",
+      "insert into app.task_tag_assignments (task_id, tag_id) values ('30000000-0000-4000-8000-0000000000a1','30000000-0000-4000-8000-0000000000b1')"
+    ],
+    "steps": [
+      {
+        "id": "one",
+        "method": "GET",
+        "path": "/api/tasks/30000000-0000-4000-8000-0000000000a1",
+        "as": "A",
+        "expect": {
+          "body": {
+            "task": {
+              "tags": [
+                {
+                  "id": "30000000-0000-4000-8000-0000000000b1",
+                  "name": "Urgent"
+                }
+              ]
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "all",
+        "method": "GET",
+        "path": "/api/tasks",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "id": "30000000-0000-4000-8000-0000000000a1",
+                "tags": [
+                  {
+                    "name": "Urgent"
+                  }
+                ]
+              }
+            ]
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "assignments",
+        "sql": "select count(*)::int as n from app.task_tag_assignments",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "n": 1
+            }
+          ]
+        }
+      }
+    ],
+    "note": "The assignment row is seeded by SQL, as the test inserts it directly. Read through the task routes."
+  },
+  {
+    "name": "verticals 646: a tag from another list is refused; assign and unassign work",
+    "source": "tasks-verticals.test.ts:646 assignTag enforces same-list via trigger; unassignTag removes",
+    "steps": [
+      {
+        "id": "la",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "A"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "lb",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "B"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "tagb",
+        "method": "POST",
+        "path": "/api/tasks/lists/{{lb:/body/list/id}}/tags",
+        "as": "A",
+        "body": {
+          "name": "X"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "t",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "t",
+          "listId": "{{la:/body/list/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "cross",
+        "method": "POST",
+        "path": "/api/tasks/{{t:/body/task/id}}/tags",
+        "as": "A",
+        "body": {
+          "tagId": "{{tagb:/body/tag/id}}"
+        },
+        "expect": {
+          "status": 400
+        }
+      },
+      {
+        "id": "taga",
+        "method": "POST",
+        "path": "/api/tasks/lists/{{la:/body/list/id}}/tags",
+        "as": "A",
+        "body": {
+          "name": "Y"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "assign",
+        "method": "POST",
+        "path": "/api/tasks/{{t:/body/task/id}}/tags",
+        "as": "A",
+        "body": {
+          "tagId": "{{taga:/body/tag/id}}"
+        },
+        "expect": {
+          "body": {
+            "task": {
+              "tags": [
+                {
+                  "id": "{{taga:/body/tag/id}}"
+                }
+              ]
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "unassign",
+        "method": "DELETE",
+        "path": "/api/tasks/{{t:/body/task/id}}/tags/{{taga:/body/tag/id}}",
+        "as": "A",
+        "expect": {
+          "body": {
+            "task": {
+              "tags": []
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "missing task",
+        "method": "POST",
+        "path": "/api/tasks/00000000-0000-0000-0000-000000000000/tags",
+        "as": "A",
+        "body": {
+          "tagId": "{{taga:/body/tag/id}}"
+        },
+        "expect": {
+          "status": 404
+        }
+      },
+      {
+        "id": "missing tag",
+        "method": "POST",
+        "path": "/api/tasks/{{t:/body/task/id}}/tags",
+        "as": "A",
+        "body": {
+          "tagId": "00000000-0000-0000-0000-000000000000"
+        },
+        "expect": {
+          "status": 404
+        }
+      },
+      {
+        "id": "none left",
+        "sql": "select count(*)::int as n from app.task_tag_assignments",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      }
+    ],
+    "rows": ["app.task_tag_assignments"],
+    "note": "The test only expects a throw for the cross-list tag; the route answers 400 on both servers."
+  }
+]

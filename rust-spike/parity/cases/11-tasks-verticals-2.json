@@ -1,0 +1,892 @@
+[
+  {
+    "name": "verticals 697: moving a task drops tags from the old list",
+    "source": "tasks-verticals.test.ts:697 moving a task to another list drops tags foreign to the destination",
+    "steps": [
+      {
+        "id": "la",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "A1"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "lb",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "B1"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "taga",
+        "method": "POST",
+        "path": "/api/tasks/lists/{{la:/body/list/id}}/tags",
+        "as": "A",
+        "body": {
+          "name": "only-A"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "t",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "mover",
+          "listId": "{{la:/body/list/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "assign",
+        "method": "POST",
+        "path": "/api/tasks/{{t:/body/task/id}}/tags",
+        "as": "A",
+        "body": {
+          "tagId": "{{taga:/body/tag/id}}"
+        },
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "move",
+        "method": "PATCH",
+        "path": "/api/tasks/{{t:/body/task/id}}",
+        "as": "A",
+        "body": {
+          "listId": "{{lb:/body/list/id}}"
+        },
+        "expect": {
+          "body": {
+            "task": {
+              "listId": "{{lb:/body/list/id}}"
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "tags",
+        "method": "GET",
+        "path": "/api/tasks/{{t:/body/task/id}}",
+        "as": "A",
+        "expect": {
+          "body": {
+            "task": {
+              "tags": []
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "none left",
+        "sql": "select count(*)::int as n from app.task_tag_assignments",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      }
+    ],
+    "rows": ["app.tasks", "app.task_tag_assignments"]
+  },
+  {
+    "name": "verticals 725: rename list, duplicate 409, missing 404",
+    "source": "tasks-verticals.test.ts:725 renameList renames, rejects duplicates (409), and 404s a foreign/missing list",
+    "steps": [
+      {
+        "id": "src",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Rename Src"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "other",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Rename Other"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "ok",
+        "method": "PATCH",
+        "path": "/api/tasks/lists/{{src:/body/list/id}}",
+        "as": "A",
+        "body": {
+          "name": "Rename Dst"
+        },
+        "expect": {
+          "body": {
+            "list": {
+              "name": "Rename Dst"
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "dup",
+        "method": "PATCH",
+        "path": "/api/tasks/lists/{{src:/body/list/id}}",
+        "as": "A",
+        "body": {
+          "name": "Rename Other"
+        },
+        "expect": {
+          "status": 409
+        }
+      },
+      {
+        "id": "dup other case",
+        "method": "PATCH",
+        "path": "/api/tasks/lists/{{src:/body/list/id}}",
+        "as": "A",
+        "body": {
+          "name": "rename other"
+        },
+        "expect": {
+          "status": 409
+        }
+      },
+      {
+        "id": "missing",
+        "method": "PATCH",
+        "path": "/api/tasks/lists/00000000-0000-0000-0000-000000000000",
+        "as": "A",
+        "body": {
+          "name": "whatever"
+        },
+        "expect": {
+          "status": 404
+        }
+      }
+    ],
+    "rows": ["app.task_lists"],
+    "note": "Adds a different-case duplicate, since the test's comment says the unique index ignores case."
+  },
+  {
+    "name": "verticals 758: deleting a non-empty list without a move target is 409",
+    "source": "tasks-verticals.test.ts:758 deleteList refuses a non-empty list without reassign (409)",
+    "steps": [
+      {
+        "id": "list",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Delete NonEmpty"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "t",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "blocks delete",
+          "listId": "{{list:/body/list/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "del",
+        "method": "DELETE",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}",
+        "as": "A",
+        "body": {},
+        "expect": {
+          "status": 409
+        }
+      }
+    ],
+    "rows": ["app.task_lists", "app.tasks"]
+  },
+  {
+    "name": "verticals 784: a refused delete destroys nothing",
+    "source": "tasks-verticals.test.ts:784 deleteList against a non-empty list with no reassign target destroys nothing",
+    "steps": [
+      {
+        "id": "keeper",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Delete NonEmpty Survives - keeper"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "list",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Delete NonEmpty Survives"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "t",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "must survive the failed delete",
+          "listId": "{{list:/body/list/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "del",
+        "method": "DELETE",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}",
+        "as": "A",
+        "body": {},
+        "expect": {
+          "body": {
+            "error": "List is not empty"
+          },
+          "status": 409
+        }
+      },
+      {
+        "id": "list survives",
+        "sql": "select count(*)::int as n from app.task_lists where id = '{{list:/body/list/id}}'",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "n": 1
+            }
+          ]
+        }
+      },
+      {
+        "id": "task survives",
+        "method": "GET",
+        "path": "/api/tasks/{{t:/body/task/id}}",
+        "as": "A",
+        "expect": {
+          "body": {
+            "task": {
+              "id": "{{t:/body/task/id}}",
+              "listId": "{{list:/body/list/id}}"
+            }
+          },
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.task_lists", "app.tasks"],
+    "note": "List name uses a plain hyphen where the test has a dash."
+  },
+  {
+    "name": "verticals 814: delete with a move target moves tasks and drops old tags",
+    "source": "tasks-verticals.test.ts:814 deleteList with reassign moves tasks, drops old-list tags, and deletes the list",
+    "steps": [
+      {
+        "id": "src",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Reassign Src"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "dst",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Reassign Dst"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "tag",
+        "method": "POST",
+        "path": "/api/tasks/lists/{{src:/body/list/id}}/tags",
+        "as": "A",
+        "body": {
+          "name": "src-only"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "t",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "reassign me",
+          "listId": "{{src:/body/list/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "assign",
+        "method": "POST",
+        "path": "/api/tasks/{{t:/body/task/id}}/tags",
+        "as": "A",
+        "body": {
+          "tagId": "{{tag:/body/tag/id}}"
+        },
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "del",
+        "method": "DELETE",
+        "path": "/api/tasks/lists/{{src:/body/list/id}}",
+        "as": "A",
+        "body": {
+          "reassignToListId": "{{dst:/body/list/id}}"
+        },
+        "expect": {
+          "body": {
+            "deleted": true
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "src gone",
+        "sql": "select count(*)::int as n from app.task_lists where id = '{{src:/body/list/id}}'",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      },
+      {
+        "id": "task moved",
+        "sql": "select list_id from app.tasks where id = '{{t:/body/task/id}}'",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "list_id": "{{dst:/body/list/id}}"
+            }
+          ]
+        }
+      },
+      {
+        "id": "tags",
+        "method": "GET",
+        "path": "/api/tasks/{{t:/body/task/id}}",
+        "as": "A",
+        "expect": {
+          "body": {
+            "task": {
+              "tags": []
+            }
+          },
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.task_lists", "app.tasks", "app.task_tags", "app.task_tag_assignments"]
+  },
+  {
+    "name": "verticals 853: deleting a missing list is 404 before the last-list guard",
+    "source": "tasks-verticals.test.ts:853 deleteList 404s a foreign/missing list before the last-list guard (actor has other lists)",
+    "steps": [
+      {
+        "id": "keeper",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Some List"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "del",
+        "method": "DELETE",
+        "path": "/api/tasks/lists/00000000-0000-0000-0000-000000000000",
+        "as": "A",
+        "body": {},
+        "expect": {
+          "status": 404
+        }
+      },
+      {
+        "id": "foreign",
+        "method": "DELETE",
+        "path": "/api/tasks/lists/{{keeper:/body/list/id}}",
+        "as": "B",
+        "body": {},
+        "expect": {
+          "status": 404
+        }
+      }
+    ],
+    "rows": ["app.task_lists"],
+    "note": "Adds a foreign-list delete by user B."
+  },
+  {
+    "name": "verticals 862: moving a list's tasks onto itself is 400",
+    "source": "tasks-verticals.test.ts:862 deleteList rejects a self-reassign with 400 (not a RESTRICT 409)",
+    "steps": [
+      {
+        "id": "list",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Self Reassign"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "del",
+        "method": "DELETE",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}",
+        "as": "A",
+        "body": {
+          "reassignToListId": "{{list:/body/list/id}}"
+        },
+        "expect": {
+          "status": 400
+        }
+      }
+    ],
+    "rows": ["app.task_lists"]
+  },
+  {
+    "name": "verticals 874: the only list cannot be deleted",
+    "source": "tasks-verticals.test.ts:874 deleteList refuses to delete the actor's only list (409)",
+    "steps": [
+      {
+        "id": "only",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "admin",
+        "body": {
+          "name": "Admin Only List"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "del",
+        "method": "DELETE",
+        "path": "/api/tasks/lists/{{only:/body/list/id}}",
+        "as": "admin",
+        "body": {},
+        "expect": {
+          "status": 409
+        }
+      }
+    ],
+    "rows": ["app.task_lists"]
+  },
+  {
+    "name": "verticals 890: rename tag, duplicate 409, missing 404",
+    "source": "tasks-verticals.test.ts:890 renameTag renames, rejects duplicates (409), and 404s a foreign/missing tag",
+    "steps": [
+      {
+        "id": "list",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Tag Rename List"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "orig",
+        "method": "POST",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}/tags",
+        "as": "A",
+        "body": {
+          "name": "tag-rename-src"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "other",
+        "method": "POST",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}/tags",
+        "as": "A",
+        "body": {
+          "name": "tag-rename-other"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "ok",
+        "method": "PATCH",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}/tags/{{orig:/body/tag/id}}",
+        "as": "A",
+        "body": {
+          "name": "tag-rename-dst"
+        },
+        "expect": {
+          "body": {
+            "tag": {
+              "name": "tag-rename-dst"
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "dup",
+        "method": "PATCH",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}/tags/{{orig:/body/tag/id}}",
+        "as": "A",
+        "body": {
+          "name": "tag-rename-other"
+        },
+        "expect": {
+          "status": 409
+        }
+      },
+      {
+        "id": "missing",
+        "method": "PATCH",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}/tags/00000000-0000-0000-0000-000000000000",
+        "as": "A",
+        "body": {
+          "name": "whatever"
+        },
+        "expect": {
+          "status": 404
+        }
+      }
+    ],
+    "rows": ["app.task_tags"]
+  },
+  {
+    "name": "verticals 926: deleting a tag removes its assignments",
+    "source": "tasks-verticals.test.ts:926 deleteTag removes the tag and cascades its assignment rows",
+    "steps": [
+      {
+        "id": "list",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Tag Delete List"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "tag",
+        "method": "POST",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}/tags",
+        "as": "A",
+        "body": {
+          "name": "delete-me"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "t",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "tagged",
+          "listId": "{{list:/body/list/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "assign",
+        "method": "POST",
+        "path": "/api/tasks/{{t:/body/task/id}}/tags",
+        "as": "A",
+        "body": {
+          "tagId": "{{tag:/body/tag/id}}"
+        },
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "del",
+        "method": "DELETE",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}/tags/{{tag:/body/tag/id}}",
+        "as": "A",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "tag gone",
+        "sql": "select count(*)::int as n from app.task_tags where id = '{{tag:/body/tag/id}}'",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      },
+      {
+        "id": "tags",
+        "method": "GET",
+        "path": "/api/tasks/{{t:/body/task/id}}",
+        "as": "A",
+        "expect": {
+          "body": {
+            "task": {
+              "tags": []
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "assignments gone",
+        "sql": "select count(*)::int as n from app.task_tag_assignments",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      }
+    ],
+    "rows": ["app.task_tags", "app.task_tag_assignments"]
+  },
+  {
+    "name": "verticals 958: deleting a missing tag is 404",
+    "source": "tasks-verticals.test.ts:958 deleteTag 404s a foreign/missing tag",
+    "steps": [
+      {
+        "id": "list",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Tag Delete 404 List"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "del",
+        "method": "DELETE",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}/tags/00000000-0000-0000-0000-000000000000",
+        "as": "A",
+        "expect": {
+          "status": 404
+        }
+      }
+    ],
+    "rows": ["app.task_tags"]
+  },
+  {
+    "name": "verticals 314: at-risk keeps Medium and above only",
+    "source": "tasks-verticals.test.ts:314 drift: overdue + at-risk surface Medium+ only; focus orders them",
+    "steps": [
+      {
+        "id": "crit",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "overdue-critical",
+          "priority": 5,
+          "dueAt": "2000-01-01T00:00:00.000Z"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "some",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "overdue-someday",
+          "priority": 1,
+          "dueAt": "2000-01-02T00:00:00.000Z"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "overdue",
+        "method": "GET",
+        "path": "/api/tasks/overdue",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "title": "overdue-critical"
+              },
+              {
+                "title": "overdue-someday"
+              }
+            ]
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "risk",
+        "method": "GET",
+        "path": "/api/tasks/at-risk",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "title": "overdue-critical"
+              }
+            ]
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "focus",
+        "method": "GET",
+        "path": "/api/tasks/focus",
+        "as": "A",
+        "expect": {
+          "status": 200
+        }
+      }
+    ],
+    "note": "Read through the drift routes. Overdue has no priority filter (both tasks show); at-risk drops the Someday task, which is what the test asserts. The test does not assert the focus order, so the case only compares both servers' focus answers."
+  },
+  {
+    "name": "verticals 241: the worker role may insert and update tasks, nothing more",
+    "source": "tasks-verticals.test.ts:241 jarvis_worker_runtime holds INSERT and UPDATE on app.tasks (recurrence grant)",
+    "seed": [
+      "insert into app.task_lists (id, owner_user_id, name) values ('20000000-0000-4000-8000-000000000001','{{userA}}','Personal')",
+      "insert into app.tasks (id, owner_user_id, title, status, list_id) values ('30000000-0000-4000-8000-000000000001','{{userA}}','User A seeded private task','todo','20000000-0000-4000-8000-000000000001')"
+    ],
+    "steps": [
+      {
+        "id": "grants",
+        "sql": "select has_table_privilege('jarvis_worker_runtime','app.tasks','INSERT') as can_insert, has_table_privilege('jarvis_worker_runtime','app.tasks','UPDATE') as can_update, has_table_privilege('jarvis_worker_runtime','app.tasks','TRUNCATE') as can_truncate",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "can_insert": true,
+              "can_update": true,
+              "can_truncate": false
+            }
+          ]
+        }
+      },
+      {
+        "id": "worker inserts for its actor",
+        "sql": "insert into app.tasks (id, owner_user_id, title, list_id) select gen_random_uuid(), '{{userA}}', 'worker made', id from app.task_lists limit 1",
+        "as": "A",
+        "role": "worker",
+        "expect": {
+          "affected": [1]
+        }
+      },
+      {
+        "id": "worker updates own",
+        "sql": "update app.tasks set title = 'worker renamed'",
+        "as": "A",
+        "role": "worker",
+        "expect": {
+          "affected": [1]
+        }
+      },
+      {
+        "id": "negative control: worker updates as a stranger",
+        "sql": "update app.tasks set title = 'taken'",
+        "as": "B",
+        "role": "worker",
+        "expect": {
+          "affected": [0]
+        }
+      }
+    ],
+    "note": "The test reads the grant table as the superuser. The case asks the same question with has_table_privilege and adds real worker-role writes with a stranger control."
+  }
+]
