@@ -21,6 +21,45 @@ function calendarEvent(id: string) {
 }
 
 describe("runGoogleSync calendar orchestration", () => {
+  it("stores attendee display names, not emails, in synced event metadata (4020)", async () => {
+    const accountId = await seedGoogleAccount(handles.dataContext, [
+      "https://www.googleapis.com/auth/calendar"
+    ]);
+    const ctx = { actorUserId: ids.userA, requestId: "pgboss:test-attendee-names" };
+    const attendees = [
+      { email: "me@x.test", displayName: "Me Owner", self: true },
+      { email: "ann@x.test", displayName: "Ann Lee" },
+      { email: "silent@x.test" },
+      ...Array.from({ length: 25 }, (_, i) => ({
+        email: `p${i}@x.test`,
+        displayName: `Guest ${i}`
+      }))
+    ];
+    await handles.workerDataContext.withDataContext(ctx, (db) =>
+      runGoogleSync(db, {
+        getFreshAccessToken: async () => "tok",
+        getActiveAccount: async () => ({ id: accountId, scopes: ["calendar"] }),
+        googleClient: {
+          listCalendarEvents: async () => [{ ...calendarEvent("with-attendees"), attendees }],
+          listMessageIds: async () => [],
+          getMessage: async () => ({ id: "x" })
+        },
+        emailExtractDeps: { runChat: async () => ({ text: "" }) },
+        now: () => new Date("2026-08-01T12:00:00.000Z")
+      })
+    );
+    const rows = await handles.dataContext.withDataContext(ctx, (db) =>
+      new CalendarRepository().listVisible(db, { ownedByActor: true })
+    );
+    const row = rows.find((r) => r.title === "with-attendees")!;
+    const meta = row.external_metadata as { attendeeNames: string[]; attendeeCount: number };
+    expect(meta.attendeeCount).toBe(28);
+    expect(meta.attendeeNames).toHaveLength(20);
+    expect(meta.attendeeNames[0]).toBe("Ann Lee");
+    expect(meta.attendeeNames).not.toContain("Me Owner");
+    expect(JSON.stringify(meta.attendeeNames)).not.toContain("@");
+  });
+
   it("continues every calendar page before stale reconciliation", async () => {
     const accountId = await seedGoogleAccount(handles.dataContext, [
       "https://www.googleapis.com/auth/calendar"
