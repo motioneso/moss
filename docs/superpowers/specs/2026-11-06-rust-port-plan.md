@@ -25,9 +25,12 @@ What it will take:
 - **What carries over.** The database design and its privacy rules, the stored data, the look and
   feel (colours, type, spacing), and the way the app talks to its phone and Mac companions all
   stay. The program code does not.
-- **Privacy on a desktop.** A desktop install serves one account until Moss can stop one person's
-  chat agent reading another person's files on the same computer. Households share Moss through a
-  server install until then.
+- **One product, several accounts.** Desktop and server are the same program and the same build.
+  They differ only in where Moss runs and how people reach it. Every install supports several
+  accounts. On a normal desktop all accounts share one operating-system user, so a determined
+  account holder or a chat agent may be able to read another account's files. Moss applies every
+  restriction it can, says so in plain words when a second account is added, and leaves the rest to
+  trust among the people sharing the install (Ben, 2026-11-06).
 - **What is and is not encrypted.** Connection passwords and AI keys stay encrypted, with the key
   held by the operating system's keychain on desktop. The main database and the notes folder are not
   encrypted by Moss today, and the rewrite does not change that unless the disk itself is encrypted.
@@ -51,9 +54,13 @@ What it will take:
 | Server          | Fastify API, pg-boss worker, CLI-runner sidecar, scripts | One Rust program with internal services: web server, job runner, agent runner, migrator |
 | Screens         | React 19 app built by Vite, served as static files       | Rust UI compiled to WebAssembly, served by the same program to any browser              |
 | Desktop         | None (browser only)                                      | Rust desktop shell (tray, window, start at login) that opens the same UI                |
-| Database        | Postgres with pgvector in Docker                         | Same Postgres and pgvector, bundled and managed by Moss on desktop (see 3.2)            |
+| Database        | Postgres with pgvector in Docker                         | Same Postgres and pgvector, bundled and managed by Moss on every install (see 3.2)      |
 | Add-on modules  | Node processes over JSON-RPC, React bundles in the host  | WebAssembly components with the same host ports, UI in a sandboxed frame (see 3.4)      |
 | Server installs | Docker Compose                                           | Same program as a Linux service or a Docker image                                       |
+
+Desktop and server are one product and the same build. They differ only in where Moss runs and
+how people reach it, which is this computer only, the home network, or the internet. The companion
+doc sets those reach settings and what each requires.
 
 The UI stays a browser UI on purpose. Phones and other household devices reach Moss through a
 browser today, and a native-only toolkit would remove that. Compiling a Rust UI to WebAssembly keeps
@@ -155,9 +162,10 @@ database and the vault folder are plain files on disk today. The keys that matte
 plan claims protection at rest for the database or vault only where the OS disk encryption is
 verified on, or after a tested encrypted-storage design, before general release.
 
-On a Linux server, an owner who picks the server profile at setup may keep keys in a `0600` file
-readable only by the service account, outside the data and export folders. That file is never an
-automatic fallback when a desktop keychain fails. Details are in the companion doc.
+On a Linux machine with no keychain session, an owner who chooses the headless key file at setup
+may keep keys in a `0600` file readable only by the service account, outside the data and export
+folders. That file is never an automatic fallback when a keychain fails. Details are in the
+companion doc.
 
 ### 3.2 Database
 
@@ -165,12 +173,12 @@ Postgres with pgvector and RLS is the security model. 633 policies, 93 security-
 and four locked-down roles carry the privacy guarantees. The desktop question is how to get that
 database onto a Windows or Mac machine.
 
-| Option                               | Keeps RLS and roles                    | Keeps migrations and data          | Desktop cost                                                     | Verdict                        |
-| ------------------------------------ | -------------------------------------- | ---------------------------------- | ---------------------------------------------------------------- | ------------------------------ |
-| Bundled Postgres plus pgvector       | Yes, unchanged                         | Yes, same files, same dump format  | Ship and manage a Postgres per OS, sign its files                | **Recommended**                |
-| Embedded Postgres-compatible engine  | Partly; RLS and extension support vary | Unproven for 84 PL/pgSQL functions | Smaller, but every policy needs re-proof                         | Reject                         |
-| SQLite with a new isolation model    | No; SQLite has no RLS or roles         | No; every SQL file rewritten       | Smallest, but the privacy model must be redesigned and re-proven | Reject                         |
-| Desktop as a thin client to a server | Yes                                    | Yes                                | No local database                                                | Fallback only if Phase 1 fails |
+| Option                                       | Keeps RLS and roles                    | Keeps migrations and data          | Desktop cost                                                     | Verdict                        |
+| -------------------------------------------- | -------------------------------------- | ---------------------------------- | ---------------------------------------------------------------- | ------------------------------ |
+| Bundled Postgres plus pgvector               | Yes, unchanged                         | Yes, same files, same dump format  | Ship and manage a Postgres per OS, sign its files                | **Recommended**                |
+| Embedded Postgres-compatible engine          | Partly; RLS and extension support vary | Unproven for 84 PL/pgSQL functions | Smaller, but every policy needs re-proof                         | Reject                         |
+| SQLite with a new isolation model            | No; SQLite has no RLS or roles         | No; every SQL file rewritten       | Smallest, but the privacy model must be redesigned and re-proven | Reject                         |
+| Thin client to an install on another machine | Yes                                    | Yes                                | No local database                                                | Fallback only if Phase 1 fails |
 
 Recommendation: bundle Postgres and pgvector on every OS. The deferred desktop plan reached the
 same answer (`docs/superpowers/plans/2026-09-05-moss-desktop-install.md`, "Postgres stays"), and so
@@ -249,7 +257,7 @@ exist only through the host. This is a security gain over today.
 Credentials change shape. Today `ctx.auth.getCredential` hands the module the plaintext secret.
 Because every module is rebuilt anyway, the new interface defaults to brokered requests instead.
 The module asks the host to make a request with a named credential attached, and never sees the
-secret. A plaintext port exists only if a real module proves it needs one (decision 7.12).
+secret. A plaintext port exists only if a real module proves it needs one (decision 7.11).
 
 The database port is the one a module could abuse. A module that can send `SET ROLE` or set
 `app.actor_user_id` could act as another user. Today a lexer allowlist blocks that
@@ -279,15 +287,21 @@ sits in its own container with a secret handshake over a `0600` Unix socket (ADR
 - **Isolation.** The sidecar boundary becomes a separate runner process with the same rules: no
   database URLs, no auth secret, no vault, a secret hello on every connection. Named pipes replace
   the Unix socket on Windows.
-- **Desktop is one account until containment is proven.** Production runs each account's agent
-  as its own OS user by default (`JARVIS_CLI_PER_USER_UID=1`, `infra/env.production.example:142-146`,
-  `infra/docker-compose.prod.yml:166`). That needs Linux and the right to switch users, so it stays
-  on Linux servers. On a desktop, every agent would run as the same OS user. An agent can then read
-  a sibling account's folders and the key store, whatever RLS says, because RLS guards the database
-  only. So a desktop install serves one account. A second account on desktop needs a proven
-  per-OS containment of the agent, and Phase 3's gate fails rather than ship that downgrade. The
-  deferred desktop plan called shared-user isolation "matching the production default"
-  (`docs/superpowers/plans/2026-09-05-moss-desktop-install.md:1042-1043`), which is no longer true.
+- **Several accounts on one install.** Production runs each account's agent as its own OS user by
+  default (`JARVIS_CLI_PER_USER_UID=1`, `infra/env.production.example:142-146`,
+  `infra/docker-compose.prod.yml:166`). That needs the right to switch users, which a Linux service
+  can be granted and a normal desktop install cannot. Every install supports several accounts either
+  way (Ben, 2026-11-06). Where all agents run as one OS user, RLS still guards every query, but it
+  guards the database only. A determined account holder, or an agent running as that user, may be
+  able to read another account's folders, database files and key store. Moss applies every
+  restriction it can: privacy rules on every query, a separate owner-only folder per account,
+  secrets kept out of agent reach, and one agent process per account, confined to its own folders
+  where the OS can enforce it. The rest is trust among the people sharing the install, and Moss says
+  so in plain words when a second account is added. The companion doc owns these rules, a table of
+  what does and does not hold per property, the notice, and how accounts are created, removed and
+  administered. The deferred desktop plan called shared-user isolation "matching the production
+  default" (`docs/superpowers/plans/2026-09-05-moss-desktop-install.md:1042-1043`), which is not
+  true.
 - **Agent sandboxes vary.** Codex's own sandbox differs per OS (`docs/native-command-sandbox.md`
   covers Linux only). The plan records what each agent gives on each OS rather than claiming one.
 
@@ -327,12 +341,15 @@ code, so invented classes stay caught.
 
 ### 3.8 Installers and auto-update
 
-| System        | Package                                             | Updates                           | Runs as                              |
-| ------------- | --------------------------------------------------- | --------------------------------- | ------------------------------------ |
-| Windows       | Per-user installer, no admin needed for Postgres    | Signed in-app updater             | Tray app; optional login item        |
-| macOS         | Signed, notarized app in a disk image               | Signed in-app updater             | Tray app; optional login item        |
-| Linux desktop | AppImage, plus .deb and .rpm                        | In-app updater or package manager | Tray app; optional systemd user unit |
-| Linux server  | Single binary plus systemd unit, and a Docker image | Package or image tag              | System service or container          |
+| System           | Package                                                          | Updates                           | Runs as                              |
+| ---------------- | ---------------------------------------------------------------- | --------------------------------- | ------------------------------------ |
+| Windows          | Per-user installer, no admin needed for Postgres                 | Signed in-app updater             | Tray app; optional login item        |
+| macOS            | Signed, notarized app in a disk image                            | Signed in-app updater             | Tray app; optional login item        |
+| Linux desktop    | AppImage, plus .deb and .rpm                                     | In-app updater or package manager | Tray app; optional systemd user unit |
+| Linux, no screen | The same build as a package plus systemd unit, or a Docker image | Package or image tag              | System service or container          |
+
+Every row is the same build. Running Moss as a tray app or as a system service on a machine with no
+screen is a hosting choice, not a separate product.
 
 Every update takes an encrypted snapshot first (database dump and vault, with keys in their own
 wrapped bundle) and migrates a staged copy. The
@@ -362,16 +379,16 @@ Phase 7 fresh-machine gate picks whichever packages install with clicks only.
 
 ### 3.10 Windows, Mac and Linux differences
 
-| Area               | Windows                                      | macOS                                 | Linux                                                       |
-| ------------------ | -------------------------------------------- | ------------------------------------- | ----------------------------------------------------------- |
-| Data folder        | `%LOCALAPPDATA%\Moss` (not roaming)          | `~/Library/Application Support/Moss`  | `$XDG_DATA_HOME/moss`                                       |
-| Local IPC          | Named pipes                                  | Unix socket                           | Unix socket                                                 |
-| Background service | Login item or Windows service                | LaunchAgent                           | systemd user unit                                           |
-| Terminals for chat | ConPTY                                       | pty                                   | pty, tmux optional                                          |
-| File names         | Case-insensitive, reserved names, long paths | Usually case-insensitive              | Case-sensitive                                              |
-| Open-file rules    | Open files cannot be deleted or replaced     | Normal                                | Normal                                                      |
-| Process sandbox    | Job objects; AppContainer is limited         | App sandbox off for a server-like app | bubblewrap, Landlock                                        |
-| Keys               | DPAPI-wrapped store                          | Keychain                              | Secret Service, with a server-mode file (see companion doc) |
+| Area               | Windows                                      | macOS                                 | Linux                                                      |
+| ------------------ | -------------------------------------------- | ------------------------------------- | ---------------------------------------------------------- |
+| Data folder        | `%LOCALAPPDATA%\Moss` (not roaming)          | `~/Library/Application Support/Moss`  | `$XDG_DATA_HOME/moss`                                      |
+| Local IPC          | Named pipes                                  | Unix socket                           | Unix socket                                                |
+| Background service | Login item or Windows service                | LaunchAgent                           | systemd user unit                                          |
+| Terminals for chat | ConPTY                                       | pty                                   | pty, tmux optional                                         |
+| File names         | Case-insensitive, reserved names, long paths | Usually case-insensitive              | Case-sensitive                                             |
+| Open-file rules    | Open files cannot be deleted or replaced     | Normal                                | Normal                                                     |
+| Process sandbox    | Job objects; AppContainer is limited         | App sandbox off for a server-like app | bubblewrap, Landlock                                       |
+| Keys               | DPAPI-wrapped store                          | Keychain                              | Secret Service, or a headless key file (see companion doc) |
 
 Two of these change behaviour, not just paths:
 
@@ -390,8 +407,8 @@ Two of these change behaviour, not just paths:
   overwrite.
 - **Sports renderer.** Uses a headless Chromium launched by Playwright (`Dockerfile`). Rust drives
   Chromium over its debugging protocol, downloaded on demand.
-- **Moss Computer.** The persistent desktop work assumes a Linux server. It stays Linux-server
-  only until a separate spec says otherwise.
+- **Moss Computer.** The persistent desktop work assumes a Linux host set up for it. It stays
+  Linux-only until a separate spec says otherwise.
 - **Meetings capture and transcription.** The companion apps keep the same API. Desktop recording
   needs microphone permission (3.9).
 
@@ -421,13 +438,13 @@ Every move, server installs and Ben's prod included, works on a copy. The origin
    new SQL files. Any unknown file or key blocks the move.
 5. Run the parity checks (sign-in, chat, one read per module, one job per queue kind).
 
-Moving from Docker to a desktop install uses the same snapshot, restored into the bundled Postgres
-by an import screen. Keys move in their own wrapped recovery package, never inside the plain
-snapshot. They are never re-generated, because a new key cannot read the old ciphertext.
+Moving from Docker to an install on another computer uses the same snapshot, restored into the
+bundled Postgres by an import screen. Keys move in their own wrapped recovery package, never inside
+the plain snapshot. They are never re-generated, because a new key cannot read the old ciphertext.
 
-A source with more than one account cannot import into a desktop install until desktop containment
-is proven (3.5). The import screen offers a server install, or a desktop that connects to the
-existing server, and never drops the other accounts.
+A source with several accounts imports whole into any install, and no account is dropped. If the
+destination runs every agent as one OS user, the import screen shows the shared-install notice
+(3.5) before the owner approves the move, and every imported account sees it at first sign-in.
 
 ### 4.3 Rolling back
 
@@ -503,8 +520,8 @@ converted tests.
   protection at rest only when verified (companion doc).
 
 **Kill gate.** If pgvector cannot load under macOS notarization, or Postgres cannot run as a normal
-Windows user, desktop installs become a thin client to a server, and the plan is re-cut before
-Phase 7.
+Windows user, installs on that OS become a thin client to an install on another machine, and the
+plan is re-cut before Phase 7.
 
 ### Phase 2: core platform (L)
 
@@ -522,11 +539,15 @@ starting.
 
 - Runner process, terminal layer, agent protocol client, the Moss tool gateway, approvals and the
   classifier.
+- One agent process per account, OS confinement where each OS allows it, and the shared-install
+  notice (companion doc).
 
 **Kill gate.** First check whether Claude, Codex and OpenCode can each be driven from Rust without
 Moss shipping Node. Then live chat with tools runs on all three systems. If an agent needs Node,
-Ben decides whether Moss downloads it (decision 7.5). A desktop second account stays off unless a
-test shows one account's agent cannot read another account's folders or keys on that OS.
+Ben decides whether Moss downloads it (decision 7.5). On each OS, the gate records which agent
+confinement holds when accounts share one OS user, each result with a negative control. A missing
+confinement does not block several accounts, but a notice that claims more than was proven fails
+the gate.
 
 ### Phase 4: UI shell and design system (L)
 
@@ -555,7 +576,7 @@ express what finance needs, redesign it before rebuilding meals.
 ### Phase 7: installers, signing, updates, backup (L)
 
 - Per-OS packages, signing, signed updates, start at login, LAN sharing prompt, backup and restore,
-  the Docker-to-desktop import screen.
+  the import screen for existing Docker installs.
 
 **Kill gate.** A clean install on a fresh machine on each OS, using clicks only, starts, signs in,
 opens Today, and backs up and restores. A failed update on each OS falls back to the old cluster.
@@ -580,18 +601,18 @@ passes.
 
 ## 6. Risks
 
-| Risk                                               | Why it matters                                               | Mitigation                                             |
-| -------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------ |
-| The old app keeps moving                           | Parity is a moving target; the rewrite never catches up      | Feature freeze from Phase 2 (decision 7.1)             |
-| Tests do not carry over                            | 500 of 538 integration files call TypeScript code directly   | New parity harness; Phase 0 measures its cost          |
-| Security drift during rewrite                      | A missed RLS context or a leaked secret is a privacy failure | 3.1 build checks; Phase 2 kill gate; same SQL policies |
-| Module ecosystem breaks                            | Installed modules and Workshop output stop working           | Phase 6; no outside modules known                      |
-| Signing and notarization fail for bundled Postgres | No Mac desktop install                                       | Phase 1 tests it first                                 |
-| Agents need Node anyway                            | "No Node" is not fully true                                  | Phase 3 check; download per agent, outside Moss        |
-| Embedding vectors differ                           | Search quality drops until re-computed                       | Compare vectors; keep old ones; owner-started re-embed |
-| Desktop privacy between accounts                   | Agents share one OS user and can read sibling files          | One account per desktop until containment passes       |
-| UI framework maturity                              | Fewer ready-made parts than React                            | Pick in Phase 0 by building a real screen              |
-| Two codebases at once                              | Fixes must land twice until cutover                          | Freeze; keep the gap short by not shipping Rust early  |
+| Risk                                               | Why it matters                                               | Mitigation                                                            |
+| -------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------- |
+| The old app keeps moving                           | Parity is a moving target; the rewrite never catches up      | Feature freeze from Phase 2 (decision 7.1)                            |
+| Tests do not carry over                            | 500 of 538 integration files call TypeScript code directly   | New parity harness; Phase 0 measures its cost                         |
+| Security drift during rewrite                      | A missed RLS context or a leaked secret is a privacy failure | 3.1 build checks; Phase 2 kill gate; same SQL policies                |
+| Module ecosystem breaks                            | Installed modules and Workshop output stop working           | Phase 6; no outside modules known                                     |
+| Signing and notarization fail for bundled Postgres | No Mac desktop install                                       | Phase 1 tests it first                                                |
+| Agents need Node anyway                            | "No Node" is not fully true                                  | Phase 3 check; download per agent, outside Moss                       |
+| Embedding vectors differ                           | Search quality drops until re-computed                       | Compare vectors; keep old ones; owner-started re-embed                |
+| Privacy between accounts on one OS user            | An account holder or agent may read sibling files            | Every achievable restriction; Phase 3 confinement tests; plain notice |
+| UI framework maturity                              | Fewer ready-made parts than React                            | Pick in Phase 0 by building a real screen                             |
+| Two codebases at once                              | Fixes must land twice until cutover                          | Freeze; keep the gap short by not shipping Rust early                 |
 
 This would be a bad idea if:
 
@@ -621,9 +642,13 @@ Rust is never shipped to users before Phase 8, so a stop never leaves people on 
 | 7.4  | Add-on module format?                                      | WebAssembly components                                   | Real sandbox, one format on three systems                                                                             |
 | 7.5  | If an agent needs Node, download it for that agent?        | Yes, pinned, outside the Moss process                    | Keeps chat working without Moss itself depending on Node                                                              |
 | 7.6  | Who buys and holds the Apple and Windows signing accounts? | Ben, or a company he names, before Phase 1's Mac check   | Notarization cannot be tested without one                                                                             |
-| 7.7  | Platform order                                             | Linux server, then macOS, then Windows                   | Ben's prod is Linux; Windows has the most unknowns                                                                    |
+| 7.7  | Platform order                                             | Linux, then macOS, then Windows                          | Ben's prod is Linux; Windows has the most unknowns                                                                    |
 | 7.8  | Accept one fresh sign-in for everyone at cutover?          | Yes, as fallback; try to keep sessions                   | Session tokens are tied to better-auth; passwords and data carry over; an unreadable hash uses verified self-recovery |
 | 7.9  | How long does the old app get security fixes?              | Two supported Rust releases and 90 days, whichever later | Gives people who do nothing a safe, countable window                                                                  |
-| 7.10 | Desktop installs with several accounts?                    | No; one account per desktop until containment is proven  | On one OS user, agents can read each other's files despite RLS; households use a server install                       |
-| 7.11 | UI framework                                               | Decide in Phase 0 between Leptos and Dioxus              | Choose by building a real screen, not by reading                                                                      |
-| 7.12 | Do modules ever get a plaintext credential?                | No by default; brokered requests only                    | Modules are rebuilt anyway; a plaintext port only if a real module proves it needs one                                |
+| 7.10 | UI framework                                               | Decide in Phase 0 between Leptos and Dioxus              | Choose by building a real screen, not by reading                                                                      |
+| 7.11 | Do modules ever get a plaintext credential?                | No by default; brokered requests only                    | Modules are rebuilt anyway; a plaintext port only if a real module proves it needs one                                |
+
+The first version of this plan listed a fork 7.10, "Desktop installs with several accounts?", with
+the answer one account per desktop until containment is proven. Ben decided it the other way on
+2026-11-06. Every install supports several accounts, and desktop and server are one product. Section
+3.5 and the companion doc carry the result. The two forks after it moved up one number.
