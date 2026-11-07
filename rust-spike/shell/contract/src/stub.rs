@@ -23,7 +23,12 @@ impl Default for StubShellData {
 }
 
 fn link(path: &str, label: &str, icon: &str) -> NavLink {
-    NavLink { path: path.into(), label: label.into(), icon: icon.into(), unread: 0 }
+    NavLink {
+        path: path.into(),
+        label: label.into(),
+        icon: icon.into(),
+        unread: 0,
+    }
 }
 
 fn greeting() -> &'static str {
@@ -38,7 +43,10 @@ impl ShellData for StubShellData {
     fn shell(&self) -> ShellView {
         ShellView {
             assistant_name: "Moss".into(),
-            account: Account { display_name: "Sam Rivera".into(), unread_notifications: 2 },
+            account: Account {
+                display_name: "Sam Rivera".into(),
+                unread_notifications: 2,
+            },
             nav: vec![
                 NavSection {
                     label: None,
@@ -113,12 +121,16 @@ impl ShellData for StubShellData {
                     QuickAction {
                         label: "Medications".into(),
                         sub: None,
-                        control: QuickActionControl::Add { label: "Log medication".into() },
+                        control: QuickActionControl::Add {
+                            label: "Log medication".into(),
+                        },
                     },
                     QuickAction {
                         label: "Mood check-in".into(),
                         sub: Some("Record how you feel.".into()),
-                        control: QuickActionControl::Button { text: "Check in".into() },
+                        control: QuickActionControl::Button {
+                            text: "Check in".into(),
+                        },
                     },
                 ],
             }),

@@ -36,15 +36,16 @@ fn Today(view: TodayView) -> impl IntoView {
             {has_actions.then(|| view! { <a href="#needs-you">"Quick actions"</a> })}
         </nav>
         <div class="cmd-wrap">
-            <div class="cmd-grid">
+            <div class="cmd-grid" data-mode="day">
                 {view.quick_actions.map(|group| view! { <QuickActions group=group /> })}
                 <div class="cmd-main">
                     <Timeline slots=view.timeline closing=view.timeline_closing />
                     {view.quiet_line.map(|line| view! {
-                        <section class="today-quiet-line" aria-label="Your day so far">
+                        <section class="today-quiet-line" id="start-here" aria-label="Your day so far">
                             <p class="cmd-empty today-quiet-line__text" role="status">{line}</p>
                         </section>
                     })}
+                    <div id="needs-you"></div>
                 </div>
                 <aside class="cmd-aside" aria-label="Today widgets">
                     <div class="cmd-aside__inner"></div>
@@ -57,17 +58,17 @@ fn Today(view: TodayView) -> impl IntoView {
 #[component]
 fn Hero(hero: TodayHero) -> impl IntoView {
     view! {
-        <section class="today-hero">
+        <section class="today-hero" data-mode="day">
             <p class="jds-eyebrow jds-eyebrow--strong jds-eyebrow--hero today-hero__eyebrow">{hero.greeting}</p>
             <h1 class="today-hero__title">
                 <span>{hero.headline}</span>
                 " "
                 <span class="today-hero__accent">{hero.headline_accent}</span>
             </h1>
-            <div class="today-hero__summary"><span>{hero.summary}</span></div>
+            <div class="today-hero__summary" id="assessment"><span>{hero.summary}</span></div>
             <hr class="today-hero__hairline" />
             {hero.weather_note.map(|note| view! {
-                <div class="today-hero__weather">
+                <div class="today-hero__weather" id="weather">
                     <p class="cmd-empty" role="status">{note} " " <a href="/settings?section=profile">"Weather settings"</a></p>
                 </div>
             })}
@@ -81,7 +82,7 @@ fn Hero(hero: TodayHero) -> impl IntoView {
 #[component]
 fn QuickActions(group: QuickActionGroup) -> impl IntoView {
     view! {
-        <section class="cmd-dock" id="needs-you" aria-label="Quick actions">
+        <section class="cmd-dock" aria-label="Quick actions">
             <div class="well">
                 <div class="well__head">
                     <span class="jds-eyebrow jds-eyebrow--strong jds-eyebrow--accent well__eyebrow">"Quick actions"</span>
@@ -111,7 +112,7 @@ fn QuickActions(group: QuickActionGroup) -> impl IntoView {
 #[component]
 fn Timeline(slots: Vec<TimelineSlot>, closing: Option<String>) -> impl IntoView {
     view! {
-        <section class="jds-brief jds-brief--timeline" id="start-here">
+        <section class="jds-brief jds-brief--timeline" id="schedule">
             <div class="jds-section-head jds-section-head--center tl-head">
                 <span class="jds-section-head__number">"01"</span>
                 <h2 class="jds-section-head__title tl-title">"Your day, laid out"</h2>
@@ -128,11 +129,12 @@ fn Timeline(slots: Vec<TimelineSlot>, closing: Option<String>) -> impl IntoView 
     }
 }
 
+/// Matches the current app's wording: "45 min", "90 min", "1 hour", "2 hours".
 fn length_label(minutes: u32) -> String {
-    match (minutes / 60, minutes % 60) {
-        (0, m) => format!("{m} min"),
-        (h, 0) => format!("{h} hr"),
-        (h, m) => format!("{h} hr {m} min"),
+    match minutes {
+        m if m % 60 != 0 => format!("{m} min"),
+        60 => "1 hour".into(),
+        m => format!("{} hours", m / 60),
     }
 }
 

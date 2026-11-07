@@ -80,7 +80,11 @@ pub fn ChatDrawer(
         send_error.set(None);
         waiting.set(true);
         messages.update(|m| {
-            m.push(ChatMessage { id: format!("local-{}", m.len()), role: ChatRole::User, text: text.clone() })
+            m.push(ChatMessage {
+                id: format!("local-{}", m.len()),
+                role: ChatRole::User,
+                text: text.clone(),
+            })
         });
         spawn_local(async move {
             match api::send_message(text).await {
@@ -92,7 +96,10 @@ pub fn ChatDrawer(
     };
 
     let status = move || {
-        thread.get().map(|t| t.status).unwrap_or_else(|| "Here when you need me".into())
+        thread
+            .get()
+            .map(|t| t.status)
+            .unwrap_or_else(|| "Here when you need me".into())
     };
     let model_label = move || thread.get().map(|t| t.model_label).unwrap_or_default();
     let name = assistant_name.clone();

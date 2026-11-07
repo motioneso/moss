@@ -62,7 +62,10 @@ fn media_signal(query: &'static str) -> ReadSignal<bool> {
 }
 
 fn current_path() -> String {
-    let path = window().location().pathname().unwrap_or_else(|_| "/".into());
+    let path = window()
+        .location()
+        .pathname()
+        .unwrap_or_else(|_| "/".into());
     if path == "/" || path.is_empty() {
         let _ = window().history().and_then(|h| {
             h.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some("/today"))
@@ -92,8 +95,9 @@ fn save_nav_rail(rail: bool) {
 fn today_subtitle() -> String {
     let now = js_sys::Date::new_0();
     const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const MONTHS: [&str; 12] =
-        ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const MONTHS: [&str; 12] = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
     format!(
         "{} · {} {}",
         DAYS[now.get_day() as usize],
@@ -136,8 +140,9 @@ fn Frame(shell: ShellView) -> impl IntoView {
     let chat_unread = RwSignal::new(shell.chat_unread);
 
     let dock_chat = Memo::new(move |_| wide.get());
-    let expanded =
-        Memo::new(move |_| chat_expanded_wish.get() && dock_chat.get() && chat_open.get() && !phone.get());
+    let expanded = Memo::new(move |_| {
+        chat_expanded_wish.get() && dock_chat.get() && chat_open.get() && !phone.get()
+    });
 
     let on_pop = Closure::<dyn Fn()>::new(move || path.set(current_path()));
     window().set_onpopstate(Some(on_pop.as_ref().unchecked_ref()));
@@ -172,7 +177,11 @@ fn Frame(shell: ShellView) -> impl IntoView {
             .unwrap_or_else(|| "Moss".into())
     };
     let subtitle = move || {
-        let mut text = if path.get() == "/today" { today_subtitle() } else { String::new() };
+        let mut text = if path.get() == "/today" {
+            today_subtitle()
+        } else {
+            String::new()
+        };
         if shell.sample_data {
             if !text.is_empty() {
                 text.push_str(" · ");
@@ -185,11 +194,19 @@ fn Frame(shell: ShellView) -> impl IntoView {
     let chat_label = format!("Chat with {assistant_name}");
     let account = shell.account.clone();
     let account_label = if account.unread_notifications > 0 {
-        format!("Account menu, {} unread notifications", account.unread_notifications)
+        format!(
+            "Account menu, {} unread notifications",
+            account.unread_notifications
+        )
     } else {
         "Account menu".to_string()
     };
-    let initial = account.display_name.chars().next().unwrap_or('?').to_string();
+    let initial = account
+        .display_name
+        .chars()
+        .next()
+        .unwrap_or('?')
+        .to_string();
 
     let on_toggle_chat = move |_| {
         if chat_open.get_untracked() {

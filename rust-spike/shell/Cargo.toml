@@ -13,7 +13,7 @@ opt-level = "z"
 lto = true
 codegen-units = 1
 panic = "abort"
-strip = "debuginfo"
+strip = true
 
 # The server and desktop shell favour speed over size.
 [profile.release.package.moss-shell]

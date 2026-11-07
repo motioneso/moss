@@ -1,10 +1,10 @@
 //! Icon paths copied from the lucide set the current app ships (lucide-react), and the Moss brand mark.
 
 /// Brand mark. Attributes: viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true"
-
 pub const BRAND_MARK: &str = r##"<rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor"></rect><rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="var(--gold)"></rect><rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="currentColor"></rect>"##;
 
-pub const CHEVRONS_LEFT: &str = r##"<path d="m11 17-5-5 5-5"></path><path d="m18 17-5-5 5-5"></path>"##;
+pub const CHEVRONS_LEFT: &str =
+    r##"<path d="m11 17-5-5 5-5"></path><path d="m18 17-5-5 5-5"></path>"##;
 
 pub const HOUSE: &str = r##"<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>"##;
 
@@ -26,7 +26,8 @@ pub const CHEVRON_UP: &str = r##"<path d="m18 15-6-6-6 6"></path>"##;
 
 pub const MENU: &str = r##"<line x1="4" x2="20" y1="12" y2="12"></line><line x1="4" x2="20" y1="6" y2="6"></line><line x1="4" x2="20" y1="18" y2="18"></line>"##;
 
-pub const MESSAGE_SQUARE: &str = r##"<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>"##;
+pub const MESSAGE_SQUARE: &str =
+    r##"<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>"##;
 
 pub const ELLIPSIS: &str = r##"<circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle>"##;
 
@@ -40,7 +41,8 @@ pub const PAPERCLIP: &str = r##"<path d="M13.234 20.252 21 12.3"></path><path d=
 
 pub const ARROW_UP: &str = r##"<path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path>"##;
 
-pub const CHEVRONS_RIGHT: &str = r##"<path d="m6 17 5-5-5-5"></path><path d="m13 17 5-5-5-5"></path>"##;
+pub const CHEVRONS_RIGHT: &str =
+    r##"<path d="m6 17 5-5-5-5"></path><path d="m13 17 5-5-5-5"></path>"##;
 
 /// Lucide icon by the name the server uses in navigation entries.
 pub fn by_name(name: &str) -> &'static str {

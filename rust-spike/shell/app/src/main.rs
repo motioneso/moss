@@ -25,17 +25,25 @@ type Data = Arc<dyn ShellData>;
 fn router(data: Data, web: PathBuf) -> Router {
     let index = web.join("index.html");
     Router::new()
-        .route("/api/shell", get(|State(d): State<Data>| async move { Json::<ShellView>(d.shell()) }))
-        .route("/api/today", get(|State(d): State<Data>| async move { Json::<TodayView>(d.today()) }))
+        .route(
+            "/api/shell",
+            get(|State(d): State<Data>| async move { Json::<ShellView>(d.shell()) }),
+        )
+        .route(
+            "/api/today",
+            get(|State(d): State<Data>| async move { Json::<TodayView>(d.today()) }),
+        )
         .route(
             "/api/chat/thread",
             get(|State(d): State<Data>| async move { Json::<ChatThread>(d.chat_thread()) }),
         )
         .route(
             "/api/chat/messages",
-            post(|State(d): State<Data>, Json(body): Json<SendMessage>| async move {
-                Json::<ChatMessage>(d.send_message(&body.text))
-            }),
+            post(
+                |State(d): State<Data>, Json(body): Json<SendMessage>| async move {
+                    Json::<ChatMessage>(d.send_message(&body.text))
+                },
+            ),
         )
         // Client-side routes (/today, /tasks, ...) all load the app page.
         .fallback_service(ServeDir::new(&web).fallback(ServeFile::new(index)))
@@ -59,7 +67,12 @@ fn parse_args() -> Result<Args, String> {
         .ok()
         .and_then(|p| p.parent().map(PathBuf::from))
         .unwrap_or_default();
-    let mut args = Args { mode, host: "127.0.0.1".into(), port: 0, web: exe_dir.join("web") };
+    let mut args = Args {
+        mode,
+        host: "127.0.0.1".into(),
+        port: 0,
+        web: exe_dir.join("web"),
+    };
     while let Some(flag) = raw.next() {
         let value = raw.next().ok_or_else(|| format!("{flag} needs a value"))?;
         match flag.as_str() {
@@ -70,7 +83,10 @@ fn parse_args() -> Result<Args, String> {
         }
     }
     if !args.web.join("index.html").is_file() {
-        return Err(format!("no web build at {} (run rust-spike/shell/build.sh)", args.web.display()));
+        return Err(format!(
+            "no web build at {} (run rust-spike/shell/build.sh)",
+            args.web.display()
+        ));
     }
     Ok(args)
 }
@@ -89,8 +105,18 @@ fn main() {
     if args.mode == "serve" {
         runtime.block_on(async {
             let listener = bind(&args.host, args.port).await;
-            println!("moss-shell serving on http://{}", listener.local_addr().expect("addr"));
-            axum::serve(listener, router(data, args.web)).await.expect("server");
+            let addr = listener.local_addr().expect("addr");
+            println!("moss-shell serving on http://{addr}");
+            if !addr.ip().is_loopback() {
+                // Sign-in arrives with the core platform port; until then anyone who can
+                // reach this address sees the sample data.
+                eprintln!(
+                    "moss-shell: listening beyond this machine with no sign-in (sample data only)"
+                );
+            }
+            axum::serve(listener, router(data, args.web))
+                .await
+                .expect("server");
         });
         return;
     }
@@ -104,10 +130,12 @@ fn main() {
 }
 
 async fn bind(host: &str, port: u16) -> tokio::net::TcpListener {
-    tokio::net::TcpListener::bind((host, port)).await.unwrap_or_else(|e| {
-        eprintln!("moss-shell: cannot listen on {host}:{port}: {e}");
-        std::process::exit(1);
-    })
+    tokio::net::TcpListener::bind((host, port))
+        .await
+        .unwrap_or_else(|e| {
+            eprintln!("moss-shell: cannot listen on {host}:{port}: {e}");
+            std::process::exit(1);
+        })
 }
 
 mod desktop {
@@ -135,12 +163,18 @@ mod desktop {
         let _webview = {
             use tao::platform::unix::WindowExtUnix;
             use wry::WebViewBuilderExtUnix;
-            builder.build_gtk(window.default_vbox().expect("vbox")).expect("webview")
+            builder
+                .build_gtk(window.default_vbox().expect("vbox"))
+                .expect("webview")
         };
 
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
-            if let Event::WindowEvent { event: WindowEvent::CloseRequested, .. } = event {
+            if let Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                ..
+            } = event
+            {
                 *control_flow = ControlFlow::Exit;
             }
         });
