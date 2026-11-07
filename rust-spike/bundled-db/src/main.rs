@@ -9,7 +9,7 @@ use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
 use bundled_db::cluster::{self, Bundle, Endpoint, Listen, StopMode};
-use bundled_db::layout::Layout;
+use bundled_db::layout::{self, Layout};
 use bundled_db::{at_rest, migrate, procs, secrets, APP_DATABASE, SUPERUSER};
 use serde_json::{json, Value};
 use signal_hook::consts::{SIGCHLD, SIGHUP, SIGINT, SIGTERM};
@@ -360,24 +360,25 @@ fn vector_proof(endpoint: &Endpoint, superuser: &secrets::Secret, note: Option<&
 /// dumps. Reads only; creates nothing.
 fn at_rest_report(options: &Options) -> Result<ExitCode, String> {
     let mut paths = Vec::new();
-    let mut database_pid = None;
+    let mut database_pids = Vec::new();
     if let Some(root) = &options.root {
         paths.push(("Database folder".to_string(), root.join("db")));
         paths.push(("Logs".to_string(), root.join("logs")));
-        database_pid = std::fs::read_to_string(root.join("db").join("postmaster.pid"))
-            .ok()
-            .and_then(|text| text.lines().next()?.trim().parse::<i32>().ok())
-            .filter(|pid| procs::alive(*pid));
+        // The same data path the supervisor uses, so the cluster name matches.
+        if let Ok(root) = root.canonicalize() {
+            let data = root.join("db");
+            database_pids = procs::database_processes(&data, &layout::cluster_name(&data));
+        }
     }
     paths.extend(options.paths.iter().cloned());
     if paths.is_empty() {
         return Err("give --root or at least one --path".into());
     }
     #[cfg(target_os = "linux")]
-    let report = at_rest::linux::report(&paths, database_pid);
+    let report = at_rest::linux::report(&paths, &database_pids);
     #[cfg(target_os = "macos")]
     let report = {
-        let _ = database_pid;
+        let _ = database_pids;
         at_rest::macos::report(&paths)
     };
     emit_pretty(&report.to_json());
