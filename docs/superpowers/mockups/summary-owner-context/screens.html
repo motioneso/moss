@@ -69,7 +69,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
 <div class="page" id="root"></div>
 <script>
 var S={you:{n:'You',st:'set',w:'34%'},priya:{n:'Priya',st:'guess',w:'38%'},sam:{n:'Sam',st:'guess',w:'22%'},s3:{n:'Speaker 3',st:'unknown',w:'6%'}};
-var ST={},NM={},V='summary',PK=null,PICK='else',NEWN='Dana Reyes',OFFER=null,COPIED=false;
+var ST={},NM={},V='summary',PK=null,PICK='else',NEWN='Dana Reyes',OFFER=null,OFK=null,COPIED=false;
 var ORDER=['you','priya','sam','s3'];
 function reset(){for(var k in S)ST[k]=S[k].st;NM={};PK=null;OFFER=null;COPIED=false}
 function setView(v){reset();if(v==='correct'){PK='priya';PICK='else'}
@@ -96,8 +96,8 @@ return '<div class="pick"><div class="railhead"><span class="jds-brief__kicker">
 +(PICK==='else'?'<div class="jds-field"><label class="jds-label" for="newn">Name</label><input class="jds-input" id="newn" value="'+NEWN+'"></div>':'')
 +'<div class="btns"><button class="jds-btn jds-btn--quiet jds-btn--sm" id="cancel">Cancel</button><button class="jds-btn jds-btn--primary jds-btn--sm" id="apply">Apply to all lines</button></div></div>'}
 function offer(){if(!OFFER)return '';
-if(OFFER==='saved')return '<div class="offer"><p>'+name('priya')+' is in People.</p></div>';
-return '<div class="offer"><p>Save '+name('priya')+' as a person?</p><div class="btns" style="margin-top:0"><button class="jds-btn jds-btn--secondary jds-btn--sm" id="save">Save</button><button class="jds-btn jds-btn--quiet jds-btn--sm" id="later">Not now</button></div></div>'}
+if(OFFER==='saved')return '<div class="offer"><p>'+name(OFK)+' is in People.</p></div>';
+return '<div class="offer"><p>Save '+name(OFK)+' as a person?</p><div class="btns" style="margin-top:0"><button class="jds-btn jds-btn--secondary jds-btn--sm" id="save">Save</button><button class="jds-btn jds-btn--quiet jds-btn--sm" id="later">Not now</button></div></div>'}
 function summary(){var rail='<aside class="rail">'+(PK?picker():'')+offer()+'<div class="railhead"><span class="jds-brief__kicker">Who talked</span><h3 class="jds-brief__title">Speakers</h3></div>'+strip()+list()+'</aside>';
 return mast('Launch planning','Tuesday 4 Nov · 39 min')+'<div class="grid"><div>'
 +sec('Overview','<p class="lead">'+nm('priya')+' and '+nm('sam')+' agreed to move the launch to March.</p>')
@@ -116,7 +116,7 @@ var v=e.target.closest('[data-v]');if(v){setView(v.getAttribute('data-v'));retur
 var x=e.target.closest('[data-x]');if(x){ST.priya=ST.sam=x.getAttribute('data-x');COPIED=false;draw();return}
 var id=e.target.id;
 if(id==='cancel'){PK=null;draw()}
-if(id==='apply'){if(PICK==='else'){NM[PK]=NEWN;OFFER='open';ST[PK]='set'}else if(PICK==='sure'){NM[PK]='Speaker 2';ST[PK]='unknown'}else{NM[PK]=PICK==='sam'?'Sam Okoye':'Priya Nair';ST[PK]='set'}PK=null;draw()}
+if(id==='apply'){if(PICK==='else'){NM[PK]=NEWN;OFFER='open';OFK=PK;ST[PK]='set'}else if(PICK==='sure'){NM[PK]='Speaker 2';ST[PK]='unknown'}else{NM[PK]=PICK==='sam'?'Sam Okoye':'Priya Nair';ST[PK]='set'}PK=null;draw()}
 if(id==='save'){OFFER='saved';draw()}if(id==='later'){OFFER=null;draw()}
 if(id==='copy'){COPIED=true;draw()}
 var t=e.target.closest('[data-th]');if(t){document.documentElement.removeAttribute('data-color-mode');if(t.getAttribute('data-th')==='dark')document.documentElement.setAttribute('data-color-mode','dark');document.querySelectorAll('[data-th]').forEach(function(b){b.setAttribute('aria-pressed',b===t)})}});

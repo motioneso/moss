@@ -99,21 +99,21 @@ Rules for the model, enforced by validation in Moss:
   the screen, copy and export resolve it from the speakers list plus owner labels. A correction
   therefore changes one stored label and needs no new model call. Unrelated mentions of the same
   name in the text are left alone.
-- Every name that is inferred and not owner-confirmed renders with "(guess)", on screen and in
-  copy and export alike, whatever the model's confidence.
+- Every name that is inferred and not owner-confirmed renders with a dotted underline on screen
+  and "(guess)" after the name in copy and export, whatever the model's confidence.
 - Validation rejects a name not found in the pack or the transcript (no invented people).
 
 Owner-assigned names are stored separately and always win over any guess.
 
 ### 5. Showing a guess as a guess
 
-- Any inferred name, high or low confidence: shown with "(guess)" and a Confirm / Change action.
+- Any inferred name, high or low confidence: shown with a dotted underline and a Confirm / Change action.
   Confidence only changes the wording of the hover note. Confirm turns it into an owner label and
-  removes the mark.
+  removes the underline.
 - Owner-set names: shown plain.
 - Unknown: "Speaker 2".
-- The summary header says "Names guessed from your calendar and notes" when any guess was used.
-  The per-name mark is what survives copy and export.
+- The screen carries no explanatory line about guesses. The "(guess)" text is what survives copy and
+  export.
 
 ### 6. Correcting a speaker
 
@@ -159,10 +159,9 @@ Summary with guesses:
 
 ```
 Summary                                  [Rewrite summary]
-Names guessed from your calendar and notes.
 
 Overview
- Priya (guess) and Sam agreed to move the launch to March.
+ Priya (dotted underline) and Sam agreed to move the launch to March.
 
 Decisions
  - Launch moves to March. (Sam)
