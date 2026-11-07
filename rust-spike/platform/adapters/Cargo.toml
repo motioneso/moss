@@ -1,0 +1,14 @@
+[package]
+name = "moss-platform-adapters"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+[dependencies]
+moss-platform-contracts = { path = "../contracts" }
+moss-platform-routing = { path = "../routing" }
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+async-trait.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+zeroize = "1"

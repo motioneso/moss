@@ -1,0 +1,23 @@
+[package]
+name = "moss-platform-harness"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+[dependencies]
+moss-platform-contracts = { path = "../contracts" }
+moss-platform-jobs = { path = "../jobs" }
+moss-platform-registry = { path = "../registry" }
+moss-platform-routing = { path = "../routing" }
+moss-platform-adapters = { path = "../adapters" }
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+tokio.workspace = true
+tokio-postgres.workspace = true
+async-trait.workspace = true
+axum = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+syn = { version = "2", features = ["full", "visit"] }
+toml = "0.8"
+proc-macro2 = "1"
