@@ -720,5 +720,104 @@
     ],
     "rows": ["app.task_lists", "app.task_tags"],
     "note": "Exact tag list instead of 'contains'. Owner is read by SQL because the tag response may not carry it."
+  },
+  {
+    "name": "tasks.test 719: tasks have a list column that cannot be empty, and in_progress is gone",
+    "source": "tasks.test.ts:719 migration 0039: every task has a list, in_progress is retired, new columns exist",
+    "steps": [
+      {
+        "id": "list column",
+        "sql": "select is_nullable from information_schema.columns where table_schema = 'app' and table_name = 'tasks' and column_name = 'list_id'",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "is_nullable": "NO"
+            }
+          ]
+        }
+      },
+      {
+        "id": "make",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "Fresh task"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "no task is in_progress",
+        "sql": "select count(*) filter (where status::text = 'in_progress')::int as retired, count(*)::int as total from app.tasks",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "retired": 0,
+              "total": 1
+            }
+          ]
+        }
+      },
+      {
+        "id": "personal list exists",
+        "sql": "select count(*)::int as n from app.task_lists where name = 'Personal'",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "n": 1
+            }
+          ]
+        }
+      },
+      {
+        "id": "negative control: a column that can be empty",
+        "sql": "select is_nullable from information_schema.columns where table_schema = 'app' and table_name = 'tasks' and column_name = 'description'",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "is_nullable": "YES"
+            }
+          ]
+        }
+      }
+    ],
+    "note": "Checks the schema both servers share. The test counts rows with no list through the superuser; a column that cannot be empty proves the same thing without a superuser."
+  },
+  {
+    "name": "tasks.test 745: the new task columns exist",
+    "source": "tasks.test.ts:745 db types: new task columns and tables are queryable",
+    "steps": [
+      {
+        "id": "columns",
+        "sql": "select count(*)::int as n from information_schema.columns where table_schema = 'app' and table_name = 'tasks' and column_name in ('list_id','parent_task_id','do_at','effort','source','recurrence_series_id')",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "n": 6
+            }
+          ]
+        }
+      },
+      {
+        "id": "negative control: a made-up column",
+        "sql": "select count(*)::int as n from information_schema.columns where table_schema = 'app' and table_name = 'tasks' and column_name = 'no_such_column'",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      }
+    ],
+    "note": "Checks the schema both servers share, not either server."
   }
 ]

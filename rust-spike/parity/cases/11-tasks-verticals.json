@@ -1709,5 +1709,57 @@
       }
     ],
     "note": "Read through the drift routes. Overdue has no priority filter (both tasks show); at-risk drops the Someday task, which is what the test asserts. The test does not assert the focus order, so the case only compares both servers' focus answers."
+  },
+  {
+    "name": "verticals 241: the worker role may insert and update tasks, nothing more",
+    "source": "tasks-verticals.test.ts:241 jarvis_worker_runtime holds INSERT and UPDATE on app.tasks (recurrence grant)",
+    "seed": [
+      "insert into app.task_lists (id, owner_user_id, name) values ('20000000-0000-4000-8000-000000000001','{{userA}}','Personal')",
+      "insert into app.tasks (id, owner_user_id, title, status, list_id) values ('30000000-0000-4000-8000-000000000001','{{userA}}','User A seeded private task','todo','20000000-0000-4000-8000-000000000001')"
+    ],
+    "steps": [
+      {
+        "id": "grants",
+        "sql": "select has_table_privilege('jarvis_worker_runtime','app.tasks','INSERT') as can_insert, has_table_privilege('jarvis_worker_runtime','app.tasks','UPDATE') as can_update, has_table_privilege('jarvis_worker_runtime','app.tasks','TRUNCATE') as can_truncate",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "can_insert": true,
+              "can_update": true,
+              "can_truncate": false
+            }
+          ]
+        }
+      },
+      {
+        "id": "worker inserts for its actor",
+        "sql": "insert into app.tasks (id, owner_user_id, title, list_id) select gen_random_uuid(), '{{userA}}', 'worker made', id from app.task_lists limit 1",
+        "as": "A",
+        "role": "worker",
+        "expect": {
+          "affected": [1]
+        }
+      },
+      {
+        "id": "worker updates own",
+        "sql": "update app.tasks set title = 'worker renamed'",
+        "as": "A",
+        "role": "worker",
+        "expect": {
+          "affected": [1]
+        }
+      },
+      {
+        "id": "negative control: worker updates as a stranger",
+        "sql": "update app.tasks set title = 'taken'",
+        "as": "B",
+        "role": "worker",
+        "expect": {
+          "affected": [0]
+        }
+      }
+    ],
+    "note": "The test reads the grant table as the superuser. The case asks the same question with has_table_privilege and adds real worker-role writes with a stranger control."
   }
 ]
