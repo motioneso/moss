@@ -8,7 +8,7 @@ description = "One program: serves the UI shell to browsers, or opens it in a de
 [dependencies]
 moss-shell-contract = { path = "../contract", features = ["stub"] }
 axum = "0.8"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs"] }
 tower-http = { version = "0.6", features = ["fs"] }
 serde_json = "1"
 tao = "0.34"

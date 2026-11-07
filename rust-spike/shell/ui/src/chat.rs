@@ -39,6 +39,7 @@ pub fn ChatDrawer(
             spawn_local(async move {
                 match api::chat_thread().await {
                     Ok(t) => {
+                        load_error.set(None);
                         messages.set(t.messages.clone());
                         thread.set(Some(t));
                     }
@@ -64,12 +65,22 @@ pub fn ChatDrawer(
         });
     });
 
-    let escape = window_event_listener(ev::keydown, move |event| {
-        if event.key() == "Escape" && open.get_untracked() && !docked.get_untracked() {
+    let aside_ref = NodeRef::<html::Aside>::new();
+
+    // Keys handled on the drawer itself, so Escape closes only the layer that has focus.
+    let on_keydown = move |event: ev::KeyboardEvent| match event.key().as_str() {
+        "Escape" if !event.default_prevented() && !docked.get_untracked() => {
+            event.prevent_default();
+            event.stop_propagation();
             on_close.run(());
         }
-    });
-    on_cleanup(move || escape.remove());
+        "Tab" if phone.get_untracked() => {
+            if let Some(aside) = aside_ref.get_untracked() {
+                crate::focus::trap_tab(&event, &aside);
+            }
+        }
+        _ => {}
+    };
 
     let send = move || {
         let text = draft.get_untracked().trim().to_string();
@@ -120,6 +131,8 @@ pub fn ChatDrawer(
             role="dialog"
             aria-modal=move || phone.get().then_some("true")
             aria-label=format!("Chat with {}", assistant_name.get_value())
+            node_ref=aside_ref
+            on:keydown=on_keydown
         >
             <div class="chatd__head">
                 <div class="chatd-overlay-background">

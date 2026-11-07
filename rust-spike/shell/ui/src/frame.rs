@@ -2,12 +2,17 @@
 //! Markup and class names follow `apps/web/src/shell/app-shell.tsx` and `shell-nav.tsx`.
 
 use leptos::ev;
+use leptos::html;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use moss_shell_contract::{NavLink, ShellView};
 use wasm_bindgen::{closure::Closure, JsCast};
 
-use crate::{api, chat::ChatDrawer, icons, today::TodayPage};
+use crate::{api, chat::ChatDrawer, focus, icons, today::TodayPage};
+
+/// In-app navigation for links rendered below the frame.
+#[derive(Clone, Copy)]
+pub struct Navigate(pub Callback<String>);
 
 const WIDE_QUERY: &str = "(min-width: 1280px)";
 const PHONE_QUERY: &str = "(max-width: 720px)";
@@ -59,6 +64,15 @@ fn media_signal(query: &'static str) -> ReadSignal<bool> {
         on_change.forget();
     }
     matches
+}
+
+fn current_url() -> String {
+    let location = window().location();
+    format!(
+        "{}{}",
+        location.pathname().unwrap_or_default(),
+        location.search().unwrap_or_default()
+    )
 }
 
 fn current_path() -> String {
@@ -149,22 +163,57 @@ fn Frame(shell: ShellView) -> impl IntoView {
     on_pop.forget();
 
     let navigate = move |to: String| {
-        if path.get_untracked() != to {
+        let route = to.split('?').next().unwrap_or_default().to_string();
+        if current_url() != to {
             let _ = window()
                 .history()
                 .and_then(|h| h.push_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(&to)));
-            path.set(to);
         }
+        path.set(route);
         mobile_nav_open.set(false);
         chat_expanded_wish.set(false);
     };
 
-    let close_nav_on_escape = window_event_listener(ev::keydown, move |event| {
-        if event.key() == "Escape" && mobile_nav_open.get_untracked() {
-            mobile_nav_open.set(false);
+    provide_context(Navigate(Callback::new(navigate)));
+
+    let nav_ref = NodeRef::<html::Aside>::new();
+    let open_nav_button = NodeRef::<html::Button>::new();
+    let chat_button = NodeRef::<html::Button>::new();
+
+    // Closing the phone navigation by hand returns focus to the menu button.
+    let close_nav = move || {
+        mobile_nav_open.set(false);
+        if let Some(button) = open_nav_button.get_untracked() {
+            let _ = button.focus();
+        }
+    };
+    Effect::new(move |_| {
+        if mobile_nav_open.get() {
+            request_animation_frame(move || {
+                if let Some(nav) = nav_ref.get_untracked() {
+                    focus::focus_first(&nav);
+                }
+            });
         }
     });
-    on_cleanup(move || close_nav_on_escape.remove());
+    let on_nav_keydown = move |event: ev::KeyboardEvent| {
+        if !mobile_nav_open.get_untracked() {
+            return;
+        }
+        match event.key().as_str() {
+            "Escape" => {
+                event.prevent_default();
+                event.stop_propagation();
+                close_nav();
+            }
+            "Tab" => {
+                if let Some(nav) = nav_ref.get_untracked() {
+                    focus::trap_tab(&event, &nav);
+                }
+            }
+            _ => {}
+        }
+    };
 
     let nav = shell.nav.clone();
     let all_links: Vec<NavLink> = nav.iter().flat_map(|s| s.links.clone()).collect();
@@ -230,6 +279,8 @@ fn Frame(shell: ShellView) -> impl IntoView {
                 role=move || mobile_nav_open.get().then_some("dialog")
                 aria-modal=move || mobile_nav_open.get().then_some("true")
                 aria-label=move || mobile_nav_open.get().then_some("Navigation")
+                node_ref=nav_ref
+                on:keydown=on_nav_keydown
             >
                 <div class="brand-row">
                     <div class="brand-lockup">
@@ -242,7 +293,7 @@ fn Frame(shell: ShellView) -> impl IntoView {
                                 type="button"
                                 class="jds-iconbtn"
                                 aria-label="Close navigation"
-                                on:click=move |_| mobile_nav_open.set(false)
+                                on:click=move |_| close_nav()
                             >
                                 <Icon svg=icons::X name="x" />
                             </button>
@@ -324,7 +375,7 @@ fn Frame(shell: ShellView) -> impl IntoView {
                 </div>
             </aside>
             <Show when=move || mobile_nav_open.get()>
-                <div aria-hidden="true" class="sidebar-scrim" on:click=move |_| mobile_nav_open.set(false)></div>
+                <div aria-hidden="true" class="sidebar-scrim" on:click=move |_| close_nav()></div>
             </Show>
 
             <div class="workspace-area">
@@ -336,6 +387,7 @@ fn Frame(shell: ShellView) -> impl IntoView {
                         class="icon-button mobile-only"
                         title="Open navigation"
                         type="button"
+                        node_ref=open_nav_button
                         on:click=move |_| mobile_nav_open.set(true)
                     >
                         <Icon svg=icons::MENU name="menu" size=20 />
@@ -353,6 +405,7 @@ fn Frame(shell: ShellView) -> impl IntoView {
                             class=move || if chat_open.get() { "icon-button chat-unread-button active" } else { "icon-button chat-unread-button" }
                             title=format!("Ask {}", shell.assistant_name)
                             type="button"
+                            node_ref=chat_button
                             on:click=on_toggle_chat
                         >
                             <Icon svg=icons::MESSAGE_SQUARE name="message-square" size=19 />
@@ -398,6 +451,9 @@ fn Frame(shell: ShellView) -> impl IntoView {
                         on_close=Callback::new(move |_| {
                             chat_open.set(false);
                             chat_expanded_wish.set(false);
+                            if let Some(button) = chat_button.get_untracked() {
+                                let _ = button.focus();
+                            }
                         })
                     />
                 </div>

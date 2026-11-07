@@ -1,7 +1,7 @@
 //! One program, two ways to run:
 //!
 //!   moss-shell serve [--host 127.0.0.1] [--port 5180] [--web <dir>]
-//!   moss-shell desktop [--web <dir>]
+//!   moss-shell desktop [--port 0] [--web <dir>]
 //!
 //! `serve` answers browsers on the LAN or this machine. `desktop` starts the same server on a
 //! private loopback port and opens it in a native window (tao + wry, the system webview).
@@ -12,11 +12,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::extract::State;
+use axum::handler::HandlerWithoutStateExt;
+use axum::http::{StatusCode, Uri};
+use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use moss_shell_contract::stub::StubShellData;
 use moss_shell_contract::{ChatMessage, ChatThread, SendMessage, ShellData, ShellView, TodayView};
-use tower_http::services::{ServeDir, ServeFile};
+use tower_http::services::ServeDir;
 
 type Data = Arc<dyn ShellData>;
 
@@ -45,9 +48,25 @@ fn router(data: Data, web: PathBuf) -> Router {
                 },
             ),
         )
-        // Client-side routes (/today, /tasks, ...) all load the app page.
-        .fallback_service(ServeDir::new(&web).fallback(ServeFile::new(index)))
+        // Client-side routes (/today, /tasks, ...) load the app page. Unknown API routes and
+        // missing files answer 404 instead.
+        .fallback_service(
+            ServeDir::new(&web)
+                .fallback((move |uri: Uri| app_page(uri, index.clone())).into_service()),
+        )
         .with_state(data)
+}
+
+async fn app_page(uri: Uri, index: PathBuf) -> Response {
+    let path = uri.path();
+    let last = path.rsplit('/').next().unwrap_or_default();
+    if path == "/api" || path.starts_with("/api/") || last.contains('.') {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    match tokio::fs::read_to_string(&index).await {
+        Ok(page) => Html(page).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
 }
 
 struct Args {
@@ -81,6 +100,9 @@ fn parse_args() -> Result<Args, String> {
             "--web" => args.web = PathBuf::from(value),
             _ => return Err(format!("unknown option {flag}")),
         }
+    }
+    if args.mode == "desktop" && args.host != "127.0.0.1" {
+        return Err("desktop mode listens on 127.0.0.1 only; use `serve --host` instead".into());
     }
     if !args.web.join("index.html").is_file() {
         return Err(format!(

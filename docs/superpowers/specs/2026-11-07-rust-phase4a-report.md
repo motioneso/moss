@@ -31,13 +31,16 @@ section 3.7. Code: `rust-spike/shell/`.
 - **Frame:** sidebar with brand, grouped module links, active state, rail mode stored under the
   same key the current app uses, account menu trigger with unread count, top bar with title, date
   and chat button with unread badge. Phone: menu button, slide-in navigation with scrim, close
-  button and Escape to close.
+  button and Escape to close. While open, the phone navigation keeps Tab inside itself and gives
+  focus back to the menu button when it closes.
 - **Today:** hero (greeting, headline, summary, weather note, briefing note), section links, quick
   actions, day timeline with planned, proposed and calendar rows, closing line, quiet line.
 - **Chat drawer:** header with status, expand and shrink (docked, desktop only), close; the thread
   with the newest message kept in view; waiting animation; composer with Enter to send, Shift+Enter
   for a new line, and a send button that stays off while empty or waiting. The thread survives
   closing and reopening the drawer. A failed send shows "Your message didn't send. Try again."
+  On phones the drawer keeps Tab inside itself. Closing it gives focus back to the chat button.
+  Escape closes only the layer that has focus.
 - **Other routes:** every other module link opens a "not ported yet" empty state, so navigation
   works end to end without inventing screens.
 
@@ -67,16 +70,16 @@ the desktop app and the browser app are the same build talking to the same route
 
 Ben's rule: Moss must work from a phone, a laptop or another computer on the LAN or tailnet.
 
-| Need                             | This part                                                                                                                                |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Listen beyond this machine       | `moss-shell serve --host 0.0.0.0` listens on every interface. It prints a warning while there is no sign-in                              |
-| Screens work from any device     | Every request is a relative `/api/...` path, so the page works from whatever address the browser used. Phone layout is built and checked |
-| Nothing assumes one local client | The server holds no per-window state; `ShellData` is shared and safe across threads                                                      |
-| Refuse writes from other sites   | The only write route takes JSON. A cross-site form post (plain text) gets 415, and no cross-origin headers are sent                      |
-| Sign-in and sessions             | Not in this part. The trait is per signed-in account by contract, but no sign-in exists yet                                              |
-| Trusted origins and https        | Not in this part. No check of the Host header yet, and no https listener                                                                 |
+| Need                           | This part                                                                                                                                                                                                                        |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Listen beyond this machine     | `moss-shell serve --host 0.0.0.0` listens on every interface. It prints a warning while there is no sign-in                                                                                                                      |
+| Screens work from any device   | Every request is a relative `/api/...` path, so the page works from whatever address the browser used. Phone layout is built and checked                                                                                         |
+| Several clients at once        | The server holds no per-window state and is safe across threads. The sample chat is one conversation shared by every browser, capped at 200 messages (oldest dropped, with a warning). The real data layer keeps one per account |
+| Refuse writes from other sites | The only write route takes JSON. A cross-site form post (plain text) gets 415, and no cross-origin headers are sent                                                                                                              |
+| Sign-in and sessions           | Not in this part. The trait is per signed-in account by contract, but no sign-in exists yet                                                                                                                                      |
+| Trusted origins and https      | Not in this part. No check of the Host header yet, so a page on another site could reach a loopback server by DNS rebinding. No https listener                                                                                   |
 
-The desktop window binds only to 127.0.0.1, but anyone else signed in to the same computer could
+Desktop mode refuses `--host`; it always binds 127.0.0.1. The desktop window binds only to 127.0.0.1, but anyone else signed in to the same computer could
 reach that port while sign-in is missing. Sign-in must land before this ships.
 
 ## Evidence
@@ -89,7 +92,7 @@ The proof artifact on the task shows the side-by-side pairs.
 | Check                                          | Result                                             |
 | ---------------------------------------------- | -------------------------------------------------- |
 | `build.sh` (wasm UI, bindgen, assets, program) | Builds clean, no warnings                          |
-| Contract unit tests                            | 2 passed                                           |
+| Contract unit tests                            | 3 passed                                           |
 | Web build size                                 | wasm 402 KB raw, 151 KB gzipped; CSS 94 KB gzipped |
 | Program size                                   | 2.0 MB, one file                                   |
 
@@ -107,6 +110,12 @@ Run at 1440x900, 1024x800 and 390x844 against `moss-shell serve`:
 | Phone navigation opens, Escape closes, navigating closes it | n/a         | n/a           | yes         |
 | Module link changes the address and shows the empty state   | yes         | yes           | yes         |
 | Console errors                                              | none        | none          | none        |
+
+A second phone-width run checked keyboard focus. Opening the navigation moves focus into it, Tab and
+Shift+Tab stay inside, Escape closes it and focus returns to the menu button. The phone chat does
+the same with the chat button. The weather settings link changes the page without a reload, and
+Back returns to Today. Unknown `/api/` paths and missing files answer 404; app routes answer with
+the app page.
 
 The same routes answered with 200 through the machine's LAN and tailnet addresses, not just
 127.0.0.1. That call came from the same machine, so it proves the listener, not a second device.
@@ -148,9 +157,12 @@ current design, not a port defect.
 - **Real data.** Everything is sample data. Nothing here touches the database or the chat runner.
 - **Dark and custom themes.** The theme boot script is carried over, but only the default theme was
   captured.
-- **Keyboard focus details.** Escape and Enter were checked. Focus return after closing the drawer
-  or the phone navigation was not.
+- **Screen readers.** Focus order was checked with the keyboard only, not with a screen reader.
 - **Startup time.** Not measured in this part.
+- **Timeline times.** The sample timeline uses fixed times, so the "now" marker does not move with
+  the clock. The real data layer supplies live times.
+- **Stylesheet list.** The build script copies a fixed list of the current app's CSS files in load
+  order. A stylesheet added to the current app later is missed until someone adds it to the list.
 
 ## How to proceed
 

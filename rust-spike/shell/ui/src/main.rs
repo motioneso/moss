@@ -1,5 +1,6 @@
 mod api;
 mod chat;
+mod focus;
 mod frame;
 mod icons;
 mod today;

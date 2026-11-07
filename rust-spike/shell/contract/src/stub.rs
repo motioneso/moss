@@ -4,8 +4,14 @@ use chrono::{Local, Timelike};
 
 use crate::*;
 
+/// Sample messages kept before the oldest are dropped.
+pub const STUB_HISTORY_LIMIT: usize = 200;
+
+/// One sample conversation shared by every browser that reaches this server.
 pub struct StubShellData {
     messages: Mutex<Vec<ChatMessage>>,
+    next_id: Mutex<usize>,
+    warned: std::sync::atomic::AtomicBool,
 }
 
 impl Default for StubShellData {
@@ -18,6 +24,8 @@ impl Default for StubShellData {
                        I moved the grocery run to after the call so it doesn't clash."
                     .into(),
             }]),
+            next_id: Mutex::new(1),
+            warned: Default::default(),
         }
     }
 }
@@ -151,7 +159,9 @@ impl ShellData for StubShellData {
 
     fn send_message(&self, text: &str) -> ChatMessage {
         let mut messages = self.messages.lock().expect("stub lock");
-        let n = messages.len();
+        let mut next_id = self.next_id.lock().expect("stub lock");
+        let n = *next_id;
+        *next_id += 2;
         messages.push(ChatMessage {
             id: format!("m{}", n + 1),
             role: ChatRole::User,
@@ -164,6 +174,15 @@ impl ShellData for StubShellData {
                 .into(),
         };
         messages.push(reply.clone());
+        if messages.len() > STUB_HISTORY_LIMIT {
+            let excess = messages.len() - STUB_HISTORY_LIMIT;
+            messages.drain(..excess);
+            if !self.warned.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                eprintln!(
+                    "moss-shell: sample chat passed {STUB_HISTORY_LIMIT} messages; dropping the oldest"
+                );
+            }
+        }
         reply
     }
 }
@@ -182,6 +201,24 @@ mod tests {
         assert_eq!(thread.messages[before].text, "hello");
         assert_eq!(thread.messages[before + 1], reply);
         assert_eq!(reply.role, ChatRole::Assistant);
+    }
+
+    #[test]
+    fn history_keeps_the_newest_messages() {
+        let data = StubShellData::default();
+        for i in 0..STUB_HISTORY_LIMIT {
+            data.send_message(&format!("note {i}"));
+        }
+        let messages = data.chat_thread().messages;
+        assert_eq!(messages.len(), STUB_HISTORY_LIMIT);
+        assert_eq!(
+            messages[messages.len() - 2].text,
+            format!("note {}", STUB_HISTORY_LIMIT - 1)
+        );
+        let mut ids: Vec<_> = messages.iter().map(|m| m.id.clone()).collect();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), STUB_HISTORY_LIMIT);
     }
 
     #[test]

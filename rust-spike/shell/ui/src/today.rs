@@ -9,6 +9,9 @@ use moss_shell_contract::{
 };
 
 use crate::api;
+use crate::frame::Navigate;
+
+const WEATHER_SETTINGS: &str = "/settings?section=profile";
 
 #[component]
 pub fn TodayPage() -> impl IntoView {
@@ -69,7 +72,15 @@ fn Hero(hero: TodayHero) -> impl IntoView {
             <hr class="today-hero__hairline" />
             {hero.weather_note.map(|note| view! {
                 <div class="today-hero__weather" id="weather">
-                    <p class="cmd-empty" role="status">{note} " " <a href="/settings?section=profile">"Weather settings"</a></p>
+                    <p class="cmd-empty" role="status">{note} " " <a
+                        href=WEATHER_SETTINGS
+                        on:click=move |event: leptos::ev::MouseEvent| {
+                            if let Some(Navigate(go)) = use_context::<Navigate>() {
+                                event.prevent_default();
+                                go.run(WEATHER_SETTINGS.to_string());
+                            }
+                        }
+                    >"Weather settings"</a></p>
                 </div>
             })}
             <div class="today-hero__prepared">
