@@ -1,0 +1,323 @@
+[
+  {
+    "name": "verticals 284: task list returns a tags array on every task",
+    "source": "tasks-verticals.test.ts:284 GET /api/tasks returns tags and rolls a stale recurring series forward (lazy-on-view)",
+    "steps": [
+      {
+        "id": "make",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "lazy roll"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "list",
+        "method": "GET",
+        "path": "/api/tasks",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "title": "lazy roll",
+                "tags": []
+              }
+            ]
+          },
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.tasks"],
+    "note": "Tags part only. The test also makes a weekly series with a stale date and checks a read rolls it forward; roll-forward is not ported, so the task here is not recurring."
+  },
+  {
+    "name": "verticals 334: lists route returns the actor's lists",
+    "source": "tasks-verticals.test.ts:334 GET /api/tasks/lists returns the actor's lists",
+    "steps": [
+      {
+        "id": "seed",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "first task"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "lists",
+        "method": "GET",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "expect": {
+          "body": {
+            "lists": [
+              {
+                "name": "Personal"
+              }
+            ]
+          },
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.task_lists"],
+    "note": "Exact one-list check instead of 'contains Personal'. Personal is made by the first task create (the test's seed data makes tasks first), so the case creates one."
+  },
+  {
+    "name": "verticals 346: creating a list is get-or-create",
+    "source": "tasks-verticals.test.ts:346 POST /api/tasks/lists creates a list (idempotent)",
+    "steps": [
+      {
+        "id": "one",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Work"
+        },
+        "expect": {
+          "body": {
+            "list": {
+              "name": "Work"
+            }
+          },
+          "status": 201
+        }
+      },
+      {
+        "id": "two",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Work"
+        },
+        "expect": {
+          "body": {
+            "list": {
+              "id": "{{one:/body/list/id}}"
+            }
+          },
+          "status": 201
+        }
+      }
+    ],
+    "rows": ["app.task_lists"]
+  },
+  {
+    "name": "verticals 369: tag created on a list",
+    "source": "tasks-verticals.test.ts:369 POST /api/tasks/lists/:listId/tags creates a tag on the list",
+    "steps": [
+      {
+        "id": "seed",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "first task"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "lists",
+        "method": "GET",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "tag",
+        "method": "POST",
+        "path": "/api/tasks/lists/{{lists:/body/lists/0/id}}/tags",
+        "as": "A",
+        "body": {
+          "name": "urgent"
+        },
+        "expect": {
+          "body": {
+            "tag": {
+              "name": "urgent",
+              "listId": "{{lists:/body/lists/0/id}}"
+            }
+          },
+          "status": 201
+        }
+      }
+    ],
+    "rows": ["app.task_lists", "app.task_tags"],
+    "note": "The test reads the Personal list through the repository; this case reads it through the lists route."
+  },
+  {
+    "name": "verticals 408: focus route returns an overdue high-priority task",
+    "source": "tasks-verticals.test.ts:408 GET /api/tasks/focus returns overdue/at-risk tasks",
+    "steps": [
+      {
+        "id": "make",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "focus-route-test",
+          "priority": 5,
+          "dueAt": "2000-01-01T00:00:00.000Z"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "focus",
+        "method": "GET",
+        "path": "/api/tasks/focus",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "title": "focus-route-test"
+              }
+            ]
+          },
+          "status": 200
+        }
+      }
+    ],
+    "note": "Exact one-task check instead of 'contains'."
+  },
+  {
+    "name": "verticals 429: at-risk route answers with a task array",
+    "source": "tasks-verticals.test.ts:429 GET /api/tasks/at-risk returns at-risk tasks",
+    "steps": [
+      {
+        "id": "risk",
+        "method": "GET",
+        "path": "/api/tasks/at-risk",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": []
+          },
+          "status": 200
+        }
+      }
+    ],
+    "note": "Fresh database, so the array is empty; the test only checks it is an array."
+  },
+  {
+    "name": "verticals 440: quadrant filter keeps the important and urgent task",
+    "source": "tasks-verticals.test.ts:440 GET /api/tasks?quadrant=do filters by Eisenhower quadrant",
+    "steps": [
+      {
+        "id": "do",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "quadrant-do-test",
+          "priority": 5,
+          "dueAt": "{{now+1h}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "later",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "quadrant-schedule-test",
+          "priority": 5,
+          "dueAt": "{{now+10d}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "filtered",
+        "method": "GET",
+        "path": "/api/tasks?quadrant=do",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "title": "quadrant-do-test"
+              }
+            ]
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "bad",
+        "method": "GET",
+        "path": "/api/tasks?quadrant=nope",
+        "as": "A",
+        "expect": {
+          "status": 400
+        }
+      }
+    ],
+    "note": "Adds a second task in another quadrant and a bad quadrant value, so the filter is shown to filter."
+  },
+  {
+    "name": "verticals 592: create with a foreign list id is 404",
+    "source": "tasks-verticals.test.ts:592 POST /api/tasks with a foreign listId returns 404",
+    "steps": [
+      {
+        "id": "bseed",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "B",
+        "body": {
+          "title": "B first task"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "blists",
+        "method": "GET",
+        "path": "/api/tasks/lists",
+        "as": "B",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "cross",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "cross-list via API",
+          "listId": "{{blists:/body/lists/0/id}}"
+        },
+        "expect": {
+          "body": {
+            "error": "List not found or not accessible"
+          },
+          "status": 404
+        }
+      }
+    ],
+    "rows": ["app.tasks"]
+  }
+]

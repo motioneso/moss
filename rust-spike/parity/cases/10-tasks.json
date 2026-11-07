@@ -1,0 +1,141 @@
+[
+  {
+    "name": "tasks.test 346: API routes use the session, ignore client owner fields",
+    "source": "tasks.test.ts:346 serves Tasks API routes from session-derived context without accepting client owner fields",
+    "steps": [
+      {
+        "id": "make",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "API-created task",
+          "ownerUserId": "{{userB}}",
+          "owner_user_id": "{{userB}}"
+        },
+        "expect": {
+          "body": {
+            "task": {
+              "ownerUserId": "{{userA}}"
+            }
+          },
+          "status": 201
+        }
+      },
+      {
+        "id": "bmake",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "B",
+        "body": {
+          "title": "B private"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "own",
+        "method": "GET",
+        "path": "/api/tasks/{{make:/body/task/id}}",
+        "as": "A",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "rename",
+        "method": "PATCH",
+        "path": "/api/tasks/{{make:/body/task/id}}",
+        "as": "A",
+        "body": {
+          "title": "API-updated task"
+        },
+        "expect": {
+          "body": {
+            "task": {
+              "title": "API-updated task"
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "retired",
+        "method": "PATCH",
+        "path": "/api/tasks/{{make:/body/task/id}}",
+        "as": "A",
+        "body": {
+          "status": "in_progress"
+        },
+        "expect": {
+          "status": 400
+        }
+      },
+      {
+        "id": "list",
+        "method": "GET",
+        "path": "/api/tasks",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "id": "{{make:/body/task/id}}"
+              }
+            ]
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "other",
+        "method": "GET",
+        "path": "/api/tasks/{{make:/body/task/id}}",
+        "as": "B",
+        "expect": {
+          "status": 404
+        }
+      },
+      {
+        "id": "otherprivate",
+        "method": "GET",
+        "path": "/api/tasks/{{bmake:/body/task/id}}",
+        "as": "A",
+        "expect": {
+          "status": 404
+        }
+      }
+    ],
+    "rows": ["app.tasks", "app.task_activity"],
+    "note": "List check is exact (A has one task) instead of 'contains'; B's private task is made through the API, not seeded."
+  },
+  {
+    "name": "tasks.test 426: invalid recurrence is refused at the route",
+    "source": "tasks.test.ts:426 rejects invalid recurrence specs at the route boundary",
+    "steps": [
+      {
+        "id": "bad",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "invalid recurrence",
+          "recurrence": {
+            "freq": "weekly",
+            "interval": 1,
+            "occurrence_date": "2026-02-30"
+          }
+        },
+        "expect": {
+          "body": {
+            "error": "recurrence must include freq daily, weekly, or monthly; positive integer interval; and YYYY-MM-DD occurrence_date"
+          },
+          "status": 400
+        }
+      }
+    ],
+    "rows": ["app.tasks"],
+    "note": "The test checks the message contains 'recurrence'; this case compares both servers' messages exactly."
+  }
+]
