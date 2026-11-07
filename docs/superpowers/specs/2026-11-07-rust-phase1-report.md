@@ -95,7 +95,8 @@ The cluster itself:
 - If the socket path would pass 104 bytes, the socket moves to a short folder in the user's
   runtime or temporary folder. Setup checks that folder, and so does every command before it reads
   the state file there. It must be a real folder, not a link, owned by the user and closed to
-  everyone else, in a parent where no other user can rename it.
+  everyone else, in a parent where no other user can rename it. The folders above that parent are
+  not checked.
 - Commands connect only through the install's own socket folder and ignore any folder named in the
   state file. The Postgres client library sends a plain password to any server that asks for one,
   so the server it reaches must be one the user started. Over TCP the client trusts whatever
@@ -504,6 +505,10 @@ installer.
 - The two JavaScript backfills on a database with rows. Only their empty-table effect is ported.
 - A second local user planting the socket folder. The tests stand in for that user with another
   user id, and the parent-owner rule has no test.
+- The folders above the socket folder's parent. Only the parent itself is checked, so a user who
+  can rename a folder higher up could swap in their own folders after the check. On Linux the
+  runtime folder and `/tmp` sit under folders only root can change. An install folder or a
+  temporary folder the user picks may not.
 - That `stop` signals only this install's supervisor. Just after a new supervisor takes the lock,
   the lock file can still name the old pid. If another install's supervisor has that pid by then,
   `stop` would signal it.

@@ -133,7 +133,8 @@ fn owned_private_dir(path: &Path) -> io::Result<()> {
 }
 
 /// Fails unless `path` is a real folder owned by `uid` that no one else can open, inside a parent
-/// where no other user can rename it or put another folder in its place.
+/// where no other user can rename it or put another folder in its place. Only the immediate parent
+/// is checked. The folders above it are trusted.
 fn check_private_dir(path: &Path, uid: u32) -> io::Result<()> {
     use std::os::unix::fs::MetadataExt;
 
