@@ -4,7 +4,7 @@ use std::io::{BufRead, BufReader};
 use std::os::unix::net::UnixListener;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use keystore::fake::{hold_secret_service, Behaviour};
 use keystore::probe::{probe_address, probe_session, Keychain};
@@ -21,6 +21,14 @@ impl Drop for Bus {
         let _ = self.daemon.kill();
         let _ = self.daemon.wait();
     }
+}
+
+/// Runs a probe on its own thread, so a probe with no time limit fails the test instead of
+/// hanging it.
+fn probe_within(limit: Duration, probe: impl FnOnce() -> Keychain + Send + 'static) -> Keychain {
+    let (send, answer) = std::sync::mpsc::channel();
+    std::thread::spawn(move || send.send(probe()));
+    answer.recv_timeout(limit).unwrap_or_else(|_| panic!("no result within {limit:?}"))
 }
 
 /// A session bus with no service folders, or with one holding a single service file.
@@ -108,10 +116,9 @@ fn a_stale_bus_socket_is_broken_not_absent() {
 fn a_bus_that_never_answers_the_handshake_is_broken_within_seconds() {
     let runtime = tempfile::tempdir().unwrap();
     let _silent = UnixListener::bind(runtime.path().join("bus")).unwrap();
-    let started = Instant::now();
-    let result = probe_session(None, runtime.path());
+    let folder = runtime.path().to_path_buf();
+    let result = probe_within(Duration::from_secs(6), move || probe_session(None, &folder));
     assert!(matches!(result, Keychain::Broken(_)), "{result:?}");
-    assert!(started.elapsed() < Duration::from_secs(6), "took {:?}", started.elapsed());
 }
 
 #[test]
@@ -143,10 +150,9 @@ fn a_keychain_that_holds_the_name_but_fails_is_broken_not_absent() {
 fn a_keychain_that_never_answers_is_broken_within_seconds() {
     let bus = start_bus(None);
     let _held = hold_secret_service(Some(&bus.address), Behaviour::Hangs).unwrap();
-    let started = Instant::now();
-    let result = probe_address(&bus.address);
+    let address = bus.address.clone();
+    let result = probe_within(Duration::from_secs(10), move || probe_address(&address));
     assert!(matches!(result, Keychain::Broken(_)), "{result:?}");
-    assert!(started.elapsed() < Duration::from_secs(10), "{:?}", started.elapsed());
 }
 
 #[test]
