@@ -43,6 +43,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
 .rp b{display:block;font-size:var(--text-sm)}.rp small{color:var(--text-subtle);font-size:var(--text-xs)}
 .acts{grid-column:1/-1;display:flex;gap:var(--space-4)}
 .acts:empty{display:none}
+.oth{max-height:180px;overflow:auto;border-bottom:1px solid var(--border);padding:var(--space-2) 0}.oth div{display:flex;justify-content:space-between;padding:var(--space-1) 0;font-size:var(--text-sm)}.oth small{color:var(--text-subtle);font-size:var(--text-xs)}.pick .more{color:var(--text-subtle);font-size:var(--text-xs);padding:0 var(--space-3)}
 .pick{margin:var(--space-2) 0 var(--space-4)}
 .pick .jds-brief__title{margin:0 0 var(--space-2);font-size:var(--text-base)}
 .pick .jds-radio-cards{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-1);margin-bottom:var(--space-3)}
@@ -65,15 +66,20 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
 </style></head>
 <body>
 <div class="bar"><b>Summary speakers</b>
-<span class="jds-segmented" id="views"><button class="jds-segmented__opt" data-v="summary" aria-pressed="true">Guesses</button><button class="jds-segmented__opt" data-v="correct">Correct a guess</button><button class="jds-segmented__opt" data-v="confirmed">Confirmed</button><button class="jds-segmented__opt" data-v="export">Copy and export</button><button class="jds-segmented__opt" data-v="none">No context</button></span>
+<span class="jds-segmented" id="views"><button class="jds-segmented__opt" data-v="summary" aria-pressed="true">Guesses</button><button class="jds-segmented__opt" data-v="correct">Correct a guess</button><button class="jds-segmented__opt" data-v="confirmed">Confirmed</button><button class="jds-segmented__opt" data-v="export">Copy and export</button><button class="jds-segmented__opt" data-v="none">No context</button><button class="jds-segmented__opt" data-v="big">30 people</button></span>
 <span class="jds-segmented"><button class="jds-segmented__opt" data-th="light" aria-pressed="true">Light</button><button class="jds-segmented__opt" data-th="dark">Dark</button></span></div>
 <div class="page" id="root"></div>
 <script>
 var S={you:{n:'You',st:'set',w:'34%'},priya:{n:'Priya',st:'guess',w:'38%'},sam:{n:'Sam',st:'guess',w:'22%'},s3:{n:'Speaker 3',st:'unknown',w:'6%'}};
 var ST={},NM={},V='summary',PK=null,PICK='else',NEWN='Dana Reyes',OFFER=null,OFK=null,COPIED=false;
 var ORDER=['you','priya','sam','s3'];
+var S0=S,O0=ORDER,BIG=false,OTH=false,Q='da';
+var SB={you:{n:'You',st:'set',w:'18%'},priya:{n:'Priya',st:'guess',w:'16%'},sam:{n:'Sam',st:'guess',w:'12%'},marcus:{n:'Marcus',st:'guess',w:'9%'},dana:{n:'Nadia',st:'set',w:'7%'},lena:{n:'Lena',st:'guess',w:'6%'},tomas:{n:'Tomas',st:'set',w:'4%'},s3:{n:'Speaker 8',st:'unknown',w:'3%'}};
+var OB=['you','priya','sam','marcus','dana','lena','tomas','s3'];
+var ATT=['Dana Reyes','Dario Costa','Dalia Haddad','Daniel Okafor','Adaeze Obi','Amir Rahimi','Anika Berg','Ben Ito','Camille Roy','Carlos Vega','Chen Wei','Elif Demir','Farah Aziz','Grace Liu','Hana Sato','Ivan Petrov','Jonas Weber','Kofi Mensah','Lucia Romano','Mei Tanaka','Nadia Hassan','Omar Khalid','Paulo Silva','Quinn Murphy','Rosa Delgado','Sven Larsen','Tara Singh','Uma Patel','Viktor Novak','Yara Haddad'];
+var OTHN=ATT.slice(0,23).filter(function(n){return n!=='Dana Reyes'});
 function reset(){for(var k in S)ST[k]=S[k].st;NM={};PK=null;OFFER=null;COPIED=false}
-function setView(v){reset();if(v==='correct'){PK='priya';PICK='else'}
+function setView(v){BIG=v==='big';S=BIG?SB:S0;ORDER=BIG?OB:O0;OTH=false;Q='da';reset();if(v==='big'){PK='s3';PICK='else'}if(v==='correct'){PK='priya';PICK='else'}
 if(v==='confirmed'){ST.priya='set';ST.sam='set'}
 if(v==='none'){NM={priya:'Speaker 2',sam:'Speaker 3',s3:'Speaker 4'};ST.priya=ST.sam=ST.s3='unknown'}
 V=v;document.querySelectorAll('[data-v]').forEach(function(b){b.setAttribute('aria-pressed',b.getAttribute('data-v')===v)});draw()}
@@ -89,18 +95,23 @@ function mast(t,e){return '<header class="mast"><div><span class="jds-masthead__
 function acts(k){var a='';if(k==='you')return a;
 if(ST[k]==='guess')a+='<button class="link" data-c="'+k+'">Confirm</button>';
 a+='<button class="link" data-p="'+k+'">'+(ST[k]==='unknown'?'Name':'Change')+'</button>';return a}
-function list(){return ORDER.map(function(k){return '<div class="rp"><b>'+nm(k)+'</b><small>'+S[k].w+'</small><div class="acts">'+acts(k)+'</div></div>'+(PK===k?picker():'')}).join('')}
+function list(){return ORDER.map(function(k){return '<div class="rp"><b>'+nm(k)+'</b><small>'+S[k].w+'</small><div class="acts">'+acts(k)+'</div></div>'+(PK===k?picker():'')}).join('')+(BIG?others():'')}
+function others(){var n=OTHN.length;return '<div class="rp"><b>'+n+' others</b><small>25%</small><div class="acts"><button class="link" id="oth">'+(OTH?'Hide':'Show')+'</button></div></div>'+(OTH?'<div class="oth">'+OTHN.map(function(x){return '<div><span>'+x+'</span><small>1%</small></div>'}).join('')+'</div>':'')}
 function strip(){var seg=[['priya',10],['sam',7],['you',6],['priya',9],['s3',3],['sam',8],['priya',6],['you',5]];
 return '<div class="strip">'+seg.map(function(g){return '<i class="spk" data-who="'+who(g[0])+'" data-state="'+ST[g[0]]+'" style="--f:'+g[1]+'" title="'+name(g[0])+'"></i>'}).join('')+'</div><div class="ticks"><span>10:02</span><span>10:41</span></div><div style="height:var(--space-4)"></div>'}
-function picker(){var o=[['priya','Priya Nair','calendar'],['sam','Sam Okoye','calendar'],['else','Someone else',''],['sure','Not sure','']];
-return '<div class="pick"><h3 class="jds-brief__title">Who is this?</h3><div class="jds-radio-cards" role="radiogroup" aria-label="Who is this?">'+o.map(function(x){return '<label class="jds-radio-card"><input type="radio" name="who" value="'+x[0]+'"'+(PICK===x[0]?' checked':'')+'><span class="jds-radio-card__label">'+x[1]+'</span>'+(x[2]?'<span class="jds-radio-card__description">'+x[2]+'</span>':'')+'</label>'}).join('')+'</div>'
+function picker(){var o=BIG?[['Dana Reyes','calendar'],['Dario Costa','calendar'],['Dalia Haddad','calendar']]:[['Priya Nair','calendar'],['Sam Okoye','calendar']];
+var q=Q.trim().toLowerCase(),m=BIG&&q?ATT.filter(function(n){return n.toLowerCase().indexOf(q)>-1&&!o.some(function(x){return x[0]===n})}):[];
+var more=m.length>4?m.length-4:0;o=o.concat(m.slice(0,4).map(function(n){return [n,'calendar']}));
+var tail=[['else','Someone else',''],['sure','Not sure','']];
+function card(x){return '<label class="jds-radio-card"><input type="radio" name="who" value="'+x[0]+'"'+(PICK===x[0]?' checked':'')+'><span class="jds-radio-card__label">'+(x[2]===''?x[1]:x[0])+'</span>'+(x[2]===''?'':'<span class="jds-radio-card__description">'+x[1]+'</span>')+'</label>'}
+return '<div class="pick"><h3 class="jds-brief__title">Who is this?</h3>'+(BIG?'<input class="jds-input" id="q" placeholder="Search the 30 attendees" value="'+Q+'" autocomplete="off">':'')+'<div class="jds-radio-cards" role="radiogroup" aria-label="Who is this?">'+o.map(function(x){return card([x[0],x[1],'c'])}).join('')+(more?'<small class="more">and '+more+' more, keep typing</small>':'')+tail.map(card).join('')+'</div>'
 +(PICK==='else'?'<div class="jds-field"><label class="jds-label" for="newn">Name</label><input class="jds-input" id="newn" value="'+NEWN+'"></div>':'')
 +'<div class="btns"><button class="jds-btn jds-btn--quiet jds-btn--sm" id="cancel">Cancel</button><button class="jds-btn jds-btn--primary jds-btn--sm" id="apply">Apply to all lines</button></div></div>'}
 function offer(){if(!OFFER)return '';
 if(OFFER==='saved')return '<div class="offer"><p>'+name(OFK)+' is in People.</p></div>';
 return '<div class="offer"><p>Save '+name(OFK)+' as a person?</p><div class="btns" style="margin-top:0"><button class="jds-btn jds-btn--secondary jds-btn--sm" id="save">Save</button><button class="jds-btn jds-btn--quiet jds-btn--sm" id="later">Not now</button></div></div>'}
 function summary(){var rail='<aside class="rail">'+offer()+'<div class="railhead"><span class="jds-brief__kicker">Who talked</span><h3 class="jds-brief__title">Speakers</h3></div>'+strip()+list()+'</aside>';
-return mast('Launch planning','Tuesday 4 Nov · 39 min')+'<div class="grid"><div>'
+return mast(BIG?'Company all-hands':'Launch planning',BIG?'Tuesday 4 Nov · 30 people · 52 min':'Tuesday 4 Nov · 39 min')+'<div class="grid"><div>'
 +sec('Overview','<p class="lead">'+nm('priya')+' and '+nm('sam')+' agreed to move the launch to March.</p>')
 +sec('Decisions',facts([['Launch moves to March.','sam'],['Budget stays as is.','s3']]))
 +sec('Action items',facts([['Update the launch plan','priya','by Fri'],['Confirm vendor dates','sam','by Wed']]))
@@ -117,11 +128,11 @@ var v=e.target.closest('[data-v]');if(v){setView(v.getAttribute('data-v'));retur
 var x=e.target.closest('[data-x]');if(x){ST.priya=ST.sam=x.getAttribute('data-x');COPIED=false;draw();return}
 var id=e.target.id;
 if(id==='cancel'){PK=null;draw()}
-if(id==='apply'){if(PICK==='else'){NM[PK]=NEWN;OFFER='open';OFK=PK;ST[PK]='set'}else if(PICK==='sure'){NM[PK]='Speaker 2';ST[PK]='unknown'}else{NM[PK]=PICK==='sam'?'Sam Okoye':'Priya Nair';ST[PK]='set'}PK=null;draw()}
+if(id==='apply'){if(PICK==='else'){NM[PK]=NEWN;OFFER='open';OFK=PK;ST[PK]='set'}else if(PICK==='sure'){NM[PK]='Speaker 2';ST[PK]='unknown'}else{NM[PK]=PICK;ST[PK]='set'}PK=null;draw()}
 if(id==='save'){OFFER='saved';draw()}if(id==='later'){OFFER=null;draw()}
-if(id==='copy'){COPIED=true;draw()}
+if(id==='copy'){COPIED=true;draw()}if(id==='oth'){OTH=!OTH;draw()}
 var t=e.target.closest('[data-th]');if(t){document.documentElement.removeAttribute('data-color-mode');if(t.getAttribute('data-th')==='dark')document.documentElement.setAttribute('data-color-mode','dark');document.querySelectorAll('[data-th]').forEach(function(b){b.setAttribute('aria-pressed',b===t)})}});
 document.addEventListener('change',function(e){if(e.target.name==='who'){PICK=e.target.value;draw()}});
-document.addEventListener('input',function(e){if(e.target.id==='newn')NEWN=e.target.value});
+document.addEventListener('input',function(e){if(e.target.id==='newn')NEWN=e.target.value;if(e.target.id==='q'){Q=e.target.value;draw();var f=document.getElementById('q');f.focus();f.setSelectionRange(Q.length,Q.length)}});
 reset();draw();
 </script></body></html>
