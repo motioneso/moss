@@ -31,7 +31,8 @@ struct App {
     port: u16,
     /// The key in the printed link. Its first use swaps it for the cookie.
     launch_key: Option<String>,
-    /// The cookie's value. Only the browser that opened the link holds it.
+    /// The cookie's value, given to the browser that opened the link. Browsers send it to every
+    /// port on 127.0.0.1, not just this one.
     session: String,
     /// Every form carries it, so another site cannot post to this server.
     token: String,

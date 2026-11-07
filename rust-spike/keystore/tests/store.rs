@@ -302,14 +302,18 @@ fn recovery_makes_a_loose_key_folder_private_first() {
 }
 
 #[test]
-fn recovery_never_writes_through_a_linked_key_folder() {
+fn recovery_never_touches_a_linked_key_folder() {
     let s = new_setup();
     let elsewhere = s._dir.path().join("elsewhere");
     fs::rename(&s.paths.key_folder, &elsewhere).unwrap();
-    fs::remove_file(elsewhere.join("recovery-store")).unwrap();
+    fs::write(elsewhere.join("recovery-store"), b"damaged").unwrap();
     symlink(&elsewhere, &s.paths.key_folder).unwrap();
     assert!(recover(&s.paths, &RecoveryKey::from_bytes(*s.recovery.bytes())).is_err());
-    assert!(!elsewhere.join("recovery-store").exists());
+
+    // The damaged file is neither moved aside nor replaced.
+    let left: Vec<_> = fs::read_dir(&elsewhere).unwrap().map(|entry| entry.unwrap().file_name()).collect();
+    assert_eq!(left, ["recovery-store"]);
+    assert_eq!(fs::read(elsewhere.join("recovery-store")).unwrap(), b"damaged");
 }
 
 #[test]
