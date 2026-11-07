@@ -20,3 +20,4 @@ axum = "0.8"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 syn = { version = "2", features = ["full", "visit"] }
 toml = "0.8"
+proc-macro2 = "1"

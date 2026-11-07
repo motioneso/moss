@@ -778,6 +778,7 @@ dependencies = [
  "moss-platform-jobs",
  "moss-platform-registry",
  "moss-platform-routing",
+ "proc-macro2",
  "reqwest",
  "serde",
  "serde_json",
