@@ -1,0 +1,12 @@
+# Throwaway spike for the Rust port, Phase 0a (JS-34). Not product code.
+[workspace]
+resolver = "2"
+members = ["keystore", "portability"]
+
+[workspace.package]
+edition = "2021"
+publish = false
+
+# scrypt at N=16384, r=16 is slow unoptimized; build dependencies optimized even in tests.
+[profile.dev.package."*"]
+opt-level = 3
