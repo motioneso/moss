@@ -48,6 +48,17 @@ impl Layout {
     pub fn postmaster_pid(&self) -> PathBuf {
         self.data.join("postmaster.pid")
     }
+
+    pub fn cluster_name(&self) -> String {
+        cluster_name(&self.data)
+    }
+}
+
+/// The Postgres `cluster_name` for a data folder: `moss-` and 12 hex digits of its path hash.
+/// Server processes carry it in their titles, so it tells this install's leftovers apart from
+/// any other install's.
+pub fn cluster_name(data: &Path) -> String {
+    format!("moss-{}", &sha2_hex(data.as_os_str().as_encoded_bytes())[..12])
 }
 
 /// `<root>/run`, unless the socket path would be too long for the OS. Then a short owner-only

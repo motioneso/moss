@@ -36,6 +36,12 @@ impl Bundle {
     pub fn bin(&self, name: &str) -> PathBuf {
         self.root.join("bin").join(name)
     }
+
+    /// Whether the bundle carries `pg-module/moss_nodump`, which makes Postgres non-dumpable.
+    /// Only Linux needs it.
+    pub fn has_nodump(&self) -> bool {
+        cfg!(target_os = "linux") && self.root.join("lib/postgresql/moss_nodump.so").is_file()
+    }
 }
 
 /// How clients reach the cluster.
@@ -193,6 +199,15 @@ pub fn initialize(layout: &Layout, bundle: &Bundle) -> Result<bool, String> {
         .stdout(log.try_clone().map_err(|e| e.to_string())?)
         .stderr(log);
     clean_env(&mut initdb);
+    // Linux: initdb dies with the supervisor, so a later supervisor never finds it still
+    // writing into the side folder it is about to clear.
+    #[cfg(target_os = "linux")]
+    unsafe {
+        initdb.pre_exec(|| {
+            libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL as libc::c_ulong);
+            Ok(())
+        });
+    }
     let status = initdb.status();
     let _ = std::fs::remove_file(&pwfile);
     let status = status.map_err(|e| format!("initdb: {e}"))?;
@@ -269,7 +284,7 @@ fn launch(layout: &Layout, bundle: &Bundle, listen: &Listen, port: u16, timeout:
         Listen::SocketOnly => "",
         Listen::Loopback(_) => "127.0.0.1",
     };
-    let settings = [
+    let mut settings = vec![
         ("listen_addresses", listen_addresses.to_string()),
         ("port", port.to_string()),
         ("unix_socket_directories", layout.run.display().to_string()),
@@ -277,10 +292,13 @@ fn launch(layout: &Layout, bundle: &Bundle, listen: &Listen, port: u16, timeout:
         ("ssl", "off".into()),
         ("password_encryption", "scram-sha-256".into()),
         ("max_connections", "50".into()),
-        ("cluster_name", "moss".into()),
+        ("cluster_name", layout.cluster_name()),
         ("logging_collector", "off".into()),
         ("lc_messages", "C".into()),
     ];
+    if bundle.has_nodump() {
+        settings.push(("shared_preload_libraries", "moss_nodump".into()));
+    }
     let mut postgres = Command::new(bundle.bin("postgres"));
     postgres.arg("-D").arg(&layout.data);
     for (name, value) in settings {
@@ -415,7 +433,7 @@ pub fn read_postmaster_pid(layout: &Layout) -> Option<PostmasterPid> {
 pub fn clear_leftovers(layout: &Layout) -> Result<Vec<String>, String> {
     let mut actions = Vec::new();
     let pidfile = read_postmaster_pid(layout);
-    let ours = procs::database_processes(&layout.data);
+    let ours = procs::database_processes(&layout.data, &layout.cluster_name());
     if !ours.is_empty() {
         let postmaster = pidfile.as_ref().map(|p| p.pid).filter(|pid| ours.contains(pid));
         match postmaster {
@@ -430,7 +448,7 @@ pub fn clear_leftovers(layout: &Layout) -> Result<Vec<String>, String> {
         }
         if !wait_gone(layout, Duration::from_secs(30)) {
             actions.push("they did not exit in time; killed them".into());
-            procs::database_processes(&layout.data).iter().for_each(|&pid| procs::signal(pid, libc::SIGKILL));
+            procs::database_processes(&layout.data, &layout.cluster_name()).iter().for_each(|&pid| procs::signal(pid, libc::SIGKILL));
             if !wait_gone(layout, Duration::from_secs(10)) {
                 return Err("old database processes would not exit".into());
             }
@@ -453,7 +471,7 @@ pub fn clear_leftovers(layout: &Layout) -> Result<Vec<String>, String> {
 fn wait_gone(layout: &Layout, timeout: Duration) -> bool {
     let started = Instant::now();
     while started.elapsed() < timeout {
-        if procs::database_processes(&layout.data).is_empty() {
+        if procs::database_processes(&layout.data, &layout.cluster_name()).is_empty() {
             return true;
         }
         std::thread::sleep(Duration::from_millis(50));

@@ -319,7 +319,7 @@ pub mod linux {
     use std::os::unix::fs::MetadataExt;
 
     /// Checks each labelled folder, swap, and crash dumps for the running database process.
-    pub fn report(paths: &[(String, PathBuf)], database_pid: Option<i32>) -> Report {
+    pub fn report(paths: &[(String, PathBuf)], database_pids: &[i32]) -> Report {
         let sys = Path::new("/sys");
         let mounts = parse_mountinfo(&std::fs::read_to_string("/proc/self/mountinfo").unwrap_or_default());
         let mut checks = Vec::new();
@@ -327,7 +327,7 @@ pub mod linux {
             checks.push(Check::new(item, Some(path), path_verdict(sys, &mounts, path)));
         }
         checks.push(Check::new("Swap", None, swap_verdict(sys, &mounts)));
-        checks.push(Check::new("Crash dumps", None, crash_dump_verdict(database_pid)));
+        checks.push(Check::new("Crash dumps", None, crash_dump_verdict(database_pids)));
         Report::from_checks(checks)
     }
 
@@ -419,31 +419,93 @@ pub mod linux {
         }
     }
 
-    /// The supervisor starts Postgres with a zero core-dump limit. This reads the limit back
-    /// from the running process, and notes where the system would send dumps from others.
-    fn crash_dump_verdict(database_pid: Option<i32>) -> Verdict {
+    /// Crash dumps of the running database. With the `moss_nodump` add-on every server process
+    /// is non-dumpable, so the kernel makes no dump and calls no crash handler. Without it only
+    /// the zero core limit protects the database, and the kernel ignores that limit when it
+    /// pipes a dump to a crash-handler program.
+    fn crash_dump_verdict(database_pids: &[i32]) -> Verdict {
         let pattern = std::fs::read_to_string("/proc/sys/kernel/core_pattern").unwrap_or_default();
-        let destination = format!("system crash dumps go to: {}", pattern.trim());
-        let Some(pid) = database_pid else {
+        let pattern = pattern.trim();
+        let destination = format!("the system sends crash dumps to: {pattern}");
+        if database_pids.is_empty() {
             return Verdict {
                 status: Status::Unknown,
                 method: None,
-                evidence: vec!["the database is not running, so its crash-dump limit was not read".into(), destination],
+                evidence: vec!["the database is not running, so its processes were not checked".into(), destination],
             };
-        };
-        let limits = std::fs::read_to_string(format!("/proc/{pid}/limits")).unwrap_or_default();
-        match core_limit(&limits).as_deref() {
-            Some("0") => Verdict {
+        }
+        let states: Vec<(i32, DumpState)> = database_pids.iter().map(|&pid| (pid, dump_state(pid))).collect();
+        let count = states.len();
+        if states.iter().all(|(_, state)| *state == DumpState::NonDumpable) {
+            return Verdict {
                 status: Status::Verified,
-                method: Some("turned off for the database".into()),
-                evidence: vec![format!("database process {pid} has a crash-dump size limit of 0"), destination],
-            },
-            Some(other) => Verdict {
-                status: Status::Off,
+                method: Some("database cannot be dumped".into()),
+                evidence: vec![
+                    format!(
+                        "all {count} database processes are non-dumpable (the kernel shows their files as owned by root), \
+                         so no crash dump of them is made and no crash handler is called"
+                    ),
+                    destination,
+                ],
+            };
+        }
+        if let Some((pid, DumpState::Limit(limit))) = states.iter().find(|(_, state)| matches!(state, DumpState::Limit(_))) {
+            return Verdict::off(format!("database process {pid} may write crash dumps (limit {limit})"));
+        }
+        if let Some((pid, _)) = states.iter().find(|(_, state)| *state == DumpState::Unreadable) {
+            return Verdict::unknown(format!("the crash-dump state of database process {pid} could not be read"));
+        }
+        if pattern.starts_with('|') {
+            return Verdict {
+                status: Status::Unknown,
                 method: None,
-                evidence: vec![format!("database process {pid} may write crash dumps (limit {other})"), destination],
-            },
-            None => Verdict::unknown(format!("limits of process {pid} could not be read")),
+                evidence: vec![
+                    "the database has a crash-dump size limit of 0, but the kernel ignores that limit when it \
+                     hands a dump to a crash-handler program, and what the handler keeps depends on its own rules"
+                        .into(),
+                    destination,
+                ],
+            };
+        }
+        Verdict {
+            status: Status::Verified,
+            method: Some("crash-dump limit of 0".into()),
+            evidence: vec![
+                format!("all {count} database processes have a crash-dump size limit of 0, which stops dumps to a file"),
+                destination,
+            ],
+        }
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    enum DumpState {
+        NonDumpable,
+        ZeroLimit,
+        /// A non-zero crash-dump size limit.
+        Limit(String),
+        Unreadable,
+    }
+
+    /// The kernel shows a non-dumpable process's `/proc` files as owned by root. The only other
+    /// cause is a setuid program, which Postgres is not. A root-run database cannot be judged
+    /// this way, so it falls back to the core limit.
+    fn dump_state(pid: i32) -> DumpState {
+        let status = Path::new("/proc").join(pid.to_string()).join("status");
+        let (Ok(text), Ok(meta)) = (std::fs::read_to_string(&status), std::fs::metadata(&status)) else {
+            return DumpState::Unreadable;
+        };
+        let real_uid = text
+            .lines()
+            .find_map(|line| line.strip_prefix("Uid:"))
+            .and_then(|ids| ids.split_whitespace().next())
+            .and_then(|id| id.parse::<u32>().ok());
+        if real_uid.is_some_and(|uid| uid != 0) && meta.uid() == 0 {
+            return DumpState::NonDumpable;
+        }
+        match core_limit(&std::fs::read_to_string(format!("/proc/{pid}/limits")).unwrap_or_default()) {
+            Some(limit) if limit == "0" => DumpState::ZeroLimit,
+            Some(limit) => DumpState::Limit(limit),
+            None => DumpState::Unreadable,
         }
     }
 }
