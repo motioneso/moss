@@ -88,8 +88,9 @@ part that is hard or costly, and ends with a plan to proceed.
 
 Every run below went through `scripts/run-gate.sh`. It builds a fresh database from the repo's
 migrations in its own throwaway Postgres container (Postgres 17.11 with pgvector) and removes the
-container afterwards. The side-by-side and planted-bug runs ran at commit 3863a19ff, with only
-this report uncommitted.
+container afterwards. The side-by-side, planted-bug and role-check runs all ran at commit
+3721c1035 on a clean tree, and each log records that commit. Later commits change only this
+report.
 
 ### Final side-by-side run
 
@@ -101,7 +102,8 @@ scripts/run-gate.sh start --gate rust-spike/parity/run-parity.sh
 scripts/run-gate.sh wait --follow
 ```
 
-The run exited 0 and ended with these lines.
+The run exited 0. These are its last lines, leaving out the gate's own end-time and cleanup
+lines.
 
 ```
 PASS suggested 242: accepting a suggestion sets todo without a completed time
@@ -157,22 +159,23 @@ The script starts the Rust server seven times against a copy of the gate databas
 roles only inside the gate's own throwaway Postgres server and resets them afterwards. Steps 5
 and 7 use a copy of the server built from git HEAD with the bypass check switched off. They show
 that the server's own check is what refuses, not something else in the setup. The gate exited 0.
-It ran at commit 3863a19ff with this report and the script itself not yet committed.
 
 ```
-1 normal roles: starts (wanted starts) | tasks spike listening on 127.0.0.1:5184
+1 normal roles: starts (wanted starts) | tasks spike listening on 127.0.0.1:5195
 2 app connection on the migration role: refuses (wanted refuses) | Error: "connected as jarvis_migration_owner, expected jarvis_app_runtime"
 3 worker connection on the app role: refuses (wanted refuses) | Error: "connected as jarvis_app_runtime, expected jarvis_worker_runtime"
 4 app role can bypass row security: refuses (wanted refuses) | Error: "role jarvis_app_runtime can bypass row-level security; refusing to start"
-5 same, with the check switched off: starts (wanted starts) | tasks spike listening on 127.0.0.1:5184
+5 same, with the check switched off: starts (wanted starts) | tasks spike listening on 127.0.0.1:5195
 6 app role is a superuser: refuses (wanted refuses) | Error: "role jarvis_app_runtime can bypass row-level security; refusing to start"
-7 same, with the check switched off: starts (wanted starts) | tasks spike listening on 127.0.0.1:5184
+7 same, with the check switched off: starts (wanted starts) | tasks spike listening on 127.0.0.1:5195
 app role after reset: superuser=false bypass=false
 ```
 
 ### Rust unit tests
 
-Run from `rust-spike/`, with no database.
+Run from `rust-spike/`, with no database. The server has 16 tests. The runner has 5, including
+one that fails a step the runner could not carry out and one that rejects a case comparing
+nothing.
 
 ```
 cargo test -p tasks
@@ -180,6 +183,14 @@ cargo test -p tasks
 
 ```
 test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+
+```
+cargo test -p parity
+```
+
+```
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 ```
 
 ### Code counts
