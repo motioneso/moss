@@ -256,6 +256,7 @@ describe("meetings composition", () => {
       "meetings.summary.validation",
       "meetings.instruction_flag",
       "meetings.owner_context",
+      "meetings.speaker_guesses",
       "meetings.grounded_outputs",
       "meetings.reviewed_tasks",
       "meetings.questions",

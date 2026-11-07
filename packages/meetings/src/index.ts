@@ -64,3 +64,4 @@ export { recordingSideReviewVersion } from "./recording-notice-source.js";
 export * from "./context-pack-port.js";
 export * from "./context-pack.js";
 export * from "./speaker-references.js";
+export { renderMeetingExport } from "./export-render.js";

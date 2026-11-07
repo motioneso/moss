@@ -133,6 +133,11 @@ export const meetingFeatures = [
       "Automatic summaries default on and use your default model. Turn off in Settings → Meetings. Analysis names recordings whose title remains automatic; user titles stay unchanged. Rewrite summary remains available."
   },
   {
+    id: "meetings.speaker_guesses",
+    description:
+      "Summaries may refer to speakers by a guessed name. A guess is marked (guess) in copy and export, and an unknown speaker shows as Speaker 2 and so on. Moss drops any name that is not in the talk or your own context."
+  },
+  {
     id: "transcribe.meeting",
     description:
       "Capture time uses native acknowledgement. Silent/near-silent clips skip transcription and clear settled delays. Transient clips retry in bounded memory. Activity records model, duration and outcome without audio or transcript text."
