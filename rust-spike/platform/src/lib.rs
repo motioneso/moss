@@ -9,6 +9,7 @@
 //! - [`redact`] decides what a log line may carry.
 //! - [`payload::JobPayload`] decides what a queued job may carry.
 //! - [`module_sql`] decides which module SQL the installer will run.
+//! - [`origin`] decides which web pages may sign in.
 //! - [`auth`], [`admin`] and [`views`] serve sign-in, account management and the first
 //!   private reads; [`http`] mounts them.
 
@@ -19,6 +20,7 @@ pub mod db;
 pub mod error;
 pub mod http;
 pub mod module_sql;
+pub mod origin;
 pub mod payload;
 pub mod queue;
 pub mod redact;

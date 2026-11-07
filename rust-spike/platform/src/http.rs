@@ -15,12 +15,13 @@ use serde_json::{json, Value};
 
 use crate::auth::SessionCookies;
 use crate::db::Database;
+use crate::origin::TrustedOrigins;
 use crate::redact::redact_json;
 use crate::secret::SecretCipher;
 use crate::{admin, auth, views};
 
-/// What every platform route needs: one pool per runtime role, the cookie signer and the
-/// connector cipher.
+/// What every platform route needs: one pool per runtime role, the cookie signer, the
+/// connector cipher and the pages trusted to sign in.
 pub struct Platform {
     /// `jarvis_app_runtime`. Every signed-in read and write runs here in a data context.
     pub app: Database,
@@ -28,6 +29,7 @@ pub struct Platform {
     pub auth: Database,
     pub sessions: SessionCookies,
     pub connectors: SecretCipher,
+    pub origins: TrustedOrigins,
 }
 
 /// Writes one redacted JSON line to stderr, with the time added.

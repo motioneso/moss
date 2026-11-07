@@ -176,9 +176,12 @@ async fn run_cases(
         args.logs.join("ts-server.log"),
     )
     .await?;
+    // Both servers run in test mode, where better-auth turns its origin checks off.
+    let mut rs_command = Command::new(&args.rs_bin);
+    rs_command.env("NODE_ENV", "test");
     let rs = match Server::start(
         "Rust",
-        Command::new(&args.rs_bin),
+        rs_command,
         args.rs_port,
         &env.env_for(&copies.rs.name),
         args.logs.join("rs-server.log"),

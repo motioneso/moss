@@ -21,8 +21,10 @@ sqlparser = { version = "0.63", features = ["visitor"] }
 subtle = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "net"] }
 tokio-postgres = { version = "0.7", features = ["with-uuid-1", "with-chrono-0_4", "with-serde_json-1"] }
+url = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 zeroize = "1"
 
 [dev-dependencies]
 tempfile = "3"
+tower = { version = "0.5", features = ["util"] }

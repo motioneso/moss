@@ -21,6 +21,7 @@ use std::sync::Arc;
 use platform::auth::SessionCookies;
 use platform::db::{Database, RuntimeRole};
 use platform::http::{self, Platform};
+use platform::origin::TrustedOrigins;
 use platform::secret::SecretCipher;
 use tasks::{jobs, routes};
 use tokio::signal::unix::{signal, SignalKind};
@@ -44,7 +45,8 @@ async fn main() -> Result<(), String> {
     let auth = connect(&env, "MOSS_AUTH_DATABASE_URL", 2, RuntimeRole::Auth).await?;
     let sessions = SessionCookies::from_env(&env)?;
     let connectors = SecretCipher::connectors(&env).map_err(|error| error.to_string())?;
-    let platform = Arc::new(Platform { app, auth, sessions, connectors });
+    let origins = TrustedOrigins::from_env(&env, port)?;
+    let platform = Arc::new(Platform { app, auth, sessions, connectors, origins });
 
     let (stop, stopped) = tokio::sync::watch::channel(false);
     let worker_task = tokio::spawn(jobs::run_worker(worker, stopped));

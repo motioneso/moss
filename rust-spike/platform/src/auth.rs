@@ -307,7 +307,7 @@ impl IntoResponse for Failure {
     }
 }
 
-fn fail(status: u16, code: &'static str, message: &'static str) -> Failure {
+pub(crate) fn fail(status: u16, code: &'static str, message: &'static str) -> Failure {
     Failure::Reply { status, code, message }
 }
 
@@ -586,6 +586,7 @@ async fn sign_up(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, Failure> {
+    platform.origins.check_auth_post(&headers)?;
     let body = parse_body(&body).ok_or(fail(400, "VALIDATION_ERROR", "Invalid body"))?;
     let (Some(email), Some(password), Some(name)) =
         (text(&body, "email"), text(&body, "password"), text(&body, "name"))
@@ -596,6 +597,7 @@ async fn sign_up(
     if !is_email(&email) {
         return Err(fail(400, "INVALID_EMAIL", "Invalid email"));
     }
+    platform.origins.check_sign_in_form(&headers)?;
     let length = password.encode_utf16().count();
     if length < MIN_PASSWORD {
         return Err(fail(400, "PASSWORD_TOO_SHORT", "Password too short"));
@@ -644,10 +646,12 @@ async fn sign_in(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, Failure> {
+    platform.origins.check_auth_post(&headers)?;
     let body = parse_body(&body).ok_or(fail(400, "VALIDATION_ERROR", "Invalid body"))?;
     let (Some(email), Some(password)) = (text(&body, "email"), text(&body, "password")) else {
         return Err(fail(400, "VALIDATION_ERROR", "Invalid body"));
     };
+    platform.origins.check_sign_in_form(&headers)?;
     let email = email.to_lowercase();
     if !is_email(&email) {
         return Err(fail(400, "INVALID_EMAIL", "Invalid email"));
@@ -682,6 +686,7 @@ async fn sign_out(
     State(platform): State<Arc<Platform>>,
     headers: HeaderMap,
 ) -> Result<Response, Failure> {
+    platform.origins.check_auth_post(&headers)?;
     let cleared = platform.sessions.clear_cookie();
     let Some(token) = platform.sessions.read_token(&headers) else {
         let reply = fail(400, "FAILED_TO_GET_SESSION", "Failed to get session").into_response();

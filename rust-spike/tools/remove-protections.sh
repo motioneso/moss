@@ -114,6 +114,13 @@ if wanted vault-dotdot "$@"; then
   expect vault-dotdot 101 in_copy vault-dotdot cargo test --quiet -p vault
 fi
 
+# Sign-up, sign-in and sign-out accept a request from any web page.
+if wanted origin-check "$@"; then
+  copy origin-check
+  plant origin-check platform/src/auth.rs '/^    platform\.origins\.check_/d'
+  expect origin-check 101 in_copy origin-check cargo test --quiet -p platform origin
+fi
+
 # Raw file access, a secret read, a privileged database URL, a raw print and a second file
 # server, each outside the files allowed them.
 if wanted static-rules "$@"; then
