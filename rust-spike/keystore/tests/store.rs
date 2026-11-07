@@ -1,8 +1,12 @@
 use std::fs;
 use std::os::unix::fs::{symlink, PermissionsExt};
 
+use keystore::probe::Keychain;
 use keystore::recovery::RecoveryKey;
 use keystore::store::{recover, secure, set_up, status, CredentialKeys, Paths, RecoverError, State};
+
+/// The only state in which setup may write the key file.
+const NO_KEYCHAIN: Keychain = Keychain::NotInstalled;
 
 struct Setup {
     _dir: tempfile::TempDir,
@@ -17,7 +21,7 @@ fn new_setup() -> Setup {
     let recovery = RecoveryKey::generate();
     let keys = CredentialKeys::generate();
     let fingerprint = keys.fingerprint();
-    set_up(&paths, &recovery, &keys).unwrap();
+    set_up(&paths, &NO_KEYCHAIN, &recovery, &keys).unwrap();
     Setup { _dir: dir, paths, recovery, fingerprint }
 }
 
@@ -57,7 +61,7 @@ fn setup_writes_private_files_and_unlocks_at_every_start() {
     // Each call reads from disk, as a restart would.
     assert_eq!(unlocked_fingerprint(status(&s.paths)), s.fingerprint);
     assert_eq!(unlocked_fingerprint(status(&s.paths)), s.fingerprint);
-    assert!(set_up(&s.paths, &RecoveryKey::generate(), &CredentialKeys::generate()).is_err());
+    assert!(set_up(&s.paths, &NO_KEYCHAIN, &RecoveryKey::generate(), &CredentialKeys::generate()).is_err());
 }
 
 #[test]
@@ -197,7 +201,7 @@ fn a_failed_setup_leaves_nothing_behind() {
     fs::create_dir_all(paths.key_folder.parent().unwrap()).unwrap();
     fs::write(&paths.key_folder, b"in the way").unwrap();
     let recovery = RecoveryKey::generate();
-    assert!(set_up(&paths, &recovery, &CredentialKeys::generate()).is_err());
+    assert!(set_up(&paths, &NO_KEYCHAIN, &recovery, &CredentialKeys::generate()).is_err());
     let data_folder = paths.bundle.parent().unwrap();
     let left: Vec<_> = fs::read_dir(data_folder).unwrap().map(|entry| entry.unwrap().file_name()).collect();
     assert!(left.is_empty(), "{left:?}");
@@ -205,7 +209,7 @@ fn a_failed_setup_leaves_nothing_behind() {
 
     fs::remove_file(&paths.key_folder).unwrap();
     let keys = CredentialKeys::generate();
-    set_up(&paths, &recovery, &keys).unwrap();
+    set_up(&paths, &NO_KEYCHAIN, &recovery, &keys).unwrap();
     assert_eq!(unlocked_fingerprint(status(&paths)), keys.fingerprint());
 }
 
@@ -214,7 +218,7 @@ fn setup_never_replaces_a_key_file_whose_bundle_is_missing() {
     let s = new_setup();
     fs::remove_file(&s.paths.bundle).unwrap();
     let before = fs::read(&s.paths.key_file).unwrap();
-    assert!(set_up(&s.paths, &RecoveryKey::generate(), &CredentialKeys::generate()).is_err());
+    assert!(set_up(&s.paths, &NO_KEYCHAIN, &RecoveryKey::generate(), &CredentialKeys::generate()).is_err());
     assert_eq!(fs::read(&s.paths.key_file).unwrap(), before);
     assert!(matches!(status(&s.paths), State::BundleMissing));
 }
@@ -226,8 +230,21 @@ fn a_write_that_fails_late_leaves_no_staging_file() {
     // A folder where the test credential belongs lets the staging file be written, then
     // makes the step that moves it into place fail.
     fs::create_dir_all(&paths.test_credential).unwrap();
-    assert!(set_up(&paths, &RecoveryKey::generate(), &CredentialKeys::generate()).is_err());
+    assert!(set_up(&paths, &NO_KEYCHAIN, &RecoveryKey::generate(), &CredentialKeys::generate()).is_err());
     let data_folder = paths.bundle.parent().unwrap();
     let left: Vec<_> = fs::read_dir(data_folder).unwrap().map(|entry| entry.unwrap().file_name()).collect();
     assert_eq!(left, ["test-credential.json"]);
+}
+
+#[test]
+fn setup_refuses_the_key_file_while_a_keychain_is_there() {
+    let present = [Keychain::Working { already_running: true }, Keychain::Broken("no answer".into())];
+    for keychain in present {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::under(&dir.path().join("config"), &dir.path().join("data"));
+        let result = set_up(&paths, &keychain, &RecoveryKey::generate(), &CredentialKeys::generate());
+        assert!(result.is_err(), "{keychain:?}");
+        assert!(matches!(status(&paths), State::NotSetUp));
+        assert!(!dir.path().join("config").exists() && !dir.path().join("data").exists());
+    }
 }

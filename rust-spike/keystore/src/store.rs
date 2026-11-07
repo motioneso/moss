@@ -20,6 +20,7 @@ use portability::secrets::{resolve_keyring, Env, JsonSecretCipher};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
+use crate::probe::Keychain;
 use crate::recovery::RecoveryKey;
 
 const BUNDLE_KIND: &str = "moss-credential-key-bundle";
@@ -259,7 +260,16 @@ fn write_key_file(paths: &Paths, recovery: &RecoveryKey, installation_id: &str) 
 /// Creates the test credential, the bundle and the key file, in that order. A crash before
 /// the bundle leaves nothing that blocks a new setup. A crash before the key file leaves a
 /// setup the owner's words can open. A failed write removes every file this setup wrote.
-pub fn set_up(paths: &Paths, recovery: &RecoveryKey, keys: &CredentialKeys) -> Result<(), String> {
+/// The caller probes the keychain just before; the file is refused unless that probe allows it.
+pub fn set_up(
+    paths: &Paths,
+    keychain: &Keychain,
+    recovery: &RecoveryKey,
+    keys: &CredentialKeys,
+) -> Result<(), String> {
+    if !keychain.allows_key_file() {
+        return Err(format!("this computer has a keychain, so the key file is not used ({keychain:?})"));
+    }
     // A key file without its bundle may still match a bundle in a backup, so it is never replaced.
     if fs::symlink_metadata(&paths.bundle).is_ok() || fs::symlink_metadata(&paths.key_file).is_ok() {
         return Err("Moss is already set up on this computer".to_string());

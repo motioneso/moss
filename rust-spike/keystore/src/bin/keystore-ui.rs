@@ -130,7 +130,8 @@ impl App {
                 if !wrong.is_empty() {
                     return self.check_page(pending, fields, &wrong);
                 }
-                match set_up(&self.paths, &pending.recovery, &pending.keys) {
+                // The keychain may have appeared or broken since the words were shown.
+                match set_up(&self.paths, &probe(), &pending.recovery, &pending.keys) {
                     Ok(()) => {
                         self.pending = None;
                         redirect("/?from=setup")
