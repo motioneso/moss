@@ -136,8 +136,13 @@ pub struct Copies {
 impl Copies {
     pub async fn create(env: &GateEnv, spike_sql: &Path) -> Result<Self, String> {
         let maintenance = connect(&with_db(&env.bootstrap, "postgres")).await?;
-        let ts_name = "moss_parity_ts".to_owned();
-        let rs_name = "moss_parity_rs".to_owned();
+        // PARITY_COPY_PREFIX lets two runs share one gate server without colliding.
+        let prefix = std::env::var("PARITY_COPY_PREFIX").unwrap_or_else(|_| "moss_parity".to_owned());
+        if !prefix.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_') {
+            return Err("PARITY_COPY_PREFIX may hold only a-z, 0-9 and _".into());
+        }
+        let ts_name = format!("{prefix}_ts");
+        let rs_name = format!("{prefix}_rs");
         // Separate statements, because a multi-statement batch runs as one transaction block and
         // DROP or CREATE DATABASE refuses to run inside one.
         for name in [&ts_name, &rs_name] {
