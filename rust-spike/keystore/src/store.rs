@@ -393,10 +393,12 @@ pub fn recover(paths: &Paths, recovery: &RecoveryKey) -> Result<Unlocked, Recove
         Ok(State::Unlocked(unlocked)) => unlocked,
         Ok(other) | Err(other) => return Err(RecoverError::Unrecoverable(other)),
     };
+    if fs::symlink_metadata(&paths.key_folder).is_ok() {
+        make_private(&paths.key_folder, 0o700, true)
+            .map_err(|detail| RecoverError::Io(format!("key folder: {detail}")))?;
+    }
     if fs::symlink_metadata(&paths.key_file).is_ok() {
-        let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|t| t.as_secs()).unwrap_or(0);
-        let aside = paths.key_file.with_extension(format!("replaced-{stamp}"));
-        fs::rename(&paths.key_file, &aside).map_err(|error| RecoverError::Io(error.to_string()))?;
+        let aside = move_aside(&paths.key_file).map_err(|error| RecoverError::Io(error.to_string()))?;
         let _ = fs::set_permissions(&aside, fs::Permissions::from_mode(0o600));
     }
     write_key_file(paths, recovery, &unlocked.installation_id)
@@ -406,19 +408,40 @@ pub fn recover(paths: &Paths, recovery: &RecoveryKey) -> Result<Unlocked, Recove
 
 /// Makes the key folder and file private to this account again.
 pub fn secure(paths: &Paths) -> Result<(), String> {
-    for (path, mode) in [(&paths.key_folder, 0o700), (&paths.key_file, 0o600)] {
-        // The owner check and the change act on the opened file, and a link is refused when
-        // it is opened. A path swapped for a link after the check cannot redirect the change.
-        let opened = File::options()
-            .read(true)
-            .custom_flags(libc::O_NOFOLLOW)
-            .open(path)
-            .map_err(|error| error.to_string())?;
-        let metadata = opened.metadata().map_err(|error| error.to_string())?;
-        if metadata.uid() != current_uid() {
-            return Err("it belongs to another account".to_string());
-        }
-        opened.set_permissions(fs::Permissions::from_mode(mode)).map_err(|error| error.to_string())?;
+    make_private(&paths.key_folder, 0o700, true)?;
+    make_private(&paths.key_file, 0o600, false)
+}
+
+/// The owner check and the change act on the opened path. A link is refused when it is
+/// opened, so a path swapped for a link after the check cannot redirect the change, and a
+/// pipe in its place cannot block the open.
+fn make_private(path: &Path, mode: u32, folder: bool) -> Result<(), String> {
+    let opened = File::options()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+        .map_err(|error| error.to_string())?;
+    let metadata = opened.metadata().map_err(|error| error.to_string())?;
+    if metadata.uid() != current_uid() {
+        return Err("it belongs to another account".to_string());
     }
-    Ok(())
+    if folder != metadata.is_dir() || !(folder || metadata.is_file()) {
+        return Err(format!("it is not a {}", if folder { "folder" } else { "plain file" }));
+    }
+    opened.set_permissions(fs::Permissions::from_mode(mode)).map_err(|error| error.to_string())
+}
+
+/// Moves a file to an unused `replaced-<seconds>-<n>` name. Linking fails rather than
+/// replace an earlier kept file.
+fn move_aside(path: &Path) -> std::io::Result<PathBuf> {
+    let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|t| t.as_secs()).unwrap_or(0);
+    let mut n = 0;
+    loop {
+        let aside = path.with_extension(format!("replaced-{stamp}-{n}"));
+        match fs::hard_link(path, &aside) {
+            Ok(()) => break fs::remove_file(path).map(|()| aside),
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => n += 1,
+            Err(error) => break Err(error),
+        }
+    }
 }

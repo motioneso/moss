@@ -248,3 +248,54 @@ fn setup_refuses_the_key_file_while_a_keychain_is_there() {
         assert!(!dir.path().join("config").exists() && !dir.path().join("data").exists());
     }
 }
+
+#[test]
+fn each_damaged_key_file_is_kept_even_within_one_second() {
+    let s = new_setup();
+    for round in 1..=2 {
+        fs::write(&s.paths.key_file, format!("damage {round}")).unwrap();
+        recover(&s.paths, &RecoveryKey::from_bytes(*s.recovery.bytes())).ok().unwrap();
+    }
+    let mut kept: Vec<String> = fs::read_dir(&s.paths.key_folder)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .filter(|name| name.starts_with("recovery-store.replaced-"))
+        .map(|name| fs::read_to_string(s.paths.key_folder.join(name)).unwrap())
+        .collect();
+    kept.sort();
+    assert_eq!(kept, ["damage 1", "damage 2"]);
+}
+
+#[test]
+fn recovery_makes_a_loose_key_folder_private_first() {
+    let s = new_setup();
+    fs::remove_file(&s.paths.key_file).unwrap();
+    fs::set_permissions(&s.paths.key_folder, fs::Permissions::from_mode(0o755)).unwrap();
+    recover(&s.paths, &RecoveryKey::from_bytes(*s.recovery.bytes())).ok().unwrap();
+    assert_eq!(mode(&s.paths.key_folder), 0o700);
+    assert_eq!(unlocked_fingerprint(status(&s.paths)), s.fingerprint);
+}
+
+#[test]
+fn recovery_never_writes_through_a_linked_key_folder() {
+    let s = new_setup();
+    let elsewhere = s._dir.path().join("elsewhere");
+    fs::rename(&s.paths.key_folder, &elsewhere).unwrap();
+    fs::remove_file(elsewhere.join("recovery-store")).unwrap();
+    symlink(&elsewhere, &s.paths.key_folder).unwrap();
+    assert!(recover(&s.paths, &RecoveryKey::from_bytes(*s.recovery.bytes())).is_err());
+    assert!(!elsewhere.join("recovery-store").exists());
+}
+
+#[test]
+fn securing_a_key_file_swapped_for_a_pipe_fails_instead_of_hanging() {
+    use std::os::unix::ffi::OsStrExt;
+    let s = new_setup();
+    fs::remove_file(&s.paths.key_file).unwrap();
+    let fifo = std::ffi::CString::new(s.paths.key_file.as_os_str().as_bytes()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
+    let paths = Paths::under(&s._dir.path().join("config"), &s._dir.path().join("data"));
+    let (send, answer) = std::sync::mpsc::channel();
+    std::thread::spawn(move || send.send(secure(&paths).is_err()));
+    assert_eq!(answer.recv_timeout(std::time::Duration::from_secs(5)), Ok(true));
+}
