@@ -359,7 +359,7 @@ mod tests {
         assert_eq!(post(&ct, br#"{"constructor":"x"}"#).unwrap(), Body::Json(json!({"constructor": "x"})));
         assert_eq!(post(&ct, "\u{feff}{}".as_bytes()).unwrap(), Body::Json(json!({})));
         assert_eq!(post(&ct, br#"{"t":"\ud800x"}"#).unwrap(), Body::Json(json!({"t": "\u{fffd}x"})));
-        assert_eq!(post(&ct, br#"{"t":"😀"}"#).unwrap(), Body::Json(json!({"t": "\u{1f600}"})));
+        assert_eq!(post(&ct, r#"{"t":"😀"}"#.as_bytes()).unwrap(), Body::Json(json!({"t": "\u{1f600}"})));
     }
 
     #[test]

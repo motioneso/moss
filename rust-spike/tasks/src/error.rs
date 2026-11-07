@@ -4,9 +4,9 @@
 //! schema checks) follow `setMossErrorHandler`, which answers `{ error }` with the error's own
 //! status and hides the text of any 5xx.
 
+use axum::http::header::CONTENT_TYPE;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde_json::{json, Value};
 
 #[derive(Debug)]
@@ -85,7 +85,13 @@ impl ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, body) = self.status_and_body();
-        let status = StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-        (status, Json(body)).into_response()
+        json_reply(status, &body)
     }
+}
+
+/// A JSON reply with the content type Fastify sends.
+pub fn json_reply(status: u16, body: &Value) -> Response {
+    let status = StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    let headers = [(CONTENT_TYPE, "application/json; charset=utf-8")];
+    (status, headers, body.to_string()).into_response()
 }
