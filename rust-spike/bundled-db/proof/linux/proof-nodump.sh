@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Phase 1 proofs with the moss_nodump add-on. Usage: proof-nodump.sh STEP
 # Steps: stop-old up check procs crash control orphan-worker orphan-postmaster pid-reuse at-rest
-#        supervisor OLD_BINARY, missing-install, at-rest-all
+#        supervisor OLD_BINARY, missing-install, at-rest-all, planted-socket OLD_BINARY
 set -u
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 L=$RUNS/logs A=$RUNS/a C=$RUNS/c
@@ -196,5 +196,57 @@ case ${1:-} in
     python3 -I -c "import json,sys
 d=json.load(open(sys.argv[1])); print('status', d['status']); print('message', d['message'])
 [print(c['item'], '|', c['status'], '|', c['evidence'][0]) for c in d['checks']]" $L/38-at-rest-after-review.json ;;
+  planted-socket)
+    # planted-socket OLD_BINARY: a long root makes the socket folder fall back to a predictable
+    # name in /tmp. A reboot empties /tmp, and then another user can create that name first.
+    # Plant it with a state file that points at a fake server, and see what each moss-db sends.
+    old=${2:?usage: proof-nodump.sh planted-socket OLD_BINARY}
+    unset XDG_RUNTIME_DIR TMPDIR
+    long=$RUNS/long-root-so-the-socket-folder-falls-back-to-a-shared-folder
+    theirs=$RUNS/planted fake_log=$L/39-fake-server.txt out=$L/39-planted-socket-folder.txt
+    rm -rf "$long" "$theirs"
+    "$BIN" init --root "$long" --pg "$PG" > $L/39-init.json 2>&1 || { cat $L/39-init.json; exit 1; }
+    run=$(python3 -I -c "import hashlib,os,sys
+print('/tmp/moss-db-' + hashlib.sha256(os.path.realpath(sys.argv[1]).encode()).hexdigest()[:12])" "$long")
+    mkdir "$theirs"
+    python3 -I -c "import json,sys
+json.dump({'endpoint': {'socket_dir': sys.argv[1], 'port': 5432}}, open(sys.argv[1] + '/state.json', 'w'))" "$theirs"
+    python3 -I "$(dirname "$0")/fake-pg-server.py" "$theirs/.s.PGSQL.5432" "$long/secrets/moss_admin" "$fake_log" &
+    fake=$!
+    for _ in $(seq 50); do [ -S "$theirs/.s.PGSQL.5432" ] && break; sleep 0.1; done
+    # try LABEL: run check with the old and this moss-db; show what reached the fake server.
+    try() {
+      for which in old new; do
+        local b=$old; [ $which = new ] && b=$BIN
+        : > "$fake_log"
+        echo "## $which moss-db check: exit $("$b" check --root "$long" > $L/39-check-$1-$which.json 2>&1; echo $?)"
+        cat $L/39-check-$1-$which.json
+        echo "## reached the fake server:"; grep . "$fake_log" || echo "(nothing)"
+      done
+    }
+    {
+      echo "# the root is long, so the socket folder is $run"
+      [ -d "$run" ] && echo "# init made it: $(stat -c 'owner uid %u, mode %a' "$run")"
+      rm -rf "$run"; echo "# a reboot empties /tmp: the socket folder is gone"
+      echo; echo "# plant 1: $run is a link to a folder with a state file and a fake server"
+      ln -s "$theirs" "$run"; try link
+      rm "$run"; mkdir "$run"; chmod 777 "$run"; cp "$theirs/state.json" "$run/"
+      echo; echo "# plant 2: $run is a real folder anyone can write to, with the same state file"
+      echo "# (it is ours, because a second account was not used; another user's folder fails earlier)"
+      try open
+      chmod 700 "$run"
+      echo; echo "# plant 3: $run is private and ours, but its state file names the fake server's folder"
+      try private
+      rm -rf "$run"
+      echo; echo "# the normal fallback still works: up makes the folder, check connects through it"
+      up_bg "$long" $L/39-up.jsonl > /dev/null
+      wait_event $L/39-up.jsonl ready 120 && echo "# up: ready, socket folder $(stat -c 'owner uid %u, mode %a' "$run")"
+      echo "# check: exit $("$BIN" check --root "$long" > $L/39-check-normal.json 2>&1; echo $?)"
+      python3 -I -c "import json,sys; d=json.load(open(sys.argv[1])); print('server', d['server'])" $L/39-check-normal.json
+      echo "# stop: $("$BIN" stop --root "$long")"
+    } > "$out" 2>&1
+    kill $fake
+    rm -rf "$long" "$theirs" "$run"
+    cat "$out" ;;
   *) echo "unknown step"; exit 2 ;;
 esac
