@@ -4,8 +4,8 @@
  *
  *   pnpm exec tsx rust-spike/keystore/proof/drive.ts <port> <scratch> <keystore-ui> <fake-secret-service>
  *
- * Every run gets fresh home folders under <scratch>/proof-home and saves screenshots to
- * <scratch>/proof-shots. Each server runs on its own private session bus, never the
+ * Every run gets fresh home folders under <scratch>/proof-home, saves screenshots to
+ * <scratch>/proof-shots and writes its log to <scratch>/evidence. Each server runs on its own private session bus, never the
  * desktop's, with no keychain unless the step starts the fake one.
  */
 import { spawn, type ChildProcess } from "node:child_process";
@@ -40,6 +40,7 @@ rmSync(homes, { recursive: true, force: true });
 rmSync(shots, { recursive: true, force: true });
 mkdirSync(homes, { recursive: true });
 mkdirSync(shots, { recursive: true });
+mkdirSync(join(scratch, "evidence"), { recursive: true });
 
 const busConfig = join(homes, "bus.conf");
 writeFileSync(
