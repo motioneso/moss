@@ -73,8 +73,9 @@ expect() {
   "$@" > "$work/$name.log" 2>&1
   rc=$?
   set -e
+  # The summary may match no line. Only the exit code decides.
   grep -E '^(test .* FAILED|error(\[E[0-9]+\])?:|BROKEN|FAIL|PARITY)|^ +(step|rows|log)' \
-    "$work/$name.log" | head -12 | sed 's/^/  /'
+    "$work/$name.log" | head -12 | sed 's/^/  /' || true
   if [ "$rc" -eq "$want" ]; then
     echo "$name: caught (exit $rc)"
   else
