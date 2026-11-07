@@ -75,14 +75,14 @@ describe("speaker validation", () => {
   });
   it("drops a name with no evidence and adds one warning", () => {
     const out = run([entry({ evidence: [] })]);
-    expect(out.speakers).toBeUndefined();
+    expect(out.speakers).toEqual([]);
     expect(out.warnings).toHaveLength(1);
   });
   it("drops a name whose evidence id is not in the transcript", () => {
-    expect(run([entry({ evidence: ["nope"] })]).speakers).toBeUndefined();
+    expect(run([entry({ evidence: ["nope"] })]).speakers).toEqual([]);
   });
   it("drops a name found in neither pack nor transcript", () => {
-    expect(run([entry({ name: "Zed" })], ["Alex"]).speakers).toBeUndefined();
+    expect(run([entry({ name: "Zed" })], ["Alex"]).speakers).toEqual([]);
   });
   it("accepts a name that is only in the pack", () => {
     const out = run([entry({ name: "Alex", basis: "calendar" })], ["Alex"]);
@@ -94,7 +94,7 @@ describe("speaker validation", () => {
     expect(out.speakers?.[0]?.confidence).toBe("low");
   });
   it("drops an entry for an unknown speaker id", () => {
-    expect(run([entry({ speakerId: "S9" })]).speakers).toBeUndefined();
+    expect(run([entry({ speakerId: "S9" })]).speakers).toEqual([]);
   });
   it("accepts a capture source id as speaker id", () => {
     expect(run([entry({ speakerId: "mic" })]).speakers).toHaveLength(1);
@@ -114,9 +114,8 @@ describe("speaker validation", () => {
       MeetingOutputValidationError
     );
   });
-  it("omits speakers when the model returns an empty list", () => {
-    expect(run([]).speakers).toBeUndefined();
-    expect(Object.hasOwn(run([]), "speakers")).toBe(false);
+  it("keeps an empty list as given", () => {
+    expect(run([]).speakers).toEqual([]);
   });
   it("accepts a summary with no speakers key (legacy shape)", () => {
     expect(validateMeetingOutput(base, inputs).speakers).toBeUndefined();

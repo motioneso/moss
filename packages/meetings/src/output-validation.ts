@@ -415,7 +415,7 @@ export function validateMeetingOutput(
   };
   return {
     ...(recording ? { recording } : {}),
-    ...(checkedSpeakers.speakers.length ? { speakers: checkedSpeakers.speakers } : {}),
+    ...(hasSpeakers ? { speakers: checkedSpeakers.speakers } : {}),
     overview: boundedText(output.overview, MAX_OVERVIEW_CHARACTERS),
     decisions: list(output.decisions).map((value) => {
       const result = claim(value, false);
