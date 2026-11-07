@@ -1,0 +1,113 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Summary owner context and speaker guesses - mockup</title><link rel="stylesheet" href="../classifier-gate/app.css">
+<style>
+.sp-split{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:var(--space-6);align-items:start;margin-top:var(--space-4)}
+@media(max-width:900px){.sp-split{grid-template-columns:1fr}}
+.sp-head{display:flex;justify-content:space-between;align-items:center;gap:var(--space-3);flex-wrap:wrap}
+.sp-name{display:inline-flex;align-items:baseline;gap:var(--space-1);flex-wrap:wrap}
+.sp-name button.sp-link{background:none;border:0;padding:0;font:inherit;font-weight:var(--weight-semibold);color:var(--text);text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer}
+.sp-guess{font-size:var(--text-sm);color:var(--text-muted)}
+.sp-confirm{font-size:var(--text-sm);background:none;border:0;padding:0;color:var(--accent);cursor:pointer;text-decoration:underline}
+.sp-sec{margin-top:var(--space-5)}
+.sp-sec h3{font-family:var(--font-display);font-size:var(--text-lg);margin:0 0 var(--space-2)}
+.sp-sec ul{margin:0;padding-left:var(--space-5)}
+.sp-sec li{margin:var(--space-1) 0}
+.sp-line{display:grid;grid-template-columns:7.5rem minmax(0,1fr);gap:var(--space-3);padding:var(--space-2) 0;border-top:1px solid var(--border)}
+.sp-line .sp-who{color:var(--text-muted);font-size:var(--text-sm)}
+.sp-pop{margin-top:var(--space-3);max-width:26rem;padding:var(--space-4);border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-raised,var(--surface));box-shadow:var(--shadow-md)}
+.sp-pop h4{margin:0 0 var(--space-3);font-family:var(--font-display);font-size:var(--text-md)}
+.sp-opt{display:flex;gap:var(--space-3);align-items:baseline;padding:var(--space-2) 0}
+.sp-opt{white-space:nowrap}.sp-opt small{color:var(--text-muted);margin-left:auto}
+.sp-pop .sp-btns{display:flex;gap:var(--space-2);justify-content:flex-end;margin-top:var(--space-4)}
+.sp-pop .sp-btns .jds-btn,.sp-head .jds-btn{margin:0}
+.sp-save{margin-top:var(--space-3);padding:var(--space-3) var(--space-4);border:1px solid var(--border);border-radius:var(--radius-md);display:flex;gap:var(--space-4);align-items:center;justify-content:space-between;flex-wrap:wrap;max-width:44rem}
+.sp-set{display:flex;justify-content:space-between;align-items:center;gap:var(--space-5);padding:var(--space-4) 0;border-top:1px solid var(--border)}
+.sp-set:first-of-type{border-top:0}
+.sp-set h4{margin:0;font-size:var(--text-md)}
+</style></head>
+<body data-view="guesses">
+<div class="mk-bar"><b>Mockup: owner context and speaker guesses</b>
+<span class="mk-group"><span class="mk-label">Screen</span><span class="jds-segmented">
+<button class="jds-segmented__opt" data-pick="view:guesses" aria-pressed="true">Summary with guesses</button>
+<button class="jds-segmented__opt" data-pick="view:confirmed">After Confirm</button>
+<button class="jds-segmented__opt" data-pick="view:picker">Correct a speaker</button>
+<button class="jds-segmented__opt" data-pick="view:save">Offer to save a person</button>
+<button class="jds-segmented__opt" data-pick="view:settings">Meeting settings</button>
+<button class="jds-segmented__opt" data-pick="view:nocontext">No context</button>
+<button class="jds-segmented__opt" data-pick="view:trimmed">Background cut for size</button></span></span>
+<span class="mk-group"><span class="mk-label">Theme</span><span class="jds-segmented"><button class="jds-segmented__opt" data-pick="theme:light" aria-pressed="true">Light</button><button class="jds-segmented__opt" data-pick="theme:dark">Dark</button></span></span></div>
+<div class="mk-page">
+
+<div data-show="view:guesses confirmed picker save nocontext trimmed">
+<h1 class="mk-h">Meetings / Launch planning</h1>
+<p class="mk-help">Tuesday 4 Nov, 10:02 to 10:41. Summary on the left, transcript on the right. Only the summary area and the speaker names change.</p>
+
+<div class="sp-split">
+<section aria-label="Summary">
+ <div class="sp-head"><h2 class="mk-h" style="margin:0">Summary</h2><button class="jds-btn jds-btn--quiet jds-btn--sm">Rewrite summary</button></div>
+
+ <p class="jds-hint" data-show="view:guesses picker save trimmed">Names guessed from your calendar and notes.</p>
+ <p class="jds-hint" data-show="view:trimmed">Some background was left out to fit.</p>
+
+ <div class="sp-sec"><h3>Overview</h3>
+  <p>
+   <span class="sp-name" data-show="view:guesses picker trimmed"><button class="sp-link" title="From your calendar, spoken for 2 lines. Click to change.">Priya</button><span class="sp-guess">(guess)</span><button class="sp-confirm">Confirm</button></span>
+   <span class="sp-name" data-show="view:confirmed save"><button class="sp-link" title="Set by you. Click to change.">Priya</button></span>
+   <span class="sp-name" data-show="view:nocontext"><button class="sp-link">Speaker 1</button></span>
+   and
+   <span class="sp-name" data-show="view:guesses confirmed picker save trimmed"><button class="sp-link">Sam</button></span>
+   <span class="sp-name" data-show="view:nocontext"><button class="sp-link">Speaker 2</button></span>
+   agreed to move the launch to March.</p></div>
+
+ <div class="sp-sec"><h3>Decisions</h3><ul>
+  <li>Launch moves to March. (<span class="sp-name" data-show="view:guesses confirmed picker save trimmed"><button class="sp-link">Sam</button></span><span class="sp-name" data-show="view:nocontext"><button class="sp-link">Speaker 2</button></span>)</li>
+  <li>Budget stays as is. (<span class="sp-name"><button class="sp-link">Speaker 3</button></span>)</li></ul></div>
+
+ <div class="sp-sec"><h3>Action items</h3><ul>
+  <li>Update the launch plan by Friday.
+   (<span class="sp-name" data-show="view:guesses picker trimmed"><button class="sp-link">Priya</button><span class="sp-guess">(guess)</span></span><span class="sp-name" data-show="view:confirmed save"><button class="sp-link">Priya</button></span><span class="sp-name" data-show="view:nocontext"><button class="sp-link">Speaker 1</button></span>)</li></ul></div>
+
+ <div class="sp-pop" role="dialog" aria-label="Who is this?" data-show="view:picker">
+  <h4>Who is this?</h4>
+  <label class="sp-opt"><input type="radio" name="p" checked> Priya Nair <small>from your calendar</small></label>
+  <label class="sp-opt"><input type="radio" name="p"> Sam Okoye <small>from your calendar</small></label>
+  <label class="sp-opt"><input type="radio" name="p"> Dana Reyes <small>in your People</small></label>
+  <label class="sp-opt"><input type="radio" name="p"> Someone else <input class="jds-input jds-input--sm" style="margin-left:auto" placeholder="Type a name" aria-label="Type a name"></label>
+  <label class="sp-opt"><input type="radio" name="p"> Not sure</label>
+  <div class="sp-btns"><button class="jds-btn jds-btn--quiet jds-btn--sm">Cancel</button><button class="jds-btn jds-btn--primary jds-btn--sm">Apply to all lines</button></div>
+ </div>
+
+ <div class="sp-save" role="status" data-show="view:save">
+  <span>Add &ldquo;Jordan Lee&rdquo; to People?</span>
+  <span><button class="jds-btn jds-btn--quiet jds-btn--sm">No thanks</button> <button class="jds-btn jds-btn--secondary jds-btn--sm">Add to People</button></span>
+ </div>
+</section>
+
+<section aria-label="Transcript">
+ <h2 class="mk-h" style="font-size:var(--text-xl)">Transcript</h2>
+ <div class="sp-line"><span class="sp-who">
+  <span data-show="view:guesses picker trimmed">Priya <span class="sp-guess">(guess)</span></span><span data-show="view:confirmed save">Priya</span><span data-show="view:nocontext">Speaker 1</span></span><span>Thanks all. Where are we on the launch date?</span></div>
+ <div class="sp-line"><span class="sp-who"><span data-show="view:guesses confirmed picker save trimmed">Sam</span><span data-show="view:nocontext">Speaker 2</span></span><span>Priya, the vendor slipped, so March is realistic.</span></div>
+ <div class="sp-line"><span class="sp-who">Speaker 3</span><span>Budget stays as is, I checked with finance.</span></div>
+ <div class="sp-line"><span class="sp-who"><span data-show="view:guesses picker trimmed">Priya <span class="sp-guess">(guess)</span></span><span data-show="view:confirmed save">Priya</span><span data-show="view:nocontext">Speaker 1</span></span><span>Fine. I'll update the plan by Friday.</span></div>
+</section>
+</div>
+</div>
+
+<div data-show="view:settings">
+ <h1 class="mk-h">Settings / Meetings</h1>
+ <p class="mk-help">One new row, in the existing Meetings settings list.</p>
+ <div style="margin-top:var(--space-4);max-width:56rem">
+  <div class="sp-set"><div><h4>Use what Moss knows about me in summaries</h4></div>
+   <label class="jds-switch"><input type="checkbox" checked aria-label="Use what Moss knows about me in summaries"><span class="jds-switch__track"><span class="jds-switch__thumb"></span></span></label></div>
+  <div class="sp-set"><div><h4>Use what Moss knows about me in summaries</h4></div>
+   <label class="jds-switch"><input type="checkbox" aria-label="Use what Moss knows about me in summaries (off state)"><span class="jds-switch__track"><span class="jds-switch__thumb"></span></span></label></div>
+ </div>
+ <p class="mk-help">The two rows show the same setting on and off. The real screen has one row, on by default.</p>
+</div>
+
+<h2 class="mk-h" style="margin-top:var(--space-6)">States covered</h2>
+<p class="mk-help">Guess: name plus (guess) and Confirm, shown in summary, transcript, copy and export. Confirmed and owner-set names show plain. Unknown shows Speaker N. No context: no marks and no header line, same as today. Cut for size: a single warning line. Loading, empty and failed summaries are unchanged.</p>
+</div>
+<script src="../classifier-gate/switcher.js"></script>
+<script>document.addEventListener('click',function(e){if(e.target.closest('.sp-confirm')){document.body.setAttribute('data-view','confirmed');document.querySelector('[data-pick="view:confirmed"]').click()}});</script>
+</body></html>
