@@ -29,6 +29,9 @@ by `scripts/run-gate.sh`, never the dev or prod database.
 | `parity/cases/`                           | The side-by-side cases, as JSON                                      |
 | `parity/conversion-ledger.md`             | Every Tasks test, how it was converted, and the counts               |
 | `ui/`                                     | Phase 0b: the Tasks screen in Leptos and in Dioxus                   |
+| `tools/plant-parity-bugs.sh`              | Phase 0b: plants three bugs in the Rust server and checks each fails |
+| `tools/check-role-guard.sh`               | Phase 0b: checks the server refuses roles that escape row security   |
+| `tools/count-code.sh`                     | Phase 0b: counts the code and tests the report scales from           |
 
 ## Running
 
@@ -98,6 +101,24 @@ The Rust Tasks unit tests, from this folder:
 
 ```
 cargo test -p tasks
+```
+
+Two more checks run the same way, each as its own gate run. One plants three bugs in copies of
+the Rust server and exits 0 only if the side-by-side run catches every one. The other starts the
+server on unsafe database roles and exits 0 only if it refuses each one.
+
+```
+scripts/run-gate.sh start --gate rust-spike/tools/plant-parity-bugs.sh
+```
+
+```
+scripts/run-gate.sh start --gate rust-spike/tools/check-role-guard.sh
+```
+
+The code counts need no database, so they run anywhere in the repo.
+
+```
+rust-spike/tools/count-code.sh
 ```
 
 `ui/README.md` says how to build and run the two screens.
