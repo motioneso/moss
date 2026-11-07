@@ -168,6 +168,54 @@ function shrinkEarlierEvidence(previous: MeetingOutputContent): MeetingOutputCon
   return changed ? next : null;
 }
 
+/** Cuts the longest text in the earlier summary by a fifth. Null when nothing is long enough. */
+function truncateEarlierText(previous: MeetingOutputContent): MeetingOutputContent | null {
+  const MARKER = " [cut to fit]";
+  const MIN = 200;
+  const cut = (text: string): string =>
+    text.replace(MARKER, "").slice(0, Math.floor(text.length * 0.8)) + MARKER;
+  type Slot = { length: number; apply: () => MeetingOutputContent };
+  const slots: Slot[] = [
+    {
+      length: previous.overview.length,
+      apply: () => ({ ...previous, overview: cut(previous.overview) })
+    },
+    ...previous.openQuestions.map((q, i) => ({
+      length: q.length,
+      apply: () => ({
+        ...previous,
+        openQuestions: previous.openQuestions.map((x, j) => (j === i ? cut(x) : x))
+      })
+    })),
+    ...previous.warnings.map((w, i) => ({
+      length: w.length,
+      apply: () => ({
+        ...previous,
+        warnings: previous.warnings.map((x, j) => (j === i ? cut(x) : x))
+      })
+    })),
+    ...previous.decisions.map((d, i) => ({
+      length: d.text.length,
+      apply: () => ({
+        ...previous,
+        decisions: previous.decisions.map((x, j) => (j === i ? { ...x, text: cut(x.text) } : x))
+      })
+    })),
+    ...previous.actions.map((a, i) => ({
+      length: a.text.length,
+      apply: () => ({
+        ...previous,
+        actions: previous.actions.map((x, j) => (j === i ? { ...x, text: cut(x.text) } : x))
+      })
+    }))
+  ];
+  const longest = slots.reduce(
+    (best, slot) => (slot.length > best.length ? slot : best),
+    slots[0]!
+  );
+  return longest.length > MIN ? longest.apply() : null;
+}
+
 /** Cuts the longest unsplittable text by a fifth. Offsets of the kept prefix stay valid. */
 function truncateLongestText(piece: MeetingOutputInputs): MeetingOutputInputs | null {
   const MARKER = " [cut to fit]";
@@ -376,7 +424,7 @@ export function createMeetingOutputRuntime(deps: {
       const window = Number.isFinite(startMs)
         ? {
             start: new Date(startMs),
-            end: new Date(startMs + (input.inputs.transcript?.throughMs ?? 0)),
+            end: new Date(startMs),
             toleranceMinutes: CALENDAR_TOLERANCE_MINUTES
           }
         : null;
@@ -579,6 +627,13 @@ export function createMeetingOutputRuntime(deps: {
           if (shrunk) {
             previous = shrunk;
             contextRun.notes.add("Some earlier evidence references were shortened to fit.");
+            prompt = promptFor(pieceInputs, previous, pack);
+            continue;
+          }
+          const shorter = previous ? truncateEarlierText(previous) : null;
+          if (shorter) {
+            previous = shorter;
+            contextRun.notes.add("Part of the earlier summary text was cut to fit.");
             prompt = promptFor(pieceInputs, previous, pack);
             continue;
           }

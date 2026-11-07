@@ -84,6 +84,8 @@ const dropLastUntil = <T>(items: readonly T[], capBytes: number): readonly T[] =
   return kept;
 };
 
+const MAX_TITLE_LENGTH = 240;
+
 const cutText = (text: string, max: number) => (text.length > max ? text.slice(0, max) : text);
 
 /** Lowest rank is last. Returns the pack plus whether any source went over its own cap. */
@@ -91,7 +93,7 @@ function capSources(pack: OwnerContextPack): { pack: OwnerContextPack; trimmed: 
   let event = pack.event;
   if (event) {
     const attendeeNames = dropLastUntil(event.attendeeNames, CONTEXT_CAPS_BYTES.calendar - 512);
-    event = { ...event, title: cutText(event.title, 240), attendeeNames };
+    event = { ...event, title: cutText(event.title, MAX_TITLE_LENGTH), attendeeNames };
     if (bytes(event) > CONTEXT_CAPS_BYTES.calendar) event = null;
   }
   const people = dropLastUntil(pack.people, CONTEXT_CAPS_BYTES.people);
@@ -134,7 +136,7 @@ export function scanContextPack(pack: OwnerContextPack): BuiltContextPack["scanH
   const counts: Record<ContextSource, number> = {
     calendar: count(pack.event ? [pack.event.title, ...pack.event.attendeeNames] : []),
     people: count(pack.people.flatMap((p) => [p.name, p.role, p.note])),
-    memory: count(pack.facts.map((f) => f.text))
+    memory: count(pack.facts.flatMap((f) => [f.query, f.text]))
   };
   return (["calendar", "people", "memory"] as const)
     .filter((source) => counts[source] > 0)
@@ -151,12 +153,20 @@ export async function buildOwnerContextPack(
   input: { readonly transcriptNames: readonly string[]; readonly window: ContextWindow }
 ): Promise<BuiltContextPack> {
   const profile = await sources.ownerProfile(db).catch(() => ({ displayName: "", aliases: [] }));
-  const owner = {
+  const ownerFull = {
     displayName: cutText(profile.displayName, MAX_NAME_LENGTH),
     aliases: profile.aliases.slice(0, 5).map((a) => cutText(a, MAX_NAME_LENGTH))
   };
+  const aliases = dropLastUntil(
+    ownerFull.aliases,
+    CONTEXT_CAPS_BYTES.owner - bytes(ownerFull.displayName) - 64
+  );
+  const owner = { displayName: ownerFull.displayName, aliases };
+  const ownerTrimmed = aliases.length !== ownerFull.aliases.length;
   const events = await settle(() => sources.calendar(db, input.window));
-  const event = events.length === 1 ? events[0]! : null;
+  const found = events.length === 1 ? events[0]! : null;
+  const titleCut = found !== null && found.title.length > MAX_TITLE_LENGTH;
+  const event = found ? { ...found, title: cutText(found.title, MAX_TITLE_LENGTH) } : null;
 
   const names: string[] = [];
   const seen = new Set<string>();
@@ -175,7 +185,7 @@ export async function buildOwnerContextPack(
   const capped = capSources(raw);
   return {
     pack: capped.pack,
-    trimmed: capped.trimmed,
+    trimmed: capped.trimmed || titleCut || ownerTrimmed,
     scanHits: scanContextPack(capped.pack)
   };
 }

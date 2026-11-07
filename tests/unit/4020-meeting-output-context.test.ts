@@ -250,4 +250,31 @@ describe("owner context in the summary prompt", () => {
     await h.generator(actor, baseInput());
     expect(seen).toEqual([db]);
   });
+
+  it("looks for the calendar event at the recording start, not across the whole recording", async () => {
+    const windows: { start: Date; end: Date }[] = [];
+    const h = setup(
+      sources({
+        calendar: async (_d, w) => {
+          windows.push(w);
+          return [event];
+        }
+      })
+    );
+    await h.generator(actor, baseInput(transcriptOf(["We asked Dana Cole about launch."])));
+    expect(windows).toHaveLength(1);
+    expect(windows[0]!.end.getTime()).toBe(windows[0]!.start.getTime());
+  });
+
+  it("shortens a huge earlier summary instead of failing the run", async () => {
+    const h = setup(sources());
+    const big = { ...content, openQuestions: Array.from({ length: 20 }, () => "<".repeat(1_900)) };
+    let calls = 0;
+    h.fetch.mockImplementation(async () => response(calls++ === 0 ? big : content));
+    const segments = Array.from({ length: 40 }, () => "Ravi said the plan is fine. ".repeat(110));
+    const generated = await h.generator(actor, baseInput(transcriptOf(segments)));
+    expect(generated.content).toBeDefined();
+    const warnings = (generated.content as { warnings: string[] }).warnings;
+    expect(warnings.some((w) => /earlier summary text was cut to fit/i.test(w))).toBe(true);
+  });
 });

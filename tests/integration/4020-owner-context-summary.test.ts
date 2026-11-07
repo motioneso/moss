@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { appendFileSync } from "node:fs";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import { AiRepository, createAiSecretCipher, type AiConfiguredModelSafeRow } from "@moss/ai";
@@ -194,11 +193,5 @@ describe("summary prompt carries the owner's own context", () => {
     expect(block).toContain("Head of design");
     expect(block).not.toContain("Secret board");
     expect(block).not.toContain("Hidden role of user B");
-
-    // Size measurement for the PR: bytes of each part of the pack as sent.
-    const pack = JSON.parse(block.replace(/\\u003[ce]|\\u0026/g, "")) as Record<string, unknown>;
-    const size = (v: unknown) => Buffer.byteLength(JSON.stringify(v), "utf8");
-    const line = `pack bytes owner=${size(pack.owner)} event=${size(pack.event)} people=${size(pack.people)} facts=${size(pack.facts)} total=${size(pack)}\n`;
-    appendFileSync("/mnt/unity-nvme/scratch/js30-pack-size.txt", line);
   });
 });
