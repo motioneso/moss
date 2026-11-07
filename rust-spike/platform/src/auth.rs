@@ -6,6 +6,7 @@
 //! on the app role, so row-level security applies to admins too. Session tokens, cookies and
 //! passwords never reach a log line or an error body.
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use axum::body::Bytes;
@@ -93,8 +94,12 @@ impl SessionCookies {
         format!("{}={value}; Max-Age={SESSION_SECONDS}; {}", self.name(), self.attributes())
     }
 
-    fn clear_cookie(&self) -> String {
-        format!("{}=; Max-Age=0; {}", self.name(), self.attributes())
+    /// `deleteSessionCookie`: clears the session cookie and the two cookies better-auth sets
+    /// beside it.
+    fn clear_cookies(&self) -> [String; 3] {
+        let prefix = if self.secure { "__Secure-" } else { "" };
+        ["session_token", "session_data", "dont_remember"]
+            .map(|name| format!("{prefix}better-auth.{name}=; Max-Age=0; {}", self.attributes()))
     }
 
     /// The session token from a validly signed cookie.
@@ -286,7 +291,7 @@ pub fn serialize_user(row: &Row) -> Value {
 
 /// A better-auth error reply, `{code, message}`, or an internal error.
 pub enum Failure {
-    Reply { status: u16, code: &'static str, message: &'static str },
+    Reply { status: u16, code: &'static str, message: Cow<'static, str> },
     Internal(ApiError),
 }
 
@@ -308,7 +313,7 @@ impl IntoResponse for Failure {
 }
 
 pub(crate) fn fail(status: u16, code: &'static str, message: &'static str) -> Failure {
-    Failure::Reply { status, code, message }
+    Failure::Reply { status, code, message: Cow::Borrowed(message) }
 }
 
 fn registration_disabled() -> Failure {
@@ -567,6 +572,87 @@ fn text<'a>(body: &'a Value, name: &str) -> Option<&'a str> {
     body.get(name).and_then(Value::as_str)
 }
 
+/// A body field's zod type in better-auth's route schema.
+#[derive(Clone, Copy)]
+enum Field {
+    /// `z.string()`
+    Text,
+    /// `z.string().nonempty()`
+    NonEmpty,
+    /// `z.email()`
+    Email,
+    /// `z.string().optional()`
+    OptionalText,
+    /// `z.boolean().optional()`
+    OptionalFlag,
+}
+
+/// `signUpEmailBodySchema`. Its `.and(z.record(...))` accepts any other key.
+const SIGN_UP_BODY: [(&str, Field); 6] = [
+    ("name", Field::Text),
+    ("email", Field::Email),
+    ("password", Field::NonEmpty),
+    ("image", Field::OptionalText),
+    ("callbackURL", Field::OptionalText),
+    ("rememberMe", Field::OptionalFlag),
+];
+
+/// The `sign-in/email` body schema. The handler checks the email format later.
+const SIGN_IN_BODY: [(&str, Field); 4] = [
+    ("email", Field::Text),
+    ("password", Field::Text),
+    ("callbackURL", Field::OptionalText),
+    ("rememberMe", Field::OptionalFlag),
+];
+
+/// zod's name for a JSON value's type.
+fn type_name(value: Option<&Value>) -> &'static str {
+    match value {
+        None => "undefined",
+        Some(Value::Null) => "null",
+        Some(Value::Bool(_)) => "boolean",
+        Some(Value::Number(_)) => "number",
+        Some(Value::String(_)) => "string",
+        Some(Value::Array(_)) => "array",
+        Some(Value::Object(_)) => "object",
+    }
+}
+
+/// better-call's body check. Each bad field adds `[body.<field>] <zod message>`, in schema
+/// order, and the reply joins them with "; ".
+fn check_body(body: &Value, schema: &[(&str, Field)]) -> Result<(), Failure> {
+    let problems: Vec<String> = schema
+        .iter()
+        .filter_map(|&(name, field)| {
+            let value = body.get(name);
+            let problem = match (field, value) {
+                (Field::OptionalText | Field::OptionalFlag, None)
+                | (Field::OptionalFlag, Some(Value::Bool(_))) => return None,
+                (Field::OptionalFlag, _) => {
+                    format!("Invalid input: expected boolean, received {}", type_name(value))
+                }
+                (Field::NonEmpty, Some(Value::String(text))) if text.is_empty() => {
+                    "Too small: expected string to have >=1 characters".to_owned()
+                }
+                (Field::Email, Some(Value::String(text))) if !is_email(text) => {
+                    "Invalid email address".to_owned()
+                }
+                (_, Some(Value::String(_))) => return None,
+                _ => format!("Invalid input: expected string, received {}", type_name(value)),
+            };
+            Some(format!("[body.{name}] {problem}"))
+        })
+        .collect();
+    if problems.is_empty() {
+        return Ok(());
+    }
+    Err(Failure::Reply {
+        status: 400,
+        code: "VALIDATION_ERROR",
+        message: Cow::Owned(problems.join("; ")),
+    })
+}
+
 async fn hash_in_background(password: Secret) -> Result<String, ApiError> {
     tokio::task::spawn_blocking(move || hash_password(password.expose_secret()))
         .await
@@ -588,15 +674,12 @@ async fn sign_up(
 ) -> Result<Response, Failure> {
     platform.origins.check_auth_post(&headers)?;
     let body = parse_body(&body).ok_or(fail(400, "VALIDATION_ERROR", "Invalid body"))?;
-    let (Some(email), Some(password), Some(name)) =
-        (text(&body, "email"), text(&body, "password"), text(&body, "name"))
-    else {
-        return Err(fail(400, "VALIDATION_ERROR", "Invalid body"));
-    };
+    check_body(&body, &SIGN_UP_BODY)?;
+
+    // The body check leaves all three as strings and the email well formed.
+    let [name, email, password] =
+        ["name", "email", "password"].map(|field| text(&body, field).unwrap_or_default());
     let email = email.to_lowercase();
-    if !is_email(&email) {
-        return Err(fail(400, "INVALID_EMAIL", "Invalid email"));
-    }
     platform.origins.check_sign_in_form(&headers)?;
     let length = password.encode_utf16().count();
     if length < MIN_PASSWORD {
@@ -648,14 +731,15 @@ async fn sign_in(
 ) -> Result<Response, Failure> {
     platform.origins.check_auth_post(&headers)?;
     let body = parse_body(&body).ok_or(fail(400, "VALIDATION_ERROR", "Invalid body"))?;
-    let (Some(email), Some(password)) = (text(&body, "email"), text(&body, "password")) else {
-        return Err(fail(400, "VALIDATION_ERROR", "Invalid body"));
-    };
+    check_body(&body, &SIGN_IN_BODY)?;
+
+    // The body check leaves both as strings.
+    let [email, password] = ["email", "password"].map(|field| text(&body, field).unwrap_or_default());
     platform.origins.check_sign_in_form(&headers)?;
-    let email = email.to_lowercase();
-    if !is_email(&email) {
+    if !is_email(email) {
         return Err(fail(400, "INVALID_EMAIL", "Invalid email"));
     }
+    let email = email.to_lowercase();
     let password = Secret::new(password);
     let user = user_by_email(&platform.auth, &email).await?;
     let hash = match &user {
@@ -687,13 +771,17 @@ async fn sign_out(
     headers: HeaderMap,
 ) -> Result<Response, Failure> {
     platform.origins.check_auth_post(&headers)?;
-    let cleared = platform.sessions.clear_cookie();
-    let Some(token) = platform.sessions.read_token(&headers) else {
-        let reply = fail(400, "FAILED_TO_GET_SESSION", "Failed to get session").into_response();
-        return Ok(with_cookie(reply, &cleared)?);
+    let mut reply = match platform.sessions.read_token(&headers) {
+        Some(token) => {
+            delete_session(&platform.auth, &token).await?;
+            json_reply(200, &json!({ "success": true }))
+        }
+        None => fail(400, "FAILED_TO_GET_SESSION", "Failed to get session").into_response(),
     };
-    delete_session(&platform.auth, &token).await?;
-    Ok(with_cookie(json_reply(200, &json!({ "success": true })), &cleared)?)
+    for cookie in platform.sessions.clear_cookies() {
+        reply = with_cookie(reply, &cookie)?;
+    }
+    Ok(reply)
 }
 
 /// `resolveRequestAccessContext`: the legacy session bearer first, then the session cookie,
@@ -752,7 +840,8 @@ async fn bearer_user(app: &Database, token: &str) -> Result<Uuid, ApiError> {
     Ok(row.get(0))
 }
 
-/// `GET /api/me`: the signed-in user, read through the data context.
+/// `GET /api/me`: the signed-in user and their form of address, read through the data context,
+/// and whether they have a password, which only the auth role can see.
 async fn me(
     State(platform): State<Arc<Platform>>,
     headers: HeaderMap,
@@ -762,8 +851,32 @@ async fn me(
     let sql = format!("SELECT {USER_FIELDS} FROM app.get_user_by_id($1::uuid)");
     let row =
         cx.db().query_opt(&sql, &[&access.actor_user_id()]).await?.ok_or(ApiError::Unauthorized)?;
+
+    // Row-level security limits preferences to the actor's own.
+    let addressed = cx
+        .db()
+        .query_opt("SELECT value_json FROM app.preferences WHERE key = 'profile.addressed'", &[])
+        .await?
+        .and_then(|row| row.get::<_, Value>(0).as_str().map(str::to_owned));
     cx.commit().await?;
-    Ok(json_reply(200, &json!({ "user": serialize_user(&row) })))
+
+    let has_password = auth_client(&platform.auth)
+        .await?
+        .query_one(
+            "SELECT EXISTS (SELECT 1 FROM app.auth_accounts \
+               WHERE user_id = $1::uuid AND provider_id = 'credential' AND password IS NOT NULL)",
+            &[&access.actor_user_id()],
+        )
+        .await?
+        .get::<_, bool>(0);
+    Ok(json_reply(
+        200,
+        &json!({
+            "user": serialize_user(&row),
+            "profilePrefs": { "addressed": addressed },
+            "hasPasswordCredential": has_password,
+        }),
+    ))
 }
 
 pub fn routes() -> Router<Arc<Platform>> {
@@ -890,6 +1003,61 @@ mod tests {
         for bad in ["a@b", "a..b@c.com", ".a@b.com", "a.@b.com", "a@-b.com", "a@b.c", "a b@c.com", "@b.com", "a@b..com"] {
             assert!(!is_email(bad), "{bad}");
         }
+    }
+
+    #[test]
+    fn clears_the_same_three_cookies_as_better_auth() {
+        assert_eq!(
+            cookies(false).clear_cookies(),
+            ["session_token", "session_data", "dont_remember"].map(|name| format!(
+                "better-auth.{name}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax"
+            ))
+        );
+        assert_eq!(
+            cookies(true).clear_cookies(),
+            ["session_token", "session_data", "dont_remember"].map(|name| format!(
+                "__Secure-better-auth.{name}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax; Secure"
+            ))
+        );
+    }
+
+    #[test]
+    fn checks_bodies_like_better_call() {
+        let check = |body: Value, schema: &[(&str, Field)]| match check_body(&body, schema) {
+            Ok(()) => None,
+            Err(Failure::Reply { status: 400, code: "VALIDATION_ERROR", message }) => {
+                Some(message.into_owned())
+            }
+            Err(_) => Some("not a validation reply".to_owned()),
+        };
+
+        // Each expected message is zod 4.4.3's own output for the same body.
+        let good = json!({ "name": "N", "email": "a@b.co", "password": "x", "extra": 1 });
+        assert_eq!(check(good, &SIGN_UP_BODY), None);
+        let bad = json!({ "email": "nope", "password": "", "image": null, "rememberMe": "yes" });
+        assert_eq!(
+            check(bad, &SIGN_UP_BODY).as_deref(),
+            Some(
+                "[body.name] Invalid input: expected string, received undefined; \
+                 [body.email] Invalid email address; \
+                 [body.password] Too small: expected string to have >=1 characters; \
+                 [body.image] Invalid input: expected string, received null; \
+                 [body.rememberMe] Invalid input: expected boolean, received string"
+            )
+        );
+        let kelvin = json!({ "name": "N", "email": "\u{212A}@example.com", "password": "x" });
+        assert_eq!(check(kelvin, &SIGN_UP_BODY).as_deref(), Some("[body.email] Invalid email address"));
+        let wrong_types = json!({ "email": ["a@b.co"], "password": 12345678, "callbackURL": {} });
+        assert_eq!(
+            check(wrong_types, &SIGN_IN_BODY).as_deref(),
+            Some(
+                "[body.email] Invalid input: expected string, received array; \
+                 [body.password] Invalid input: expected string, received number; \
+                 [body.callbackURL] Invalid input: expected string, received object"
+            )
+        );
+        let loose = json!({ "email": "nope", "password": "", "rememberMe": false });
+        assert_eq!(check(loose, &SIGN_IN_BODY), None);
     }
 
     #[test]

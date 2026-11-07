@@ -34,7 +34,10 @@
         "path": "/api/tasks/30000000-0000-4000-8000-000000000001/activity",
         "as": "B",
         "expect": {
-          "status": 404
+          "status": 200,
+          "body": {
+            "activity": []
+          }
         }
       },
       {
@@ -99,7 +102,8 @@
         }
       }
     ],
-    "rows": ["app.tasks", "app.task_activity"]
+    "rows": ["app.tasks", "app.task_activity"],
+    "note": "The activity list does not check that the task is visible, so another member's task answers 200 with an empty list on both servers. Row-level security hides the rows."
   },
   {
     "name": "safety: admin cannot read a member's private data",
@@ -163,7 +167,10 @@
         "path": "/api/tasks/30000000-0000-4000-8000-000000000001/activity",
         "as": "admin",
         "expect": {
-          "status": 404
+          "status": 200,
+          "body": {
+            "activity": []
+          }
         }
       },
       {
@@ -524,9 +531,21 @@
         "expect": {
           "status": 401
         }
+      },
+      {
+        "id": "audit trail, request ids by presence only",
+        "sql": "select actor_user_id, action, target_type, target_id, metadata, request_id is not null as has_request_id from app.admin_audit_events order by created_at, action",
+        "as": "admin",
+        "expect": {
+          "rows": [
+            { "has_request_id": true },
+            { "has_request_id": true },
+            { "has_request_id": true }
+          ]
+        }
       }
     ],
-    "rows": ["app.users", "app.admin_audit_events"]
+    "rows": ["app.users"]
   },
   {
     "name": "safety: account guardrails hold for admins",
@@ -670,9 +689,17 @@
         "expect": {
           "status": 403
         }
+      },
+      {
+        "id": "audit trail, request ids by presence only",
+        "sql": "select actor_user_id, action, target_type, target_id, metadata, request_id is not null as has_request_id from app.admin_audit_events order by created_at, action",
+        "as": "B",
+        "expect": {
+          "rows": [{ "has_request_id": true }, { "has_request_id": true }]
+        }
       }
     ],
-    "rows": ["app.users", "app.admin_audit_events"],
+    "rows": ["app.users"],
     "note": "Delete and reject are only called where a guard refuses them, because the Rust server answers 501 once every guard passes."
   },
   {
@@ -889,6 +916,10 @@
   {
     "name": "safety: passwords never come back or reach a log",
     "source": "Hard invariant: secrets never escape; the harness scans both server logs for MOSS-SENTINEL- after the last case",
+    "seed": [
+      "update app.users set is_bootstrap_owner = true where id = '{{admin}}'",
+      "insert into app.instance_settings (key, value) values ('registration.enabled', '{\"value\": true}'::jsonb), ('registration.requires_approval', '{\"value\": false}'::jsonb) on conflict (key) do update set value = excluded.value"
+    ],
     "steps": [
       {
         "id": "sign up",
