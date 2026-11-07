@@ -12,21 +12,21 @@ slice 5 (live proof) wait for Ben's mockups and are not planned here.
 
 Every capability the plan assumes, cited against `origin/main` at the time of writing.
 
-| Capability                                                                                         | Evidence                                                                                                           |
-| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Prompt is assembled in the registry composition, one place, with an escaped JSON `externalData`    | `packages/module-registry/src/meeting-output-runtime.ts:310-321` (`promptFor`), `:298-302` (`escapeData`)          |
-| Meetings never imports calendar, people or memory, so the pack is composed in the registry (design choice, not a ban) | `packages/meetings/package.json` deps (db, module-sdk, shared, structured-state, ui, jobs, vault); registry imports `@moss/calendar` and `@moss/memory` already (`approval-source-references.ts:3,7`) |
-| Meetings already receives other modules through a port built in the registry                       | `createTask: MeetingTaskCreator` at `meeting-output-runtime.ts:484-493`                                            |
-| Generation runs in Moss under the owner's data context, no tools                                   | `meeting-output-runtime.ts:351` (`prepareStructuredGeneration`), `output-service.ts:149-170`                   |
-| Prompt cap and split loop; unsplittable piece throws `meeting_output_input_too_large`              | `meeting-output-runtime.ts:324-330,392-398`; `STRUCTURED_PROMPT_MAX_BYTES` from `@moss/ai`                         |
-| Instruction scan covers transcript and notes only, returns reader-facing lines, never blocks       | `packages/meetings/src/instruction-scan.ts:34-47`; stored via `output-service.ts:149,209`                          |
-| Artifact is one JSON text column, so a new optional field needs no SQL                             | `packages/meetings/sql/0278_meeting_outputs.sql:12-22` (`artifact_json TEXT`, 1 MB cap)                            |
-| Output schema, content type and validation limits                                                  | `meeting-output-runtime.ts:67-130` (`MEETING_OUTPUT_SCHEMA`; overview, decisions and actions start at `:102`), `packages/shared/src/meeting-output-api.ts:24-31`, `packages/meetings/src/output-validation.ts:9-17` |
-| Transcript speaker is anonymous and meeting-local                                                  | `packages/shared/src/meeting-transcript-api.ts:23-24`                                                              |
-| People has an exact name or identity lookup that takes the owner's scoped db                       | `packages/people/src/service.ts:25-50` (`PersonContextService.resolve`), `listPeople` at `:60`                     |
-| Memory recall takes a free-text query, scoped db and owner id, with no chat context                | `packages/memory/src/graph-recall-service.ts:62-69` (`recall`); needs an embedding provider, built at `built-in-module-helpers.ts:31` |
-| Calendar reads are owner-scoped by row policy, with an owner-only filter option                    | `packages/calendar/src/repository.ts:23-32` (`ListVisibleCalendarEventsOptions`), `:83` (`listVisible`)            |
-| Meeting preferences are per-user keys through a store port                                         | `packages/meetings/src/preferences.ts:19-22,95-115`                                                                |
+| Capability                                                                                                            | Evidence                                                                                                                                                                                                            |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prompt is assembled in the registry composition, one place, with an escaped JSON `externalData`                       | `packages/module-registry/src/meeting-output-runtime.ts:310-321` (`promptFor`), `:298-302` (`escapeData`)                                                                                                           |
+| Meetings never imports calendar, people or memory, so the pack is composed in the registry (design choice, not a ban) | `packages/meetings/package.json` deps (db, module-sdk, shared, structured-state, ui, jobs, vault); registry imports `@moss/calendar` and `@moss/memory` already (`approval-source-references.ts:3,7`)               |
+| Meetings already receives other modules through a port built in the registry                                          | `createTask: MeetingTaskCreator` at `meeting-output-runtime.ts:484-493`                                                                                                                                             |
+| Generation runs in Moss under the owner's data context, no tools                                                      | `meeting-output-runtime.ts:351` (`prepareStructuredGeneration`), `output-service.ts:149-170`                                                                                                                        |
+| Prompt cap and split loop; unsplittable piece throws `meeting_output_input_too_large`                                 | `meeting-output-runtime.ts:324-330,392-398`; `STRUCTURED_PROMPT_MAX_BYTES` from `@moss/ai`                                                                                                                          |
+| Instruction scan covers transcript and notes only, returns reader-facing lines, never blocks                          | `packages/meetings/src/instruction-scan.ts:34-47`; stored via `output-service.ts:149,209`                                                                                                                           |
+| Artifact is one JSON text column, so a new optional field needs no SQL                                                | `packages/meetings/sql/0278_meeting_outputs.sql:12-22` (`artifact_json TEXT`, 1 MB cap)                                                                                                                             |
+| Output schema, content type and validation limits                                                                     | `meeting-output-runtime.ts:67-130` (`MEETING_OUTPUT_SCHEMA`; overview, decisions and actions start at `:102`), `packages/shared/src/meeting-output-api.ts:24-31`, `packages/meetings/src/output-validation.ts:9-17` |
+| Transcript speaker is anonymous and meeting-local                                                                     | `packages/shared/src/meeting-transcript-api.ts:23-24`                                                                                                                                                               |
+| People has an exact name or identity lookup that takes the owner's scoped db                                          | `packages/people/src/service.ts:25-50` (`PersonContextService.resolve`), `listPeople` at `:60`                                                                                                                      |
+| Memory recall takes a free-text query, scoped db and owner id, with no chat context                                   | `packages/memory/src/graph-recall-service.ts:62-69` (`recall`); needs an embedding provider, built at `built-in-module-helpers.ts:31`                                                                               |
+| Calendar reads are owner-scoped by row policy, with an owner-only filter option                                       | `packages/calendar/src/repository.ts:23-32` (`ListVisibleCalendarEventsOptions`), `:83` (`listVisible`)                                                                                                             |
+| Meeting preferences are per-user keys through a store port                                                            | `packages/meetings/src/preferences.ts:19-22,95-115`                                                                                                                                                                 |
 
 ### Open checks from the spec, resolved by reading the code
 
@@ -40,18 +40,18 @@ Every capability the plan assumes, cited against `origin/main` at the time of wr
    display name or identity for the owner. It returns one person or null, so it cannot rank near
    matches and nothing batches. Slice 1 adds a bounded batch lookup that takes a list of names.
 3. **Does memory recall take a free-text query without a chat context? Yes.** `recall(scopedDb,
-   ownerUserId, query, options)` needs only the embedding provider the registry already builds. No new
+ownerUserId, query, options)` needs only the embedding provider the registry already builds. No new
    memory function is needed. Slice 1 only wraps it in a registry-side adapter.
 4. **Real pack size on a seeded account: not measurable until slice 2 exists.** It is a slice 2
    exit criterion, with the numbers recorded on the PR.
 
 ### Open questions with owners
 
-| Question                                                                                              | Owner                | Default if unanswered                                                  |
-| ----------------------------------------------------------------------------------------------------- | -------------------- | ---------------------------------------------------------------------- |
-| Store attendee display names only, or also email addresses, in event metadata?                        | Ben (privacy)        | Names only. Matching to People then works by name, not address.        |
-| Is there a recording start time on the meeting, or only `meeting_records.created_at`?                 | Slice 2 builder      | Read the recording metadata first, fall back to the record's creation time. |
-| Does the Outlook mirror expose attendee names to the browser reader at all?                           | Slice 1 builder      | Google only in slice 1. Outlook events stay count-only, and the pack skips the attendee list. |
+| Question                                                                              | Owner           | Default if unanswered                                                                         |
+| ------------------------------------------------------------------------------------- | --------------- | --------------------------------------------------------------------------------------------- |
+| Store attendee display names only, or also email addresses, in event metadata?        | Ben (privacy)   | Names only. Matching to People then works by name, not address.                               |
+| Is there a recording start time on the meeting, or only `meeting_records.created_at`? | Slice 2 builder | Read the recording metadata first, fall back to the record's creation time.                   |
+| Does the Outlook mirror expose attendee names to the browser reader at all?           | Slice 1 builder | Google only in slice 1. Outlook events stay count-only, and the pack skips the attendee list. |
 
 Ben's ruling on the first row blocks nothing: the default is built, and widening it later is one
 metadata key plus one filter.
@@ -312,13 +312,17 @@ Contracts (in `packages/shared/src/meeting-output-api.ts`):
 
 ```ts
 export type MeetingSpeakerBasis =
-  "calendar" | "introduced-in-talk" | "addressed-by-name" | "owner" | "inference";
+  | "calendar"
+  | "introduced-in-talk"
+  | "addressed-by-name"
+  | "owner"
+  | "inference";
 export interface MeetingSpeakerGuess {
-  readonly speakerId: string;               // transcript speakerId, or a source label
+  readonly speakerId: string; // transcript speakerId, or a source label
   readonly name: string | null;
   readonly basis: MeetingSpeakerBasis;
   readonly confidence: "high" | "low";
-  readonly evidence: readonly string[];     // transcript segment ids
+  readonly evidence: readonly string[]; // transcript segment ids
 }
 // MeetingOutputContent gains:  readonly speakers?: readonly MeetingSpeakerGuess[];
 ```
@@ -414,12 +418,12 @@ Owner: Ben makes the call. The coordinator collects the numbers.
 
 ## 8. Rulings ledger
 
-| Finding                                                                                            | Evidence                                                               | Status             |
-| -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------ |
-| Attendee names are not stored anywhere, only a count                                                | `google-sync-phases.ts:340`, `calendar-api.ts:16`                      | Fact; slice 1.1    |
-| Meetings cannot import the other modules, so the pack is composed in the registry                  | `meetings/package.json`, `meeting-output-runtime.ts:484`               | Decision           |
-| Memory recall needs no chat context and no new function                                            | `graph-recall-service.ts:62`                                           | Fact               |
-| People lookup is exact-match and singular, so a bounded batch is added                             | `people/src/service.ts:25`                                             | Decision; slice 1.3 |
-| Artifact JSON is one text column, no SQL for `speakers`                                            | `0278_meeting_outputs.sql:12-22`                                       | Fact               |
-| Names default to display name only, no emails                                                       | Spec section 1 "Never included"                                        | Decision pending Ben's confirmation (default built) |
-| Owner labels table belongs to slice 4, not 3                                                        | Spec slice 4 "correction storage"                                      | Decision           |
+| Finding                                                                           | Evidence                                                 | Status                                              |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------- |
+| Attendee names are not stored anywhere, only a count                              | `google-sync-phases.ts:340`, `calendar-api.ts:16`        | Fact; slice 1.1                                     |
+| Meetings cannot import the other modules, so the pack is composed in the registry | `meetings/package.json`, `meeting-output-runtime.ts:484` | Decision                                            |
+| Memory recall needs no chat context and no new function                           | `graph-recall-service.ts:62`                             | Fact                                                |
+| People lookup is exact-match and singular, so a bounded batch is added            | `people/src/service.ts:25`                               | Decision; slice 1.3                                 |
+| Artifact JSON is one text column, no SQL for `speakers`                           | `0278_meeting_outputs.sql:12-22`                         | Fact                                                |
+| Names default to display name only, no emails                                     | Spec section 1 "Never included"                          | Decision pending Ben's confirmation (default built) |
+| Owner labels table belongs to slice 4, not 3                                      | Spec slice 4 "correction storage"                        | Decision                                            |
