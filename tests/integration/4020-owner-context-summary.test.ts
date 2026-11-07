@@ -124,7 +124,8 @@ describe("summary prompt carries the owner's own context", () => {
       decisions: [],
       openQuestions: [],
       actions: [],
-      warnings: []
+      warnings: [],
+      speakers: []
     };
     const fetch = vi.fn<typeof globalThis.fetch>(
       async () =>
