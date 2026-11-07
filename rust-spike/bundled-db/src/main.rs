@@ -22,6 +22,7 @@ usage:
   moss-db stop    --root DIR
   moss-db status  --root DIR
   moss-db check   --root DIR [--write NOTE]
+  moss-db hold    --root DIR --seconds N
   moss-db at-rest [--root DIR] [--path LABEL=DIR]...
 ";
 
@@ -54,6 +55,7 @@ fn main() -> ExitCode {
         "stop" => stop(&options),
         "status" => status(&options),
         "check" => check(&options),
+        "hold" => hold(&options),
         "at-rest" => at_rest_report(&options),
         _ => {
             eprint!("{USAGE}");
@@ -74,6 +76,7 @@ struct Options {
     tcp: bool,
     port_range: Option<(u16, u16)>,
     write: Option<String>,
+    seconds: Option<u32>,
     paths: Vec<(String, PathBuf)>,
 }
 
@@ -98,6 +101,7 @@ impl Options {
                     options.port_range = Some(range);
                 }
                 "--write" => options.write = Some(value()?),
+                "--seconds" => options.seconds = Some(value()?.parse().map_err(|_| "--seconds needs a number")?),
                 "--path" => {
                     let text = value()?;
                     let (label, path) = text.split_once('=').ok_or_else(|| format!("--path wants LABEL=DIR, got {text}"))?;
@@ -255,7 +259,11 @@ fn check(options: &Options) -> Result<ExitCode, String> {
 
     let mut app = endpoint.connect(SUPERUSER, &superuser, APP_DATABASE)?;
     let server = app
-        .query_one("SELECT current_setting('server_version'), pg_postmaster_start_time()::text, current_setting('data_checksums')", &[])
+        .query_one(
+            "SELECT current_setting('server_version'), pg_postmaster_start_time()::text, current_setting('data_checksums'), \
+             current_setting('cluster_name'), current_setting('shared_preload_libraries')",
+            &[],
+        )
         .map_err(sql)?;
     let vector: Option<String> = app
         .query_opt("SELECT extversion FROM pg_extension WHERE extname = 'vector'", &[])
@@ -293,6 +301,8 @@ fn check(options: &Options) -> Result<ExitCode, String> {
             "version": server.get::<_, String>(0),
             "started": server.get::<_, String>(1),
             "data_checksums": server.get::<_, String>(2),
+            "cluster_name": server.get::<_, String>(3),
+            "shared_preload_libraries": server.get::<_, String>(4),
         },
         "app_database": {
             "vector_extension": vector,
@@ -354,6 +364,30 @@ fn vector_proof(endpoint: &Endpoint, superuser: &secrets::Secret, note: Option<&
         .map(|row| json!({ "id": row.get::<_, i64>(0), "note": row.get::<_, String>(1), "written_at": row.get::<_, String>(2) }))
         .collect();
     Ok(json!({ "query": query, "nearest": nearest, "plan": plan, "marks": marks }))
+}
+
+/// Proof helper: one session reads the proof rows into memory, then keeps the CPU busy. It
+/// prints the server process id first, so a crash proof can target that exact process. A busy
+/// loop, unlike `pg_sleep`, does not notice the postmaster dying, which the leftover proof needs.
+fn hold(options: &Options) -> Result<ExitCode, String> {
+    let seconds = options.seconds.ok_or("give --seconds")?;
+    let layout = Layout::create(options.root()?).map_err(|e| e.to_string())?;
+    let state = cluster::read_state(&layout)?;
+    let endpoint = Endpoint::from_json(&state["endpoint"]).ok_or("the state file has no endpoint")?;
+    let superuser = secrets::existing(&layout, SUPERUSER)?;
+    let sql = |e: postgres::Error| cluster::db_error(&e);
+    let mut db = endpoint.connect(SUPERUSER, &superuser, PROOF_DATABASE)?;
+    let row = db.query_one("SELECT pg_backend_pid(), count(*) FROM marks", &[]).map_err(sql)?;
+    emit(&json!({ "event": "holding", "backend_pid": row.get::<_, i32>(0), "rows_read": row.get::<_, i64>(1) }));
+    let busy = format!(
+        "DO $$ BEGIN WHILE clock_timestamp() < now() + interval '{seconds} seconds' LOOP END LOOP; END $$"
+    );
+    let outcome = match db.batch_execute(&busy) {
+        Ok(()) => "finished".to_string(),
+        Err(error) => sql(error),
+    };
+    emit(&json!({ "event": "released", "outcome": outcome }));
+    Ok(ExitCode::SUCCESS)
 }
 
 /// Disk encryption for the install's folders (with `--root`), any `--path`, swap and crash
