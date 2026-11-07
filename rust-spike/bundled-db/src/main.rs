@@ -9,7 +9,7 @@ use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
 use bundled_db::cluster::{self, Bundle, Endpoint, Listen, StopMode};
-use bundled_db::layout::{self, Layout};
+use bundled_db::layout::Layout;
 use bundled_db::{at_rest, migrate, procs, secrets, APP_DATABASE, SUPERUSER};
 use serde_json::{json, Value};
 use signal_hook::consts::{SIGCHLD, SIGHUP, SIGINT, SIGTERM};
@@ -37,6 +37,10 @@ const STOP_TIMEOUT: Duration = Duration::from_secs(30);
 const PROOF_DATABASE: &str = "moss_proof";
 
 fn main() -> ExitCode {
+    if let Err(error) = procs::protect_from_crash_dumps() {
+        emit(&json!({ "event": "error", "error": format!("crash-dump protection: {error}") }));
+        return ExitCode::FAILURE;
+    }
     let args: Vec<String> = std::env::args().skip(1).collect();
     let Some((command, rest)) = args.split_first() else {
         eprint!("{USAGE}");
@@ -218,7 +222,7 @@ fn up(options: &Options) -> Result<ExitCode, String> {
 
 /// Asks the running supervisor to stop, then waits until it has let go of the install.
 fn stop(options: &Options) -> Result<ExitCode, String> {
-    let layout = Layout::create(options.root()?).map_err(|e| e.to_string())?;
+    let layout = Layout::open(options.root()?).map_err(|e| e.to_string())?;
     let Some(pid) = cluster::holder(&layout)? else {
         emit(&json!({ "event": "not-running" }));
         return Ok(ExitCode::SUCCESS);
@@ -236,7 +240,7 @@ fn stop(options: &Options) -> Result<ExitCode, String> {
 }
 
 fn status(options: &Options) -> Result<ExitCode, String> {
-    let layout = Layout::create(options.root()?).map_err(|e| e.to_string())?;
+    let layout = Layout::open(options.root()?).map_err(|e| e.to_string())?;
     let supervisor = cluster::holder(&layout)?;
     let postmaster = cluster::read_postmaster_pid(&layout);
     let state = cluster::read_state(&layout).ok();
@@ -251,7 +255,7 @@ fn status(options: &Options) -> Result<ExitCode, String> {
 /// Reads back what `up` set up, and runs a vector search. `--write NOTE` also stores a
 /// marked row, so a later check after a restart or a crash can show the row survived.
 fn check(options: &Options) -> Result<ExitCode, String> {
-    let layout = Layout::create(options.root()?).map_err(|e| e.to_string())?;
+    let layout = Layout::open(options.root()?).map_err(|e| e.to_string())?;
     let state = cluster::read_state(&layout)?;
     let endpoint = Endpoint::from_json(&state["endpoint"]).ok_or("the state file has no endpoint")?;
     let superuser = secrets::existing(&layout, SUPERUSER)?;
@@ -371,7 +375,7 @@ fn vector_proof(endpoint: &Endpoint, superuser: &secrets::Secret, note: Option<&
 /// loop, unlike `pg_sleep`, does not notice the postmaster dying, which the leftover proof needs.
 fn hold(options: &Options) -> Result<ExitCode, String> {
     let seconds = options.seconds.ok_or("give --seconds")?;
-    let layout = Layout::create(options.root()?).map_err(|e| e.to_string())?;
+    let layout = Layout::open(options.root()?).map_err(|e| e.to_string())?;
     let state = cluster::read_state(&layout)?;
     let endpoint = Endpoint::from_json(&state["endpoint"]).ok_or("the state file has no endpoint")?;
     let superuser = secrets::existing(&layout, SUPERUSER)?;
@@ -394,14 +398,15 @@ fn hold(options: &Options) -> Result<ExitCode, String> {
 /// dumps. Reads only; creates nothing.
 fn at_rest_report(options: &Options) -> Result<ExitCode, String> {
     let mut paths = Vec::new();
+    let mut supervisor = Ok(None);
     let mut database_pids = Vec::new();
     if let Some(root) = &options.root {
         paths.push(("Database folder".to_string(), root.join("db")));
         paths.push(("Logs".to_string(), root.join("logs")));
         // The same data path the supervisor uses, so the cluster name matches.
-        if let Ok(root) = root.canonicalize() {
-            let data = root.join("db");
-            database_pids = procs::database_processes(&data, &layout::cluster_name(&data));
+        if let Ok(layout) = Layout::open(root) {
+            supervisor = cluster::holder(&layout);
+            database_pids = procs::database_processes(&layout.data, &layout.cluster_name());
         }
     }
     paths.extend(options.paths.iter().cloned());
@@ -409,10 +414,10 @@ fn at_rest_report(options: &Options) -> Result<ExitCode, String> {
         return Err("give --root or at least one --path".into());
     }
     #[cfg(target_os = "linux")]
-    let report = at_rest::linux::report(&paths, &database_pids);
+    let report = at_rest::linux::report(&paths, supervisor, &database_pids);
     #[cfg(target_os = "macos")]
     let report = {
-        let _ = database_pids;
+        let _ = (supervisor, database_pids);
         at_rest::macos::report(&paths)
     };
     emit_pretty(&report.to_json());

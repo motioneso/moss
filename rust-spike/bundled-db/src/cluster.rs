@@ -125,19 +125,36 @@ pub fn lock(layout: &Layout) -> Result<InstallLock, String> {
     Ok(InstallLock { _file: file })
 }
 
+/// How long `holder` waits for a new supervisor to write its pid.
+const HOLDER_WAIT: Duration = Duration::from_secs(1);
+
 /// The pid of the supervisor running this install, if one is. Takes a shared lock for a
 /// moment and writes nothing.
+///
+/// A new supervisor writes its pid just after it takes the lock, so for a moment the file can
+/// be empty or still name the previous supervisor, whose pid may now belong to another program.
+/// A pid counts only when it runs `moss-db up` or `init`.
 pub fn holder(layout: &Layout) -> Result<Option<i32>, String> {
-    let file = match File::open(&layout.lock) {
-        Ok(file) => file,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(format!("lock file: {error}")),
-    };
-    if try_flock(&file, libc::LOCK_SH)? {
-        return Ok(None);
+    let clock = Instant::now();
+    loop {
+        let file = match File::open(&layout.lock) {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(format!("lock file: {error}")),
+        };
+        if try_flock(&file, libc::LOCK_SH)? {
+            return Ok(None);
+        }
+        let text = std::fs::read_to_string(&layout.lock).map_err(|e| format!("lock file: {e}"))?;
+        let text = text.trim();
+        match text.parse::<i32>() {
+            Ok(pid) if procs::is_supervisor(pid) => return Ok(Some(pid)),
+            _ if clock.elapsed() > HOLDER_WAIT => {
+                return Err(format!("the install is locked, but the lock file names no running supervisor ({text:?})"));
+            }
+            _ => std::thread::sleep(Duration::from_millis(20)),
+        }
     }
-    let text = std::fs::read_to_string(&layout.lock).map_err(|e| format!("lock file: {e}"))?;
-    Ok(text.trim().parse().ok())
 }
 
 /// `Ok(false)` when another process holds a conflicting lock.
@@ -191,16 +208,19 @@ pub fn initialize(layout: &Layout, bundle: &Bundle) -> Result<bool, String> {
         .args(["-U", SUPERUSER, "--encoding=UTF8", "--no-instructions", "--data-checksums"])
         .arg(format!("--pwfile={}", pwfile.display()))
         .args(["--auth-local=scram-sha-256", "--auth-host=scram-sha-256"])
-        // Sorting and case rules come from the bundled ICU, the same on every OS. The libc
-        // ctype stays UTF-8 because Postgres 17 text search still asks libc what a letter is.
+        // Sorting and case rules come from ICU, not from the OS's C library. Sorting matches
+        // across OSes only when each bundle ships the same ICU version. The spike used each
+        // machine's own ICU. The libc ctype stays UTF-8 because Postgres 17 text search still
+        // asks libc what a letter is.
         .args(["--locale-provider=icu", "--icu-locale=und", "--lc-collate=C", "--lc-ctype=C.UTF-8"])
         .args(["--lc-messages=C", "--lc-monetary=C", "--lc-numeric=C", "--lc-time=C"])
         .stdin(Stdio::null())
         .stdout(log.try_clone().map_err(|e| e.to_string())?)
         .stderr(log);
     clean_env(&mut initdb);
-    // Linux: initdb dies with the supervisor, so a later supervisor never finds it still
-    // writing into the side folder it is about to clear.
+    // Linux: initdb dies with the supervisor. The server initdb starts gets no such signal. It
+    // reads its commands from initdb through a pipe, so it should stop soon after initdb, but
+    // nothing checks that it has stopped before a later supervisor clears the side folder.
     #[cfg(target_os = "linux")]
     unsafe {
         initdb.pre_exec(|| {
