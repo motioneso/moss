@@ -1,4 +1,5 @@
 import { replyThreadingMetadata } from "./reply-threading.js";
+import { attendeeMetadata } from "./google-attendee-names.js";
 import { sql } from "kysely";
 
 import type { ConnectorSyncDeferredReason, ConnectorSyncErrorDetail } from "@moss/shared";
@@ -337,7 +338,7 @@ export async function runGoogleCalendarPhase(context: PhaseContext): Promise<str
             externalMetadata: {
               status: event.status ?? null,
               htmlLink: event.htmlLink ?? null,
-              attendeeCount: event.attendees?.length ?? 0,
+              ...attendeeMetadata(event.attendees),
               allDay: instants.allDay
             }
           })

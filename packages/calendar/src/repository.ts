@@ -31,7 +31,71 @@ export interface ListVisibleCalendarEventsOptions {
   readonly limit?: number;
 }
 
+/** One owned event near a time window, with attendee display names only (never emails). */
+export interface CalendarEventContext {
+  readonly eventId: string;
+  readonly title: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly attendeeNames: readonly string[];
+}
+
+export interface CalendarEventWindow {
+  readonly start: Date;
+  readonly end: Date;
+  readonly toleranceMinutes: number;
+}
+
+const MAX_OVERLAPPING_EVENTS = 3;
+const MAX_CONTEXT_ATTENDEES = 20;
+const MAX_CONTEXT_NAME_LENGTH = 80;
+
+function attendeeNamesFromMetadata(metadata: unknown): string[] {
+  const raw = (metadata as { attendeeNames?: unknown } | null)?.attendeeNames;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((n): n is string => typeof n === "string" && n.trim() !== "" && !n.includes("@"))
+    .map((n) => n.trim().slice(0, MAX_CONTEXT_NAME_LENGTH))
+    .slice(0, MAX_CONTEXT_ATTENDEES);
+}
+
 export class CalendarRepository {
+  /**
+   * The actor's own events that overlap the window, widened by the tolerance on both
+   * sides. Most overlap first, at most three rows.
+   */
+  async listEventsOverlapping(
+    scopedDb: DataContextDb,
+    window: CalendarEventWindow
+  ): Promise<readonly CalendarEventContext[]> {
+    assertDataContextDb(scopedDb);
+    const tolMs = Math.max(0, window.toleranceMinutes) * 60_000;
+    const widenedStart = new Date(window.start.getTime() - tolMs);
+    const widenedEnd = new Date(window.end.getTime() + tolMs);
+
+    const rows = await scopedDb.db
+      .selectFrom("app.calendar_events")
+      .select(["id", "title", "starts_at", "ends_at", "external_metadata"])
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .where("ends_at", ">", widenedStart)
+      .where("starts_at", "<", widenedEnd)
+      .orderBy(
+        sql`extract(epoch from (least(ends_at, ${window.end}::timestamptz) - greatest(starts_at, ${window.start}::timestamptz)))`,
+        "desc"
+      )
+      .orderBy("id")
+      .limit(MAX_OVERLAPPING_EVENTS)
+      .execute();
+
+    return rows.map((row) => ({
+      eventId: row.id,
+      title: row.title,
+      startsAt: new Date(row.starts_at).toISOString(),
+      endsAt: new Date(row.ends_at).toISOString(),
+      attendeeNames: attendeeNamesFromMetadata(row.external_metadata)
+    }));
+  }
+
   async listMirrorWindow(
     scopedDb: DataContextDb,
     accountId: string,

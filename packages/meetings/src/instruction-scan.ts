@@ -15,7 +15,7 @@ const ORDER_PATTERNS: readonly RegExp[] = [
   /^(please )?(leave out|omit|do not mention|don't mention|dont mention)\b/
 ];
 
-const looksLikeOrder = (line: string): boolean => {
+export const looksLikeOrder = (line: string): boolean => {
   const normal = line.toLowerCase().replace(/\s+/g, " ").trim();
   return normal.length > 0 && ORDER_PATTERNS.some((pattern) => pattern.test(normal));
 };
