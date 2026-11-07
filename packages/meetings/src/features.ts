@@ -368,7 +368,7 @@ export const meetingFeatures = [
   {
     id: "meetings.owner_context",
     description:
-      "Summaries always use background about you: your name, the matching calendar event, notes on people named in the recording and related memories. Only your own data, capped, never quoted as evidence, and dropped first with a warning if it does not fit."
+      "Summaries always use background about you: your name, the matching calendar event, notes on people named in the recording and related memories. Only your own data, capped, never quoted as evidence, dropped first with a warning if too long."
   },
   {
     id: "meetings.grounded_outputs",
