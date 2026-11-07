@@ -152,6 +152,9 @@ struct Outcome {
     problems: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     note: Option<String>,
+    /// Steps marked `record`: `{step, side, output}` for each server.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    recorded: Vec<Value>,
 }
 
 async fn run_cases(
@@ -207,6 +210,9 @@ async fn run_cases(
         for problem in &outcome.problems {
             println!("     {problem}");
         }
+        for record in &outcome.recorded {
+            println!("     recorded {record}");
+        }
         outcomes.push(outcome);
     }
     ts.stop().await;
@@ -251,6 +257,7 @@ async fn run_case(
 ) -> Outcome {
     let vars = Vars { start: Utc::now() };
     let mut problems = Vec::new();
+    let mut recorded = Vec::new();
     let mut sides = [
         Side {
             label: "TypeScript",
@@ -312,6 +319,9 @@ async fn run_case(
                     None => observed.clone(),
                 };
                 seen.push(side.canon.value(&compared));
+                if step.record {
+                    recorded.push(json!({ "step": key, "side": side.label, "output": observed }));
+                }
                 side.outputs.insert(key.clone(), observed);
             }
             for line in diff(&seen[0], &seen[1], 8) {
@@ -341,6 +351,7 @@ async fn run_case(
         passed: problems.is_empty(),
         problems,
         note: case.note.clone(),
+        recorded,
     }
 }
 
@@ -414,6 +425,7 @@ fn scan_logs(logs: &Path) -> Outcome {
         passed: problems.is_empty(),
         problems,
         note: None,
+        recorded: Vec::new(),
     }
 }
 

@@ -82,6 +82,10 @@ pub struct Step {
     /// Text that must not appear in the step's output on either server, ignoring case.
     #[serde(default)]
     pub absent: Vec<String>,
+    /// Prints both servers' output and keeps it in the report, for a step that is observed
+    /// rather than asserted.
+    #[serde(default)]
+    pub record: bool,
 }
 
 pub const SEED_IDS: &[(&str, &str)] = &[

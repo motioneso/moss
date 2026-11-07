@@ -908,10 +908,11 @@
       {
         "id": "admin edits AI keys with no filter (observed, not asserted)",
         "sql": "update app.ai_provider_configs set base_url = 'https://parity.invalid'",
-        "as": "admin"
+        "as": "admin",
+        "record": true
       }
     ],
-    "note": "The last step records whether an admin update with no WHERE clause reaches a member's row. Update rules alone decide that, because the statement reads no column."
+    "note": "The last step records, in the run log and the report, whether an admin update with no WHERE clause reaches a member's row. Update rules alone decide that, because the statement reads no column."
   },
   {
     "name": "safety: passwords never come back or reach a log",
