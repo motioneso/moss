@@ -21,9 +21,27 @@ export interface MeetingOutputAction extends MeetingOutputClaim {
   readonly ownerPhrase: string | null;
   readonly duePhrase: string | null;
 }
+export type MeetingSpeakerBasis =
+  | "calendar"
+  | "introduced-in-talk"
+  | "addressed-by-name"
+  | "owner"
+  | "inference";
+/** A proposed name for one speaker. Text elsewhere in the summary refers to it as {{speaker:<id>}}. */
+export interface MeetingSpeakerGuess {
+  /** Transcript speaker id, or a capture source id when the transcript has no speaker ids. */
+  readonly speakerId: string;
+  readonly name: string | null;
+  readonly basis: MeetingSpeakerBasis;
+  readonly confidence: "high" | "low";
+  /** Transcript segment ids that support the name. */
+  readonly evidence: readonly string[];
+}
 export interface MeetingOutputContent {
   /** Absent on retained legacy summaries. */
   readonly recording?: RecordingInterpretation;
+  /** Absent on summaries written before speaker guesses existed. */
+  readonly speakers?: readonly MeetingSpeakerGuess[];
   readonly overview: string;
   readonly decisions: readonly MeetingOutputClaim[];
   readonly openQuestions: readonly string[];

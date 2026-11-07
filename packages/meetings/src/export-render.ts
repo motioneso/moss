@@ -1,5 +1,7 @@
 import type { MeetingOutputArtifact, MeetingOutputEvidence } from "@moss/shared";
 
+import { resolveSummarySpeakerText } from "./speaker-references.js";
+
 /** Render untrusted artifact fields as text, never active Markdown/HTML or remote images. */
 function plain(value: string): string {
   return value
@@ -15,7 +17,8 @@ function citation(evidence: MeetingOutputEvidence): string {
     : `personal-note:${evidence.meetingId}@${evidence.notesRevision}:${evidence.startCharacter}-${evidence.endCharacter}`;
 }
 /** No source excerpts: only reviewed artifact content and exact revision/range references. */
-export function renderMeetingExport(artifact: MeetingOutputArtifact): string {
+export function renderMeetingExport(source: MeetingOutputArtifact): string {
+  const artifact = { ...source, content: resolveSummarySpeakerText(source.content) };
   const claim = (item: { text: string; evidence: readonly MeetingOutputEvidence[] }) =>
     `- ${plain(item.text)}\n  Evidence: ${item.evidence.map(citation).join("; ")}`;
   return (

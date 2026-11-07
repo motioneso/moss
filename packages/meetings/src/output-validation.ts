@@ -1,7 +1,9 @@
 import type {
   MeetingOutputContent,
   MeetingOutputEvidence,
-  MeetingOutputInputs
+  MeetingOutputInputs,
+  MeetingSpeakerBasis,
+  MeetingSpeakerGuess
 } from "@moss/shared";
 
 import { validateRecordingInterpretation } from "./recording-validation.js";
@@ -12,6 +14,21 @@ const MAX_PHRASE_CHARACTERS = 300;
 const MAX_ITEMS = 50;
 const MAX_EVIDENCE = 10;
 const MAX_OUTPUT_CHARACTERS = 40_000;
+const MAX_SPEAKERS = 20;
+const MAX_SPEAKER_NAME = 100;
+const SPEAKER_BASES: readonly MeetingSpeakerBasis[] = [
+  "calendar",
+  "introduced-in-talk",
+  "addressed-by-name",
+  "owner",
+  "inference"
+];
+const SPEAKERS_DROPPED_WARNING = "Some speaker names could not be checked and were left out.";
+
+export interface MeetingOutputValidationOptions {
+  /** Names from the owner context (profile, calendar, people). A speaker name must come from here or the talk. */
+  readonly knownNames?: Iterable<string>;
+}
 
 export const MEETING_OUTPUT_COMMON_GUIDANCE =
   "Return an overview, decisions, open questions, suggested actions, and warnings. " +
@@ -149,6 +166,73 @@ function list(
   return Array.from(value);
 }
 
+const words = (name: string) => name.toLowerCase().split(/\s+/).filter(Boolean);
+
+function nameIsKnown(name: string, known: readonly string[], transcriptText: string): boolean {
+  if (transcriptText.includes(name.toLowerCase())) return true;
+  const wanted = words(name);
+  return known.some((candidate) => {
+    const have = words(candidate);
+    return wanted.every((word) => have.includes(word));
+  });
+}
+
+/** A malformed block throws (so the call is retried). A semantically bad entry is dropped. */
+function validateSpeakers(
+  value: unknown,
+  inputs: MeetingOutputInputs,
+  known: readonly string[]
+): { speakers: MeetingSpeakerGuess[]; dropped: boolean } {
+  const shaped = list(value, MAX_SPEAKERS).map((raw) => {
+    const item = record(raw, ["speakerId", "name", "basis", "confidence", "evidence"]);
+    const speakerId = text(item.speakerId, 100);
+    const name = item.name === null ? null : text(item.name, MAX_SPEAKER_NAME);
+    if (!SPEAKER_BASES.includes(item.basis as MeetingSpeakerBasis)) invalid();
+    if (item.confidence !== "high" && item.confidence !== "low") invalid();
+    const evidenceIds = list(item.evidence, MAX_EVIDENCE).map((id) => text(id, 300));
+    return {
+      speakerId,
+      name,
+      basis: item.basis as MeetingSpeakerBasis,
+      confidence: item.confidence as "high" | "low",
+      evidence: evidenceIds
+    };
+  });
+  const segments = inputs.transcript?.segments ?? [];
+  const byId = new Map(segments.map((segment) => [segment.segmentId, segment]));
+  const speakerIds = new Set<string>();
+  for (const segment of segments) {
+    speakerIds.add(segment.sourceId);
+    if (segment.speakerId) speakerIds.add(segment.speakerId);
+  }
+  const transcriptText = segments.map((segment) => segment.text.toLowerCase()).join("\n");
+  const seen = new Set<string>();
+  const speakers: MeetingSpeakerGuess[] = [];
+  let dropped = false;
+  for (const entry of shaped) {
+    const ok =
+      !seen.has(entry.speakerId) &&
+      speakerIds.has(entry.speakerId) &&
+      entry.evidence.every((id) => byId.has(id)) &&
+      (entry.name === null ||
+        (entry.evidence.length > 0 && nameIsKnown(entry.name, known, transcriptText)));
+    if (!ok) {
+      dropped = true;
+      continue;
+    }
+    seen.add(entry.speakerId);
+    const spoken = entry.evidence.some((id) => {
+      const segment = byId.get(id)!;
+      return segment.speakerId === entry.speakerId || segment.sourceId === entry.speakerId;
+    });
+    speakers.push({
+      ...entry,
+      confidence: entry.basis === "calendar" && !spoken ? "low" : entry.confidence
+    });
+  }
+  return { speakers, dropped };
+}
+
 function splitsSurrogate(text: string, offset: number): boolean {
   const previous = text.charCodeAt(offset - 1);
   const next = text.charCodeAt(offset);
@@ -242,7 +326,8 @@ function evidence(
  */
 export function validateMeetingOutput(
   value: unknown,
-  inputs: MeetingOutputInputs
+  inputs: MeetingOutputInputs,
+  options: MeetingOutputValidationOptions = {}
 ): MeetingOutputContent {
   text(inputs.meetingId, 300, "inputs_invalid");
   integer(inputs.notesRevision, 0, "inputs_invalid");
@@ -264,13 +349,16 @@ export function validateMeetingOutput(
   }
   const hasRecording =
     typeof value === "object" && value !== null && Object.hasOwn(value, "recording");
+  const hasSpeakers =
+    typeof value === "object" && value !== null && Object.hasOwn(value, "speakers");
   const output = record(value, [
     "overview",
     "decisions",
     "openQuestions",
     "actions",
     "warnings",
-    ...(hasRecording ? ["recording"] : [])
+    ...(hasRecording ? ["recording"] : []),
+    ...(hasSpeakers ? ["speakers"] : [])
   ]);
   let recording: MeetingOutputContent["recording"];
   if (hasRecording) {
@@ -281,6 +369,9 @@ export function validateMeetingOutput(
       invalid("schema_invalid");
     }
   }
+  const checkedSpeakers = hasSpeakers
+    ? validateSpeakers(output.speakers, inputs, [...(options.knownNames ?? [])])
+    : { speakers: [], dropped: false };
   let characters = 0;
   const boundedText = (value: unknown, maximum = MAX_ITEM_CHARACTERS): string => {
     const result = text(value, maximum);
@@ -324,6 +415,7 @@ export function validateMeetingOutput(
   };
   return {
     ...(recording ? { recording } : {}),
+    ...(checkedSpeakers.speakers.length ? { speakers: checkedSpeakers.speakers } : {}),
     overview: boundedText(output.overview, MAX_OVERVIEW_CHARACTERS),
     decisions: list(output.decisions).map((value) => {
       const result = claim(value, false);
@@ -339,6 +431,9 @@ export function validateMeetingOutput(
         duePhrase: phrase(result.item.duePhrase, result.excerpts, "due_phrase_unsupported")
       };
     }),
-    warnings: list(output.warnings).map((value) => boundedText(value))
+    warnings: [
+      ...list(output.warnings).map((value) => boundedText(value)),
+      ...(checkedSpeakers.dropped ? [SPEAKERS_DROPPED_WARNING] : [])
+    ]
   };
 }

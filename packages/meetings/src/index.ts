@@ -63,3 +63,4 @@ export * from "./recording-notice-jobs.js";
 export { recordingSideReviewVersion } from "./recording-notice-source.js";
 export * from "./context-pack-port.js";
 export * from "./context-pack.js";
+export * from "./speaker-references.js";
