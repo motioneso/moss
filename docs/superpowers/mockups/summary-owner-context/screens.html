@@ -6,25 +6,17 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
 .bar{display:flex;gap:var(--space-4);align-items:center;padding:var(--space-3) var(--space-5);border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap}
 .bar b{font-family:var(--font-display)}
 .page{max-width:1500px;margin:0 auto;padding:var(--space-6) var(--space-6) var(--space-10)}
-/* speaker chip */
+/* speaker names */
 .spk{--c:var(--text-subtle);--cs:var(--surface-2);--ci:var(--ink-2)}
 .spk[data-who=you]{--c:var(--gold-strong);--cs:var(--gold-soft);--ci:var(--gold-ink)}
 .spk[data-who=priya]{--c:var(--forest);--cs:var(--forest-soft);--ci:var(--forest-ink)}
 .spk[data-who=sam]{--c:var(--steel);--cs:var(--steel-soft);--ci:var(--steel-ink)}
-.chip{position:relative;display:inline-grid;place-items:center;flex:none;width:var(--s,28px);height:var(--s,28px);border-radius:50%;background:var(--cs);color:var(--ci);border:2px solid var(--c);font:var(--weight-bold) calc(var(--s,28px)*.38)/1 var(--font-display)}
-.spk[data-state=guess] .chip{border-style:dashed}
-.spk[data-state=guess] .chip::after{content:"?";position:absolute;right:calc(var(--s,28px)*-.24);bottom:calc(var(--s,28px)*-.24);width:max(16px,calc(var(--s,28px)*.46));height:max(16px,calc(var(--s,28px)*.46));border-radius:50%;background:var(--amber-strong);color:var(--white);font:var(--weight-bold) max(11px,calc(var(--s,28px)*.3))/1 var(--font-sans);display:grid;place-items:center;border:2px solid var(--surface)}
-.spk[data-state=unknown] .chip{border-style:dotted}
-.nm{display:inline-flex;align-items:center;gap:var(--space-2);white-space:nowrap}
-.nm .chip{--s:32px}.nm b{font-weight:var(--weight-semibold)}
+.nm{white-space:nowrap;font-weight:var(--weight-semibold)}
+.spk[data-state=guess] .nm{text-decoration:underline dotted;text-decoration-thickness:2px;text-underline-offset:5px}
 .link{background:none;border:0;padding:0;font:inherit;font-size:var(--text-sm);font-weight:var(--weight-semibold);color:var(--accent-fg);text-decoration:underline;text-underline-offset:4px;cursor:pointer}
 .spk:not([data-state=guess]) .link{display:none}
 /* masthead (plain) */
 .mast{display:flex;justify-content:space-between;align-items:flex-end;gap:var(--space-6);flex-wrap:wrap;padding-bottom:var(--space-5);border-bottom:1px solid var(--border-strong)}
-.who{display:flex;gap:var(--space-5)}
-.who .spk{display:grid;justify-items:center;gap:var(--space-1);font-size:var(--text-xs);color:var(--text-muted)}
-.who .chip{--s:46px}
-.who .spk[data-state=guess]{gap:var(--space-2)}
 /* talk strip */
 .strip{display:flex;height:30px;gap:2px;margin:var(--space-3) 0 var(--space-2)}
 .strip i{flex:var(--f);background:var(--cs);border:1px solid color-mix(in srgb,var(--c) 45%,var(--cs));border-radius:2px;min-width:6px}
@@ -39,7 +31,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
 .sec:first-child{border-top:0;padding-top:0}
 .sec .jds-section-head{margin-bottom:var(--space-4)}
 .lead{margin:0;font:var(--weight-semibold) var(--text-3xl)/1.25 var(--font-display);letter-spacing:-.5px;max-width:30ch}
-.lead .nm{gap:var(--space-2)}.lead .nm .chip{--s:36px}
+
 .fact{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--space-4);align-items:center;padding:var(--space-4) 0;border-bottom:1px solid var(--border)}
 
 .fact p{margin:0;font:var(--weight-semibold) var(--text-lg) var(--font-display)}
@@ -47,11 +39,11 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
 .railhead{margin:0 0 var(--space-3);padding-bottom:var(--space-2);border-bottom:2px solid var(--accent-fg)}
 .railhead .jds-brief__kicker{display:block}
 .railhead .jds-brief__title{font-size:var(--text-lg)}
-.rp{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--space-3);align-items:center;padding:var(--space-3) 0;border-bottom:1px solid var(--border)}
-.rp .chip{--s:36px}.rp b{display:block;font-size:var(--text-sm)}.rp small{color:var(--text-subtle);font-size:var(--text-xs)}
+.rp{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:var(--space-4);align-items:baseline;padding:var(--space-3) 0;border-bottom:1px solid var(--border)}
+.rp b{display:block;font-size:var(--text-sm)}.rp small{color:var(--text-subtle);font-size:var(--text-xs)}
 .tx{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 var(--space-8)}
-.line{display:grid;grid-template-columns:auto minmax(0,1fr);gap:var(--space-3);padding:var(--space-3) 0;border-bottom:1px solid var(--border)}
-.line p{margin:0}.line small{color:var(--text-subtle);font-size:var(--text-xs)}
+.line{display:grid;grid-template-columns:7rem minmax(0,1fr);gap:var(--space-3);padding:var(--space-3) 0;border-bottom:1px solid var(--border)}
+.line p{margin:0}.line small{display:inline-block;margin-top:var(--space-1);color:var(--text-subtle);font-size:var(--text-xs)}
 </style></head>
 <body>
 <div class="bar"><b>Summary speakers · Look B</b>
@@ -63,14 +55,14 @@ var S={you:{n:'You',i:'ME',st:'set',w:'34%'},priya:{n:'Priya',i:'PN',st:'guess',
 var ST={};function reset(){for(var k in S)ST[k]=S[k].st}reset();
 function who(k){return k==='s3'?'unknown':k}
 function sp(k,inner){return '<span class="spk" data-who="'+who(k)+'" data-state="'+ST[k]+'">'+inner+'</span>'}
-function chip(k,s){return sp(k,'<span class="chip" style="--s:'+s+'px" title="'+(ST[k]==='guess'?'Guessed from your calendar':ST[k]==='set'?'Set by you':'Not identified')+'">'+S[k].i+'</span>')}
-function nm(k){return sp(k,'<span class="nm"><span class="chip">'+S[k].i+'</span><b>'+S[k].n+'</b></span>').replace('class="spk"','class="spk nm"').replace('<span class="nm"><span class="chip">','<span class="chip">').replace('</b></span></span>','</b></span>')}
+function chip(k){return sp(k,'<span class="nm" title="'+(ST[k]==='guess'?'Guessed from your calendar':ST[k]==='set'?'Set by you':'Not identified')+'">'+S[k].n+'</span>')}
+function nm(k){return chip(k)}
 function sec(n,t,body,meta){return '<section class="sec"><div class="jds-section-head"><span class="jds-section-head__number">'+n+'</span><h2 class="jds-section-head__title">'+t+'</h2>'+(meta?'<span class="jds-section-head__meta">'+meta+'</span>':'')+'</div>'+body+'</section>'}
 function facts(a){return a.map(function(f){return '<div class="fact"><p>'+f[0]+(f[2]?'<small>'+f[2]+'</small>':'')+'</p>'+nm(f[1])+'</div>'}).join('')}
-function tx(){return [['priya','Thanks all. Where are we on the launch date?','10:02'],['sam','Priya, the vendor slipped, so March is realistic.','10:03'],['s3','Budget stays as is, I checked with finance.','10:05'],['priya','Fine. I will update the plan by Friday.','10:06']].map(function(t){return '<div class="line">'+chip(t[0],30)+'<div><p>'+t[1]+'</p><small>'+S[t[0]].n+' · '+t[2]+'</small></div></div>'}).join('')}
+function tx(){return [['priya','Thanks all. Where are we on the launch date?','10:02'],['sam','Priya, the vendor slipped, so March is realistic.','10:03'],['s3','Budget stays as is, I checked with finance.','10:05'],['priya','Fine. I will update the plan by Friday.','10:06']].map(function(t){return '<div class="line"><span>'+chip(t[0])+'<br><small>'+t[2]+'</small></span><p>'+t[1]+'</p></div>'}).join('')}
 function draw(){var seg=[['priya',10],['sam',7],['you',6],['priya',9],['s3',3],['sam',8],['priya',6],['you',5]];
 document.getElementById('root').innerHTML=
-'<header class="mast"><div><span class="jds-masthead__eyebrow">Tuesday 4 Nov · 39 min</span><h1 class="jds-masthead__title">Launch planning</h1></div><div class="who">'+['you','priya','sam','s3'].map(function(k){return sp(k,chip(k,46)+'<span>'+S[k].n+'</span>')}).join('').replace(/<span class="spk"([^>]*)>/g,'<span class="spk"$1>')+'</div></header>'
+'<header class="mast"><div><span class="jds-masthead__eyebrow">Tuesday 4 Nov · 39 min</span><h1 class="jds-masthead__title">Launch planning</h1></div></header>'
 +'<div class="grid"><div>'
 +sec('01','Overview','<p class="lead">'+nm('priya')+' and '+nm('sam')+' agreed to move the launch to March.</p>')
 +sec('02','Decisions',facts([['Launch moves to March.','sam'],['Budget stays as is.','s3']]))
@@ -78,7 +70,7 @@ document.getElementById('root').innerHTML=
 +sec('04','Transcript','<div class="tx">'+tx()+'</div>','10:02 to 10:41')
 +'</div><aside class="rail"><div class="railhead"><span class="jds-brief__kicker">Who talked</span><h3 class="jds-brief__title">Speakers</h3></div>'
 +'<div class="strip">'+seg.map(function(s){return '<i class="spk" data-who="'+who(s[0])+'" data-state="'+ST[s[0]]+'" style="--f:'+s[1]+'" title="'+S[s[0]].n+'"></i>'}).join('')+'</div><div class="ticks"><span>10:02</span><span>10:41</span></div><div style="height:var(--space-4)"></div>'
-+['you','priya','sam','s3'].map(function(k){return '<div class="rp spk" data-who="'+who(k)+'" data-state="'+ST[k]+'">'+chip(k,36)+'<div><b>'+S[k].n+'</b><small>'+S[k].w+'</small></div><button class="link" data-c="'+k+'">Confirm</button></div>'}).join('')+'</aside></div>'}
++['you','priya','sam','s3'].map(function(k){return '<div class="rp spk" data-who="'+who(k)+'" data-state="'+ST[k]+'">'+'<b>'+chip(k)+'</b><small>'+S[k].w+'</small><button class="link" data-c="'+k+'">Confirm</button></div>'}).join('')+'</aside></div>'}
 document.addEventListener('click',function(e){var c=e.target.closest('[data-c]');if(c){ST[c.getAttribute('data-c')]='set';draw()}
 if(e.target.id==='reset'){reset();draw()}
 var t=e.target.closest('[data-th]');if(t){document.documentElement.removeAttribute('data-color-mode');if(t.getAttribute('data-th')==='dark')document.documentElement.setAttribute('data-color-mode','dark');document.querySelectorAll('[data-th]').forEach(function(b){b.setAttribute('aria-pressed',b===t)})}});
