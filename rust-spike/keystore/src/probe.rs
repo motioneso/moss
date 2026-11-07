@@ -1,9 +1,12 @@
 //! Is there a keychain? Asks the D-Bus session bus for the Secret Service
 //! (`org.freedesktop.secrets`), which GNOME Keyring and KWallet both provide.
 
+use std::path::{Path, PathBuf};
+use std::sync::mpsc;
 use std::time::Duration;
 
-use zbus::blocking::{connection, fdo::DBusProxy};
+use zbus::address::transport::{Transport, Unix, UnixSocket};
+use zbus::blocking::{connection, fdo::DBusProxy, Connection};
 use zbus::names::BusName;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
 
@@ -12,7 +15,9 @@ const ANSWER_WITHIN: Duration = Duration::from_secs(3);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Keychain {
-    /// No session bus to ask, as on a server or a bare window manager.
+    /// No session bus to ask, as on a server or a bare window manager. Only an unset
+    /// address with no socket in the runtime folder counts; a bus that is there but fails
+    /// is `Broken`.
     NoSessionBus(String),
     /// A session bus, but nothing provides the Secret Service or can start it.
     NotInstalled,
@@ -32,18 +37,55 @@ impl Keychain {
 
 /// Probes the session bus this process was started with.
 pub fn probe() -> Keychain {
-    probe_with(connection::Builder::session())
+    let address = std::env::var("DBUS_SESSION_BUS_ADDRESS").ok().filter(|a| !a.is_empty());
+    let runtime_dir = std::env::var_os("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(format!("/run/user/{}", unsafe { libc::geteuid() })));
+    probe_session(address.as_deref(), &runtime_dir)
 }
 
-/// Probes the bus at a given address.
+/// Finds the session bus the way D-Bus clients do: the address if one is set, else the `bus`
+/// socket in the runtime folder. There is no session bus only when neither exists.
+pub fn probe_session(address: Option<&str>, runtime_dir: &Path) -> Keychain {
+    if let Some(address) = address {
+        return probe_address(address);
+    }
+    let socket = runtime_dir.join("bus");
+    match socket.symlink_metadata() {
+        Ok(_) => probe_with(Ok(Transport::Unix(Unix::new(UnixSocket::File(socket))).into())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Keychain::NoSessionBus(
+            format!("no bus address is set and {} does not exist", socket.display()),
+        ),
+        Err(error) => Keychain::Broken(format!("{}: {error}", socket.display())),
+    }
+}
+
+/// Probes the bus at a given address. A set address that cannot be reached is `Broken`.
 pub fn probe_address(address: &str) -> Keychain {
-    probe_with(connection::Builder::address(address))
+    probe_with(address.parse())
 }
 
-fn probe_with(builder: zbus::Result<connection::Builder<'static>>) -> Keychain {
-    let connection = match builder.and_then(|b| b.method_timeout(ANSWER_WITHIN).build()) {
+/// Connects within `ANSWER_WITHIN`. The connection handshake has no timeout of its own, so it
+/// runs on a thread that is left behind if the bus never answers.
+fn connect(address: zbus::Result<zbus::Address>) -> Result<Connection, String> {
+    let address = address.map_err(|error| error.to_string())?;
+    let (send, answer) = mpsc::channel();
+    std::thread::spawn(move || {
+        let connection = connection::Builder::address(address)
+            .and_then(|builder| builder.method_timeout(ANSWER_WITHIN).build());
+        let _ = send.send(connection);
+    });
+    match answer.recv_timeout(ANSWER_WITHIN) {
+        Ok(Ok(connection)) => Ok(connection),
+        Ok(Err(error)) => Err(error.to_string()),
+        Err(_) => Err(format!("no answer within {} s", ANSWER_WITHIN.as_secs())),
+    }
+}
+
+fn probe_with(address: zbus::Result<zbus::Address>) -> Keychain {
+    let connection = match connect(address) {
         Ok(connection) => connection,
-        Err(error) => return Keychain::NoSessionBus(error.to_string()),
+        Err(error) => return Keychain::Broken(format!("session bus: {error}")),
     };
 
     // A bus that will not answer says nothing about the keychain, so it never offers the file.

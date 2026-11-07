@@ -1,17 +1,19 @@
 //! The keychain probe against a real, private D-Bus session bus for each test.
 
 use std::io::{BufRead, BufReader};
+use std::os::unix::net::UnixListener;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 use keystore::fake::{hold_secret_service, Behaviour};
-use keystore::probe::{probe_address, Keychain};
+use keystore::probe::{probe_address, probe_session, Keychain};
 
 struct Bus {
     daemon: Child,
     address: String,
-    _dir: tempfile::TempDir,
+    /// Holds the bus socket as `bus`, like a session's runtime folder.
+    dir: tempfile::TempDir,
 }
 
 impl Drop for Bus {
@@ -62,16 +64,54 @@ fn start_bus(service_file: Option<&str>) -> Bus {
         .expect("dbus-daemon is installed");
     let mut address = String::new();
     BufReader::new(daemon.stdout.take().unwrap()).read_line(&mut address).unwrap();
-    Bus { daemon, address: address.trim().to_string(), _dir: dir }
+    Bus { daemon, address: address.trim().to_string(), dir }
 }
 
 #[test]
 fn no_session_bus_allows_the_key_file() {
-    let dir = tempfile::tempdir().unwrap();
-    let missing = format!("unix:path={}", dir.path().join("no-bus").display());
-    let result = probe_address(&missing);
+    let runtime = tempfile::tempdir().unwrap();
+    let result = probe_session(None, runtime.path());
     assert!(matches!(result, Keychain::NoSessionBus(_)), "{result:?}");
     assert!(result.allows_key_file());
+}
+
+#[test]
+fn with_no_address_the_runtime_folder_bus_is_asked() {
+    let bus = start_bus(None);
+    assert_eq!(probe_session(None, bus.dir.path()), Keychain::NotInstalled);
+}
+
+#[test]
+fn a_set_address_that_cannot_be_reached_is_broken_not_absent() {
+    let runtime = tempfile::tempdir().unwrap();
+    let dead = format!("unix:path={}", runtime.path().join("gone").display());
+    let result = probe_session(Some(&dead), runtime.path());
+    assert!(matches!(result, Keychain::Broken(_)), "{result:?}");
+    assert!(!result.allows_key_file());
+
+    // The set address is the session's bus, even when the runtime folder holds a working one.
+    let bus = start_bus(None);
+    let result = probe_session(Some(&dead), bus.dir.path());
+    assert!(matches!(result, Keychain::Broken(_)), "{result:?}");
+}
+
+#[test]
+fn a_stale_bus_socket_is_broken_not_absent() {
+    let runtime = tempfile::tempdir().unwrap();
+    drop(UnixListener::bind(runtime.path().join("bus")).unwrap());
+    let result = probe_session(None, runtime.path());
+    assert!(matches!(result, Keychain::Broken(_)), "{result:?}");
+    assert!(!result.allows_key_file());
+}
+
+#[test]
+fn a_bus_that_never_answers_the_handshake_is_broken_within_seconds() {
+    let runtime = tempfile::tempdir().unwrap();
+    let _silent = UnixListener::bind(runtime.path().join("bus")).unwrap();
+    let started = Instant::now();
+    let result = probe_session(None, runtime.path());
+    assert!(matches!(result, Keychain::Broken(_)), "{result:?}");
+    assert!(started.elapsed() < Duration::from_secs(6), "took {:?}", started.elapsed());
 }
 
 #[test]
