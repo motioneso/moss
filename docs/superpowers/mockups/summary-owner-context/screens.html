@@ -51,7 +51,7 @@
  <div class="sp-sec"><h3>Overview</h3>
   <p>
    <span class="sp-name" data-show="view:guesses picker trimmed"><button class="sp-link" title="From your calendar, spoken for 2 lines. Click to change.">Priya</button><span class="sp-guess">(guess)</span><button class="sp-confirm">Confirm</button></span>
-   <span class="sp-name" data-show="view:confirmed save"><button class="sp-link" title="Set by you. Click to change.">Priya</button></span>
+   <span class="sp-name" data-show="view:confirmed"><button class="sp-link" title="Set by you. Click to change.">Priya</button></span><span class="sp-name" data-show="view:save"><button class="sp-link">Jordan</button></span>
    <span class="sp-name" data-show="view:nocontext"><button class="sp-link">Speaker 1</button></span>
    and
    <span class="sp-name" data-show="view:guesses confirmed picker save trimmed"><button class="sp-link">Sam</button></span>
@@ -64,50 +64,48 @@
 
  <div class="sp-sec"><h3>Action items</h3><ul>
   <li>Update the launch plan by Friday.
-   (<span class="sp-name" data-show="view:guesses picker trimmed"><button class="sp-link">Priya</button><span class="sp-guess">(guess)</span></span><span class="sp-name" data-show="view:confirmed save"><button class="sp-link">Priya</button></span><span class="sp-name" data-show="view:nocontext"><button class="sp-link">Speaker 1</button></span>)</li></ul></div>
+   (<span class="sp-name" data-show="view:guesses picker trimmed"><button class="sp-link">Priya</button><span class="sp-guess">(guess)</span></span><span class="sp-name" data-show="view:confirmed"><button class="sp-link">Priya</button></span><span class="sp-name" data-show="view:save"><button class="sp-link">Jordan</button></span><span class="sp-name" data-show="view:nocontext"><button class="sp-link">Speaker 1</button></span>)</li></ul></div>
 
  <div class="sp-pop" role="dialog" aria-label="Who is this?" data-show="view:picker">
   <h4>Who is this?</h4>
-  <label class="sp-opt"><input type="radio" name="p" checked> Priya Nair <small>from your calendar</small></label>
+  <label class="sp-opt"><input type="radio" name="p"> Priya Nair <small>from your calendar</small></label>
   <label class="sp-opt"><input type="radio" name="p"> Sam Okoye <small>from your calendar</small></label>
   <label class="sp-opt"><input type="radio" name="p"> Dana Reyes <small>in your People</small></label>
-  <label class="sp-opt"><input type="radio" name="p"> Someone else <input class="jds-input jds-input--sm" style="margin-left:auto" placeholder="Type a name" aria-label="Type a name"></label>
+  <label class="sp-opt"><input type="radio" name="p" checked> Someone else <input class="jds-input jds-input--sm" style="margin-left:auto" value="Jordan Lee" placeholder="Type a name" aria-label="Type a name"></label>
   <label class="sp-opt"><input type="radio" name="p"> Not sure</label>
-  <div class="sp-btns"><button class="jds-btn jds-btn--quiet jds-btn--sm">Cancel</button><button class="jds-btn jds-btn--primary jds-btn--sm">Apply to all lines</button></div>
+  <div class="sp-btns"><button class="jds-btn jds-btn--quiet jds-btn--sm" data-go="guesses">Cancel</button><button class="jds-btn jds-btn--primary jds-btn--sm" data-go="save">Apply to all lines</button></div>
  </div>
 
  <div class="sp-save" role="status" data-show="view:save">
   <span>Add &ldquo;Jordan Lee&rdquo; to People?</span>
-  <span><button class="jds-btn jds-btn--quiet jds-btn--sm">No thanks</button> <button class="jds-btn jds-btn--secondary jds-btn--sm">Add to People</button></span>
+  <span><button class="jds-btn jds-btn--quiet jds-btn--sm" data-go="guesses">No thanks</button> <button class="jds-btn jds-btn--secondary jds-btn--sm" data-go="guesses">Add to People</button></span>
  </div>
 </section>
 
 <section aria-label="Transcript">
  <h2 class="mk-h" style="font-size:var(--text-xl)">Transcript</h2>
  <div class="sp-line"><span class="sp-who">
-  <span data-show="view:guesses picker trimmed">Priya <span class="sp-guess">(guess)</span></span><span data-show="view:confirmed save">Priya</span><span data-show="view:nocontext">Speaker 1</span></span><span>Thanks all. Where are we on the launch date?</span></div>
+  <span data-show="view:guesses picker trimmed">Priya <span class="sp-guess">(guess)</span></span><span data-show="view:confirmed">Priya</span><span data-show="view:save">Jordan</span><span data-show="view:nocontext">Speaker 1</span></span><span>Thanks all. Where are we on the launch date?</span></div>
  <div class="sp-line"><span class="sp-who"><span data-show="view:guesses confirmed picker save trimmed">Sam</span><span data-show="view:nocontext">Speaker 2</span></span><span>Priya, the vendor slipped, so March is realistic.</span></div>
  <div class="sp-line"><span class="sp-who">Speaker 3</span><span>Budget stays as is, I checked with finance.</span></div>
- <div class="sp-line"><span class="sp-who"><span data-show="view:guesses picker trimmed">Priya <span class="sp-guess">(guess)</span></span><span data-show="view:confirmed save">Priya</span><span data-show="view:nocontext">Speaker 1</span></span><span>Fine. I'll update the plan by Friday.</span></div>
+ <div class="sp-line"><span class="sp-who"><span data-show="view:guesses picker trimmed">Priya <span class="sp-guess">(guess)</span></span><span data-show="view:confirmed">Priya</span><span data-show="view:save">Jordan</span><span data-show="view:nocontext">Speaker 1</span></span><span>Fine. I'll update the plan by Friday.</span></div>
 </section>
 </div>
 </div>
 
 <div data-show="view:settings">
  <h1 class="mk-h">Settings / Meetings</h1>
- <p class="mk-help">One new row, in the existing Meetings settings list.</p>
+ <p class="mk-help">One new row in the Meetings settings list. Click the switch to see it off.</p>
  <div style="margin-top:var(--space-4);max-width:56rem">
   <div class="sp-set"><div><h4>Use what Moss knows about me in summaries</h4></div>
    <label class="jds-switch"><input type="checkbox" checked aria-label="Use what Moss knows about me in summaries"><span class="jds-switch__track"><span class="jds-switch__thumb"></span></span></label></div>
-  <div class="sp-set"><div><h4>Use what Moss knows about me in summaries</h4></div>
-   <label class="jds-switch"><input type="checkbox" aria-label="Use what Moss knows about me in summaries (off state)"><span class="jds-switch__track"><span class="jds-switch__thumb"></span></span></label></div>
  </div>
- <p class="mk-help">The two rows show the same setting on and off. The real screen has one row, on by default.</p>
 </div>
 
-<h2 class="mk-h" style="margin-top:var(--space-6)">States covered</h2>
-<p class="mk-help">Guess: name plus (guess) and Confirm, shown in summary, transcript, copy and export. Confirmed and owner-set names show plain. Unknown shows Speaker N. No context: no marks and no header line, same as today. Cut for size: a single warning line. Loading, empty and failed summaries are unchanged.</p>
 </div>
 <script src="../classifier-gate/switcher.js"></script>
-<script>document.addEventListener('click',function(e){if(e.target.closest('.sp-confirm')){document.body.setAttribute('data-view','confirmed');document.querySelector('[data-pick="view:confirmed"]').click()}});</script>
+<script>document.addEventListener('click',function(e){
+var v=null,c=e.target.closest('.sp-confirm'),l=e.target.closest('.sp-link'),g=e.target.closest('[data-go]');
+if(c)v='confirmed';else if(g)v=g.getAttribute('data-go');else if(l&&document.body.getAttribute('data-view')!=='nocontext')v='picker';
+if(v)document.querySelector('[data-pick="view:'+v+'"]').click()});</script>
 </body></html>
