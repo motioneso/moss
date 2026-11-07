@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Summaries can guess who is speaking.** Meeting summaries can now refer to speakers by a guessed name, marked as a guess, and fall back to "Speaker 2" when Moss is not sure. [PR #4029](https://github.com/motioneso/moss/pull/4029)
 - **Summaries use your meeting background.** Meeting summaries now use your name, the matching calendar event and your notes about the people involved to get names and context right. [PR #4026](https://github.com/motioneso/moss/pull/4026)
 
 ### 2026-11-06
