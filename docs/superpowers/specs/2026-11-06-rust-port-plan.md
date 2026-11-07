@@ -4,8 +4,7 @@
 - **Route:** full rewrite of server and UI in Rust. Ben ruled this on 2026-11-06.
 - **Companion doc:** `docs/superpowers/specs/2026-11-06-rust-port-data-and-install-rules.md`
   (task JS-32) sets the detailed rules for data, keys, install and cutover. Where the two overlap,
-  that doc owns the rule and this plan points to it. It lands in its own pull request, which should
-  merge before or with this one.
+  that doc owns the rule and this plan points to it. It merged in pull request 4024.
 - **Grounded on:** `main` at `1cb86c8b2`. Every count below comes from that tree.
 
 ## 1. Summary
@@ -222,8 +221,10 @@ Cutover handles jobs in this order, because a queue cannot drain after its worke
 1. Fence producers. The API and schedules stop creating jobs.
 2. Let the old worker finish only job kinds on an approved safe-to-finish list.
 3. Stop the old worker and verify no worker process holds a job.
-4. Archive what is left, pending and in-flight, and map each to a Rust job kind or a recorded drop.
-   Nothing is retried blindly, because an in-flight job may already have had its effect.
+4. Archive the pg-boss tables as protected history. Import each pending job once, keyed by its
+   source ID, into a Rust job kind. Mark in-flight or uncertain work as needing reconciliation by
+   the owner or the provider. Nothing is retried blindly, because an in-flight job may already have
+   had its effect.
 
 ### 3.4 Running third-party modules safely
 
