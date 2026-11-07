@@ -188,3 +188,46 @@ fn a_test_credential_from_another_setup_means_mixed_files() {
     fs::copy(&b.paths.test_credential, &a.paths.test_credential).unwrap();
     assert!(matches!(status(&a.paths), State::KeysDoNotMatch(_)));
 }
+
+#[test]
+fn a_failed_setup_leaves_nothing_behind() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = Paths::under(&dir.path().join("config"), &dir.path().join("data"));
+    // A plain file where the key folder belongs makes the last write fail.
+    fs::create_dir_all(paths.key_folder.parent().unwrap()).unwrap();
+    fs::write(&paths.key_folder, b"in the way").unwrap();
+    let recovery = RecoveryKey::generate();
+    assert!(set_up(&paths, &recovery, &CredentialKeys::generate()).is_err());
+    let data_folder = paths.bundle.parent().unwrap();
+    let left: Vec<_> = fs::read_dir(data_folder).unwrap().map(|entry| entry.unwrap().file_name()).collect();
+    assert!(left.is_empty(), "{left:?}");
+    assert!(matches!(status(&paths), State::NotSetUp));
+
+    fs::remove_file(&paths.key_folder).unwrap();
+    let keys = CredentialKeys::generate();
+    set_up(&paths, &recovery, &keys).unwrap();
+    assert_eq!(unlocked_fingerprint(status(&paths)), keys.fingerprint());
+}
+
+#[test]
+fn setup_never_replaces_a_key_file_whose_bundle_is_missing() {
+    let s = new_setup();
+    fs::remove_file(&s.paths.bundle).unwrap();
+    let before = fs::read(&s.paths.key_file).unwrap();
+    assert!(set_up(&s.paths, &RecoveryKey::generate(), &CredentialKeys::generate()).is_err());
+    assert_eq!(fs::read(&s.paths.key_file).unwrap(), before);
+    assert!(matches!(status(&s.paths), State::BundleMissing));
+}
+
+#[test]
+fn a_write_that_fails_late_leaves_no_staging_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = Paths::under(&dir.path().join("config"), &dir.path().join("data"));
+    // A folder where the test credential belongs lets the staging file be written, then
+    // makes the step that moves it into place fail.
+    fs::create_dir_all(&paths.test_credential).unwrap();
+    assert!(set_up(&paths, &RecoveryKey::generate(), &CredentialKeys::generate()).is_err());
+    let data_folder = paths.bundle.parent().unwrap();
+    let left: Vec<_> = fs::read_dir(data_folder).unwrap().map(|entry| entry.unwrap().file_name()).collect();
+    assert_eq!(left, ["test-credential.json"]);
+}

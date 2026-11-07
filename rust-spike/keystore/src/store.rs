@@ -232,10 +232,16 @@ fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     DirBuilder::new().recursive(true).mode(0o700).create(folder)?;
     let staging = path.with_extension("staging");
     let _ = fs::remove_file(&staging);
-    let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(&staging)?;
-    file.write_all(bytes)?;
-    file.sync_all()?;
-    fs::rename(&staging, path)?;
+    let staged = (|| {
+        let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(&staging)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        fs::rename(&staging, path)
+    })();
+    if staged.is_err() {
+        let _ = fs::remove_file(&staging);
+    }
+    staged?;
     File::open(folder)?.sync_all()
 }
 
@@ -250,10 +256,12 @@ fn write_key_file(paths: &Paths, recovery: &RecoveryKey, installation_id: &str) 
     write_private(&paths.key_file, &serde_json::to_vec_pretty(&contents).unwrap())
 }
 
-/// Creates the bundle, the test credential and the key file, in that order. A crash before
-/// the key file leaves a setup the owner's words can still open.
+/// Creates the test credential, the bundle and the key file, in that order. A crash before
+/// the bundle leaves nothing that blocks a new setup. A crash before the key file leaves a
+/// setup the owner's words can open. A failed write removes every file this setup wrote.
 pub fn set_up(paths: &Paths, recovery: &RecoveryKey, keys: &CredentialKeys) -> Result<(), String> {
-    if paths.bundle.exists() {
+    // A key file without its bundle may still match a bundle in a backup, so it is never replaced.
+    if fs::symlink_metadata(&paths.bundle).is_ok() || fs::symlink_metadata(&paths.key_file).is_ok() {
         return Err("Moss is already set up on this computer".to_string());
     }
     let installation_id = hex::encode(rand::random::<[u8; 16]>());
@@ -277,11 +285,15 @@ pub fn set_up(paths: &Paths, recovery: &RecoveryKey, keys: &CredentialKeys) -> R
     check.insert("installationId".to_string(), json!(installation_id));
     let test_credential = keys.ai_cipher().encrypt_json(&check);
 
-    let io = |error: std::io::Error| error.to_string();
-    write_private(&paths.bundle, &serde_json::to_vec_pretty(&bundle).unwrap()).map_err(io)?;
-    write_private(&paths.test_credential, &serde_json::to_vec_pretty(&test_credential).unwrap())
-        .map_err(io)?;
-    write_key_file(paths, recovery, &installation_id).map_err(io)
+    let written = write_private(&paths.test_credential, &serde_json::to_vec_pretty(&test_credential).unwrap())
+        .and_then(|()| write_private(&paths.bundle, &serde_json::to_vec_pretty(&bundle).unwrap()))
+        .and_then(|()| write_key_file(paths, recovery, &installation_id));
+    written.map_err(|error| {
+        for path in [&paths.key_file, &paths.bundle, &paths.test_credential] {
+            let _ = fs::remove_file(path);
+        }
+        error.to_string()
+    })
 }
 
 /// Where things stand, read fresh from disk.
