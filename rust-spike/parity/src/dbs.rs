@@ -299,7 +299,7 @@ impl Copy {
             }
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         }
-        Ok(json!({ "state": "timed out" }))
+        Err(format!("job {id} did not finish within 30 seconds"))
     }
 }
 

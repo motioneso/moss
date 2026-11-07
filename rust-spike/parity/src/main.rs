@@ -269,10 +269,8 @@ async fn run_case(
             let key = step.id.clone().unwrap_or_else(|| index.to_string());
             let mut seen = Vec::new();
             for side in sides.iter_mut() {
-                let observed = match perform(step, side, &vars, env, http).await {
-                    Ok(value) => value,
-                    Err(error) => json!({ "harness error": error }),
-                };
+                let result = perform(step, side, &vars, env, http).await;
+                let observed = observe(result, &key, side.label, &mut problems);
                 if let Some(expect) = &step.expect {
                     match vars.fill_json(expect, &side.outputs) {
                         Ok(expect) if !contains(&observed, &expect) => problems.push(format!(
@@ -315,6 +313,20 @@ async fn run_case(
         problems,
         note: case.note.clone(),
     }
+}
+
+/// The value a step produced. A step the runner could not carry out is a problem on that side,
+/// so the same runner error on both sides never counts as a match.
+fn observe(
+    result: Result<Value, String>,
+    key: &str,
+    label: &str,
+    problems: &mut Vec<String>,
+) -> Value {
+    result.unwrap_or_else(|error| {
+        problems.push(format!("step {key}: {label} could not run the step: {error}"));
+        json!({ "harness error": error })
+    })
 }
 
 fn clip(value: &Value) -> String {
@@ -387,4 +399,26 @@ async fn perform(
         serde_json::from_str(&text).unwrap_or(json!({ "text": text }))
     };
     Ok(json!({ "status": status, "body": body }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn runner_errors_are_problems() {
+        let mut problems = Vec::new();
+        let error = Err("request failed: refused".to_owned());
+        let value = observe(error, "make", "Rust", &mut problems);
+        assert_eq!(value, json!({ "harness error": "request failed: refused" }));
+        assert_eq!(
+            problems,
+            vec!["step make: Rust could not run the step: request failed: refused"]
+        );
+
+        let mut problems = Vec::new();
+        let value = observe(Ok(json!({ "status": 200 })), "make", "Rust", &mut problems);
+        assert_eq!(value, json!({ "status": 200 }));
+        assert!(problems.is_empty());
+    }
 }

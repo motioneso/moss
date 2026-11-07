@@ -115,6 +115,7 @@ pub fn load_dir(dir: &Path, only: Option<&str>) -> Result<Vec<Case>, String> {
             .map_err(|error| format!("parse {}: {error}", path.display()))?;
         let known = uuids_in(&text);
         for mut case in file {
+            check(&case).map_err(|error| format!("{}: {error}", path.display()))?;
             if only.is_some_and(|filter| !case.name.contains(filter)) {
                 continue;
             }
@@ -123,6 +124,14 @@ pub fn load_dir(dir: &Path, only: Option<&str>) -> Result<Vec<Case>, String> {
         }
     }
     Ok(cases)
+}
+
+/// A case with no steps and no tables would pass without comparing anything.
+pub fn check(case: &Case) -> Result<(), String> {
+    if case.steps.is_empty() && case.rows.is_empty() {
+        return Err(format!("case {} compares nothing", case.name));
+    }
+    Ok(())
 }
 
 fn uuids_in(text: &str) -> HashSet<String> {
@@ -254,5 +263,22 @@ mod tests {
             json!("owner 00000000-0000-4000-8000-000000000001")
         );
         assert!(vars.fill("{{nope}}", &outputs).is_err());
+    }
+
+    #[test]
+    fn a_case_must_compare_something() {
+        let empty: Case = serde_json::from_value(json!({"name": "empty", "steps": []})).unwrap();
+        assert!(check(&empty).is_err());
+
+        let rows_only: Case =
+            serde_json::from_value(json!({"name": "rows", "steps": [], "rows": ["app.tasks"]}))
+                .unwrap();
+        assert!(check(&rows_only).is_ok());
+
+        let one_step: Case = serde_json::from_value(
+            json!({"name": "step", "steps": [{"method": "GET", "path": "/api/tasks"}]}),
+        )
+        .unwrap();
+        assert!(check(&one_step).is_ok());
     }
 }
