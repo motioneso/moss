@@ -15,6 +15,7 @@ import { MeetingMarkdownCopy } from "./meeting-markdown-copy.js";
 import { generateMeetingOutput, getMeetingOutputs, outputKeys } from "./output-client.js";
 import { operationError, useOutputSession, type OutputOperation } from "./output-session.js";
 import { OutputEvidence } from "./output-evidence.js";
+import { resolveSummarySpeakerText } from "../speaker-references.js";
 import { MeetingCandidateSource } from "./meeting-candidate-source.js";
 import { MeetingOutputEditor, hasKeptOutputEdits } from "./meeting-output-editor.js";
 import { MeetingVaultExport } from "./meeting-vault-export.js";
@@ -47,6 +48,7 @@ export function ArtifactContent({
   readonly artifact: MeetingOutputArtifact;
   readonly typeId?: string;
 }) {
+  const content = resolveSummarySpeakerText(artifact.content);
   const groupHeading = typeId === "brain-dump" || typeId === "idea" ? "Ideas" : "Topics";
   return (
     <div className="meetings-section">
@@ -71,7 +73,7 @@ export function ArtifactContent({
           {`${hit.count} ${hit.count === 1 ? "line" : "lines"} in ${PACK_SOURCE_LABEL[hit.source]} looked like ${hit.count === 1 ? "an order" : "orders"} to the AI. The AI has no way to act on ${hit.count === 1 ? "it" : "them"}, so check the summary.`}
         </p>
       ))}
-      <p className="meetings-transcript-text">{artifact.content.overview}</p>
+      <p className="meetings-transcript-text">{content.overview}</p>
       {artifact.content.recording?.ideaGroups.length ? (
         <Eyebrow as="h3">{groupHeading}</Eyebrow>
       ) : null}
@@ -86,7 +88,7 @@ export function ArtifactContent({
         </section>
       ))}
       {artifact.content.decisions.length ? <Eyebrow as="h3">Decisions</Eyebrow> : null}
-      {artifact.content.decisions.map((claim, index) => (
+      {content.decisions.map((claim, index) => (
         <article className="meetings-section" key={index}>
           <Divider />
           <p className="meetings-transcript-text">{claim.text}</p>
@@ -97,13 +99,13 @@ export function ArtifactContent({
         <div>
           <Eyebrow as="h3">Open questions</Eyebrow>
           <ul>
-            {artifact.content.openQuestions.map((question, index) => (
+            {content.openQuestions.map((question, index) => (
               <li key={index}>{question}</li>
             ))}
           </ul>
         </div>
       ) : null}
-      {artifact.content.warnings.map((warning, index) => (
+      {content.warnings.map((warning, index) => (
         <Note key={index} variant="practical">
           {warning}
         </Note>
@@ -572,7 +574,7 @@ export function MeetingSummary({
                 (item) =>
                   item.artifactVersion === artifact.version ||
                   item.reviewState === "accepted" ||
-                  artifact.content.actions.some(
+                  resolveSummarySpeakerText(artifact.content).actions.some(
                     (action) => JSON.stringify(action) === JSON.stringify(item.proposal)
                   )
               ) ? (
@@ -583,7 +585,7 @@ export function MeetingSummary({
                   (item) =>
                     item.artifactVersion === artifact.version ||
                     item.reviewState === "accepted" ||
-                    artifact.content.actions.some(
+                    resolveSummarySpeakerText(artifact.content).actions.some(
                       (action) => JSON.stringify(action) === JSON.stringify(item.proposal)
                     )
                 )

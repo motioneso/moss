@@ -60,7 +60,8 @@ export function fixtureOutput(body: Record<string, unknown>): {
         { text: OUTPUT_FIXTURE_ACTION, evidence, ownerPhrase: "Alex", duePhrase: "tomorrow" }
       ],
       openQuestions: [],
-      warnings: []
+      warnings: [],
+      speakers: []
     },
     observation: {
       model: body.model,

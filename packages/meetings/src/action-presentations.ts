@@ -28,7 +28,12 @@ import { MeetingRecordsRepository } from "./repository.js";
 import { MeetingOutputsRepository } from "./output-repository.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
 import { encodeMeetingTranscriptBatch } from "./transcript-batch.js";
-import { getMeetingOutputTemplate, validateMeetingOutput } from "./output-validation.js";
+import {
+  getMeetingOutputTemplate,
+  storedSpeakerNames,
+  validateMeetingOutput
+} from "./output-validation.js";
+import { resolveSummarySpeakerText } from "./speaker-references.js";
 import { MeetingPreferencesRepository, savedCaptureSelection } from "./preferences.js";
 import { MeetingCaptureConnectionRepository } from "./capture-connection-repository.js";
 
@@ -412,6 +417,34 @@ function evidenceFields(inputs: MeetingOutputInputs, title: string): ApprovalFie
       "Warning",
       (value) => (typeof value === "string" ? [{ label: "Text", value }] : null),
       50
+    ),
+    speakers: list(
+      "Speaker guess",
+      (value) =>
+        presentApprovalFields(
+          value,
+          {
+            speakerId: {
+              label: "Speaker",
+              present: (id) =>
+                identifier(id) ? "Meeting-local speaker (identity unverified)" : null
+            },
+            name: nullableText("Name"),
+            basis: text("Basis"),
+            confidence: text("Confidence"),
+            evidence: {
+              label: "Evidence",
+              present: (ids) =>
+                Array.isArray(ids) && ids.every((id) => typeof id === "string")
+                  ? ids.length
+                    ? `${ids.length} transcript passage${ids.length === 1 ? "" : "s"}`
+                    : "None"
+                  : null
+            }
+          },
+          ["speakerId", "name", "basis", "confidence", "evidence"]
+        ),
+      20
     )
   };
 }
@@ -507,13 +540,21 @@ export const meetingSummaryPresentation: RouteApprovalPresentation = async (db, 
   const artifact = await outputs.getArtifact(db, meeting.id, body.expectedOutputVersion);
   if (!artifact || artifact.meetingId !== meeting.id || artifact.inputs.meetingId !== meeting.id)
     return null;
+  let shown: Record<string, unknown>;
   try {
-    validateMeetingOutput(body.content, artifact.inputs);
+    const checked = validateMeetingOutput(body.content, artifact.inputs, {
+      knownNames: storedSpeakerNames(artifact.content)
+    });
+    // The card shows resolved speaker text. The stored body and the version hash keep tokens.
+    const resolved = resolveSummarySpeakerText(checked) as unknown as Record<string, unknown>;
+    shown = { ...(body.content as Record<string, unknown>) };
+    for (const key of ["overview", "decisions", "openQuestions", "actions", "warnings"])
+      if (key in shown) shown[key] = resolved[key];
   } catch {
     return null;
   }
   const fields = presentApprovalFields(
-    body,
+    { ...body, content: shown },
     {
       requestKey,
       expectedOutputVersion: count("Based on summary version", 1),
