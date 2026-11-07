@@ -1,97 +1,86 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Summary speakers - two directions</title><link rel="stylesheet" href="../classifier-gate/app.css">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Summary speakers - Look B</title>
+<link rel="stylesheet" href="../../../../apps/web/src/styles/tokens.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-core.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-row-controls.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-sections.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-moss.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-moss-today.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-forms.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-keyline.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-tabs.css">
 <style>
-.mk-page{max-width:none;padding:var(--space-5) var(--space-6) var(--space-10)}
-/* speaker chips */
-.spk{--c:var(--text-subtle);--cs:var(--surface-2,var(--surface));--ci:var(--ink-2)}
+@font-face{font-family:"Archivo";font-style:normal;font-weight:400;font-display:swap;src:url("../classifier-gate/fonts/archivo-latin-400-normal.woff2") format("woff2")}@font-face{font-family:"Archivo";font-style:normal;font-weight:500;font-display:swap;src:url("../classifier-gate/fonts/archivo-latin-500-normal.woff2") format("woff2")}@font-face{font-family:"Archivo";font-style:normal;font-weight:600;font-display:swap;src:url("../classifier-gate/fonts/archivo-latin-600-normal.woff2") format("woff2")}@font-face{font-family:"Archivo";font-style:normal;font-weight:700;font-display:swap;src:url("../classifier-gate/fonts/archivo-latin-700-normal.woff2") format("woff2")}@font-face{font-family:"Archivo";font-style:normal;font-weight:800;font-display:swap;src:url("../classifier-gate/fonts/archivo-latin-800-normal.woff2") format("woff2")}@font-face{font-family:"Archivo";font-style:normal;font-weight:900;font-display:swap;src:url("../classifier-gate/fonts/archivo-latin-900-normal.woff2") format("woff2")}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans)}
+.bar{display:flex;gap:var(--space-4);align-items:center;padding:var(--space-3) var(--space-5);border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap}
+.bar b{font-family:var(--font-display)}
+.page{max-width:1500px;margin:0 auto;padding:var(--space-6) var(--space-6) var(--space-10)}
+/* speaker chip */
+.spk{--c:var(--text-subtle);--cs:var(--surface-2);--ci:var(--ink-2)}
 .spk[data-who=you]{--c:var(--gold-strong);--cs:var(--gold-soft);--ci:var(--gold-ink)}
 .spk[data-who=priya]{--c:var(--forest);--cs:var(--forest-soft);--ci:var(--forest-ink)}
 .spk[data-who=sam]{--c:var(--steel);--cs:var(--steel-soft);--ci:var(--steel-ink)}
-.chip{position:relative;display:inline-grid;place-items:center;flex:none;width:var(--s,28px);height:var(--s,28px);border-radius:50%;background:var(--cs);color:var(--ci);border:2px solid var(--c);font:900 calc(var(--s,28px)*.38)/1 var(--font-display);letter-spacing:.02em;vertical-align:middle}
-.spk[data-state=guess] .chip{border-style:dashed;background:repeating-linear-gradient(135deg,var(--cs) 0 5px,color-mix(in srgb,var(--cs) 70%,var(--surface)) 5px 10px)}
-.spk[data-state=guess] .chip::after{content:"?";position:absolute;right:-5px;bottom:-5px;width:max(13px,calc(var(--s,28px)*.38));height:max(13px,calc(var(--s,28px)*.38));border-radius:50%;background:var(--gold-light,var(--gold));color:var(--gold-ink);font:900 max(9px,calc(var(--s,28px)*.26))/1 var(--font-sans);display:grid;place-items:center;border:2px solid var(--surface)}
-.spk[data-state=set] .chip::after{content:"";position:absolute;right:-3px;bottom:-3px;width:max(10px,calc(var(--s,28px)*.3));height:max(10px,calc(var(--s,28px)*.3));border-radius:50%;background:var(--c);border:2px solid var(--surface)}
-.spk[data-state=unknown] .chip{border-style:dotted;background:var(--cs)}
-.nm{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-.nm b{font-weight:700;color:var(--text)}
-.nm .chip{--s:28px}
-.conf{font:700 var(--text-2xs)/1 var(--font-sans);letter-spacing:var(--tracking-caps);text-transform:uppercase;border:1px solid var(--border-strong);background:var(--surface);color:var(--accent-fg);border-radius:999px;padding:5px 9px;cursor:pointer}
-.conf:hover{background:var(--accent-soft)}
-.spk:not([data-state=guess]) .conf{display:none}
-/* shared */
-.num{font:900 var(--text-2xl)/1 var(--font-display);color:var(--accent-fg);border-bottom:2px solid var(--gold);padding-bottom:2px}
-.sh{display:flex;align-items:baseline;gap:var(--space-3);margin:0 0 var(--space-3)}
-.sh h2{margin:0;font:900 var(--text-2xl)/1.1 var(--font-display)}
-.sh .jds-eyebrow{margin-left:auto}
-.big{font:800 clamp(1.5rem,2.3vw,2.2rem)/1.25 var(--font-display);margin:0;max-width:34ch}
-.big .nm{gap:8px;vertical-align:baseline}.big .nm .chip{--s:34px}.big .nm b{border-bottom:3px solid var(--c)}
-.rule{border:0;border-top:1px solid var(--border);margin:var(--space-5) 0}
-.row{display:grid;grid-template-columns:2.2rem minmax(0,1fr) auto;gap:var(--space-4);align-items:center;padding:var(--space-4) 0;border-top:1px solid var(--border)}
-.row .ix{font:900 var(--text-xl) var(--font-display);color:var(--text-faint)}
-.row p{margin:0;font-size:var(--text-md);font-weight:600}
-.due{font-size:var(--text-xs);color:var(--text-subtle)}
-.tx{display:grid;grid-template-columns:auto minmax(0,1fr);gap:var(--space-3);padding:var(--space-3) 0;border-top:1px solid var(--border);align-items:start}
-.tx p{margin:0}.tx small{color:var(--text-subtle)}
-/* direction A */
-.A{display:grid;grid-template-columns:17rem minmax(0,1fr) 22rem;gap:var(--space-7,40px)}
-@media(max-width:1100px){.A{grid-template-columns:1fr}}
-.A .roster{position:sticky;top:5rem;align-self:start}
-.rp{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--space-4);align-items:center;padding:var(--space-3) 0;border-top:1px solid var(--border)}
-.rp .chip{--s:44px}
-.rp .bar{height:6px;border-radius:3px;background:var(--surface-2,var(--border));margin-top:6px;overflow:hidden}
-.rp .bar i{display:block;height:100%;background:var(--c);width:var(--w)}
-.rp b{display:block}.rp small{color:var(--text-subtle);font-size:var(--text-xs)}
-/* direction B */
-.hero{background:var(--hero-bg,var(--forest));color:var(--hero-fg,#fff);border-bottom:3px solid var(--gold);padding:var(--space-6);display:flex;gap:var(--space-6);justify-content:space-between;align-items:flex-end;flex-wrap:wrap;border-radius:var(--radius-md)}
-.hero .jds-eyebrow{color:var(--hero-accent,var(--gold-light))}
-.hero h1{margin:var(--space-2) 0 0;font:900 clamp(2rem,4vw,3.2rem)/1 var(--font-display)}
-.hero .meta{margin-top:var(--space-2);opacity:.85;font-size:var(--text-sm)}
-.stack{display:flex;gap:var(--space-4);align-items:center}
-.stack .spk{display:grid;justify-items:center;gap:6px;font-size:var(--text-xs)}
-.stack .chip{--s:54px;border-color:var(--hero-accent,var(--gold-light));color:var(--ci)}
-.stack .spk[data-state=guess] .chip::after{border-color:var(--hero-bg,var(--forest))}
-.stack .conf{background:transparent;color:var(--hero-fg,#fff);border-color:color-mix(in srgb,var(--hero-fg,#fff) 50%,transparent)}
-.tl{margin:var(--space-6) 0 var(--space-2);display:flex;height:34px;border-radius:var(--radius-md);overflow:hidden;gap:2px}
-.tl i{background:var(--c);flex:var(--f);min-width:6px;position:relative}
-.tl i[data-state=guess]{background:repeating-linear-gradient(135deg,var(--c) 0 6px,color-mix(in srgb,var(--c) 55%,var(--surface)) 6px 12px)}
-.tl i[data-who=unknown]{background:var(--cs);border:1px dotted var(--c)}
-.ticks{display:flex;justify-content:space-between;font-size:var(--text-xs);color:var(--text-subtle);margin-bottom:var(--space-6)}
-.B{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:var(--space-7,40px)}
-@media(max-width:1100px){.B{grid-template-columns:1fr}}
-.B .row{grid-template-columns:2rem minmax(0,1fr);row-gap:var(--space-2)}.B .row .nm{grid-column:2}
-.tx2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 var(--space-7,40px);margin-top:var(--space-6)}
-.hide{display:none!important}
+.chip{position:relative;display:inline-grid;place-items:center;flex:none;width:var(--s,28px);height:var(--s,28px);border-radius:50%;background:var(--cs);color:var(--ci);border:2px solid var(--c);font:var(--weight-bold) calc(var(--s,28px)*.38)/1 var(--font-display)}
+.spk[data-state=guess] .chip{border-style:dashed}
+.spk[data-state=guess] .chip::after{content:"?";position:absolute;right:calc(var(--s,28px)*-.24);bottom:calc(var(--s,28px)*-.24);width:max(16px,calc(var(--s,28px)*.46));height:max(16px,calc(var(--s,28px)*.46));border-radius:50%;background:var(--amber-strong);color:var(--white);font:var(--weight-bold) max(11px,calc(var(--s,28px)*.3))/1 var(--font-sans);display:grid;place-items:center;border:2px solid var(--surface)}
+.spk[data-state=unknown] .chip{border-style:dotted}
+.nm{display:inline-flex;align-items:center;gap:var(--space-2);white-space:nowrap}
+.nm .chip{--s:32px}.nm b{font-weight:var(--weight-semibold)}
+.link{background:none;border:0;padding:0;font:inherit;font-size:var(--text-sm);font-weight:var(--weight-semibold);color:var(--accent-fg);text-decoration:underline;text-underline-offset:4px;cursor:pointer}
+.spk:not([data-state=guess]) .link{display:none}
+/* masthead (plain) */
+.mast{display:flex;justify-content:space-between;align-items:flex-end;gap:var(--space-6);flex-wrap:wrap;padding-bottom:var(--space-5);border-bottom:1px solid var(--border-strong)}
+.who{display:flex;gap:var(--space-5)}
+.who .spk{display:grid;justify-items:center;gap:var(--space-1);font-size:var(--text-xs);color:var(--text-muted)}
+.who .chip{--s:46px}
+.who .spk[data-state=guess]{gap:var(--space-2)}
+/* talk strip */
+.strip{display:flex;height:30px;gap:2px;margin:var(--space-3) 0 var(--space-2)}
+.strip i{flex:var(--f);background:var(--cs);border:1px solid color-mix(in srgb,var(--c) 45%,var(--cs));border-radius:2px;min-width:6px}
+.strip i[data-state=guess]{background:repeating-linear-gradient(135deg,var(--cs) 0 6px,color-mix(in srgb,var(--c) 14%,var(--cs)) 6px 12px)}
+.ticks{display:flex;justify-content:space-between;font-size:var(--text-xs);color:var(--text-faint)}
+/* grid */
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:34px;margin-top:var(--space-6)}
+@media(max-width:1080px){.grid{grid-template-columns:1fr}}
+.rail{border-left:1px solid var(--border);padding-left:34px}
+@media(max-width:1080px){.rail{border-left:0;padding-left:0}}
+.sec{padding:var(--space-5) 0;border-top:1px solid var(--border)}
+.sec:first-child{border-top:0;padding-top:0}
+.sec .jds-section-head{margin-bottom:var(--space-4)}
+.lead{margin:0;font:var(--weight-semibold) var(--text-3xl)/1.25 var(--font-display);letter-spacing:-.5px;max-width:30ch}
+.lead .nm{gap:var(--space-2)}.lead .nm .chip{--s:36px}
+.fact{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--space-4);align-items:center;padding:var(--space-4) 0;border-bottom:1px solid var(--border)}
+
+.fact p{margin:0;font:var(--weight-semibold) var(--text-lg) var(--font-display)}
+.fact small{color:var(--text-subtle);font-size:var(--text-xs);margin-left:var(--space-2);font-family:var(--font-sans);font-weight:400}
+.railhead{margin:0 0 var(--space-3);padding-bottom:var(--space-2);border-bottom:2px solid var(--accent-fg)}
+.railhead .jds-brief__kicker{display:block}
+.railhead .jds-brief__title{font-size:var(--text-lg)}
+.rp{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--space-3);align-items:center;padding:var(--space-3) 0;border-bottom:1px solid var(--border)}
+.rp .chip{--s:36px}.rp b{display:block;font-size:var(--text-sm)}.rp small{color:var(--text-subtle);font-size:var(--text-xs)}
+.tx{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 var(--space-8)}
+.line{display:grid;grid-template-columns:auto minmax(0,1fr);gap:var(--space-3);padding:var(--space-3) 0;border-bottom:1px solid var(--border)}
+.line p{margin:0}.line small{color:var(--text-subtle);font-size:var(--text-xs)}
 </style></head>
-<body data-view="a">
-<div class="mk-bar"><b>Summary speakers: two directions</b>
-<span class="mk-group"><span class="mk-label">Direction</span><span class="jds-segmented">
-<button class="jds-segmented__opt" data-pick="view:a" aria-pressed="true">A · Roster and ledger</button>
-<button class="jds-segmented__opt" data-pick="view:b">B · Hero and timeline</button></span></span>
-<span class="mk-group"><span class="mk-label">Theme</span><span class="jds-segmented"><button class="jds-segmented__opt" data-pick="theme:light" aria-pressed="true">Light</button><button class="jds-segmented__opt" data-pick="theme:dark">Dark</button></span></span>
+<body>
+<div class="bar"><b>Summary speakers · Look B</b>
+<span class="jds-segmented"><button class="jds-segmented__opt" data-th="light" aria-pressed="true">Light</button><button class="jds-segmented__opt" data-th="dark">Dark</button></span>
 <button class="jds-btn jds-btn--quiet jds-btn--sm" id="reset">Reset guesses</button></div>
-<div class="mk-page" id="root"></div>
+<div class="page" id="root"></div>
 <script>
 var S={you:{n:'You',i:'ME',st:'set',w:'34%'},priya:{n:'Priya',i:'PN',st:'guess',w:'38%'},sam:{n:'Sam',i:'SO',st:'guess',w:'22%'},s3:{n:'Speaker 3',i:'3',st:'unknown',w:'6%'}};
 var ST={};function reset(){for(var k in S)ST[k]=S[k].st}reset();
 function who(k){return k==='s3'?'unknown':k}
-function chip(k,s){return '<span class="spk" data-who="'+who(k)+'" data-state="'+ST[k]+'" title="'+(ST[k]==='guess'?'Guessed from your calendar. Confirm or change.':ST[k]==='set'?'Set by you':'Not identified')+'"><span class="chip" style="--s:'+(s||28)+'px">'+S[k].i+'</span></span>'}
-function nm(k,conf){return '<span class="spk nm" data-who="'+who(k)+'" data-state="'+ST[k]+'"><span class="chip">'+S[k].i+'</span><b>'+S[k].n+'</b>'+(conf?'<button class="conf" data-c="'+k+'">Confirm</button>':'')+'</span>'}
-function rows(){return '<div class="row"><span class="ix">1</span><p>Launch moves to March.</p>'+nm('sam')+'</div><div class="row"><span class="ix">2</span><p>Budget stays as is.</p>'+nm('s3')+'</div>'}
-function acts(){return '<div class="row"><span class="ix">&#9633;</span><p>Update the launch plan <span class="due">by Fri</span></p>'+nm('priya')+'</div><div class="row"><span class="ix">&#9633;</span><p>Confirm vendor dates <span class="due">by Wed</span></p>'+nm('sam')+'</div>'}
-function tx(){return [['priya','Thanks all. Where are we on the launch date?','10:02'],['sam','Priya, the vendor slipped, so March is realistic.','10:03'],['s3','Budget stays as is, I checked with finance.','10:05'],['priya','Fine. I will update the plan by Friday.','10:06']].map(function(t){return '<div class="tx">'+chip(t[0],30)+'<div><p>'+t[1]+'</p><small>'+S[t[0]].n+' · '+t[2]+'</small></div></div>'}).join('')}
-function A(){return '<div class="A"><aside class="roster"><div class="sh"><h2>Speakers</h2></div>'+['you','priya','sam','s3'].map(function(k){return '<div class="rp spk" data-who="'+who(k)+'" data-state="'+ST[k]+'">'+chip(k,44)+'<div><b>'+S[k].n+'</b><div class="bar"><i style="--w:'+S[k].w+'"></i></div></div><span style="display:grid;justify-items:end;gap:6px"><small>'+S[k].w+'</small><button class="conf" data-c="'+k+'">Confirm</button></span></div>'}).join('')+'</aside>'
-+'<main><div class="sh"><span class="num">01</span><h2>Overview</h2><span class="jds-eyebrow">Launch planning · 39 min</span></div><p class="big">'+nm('priya')+' and '+nm('sam')+' agreed to move the launch to March.</p><hr class="rule">'
-+'<div class="sh"><span class="num">02</span><h2>Decisions</h2></div>'+rows()+'<hr class="rule"><div class="sh"><span class="num">03</span><h2>Action items</h2></div>'+acts()+'</main>'
-+'<section><div class="sh"><h2>Transcript</h2></div>'+tx()+'</section></div>'}
-function B(){var seg=[['priya',10],['sam',7],['you',6],['priya',9],['s3',3],['sam',8],['priya',6],['you',5]];
-return '<div class="hero"><div><span class="jds-eyebrow">Tuesday 4 Nov · 39 min</span><h1>Launch planning</h1></div><div class="stack">'+['you','priya','sam','s3'].map(function(k){return '<div class="spk" data-who="'+who(k)+'" data-state="'+ST[k]+'">'+chip(k,54)+'<span>'+S[k].n+'</span><button class="conf" data-c="'+k+'">Confirm</button></div>'}).join('')+'</div></div>'
-+'<div class="tl">'+seg.map(function(s){return '<i class="spk" data-who="'+who(s[0])+'" data-state="'+ST[s[0]]+'" style="--f:'+s[1]+'" title="'+S[s[0]].n+'"></i>'}).join('')+'</div><div class="ticks"><span>10:02</span><span>10:15</span><span>10:30</span><span>10:41</span></div>'
-+'<div class="B"><div><div class="sh"><h2>Overview</h2></div><p class="big">'+nm('priya')+' and '+nm('sam')+' agreed to move the launch to March.</p></div><div><div class="sh"><h2>Decisions</h2></div>'+rows()+'</div><div><div class="sh"><h2>Action items</h2></div>'+acts()+'</div></div>'
-+'<div class="tx2">'+tx()+'</div>'}
-function draw(){document.getElementById('root').innerHTML=document.body.getAttribute('data-view')==='b'?B():A()}
+function sp(k,inner){return '<span class="spk" data-who="'+who(k)+'" data-state="'+ST[k]+'">'+inner+'</span>'}
+function chip(k,s){return sp(k,'<span class="chip" style="--s:'+s+'px" title="'+(ST[k]==='guess'?'Guessed from your calendar':ST[k]==='set'?'Set by you':'Not identified')+'">'+S[k].i+'</span>')}
+function nm(k){return sp(k,'<span class="nm"><span class="chip">'+S[k].i+'</span><b>'+S[k].n+'</b></span>').replace('class="spk"','class="spk nm"').replace('<span class="nm"><span class="chip">','<span class="chip">').replace('</b></span></span>','</b></span>')}
+function sec(n,t,body,meta){return '<section class="sec"><div class="jds-section-head"><span class="jds-section-head__number">'+n+'</span><h2 class="jds-section-head__title">'+t+'</h2>'+(meta?'<span class="jds-section-head__meta">'+meta+'</span>':'')+'</div>'+body+'</section>'}
+function facts(a){return a.map(function(f){return '<div class="fact"><p>'+f[0]+(f[2]?'<small>'+f[2]+'</small>':'')+'</p>'+nm(f[1])+'</div>'}).join('')}
+function tx(){return [['priya','Thanks all. Where are we on the launch date?','10:02'],['sam','Priya, the vendor slipped, so March is realistic.','10:03'],['s3','Budget stays as is, I checked with finance.','10:05'],['priya','Fine. I will update the plan by Friday.','10:06']].map(function(t){return '<div class="line">'+chip(t[0],30)+'<div><p>'+t[1]+'</p><small>'+S[t[0]].n+' · '+t[2]+'</small></div></div>'}).join('')}
+function draw(){var seg=[['priya',10],['sam',7],['you',6],['priya',9],['s3',3],['sam',8],['priya',6],['you',5]];
+document.getElementById('root').innerHTML=
+'<header class="mast"><div><span class="jds-masthead__eyebrow">Tuesday 4 Nov · 39 min</span><h1 class="jds-masthead__title">Launch planning</h1></div><div class="who">'+['you','priya','sam','s3'].map(function(k){return sp(k,chip(k,46)+'<span>'+S[k].n+'</span>')}).join('').replace(/<span class="spk"([^>]*)>/g,'<span class="spk"$1>')+'</div></header>'
++'<div class="grid"><div>'
++sec('01','Overview','<p class="lead">'+nm('priya')+' and '+nm('sam')+' agreed to move the launch to March.</p>')
++sec('02','Decisions',facts([['Launch moves to March.','sam'],['Budget stays as is.','s3']]))
++sec('03','Action items',facts([['Update the launch plan','priya','by Fri'],['Confirm vendor dates','sam','by Wed']]))
++sec('04','Transcript','<div class="tx">'+tx()+'</div>','10:02 to 10:41')
++'</div><aside class="rail"><div class="railhead"><span class="jds-brief__kicker">Who talked</span><h3 class="jds-brief__title">Speakers</h3></div>'
++'<div class="strip">'+seg.map(function(s){return '<i class="spk" data-who="'+who(s[0])+'" data-state="'+ST[s[0]]+'" style="--f:'+s[1]+'" title="'+S[s[0]].n+'"></i>'}).join('')+'</div><div class="ticks"><span>10:02</span><span>10:41</span></div><div style="height:var(--space-4)"></div>'
++['you','priya','sam','s3'].map(function(k){return '<div class="rp spk" data-who="'+who(k)+'" data-state="'+ST[k]+'">'+chip(k,36)+'<div><b>'+S[k].n+'</b><small>'+S[k].w+'</small></div><button class="link" data-c="'+k+'">Confirm</button></div>'}).join('')+'</aside></div>'}
 document.addEventListener('click',function(e){var c=e.target.closest('[data-c]');if(c){ST[c.getAttribute('data-c')]='set';draw()}
-if(e.target.id==='reset'){reset();draw()}});
+if(e.target.id==='reset'){reset();draw()}
+var t=e.target.closest('[data-th]');if(t){document.documentElement.removeAttribute('data-color-mode');if(t.getAttribute('data-th')==='dark')document.documentElement.setAttribute('data-color-mode','dark');document.querySelectorAll('[data-th]').forEach(function(b){b.setAttribute('aria-pressed',b===t)})}});
 draw();
-</script>
-<script src="../classifier-gate/switcher.js"></script>
-<script>document.querySelector('.mk-bar').addEventListener('click',function(e){if(e.target.closest('[data-pick^="view"]'))draw()});</script>
-</body></html>
+</script></body></html>
