@@ -15,13 +15,13 @@ Every capability the plan assumes, cited against `origin/main` at the time of wr
 | Capability                                                                                         | Evidence                                                                                                           |
 | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | Prompt is assembled in the registry composition, one place, with an escaped JSON `externalData`    | `packages/module-registry/src/meeting-output-runtime.ts:310-321` (`promptFor`), `:298-302` (`escapeData`)          |
-| Meetings never imports calendar, people or memory, so the pack must be composed in the registry    | `packages/meetings/package.json` deps (db, module-sdk, shared, structured-state, ui, jobs, vault); registry imports `@moss/calendar` and `@moss/memory` already (`approval-source-references.ts:3,7`) |
+| Meetings never imports calendar, people or memory, so the pack is composed in the registry (design choice, not a ban) | `packages/meetings/package.json` deps (db, module-sdk, shared, structured-state, ui, jobs, vault); registry imports `@moss/calendar` and `@moss/memory` already (`approval-source-references.ts:3,7`) |
 | Meetings already receives other modules through a port built in the registry                       | `createTask: MeetingTaskCreator` at `meeting-output-runtime.ts:484-493`                                            |
 | Generation runs in Moss under the owner's data context, no tools                                   | `meeting-output-runtime.ts:351` (`prepareStructuredGeneration`), `output-service.ts:149-170`                   |
 | Prompt cap and split loop; unsplittable piece throws `meeting_output_input_too_large`              | `meeting-output-runtime.ts:324-330,392-398`; `STRUCTURED_PROMPT_MAX_BYTES` from `@moss/ai`                         |
 | Instruction scan covers transcript and notes only, returns reader-facing lines, never blocks       | `packages/meetings/src/instruction-scan.ts:34-47`; stored via `output-service.ts:149,209`                          |
 | Artifact is one JSON text column, so a new optional field needs no SQL                             | `packages/meetings/sql/0278_meeting_outputs.sql:12-22` (`artifact_json TEXT`, 1 MB cap)                            |
-| Output schema, content type and validation limits                                                  | `meeting-output-runtime.ts:67-100` (`MEETING_OUTPUT_SCHEMA`), `packages/shared/src/meeting-output-api.ts:24-31`, `packages/meetings/src/output-validation.ts:9-17` |
+| Output schema, content type and validation limits                                                  | `meeting-output-runtime.ts:67-130` (`MEETING_OUTPUT_SCHEMA`; overview, decisions and actions start at `:102`), `packages/shared/src/meeting-output-api.ts:24-31`, `packages/meetings/src/output-validation.ts:9-17` |
 | Transcript speaker is anonymous and meeting-local                                                  | `packages/shared/src/meeting-transcript-api.ts:23-24`                                                              |
 | People has an exact name or identity lookup that takes the owner's scoped db                       | `packages/people/src/service.ts:25-50` (`PersonContextService.resolve`), `listPeople` at `:60`                     |
 | Memory recall takes a free-text query, scoped db and owner id, with no chat context                | `packages/memory/src/graph-recall-service.ts:62-69` (`recall`); needs an embedding provider, built at `built-in-module-helpers.ts:31` |
@@ -34,7 +34,7 @@ Every capability the plan assumes, cited against `origin/main` at the time of wr
    stored at all.** Google sync writes only `attendeeCount` into event metadata
    (`packages/connectors/src/google-sync-phases.ts:340`), the shared contract exposes only the count
    (`packages/shared/src/calendar-api.ts:16`, `serialize.ts:19`), and the Outlook path stores none
-   (no match in `outlook-calendar-config.ts`). So slice 1 needs a connector change as well as a read
+   (checked `packages/connectors/src/outlook-calendar-source.ts:4` and `outlook-calendar-jobs.ts:139`; no attendee list). So slice 1 needs a connector change as well as a read
    function, and events already cached have no names until their next sync.
 2. **Does people expose a lookup by name that respects sharing? Partly.** `resolve` matches one exact
    display name or identity for the owner. It returns one person or null, so it cannot rank near
@@ -89,8 +89,9 @@ metadata key plus one filter.
   email addresses are not selected.
 - **Never edit an applied migration.** Slice 1 likely needs no SQL. If one is needed it is a new file
   in the owning module's `sql/`.
-- **App map.** Slices 1-3 add no user-visible screen or setting, so the app map stays untouched.
-  Slice 4 owns the map change. Slice 3 makes no user-visible claim until slice 4 renders it.
+- **App map.** Slices 2 and 3 change behaviour (default-on owner context, a preference, speaker marks
+  in copy and export), so each updates the meetings manifest `features` and `settings` entries in
+  the same PR. Slice 1 changes no behaviour a user can see. Slice 4 adds the screen-level entries.
 
 ## 4. Slice 1: public read APIs
 
@@ -172,12 +173,12 @@ of each new function inside `packages/module-registry/src` is part of slice 2's 
 Verification (unpiped):
 
 ```bash
-pnpm --filter @moss/calendar test > /tmp/s1-cal.log 2>&1; echo "EXIT=$?"      # expect 0
-pnpm --filter @moss/people test > /tmp/s1-people.log 2>&1; echo "EXIT=$?"     # expect 0
-pnpm --filter @moss/meetings test > /tmp/s1-meet.log 2>&1; echo "EXIT=$?"     # expect 0
+pnpm test:unit tests/unit/<new calendar and people test files> > /tmp/s1-unit.log 2>&1; echo "EXIT=$?"   # expect 0
+pnpm typecheck > /tmp/s1-types.log 2>&1; echo "EXIT=$?"                                                 # expect 0
+pnpm lint > /tmp/s1-lint.log 2>&1; echo "EXIT=$?"                                                       # expect 0
 ```
 
-These package tests that touch the database go through the `verify-gate` skill, not a bare run. Full
+Integration runs and the full gate go through the `verify-gate` skill, not a bare run. Full
 gate before the PR, also through `verify-gate`: `pnpm verify:foundation`, expect exit 0.
 
 ### Kill gate after slice 1
@@ -234,17 +235,25 @@ Decisions:
 
 - Zero or two-plus calendar matches means `event: null`. A source that throws is treated as empty and
   the others still run. Nothing here may fail a summary.
-- Transcript names for People and Memory come from the calendar attendee list plus capitalised names
-  heard in the transcript, capped at 30. This is a plain string extraction in Moss, not a model call.
+- Names for People come from the calendar attendee list plus capitalised names heard in the transcript, capped at 30. Memory queries are those names plus the selected event title (spec section 1). This is a plain string extraction in Moss, not a model call.
 - Scan hits store only the source and a count. The excerpt never leaves the function, so no pack text
   reaches stored output. The existing flag type gains an optional `packHits` list; the existing
   `lines` keep their meaning.
+- Plumbing. The generator today returns only `content` and `modelRoute`, and the service scans and
+  persists the flag itself (`output-service.ts:19,149,168,208`). The generator result gains an
+  optional `context: { packHits, trimmed, knownNames }`. `knownNames` is in memory only: the service
+  passes it to the validator and drops it before saving. `packHits` is merged into the stored flag.
+  The summary screen's flag notice (`meeting-summary.tsx:54`) reads `lines` and `more` only, so
+  slice 2 also renders pack hits there as one plain sentence per source ("1 line in a calendar title
+  looked like an order"). The service revalidates twice, so the validator accepts `knownNames` on
+  both calls.
 - Trim order inside the loop that now throws `meeting_output_input_too_large`: (1) drop pack items
   lowest rank first, (2) drop the whole pack, (3) truncate the running summary's oldest evidence,
   (4) truncate the unsplittable segment with a visible marker. Each step adds a warning to the
   summary. The error stays only when the guidance alone exceeds the cap.
-- The pack is rebuilt once per run and counted in the byte budget for every piece. Pieces still target
-  half the cap, now minus the pack size.
+- The pack is rebuilt for every piece (spec section 2) with that piece's transcript names, and counted
+  in the byte budget. Pieces still target half the cap, now minus the pack size. A test uses two
+  pieces that name different people and asserts each prompt carries only its own people.
 - A new meetings preference key `meetings.use-owner-context` (default on) is read in the generator.
   The toggle screen is slice 4, but the read lands now so slice 4 adds only UI.
 - Guidance added to the prompt, kept under 150 words: the block is background about the owner, is
@@ -257,6 +266,7 @@ Tests:
   count 1, and the stored artifact contains neither the title nor the line. Fails if text leaks.
 - Prompt snapshot: `ownerContext` is escaped the same way as `externalData` (`<`, `>`, `&`). Fails on a
   raw `</` inside a note.
+- A fact reachable only through the event title is recalled.
 - One source throwing: the summary still completes with the other sources.
 - Single oversized segment plus a full pack: the run completes with warnings in the trim order above.
   Fails if the pack is kept while evidence is cut.
@@ -275,10 +285,10 @@ the total. Record the numbers on the PR. If the total exceeds 17 KB the caps cha
 Verification (unpiped):
 
 ```bash
-pnpm --filter @moss/meetings test > /tmp/s2-meet.log 2>&1; echo "EXIT=$?"            # expect 0
-pnpm --filter @moss/module-registry test > /tmp/s2-reg.log 2>&1; echo "EXIT=$?"      # expect 0
-pnpm typecheck > /tmp/s2-types.log 2>&1; echo "EXIT=$?"                              # expect 0
-pnpm lint > /tmp/s2-lint.log 2>&1; echo "EXIT=$?"                                    # expect 0
+pnpm test:unit tests/unit/<new context pack and prompt test files> > /tmp/s2-unit.log 2>&1; echo "EXIT=$?"   # expect 0
+pnpm test:integration tests/integration/<new meeting context test> > /tmp/s2-int.log 2>&1; echo "EXIT=$?"    # expect 0
+pnpm typecheck > /tmp/s2-types.log 2>&1; echo "EXIT=$?"                                                       # expect 0
+pnpm lint > /tmp/s2-lint.log 2>&1; echo "EXIT=$?"                                                             # expect 0
 ```
 
 DB-touching ones and the full `pnpm verify:foundation` (expect 0) run through `verify-gate`.
@@ -324,7 +334,11 @@ Decisions:
   names a speaker in the overview, decisions and actions. Stored text keeps the token. A small pure
   resolver (`resolveSpeakerReferences(text, speakers, ownerLabels)`) lives in meetings and is
   what slice 4 calls from screen, copy and export. Slice 3 ships the resolver and its tests, and
-  wires **export and copy to it now**, so a summary with tokens never prints a raw token. Unknown
+  wires **every existing consumer to it now**, so a summary with tokens never shows a raw token. That
+  covers export and copy, the on-screen summary (`packages/meetings/src/web/meeting-summary.tsx`
+  renders the overview at `:63` and decisions at `:82` verbatim today), the actions list, and any
+  chat or history projection that reads summary text. A grep for every reader of `overview`,
+  `decisions` and `actions` text is a slice 3 exit check. Unknown
   speaker resolves to "Speaker N". Inferred, unconfirmed names resolve with "(guess)".
 - **Owner labels storage is deferred to slice 4.** Slice 3 passes an empty label map. The resolver
   signature already takes it, so slice 4 adds the table and no change to stored summaries.
@@ -338,8 +352,7 @@ Decisions:
 - **Retry behaviour.** A malformed speakers block falls under the existing one-retry rule for bad
   shapes. A semantically bad entry is dropped, not retried.
 - **Split transcripts.** The running summary carries `speakers` forward, and each piece may refine
-  but not delete an earlier entry that still has evidence. Evidence ids are shifted the same way the
-  existing evidence is shifted (`shiftMeetingOutputChunkEvidence`).
+  but not delete an earlier entry that still has evidence. Speaker evidence ids are segment ids and stay unchanged across pieces. `shiftMeetingOutputChunkEvidence` shifts note character offsets only (`output-chunks.ts:178`) and is not applied to them.
 - No SQL: the artifact column is JSON text and the field is optional.
 - Rewrite keeps owner labels as fact, but labels arrive in slice 4. Slice 3 only guarantees the
   prompt has a slot for them.
@@ -361,17 +374,19 @@ Tests:
 
 E2E: an integration run with the stubbed model, seeded transcript and a calendar event asserts the
 stored artifact holds `speakers` plus tokens, and that the exported text has names marked "(guess)".
-A browser test is slice 4/5 because slice 3 renders nothing new in the screen.
+A browser test on dev opens the summary screen and asserts no `{{speaker:` text appears. Marks, the picker and corrections are slice 4.
 
 Verification (unpiped):
 
 ```bash
-pnpm --filter @moss/shared test > /tmp/s3-shared.log 2>&1; echo "EXIT=$?"            # expect 0
-pnpm --filter @moss/meetings test > /tmp/s3-meet.log 2>&1; echo "EXIT=$?"            # expect 0
-pnpm --filter @moss/module-registry test > /tmp/s3-reg.log 2>&1; echo "EXIT=$?"      # expect 0
-pnpm typecheck > /tmp/s3-types.log 2>&1; echo "EXIT=$?"                              # expect 0
-pnpm lint > /tmp/s3-lint.log 2>&1; echo "EXIT=$?"                                    # expect 0
+pnpm test:unit tests/unit/<new speaker validator, resolver and export test files> > /tmp/s3-unit.log 2>&1; echo "EXIT=$?"   # expect 0
+pnpm test:integration tests/integration/<new meeting speakers test> > /tmp/s3-int.log 2>&1; echo "EXIT=$?"                   # expect 0
+pnpm typecheck > /tmp/s3-types.log 2>&1; echo "EXIT=$?"                                                                      # expect 0
+pnpm lint > /tmp/s3-lint.log 2>&1; echo "EXIT=$?"                                                                            # expect 0
 ```
+
+The meetings, calendar, shared and registry packages have no `test` script, so `pnpm --filter <pkg> test`
+exits 0 with nothing run. Use only the root runners above, and check the log names the new files.
 
 All DB-touching runs and `pnpm verify:foundation` (expect 0) go through `verify-gate`.
 
@@ -392,8 +407,8 @@ Owner: Ben makes the call. The coordinator collects the numbers.
 - One session per slice, one branch and one PR per slice, merged in order. Slices are session-sized.
 - Spec before build is met. No front-end design is needed for these slices, because none render new
   screens.
-- Each PR fills in the Release note section as `Category: N/A`, since nothing user-visible ships until
-  slice 4.
+- Slice 1 fills in the Release note section as `Category: N/A`. Slices 2 and 3 give a plain Added
+  entry, since summaries change for the owner as soon as they merge.
 - Each PR ends with proof from a real run on dev. No faked or rewritten responses.
 - Plan documents are committed in this PR before any slice starts.
 
