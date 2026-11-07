@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-11-07
+
+#### Added
+
+- **Summaries use your meeting background.** Meeting summaries now use your name, the matching calendar event and your notes about the people involved to get names and context right. [PR #4026](https://github.com/motioneso/moss/pull/4026)
+
 ### 2026-11-06
 
 #### Fixed
