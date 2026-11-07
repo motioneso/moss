@@ -256,7 +256,7 @@ list is in `rust-spike/parity/conversion-ledger.md`.
 | tasks-action-policy-self-heal | 5     | 0 (outside)                          |
 | tasks-manage-share-regression | 2     | 0 (outside)                          |
 
-The side-by-side suite now holds 67 cases in 8 files: the 64 converted tests and 3 smoke cases
+The side-by-side suite now holds 67 cases in 9 files: the 64 converted tests and 3 smoke cases
 written first.
 
 ## Cost of porting
