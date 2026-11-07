@@ -86,6 +86,17 @@ fn db_name(url: &Url) -> Result<String, String> {
     Ok(name.to_owned())
 }
 
+/// A Postgres error with the server's message, code and detail, which plain Display hides.
+pub fn pg(error: &tokio_postgres::Error) -> String {
+    match error.as_db_error() {
+        Some(db) => {
+            let detail = db.detail().map(|text| format!(" ({text})")).unwrap_or_default();
+            format!("{} [{}]{detail}", db.message(), db.code().code())
+        }
+        None => error.to_string(),
+    }
+}
+
 pub fn with_db(url: &Url, db: &str) -> Url {
     let mut copy = url.clone();
     copy.set_path(&format!("/{db}"));
@@ -95,7 +106,7 @@ pub fn with_db(url: &Url, db: &str) -> Url {
 pub async fn connect(url: &Url) -> Result<Client, String> {
     let (client, connection) = tokio_postgres::connect(url.as_str(), NoTls)
         .await
-        .map_err(|error| format!("connect: {error}"))?;
+        .map_err(|error| format!("connect: {}", pg(&error)))?;
     tokio::spawn(async move {
         let _ = connection.await;
     });
@@ -125,17 +136,20 @@ pub struct Copies {
 impl Copies {
     pub async fn create(env: &GateEnv, spike_sql: &Path) -> Result<Self, String> {
         let maintenance = connect(&with_db(&env.bootstrap, "postgres")).await?;
-        let ts_name = format!("{}_parity_ts", env.gate_db);
-        let rs_name = format!("{}_parity_rs", env.gate_db);
+        let ts_name = "moss_parity_ts".to_owned();
+        let rs_name = "moss_parity_rs".to_owned();
+        // Separate statements, because a multi-statement batch runs as one transaction block and
+        // DROP or CREATE DATABASE refuses to run inside one.
         for name in [&ts_name, &rs_name] {
-            maintenance
-                .batch_execute(&format!(
-                    "DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE); \
-                     CREATE DATABASE \"{name}\" TEMPLATE \"{}\"",
-                    env.gate_db
-                ))
-                .await
-                .map_err(|error| format!("clone {name}: {error}"))?;
+            for sql in [
+                format!("DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)"),
+                format!("CREATE DATABASE \"{name}\" TEMPLATE \"{}\"", env.gate_db),
+            ] {
+                maintenance
+                    .batch_execute(&sql)
+                    .await
+                    .map_err(|error| format!("clone {name}: {}", pg(&error)))?;
+            }
         }
         let spike = std::fs::read_to_string(spike_sql)
             .map_err(|error| format!("read {}: {error}", spike_sql.display()))?;
@@ -161,7 +175,7 @@ impl Copy {
     async fn open(env: &GateEnv, name: String, spike_sql: Option<&str>) -> Result<Self, String> {
         let admin = connect(&with_db(&env.bootstrap, &name)).await?;
         if let Some(sql) = spike_sql {
-            admin.batch_execute(sql).await.map_err(|error| format!("spike SQL: {error}"))?;
+            admin.batch_execute(sql).await.map_err(|error| format!("spike SQL: {}", pg(&error)))?;
         }
         let closure = admin
             .query(
@@ -173,18 +187,18 @@ impl Copy {
                 &[],
             )
             .await
-            .map_err(|error| format!("closure: {error}"))?;
+            .map_err(|error| format!("closure: {}", pg(&error)))?;
         admin
             .batch_execute("CREATE SCHEMA parity_keep")
             .await
-            .map_err(|error| format!("keep schema: {error}"))?;
+            .map_err(|error| format!("keep schema: {}", pg(&error)))?;
         let mut keep = Vec::new();
         for row in closure {
             let table: String = row.get(0);
             let count: i64 = admin
                 .query_one(&format!("SELECT count(*) FROM {table}"), &[])
                 .await
-                .map_err(|error| format!("count {table}: {error}"))?
+                .map_err(|error| format!("count {table}: {}", pg(&error)))?
                 .get(0);
             if count == 0 {
                 continue;
@@ -197,13 +211,13 @@ impl Copy {
                     &[&table],
                 )
                 .await
-                .map_err(|error| format!("columns {table}: {error}"))?
+                .map_err(|error| format!("columns {table}: {}", pg(&error)))?
                 .get(0);
             let copy = keep_name(&table);
             admin
                 .batch_execute(&format!("CREATE TABLE {copy} AS SELECT {columns} FROM {table}"))
                 .await
-                .map_err(|error| format!("keep {table}: {error}"))?;
+                .map_err(|error| format!("keep {table}: {}", pg(&error)))?;
             keep.push(Keep { table, columns });
         }
         let mut truncate = Vec::new();
@@ -211,7 +225,7 @@ impl Copy {
             let exists: bool = admin
                 .query_one("SELECT to_regclass($1) IS NOT NULL", &[&table])
                 .await
-                .map_err(|error| format!("check {table}: {error}"))?
+                .map_err(|error| format!("check {table}: {}", pg(&error)))?
                 .get(0);
             if exists {
                 truncate.push(table.to_owned());
@@ -235,12 +249,12 @@ impl Copy {
         }
         sql.push_str("SET session_replication_role = DEFAULT;\n");
         sql.push_str(BASE_SEED);
-        self.admin.batch_execute(&sql).await.map_err(|error| format!("reset: {error}"))?;
+        self.admin.batch_execute(&sql).await.map_err(|error| format!("reset: {}", pg(&error)))?;
         for statement in seed {
             self.admin
                 .batch_execute(statement)
                 .await
-                .map_err(|error| format!("seed: {error}"))?;
+                .map_err(|error| format!("seed: {}", pg(&error)))?;
         }
         Ok(())
     }
@@ -254,7 +268,7 @@ impl Copy {
                 &[],
             )
             .await
-            .map_err(|error| format!("rows {table}: {error}"))?;
+            .map_err(|error| format!("rows {table}: {}", pg(&error)))?;
         match row.get::<_, Value>(0) {
             Value::Array(rows) => Ok(rows),
             _ => Ok(Vec::new()),
@@ -270,7 +284,7 @@ impl Copy {
                 .admin
                 .query_opt(&query, &[&id])
                 .await
-                .map_err(|error| format!("job: {error}"))?;
+                .map_err(|error| format!("job: {}", pg(&error)))?;
             if let Some(row) = row {
                 let state: String = row.get(0);
                 if matches!(state.as_str(), "completed" | "failed" | "cancelled") {
@@ -286,6 +300,12 @@ impl Copy {
 
 fn keep_name(table: &str) -> String {
     format!("parity_keep.\"{}\"", table.replace('"', ""))
+}
+
+fn probe_error(error: &tokio_postgres::Error) -> Value {
+    let code = error.code().map(|code| code.code().to_owned());
+    let message = error.as_db_error().map(|db| db.message().to_owned());
+    json!({ "error": { "code": code, "message": message } })
 }
 
 /// Runs `sql` as a runtime role inside a transaction that is rolled back, with the actor set
@@ -305,28 +325,39 @@ pub async fn probe(role_url: &Url, db: &str, actor: Option<&str>, sql: &str) -> 
     if let Err(error) = client.batch_execute(&setup).await {
         return json!({ "error": { "setup": error.to_string() } });
     }
-    let result = match client.simple_query(sql).await {
-        Ok(messages) => {
-            let rows: Vec<Value> = messages
-                .iter()
-                .filter_map(|message| match message {
-                    SimpleQueryMessage::Row(row) => {
-                        let mut object = Map::new();
-                        for (index, column) in row.columns().iter().enumerate() {
-                            let value = row.get(index).map(|text| Value::String(text.to_owned()));
-                            object.insert(column.name().to_owned(), value.unwrap_or(Value::Null));
-                        }
-                        Some(Value::Object(object))
-                    }
-                    _ => None,
-                })
-                .collect();
-            json!({ "rows": rows })
+    let statement = sql.trim().trim_end_matches(';');
+    let is_select =
+        statement.get(..6).is_some_and(|head| head.eq_ignore_ascii_case("select")) && !statement.contains(';');
+    let result = if is_select {
+        // A single SELECT keeps its column types by going through jsonb.
+        let wrapped = format!("SELECT coalesce(jsonb_agg(to_jsonb(q)), '[]'::jsonb) FROM ({statement}) q");
+        match client.query_one(&wrapped, &[]).await {
+            Ok(row) => json!({ "rows": row.get::<_, Value>(0) }),
+            Err(error) => probe_error(&error),
         }
-        Err(error) => {
-            let code = error.code().map(|code| code.code().to_owned());
-            let message = error.as_db_error().map(|db| db.message().to_owned());
-            json!({ "error": { "code": code, "message": message } })
+    } else {
+        // Anything else reports text rows and how many rows each statement touched.
+        match client.simple_query(sql).await {
+            Ok(messages) => {
+                let mut rows = Vec::new();
+                let mut affected = Vec::new();
+                for message in &messages {
+                    match message {
+                        SimpleQueryMessage::Row(row) => {
+                            let mut object = Map::new();
+                            for (index, column) in row.columns().iter().enumerate() {
+                                let value = row.get(index).map(|text| Value::String(text.to_owned()));
+                                object.insert(column.name().to_owned(), value.unwrap_or(Value::Null));
+                            }
+                            rows.push(Value::Object(object));
+                        }
+                        SimpleQueryMessage::CommandComplete(count) => affected.push(json!(count)),
+                        _ => {}
+                    }
+                }
+                json!({ "rows": rows, "affected": affected })
+            }
+            Err(error) => probe_error(&error),
         }
     };
     let _ = client.batch_execute("ROLLBACK").await;
