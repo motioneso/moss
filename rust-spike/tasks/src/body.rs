@@ -8,7 +8,7 @@ use axum::http::header::{CONTENT_LENGTH, CONTENT_TYPE, TRANSFER_ENCODING};
 use axum::http::{HeaderMap, Method};
 use serde_json::{Map, Value};
 
-use crate::error::ApiError;
+use platform::error::ApiError;
 use crate::schema::{self, Schema};
 
 /// Fastify's default `bodyLimit`.

@@ -6,6 +6,7 @@
 //! a body schema still read it.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Path, RawQuery, State};
@@ -13,14 +14,14 @@ use axum::http::{HeaderMap, Method, Uri};
 use axum::response::Response;
 use axum::routing::get;
 use axum::Router;
-use deadpool_postgres::Pool;
+use platform::auth::resolve_access;
+use platform::db::DataContext;
+use platform::error::{json_reply, ApiError};
+use platform::http::Platform;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::auth::resolve_access;
 use crate::body::{parse_query, read_body, validated, BODY_LIMIT};
-use crate::db::DataContext;
-use crate::error::{json_reply, ApiError};
 use crate::jobs;
 use crate::model::{preferences_json, Task, TaskTag};
 use crate::parse::{self, optional_string, require_object, required_string};
@@ -28,10 +29,11 @@ use crate::repo::{self, Quadrant};
 use crate::schema::Schema;
 use crate::schemas;
 
+/// The platform's sign-in and runtime roles. Every handler signs the request in through the
+/// platform and reads through a data context on the app role.
 #[derive(Clone)]
 pub struct AppState {
-    /// Pool connected as the app runtime role.
-    pub app: Pool,
+    pub platform: Arc<Platform>,
 }
 
 type Reply = Result<Response, ApiError>;
@@ -123,7 +125,7 @@ async fn list_tasks(
     bytes: Bytes,
 ) -> Reply {
     request_body(&method, &headers, &bytes, None)?;
-    let access = resolve_access(&state.app, &headers).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
     let query = parse_query(query.as_deref());
     let quadrant = optional_string(query.get("quadrant"), "quadrant")?;
     let tag_id = optional_string(query.get("tagId"), "tagId")?;
@@ -133,7 +135,7 @@ async fn list_tasks(
             ApiError::http(400, "quadrant must be do, schedule, delegate, or eliminate")
         })?),
     };
-    let cx = DataContext::open(&state.app, &access).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     let tasks = repo::list_filtered(&cx, tag_id.as_deref(), quadrant).await?;
     let tasks = tasks_json(&cx, &tasks).await?;
     cx.commit().await?;
@@ -147,9 +149,9 @@ async fn create_task(
     bytes: Bytes,
 ) -> Reply {
     let body = request_body(&method, &headers, &bytes, Some(schemas::create_task()))?;
-    let access = resolve_access(&state.app, &headers).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
     let input = parse::parse_create_task(&body)?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     let task = repo::create(&cx, &input).await?;
     let task = task_with_tags(&cx, Some(task)).await?;
     cx.commit().await?;
@@ -164,8 +166,8 @@ async fn get_task(
     bytes: Bytes,
 ) -> Reply {
     request_body(&method, &headers, &bytes, None)?;
-    let access = resolve_access(&state.app, &headers).await?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     let task = repo::get_by_id(&cx, &id).await?;
     let task = task_with_tags(&cx, task).await?;
     cx.commit().await?;
@@ -183,9 +185,9 @@ async fn update_task(
     bytes: Bytes,
 ) -> Reply {
     let body = request_body(&method, &headers, &bytes, Some(schemas::update_task()))?;
-    let access = resolve_access(&state.app, &headers).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
     let input = parse::parse_update_task(&body)?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     let prior = repo::get_by_id(&cx, &id).await?;
     let task = match prior {
         Some(_) => repo::update(&cx, &id, &input).await?,
@@ -207,8 +209,8 @@ async fn list_subtasks(
     bytes: Bytes,
 ) -> Reply {
     request_body(&method, &headers, &bytes, None)?;
-    let access = resolve_access(&state.app, &headers).await?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     let tasks = repo::list_by_parent(&cx, &id).await?;
     let tasks = tasks_json(&cx, &tasks).await?;
     cx.commit().await?;
@@ -223,9 +225,9 @@ async fn assign_tag(
     bytes: Bytes,
 ) -> Reply {
     let body = request_body(&method, &headers, &bytes, Some(schemas::assign_tag()))?;
-    let access = resolve_access(&state.app, &headers).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
     let tag_id = required_string(require_object(&body)?.get("tagId"), "tagId")?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     repo::assign_tag(&cx, &id, &tag_id).await?;
     let task = repo::get_by_id(&cx, &id).await?;
     let task = task_with_tags(&cx, task).await?;
@@ -244,8 +246,8 @@ async fn unassign_tag(
     bytes: Bytes,
 ) -> Reply {
     request_body(&method, &headers, &bytes, None)?;
-    let access = resolve_access(&state.app, &headers).await?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     repo::unassign_tag(&cx, &id, &tag_id).await?;
     let task = repo::get_by_id(&cx, &id).await?;
     let task = task_with_tags(&cx, task).await?;
@@ -264,8 +266,8 @@ async fn list_activity(
     bytes: Bytes,
 ) -> Reply {
     request_body(&method, &headers, &bytes, None)?;
-    let access = resolve_access(&state.app, &headers).await?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     let activity = repo::list_activity(&cx, &id).await?;
     cx.commit().await?;
     let activity: Vec<Value> = activity.iter().map(|entry| entry.to_json()).collect();
@@ -280,16 +282,17 @@ async fn add_activity(
     bytes: Bytes,
 ) -> Reply {
     let body = request_body(&method, &headers, &bytes, Some(schemas::add_activity()))?;
-    let access = resolve_access(&state.app, &headers).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
     let input = parse::parse_activity(&body)?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     let activity =
         repo::add_activity(&cx, &id, &input.activity_type, input.body.as_deref()).await?;
     cx.commit().await?;
     Ok(json_reply(201, &json!({ "activity": activity.to_json() })))
 }
 
-/// Checks the task is visible to the actor, then queues the status change for the worker.
+/// Checks the task is visible to the actor, then queues the status change for the worker in
+/// the same transaction, so the job exists only if the check commits.
 async fn deferred_status(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -298,21 +301,19 @@ async fn deferred_status(
     bytes: Bytes,
 ) -> Reply {
     let body = request_body(&method, &headers, &bytes, Some(schemas::deferred_status()))?;
-    let access = resolve_access(&state.app, &headers).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
     let input = parse::parse_deferred_status(&body)?;
-    let cx = DataContext::open(&state.app, &access).await?;
-    let visible = repo::get_by_id(&cx, &id).await?;
-    cx.commit().await?;
-    if visible.is_none() {
+    let cx = DataContext::open(&state.platform.app, &access).await?;
+    let Some(task) = repo::get_by_id(&cx, &id).await? else {
         return task_not_found();
-    }
-    let payload = jobs::DeferredStatusPayload {
-        actor_user_id: access.actor_user_id,
-        task_id: id,
-        requested_status: input.status,
+    };
+    let request = jobs::DeferredStatus {
+        task_id: task.id,
+        status: input.status,
         idempotency_key: input.idempotency_key,
     };
-    let job_id = jobs::send(&state.app, &payload).await?;
+    let job_id = jobs::send(&cx, &request).await?;
+    cx.commit().await?;
     Ok(json_reply(202, &json!({ "jobId": job_id })))
 }
 
@@ -325,8 +326,8 @@ async fn get_preferences(
     bytes: Bytes,
 ) -> Reply {
     request_body(&method, &headers, &bytes, None)?;
-    let access = resolve_access(&state.app, &headers).await?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     let row = repo::get_or_create_preferences(&cx).await?;
     cx.commit().await?;
     ok(json!({ "preferences": preferences_json(&row) }))
@@ -339,12 +340,12 @@ async fn update_preferences(
     bytes: Bytes,
 ) -> Reply {
     let body = request_body(&method, &headers, &bytes, Some(schemas::update_preferences()))?;
-    let access = resolve_access(&state.app, &headers).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
     let default_view = match require_object(&body)?.get("defaultView") {
         Some(Value::String(view)) if view == "priority" || view == "matrix" => view.clone(),
         _ => return Err(ApiError::http(400, "defaultView must be priority or matrix")),
     };
-    let cx = DataContext::open(&state.app, &access).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     let row = repo::update_preferences(&cx, &default_view).await?;
     cx.commit().await?;
     ok(json!({ "preferences": preferences_json(&row) }))
@@ -361,8 +362,8 @@ async fn list_lists(
     bytes: Bytes,
 ) -> Reply {
     request_body(&method, &headers, &bytes, None)?;
-    let access = resolve_access(&state.app, &headers).await?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     let lists = repo::list_lists(&cx).await?;
     cx.commit().await?;
     let lists: Vec<Value> = lists.iter().map(|list| list.to_json()).collect();
@@ -376,9 +377,9 @@ async fn create_list(
     bytes: Bytes,
 ) -> Reply {
     let body = request_body(&method, &headers, &bytes, Some(schemas::name_only()))?;
-    let access = resolve_access(&state.app, &headers).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
     let name = required_string(require_object(&body)?.get("name"), "name")?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     let list = repo::get_or_create_list(&cx, &name).await?;
     cx.commit().await?;
     Ok(json_reply(201, &json!({ "list": list.to_json() })))
@@ -392,9 +393,9 @@ async fn rename_list(
     bytes: Bytes,
 ) -> Reply {
     let body = request_body(&method, &headers, &bytes, Some(schemas::name_only()))?;
-    let access = resolve_access(&state.app, &headers).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
     let name = required_string(require_object(&body)?.get("name"), "name")?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     let list = repo::rename_list(&cx, &list_id, &name).await?;
     cx.commit().await?;
     ok(json!({ "list": list.to_json() }))
@@ -408,10 +409,10 @@ async fn delete_list(
     bytes: Bytes,
 ) -> Reply {
     let body = request_body(&method, &headers, &bytes, Some(schemas::delete_list()))?;
-    let access = resolve_access(&state.app, &headers).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
     let reassign_to =
         optional_string(require_object(&body)?.get("reassignToListId"), "reassignToListId")?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     repo::delete_list(&cx, &list_id, reassign_to.as_deref()).await?;
     cx.commit().await?;
     ok(json!({ "deleted": true }))
@@ -427,8 +428,8 @@ async fn list_tags(
     bytes: Bytes,
 ) -> Reply {
     request_body(&method, &headers, &bytes, None)?;
-    let access = resolve_access(&state.app, &headers).await?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     let tags = repo::list_tags(&cx, &list_id).await?;
     cx.commit().await?;
     let tags: Vec<Value> = tags.iter().map(TaskTag::to_json).collect();
@@ -443,9 +444,9 @@ async fn create_tag(
     bytes: Bytes,
 ) -> Reply {
     let body = request_body(&method, &headers, &bytes, Some(schemas::name_only()))?;
-    let access = resolve_access(&state.app, &headers).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
     let name = required_string(require_object(&body)?.get("name"), "name")?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     let tag = repo::create_tag(&cx, &list_id, &name).await?;
     cx.commit().await?;
     Ok(json_reply(201, &json!({ "tag": tag.to_json() })))
@@ -459,9 +460,9 @@ async fn rename_tag(
     bytes: Bytes,
 ) -> Reply {
     let body = request_body(&method, &headers, &bytes, Some(schemas::name_only()))?;
-    let access = resolve_access(&state.app, &headers).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
     let name = required_string(require_object(&body)?.get("name"), "name")?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     let tag = repo::rename_tag(&cx, &list_id, &tag_id, &name).await?;
     cx.commit().await?;
     ok(json!({ "tag": tag.to_json() }))
@@ -475,8 +476,8 @@ async fn delete_tag(
     bytes: Bytes,
 ) -> Reply {
     request_body(&method, &headers, &bytes, None)?;
-    let access = resolve_access(&state.app, &headers).await?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     repo::delete_tag(&cx, &list_id, &tag_id).await?;
     cx.commit().await?;
     ok(json!({ "deleted": true }))
@@ -492,8 +493,8 @@ async fn focus(
     bytes: Bytes,
 ) -> Reply {
     request_body(&method, &headers, &bytes, None)?;
-    let access = resolve_access(&state.app, &headers).await?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     let tasks = repo::focus(&cx).await?;
     let tasks = tasks_json(&cx, &tasks).await?;
     cx.commit().await?;
@@ -507,8 +508,8 @@ async fn at_risk(
     bytes: Bytes,
 ) -> Reply {
     request_body(&method, &headers, &bytes, None)?;
-    let access = resolve_access(&state.app, &headers).await?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     let tasks = repo::at_risk(&cx).await?;
     let tasks = tasks_json(&cx, &tasks).await?;
     cx.commit().await?;
@@ -522,8 +523,8 @@ async fn overdue(
     bytes: Bytes,
 ) -> Reply {
     request_body(&method, &headers, &bytes, None)?;
-    let access = resolve_access(&state.app, &headers).await?;
-    let cx = DataContext::open(&state.app, &access).await?;
+    let access = resolve_access(&state.platform, &headers).await?;
+    let cx = DataContext::open(&state.platform.app, &access).await?;
     let tasks = repo::overdue(&cx).await?;
     let tasks = tasks_json(&cx, &tasks).await?;
     cx.commit().await?;

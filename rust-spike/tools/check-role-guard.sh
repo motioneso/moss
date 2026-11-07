@@ -28,7 +28,7 @@ cp "$CARGO_TARGET_DIR/release/tasks" "$work/tasks"
 src="$work/src-no-guard"
 mkdir -p "$src"
 git -C "$root" archive HEAD rust-spike | tar -x -C "$src"
-db_rs="$src/rust-spike/tasks/src/db.rs"
+db_rs="$src/rust-spike/platform/src/db.rs"
 cp "$db_rs" "$db_rs.orig"
 sed -i 's/if superuser || bypass {/if false \&\& (superuser || bypass) {/' "$db_rs"
 if cmp -s "$db_rs" "$db_rs.orig"; then
@@ -52,15 +52,17 @@ docker exec -i "$container" psql -U postgres -d "$copy" -q -v ON_ERROR_STOP=1 \
   < "$root/rust-spike/tasks/sql/0001_spike_job_queue.sql" >/dev/null
 app="${MOSS_APP_DATABASE_URL%/*}/$copy"
 worker="${MOSS_WORKER_DATABASE_URL%/*}/$copy"
+auth="${MOSS_AUTH_DATABASE_URL%/*}/$copy"
 migration="${MOSS_MIGRATION_DATABASE_URL%/*}/$copy"
 
 failed=0
 
-# step <label> <starts|refuses> <binary> <app url> <worker url> [text the output must contain]
+# step <label> <starts|refuses> <binary> <app url> <worker url> <auth url> [text the output must contain]
 step() {
-  local label=$1 want=$2 bin=$3 app_url=$4 worker_url=$5 needle=${6:-} rc got=refuses ok=yes
+  local label=$1 want=$2 bin=$3 app_url=$4 worker_url=$5 auth_url=$6 needle=${7:-} rc got=refuses ok=yes
   set +e
-  MOSS_APP_DATABASE_URL=$app_url MOSS_WORKER_DATABASE_URL=$worker_url TASKS_SPIKE_PORT=$port \
+  MOSS_APP_DATABASE_URL=$app_url MOSS_WORKER_DATABASE_URL=$worker_url \
+    MOSS_AUTH_DATABASE_URL=$auth_url TASKS_SPIKE_PORT=$port \
     timeout 8 "$bin" > "$work/out" 2>&1
   rc=$?
   set -e
@@ -75,20 +77,24 @@ step() {
   fi
 }
 
-step "1 normal roles" starts "$work/tasks" "$app" "$worker" "listening on"
-step "2 app connection on the migration role" refuses "$work/tasks" "$migration" "$worker" \
+step "1 normal roles" starts "$work/tasks" "$app" "$worker" "$auth" "listening on"
+step "2 app connection on the migration role" refuses "$work/tasks" "$migration" "$worker" "$auth" \
   "connected as jarvis_migration_owner, expected jarvis_app_runtime"
-step "3 worker connection on the app role" refuses "$work/tasks" "$app" "$app" \
+step "3 worker connection on the app role" refuses "$work/tasks" "$app" "$app" "$auth" \
   "connected as jarvis_app_runtime, expected jarvis_worker_runtime"
+step "3b sign-in connection on the app role" refuses "$work/tasks" "$app" "$worker" "$app" \
+  "connected as jarvis_app_runtime, expected jarvis_auth_runtime"
 
 admin 'ALTER ROLE jarvis_app_runtime BYPASSRLS' >/dev/null
-step "4 app role can bypass row security" refuses "$work/tasks" "$app" "$worker" \
+step "4 app role can bypass row security" refuses "$work/tasks" "$app" "$worker" "$auth" \
   "role jarvis_app_runtime can bypass row-level security; refusing to start"
-step "5 same, with the check switched off" starts "$work/tasks-no-guard" "$app" "$worker" "listening on"
+step "5 same, with the check switched off" starts "$work/tasks-no-guard" "$app" "$worker" "$auth" \
+  "listening on"
 admin 'ALTER ROLE jarvis_app_runtime NOBYPASSRLS SUPERUSER' >/dev/null
-step "6 app role is a superuser" refuses "$work/tasks" "$app" "$worker" \
+step "6 app role is a superuser" refuses "$work/tasks" "$app" "$worker" "$auth" \
   "role jarvis_app_runtime can bypass row-level security; refusing to start"
-step "7 same, with the check switched off" starts "$work/tasks-no-guard" "$app" "$worker" "listening on"
+step "7 same, with the check switched off" starts "$work/tasks-no-guard" "$app" "$worker" "$auth" \
+  "listening on"
 admin 'ALTER ROLE jarvis_app_runtime NOSUPERUSER' >/dev/null
 
 echo "app role after reset: $(admin "SELECT 'superuser=' || rolsuper || ' bypass=' || rolbypassrls FROM pg_roles WHERE rolname = 'jarvis_app_runtime'")"

@@ -9,7 +9,7 @@ description = "Phase 0b spike: the Tasks module served from Rust under the same 
 axum = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = { version = "0.10", features = ["case-insensitive"] }
-deadpool-postgres = "0.14"
+platform = { path = "../platform" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "time", "net"] }

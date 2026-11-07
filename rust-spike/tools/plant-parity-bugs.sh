@@ -30,8 +30,8 @@ build() {
 }
 
 # Every request runs as user A, whoever signed in.
-build wrong-actor tasks/src/db.rs \
-  's/&\[&access\.actor_user_id\.to_string(), &access\.request_id\]/\&[\&"00000000-0000-4000-8000-000000000001".to_string(), \&access.request_id]/'
+build wrong-actor platform/src/db.rs \
+  's/&\[&access\.actor_user_id()\.to_string(), &access\.request_id()\]/\&[\&"00000000-0000-4000-8000-000000000001".to_string(), \&access.request_id()]/'
 
 # Creating a task answers 200 instead of 201.
 build create-200 tasks/src/routes.rs \

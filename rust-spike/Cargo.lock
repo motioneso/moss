@@ -2007,7 +2007,7 @@ dependencies = [
  "axum",
  "chrono",
  "chrono-tz",
- "deadpool-postgres",
+ "platform",
  "serde",
  "serde_json",
  "tokio",
