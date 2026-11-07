@@ -70,7 +70,8 @@ pub fn is_users_postgres(status: &str, uid: u32) -> bool {
 }
 
 /// macOS: `ps` gives each process's user, accounting name and current title. Not compiled or
-/// run in this spike because the Mac has no Rust toolchain.
+/// run in this spike because the Mac has no Rust toolchain. On the test Mac, `ps` showed every
+/// server process with accounting name `postgres` and the `postgres: <cluster name>: ` title.
 #[cfg(target_os = "macos")]
 pub fn database_processes(data: &Path, cluster: &str) -> Vec<i32> {
     let Ok(data) = data.canonicalize() else { return Vec::new() };
