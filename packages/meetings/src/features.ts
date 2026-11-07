@@ -363,12 +363,12 @@ export const meetingFeatures = [
   {
     id: "meetings.instruction_flag",
     description:
-      "Best effort: Moss flags recording lines that look like orders to the AI and quotes them above the summary for the owner. The AI cannot act on them, but they can still bend a summary, so check it against the quotes. The same check covers your calendar event, people notes and saved memories used as owner context, and the notice says only how many lines in which source looked like orders."
+      "Best effort: Moss quotes recording lines that look like orders to the AI above the summary. It also counts such lines in the calendar event, people notes and memories used as context. Check the summary against them."
   },
   {
     id: "meetings.owner_context",
     description:
-      "Summaries always use background about you: your name, the calendar event that matches the recording, notes about people named in it and related saved memories. Nothing is switched on or off. Only your own data is read, only a small capped amount is sent, and it is background only, never quoted as evidence. If it does not fit a very long recording, Moss drops it first and adds a warning to the summary."
+      "Summaries always use background about you: your name, the matching calendar event, notes on people named in the recording and related memories. Only your own data, capped, never quoted as evidence, and dropped first with a warning if it does not fit."
   },
   {
     id: "meetings.grounded_outputs",
