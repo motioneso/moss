@@ -35,6 +35,7 @@ pub struct GateEnv {
     pub bootstrap: Url,
     pub app: Url,
     pub worker: Url,
+    pub auth: Url,
     /// Every `*_DATABASE_URL` variable, so a server's whole environment can point at its copy.
     pub all: Vec<(String, Url)>,
 }
@@ -60,6 +61,7 @@ impl GateEnv {
             bootstrap,
             app: read("MOSS_APP_DATABASE_URL")?,
             worker: read("MOSS_WORKER_DATABASE_URL")?,
+            auth: read("MOSS_AUTH_DATABASE_URL")?,
             all,
         })
     }

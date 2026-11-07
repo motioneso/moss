@@ -1,7 +1,8 @@
-//! Differential checks for the Tasks module (Phase 0b, plan section 2.3).
+//! Differential checks for Tasks (Phase 0b, plan section 2.3) and the platform safety core.
 //!
 //! Sends the same requests to the TypeScript server and the Rust server, each on its own clone of
 //! the gate database, and compares status, body, job results and the rows each case left behind.
+//! After the last case it reads both server logs, which must never hold a `MOSS-SENTINEL-` value.
 //! Runs only inside a gate run.
 
 mod canon;
@@ -9,13 +10,13 @@ mod case;
 mod dbs;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Stdio};
 use std::time::Duration;
 
 use chrono::Utc;
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use tokio::process::{Child, Command};
 
 use canon::{contains, diff, Canon};
@@ -84,6 +85,9 @@ async fn run() -> Result<bool, String> {
     copies.drop_all(&env).await;
     result
 }
+
+/// Cases put this in every password and secret they send. No server log may hold it.
+const SENTINEL: &str = "MOSS-SENTINEL-";
 
 struct Server {
     name: &'static str,
@@ -161,7 +165,9 @@ async fn run_cases(
         .arg(args.repo.join("rust-spike/parity/ts-server.ts"))
         .current_dir(&args.repo)
         .env("NODE_ENV", "test")
-        .env("JARVIS_EMBED_PROVIDER", "stub");
+        .env("JARVIS_EMBED_PROVIDER", "stub")
+        // The sign-in cases make more auth requests than the default limit of 10 allows.
+        .env("JARVIS_RL_AUTH_MAX", "1000");
     let ts = Server::start(
         "TypeScript",
         ts_command,
@@ -202,6 +208,12 @@ async fn run_cases(
     }
     ts.stop().await;
     rs.stop().await;
+    let logs = scan_logs(&args.logs);
+    println!("{} {}", if logs.passed { "PASS" } else { "FAIL" }, logs.name);
+    for problem in &logs.problems {
+        println!("     {problem}");
+    }
+    outcomes.push(logs);
 
     let passed = outcomes.iter().filter(|outcome| outcome.passed).count();
     println!("PARITY {passed}/{} cases match", outcomes.len());
@@ -222,6 +234,8 @@ struct Side<'a> {
     copy: &'a Copy,
     server: &'a Server,
     outputs: HashMap<String, Value>,
+    /// Cookies saved by `save_cookie`, as `name=value` pairs ready for a Cookie header.
+    cookies: HashMap<String, String>,
     canon: Canon,
 }
 
@@ -240,6 +254,7 @@ async fn run_case(
             copy: &copies.ts,
             server: servers[0],
             outputs: HashMap::new(),
+            cookies: HashMap::new(),
             canon: Canon::new(vars.start, &case.known_ids),
         },
         Side {
@@ -247,6 +262,7 @@ async fn run_case(
             copy: &copies.rs,
             server: servers[1],
             outputs: HashMap::new(),
+            cookies: HashMap::new(),
             canon: Canon::new(vars.start, &case.known_ids),
         },
     ];
@@ -282,7 +298,17 @@ async fn run_case(
                         Err(error) => problems.push(format!("step {key}: {error}")),
                     }
                 }
-                seen.push(side.canon.value(&observed));
+                let text = observed.to_string().to_lowercase();
+                for needle in &step.absent {
+                    if text.contains(&needle.to_lowercase()) {
+                        problems.push(format!("step {key}: {} output holds {needle:?}", side.label));
+                    }
+                }
+                let compared = match &step.compare {
+                    Some(pointers) => select(&observed, pointers),
+                    None => observed.clone(),
+                };
+                seen.push(side.canon.value(&compared));
                 side.outputs.insert(key.clone(), observed);
             }
             for line in diff(&seen[0], &seen[1], 8) {
@@ -329,6 +355,65 @@ fn observe(
     })
 }
 
+/// The parts of `value` the pointers name, keyed by pointer. A missing part is null.
+fn select(value: &Value, pointers: &[String]) -> Value {
+    let mut out = Map::new();
+    for pointer in pointers {
+        out.insert(pointer.clone(), value.pointer(pointer).cloned().unwrap_or(Value::Null));
+    }
+    Value::Object(out)
+}
+
+/// Reads Set-Cookie headers. Returns what each cookie's attributes say, keyed by cookie name,
+/// with the value reduced to "set" or "empty", and the `name=value` pairs to send back.
+fn read_cookies(headers: &[String]) -> (Map<String, Value>, Vec<String>) {
+    let mut seen = Map::new();
+    let mut jar = Vec::new();
+    for header in headers {
+        let mut parts = header.split(';').map(str::trim);
+        let Some((name, value)) = parts.next().and_then(|pair| pair.split_once('=')) else {
+            continue;
+        };
+        let mut attributes = Map::new();
+        attributes.insert("value".into(), json!(if value.is_empty() { "empty" } else { "set" }));
+        for part in parts.filter(|part| !part.is_empty()) {
+            match part.split_once('=') {
+                Some((key, text)) => attributes.insert(key.trim().to_ascii_lowercase(), json!(text.trim())),
+                None => attributes.insert(part.to_ascii_lowercase(), json!(true)),
+            };
+        }
+        if !value.is_empty() {
+            jar.push(format!("{name}={value}"));
+        }
+        seen.insert(name.to_owned(), Value::Object(attributes));
+    }
+    (seen, jar)
+}
+
+/// Counts the lines in each server log that hold [`SENTINEL`].
+fn scan_logs(logs: &Path) -> Outcome {
+    let mut problems = Vec::new();
+    for (label, file) in [("TypeScript", "ts-server.log"), ("Rust", "rs-server.log")] {
+        match std::fs::read(logs.join(file)) {
+            Ok(bytes) => {
+                let text = String::from_utf8_lossy(&bytes);
+                let lines = text.lines().filter(|line| line.contains(SENTINEL)).count();
+                if lines > 0 {
+                    problems.push(format!("{label} server log: {lines} lines hold {SENTINEL}"));
+                }
+            }
+            Err(error) => problems.push(format!("{label} server log: {error}")),
+        }
+    }
+    Outcome {
+        name: format!("server logs hold no {SENTINEL} value"),
+        source: "safety: every password and secret a case sends carries the sentinel".into(),
+        passed: problems.is_empty(),
+        problems,
+        note: None,
+    }
+}
+
 fn clip(value: &Value) -> String {
     let text = value.to_string();
     if text.chars().count() > 300 {
@@ -340,7 +425,7 @@ fn clip(value: &Value) -> String {
 
 async fn perform(
     step: &Step,
-    side: &Side<'_>,
+    side: &mut Side<'_>,
     vars: &Vars,
     env: &GateEnv,
     http: &reqwest::Client,
@@ -353,6 +438,7 @@ async fn perform(
         let sql = vars.fill_string(sql, &side.outputs)?;
         let role = match step.role.as_deref() {
             Some("worker") => &env.worker,
+            Some("auth") => &env.auth,
             Some("app") | None => &env.app,
             Some(other) => return Err(format!("unknown role {other}")),
         };
@@ -370,6 +456,10 @@ async fn perform(
         } else if actor != "anon" {
             return Err(format!("unknown actor {actor}"));
         }
+    }
+    if let Some(name) = &step.cookie {
+        let jar = side.cookies.get(name).ok_or_else(|| format!("no cookie saved as {name}"))?;
+        request = request.header("cookie", jar.as_str());
     }
     let mut has_content_type = false;
     for (name, value) in &step.headers {
@@ -392,13 +482,30 @@ async fn perform(
 
     let response = request.send().await.map_err(|error| format!("request failed: {error}"))?;
     let status = response.status().as_u16();
+    let set_cookies: Vec<String> = response
+        .headers()
+        .get_all("set-cookie")
+        .iter()
+        .filter_map(|value| value.to_str().ok().map(str::to_owned))
+        .collect();
     let text = response.text().await.map_err(|error| format!("read body: {error}"))?;
     let body = if text.is_empty() {
         Value::Null
     } else {
         serde_json::from_str(&text).unwrap_or(json!({ "text": text }))
     };
-    Ok(json!({ "status": status, "body": body }))
+    let (cookies, jar) = read_cookies(&set_cookies);
+    if let Some(name) = &step.save_cookie {
+        if jar.is_empty() {
+            return Err(format!("the response set no cookie to save as {name} (status {status})"));
+        }
+        side.cookies.insert(name.clone(), jar.join("; "));
+    }
+    let mut output = json!({ "status": status, "body": body });
+    if !cookies.is_empty() {
+        output["cookies"] = Value::Object(cookies);
+    }
+    Ok(output)
 }
 
 #[cfg(test)]
@@ -420,5 +527,50 @@ mod tests {
         let value = observe(Ok(json!({ "status": 200 })), "make", "Rust", &mut problems);
         assert_eq!(value, json!({ "status": 200 }));
         assert!(problems.is_empty());
+    }
+
+    #[test]
+    fn reads_cookies_without_their_values() {
+        let headers = vec![
+            "better-auth.session_token=abc.def%3D; Max-Age=604800; Path=/; HttpOnly; SameSite=Lax"
+                .to_owned(),
+            "better-auth.dont_remember=; Max-Age=0; Path=/".to_owned(),
+        ];
+        let (seen, jar) = read_cookies(&headers);
+        assert_eq!(
+            Value::Object(seen),
+            json!({
+                "better-auth.session_token": {
+                    "value": "set", "max-age": "604800", "path": "/", "httponly": true,
+                    "samesite": "Lax"
+                },
+                "better-auth.dont_remember": { "value": "empty", "max-age": "0", "path": "/" }
+            })
+        );
+        assert_eq!(jar, vec!["better-auth.session_token=abc.def%3D"]);
+    }
+
+    #[test]
+    fn selects_parts_by_pointer() {
+        let output = json!({ "status": 200, "body": { "token": "x", "user": { "id": 1 } } });
+        let pointers = vec!["/status".to_owned(), "/body/user".to_owned(), "/body/gone".to_owned()];
+        assert_eq!(
+            select(&output, &pointers),
+            json!({ "/status": 200, "/body/user": { "id": 1 }, "/body/gone": null })
+        );
+    }
+
+    #[test]
+    fn a_sentinel_in_either_log_fails_the_scan() {
+        let dir = std::env::temp_dir().join(format!("parity-scan-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("ts-server.log"), "TS READY 1\n").unwrap();
+        std::fs::write(dir.join("rs-server.log"), "listening\n").unwrap();
+        assert!(scan_logs(&dir).passed);
+        std::fs::write(dir.join("rs-server.log"), "body {\"password\":\"MOSS-SENTINEL-1\"}\n").unwrap();
+        let outcome = scan_logs(&dir);
+        assert!(!outcome.passed);
+        assert_eq!(outcome.problems, vec!["Rust server log: 1 lines hold MOSS-SENTINEL-"]);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
