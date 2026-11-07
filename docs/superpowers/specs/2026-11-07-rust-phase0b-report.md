@@ -51,8 +51,16 @@ part that is hard or costly, and ends with a plan to proceed.
   - The same database roles as the TypeScript server. It refuses to start unless the app
     connection is the app runtime role, the worker connection is the worker runtime role, and
     neither role is a superuser or can bypass row security.
-  - The same data context. Every query runs in a transaction that first sets the actor and the
-    request id for that transaction only, as the TypeScript `DataContextRunner` does.
+  - The same data context. Every task read and write runs in a transaction that first sets the
+    actor and the request id for that transaction only, as the TypeScript `DataContextRunner`
+    does. That includes the job's own status update, which runs as the user who queued it.
+  - Three queries run outside that transaction, and none of them touches task rows:
+    - The sign-in lookup runs before the user is known, through the database's session and
+      user lookup functions.
+    - Queuing the job writes the user id, task id, requested status and idempotency key to the
+      spike's queue table. It runs after the request's visibility check has committed, so the two
+      are not one atomic step.
+    - The worker claims and finishes jobs on that queue table with the worker role.
   - Answers that match the TypeScript server's status codes and bodies, including its
     request-parsing and validation errors.
 - **A side-by-side test runner** (`rust-spike/parity`). It runs both servers on two copies of
@@ -277,14 +285,15 @@ Measured from each agent's own session record. Output tokens are the tokens an a
 reset is a cleared context window. The tokens an agent read are not counted, and they are far
 larger. The two helpers read 7.0M and 9.6M tokens from cache while writing about 60,000 each.
 
-| Work                                                                | Agent             | Output tokens         | Resets  |
-| ------------------------------------------------------------------- | ----------------- | --------------------- | ------- |
-| Rust Tasks server: 23 endpoints, shared pieces, the job, unit tests | Opus 5.5          | 307,772               | about 5 |
-| Side-by-side runner and the 3 smoke cases                           | Opus 5.5          | 74,655                | 1       |
-| Sorting all 146 tests and converting 64                             | Sonnet 5.5 helper | 59,766                | 1       |
-| Tasks screen in both frameworks, measurements, Herdr study          | Sonnet 5.5 helper | 62,468                | 1       |
-| Planted bugs, role check, counts and this report                    | Opus 5.5          | 194,567 before review | about 3 |
-| **Total**                                                           |                   | **about 0.70M**       |         |
+| Work                                                                | Agent               | Output tokens         | Resets  |
+| ------------------------------------------------------------------- | ------------------- | --------------------- | ------- |
+| Rust Tasks server: 23 endpoints, shared pieces, the job, unit tests | Opus 5.5            | 307,772               | about 5 |
+| Side-by-side runner and the 3 smoke cases                           | Opus 5.5            | 74,655                | 1       |
+| Sorting all 146 tests and converting 64                             | Sonnet 5.5 helper   | 59,766                | 1       |
+| Tasks screen in both frameworks, measurements, Herdr study          | Sonnet 5.5 helper   | 62,468                | 1       |
+| Planted bugs, role check, counts and this report                    | Opus 5.5            | 194,567 before review | about 3 |
+| Two review rounds                                                   | Sonnet 5.5 reviewer | 18,506                | 0       |
+| **Total**                                                           |                     | **about 0.72M**       |         |
 
 - The first row is the porting cost. It covers about 2,300 lines of TypeScript, so it is the unit
   the scaling below uses.
@@ -320,13 +329,13 @@ larger. The two helpers read 7.0M and 9.6M tokens from cache while writing about
 
 Scaled to the whole codebase:
 
-| Part                   | Basis                                                                                                                                             | Output tokens    |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| Runner as built        | measured                                                                                                                                          | 0.07M            |
-| New step kinds         | the list above                                                                                                                                    | 0.1M to 0.4M     |
-| Converting tests, low  | 29.3 times what converting Tasks cost (4,281 integration tests against 146), so the same 44% share converts                                       | 1.8M             |
-| Converting tests, high | about 90% of 4,281 tests convert, at 930 tokens each. In Tasks, 93% of tests go through HTTP or a tool, and 97% of the ported HTTP ones converted | 3.6M             |
-| **Total**              |                                                                                                                                                   | **1.9M to 4.1M** |
+| Part                   | Basis                                                                                                                                                                | Output tokens    |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| Runner as built        | measured                                                                                                                                                             | 0.07M            |
+| New step kinds         | the list above                                                                                                                                                       | 0.1M to 0.4M     |
+| Converting tests, low  | 29.3 times what converting Tasks cost (4,281 integration tests against 146), so the same 44% share converts                                                          | 1.8M             |
+| Converting tests, high | about 90% of 4,281 tests convert, at 930 tokens each. In the ported part of Tasks, 89 of 100 tests go through HTTP or an AI tool, and 97% of the HTTP ones converted | 3.6M             |
+| **Total**              |                                                                                                                                                                      | **1.9M to 4.1M** |
 
 Both test counts treat a table-driven test (`it.each`) as one test. The integration suite has 175
 of them. Each may become several cases, so the conversion rows may run somewhat low.
