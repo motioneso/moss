@@ -1,5 +1,5 @@
 //! Database passwords. The spike keeps each one in an owner-only file under the install root.
-//! The product keeps them in the OS key store (Phase 0b), never in a file beside the data.
+//! The product keeps them in the OS key store (Phase 0a, fact 4), never in a file beside the data.
 
 use std::fmt;
 use std::io::{self, Write};
