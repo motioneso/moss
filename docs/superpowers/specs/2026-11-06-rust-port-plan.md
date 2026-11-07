@@ -300,8 +300,9 @@ sits in its own container with a secret handshake over a `0600` Unix socket (ADR
 - **Sign-in and sessions.** better-auth (`packages/auth/src/index.ts`) has no Rust equivalent. Moss
   rewrites sign-in, sessions, companion pairing and trusted origins. It must verify existing
   password hashes. Keeping existing sessions is a goal, but one fresh sign-in at cutover is an
-  acceptable fallback (decision 7.8). If a hash format cannot be verified, that account gets a
-  forced password reset through the owner, never a silent new password.
+  acceptable fallback (decision 7.8). If a hash format cannot be verified, that person resets their own password through a
+  pre-approved, verified account-recovery flow. The original hashes are kept. No admin sees, sets or
+  signs in as the account, and cutover never leaves an owner locked out.
 
 ### 3.7 The UI
 
@@ -605,17 +606,17 @@ Rust is never shipped to users before Phase 8, so a stop never leaves people on 
 
 ## 7. Open decisions for Ben
 
-| #    | Fork                                                       | Recommended                                              | Why                                                                                                           |
-| ---- | ---------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| 7.1  | Keep adding features to today's app during the rewrite?    | Freeze big features from Phase 2; fixes only             | Otherwise parity never arrives                                                                                |
-| 7.2  | Keep today's HTTP API contract?                            | Yes                                                      | Companions and agent tools keep working, and the parity harness has a fixed target                            |
-| 7.3  | Database on desktop: bundled Postgres or SQLite?           | Bundled Postgres everywhere                              | Keeps every privacy rule and every migration; SQLite needs a new proof                                        |
-| 7.4  | Add-on module format?                                      | WebAssembly components                                   | Real sandbox, one format on three systems                                                                     |
-| 7.5  | If an agent needs Node, download it for that agent?        | Yes, pinned, outside the Moss process                    | Keeps chat working without Moss itself depending on Node                                                      |
-| 7.6  | Who buys and holds the Apple and Windows signing accounts? | Ben, or a company he names, before Phase 1's Mac check   | Notarization cannot be tested without one                                                                     |
-| 7.7  | Platform order                                             | Linux server, then macOS, then Windows                   | Ben's prod is Linux; Windows has the most unknowns                                                            |
-| 7.8  | Accept one fresh sign-in for everyone at cutover?          | Yes, as fallback; try to keep sessions                   | Session tokens are tied to better-auth; passwords and data carry over; an unreadable hash gets a forced reset |
-| 7.9  | How long does the old app get security fixes?              | Two supported Rust releases and 90 days, whichever later | Gives people who do nothing a safe, countable window                                                          |
-| 7.10 | Desktop installs with several accounts?                    | No; one account per desktop until containment is proven  | On one OS user, agents can read each other's files despite RLS; households use a server install               |
-| 7.11 | UI framework                                               | Decide in Phase 0 between Leptos and Dioxus              | Choose by building a real screen, not by reading                                                              |
-| 7.12 | Do modules ever get a plaintext credential?                | No by default; brokered requests only                    | Modules are rebuilt anyway; a plaintext port only if a real module proves it needs one                        |
+| #    | Fork                                                       | Recommended                                              | Why                                                                                                                   |
+| ---- | ---------------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| 7.1  | Keep adding features to today's app during the rewrite?    | Freeze big features from Phase 2; fixes only             | Otherwise parity never arrives                                                                                        |
+| 7.2  | Keep today's HTTP API contract?                            | Yes                                                      | Companions and agent tools keep working, and the parity harness has a fixed target                                    |
+| 7.3  | Database on desktop: bundled Postgres or SQLite?           | Bundled Postgres everywhere                              | Keeps every privacy rule and every migration; SQLite needs a new proof                                                |
+| 7.4  | Add-on module format?                                      | WebAssembly components                                   | Real sandbox, one format on three systems                                                                             |
+| 7.5  | If an agent needs Node, download it for that agent?        | Yes, pinned, outside the Moss process                    | Keeps chat working without Moss itself depending on Node                                                              |
+| 7.6  | Who buys and holds the Apple and Windows signing accounts? | Ben, or a company he names, before Phase 1's Mac check   | Notarization cannot be tested without one                                                                             |
+| 7.7  | Platform order                                             | Linux server, then macOS, then Windows                   | Ben's prod is Linux; Windows has the most unknowns                                                                    |
+| 7.8  | Accept one fresh sign-in for everyone at cutover?          | Yes, as fallback; try to keep sessions                   | Session tokens are tied to better-auth; passwords and data carry over; an unreadable hash uses verified self-recovery |
+| 7.9  | How long does the old app get security fixes?              | Two supported Rust releases and 90 days, whichever later | Gives people who do nothing a safe, countable window                                                                  |
+| 7.10 | Desktop installs with several accounts?                    | No; one account per desktop until containment is proven  | On one OS user, agents can read each other's files despite RLS; households use a server install                       |
+| 7.11 | UI framework                                               | Decide in Phase 0 between Leptos and Dioxus              | Choose by building a real screen, not by reading                                                                      |
+| 7.12 | Do modules ever get a plaintext credential?                | No by default; brokered requests only                    | Modules are rebuilt anyway; a plaintext port only if a real module proves it needs one                                |
