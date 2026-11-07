@@ -38,6 +38,9 @@ export type {
   UpsertIndexingStateParams
 } from "./repository.js";
 
+export { findPeopleByNames } from "./find-by-names.js";
+export type { PersonByNameMatch } from "./find-by-names.js";
+
 export { PersonContextService, RequiresExplicitActionError } from "./service.js";
 
 export {
