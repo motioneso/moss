@@ -201,6 +201,20 @@ function truncateEarlierText(previous: MeetingOutputContent): MeetingOutputConte
         decisions: previous.decisions.map((x, j) => (j === i ? { ...x, text: cut(x.text) } : x))
       })
     })),
+    ...(previous.recording?.ideaGroups ?? []).flatMap((group, g) =>
+      group.ideas.map((idea, k) => ({
+        length: idea.length,
+        apply: (): MeetingOutputContent => ({
+          ...previous,
+          recording: {
+            ...previous.recording!,
+            ideaGroups: previous.recording!.ideaGroups.map((x, gi) =>
+              gi === g ? { ...x, ideas: x.ideas.map((y, ki) => (ki === k ? cut(y) : y)) } : x
+            )
+          }
+        })
+      }))
+    ),
     ...previous.actions.map((a, i) => ({
       length: a.text.length,
       apply: () => ({

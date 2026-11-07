@@ -277,4 +277,22 @@ describe("owner context in the summary prompt", () => {
     const warnings = (generated.content as { warnings: string[] }).warnings;
     expect(warnings.some((w) => /earlier summary text was cut to fit/i.test(w))).toBe(true);
   });
+
+  it("also shortens oversized idea groups in the earlier summary", async () => {
+    const h = setup(sources());
+    const base = recordingInterpretation();
+    const big = {
+      ...content,
+      recording: {
+        ...base,
+        ideaGroups: [{ title: "Ideas", ideas: Array.from({ length: 12 }, () => "<".repeat(1_000)) }]
+      }
+    };
+    let calls = 0;
+    h.fetch.mockImplementation(async () => response(calls++ === 0 ? big : content));
+    const segments = Array.from({ length: 40 }, () => "Ravi said the plan is fine. ".repeat(110));
+    const generated = await h.generator(actor, baseInput(transcriptOf(segments)));
+    const warnings = (generated.content as { warnings: string[] }).warnings;
+    expect(warnings.some((w) => /earlier summary text was cut to fit/i.test(w))).toBe(true);
+  });
 });
