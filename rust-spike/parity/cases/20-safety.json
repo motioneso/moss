@@ -99,10 +99,7 @@
         }
       }
     ],
-    "rows": [
-      "app.tasks",
-      "app.task_activity"
-    ]
+    "rows": ["app.tasks", "app.task_activity"]
   },
   {
     "name": "safety: admin cannot read a member's private data",
@@ -120,9 +117,7 @@
         "as": "A",
         "body": {
           "providerId": "google-calendar",
-          "scopes": [
-            "https://www.googleapis.com/auth/calendar.readonly"
-          ],
+          "scopes": ["https://www.googleapis.com/auth/calendar.readonly"],
           "tokenPayload": {
             "accessToken": "MOSS-SENTINEL-admin-case"
           }
@@ -292,10 +287,7 @@
         }
       }
     ],
-    "rows": [
-      "app.tasks",
-      "app.task_activity"
-    ]
+    "rows": ["app.tasks", "app.task_activity"]
   },
   {
     "name": "safety: the app and worker roles cannot read sign-in secrets",
@@ -388,14 +380,8 @@
           "name": "New Member"
         },
         "save_cookie": "first",
-        "compare": [
-          "/status",
-          "/body/user",
-          "/cookies"
-        ],
-        "absent": [
-          "MOSS-SENTINEL-"
-        ],
+        "compare": ["/status", "/body/user", "/cookies"],
+        "absent": ["MOSS-SENTINEL-"],
         "expect": {
           "status": 200
         }
@@ -473,15 +459,8 @@
           "password": "MOSS-SENTINEL-lifecycle-pass"
         },
         "save_cookie": "second",
-        "compare": [
-          "/status",
-          "/body/redirect",
-          "/body/user",
-          "/cookies"
-        ],
-        "absent": [
-          "MOSS-SENTINEL-"
-        ],
+        "compare": ["/status", "/body/redirect", "/body/user", "/cookies"],
+        "absent": ["MOSS-SENTINEL-"],
         "expect": {
           "status": 200
         }
@@ -532,11 +511,7 @@
         "method": "POST",
         "path": "/api/auth/sign-out",
         "cookie": "second",
-        "compare": [
-          "/status",
-          "/body",
-          "/cookies"
-        ],
+        "compare": ["/status", "/body", "/cookies"],
         "expect": {
           "status": 200
         }
@@ -551,10 +526,7 @@
         }
       }
     ],
-    "rows": [
-      "app.users",
-      "app.admin_audit_events"
-    ]
+    "rows": ["app.users", "app.admin_audit_events"]
   },
   {
     "name": "safety: account guardrails hold for admins",
@@ -700,10 +672,7 @@
         }
       }
     ],
-    "rows": [
-      "app.users",
-      "app.admin_audit_events"
-    ],
+    "rows": ["app.users", "app.admin_audit_events"],
     "note": "Delete and reject are only called where a guard refuses them, because the Rust server answers 501 once every guard passes."
   },
   {
@@ -717,9 +686,7 @@
         "as": "A",
         "body": {
           "providerId": "google-calendar",
-          "scopes": [
-            "https://www.googleapis.com/auth/calendar.readonly"
-          ],
+          "scopes": ["https://www.googleapis.com/auth/calendar.readonly"],
           "tokenPayload": {
             "accessToken": "MOSS-SENTINEL-access-1",
             "refreshToken": "MOSS-SENTINEL-refresh-1"
@@ -832,9 +799,7 @@
             "accessToken": "MOSS-SENTINEL-outlook"
           }
         },
-        "absent": [
-          "MOSS-SENTINEL-"
-        ],
+        "absent": ["MOSS-SENTINEL-"],
         "expect": {
           "status": 403
         }
@@ -902,9 +867,7 @@
         "sql": "update app.ai_provider_configs set display_name = 'Taken' where owner_user_id = '{{userA}}'",
         "as": "B",
         "expect": {
-          "affected": [
-            0
-          ]
+          "affected": [0]
         }
       },
       {
@@ -912,9 +875,7 @@
         "sql": "update app.ai_provider_configs set display_name = 'Taken' where owner_user_id = '{{userA}}'",
         "as": "admin",
         "expect": {
-          "affected": [
-            0
-          ]
+          "affected": [0]
         }
       },
       {
@@ -938,13 +899,8 @@
           "password": "MOSS-SENTINEL-right-pass",
           "name": "Password Check"
         },
-        "compare": [
-          "/status",
-          "/body/user"
-        ],
-        "absent": [
-          "MOSS-SENTINEL-"
-        ],
+        "compare": ["/status", "/body/user"],
+        "absent": ["MOSS-SENTINEL-"],
         "expect": {
           "status": 200
         }
@@ -957,9 +913,7 @@
           "email": "password-check@example.test",
           "password": "MOSS-SENTINEL-wrong-pass"
         },
-        "absent": [
-          "MOSS-SENTINEL-"
-        ],
+        "absent": ["MOSS-SENTINEL-"],
         "expect": {
           "status": 401
         }
@@ -972,9 +926,7 @@
           "email": "nobody@example.test",
           "password": "MOSS-SENTINEL-unknown-pass"
         },
-        "absent": [
-          "MOSS-SENTINEL-"
-        ],
+        "absent": ["MOSS-SENTINEL-"],
         "expect": {
           "status": 401
         }
@@ -987,14 +939,8 @@
           "email": "password-check@example.test",
           "password": "MOSS-SENTINEL-right-pass"
         },
-        "compare": [
-          "/status",
-          "/body/redirect",
-          "/body/user"
-        ],
-        "absent": [
-          "MOSS-SENTINEL-"
-        ],
+        "compare": ["/status", "/body/redirect", "/body/user"],
+        "absent": ["MOSS-SENTINEL-"],
         "expect": {
           "status": 200
         }
@@ -1008,9 +954,7 @@
           "password": "MOSS-SENTINEL-right-pass",
           "name": "Password Check"
         },
-        "absent": [
-          "MOSS-SENTINEL-"
-        ],
+        "absent": ["MOSS-SENTINEL-"],
         "expect": {
           "status": 422
         }
@@ -1024,9 +968,7 @@
           "password": "MOSS-SENTINEL-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
           "name": "Long"
         },
-        "absent": [
-          "MOSS-SENTINEL-"
-        ],
+        "absent": ["MOSS-SENTINEL-"],
         "expect": {
           "status": 400
         }
@@ -1040,9 +982,7 @@
           "password": "MOSS-SENTINEL-bad-email",
           "name": "Bad"
         },
-        "absent": [
-          "MOSS-SENTINEL-"
-        ],
+        "absent": ["MOSS-SENTINEL-"],
         "expect": {
           "status": 400
         }
@@ -1061,8 +1001,6 @@
         }
       }
     ],
-    "rows": [
-      "app.users"
-    ]
+    "rows": ["app.users"]
   }
 ]
