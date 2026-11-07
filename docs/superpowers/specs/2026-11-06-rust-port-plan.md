@@ -188,9 +188,11 @@ Migrations:
 - Every applied file stays byte for byte. No checksum reset, ever.
 - A frozen manifest lists every legacy file and its hash. The Rust runner computes the same
   hashes, including the `moss:sql-migration+backfill:v1` domain over SQL plus backfill bytes.
-  Module files are hashed differently today. The module runner hashes the text after decoding it
-  as UTF-8 (`packages/db/src/migrations/module-sql-runner.ts:151-159`), while the core runner hashes
-  raw bytes. Rust reproduces each rule for its own ledger.
+  Built-in module SQL goes through the core runner (`scripts/migrate.ts:38-57`). Add-on modules
+  installed by `scripts/module-install.ts` use a different rule. Their runner hashes the text after
+  decoding it as UTF-8 (`packages/db/src/migrations/module-sql-runner.ts:151-159`), while the core
+  runner hashes raw bytes. The two differ only for invalid UTF-8. Rust reproduces each rule for its
+  own ledger, as the companion doc specifies.
 - The two JavaScript backfills get Rust replacements, tested against the JavaScript on copies of
   real data. The hash of the legacy pair stays recorded; the Rust replacement only runs where the
   legacy pair has not run.
@@ -301,9 +303,9 @@ sits in its own container with a secret handshake over a `0600` Unix socket (ADR
 - **Sign-in and sessions.** better-auth (`packages/auth/src/index.ts`) has no Rust equivalent. Moss
   rewrites sign-in, sessions, companion pairing and trusted origins. It must verify existing
   password hashes. Keeping existing sessions is a goal, but one fresh sign-in at cutover is an
-  acceptable fallback (decision 7.8). If a hash format cannot be verified, that person resets their own password through a
-  pre-approved, verified account-recovery flow. The original hashes are kept. No admin sees, sets or
-  signs in as the account, and cutover never leaves an owner locked out.
+  acceptable fallback (decision 7.8). A hash that cannot be verified blocks cutover for that
+  account, unless a pre-approved, verified account-recovery flow lets the rightful person reset it.
+  The original hashes are kept. No admin sees, sets or signs in as the account.
 
 ### 3.7 The UI
 
@@ -332,7 +334,8 @@ code, so invented classes stay caught.
 | Linux desktop | AppImage, plus .deb and .rpm                        | In-app updater or package manager | Tray app; optional systemd user unit |
 | Linux server  | Single binary plus systemd unit, and a Docker image | Package or image tag              | System service or container          |
 
-Every update takes a snapshot first (database dump, vault, keys) and migrates a staged copy. The
+Every update takes an encrypted snapshot first (database dump and vault, with keys in their own
+wrapped bundle) and migrates a staged copy. The
 staged copy runs under its own Postgres cluster, started after the old app stops, so migrations
 never touch the live files. Moss switches to the staged copy only when it passes its checks, and
 keeps the old cluster stopped for rollback. The update channel is signed, and the app refuses
@@ -561,8 +564,11 @@ The full parity checklist runs in Phase 8, once modules exist.
 ### Phase 8: cutover (M)
 
 - Rehearse the 4.2 move and both 4.3 rollbacks on a copy of real data, then move Ben's prod.
+- Run the full parity checklist on a fresh install on each OS: sign-in, chat with tools, one read
+  and one write per module, one job per queue kind, backup and restore, and phone access.
 
-**Kill gate.** The rehearsal passes both rollbacks. If it does not, prod does not move.
+**Kill gate.** The rehearsal passes both rollbacks, and the full parity checklist passes on each
+OS. If either fails, prod does not move.
 
 ### Phase 9: retire TypeScript (S)
 
