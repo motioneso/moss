@@ -14,10 +14,10 @@ use axum::http::{HeaderMap, Method, Uri};
 use axum::response::Response;
 use axum::routing::get;
 use axum::Router;
-use platform::auth::resolve_access;
-use platform::db::DataContext;
-use platform::error::{json_reply, ApiError};
-use platform::http::Platform;
+use safety_core::auth::resolve_access;
+use safety_core::db::DataContext;
+use safety_core::error::{json_reply, ApiError};
+use safety_core::http::Platform;
 use serde_json::{json, Value};
 use uuid::Uuid;
 

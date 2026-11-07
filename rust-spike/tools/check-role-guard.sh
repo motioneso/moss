@@ -28,7 +28,7 @@ cp "$CARGO_TARGET_DIR/release/tasks" "$work/tasks"
 src="$work/src-no-guard"
 mkdir -p "$src"
 git -C "$root" archive HEAD rust-spike | tar -x -C "$src"
-db_rs="$src/rust-spike/platform/src/db.rs"
+db_rs="$src/rust-spike/safety-core/src/db.rs"
 cp "$db_rs" "$db_rs.orig"
 sed -i 's/if superuser || bypass {/if false \&\& (superuser || bypass) {/' "$db_rs"
 if cmp -s "$db_rs" "$db_rs.orig"; then

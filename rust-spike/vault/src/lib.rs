@@ -1,5 +1,5 @@
 //! Confined file access for the server code. `tools/check-safety-rules.sh` fails if `std::fs` or
-//! `tokio::fs` appears in the platform or tasks crates. The built screens served from
+//! `tokio::fs` appears in the safety-core or tasks crates. The built screens served from
 //! `tasks/src/main.rs` and the migration files read by the portability crate sit outside it.
 //!
 //! A [`Root`] is a directory that access is confined to. Paths are relative, use `/` between

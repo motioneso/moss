@@ -87,25 +87,25 @@ expect() {
 # A module's SQL may touch another module's tables.
 if wanted module-sql-owner "$@"; then
   copy module-sql-owner
-  plant module-sql-owner platform/src/module_sql.rs 's/^        self\.owned\.contains(name)$/        true/'
-  expect module-sql-owner 101 in_copy module-sql-owner cargo test --quiet -p platform module_sql
+  plant module-sql-owner safety-core/src/module_sql.rs 's/^        self\.owned\.contains(name)$/        true/'
+  expect module-sql-owner 101 in_copy module-sql-owner cargo test --quiet -p safety-core module_sql
 fi
 
 # A secret can be printed with {:?}.
 if wanted secret-debug "$@"; then
   copy secret-debug
-  plant secret-debug platform/src/secret.rs 's/^pub struct Secret {$/#[derive(Debug)]\n&/'
-  expect secret-debug 101 in_copy secret-debug cargo build --quiet -p platform
+  plant secret-debug safety-core/src/secret.rs 's/^pub struct Secret {$/#[derive(Debug)]\n&/'
+  expect secret-debug 101 in_copy secret-debug cargo build --quiet -p safety-core
 fi
 
 # Log lines are written as they come.
 if wanted redaction "$@"; then
   copy redaction
-  plant redaction platform/src/redact.rs \
+  plant redaction safety-core/src/redact.rs \
     's/^pub fn redact_json(value: &Value) -> Value {$/&\n    return value.clone();/'
-  plant redaction platform/src/redact.rs \
+  plant redaction safety-core/src/redact.rs \
     's/^pub fn redact_text(text: &str) -> String {$/&\n    return text.to_owned();/'
-  expect redaction 101 in_copy redaction cargo test --quiet -p platform redact
+  expect redaction 101 in_copy redaction cargo test --quiet -p safety-core redact
 fi
 
 # A vault path may climb out with "..".
@@ -118,15 +118,15 @@ fi
 # Sign-up, sign-in and sign-out accept a request from any web page.
 if wanted origin-check "$@"; then
   copy origin-check
-  plant origin-check platform/src/auth.rs '/^    platform\.origins\.check_/d'
-  expect origin-check 101 in_copy origin-check cargo test --quiet -p platform origin
+  plant origin-check safety-core/src/auth.rs '/^    platform\.origins\.check_/d'
+  expect origin-check 101 in_copy origin-check cargo test --quiet -p safety-core origin
 fi
 
 # Raw file access, a secret read, a privileged database URL, a raw print and a second file
 # server, each outside the files allowed them.
 if wanted static-rules "$@"; then
   copy static-rules
-  plant static-rules platform/src/views.rs \
+  plant static-rules safety-core/src/views.rs \
     '$a fn sneak(secret: \&crate::secret::Secret) -> String {\n    eprintln!("{}", secret.expose_secret());\n    let _ = std::env::var("MOSS_BOOTSTRAP_DATABASE_URL");\n    std::fs::read_to_string("/etc/hostname").unwrap_or_default()\n}'
   plant static-rules tasks/src/routes.rs \
     '$a fn files() -> tower_http::services::ServeDir { tower_http::services::ServeDir::new("/") }'
@@ -142,9 +142,9 @@ fi
 # The connector list returns the sealed secret.
 if wanted connector-envelope "$@"; then
   copy connector-envelope
-  plant connector-envelope platform/src/views.rs \
+  plant connector-envelope safety-core/src/views.rs \
     's/accounts\.encrypted_secret IS NOT NULL AS has_secret, \\$/accounts.encrypted_secret IS NOT NULL AS has_secret, accounts.encrypted_secret, \\/'
-  plant connector-envelope platform/src/views.rs \
+  plant connector-envelope safety-core/src/views.rs \
     's/"hasSecret": row\.get::<_, bool>("has_secret"),/&\n        "encryptedSecret": row.get::<_, Option<Value>>("encrypted_secret"),/'
   build_server connector-envelope
   expect connector-envelope 1 parity connector-envelope "safety: connectors"
@@ -154,8 +154,8 @@ fi
 if wanted admin-bypass "$@"; then
   copy admin-bypass
   plant admin-bypass tasks/src/main.rs 's/"MOSS_APP_DATABASE_URL", 4/"MOSS_BOOTSTRAP_DATABASE_URL", 4/'
-  plant admin-bypass platform/src/db.rs 's/if name != expected {/if false \&\& name != expected {/'
-  plant admin-bypass platform/src/db.rs 's/if superuser || bypass {/if false \&\& (superuser || bypass) {/'
+  plant admin-bypass safety-core/src/db.rs 's/if name != expected {/if false \&\& name != expected {/'
+  plant admin-bypass safety-core/src/db.rs 's/if superuser || bypass {/if false \&\& (superuser || bypass) {/'
   build_server admin-bypass
   expect admin-bypass 1 parity admin-bypass "safety: admin"
 fi
@@ -163,7 +163,7 @@ fi
 # Sign-in prints the request body, password included.
 if wanted password-logged "$@"; then
   copy password-logged
-  plant password-logged platform/src/auth.rs \
+  plant password-logged safety-core/src/auth.rs \
     '/^async fn sign_in(/,/^}/ s/^    let body = parse_body(&body)\.ok_or(fail(400, "VALIDATION_ERROR", "Invalid body"))?;$/&\n    eprintln!("sign-in body: {body}");/'
   build_server password-logged
   expect password-logged 1 parity password-logged "safety: password"

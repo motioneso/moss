@@ -34,7 +34,7 @@ made by `scripts/run-gate.sh`, never the dev or prod database.
 | `tools/plant-parity-bugs.sh`              | Phase 0b: plants three bugs in the Rust server and checks each fails |
 | `tools/check-role-guard.sh`               | Phase 0b: checks the server refuses roles that escape row security   |
 | `tools/count-code.sh`                     | Phase 0b: counts the code and tests the report scales from           |
-| `platform/`                               | Phase 2a: sign-in, admin routes, data context, secrets, redaction    |
+| `safety-core/`                            | Phase 2a: sign-in, admin routes, data context, secrets, redaction    |
 | `vault/`                                  | Phase 2a: file access that cannot leave its folder                   |
 | `parity/cases/20-safety.json`             | Phase 2a: the safety cases, run against both servers                 |
 | `tools/check-safety-rules.sh`             | Phase 2a: fails on file access, secret use or prints out of place    |
@@ -136,10 +136,10 @@ The safety cases in `parity/cases/20-safety.json` run as part of the side-by-sid
 servers run in test mode there, which turns off the sign-in origin check, so that check is covered
 by unit tests instead.
 
-The platform and vault unit tests need no database. From this folder:
+The safety-core and vault unit tests need no database. From this folder:
 
 ```
-cargo test -p platform -p vault
+cargo test -p safety-core -p vault
 ```
 
 The rules check needs no database either. It exits 1 and prints the lines if any rule breaks.

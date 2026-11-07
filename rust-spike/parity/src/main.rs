@@ -1,4 +1,4 @@
-//! Differential checks for Tasks (Phase 0b, plan section 2.3) and the platform safety core.
+//! Differential checks for Tasks (Phase 0b, plan section 2.3) and the safety core.
 //!
 //! Sends the same requests to the TypeScript server and the Rust server, each on its own clone of
 //! the gate database, and compares status, body, job results and the rows each case left behind.
