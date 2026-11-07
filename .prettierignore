@@ -96,3 +96,5 @@ scripts/uat-host/
 docs/superpowers/specs/mockups/moss-runs-itself/
 # Summary update guard mockups (#3689): static page that borrows the classifier-gate stylesheet, frozen for review.
 docs/superpowers/mockups/summary-update-guard/
+# Summary owner context and speaker guesses mockups (JS-27): static page that borrows the classifier-gate stylesheet, frozen for review.
+docs/superpowers/mockups/summary-owner-context/

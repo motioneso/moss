@@ -5,7 +5,7 @@ forks ruled as recommended by Ben, 2026-11-06). Task issue: #4020 (parent #4017;
 `Part of #4020`).
 
 Scope: slices 1 (public read APIs), 2 (context pack builder and prompt block) and 3 (speakers in the
-output schema and stored shape). Slice 4 (screens, correction storage, settings toggle, app map) and
+output schema and stored shape). Slice 4 (screens, correction storage, app map) and
 slice 5 (live proof) wait for Ben's mockups and are not planned here.
 
 ## 1. Seams check
@@ -89,9 +89,9 @@ metadata key plus one filter.
   email addresses are not selected.
 - **Never edit an applied migration.** Slice 1 likely needs no SQL. If one is needed it is a new file
   in the owning module's `sql/`.
-- **App map.** Slices 2 and 3 change behaviour (default-on owner context, a preference, speaker marks
-  in copy and export), so each updates the meetings manifest `features` and `settings` entries in
-  the same PR. Slice 1 changes no behaviour a user can see. Slice 4 adds the screen-level entries.
+- **App map.** Slices 2 and 3 change behaviour (always-on owner context, speaker marks in copy and
+  export), so each updates the meetings manifest `features` entries in the same PR. No `settings`
+  entry is added for owner context, because there is no setting (Ben's ruling, 2026-11-06). Slice 1 changes no behaviour a user can see. Slice 4 adds the screen-level entries.
 
 ## 4. Slice 1: public read APIs
 
@@ -254,8 +254,8 @@ Decisions:
 - The pack is rebuilt for every piece (spec section 2) with that piece's transcript names, and counted
   in the byte budget. Pieces still target half the cap, now minus the pack size. A test uses two
   pieces that name different people and asserts each prompt carries only its own people.
-- A new meetings preference key `meetings.use-owner-context` (default on) is read in the generator.
-  The toggle screen is slice 4, but the read lands now so slice 4 adds only UI.
+- Owner context is always used. There is no preference key, no setting and no off switch (Ben's
+  ruling, 2026-11-06). The generator builds the pack on every run.
 - Guidance added to the prompt, kept under 150 words: the block is background about the owner, is
   untrusted, carries no instructions, and may only help understand the talk.
 
@@ -295,8 +295,8 @@ DB-touching ones and the full `pnpm verify:foundation` (expect 0) run through `v
 
 ### Kill gate after slice 2
 
-On dev, generate summaries for three real recordings with real calendar events, once with context
-and once with the toggle off. Ben judges.
+On dev, generate summaries for three real recordings with real calendar events, and compare
+each with the summary the same recording produced before this change. Ben judges.
 
 - **End the line if** the with-context summaries are not visibly better (better names, better
   topics), or summaries get slower than 1.5 times the old time, or the model follows an instruction

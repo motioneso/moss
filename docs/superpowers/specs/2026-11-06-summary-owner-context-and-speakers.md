@@ -99,21 +99,21 @@ Rules for the model, enforced by validation in Moss:
   the screen, copy and export resolve it from the speakers list plus owner labels. A correction
   therefore changes one stored label and needs no new model call. Unrelated mentions of the same
   name in the text are left alone.
-- Every name that is inferred and not owner-confirmed renders with "(guess)", on screen and in
-  copy and export alike, whatever the model's confidence.
+- Every name that is inferred and not owner-confirmed renders with a dotted underline on screen
+  and "(guess)" after the name in copy and export, whatever the model's confidence.
 - Validation rejects a name not found in the pack or the transcript (no invented people).
 
 Owner-assigned names are stored separately and always win over any guess.
 
 ### 5. Showing a guess as a guess
 
-- Any inferred name, high or low confidence: shown with "(guess)" and a Confirm / Change action.
+- Any inferred name, high or low confidence: shown with a dotted underline and a Confirm / Change action.
   Confidence only changes the wording of the hover note. Confirm turns it into an owner label and
-  removes the mark.
+  removes the underline.
 - Owner-set names: shown plain.
 - Unknown: "Speaker 2".
-- The summary header says "Names guessed from your calendar and notes" when any guess was used.
-  The per-name mark is what survives copy and export.
+- The screen carries no explanatory line about guesses. The "(guess)" text is what survives copy and
+  export.
 
 ### 6. Correcting a speaker
 
@@ -131,7 +131,7 @@ Owner-assigned names are stored separately and always win over any guess.
 introduced-in-talk`.
 - One or more sources unavailable (module off, connector down): the others are still used. The
   summary carries no warning unless something was cut for size.
-- The owner can turn "Use my context in summaries" off in Meeting settings. Default on.
+- There is no setting to turn owner context off. It is how summaries work (Ben, 2026-11-06).
 
 ### 8. Invariants check
 
@@ -148,8 +148,8 @@ introduced-in-talk`.
 
 ### 9. App map
 
-Build PR updates the meetings manifest `features` and `settings` entries (context toggle, speaker
-correction) and `app-map-core.ts` only if a core screen changes.
+Build PR updates the meetings manifest `features` entries (owner context, speaker correction) and
+`app-map-core.ts` only if a core screen changes. No `settings` entry is added for owner context.
 
 ## Screens (not yet agreed with Ben)
 
@@ -159,10 +159,9 @@ Summary with guesses:
 
 ```
 Summary                                  [Rewrite summary]
-Names guessed from your calendar and notes.
 
 Overview
- Priya (guess) and Sam agreed to move the launch to March.
+ Priya (dotted underline) and Sam agreed to move the launch to March.
 
 Decisions
  - Launch moves to March. (Sam)
@@ -180,12 +179,6 @@ Speaker picker (opens from a name):
                           [Cancel]  [Apply to all lines]
 ```
 
-Meeting settings row:
-
-```
- Use what Moss knows about me in summaries        [ on ]
-```
-
 ## Forks and recommendations
 
 1. **Where names come from.**
@@ -201,7 +194,9 @@ Meeting settings row:
    is written that way. Costs a render step and a change to the stored shape.
 5. **Calendar match.** (a) Best single overlap only. (b) Let the owner pick when several match.
    Recommend (a) now, (b) later.
-6. **Setting default.** On by default, with an off switch. Recommend on.
+6. **Setting default.** Ruling by Ben, 2026-11-06, replacing the earlier on-by-default fork. There
+   is no setting. Owner context is always used and there is no off switch, no preference key and no
+   app-map settings entry for it.
 7. **Saving a corrected name as a person.** Offer, never auto. Recommend offer.
 
 ## Open checks before build
@@ -217,6 +212,6 @@ Meeting settings row:
 1. Public read APIs in calendar, people, memory if missing.
 2. Context pack builder, caps, instruction scan, prompt block, tests.
 3. Speakers in the output schema, validation, stored shape.
-4. Screen: guess marks, picker, correction storage, settings toggle, app map.
+4. Screen: guess marks, picker, correction storage, app map.
 5. Live proof on dev: a real recording with a calendar event, one guess corrected, one run with no
    context.
