@@ -97,8 +97,8 @@ part that is hard or costly, and ends with a plan to proceed.
 Every run below went through `scripts/run-gate.sh`. It builds a fresh database from the repo's
 migrations in its own throwaway Postgres container (Postgres 17.11 with pgvector) and removes the
 container afterwards. The side-by-side, planted-bug and role-check runs all ran at commit
-3721c1035 on a clean tree, and each log records that commit. Later commits change only this
-report.
+3721c1035 on a clean tree, and each log records that commit. Later commits change this report
+and split one case file into two files that hold the same 30 cases in the same order.
 
 ### Final side-by-side run
 
@@ -307,7 +307,7 @@ larger. The two helpers read 7.0M and 9.6M tokens from cache while writing about
 | Part                        | Size                                                                                | Output tokens                      |
 | --------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------- |
 | Runner                      | 1,307 lines (1,215 of Rust, a 54-line TypeScript launcher, a 38-line shell wrapper) | 74,655, with the smoke cases       |
-| 64 converted cases          | 3,930 lines of JSON, about 61 per test                                              | 59,766, with sorting all 146 tests |
+| 64 converted cases          | 3,932 lines of JSON, about 61 per test                                              | 59,766, with sorting all 146 tests |
 | Planted-bug and role checks | two shell scripts in `rust-spike/tools`                                             | in the last row of Effort          |
 
 - The 14 TypeScript Tasks test files hold 4,787 lines for 146 tests, about 33 lines a test. A
