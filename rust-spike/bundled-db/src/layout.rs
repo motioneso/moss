@@ -26,19 +26,32 @@ impl Layout {
     /// Creates the owner-only folders. `root` may not exist yet.
     pub fn create(root: &Path) -> io::Result<Layout> {
         private_dir(root)?;
-        let root = root.canonicalize()?;
-        let layout = Layout {
+        let layout = Layout::at(root.canonicalize()?)?;
+        // Each inner folder must be a real folder this user owns, because the socket folder may
+        // sit in a shared temporary folder under a predictable name.
+        for dir in [&layout.run, &layout.secrets, &layout.logs] {
+            owned_private_dir(dir)?;
+        }
+        Ok(layout)
+    }
+
+    /// The layout of an install that already exists. Creates and changes nothing.
+    pub fn open(root: &Path) -> io::Result<Layout> {
+        let real = root
+            .canonicalize()
+            .map_err(|e| io::Error::new(e.kind(), format!("no install at {}: {e}", root.display())))?;
+        Layout::at(real)
+    }
+
+    fn at(root: PathBuf) -> io::Result<Layout> {
+        Ok(Layout {
             data: root.join("db"),
             run: socket_dir(&root)?,
             secrets: root.join("secrets"),
             logs: root.join("logs"),
             lock: root.join("moss-db.lock"),
             root,
-        };
-        for dir in [&layout.run, &layout.secrets, &layout.logs] {
-            private_dir(dir)?;
-        }
-        Ok(layout)
+        })
     }
 
     pub fn state_file(&self) -> PathBuf {
@@ -97,6 +110,18 @@ pub fn private_dir(path: &Path) -> io::Result<()> {
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
 }
 
+/// `private_dir` for a folder Moss makes itself. An existing one must be a real folder, not a
+/// link, and belong to this user.
+fn owned_private_dir(path: &Path) -> io::Result<()> {
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
+    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(path)?;
+    let meta = std::fs::symlink_metadata(path)?;
+    if !meta.is_dir() || meta.uid() != unsafe { libc::geteuid() } {
+        return Err(io::Error::other(format!("{} is not a folder that belongs to this user", path.display())));
+    }
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+}
+
 /// A new file only this user can read or write.
 pub fn private_file(path: &Path) -> io::Result<File> {
     use std::os::unix::fs::OpenOptionsExt;
@@ -112,4 +137,35 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> io::Result<()> {
     file.write_all(bytes)?;
     file.sync_all()?;
     std::fs::rename(&tmp, path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn open_creates_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("typo");
+        assert!(Layout::open(&missing).is_err());
+        assert!(!missing.exists());
+
+        let layout = Layout::create(&dir.path().join("install")).unwrap();
+        let opened = Layout::open(&layout.root).unwrap();
+        assert_eq!(opened.run, layout.run);
+        assert_eq!(opened.data, layout.data);
+        assert!(!opened.data.exists());
+    }
+
+    #[test]
+    fn a_linked_inner_folder_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let elsewhere = dir.path().join("elsewhere");
+        std::fs::create_dir(&elsewhere).unwrap();
+        let root = dir.path().join("install");
+        std::fs::create_dir(&root).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, root.join("logs")).unwrap();
+        let error = Layout::create(&root).unwrap_err();
+        assert!(error.to_string().contains("is not a folder that belongs to this user"), "{error}");
+    }
 }

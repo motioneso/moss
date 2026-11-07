@@ -58,6 +58,12 @@ pub struct Report {
     pub message: String,
 }
 
+/// The Linux check on whether a crash can copy Moss memory into a dump. It judges processes,
+/// not a disk, so the message words it apart from the disk checks.
+pub const CRASH_DUMPS: &str = "Crash dumps";
+
+const NO_CLAIM: &str = "Moss makes no claim that data on disk is protected.";
+
 impl Report {
     pub fn from_checks(checks: Vec<Check>) -> Report {
         let status = if checks.iter().any(|c| c.status == Status::Off) {
@@ -67,27 +73,45 @@ impl Report {
         } else {
             Status::Unknown
         };
-        let names = |wanted: Status| {
-            let items: Vec<&str> =
-                checks.iter().filter(|c| c.status == wanted).map(|c| c.item.as_str()).collect();
-            items.join(", ")
+
+        // The disk items with this status, and whether the crash-dump check has it.
+        let split = |wanted: Status| {
+            let disks: Vec<&str> = checks
+                .iter()
+                .filter(|c| c.status == wanted && c.item != CRASH_DUMPS)
+                .map(|c| c.item.as_str())
+                .collect();
+            (disks.join(", "), checks.iter().any(|c| c.status == wanted && c.item == CRASH_DUMPS))
         };
-        let message = match status {
-            Status::Verified => "Disk encryption is on everywhere Moss keeps data. If this computer's disk \
-                                 is lost or stolen while it is switched off, Moss data cannot be read."
-                .to_string(),
-            Status::Off => format!(
-                "Disk encryption is off for: {}. Anyone who gets this disk can read Moss data. Moss makes \
-                 no claim that data on disk is protected.",
-                names(Status::Off)
+        let mut parts = Vec::new();
+        match status {
+            Status::Verified => parts.push(
+                "Disk encryption is on everywhere Moss keeps data. If this computer's disk is lost or \
+                 stolen while it is switched off, Moss data cannot be read."
+                    .to_string(),
             ),
-            Status::Unknown => format!(
-                "Moss could not check disk encryption for: {}. Moss makes no claim that data on disk \
-                 is protected.",
-                names(Status::Unknown)
-            ),
-        };
-        Report { claim_protection: status == Status::Verified, status, checks, message }
+            Status::Off => {
+                let (disks, dumps) = split(Status::Off);
+                if !disks.is_empty() {
+                    parts.push(format!("Disk encryption is off for: {disks}. Anyone who gets this disk can read Moss data."));
+                }
+                if dumps {
+                    parts.push("A crash can save Moss memory, which holds private data, in a crash dump.".into());
+                }
+                parts.push(NO_CLAIM.into());
+            }
+            Status::Unknown => {
+                let (disks, dumps) = split(Status::Unknown);
+                if !disks.is_empty() {
+                    parts.push(format!("Moss could not check disk encryption for: {disks}."));
+                }
+                if dumps {
+                    parts.push("Moss could not check whether a crash can save its memory in a crash dump.".into());
+                }
+                parts.push(NO_CLAIM.into());
+            }
+        }
+        Report { claim_protection: status == Status::Verified, status, checks, message: parts.join(" ") }
     }
 
     pub fn to_json(&self) -> Value {
@@ -295,6 +319,45 @@ pub fn split_dev(dev: u64) -> (u32, u32) {
     (major as u32, minor as u32)
 }
 
+/// The number of block device `node`, read from the node itself or else from sysfs by name.
+fn device_number(sys: &Path, node: &Path) -> Option<(u32, u32)> {
+    use std::os::unix::fs::{FileTypeExt, MetadataExt};
+    if let Ok(meta) = std::fs::metadata(node) {
+        return meta.file_type().is_block_device().then(|| split_dev(meta.rdev()));
+    }
+    let name = node.file_name()?.to_str()?;
+    let dev = std::fs::read_to_string(sys.join(format!("class/block/{name}/dev"))).ok()?;
+    let (major, minor) = dev.trim().split_once(':')?;
+    Some((major.parse().ok()?, minor.parse().ok()?))
+}
+
+/// zram swap stays in memory unless it was given a backing device. The kernel then writes idle
+/// and incompressible pages to that device, so the device is judged like any other.
+pub fn zram_verdict(sys: &Path, device: &str) -> Verdict {
+    let swap = format!("swap device /dev/{device} is zram (compressed memory)");
+    let Ok(backing) = std::fs::read_to_string(sys.join(format!("class/block/{device}/backing_dev"))) else {
+        return Verdict {
+            status: Status::Unknown,
+            method: None,
+            evidence: vec![swap, "its backing device setting cannot be read".into()],
+        };
+    };
+    let backing = backing.trim();
+    if backing == "none" {
+        return Verdict {
+            status: Status::Verified,
+            method: Some("zram".into()),
+            evidence: vec![swap, "it has no backing device, so its pages are never written to disk".into()],
+        };
+    }
+    let mut verdict = match device_number(sys, Path::new(backing)) {
+        Some((major, minor)) => block_device(sys, major, minor, 0),
+        None => Verdict::unknown(format!("backing device {backing} cannot be found")),
+    };
+    verdict.evidence.insert(0, format!("{swap} and writes pages out to {backing}"));
+    verdict
+}
+
 /// One `/proc/swaps` entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Swap {
@@ -323,8 +386,8 @@ pub mod linux {
     use super::*;
     use std::os::unix::fs::MetadataExt;
 
-    /// Checks each labelled folder, swap, and crash dumps for the running database process.
-    pub fn report(paths: &[(String, PathBuf)], database_pids: &[i32]) -> Report {
+    /// Checks each labelled folder, swap, and crash dumps of the supervisor and the database.
+    pub fn report(paths: &[(String, PathBuf)], supervisor: Result<Option<i32>, String>, database_pids: &[i32]) -> Report {
         let sys = Path::new("/sys");
         let mounts = parse_mountinfo(&std::fs::read_to_string("/proc/self/mountinfo").unwrap_or_default());
         let mut checks = Vec::new();
@@ -332,7 +395,7 @@ pub mod linux {
             checks.push(Check::new(item, Some(path), path_verdict(sys, &mounts, path)));
         }
         checks.push(Check::new("Swap", None, swap_verdict(sys, &mounts)));
-        checks.push(Check::new("Crash dumps", None, crash_dump_verdict(database_pids)));
+        checks.push(Check::new(CRASH_DUMPS, None, crash_dump_verdict(supervisor, database_pids)));
         Report::from_checks(checks)
     }
 
@@ -392,17 +455,17 @@ pub mod linux {
         let mut verdicts = Vec::new();
         for swap in &swaps {
             let name = swap.path.display().to_string();
-            verdicts.push(if name.starts_with("/dev/zram") {
-                Verdict::verified("zram", format!("{name} is compressed memory, never written to disk"))
+            let zram = name.strip_prefix("/dev/").filter(|device| device.starts_with("zram") && !device.contains('/'));
+            verdicts.push(if let Some(device) = zram {
+                zram_verdict(sys, device)
             } else if swap.kind == "partition" {
-                match std::fs::metadata(&swap.path) {
-                    Ok(meta) => {
-                        let (major, minor) = split_dev(meta.rdev());
+                match device_number(sys, &swap.path) {
+                    Some((major, minor)) => {
                         let mut verdict = block_device(sys, major, minor, 0);
                         verdict.evidence.insert(0, format!("swap partition {name}"));
                         verdict
                     }
-                    Err(_) => Verdict::unknown(format!("swap partition {name} cannot be read")),
+                    None => Verdict::unknown(format!("swap partition {name} cannot be read")),
                 }
             } else {
                 let mut verdict = path_verdict(sys, mounts, &swap.path);
@@ -424,67 +487,99 @@ pub mod linux {
         }
     }
 
-    /// Crash dumps of the running database. With the `moss_nodump` add-on every server process
-    /// is non-dumpable, so the kernel makes no dump and calls no crash handler. Without it only
-    /// the zero core limit protects the database, and the kernel ignores that limit when it
-    /// pipes a dump to a crash-handler program.
-    fn crash_dump_verdict(database_pids: &[i32]) -> Verdict {
+    /// Crash dumps of the supervisor, which holds every database password, and of the running
+    /// database. The supervisor makes itself non-dumpable at start, and the `moss_nodump` add-on
+    /// does the same for every server process, so the kernel makes no dump and calls no crash
+    /// handler. A process without that is protected only by a zero core limit, and the kernel
+    /// ignores that limit when it pipes a dump to a crash-handler program.
+    ///
+    /// `supervisor` is the pid holding the install lock, `None` when no supervisor runs.
+    fn crash_dump_verdict(supervisor: Result<Option<i32>, String>, database_pids: &[i32]) -> Verdict {
         let pattern = std::fs::read_to_string("/proc/sys/kernel/core_pattern").unwrap_or_default();
-        let states: Vec<(i32, DumpState)> = database_pids.iter().map(|&pid| (pid, dump_state(pid))).collect();
-        decide(&states, pattern.trim())
+        let supervisor = match supervisor {
+            Ok(pid) => pid,
+            Err(error) => return Verdict::unknown(format!("whether a supervisor is running could not be read: {error}")),
+        };
+        let procs: Vec<Proc> = supervisor
+            .map(|pid| (SUPERVISOR, pid))
+            .into_iter()
+            .chain(database_pids.iter().map(|&pid| (DATABASE, pid)))
+            .map(|(role, pid)| Proc { role, pid, state: dump_state(pid) })
+            .collect();
+        decide(&procs, pattern.trim())
     }
 
-    /// The crash-dump verdict from each database process's dump state and the kernel's
-    /// `core_pattern`.
-    fn decide(states: &[(i32, DumpState)], pattern: &str) -> Verdict {
+    const SUPERVISOR: &str = "supervisor";
+    const DATABASE: &str = "database";
+
+    /// A process whose memory holds private rows or passwords.
+    #[derive(Debug)]
+    struct Proc {
+        role: &'static str,
+        pid: i32,
+        state: DumpState,
+    }
+
+    /// The crash-dump verdict from each process's dump state and the kernel's `core_pattern`.
+    fn decide(procs: &[Proc], pattern: &str) -> Verdict {
         let destination = format!("the system sends crash dumps to: {pattern}");
-        if states.is_empty() {
+        let database = procs.iter().filter(|p| p.role == DATABASE).count();
+        if database == 0 {
             return Verdict {
                 status: Status::Unknown,
                 method: None,
                 evidence: vec!["the database is not running, so its processes were not checked".into(), destination],
             };
         }
-        let count = states.len();
-        if states.iter().all(|(_, state)| *state == DumpState::NonDumpable) {
-            return Verdict {
-                status: Status::Verified,
-                method: Some("database cannot be dumped".into()),
-                evidence: vec![
-                    format!(
-                        "all {count} database processes are non-dumpable (the kernel shows their files as owned by root), \
-                         so no crash dump of them is made and no crash handler is called"
-                    ),
-                    destination,
-                ],
-            };
+        let supervised = procs.iter().any(|p| p.role == SUPERVISOR);
+        let checked = if supervised {
+            format!("the supervisor and all {database} database processes")
+        } else {
+            format!("all {database} database processes")
+        };
+        let mut evidence = Vec::new();
+        if !supervised {
+            evidence.push("no supervisor is running for this install".to_string());
         }
-        if let Some((pid, DumpState::Limit(limit))) = states.iter().find(|(_, state)| matches!(state, DumpState::Limit(_))) {
-            return Verdict::off(format!("database process {pid} may write crash dumps (limit {limit})"));
+        evidence.push(destination);
+
+        if procs.iter().all(|p| p.state == DumpState::NonDumpable) {
+            evidence.insert(
+                0,
+                format!(
+                    "{checked} are non-dumpable (the kernel shows their files as owned by root), so no crash dump \
+                     of them is made and no crash handler is called"
+                ),
+            );
+            return Verdict { status: Status::Verified, method: Some("cannot be dumped".into()), evidence };
         }
-        if let Some((pid, _)) = states.iter().find(|(_, state)| *state == DumpState::Unreadable) {
-            return Verdict::unknown(format!("the crash-dump state of database process {pid} could not be read"));
+        let limited = procs.iter().find_map(|p| match &p.state {
+            DumpState::Limit(limit) => Some((p, limit)),
+            _ => None,
+        });
+        if let Some((p, limit)) = limited {
+            return Verdict::off(format!("{} process {} may write crash dumps (limit {limit})", p.role, p.pid));
+        }
+        if let Some(p) = procs.iter().find(|p| p.state == DumpState::Unreadable) {
+            return Verdict::unknown(format!("the crash-dump state of {} process {} could not be read", p.role, p.pid));
         }
         if pattern.starts_with('|') {
-            return Verdict {
-                status: Status::Unknown,
-                method: None,
-                evidence: vec![
-                    "the database has a crash-dump size limit of 0, but the kernel ignores that limit when it \
-                     hands a dump to a crash-handler program, and what the handler keeps depends on its own rules"
-                        .into(),
-                    destination,
-                ],
-            };
+            let p = procs.iter().find(|p| p.state == DumpState::ZeroLimit).expect("a process that is not non-dumpable");
+            evidence.insert(
+                0,
+                format!(
+                    "{} process {} is dumpable with a crash-dump size limit of 0, but the kernel ignores that limit \
+                     when it hands a dump to a crash-handler program, and what the handler keeps depends on its own rules",
+                    p.role, p.pid
+                ),
+            );
+            return Verdict { status: Status::Unknown, method: None, evidence };
         }
-        Verdict {
-            status: Status::Verified,
-            method: Some("crash-dump limit of 0".into()),
-            evidence: vec![
-                format!("all {count} database processes have a crash-dump size limit of 0, which stops dumps to a file"),
-                destination,
-            ],
-        }
+        evidence.insert(
+            0,
+            format!("each of {checked} is non-dumpable or has a crash-dump size limit of 0, which stops dumps to a file"),
+        );
+        Verdict { status: Status::Verified, method: Some("crash-dump limit of 0".into()), evidence }
     }
 
     #[derive(Debug, PartialEq, Eq)]
@@ -497,8 +592,8 @@ pub mod linux {
     }
 
     /// The kernel shows a non-dumpable process's `/proc` files as owned by root. The only other
-    /// cause is a setuid program, which Postgres is not. A root-run database cannot be judged
-    /// this way, so it falls back to the core limit.
+    /// cause is a setuid program, which neither Postgres nor `moss-db` is. A process run as root
+    /// cannot be judged this way, so it falls back to the core limit.
     fn dump_state(pid: i32) -> DumpState {
         let dir = Path::new("/proc").join(pid.to_string());
         let status = dir.join("status");
@@ -553,36 +648,77 @@ pub mod linux {
             assert_eq!(classify(&root, 0, &limits("unlimited")), DumpState::Limit("unlimited".into()));
         }
 
+        fn db(pid: i32, state: DumpState) -> Proc {
+            Proc { role: DATABASE, pid, state }
+        }
+
+        fn sup(state: DumpState) -> Proc {
+            Proc { role: SUPERVISOR, pid: 9, state }
+        }
+
         #[test]
         fn non_dumpable_everywhere_is_verified_even_with_a_crash_handler() {
-            let verdict = decide(&[(10, DumpState::NonDumpable), (11, DumpState::NonDumpable)], PIPE);
+            let procs = [sup(DumpState::NonDumpable), db(10, DumpState::NonDumpable), db(11, DumpState::NonDumpable)];
+            let verdict = decide(&procs, PIPE);
             assert_eq!(verdict.status, Status::Verified);
-            assert_eq!(verdict.method.as_deref(), Some("database cannot be dumped"));
+            assert_eq!(verdict.method.as_deref(), Some("cannot be dumped"));
+            assert!(verdict.evidence[0].starts_with("the supervisor and all 2 database processes are non-dumpable"));
+        }
+
+        #[test]
+        fn a_dumpable_supervisor_spoils_a_protected_database() {
+            let unlimited =
+                [sup(DumpState::Limit("unlimited".into())), db(10, DumpState::NonDumpable), db(11, DumpState::NonDumpable)];
+            let verdict = decide(&unlimited, PIPE);
+            assert_eq!(verdict.status, Status::Off);
+            assert_eq!(verdict.evidence[0], "supervisor process 9 may write crash dumps (limit unlimited)");
+
+            // The kernel ignores a zero limit when it pipes the dump to a crash handler.
+            let zero = [sup(DumpState::ZeroLimit), db(10, DumpState::NonDumpable), db(11, DumpState::NonDumpable)];
+            let verdict = decide(&zero, PIPE);
+            assert_eq!(verdict.status, Status::Unknown);
+            assert!(verdict.evidence[0].starts_with("supervisor process 9 is dumpable"));
+        }
+
+        #[test]
+        fn without_a_supervisor_only_the_database_is_judged() {
+            let verdict = decide(&[db(10, DumpState::NonDumpable)], PIPE);
+            assert_eq!(verdict.status, Status::Verified);
+            assert!(verdict.evidence.iter().any(|line| line == "no supervisor is running for this install"));
+        }
+
+        #[test]
+        fn an_unreadable_install_lock_is_unknown() {
+            let verdict = crash_dump_verdict(Err("lock file: permission denied".into()), &[]);
+            assert_eq!(verdict.status, Status::Unknown);
         }
 
         #[test]
         fn a_zero_limit_is_verified_only_when_dumps_go_to_a_file() {
-            let states = [(10, DumpState::NonDumpable), (11, DumpState::ZeroLimit)];
-            assert_eq!(decide(&states, PIPE).status, Status::Unknown);
-            let verdict = decide(&states, "core");
+            let procs = [sup(DumpState::NonDumpable), db(10, DumpState::NonDumpable), db(11, DumpState::ZeroLimit)];
+            assert_eq!(decide(&procs, PIPE).status, Status::Unknown);
+            let verdict = decide(&procs, "core");
             assert_eq!(verdict.status, Status::Verified);
             assert_eq!(verdict.method.as_deref(), Some("crash-dump limit of 0"));
         }
 
         #[test]
         fn a_dumpable_process_is_off_and_an_unreadable_one_unknown() {
-            let off = decide(&[(10, DumpState::NonDumpable), (11, DumpState::Limit("unlimited".into()))], PIPE);
+            let off = decide(&[db(10, DumpState::NonDumpable), db(11, DumpState::Limit("unlimited".into()))], PIPE);
             assert_eq!(off.status, Status::Off);
-            assert_eq!(decide(&[(10, DumpState::ZeroLimit), (11, DumpState::Unreadable)], "core").status, Status::Unknown);
+            let unreadable = decide(&[db(10, DumpState::ZeroLimit), db(11, DumpState::Unreadable)], "core");
+            assert_eq!(unreadable.status, Status::Unknown);
 
             // A dumpable process outranks an unreadable one.
-            let both = decide(&[(10, DumpState::Unreadable), (11, DumpState::Limit("1024".into()))], "core");
+            let both = decide(&[db(10, DumpState::Unreadable), db(11, DumpState::Limit("1024".into()))], "core");
             assert_eq!(both.status, Status::Off);
         }
 
         #[test]
         fn a_stopped_database_is_unknown() {
             assert_eq!(decide(&[], "core").status, Status::Unknown);
+            // A supervisor still starting the database is not enough.
+            assert_eq!(decide(&[sup(DumpState::NonDumpable)], "core").status, Status::Unknown);
         }
     }
 }
@@ -867,6 +1003,47 @@ mod tests {
         assert_eq!(sys.verdict(7, 0).status, Status::Unknown);
     }
 
+    /// A zram device whose `backing_dev` reads `backing`, or has no such file when `None`.
+    /// Backing devices are named so that no real `/dev` node matches them.
+    fn zram(sys: &Sys, backing: Option<&str>) -> Verdict {
+        let dir = sys.device("zram0", 252, 0);
+        if let Some(backing) = backing {
+            std::fs::write(dir.join("backing_dev"), format!("{backing}\n")).unwrap();
+        }
+        zram_verdict(sys.root(), "zram0")
+    }
+
+    #[test]
+    fn zram_without_a_backing_device_is_verified() {
+        let sys = Sys::new();
+        let verdict = zram(&sys, Some("none"));
+        assert_eq!(verdict.status, Status::Verified);
+        assert_eq!(verdict.method.as_deref(), Some("zram"));
+    }
+
+    #[test]
+    fn zram_is_judged_by_its_backing_device() {
+        let sys = Sys::new();
+        sys.partition("moss-test-sdz1", 8, 33);
+        let plain = zram(&sys, Some("/dev/moss-test-sdz1"));
+        assert_eq!(plain.status, Status::Off);
+        assert_eq!(plain.evidence[0], "swap device /dev/zram0 is zram (compressed memory) and writes pages out to /dev/moss-test-sdz1");
+        assert!(plain.evidence[1].starts_with("moss-test-sdz1 is a plain partition"));
+
+        let sys = Sys::new();
+        sys.partition("moss-test-nvme9p3", 259, 93);
+        sys.mapped("moss-test-dm-9", 9, "CRYPT-LUKS2-0123456789abcdef-luks-0123", &["moss-test-nvme9p3"]);
+        let luks = zram(&sys, Some("/dev/moss-test-dm-9"));
+        assert_eq!(luks.status, Status::Verified);
+        assert_eq!(luks.method.as_deref(), Some("LUKS2 (dm-crypt)"));
+    }
+
+    #[test]
+    fn zram_with_an_unreadable_or_missing_backing_device_is_unknown() {
+        assert_eq!(zram(&Sys::new(), None).status, Status::Unknown);
+        assert_eq!(zram(&Sys::new(), Some("/dev/moss-test-gone")).status, Status::Unknown);
+    }
+
     fn mount(point: &str, fs_type: &str, major: u32, minor: u32) -> Mount {
         Mount { major, minor, mount_point: PathBuf::from(point), fs_type: fs_type.into(), source: "/dev/x".into() }
     }
@@ -991,5 +1168,21 @@ mod tests {
         assert!(off.message.contains("off for: Data."));
 
         assert!(!Report::from_checks(Vec::new()).claim_protection);
+    }
+
+    #[test]
+    fn crash_dumps_are_not_called_a_disk() {
+        let dumps_off = Report::from_checks(vec![check("Data", Status::Verified), check(CRASH_DUMPS, Status::Off)]);
+        assert_eq!(dumps_off.status, Status::Off);
+        assert!(!dumps_off.message.contains("Disk encryption is off"), "{}", dumps_off.message);
+        assert!(dumps_off.message.starts_with("A crash can save Moss memory"), "{}", dumps_off.message);
+
+        let both_off = Report::from_checks(vec![check("Data", Status::Off), check(CRASH_DUMPS, Status::Off)]);
+        assert!(both_off.message.starts_with("Disk encryption is off for: Data. "), "{}", both_off.message);
+        assert!(both_off.message.contains("A crash can save Moss memory"), "{}", both_off.message);
+
+        let dumps_unknown = Report::from_checks(vec![check("Data", Status::Verified), check(CRASH_DUMPS, Status::Unknown)]);
+        assert!(!dumps_unknown.message.contains("disk encryption for"), "{}", dumps_unknown.message);
+        assert!(dumps_unknown.message.starts_with("Moss could not check whether a crash"), "{}", dumps_unknown.message);
     }
 }

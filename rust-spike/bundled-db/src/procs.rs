@@ -22,6 +22,48 @@ pub fn signal(pid: i32, signal: i32) {
     }
 }
 
+/// Keeps this process's memory out of crash dumps, because `moss-db` reads database passwords.
+/// The zero core limit stops dumps to a file. Linux also marks the process non-dumpable, so the
+/// kernel makes no dump at all, not even for a crash-handler program that ignores the limit.
+pub fn protect_from_crash_dumps() -> std::io::Result<()> {
+    let none = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+    if unsafe { libc::setrlimit(libc::RLIMIT_CORE, &none) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    #[cfg(target_os = "linux")]
+    if unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+/// Whether `pid` runs `moss-db up` or `moss-db init`, the two commands that hold the install lock.
+pub fn is_supervisor(pid: i32) -> bool {
+    command_line(pid).is_some_and(|args| supervisor_args(&args))
+}
+
+pub fn supervisor_args(args: &[String]) -> bool {
+    let program = args.first().and_then(|first| Path::new(first).file_name()).and_then(|name| name.to_str());
+    program == Some("moss-db") && matches!(args.get(1).map(String::as_str), Some("up" | "init"))
+}
+
+/// The command line stays readable when the process is non-dumpable.
+#[cfg(target_os = "linux")]
+fn command_line(pid: i32) -> Option<Vec<String>> {
+    let raw = std::fs::read(format!("/proc/{pid}/cmdline")).ok()?;
+    let text = String::from_utf8_lossy(&raw);
+    Some(text.split('\0').filter(|arg| !arg.is_empty()).map(str::to_string).collect())
+}
+
+/// `ps` joins arguments with spaces. A program path holding a space therefore fails the check,
+/// which errs towards signalling nothing.
+#[cfg(target_os = "macos")]
+fn command_line(pid: i32) -> Option<Vec<String>> {
+    let out = std::process::Command::new("/bin/ps").args(["-ww", "-o", "command=", "-p", &pid.to_string()]).output().ok()?;
+    let args: Vec<String> = String::from_utf8_lossy(&out.stdout).split_whitespace().map(str::to_string).collect();
+    (!args.is_empty()).then_some(args)
+}
+
 /// Whether a `postgres` process with these arguments belongs to the install.
 pub fn belongs(args: &[&str], data: &Path, cluster: &str) -> bool {
     let data = data.to_string_lossy();
@@ -118,6 +160,23 @@ mod tests {
         // Another install, or the machine's own Postgres, has a different title.
         assert!(!belongs(&["postgres: 17/main: checkpointer "], Path::new(DATA), "moss-0123456789ab"));
         assert!(!belongs(&["postgres: checkpointer "], Path::new(DATA), "moss-0123456789ab"));
+    }
+
+    #[test]
+    fn only_up_and_init_count_as_a_supervisor() {
+        let args = |text: &str| text.split(' ').map(str::to_string).collect::<Vec<_>>();
+        assert!(supervisor_args(&args("/opt/moss/bin/moss-db up --root /x --pg /y --repo /z")));
+        assert!(supervisor_args(&args("moss-db init --root /x --pg /y")));
+        assert!(!supervisor_args(&args("/opt/moss/bin/moss-db stop --root /x")));
+        assert!(!supervisor_args(&args("/usr/bin/sleep 600")));
+        assert!(!supervisor_args(&args("/opt/not-moss-db up")));
+        assert!(!supervisor_args(&[]));
+    }
+
+    #[test]
+    fn this_test_process_is_not_a_supervisor() {
+        assert!(!is_supervisor(std::process::id() as i32));
+        assert!(!is_supervisor(i32::MAX));
     }
 
     #[test]

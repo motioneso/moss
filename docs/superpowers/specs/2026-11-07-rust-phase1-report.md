@@ -15,30 +15,32 @@
 One Rust program, `moss-db`, runs a private, bundled Postgres with pgvector for one install. On
 Linux it creates the database, runs all 331 of the app's built-in migrations, answers a vector
 query, stops cleanly and restarts with the data intact. It recovered from every crash tried. The
-same flows passed on macOS, run by hand against the same Postgres build. Windows is designed below
-but nothing ran on it.
+same flows passed on macOS, run by hand against Postgres built from the same source. Windows is
+designed below but nothing ran on it.
 
-Neither kill gate fires. Neither is closed, because closing them needs a Developer ID for the Mac
+Neither kill gate has fired, and neither is closed. Closing them needs a Developer ID for the Mac
 and a Windows machine.
 
 | Brief item                                    | Result                                     | Main evidence                                                                                     |
 | --------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------- |
 | 1. Start, migrate and stop a bundled Postgres | Holds on Linux                             | 331 migrations applied. The vector query uses its index. Clean stop in 0.4 s.                     |
 | 2. Linux restart and crash recovery           | Holds                                      | Seven crash and leftover cases recover with data intact. The machine's own Postgres is untouched. |
-| 3. macOS, including signing                   | Holds by hand; notarization untested       | The same flows pass. A signed app loads pgvector once library validation is satisfied or relaxed. |
+| 3. macOS, including signing                   | Holds by hand; notarization untested       | The same flows pass. A signed app loaded pgvector only with library validation switched off.      |
 | 4. Windows without admin, with named pipes    | Designed, untested                         | The approach below names each unknown.                                                            |
 | 5. Disk-encryption report                     | Holds on Linux; Mac checks matched by hand | Linux reports "off" and claims nothing. The Mac reads FileVault on, encrypted swap.               |
-| 6. How to bundle Postgres                     | Decided                                    | Build it ourselves from checked source. 23 MB on Linux, 56 MB on the Mac.                         |
+| 6. How to bundle Postgres                     | Decided                                    | Build it ourselves from checked source. About 58 MB on Linux with ICU, 56 MB on the Mac.          |
 
-The tests were seen to fail as well as pass. Each of the three disk-encryption protections was
-removed in turn, and each time exactly one test failed (log 33).
+The tests were seen to fail as well as pass. Each disk-encryption and crash-dump protection was
+removed in turn, and each time only that protection's tests failed (logs 33, 35).
 
 The plan's Phase 1 kill gate reads "if pgvector cannot load under macOS notarization, or Postgres
 cannot run as a normal Windows user":
 
-- **macOS: does not fire.** pgvector loads in a signed app. The only blocker found was library
-  validation, and it refused every bundled library, not just pgvector. Both fixes are known, and
-  one was proven. Closing the gate needs notarization with a Developer ID.
+- **macOS: not fired, not closed.** pgvector loaded in an ad hoc signed app only with library
+  validation switched off. Library validation refused every bundled library, not just pgvector.
+  The expected fix, signing every file with one Developer ID, is untested. Switching validation
+  off is a last resort with a security cost (see Signing). Closing the gate needs notarization
+  with a Developer ID.
 - **Windows: does not fire, not closed.** Nothing ran on Windows.
 
 Phase 2 was not started. The plan's keys bullet (unlock and recover in a real install) is outside
@@ -61,16 +63,18 @@ this task.
 
 ### One install
 
-| Rule                         | How `moss-db` meets it                                                                                   |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------- |
-| One data folder per install  | A root folder (mode 700) holds `db`, `run`, `secrets`, `logs` and a lock file                            |
-| No admin rights              | Runs as the user. Writes only inside the root folder, plus a short socket folder if the path is too long |
-| Local-only connections       | A private socket by default, with no TCP listener. TCP only on request, and only on loopback             |
-| Generated credentials        | Random passwords for the superuser and the four app roles. Every connection must use SCRAM               |
-| One supervisor per install   | A lock on the lock file. A second supervisor exits with "another supervisor ... is already running"      |
-| A free port when needed      | `up --tcp` tries a port range and skips ports another program holds                                      |
-| Never touch another Postgres | A leftover must be this user's `postgres` and name this install's data folder or cluster name            |
-| Setup survives a power cut   | The new database is built in `db.partial` and renamed when complete. A rerun starts that step over       |
+| Rule                           | How `moss-db` meets it                                                                                   |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| One data folder per install    | A root folder (mode 700) holds `db`, `run`, `secrets`, `logs` and a lock file                            |
+| No admin rights                | Runs as the user. Writes only inside the root folder, plus a short socket folder if the path is too long |
+| Local-only connections         | A private socket by default, with no TCP listener. TCP only on request, and only on loopback             |
+| Generated credentials          | Random passwords for the superuser and the four app roles. Every connection must use SCRAM               |
+| One supervisor per install     | A lock on the lock file. A second supervisor exits with "another supervisor ... is already running"      |
+| Stop signals only a supervisor | `stop` signals the pid in the lock file only if that process runs `moss-db up` or `init`                 |
+| A free port when needed        | `up --tcp` tries a port range and skips ports another program holds                                      |
+| Never touch another Postgres   | A leftover must be this user's `postgres` and name this install's data folder or cluster name            |
+| Setup survives a power cut     | The new database is built in `db.partial` and renamed when complete. A rerun starts that step over       |
+| Reading creates nothing        | `stop`, `status` and `check` refuse a root that does not exist instead of creating it                    |
 
 The cluster itself:
 
@@ -81,12 +85,14 @@ The cluster itself:
 - The cluster name is `moss-` plus 12 hex digits of the data folder's hash. Server process titles
   carry it, so leftovers from this install can be told apart from any other Postgres.
 - Postgres runs with a zero core-dump limit.
+- `moss-db` gives itself a zero core-dump limit as it starts and, on Linux, makes itself
+  non-dumpable, because it reads every role's password.
 - The four app roles (`jarvis_app_runtime`, `jarvis_auth_runtime`, `jarvis_migration_owner`,
   `jarvis_worker_runtime`) are not superusers and do not bypass row-level security.
 - On Linux Postgres gets a parent-death signal, so killing the supervisor shuts the database down.
   macOS has no such signal, so the next start cleans up instead.
 - If the socket path would pass 104 bytes, the socket moves to a short folder in the user's
-  runtime or temporary folder.
+  runtime or temporary folder. That folder must be a real folder owned by the user, not a link.
 
 ### Migrations
 
@@ -105,26 +111,28 @@ The cluster itself:
 
 The machine runs Ubuntu 24.04 LTS on x86_64, with kernel 6.8 and glibc 2.39.
 
-| Case                              | What happened                                                                                                                                                                | Log       |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| First run                         | Created the cluster and applied 331 migrations. initdb 848 ms, start 113 ms, migrations 2.2 s. SIGTERM gave a clean stop in 403 ms                                           | 01        |
-| Check                             | Postgres 17.11, checksums on, vector 0.8.7, 331 migrations recorded. The app role is not a superuser and does not bypass RLS                                                 | 03        |
-| Vector query                      | Nearest to [0.9,0.6,0] is north-east (0.2236), then east (0.6083). The plan is "Index Scan using items_embedding"                                                            | 03        |
-| Permissions and refusals          | Folders 700, files 600, socket 700. A wrong password gives "password authentication failed". No password gives "fe_sendauth: no password supplied"                           | 04        |
-| Second supervisor                 | Refused with "another supervisor (pid N) is already running this install", exit 1                                                                                            | 04        |
-| Listeners                         | Only the private socket. The machine's own Postgres on port 5432 kept running, untouched                                                                                     | 04b       |
-| Stop and restart                  | Stop 452 ms. The restart applied 0, found 331 already applied and kept the test row                                                                                          | 05-07     |
-| Database killed                   | The next start replaced the stale lock file and recovered. Both test rows were present                                                                                       | 08-09     |
-| Busy query when the database dies | Ended with "terminating connection because of unexpected SIGQUIT"                                                                                                            | 10        |
-| Leftover worker                   | A busy backend outlived its killed postmaster. Plain Postgres then refuses to start ("pre-existing shared memory block ... is still in use"). `moss-db` ended it and started | 11-13, 29 |
-| Supervisor killed                 | Postgres got a fast shutdown and stopped by itself. The next start was clean                                                                                                 | 14-15     |
-| Database left running alone       | A database with no supervisor was stopped cleanly, then started again                                                                                                        | 16, 30    |
-| Lock file names a reused pid      | Plain Postgres refuses ("lock file "postmaster.pid" already exists"). `moss-db` left the other program running and removed only the stale lock file                          | 17-18, 31 |
-| Second install on TCP             | Skipped port 5193, which another program held, and used 5194. Applied 331. The first install was unaffected                                                                  | 19-20     |
-| Bundle moved                      | The bundle runs from any folder, because each binary finds its libraries relative to itself                                                                                  | 21        |
-| Power cut during first setup      | Killing the supervisor 0.35 s into setup left an unfinished folder and no initdb process. The rerun built the database again and applied 331                                 | 22        |
+| Case                              | What happened                                                                                                                                                                                | Log       |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| First run                         | Created the cluster and applied 331 migrations. initdb 848 ms, start 113 ms, migrations 2.2 s. SIGTERM gave a clean stop in 403 ms                                                           | 01        |
+| Check                             | Postgres 17.11, checksums on, vector 0.8.7, 331 migrations recorded. The app role is not a superuser and does not bypass RLS                                                                 | 03        |
+| Vector query                      | Nearest to [0.9,0.6,0] is north-east (0.2236), then east (0.6083). The plan is "Index Scan using items_embedding"                                                                            | 03        |
+| Permissions and refusals          | Folders 700, files 600, socket 700. A wrong password gives "password authentication failed". No password gives "fe_sendauth: no password supplied"                                           | 04        |
+| Second supervisor                 | Refused with "another supervisor (pid N) is already running this install", exit 1                                                                                                            | 04        |
+| Listeners                         | Only the private socket. The machine's own Postgres on port 5432 kept running, untouched                                                                                                     | 04b       |
+| Stop and restart                  | Stop 452 ms. The restart applied 0, found 331 already applied and kept the test row                                                                                                          | 05-07     |
+| Database killed                   | The next start replaced the stale lock file and recovered. Both test rows were present                                                                                                       | 08-09     |
+| Busy query when the database dies | Ended with "terminating connection because of unexpected SIGQUIT"                                                                                                                            | 10        |
+| Leftover worker                   | A busy backend outlived its killed postmaster. Plain Postgres then refuses to start ("pre-existing shared memory block ... is still in use"). `moss-db` ended it and started                 | 11-13, 29 |
+| Supervisor killed                 | Postgres got a fast shutdown and stopped by itself. The next start was clean                                                                                                                 | 14-15     |
+| Database left running alone       | A database with no supervisor was stopped cleanly, then started again                                                                                                                        | 16, 30    |
+| Lock file names a reused pid      | Plain Postgres refuses ("lock file "postmaster.pid" already exists"). `moss-db` left the other program running and removed only the stale lock file                                          | 17-18, 31 |
+| Second install on TCP             | Skipped port 5193, which another program held, and used 5194. Applied 331. The first install was unaffected                                                                                  | 19-20     |
+| Bundle moved                      | The bundle runs from any folder, because each binary finds its libraries relative to itself                                                                                                  | 21        |
+| Power cut during first setup      | Killing the supervisor 0.35 s into setup left an unfinished folder and no initdb process. initdb's own Postgres child was not looked for. The rerun built the database again and applied 331 | 22        |
+| Supervisor crashed                | An abort made no crash dump and called no crash handler. Postgres stopped with it, and the next start had nothing to clean up                                                                | 36b, 37   |
+| Mistyped root                     | `stop`, `status` and `check` failed with "no install at ..." and created nothing                                                                                                             | 37        |
 
-Unit tests pass, 23 in `bundled-db` and 76 across the workspace.
+Unit tests pass, 34 in `bundled-db` and 87 across the workspace.
 
 ### Crash dumps on Linux
 
@@ -144,10 +152,20 @@ be that lucky.
 A non-dumpable process hides its working folder and binary link in `/proc`. The leftover finder
 reads the command line instead, which stays readable.
 
+The supervisor matters too, because it reads every role's password. These runs crash it with an
+abort, because Rust's own handler swallows a SIGSEGV sent from outside (logs 36a, 36b):
+
+| Supervisor            | Its state                                    | After an abort                                                               |
+| --------------------- | -------------------------------------------- | ---------------------------------------------------------------------------- |
+| Before the review fix | Dumpable, limit 0 with no hard limit         | apport logged "called for global pid N, signal 6, core limit 0, dump mode 1" |
+| Now                   | Non-dumpable, limit 0 with a hard limit of 0 | No crash-handler line and nothing in `/var/crash`. Postgres stopped with it  |
+
+The product's app process will hold the same passwords, so it must guard itself the same way.
+
 ### Disk-encryption report on Linux
 
 `moss-db at-rest` checks each place Moss data can land and reports verified, off or unknown. It
-claims protection only when every check is verified. On the test machine (log 34):
+claims protection only when every check is verified. On the test machine (log 38):
 
 | Place           | Verdict  | Why                                                               |
 | --------------- | -------- | ----------------------------------------------------------------- |
@@ -156,7 +174,7 @@ claims protection only when every check is verified. On the test machine (log 34
 | Home folder     | Off      | A plain partition                                                 |
 | Swap            | Off      | A swap file on the plain root partition                           |
 | Shared memory   | Unknown  | `/dev/shm` lives in memory and may be swapped out                 |
-| Crash dumps     | Verified | "all 6 database processes are non-dumpable"                       |
+| Crash dumps     | Verified | "the supervisor and all 6 database processes are non-dumpable"    |
 | Overall         | Off      | Protection is not claimed                                         |
 
 The message shown is "Disk encryption is off for: Database folder, Logs, Home folder, Swap. Anyone
@@ -166,13 +184,22 @@ Without the add-on the crash-dump check reports unknown, because "the kernel ign
 it hands a dump to a crash-handler program" (log 28c). An earlier version reported verified in that
 case (log 23). The fix replaced it.
 
-Each protection was removed in turn, and exactly one test failed each time (log 33):
+Before review the check judged only the database processes. It reported verified while the
+supervisor could still be dumped (log 36a). It now judges the supervisor too, and reports unknown
+in that case.
 
-| Protection removed                                 | Test that failed                                          |
-| -------------------------------------------------- | --------------------------------------------------------- |
-| Distrust a zero limit when a crash handler is set  | `a_zero_limit_is_verified_only_when_dumps_go_to_a_file`   |
-| Claim protection only when every check is verified | `protection_is_claimed_only_when_every_check_is_verified` |
-| Read each process's dump state correctly           | `classify_reads_the_dump_state`                           |
+zram swap counts as memory only when it has no backing device. With one, the backing device is
+judged like a disk. This machine has no zram, so only unit tests cover that.
+
+Each protection was removed in turn, and only its own tests failed (logs 33, 35):
+
+| Protection removed                                 | Test that failed                                                                                       |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Distrust a zero limit when a crash handler is set  | `a_zero_limit_is_verified_only_when_dumps_go_to_a_file`                                                |
+| Claim protection only when every check is verified | `protection_is_claimed_only_when_every_check_is_verified`                                              |
+| Read each process's dump state correctly           | `classify_reads_the_dump_state`                                                                        |
+| Judge zram swap by its backing device              | `zram_is_judged_by_its_backing_device`, `zram_with_an_unreadable_or_missing_backing_device_is_unknown` |
+| Judge the supervisor as well as the database       | `a_dumpable_supervisor_spoils_a_protected_database`                                                    |
 
 ## macOS evidence
 
@@ -207,7 +234,10 @@ runtime checks but cannot be notarized.
   different Team IDs". postgres failed the same way on libzstd. Library validation refuses every
   bundled library whose signature does not share the program's Team ID, pgvector included.
 - With the `com.apple.security.cs.disable-library-validation` entitlement, initdb ran and
-  `CREATE EXTENSION vector` worked (distance 1).
+  `CREATE EXTENSION vector` worked (distance 1). That entitlement lets the program load a library
+  signed by anyone, ad hoc signatures included. Library validation is what keeps a planted library
+  out of a signed program, so the entitlement gives up that guard for the process that holds all
+  Moss data.
 - Gatekeeper rejected the ad hoc build, as expected. `syspolicy_check` flagged "Adhoc Signed App",
   "Bad Load Command" and "Notary Ticket Missing".
 
@@ -222,8 +252,9 @@ Laid out as a proper app, the bundle passes everything a Developer ID does not f
 - pgvector loaded inside the app with library validation relaxed.
 
 Signed with one Developer ID, every file shares one Team ID, so library validation should pass
-without the entitlement. That is the expected path, and it is untested. The entitlement is the
-proven fallback.
+without the entitlement. That is the expected path, and it is untested. The entitlement worked,
+but it is a last resort. Ship it only if one Team ID fails, and only after a decision that accepts
+its cost.
 
 ### Left on the test Mac
 
@@ -348,6 +379,7 @@ Ready-made builds were considered and not downloaded or tried:
 | ------------ | -------------------------------------------- | ------ |
 | Linux x86_64 | Full install                                 | 35 MB  |
 | Linux x86_64 | Runtime files, stripped                      | 23 MB  |
+| Linux x86_64 | Runtime files plus the system's ICU (sum)    | 58 MB  |
 | Linux x86_64 | Desktop programs only                        | 11 MB  |
 | Linux x86_64 | System libraries it uses (ICU 35 MB of this) | 39 MB  |
 | macOS arm64  | App, including ICU (37 MB)                   | 62 MB  |
@@ -359,8 +391,10 @@ Ready-made builds were considered and not downloaded or tried:
 - On Linux, bundle ICU and zstd. libstdc++ and libgcc_s can come from the system when the build
   runs on the oldest supported base.
 - ICU data could be trimmed to the locales Moss needs (untested).
-- Postgres 17's builtin C.UTF-8 provider would drop ICU entirely, but it sorts differently. ICU's
-  root collation sorts the same on Linux and macOS.
+- Postgres 17's builtin C.UTF-8 provider would drop ICU entirely, but it sorts differently.
+- ICU's root collation sorted the test words the same on Linux and macOS. Each machine used its own
+  ICU, version 74 from Ubuntu and version 79 from Homebrew on the Mac. Sorting is only certain to
+  match when every bundle ships the same ICU version.
 
 ### Licences
 
@@ -406,6 +440,9 @@ installer.
 
 - Notarization with a Developer ID, and a Gatekeeper launch of a quarantined download.
 - Library validation passing without the entitlement when every file shares one Team ID.
+- That killing setup leaves no Postgres process behind. initdb's own Postgres child gets no
+  parent-death signal, and log 22 looked only for initdb.
+- zram swap on a real machine. Only unit tests cover the backing-device check.
 - `moss-db` compiled or run on a Mac. Its Mac code only type-checks, and its disk-encryption
   checks were matched by hand.
 - Intel Macs and macOS older than 26.
@@ -439,8 +476,9 @@ installer.
 - Build in CI with the deployment target set to the oldest supported macOS, for arm64 and also
   x86_64 if Intel is supported.
 - Sign every file with one Team ID and the hardened runtime, then notarize and staple.
-- On a clean Mac, launch a quarantined download and run `CREATE EXTENSION vector`. Try it first
-  without the library-validation entitlement, and keep the entitlement only if that fails.
+- On a clean Mac, launch a quarantined download and run `CREATE EXTENSION vector` without the
+  library-validation entitlement. If that fails, decide before shipping the entitlement, because
+  it lets the database load a library signed by anyone.
 - Run `moss-db` itself on a Mac.
 
 ### Windows
@@ -459,6 +497,8 @@ installer.
 ### Every OS
 
 - Port the two JavaScript backfills before moving an existing Docker install.
+- Make the app process guard itself from crash dumps as `moss-db` does, and have the at-rest check
+  judge it.
 - Run the rules doc's G1 gate on fresh standard-user machines for every declared OS and CPU.
 
 ## Tools not available

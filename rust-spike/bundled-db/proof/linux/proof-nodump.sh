@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Phase 1 proofs with the moss_nodump add-on. Usage: proof-nodump.sh STEP
 # Steps: stop-old up check procs crash control orphan-worker orphan-postmaster pid-reuse at-rest
+#        supervisor OLD_BINARY, missing-install, at-rest-all
 set -u
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 L=$RUNS/logs A=$RUNS/a C=$RUNS/c
@@ -49,6 +50,46 @@ crash() {
     find /var/crash -newer "$B/runs/crash-marker-$label" 2>/dev/null | grep . || echo "(none)"
     echo "# database log:"
     grep -E "PID $pid\)|reinitializing|ready to accept" "$root/logs/postgres.log" | tail -4
+  } > "$out" 2>&1
+  rm -f "$B/runs/crash-marker-$label"
+  cat "$out"
+}
+
+# crash_supervisor UP_BINARY LABEL OUT: start install A with UP_BINARY, run each at-rest checker,
+# crash the supervisor with SIGABRT and record what the crash handler saw.
+#
+# Rust's own SIGSEGV handler swallows a SIGSEGV sent with kill, so the supervisor would carry on.
+# SIGABRT takes the kernel's crash-dump path, as a real fault or an abort does.
+crash_supervisor() {
+  local up=$1 label=$2 out=$3
+  local log=$L/up-$label.jsonl
+  BIN=$up up_bg $A "$log" > /dev/null
+  wait_event "$log" ready 120 || return 1
+  local sup; sup=$(json_field "$log" ready supervisor_pid)
+  local pm; pm=$(postmaster_of $A)
+  local before; before=$(wc -l < /var/log/apport.log)
+  touch "$B/runs/crash-marker-$label"
+  {
+    echo "# $label: supervisor $sup, postmaster $pm"
+    echo "owner of /proc/$sup/status: uid $(stat -c %u /proc/$sup/status) (its real uid: $(awk '/^Uid:/{print $2}' /proc/$sup/status))"
+    echo "core limit (soft, hard): $(awk '/^Max core file size/{print $5, $6}' /proc/$sup/limits)"
+    echo "core_pattern: $(cat /proc/sys/kernel/core_pattern)"
+    for checker in "$up" "$BIN"; do
+      [ "$checker" = "$up" ] && who="the moss-db that started it" || who="this moss-db"
+      echo "# at-rest crash-dump check by $who:"
+      "$checker" at-rest --root $A | python3 -I -c "import json,sys
+d=json.load(sys.stdin); print('status', d.get('status'))
+[print(c) for c in d['checks'] if c['item']=='Crash dumps']"
+      [ "$up" = "$BIN" ] && break
+    done
+    kill -ABRT "$sup"
+    wait_gone "$sup" && echo "# supervisor $sup ended" || echo "# supervisor $sup STILL RUNNING"
+    local i=0; while [ $i -lt 50 ]; do i=$((i+1)); sleep 0.1; done   # give a crash handler 5 s
+    echo "# crash-handler log lines naming pid $sup:"
+    tail -n +$((before+1)) /var/log/apport.log | grep "pid $sup," || echo "(none)"
+    echo "# new files in /var/crash:"
+    find /var/crash -newer "$B/runs/crash-marker-$label" 2>/dev/null | grep . || echo "(none)"
+    wait_gone "$pm" && echo "# postmaster $pm stopped with its supervisor" || echo "# postmaster $pm STILL RUNNING"
   } > "$out" 2>&1
   rm -f "$B/runs/crash-marker-$label"
   cat "$out"
@@ -120,6 +161,40 @@ case ${1:-} in
     kill $other ;;
   at-rest)
     "$BIN" at-rest --root $A > $L/32-at-rest-with-addon.json 2>&1; echo "exit $?"
-    python3 -I -c "import json,sys; d=json.load(open(sys.argv[1])); print('overall', d.get('overall')); [print(c) for c in d['checks'] if c['item']=='Crash dumps']" $L/32-at-rest-with-addon.json ;;
+    python3 -I -c "import json,sys; d=json.load(open(sys.argv[1])); print('status', d['status']); [print(c) for c in d['checks'] if c['item']=='Crash dumps']" $L/32-at-rest-with-addon.json ;;
+  supervisor)
+    # supervisor OLD_BINARY: the supervisor holds every database password. Crash one started by a
+    # moss-db from before it guarded itself, then one started by this moss-db.
+    old=${2:?usage: proof-nodump.sh supervisor OLD_BINARY}
+    crash_supervisor "$old" old-binary $L/36a-supervisor-crash-old-binary.txt
+    crash_supervisor "$BIN" new-binary $L/36b-supervisor-crash-new-binary.txt ;;
+  missing-install)
+    # Commands that only read an install must not create one, even under a mistyped root.
+    up_bg $A $L/37-up.jsonl > /dev/null
+    wait_event $L/37-up.jsonl ready 120 || exit 1
+    missing=$RUNS/no-such-install
+    {
+      for cmd in status check stop; do
+        echo "# $cmd --root <missing>: exit $("$BIN" $cmd --root $missing > $L/37-$cmd-missing.json 2>&1; echo $?)"
+        cat $L/37-$cmd-missing.json
+      done
+      [ -e $missing ] && echo "# $missing EXISTS" || echo "# the missing root is still missing"
+      echo "# status --root <real>: exit $("$BIN" status --root $A > $L/37-status.json 2>&1; echo $?)"
+      echo "# check --root <real>: exit $("$BIN" check --root $A > $L/37-check.json 2>&1; echo $?)"
+      python3 -I -c "import json,sys; d=json.load(open(sys.argv[1])); print(d['server'])" $L/37-check.json
+      echo "# stop --root <real>: exit $("$BIN" stop --root $A > $L/37-stop.json 2>&1; echo $?)"
+      cat $L/37-stop.json
+    } > $L/37-commands-on-missing-install.txt 2>&1
+    cat $L/37-commands-on-missing-install.txt ;;
+  at-rest-all)
+    # Every place the report's at-rest table lists, with the database running.
+    up_bg $A $L/38-up.jsonl > /dev/null
+    wait_event $L/38-up.jsonl ready 120 || exit 1
+    "$BIN" at-rest --root $A --path "Home folder=$HOME" --path "Shared memory=/dev/shm" > $L/38-at-rest-after-review.json 2>&1
+    echo "at-rest exit $?"
+    "$BIN" stop --root $A > /dev/null
+    python3 -I -c "import json,sys
+d=json.load(open(sys.argv[1])); print('status', d['status']); print('message', d['message'])
+[print(c['item'], '|', c['status'], '|', c['evidence'][0]) for c in d['checks']]" $L/38-at-rest-after-review.json ;;
   *) echo "unknown step"; exit 2 ;;
 esac
