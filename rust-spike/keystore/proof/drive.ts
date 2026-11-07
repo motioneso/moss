@@ -8,12 +8,13 @@
  * <scratch>/proof-shots and writes its log to <scratch>/evidence. Each server runs on its own private session bus, never the
  * desktop's, with no keychain unless the step starts the fake one.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import {
   chmodSync,
   existsSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync
@@ -79,6 +80,7 @@ interface Home {
   keyFolder: string;
   keyFile: string;
   bundle: string;
+  testCredential: string;
 }
 
 function home(name: string): Home {
@@ -89,7 +91,8 @@ function home(name: string): Home {
     root,
     keyFolder,
     keyFile: join(keyFolder, "recovery-store"),
-    bundle: join(root, ".local/share/moss/keys/credential-keys.json")
+    bundle: join(root, ".local/share/moss/keys/credential-keys.json"),
+    testCredential: join(root, ".local/share/moss/keys/test-credential.json")
   };
 }
 
@@ -109,7 +112,19 @@ async function start(at: Home, keychain: Keychain): Promise<ChildProcess> {
     keychain === "no-bus"
       ? [uiBin, ui.slice(1)]
       : keychain === "none"
-        ? ["dbus-run-session", [`--config-file=${busConfig}`, "--", ...ui]]
+        ? [
+            "dbus-run-session",
+            [
+              `--config-file=${busConfig}`,
+              "--",
+              "sh",
+              "-c",
+              'printf %s "$DBUS_SESSION_BUS_ADDRESS" > "$0"; exec "$1" --port "$2"',
+              join(at.root, "run/bus-address"),
+              uiBin,
+              String(port)
+            ]
+          ]
         : [
             "dbus-run-session",
             [
@@ -135,9 +150,9 @@ async function start(at: Home, keychain: Keychain): Promise<ChildProcess> {
     let printed = "";
     child.stdout?.on("data", (chunk: Buffer) => {
       printed += chunk.toString();
-      const link = /listening on (\S+)\n/.exec(printed);
+      const link = /listening on (\S+)\n/.exec(printed)?.[1];
       if (link) {
-        launch = link[1];
+        launch = link;
         resolve();
       }
     });
@@ -157,6 +172,27 @@ async function stop(child: ChildProcess): Promise<void> {
     }
   }
   await exited;
+}
+
+/** Starts a working keychain on a running server's session bus, as if one were just installed. */
+function keychainAppears(at: Home): ChildProcess {
+  const address = readFileSync(join(at.root, "run/bus-address"), "utf8");
+  const fake = spawn(fakeBin, ["--working"], {
+    env: { PATH: process.env.PATH, DBUS_SESSION_BUS_ADDRESS: address },
+    detached: true,
+    stdio: "ignore"
+  });
+  exits.set(fake, new Promise<void>((resolve) => fake.once("exit", () => resolve())));
+  // Returns once the keychain holds its name, and throws after 5 s.
+  execFileSync("gdbus", [
+    "wait",
+    "--address",
+    address,
+    "--timeout",
+    "5",
+    "org.freedesktop.secrets"
+  ]);
+  return fake;
 }
 
 function mode(path: string): string {
@@ -195,6 +231,15 @@ async function readWords(page: Page): Promise<{ name: string; words: string[] }>
     item.replace(/^\d+/, "")
   );
   return { name, words };
+}
+
+/** The sheet positions the check page asks for. */
+async function askedPositions(page: Page): Promise<number[]> {
+  return page
+    .locator('form.check input[name^="w"]')
+    .evaluateAll((inputs) =>
+      inputs.map((input) => Number((input as HTMLInputElement).name.slice(1)))
+    );
 }
 
 async function fillBoxes(page: Page, words: string[]): Promise<void> {
@@ -298,11 +343,7 @@ try {
     (await heading(page)) === "Check your sheet",
     "the sheet is checked before anything is saved"
   );
-  const asked = await page
-    .locator('form.check input[name^="w"]')
-    .evaluateAll((inputs) =>
-      inputs.map((input) => Number((input as HTMLInputElement).name.slice(1)))
-    );
+  const asked = await askedPositions(page);
   for (const position of asked) {
     const word = sheet.words[position - 1] ?? "";
     await page.fill(`input[name="w${position}"]`, word === "zoo" ? "abandon" : "zoo");
@@ -482,6 +523,39 @@ try {
     "it says why"
   );
   await shot(page, "15-no-desktop-session", "No desktop session at all, as on a server");
+  await stop(server);
+
+  // A keychain is installed while the words are on screen: the server checks again and refuses.
+  const e = home("e");
+  server = await start(e, "none");
+  running.push(server);
+  await page.goto(launch);
+  await press(page, "Use a private file");
+  const late = await readWords(page);
+  await press(page, "I've written them down");
+  for (const position of await askedPositions(page)) {
+    await page.fill(`input[name="w${position}"]`, late.words[position - 1] ?? "");
+  }
+  running.push(keychainAppears(e));
+  await press(page, "Finish setup");
+  check(
+    (await heading(page)) === "Moss couldn't save its keys",
+    "a keychain that appears before the check stops the key file"
+  );
+  check(
+    !existsSync(e.keyFile) && !existsSync(e.bundle) && !existsSync(e.testCredential),
+    "nothing was written, not even the test credential"
+  );
+  await page.click("text=What Moss saw");
+  check(
+    (await page.locator("details code").textContent())?.includes("has a keychain") === true,
+    "it says a keychain was found"
+  );
+  await shot(
+    page,
+    "16-keychain-appeared",
+    "A keychain appeared before the sheet check; nothing saved"
+  );
   await stop(server);
   note("all checks passed");
 } finally {
