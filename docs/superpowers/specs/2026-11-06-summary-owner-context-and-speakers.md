@@ -131,7 +131,7 @@ Owner-assigned names are stored separately and always win over any guess.
 introduced-in-talk`.
 - One or more sources unavailable (module off, connector down): the others are still used. The
   summary carries no warning unless something was cut for size.
-- The owner can turn "Use my context in summaries" off in Meeting settings. Default on.
+- There is no setting to turn owner context off. It is how summaries work (Ben, 2026-11-06).
 
 ### 8. Invariants check
 
@@ -148,8 +148,8 @@ introduced-in-talk`.
 
 ### 9. App map
 
-Build PR updates the meetings manifest `features` and `settings` entries (context toggle, speaker
-correction) and `app-map-core.ts` only if a core screen changes.
+Build PR updates the meetings manifest `features` entries (owner context, speaker correction) and
+`app-map-core.ts` only if a core screen changes. No `settings` entry is added for owner context.
 
 ## Screens (not yet agreed with Ben)
 
@@ -180,12 +180,6 @@ Speaker picker (opens from a name):
                           [Cancel]  [Apply to all lines]
 ```
 
-Meeting settings row:
-
-```
- Use what Moss knows about me in summaries        [ on ]
-```
-
 ## Forks and recommendations
 
 1. **Where names come from.**
@@ -201,7 +195,9 @@ Meeting settings row:
    is written that way. Costs a render step and a change to the stored shape.
 5. **Calendar match.** (a) Best single overlap only. (b) Let the owner pick when several match.
    Recommend (a) now, (b) later.
-6. **Setting default.** On by default, with an off switch. Recommend on.
+6. **Setting default.** Ruling by Ben, 2026-11-06, replacing the earlier on-by-default fork. There
+   is no setting. Owner context is always used and there is no off switch, no preference key and no
+   app-map settings entry for it.
 7. **Saving a corrected name as a person.** Offer, never auto. Recommend offer.
 
 ## Open checks before build
@@ -217,6 +213,6 @@ Meeting settings row:
 1. Public read APIs in calendar, people, memory if missing.
 2. Context pack builder, caps, instruction scan, prompt block, tests.
 3. Speakers in the output schema, validation, stored shape.
-4. Screen: guess marks, picker, correction storage, settings toggle, app map.
+4. Screen: guess marks, picker, correction storage, app map.
 5. Live proof on dev: a real recording with a calendar event, one guess corrected, one run with no
    context.

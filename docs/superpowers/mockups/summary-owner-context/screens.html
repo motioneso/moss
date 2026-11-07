@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Summary speakers - Look B</title>
-<link rel="stylesheet" href="../../../../apps/web/src/styles/tokens.css"><link rel="stylesheet" href="../../../../apps/web/src/styles/components-forms.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-core.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-row-controls.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-sections.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-moss.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-moss-today.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-forms.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-keyline.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-tabs.css">
+<link rel="stylesheet" href="../../../../apps/web/src/styles/tokens.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-core.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-row-controls.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-sections.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-moss.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-moss-today.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-forms.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-keyline.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-tabs.css">
 <style>
 @font-face{font-family:"Archivo";font-style:normal;font-weight:400;font-display:swap;src:url("../classifier-gate/fonts/archivo-latin-400-normal.woff2") format("woff2")}@font-face{font-family:"Archivo";font-style:normal;font-weight:500;font-display:swap;src:url("../classifier-gate/fonts/archivo-latin-500-normal.woff2") format("woff2")}@font-face{font-family:"Archivo";font-style:normal;font-weight:600;font-display:swap;src:url("../classifier-gate/fonts/archivo-latin-600-normal.woff2") format("woff2")}@font-face{font-family:"Archivo";font-style:normal;font-weight:700;font-display:swap;src:url("../classifier-gate/fonts/archivo-latin-700-normal.woff2") format("woff2")}@font-face{font-family:"Archivo";font-style:normal;font-weight:800;font-display:swap;src:url("../classifier-gate/fonts/archivo-latin-800-normal.woff2") format("woff2")}@font-face{font-family:"Archivo";font-style:normal;font-weight:900;font-display:swap;src:url("../classifier-gate/fonts/archivo-latin-900-normal.woff2") format("woff2")}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans)}
@@ -56,22 +56,20 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
 .offer p{margin:0 0 var(--space-3);font-weight:var(--weight-semibold)}
 .doc{border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-md);padding:var(--space-6);white-space:pre-wrap;font-size:var(--text-md);line-height:1.6}
 .doc h4{margin:0}
-.row{display:flex;justify-content:space-between;align-items:center;gap:var(--space-6);padding:var(--space-4) 0;border-bottom:1px solid var(--border)}
-.row p{margin:0;font:var(--weight-semibold) var(--text-lg) var(--font-display)}
 .bar .jds-segmented{flex-wrap:wrap;max-width:100%}
 .tx{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 var(--space-8)}
 .line{display:grid;grid-template-columns:7rem minmax(0,1fr);gap:var(--space-3);padding:var(--space-3) 0;border-bottom:1px solid var(--border)}
 .line p{margin:0}.line small{display:inline-block;margin-top:var(--space-1);color:var(--text-subtle);font-size:var(--text-xs)}
-@media(max-width:700px){.page{padding:var(--space-4) var(--space-4) var(--space-8)}.tx{grid-template-columns:1fr}.lead{font-size:var(--text-2xl)}.bar{padding:var(--space-3) var(--space-4)}.mast{padding-bottom:var(--space-4)}.doc{padding:var(--space-4)}.row{align-items:flex-start}}
+@media(max-width:700px){.page{padding:var(--space-4) var(--space-4) var(--space-8)}.tx{grid-template-columns:1fr}.lead{font-size:var(--text-2xl)}.bar{padding:var(--space-3) var(--space-4)}.mast{padding-bottom:var(--space-4)}.doc{padding:var(--space-4)}}
 </style></head>
 <body>
 <div class="bar"><b>Summary speakers</b>
-<span class="jds-segmented" id="views"><button class="jds-segmented__opt" data-v="summary" aria-pressed="true">Guesses</button><button class="jds-segmented__opt" data-v="correct">Correct a guess</button><button class="jds-segmented__opt" data-v="confirmed">Confirmed</button><button class="jds-segmented__opt" data-v="export">Copy and export</button><button class="jds-segmented__opt" data-v="none">No context</button><button class="jds-segmented__opt" data-v="settings">Settings</button></span>
+<span class="jds-segmented" id="views"><button class="jds-segmented__opt" data-v="summary" aria-pressed="true">Guesses</button><button class="jds-segmented__opt" data-v="correct">Correct a guess</button><button class="jds-segmented__opt" data-v="confirmed">Confirmed</button><button class="jds-segmented__opt" data-v="export">Copy and export</button><button class="jds-segmented__opt" data-v="none">No context</button></span>
 <span class="jds-segmented"><button class="jds-segmented__opt" data-th="light" aria-pressed="true">Light</button><button class="jds-segmented__opt" data-th="dark">Dark</button></span></div>
 <div class="page" id="root"></div>
 <script>
 var S={you:{n:'You',st:'set',w:'34%'},priya:{n:'Priya',st:'guess',w:'38%'},sam:{n:'Sam',st:'guess',w:'22%'},s3:{n:'Speaker 3',st:'unknown',w:'6%'}};
-var ST={},NM={},V='summary',PK=null,PICK='else',NEWN='Dana Reyes',OFFER=null,COPIED=false,CTX=true;
+var ST={},NM={},V='summary',PK=null,PICK='else',NEWN='Dana Reyes',OFFER=null,COPIED=false;
 var ORDER=['you','priya','sam','s3'];
 function reset(){for(var k in S)ST[k]=S[k].st;NM={};PK=null;OFFER=null;COPIED=false}
 function setView(v){reset();if(v==='correct'){PK='priya';PICK='else'}
@@ -111,8 +109,7 @@ var t='Launch planning\nTuesday 4 Nov, 39 min\n\nOverview\n'+ex('priya')+' and '
 return mast('Launch planning','Tuesday 4 Nov · 39 min')+'<div class="grid"><div>'+sec('Copy and export','<div class="doc">'+t+'</div>')+'</div><aside class="rail"><div class="railhead"><span class="jds-brief__kicker">Names</span><h3 class="jds-brief__title">Resolved</h3></div>'
 +'<span class="jds-segmented"><button class="jds-segmented__opt" data-x="guess" aria-pressed="'+g+'">Guessed</button><button class="jds-segmented__opt" data-x="set" aria-pressed="'+!g+'">Confirmed</button></span>'
 +'<div class="btns" style="margin-top:var(--space-4)"><button class="jds-btn jds-btn--primary jds-btn--sm" id="copy">'+(COPIED?'Copied':'Copy summary')+'</button><button class="jds-btn jds-btn--quiet jds-btn--sm">Export as file</button></div></aside></div>'}
-function settingsView(){return mast('Meeting settings','Settings')+'<div style="max-width:760px">'+sec('Summaries','<div class="row"><p>Use what Moss knows about me in summaries</p><label class="jds-switch"><input type="checkbox" id="ctx" aria-label="Use what Moss knows about me in summaries"'+(CTX?' checked':'')+'><span class="jds-switch__track"><span class="jds-switch__thumb"></span></span></label></div>')+'</div>'}
-function draw(){document.getElementById('root').innerHTML=V==='export'?exportView():V==='settings'?settingsView():summary()}
+function draw(){document.getElementById('root').innerHTML=V==='export'?exportView():summary()}
 document.addEventListener('click',function(e){var c=e.target.closest('[data-c]');if(c){ST[c.getAttribute('data-c')]='set';draw();return}
 var p=e.target.closest('[data-p]');if(p){PK=p.getAttribute('data-p');PICK='else';draw();return}
 var v=e.target.closest('[data-v]');if(v){setView(v.getAttribute('data-v'));return}
@@ -123,7 +120,7 @@ if(id==='apply'){if(PICK==='else'){NM[PK]=NEWN;OFFER='open';ST[PK]='set'}else if
 if(id==='save'){OFFER='saved';draw()}if(id==='later'){OFFER=null;draw()}
 if(id==='copy'){COPIED=true;draw()}
 var t=e.target.closest('[data-th]');if(t){document.documentElement.removeAttribute('data-color-mode');if(t.getAttribute('data-th')==='dark')document.documentElement.setAttribute('data-color-mode','dark');document.querySelectorAll('[data-th]').forEach(function(b){b.setAttribute('aria-pressed',b===t)})}});
-document.addEventListener('change',function(e){if(e.target.name==='who'){PICK=e.target.value;draw()}if(e.target.id==='ctx'){CTX=e.target.checked}});
+document.addEventListener('change',function(e){if(e.target.name==='who'){PICK=e.target.value;draw()}});
 document.addEventListener('input',function(e){if(e.target.id==='newn')NEWN=e.target.value});
 reset();draw();
 </script></body></html>
