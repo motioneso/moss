@@ -160,8 +160,56 @@ async fn postgres_queue_lifecycle() {
         )
         .await
         .unwrap();
+    let invalid_payload_schedule = Uuid::new_v4();
+    let invalid_cron_schedule = Uuid::new_v4();
+    for invalid in [invalid_payload_schedule, invalid_cron_schedule] {
+        producer
+            .schedule(
+                actor(1),
+                invalid,
+                "tasks.defer",
+                payload(1),
+                "* * * * *",
+                "UTC",
+                Utc::now() - Duration::days(1),
+            )
+            .await
+            .unwrap();
+    }
+    db.execute(
+        "UPDATE moss_queue.schedules SET payload='{}'::jsonb WHERE id=$1",
+        &[&invalid_payload_schedule],
+    )
+    .await
+    .unwrap();
+    db.execute(
+        "UPDATE moss_queue.schedules SET cron='not cron' WHERE id=$1",
+        &[&invalid_cron_schedule],
+    )
+    .await
+    .unwrap();
     let (a, b) = tokio::join!(worker_a.tick(), worker_b.tick());
-    assert!(a.unwrap() + b.unwrap() >= 1);
+    assert_eq!(
+        a.unwrap() + b.unwrap(),
+        1,
+        "downtime must coalesce, not replay every missed occurrence"
+    );
+    assert_eq!(worker_a.tick().await.unwrap(), 0);
+    let quarantined = db
+        .query_one(
+            "SELECT count(*) FROM moss_queue.schedules WHERE disabled_reason IS NOT NULL",
+            &[],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        quarantined.get::<_, i64>(0),
+        2,
+        "bad schedules must not block healthy schedules"
+    );
+    assert!(!producer.unschedule(actor(2), schedule).await.unwrap());
+    assert!(producer.unschedule(actor(1), schedule).await.unwrap());
+    assert!(!producer.unschedule(actor(1), schedule).await.unwrap());
     let row = db
         .query_one(
             "SELECT count(*) FROM moss_queue.jobs WHERE actor_user_id=$1",
@@ -226,5 +274,5 @@ async fn postgres_queue_lifecycle() {
         );
     });
     assert!(ran.unwrap());
-    println!("QUEUE PASS: duplicate keys, actor boundary, SKIP LOCKED, retries, stale fencing, delayed jobs, worker context, recurring schedules, sentinel absence, automatic heartbeat");
+    println!("QUEUE PASS: duplicate keys, actor boundary, SKIP LOCKED, retries, stale fencing, delayed jobs, worker context, recurring schedules, sentinel absence, automatic heartbeat, invalid schedule quarantine, missed-run coalescing, actor-scoped cancellation");
 }

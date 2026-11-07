@@ -25,10 +25,11 @@ CREATE TABLE moss_queue.schedules (
     id uuid PRIMARY KEY,
     actor_user_id uuid NOT NULL,
     queue text NOT NULL,
-    payload jsonb NOT NULL,
+    payload jsonb NOT NULL CHECK (octet_length(payload::text) <= 8192),
     cron text NOT NULL,
     timezone text NOT NULL,
-    next_at timestamptz NOT NULL
+    next_at timestamptz NOT NULL,
+    disabled_reason text CHECK (disabled_reason IN ('invalid-payload', 'invalid-schedule'))
 );
 ALTER TABLE moss_queue.jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE moss_queue.jobs FORCE ROW LEVEL SECURITY;
@@ -44,5 +45,5 @@ CREATE POLICY schedule_actor ON moss_queue.schedules TO jarvis_app_runtime
 CREATE POLICY job_worker ON moss_queue.jobs TO jarvis_worker_runtime USING (true) WITH CHECK (true);
 CREATE POLICY schedule_worker ON moss_queue.schedules TO jarvis_worker_runtime USING (true) WITH CHECK (true);
 GRANT SELECT, INSERT ON moss_queue.jobs TO jarvis_app_runtime;
-GRANT SELECT, INSERT, UPDATE ON moss_queue.schedules TO jarvis_app_runtime;
+GRANT SELECT, INSERT, UPDATE, DELETE ON moss_queue.schedules TO jarvis_app_runtime;
 GRANT SELECT, INSERT, UPDATE ON moss_queue.jobs, moss_queue.schedules TO jarvis_worker_runtime;

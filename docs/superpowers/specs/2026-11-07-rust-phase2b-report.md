@@ -18,7 +18,7 @@ not switch the running app to Rust or finish the whole Phase 2 safety gate.
 
 | Part               | Behavior                                                                                                                                                                                                                                                                                           |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Postgres queue     | New `moss_queue` schema, delayed jobs, per-actor/queue UUID idempotency, concurrent claims with `SKIP LOCKED`, bounded retries/backoff, renewable fenced leases, terminal failure codes and timezone-aware recurring schedules.                                                                    |
+| Postgres queue     | New `moss_queue` schema, delayed jobs, per-actor/queue UUID idempotency, concurrent claims with `SKIP LOCKED`, bounded retries/backoff, renewable fenced leases, terminal failure codes, timezone-aware schedules, invalid-row quarantine and cancellation.                                        |
 | Metadata contracts | Closed envelope with actor/module IDs, job kind, manifest hash and per-queue semantic params. UUIDs, declared enums, bounded numbers, booleans, nulls and bounded arrays only; no generic text kind. Payload and params byte limits. Unknown fields and actor mismatches refused before insertion. |
 | Module registry    | Loads manifests including navigation, settings, features, routes, migrations and owned SQL tables. Duplicate ownership and unsafe migration paths refused. Query APIs retain declarations.                                                                                                         |
 | Route coverage     | Checks actual registered patterns in both directions: undeclared handlers and declarations without handlers fail. HEAD is normalized to GET, matching TypeScript. Explicit platform allowlist for core routes.                                                                                     |
@@ -61,9 +61,87 @@ These checks prove tested protocol contracts, not live provider acceptance.
 
 ## Evidence
 
-Verification results and the protection-removal output are recorded below after
-the final run. The task proof contains command output from this work; build
-outputs, logs, generated manifest exports and proof files are not committed.
+The focused verify-gate completed with exit zero on Linux on 2026-11-07. It used
+its own throwaway pgvector Postgres container, applied the existing migrations,
+and removed the container afterward. The live dev database was never used.
+
+| Check                      | Result                                                                                                                                                                                                                                                               |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HTTP differential suite    | **50/50 matched**: 21 metadata/route contract cases, one complete built-in app-map comparison, 22 routing cases and six adapter success/failure cases.                                                                                                               |
+| Existing TypeScript server | Real Fastify capability-route endpoint, with seeded app users and sessions in the gate database. Both servers refuse anonymous lookup.                                                                                                                               |
+| Built-in declarations      | All 28 manifests loaded, including 140 owned-table declarations. Full app-map output matches, including nested errors and remediations.                                                                                                                              |
+| Cargo                      | Eight unit/regression tests pass; the separate gated Postgres lifecycle test passes. Database test is ignored in ordinary cargo runs by design.                                                                                                                      |
+| Queue database scenarios   | Duplicate keys, actor mismatch, actor isolation, concurrent claims, retries, stale fencing, delayed execution, actor context handoff, schedules, sentinel absence, heartbeat, invalid schedule quarantine, missed-run coalescing and actor-scoped cancellation pass. |
+| Guard sensitivity          | Removing each of five guards makes its corresponding regression check fail; restoring the guards passes.                                                                                                                                                             |
+| Maintainability            | Repository lint, format check, file-size check and typecheck pass. Standalone harness TypeScript check, scoped lint, Rust formatting and workspace boundary checks pass.                                                                                             |
+
+Reproduce through the commands in `rust-spike/platform/README.md`. Rust formatting
+uses the already-installed `+1.95.0` toolchain. The root format ignore gains only
+the new workspace's generated `target` folder; otherwise Cargo fingerprint JSON
+is incorrectly treated as authored source. No new global tool was installed.
+
+These are real excerpts from the protection-removal run. Each mutation is made
+in a disposable copy; no weakened guard is committed:
+
+```text
+NEGATIVE payload refusal removed: expected failure, exit 101
+accepted forbidden top-level field content
+test payload_refuses_content_and_secrets ... FAILED
+NEGATIVE route coverage removed: expected failure, exit 101
+undeclared route reached startup
+test undeclared_route_is_refused ... FAILED
+NEGATIVE provider lint removed: expected failure, exit 101
+provider guard accepted a hardcoded provider in feature code
+test provider_literal_is_rejected ... FAILED
+NEGATIVE payload shape lint removed: expected failure, exit 101
+payload guard accepted free text
+test payload_shape_is_rejected ... FAILED
+NEGATIVE module edge check removed: expected failure, exit 1
+AssertionError: private implementation edge was allowed
+NEGATIVE PASS: all five removed protections made their own regression check fail
+```
+
+The passing run ends with:
+
+```text
+PARITY 50/50 cases match; anonymous capability lookup refused on both servers
+### FINAL rc=0
+```
+
+Logs, generated exports and the task's proof recipe are kept outside commits.
+There is no screen change in this internal platform slice; command output is the
+proof. A local HTTP sink proves protocol requests, not a production AI reply.
+
+## Independent review disposition
+
+Round one identified three major findings. All are addressed: the complete
+parity run is green and reported here; invalid schedule rows are quarantined
+without rolling back healthy work; and missed cron occurrences coalesce into one
+job before advancing from database time. Tests cover two corrupt schedules beside
+a healthy one, concurrent ticks, and no further replay after the first tick.
+
+The review's minor findings are recorded too:
+
+- Tightened job-kind spelling and raw UUID validation before deserialization.
+- Scoped expired-lease cleanup to the queues owned by that worker.
+- Added schedule cancellation with actor RLS and a schedule-payload storage bound.
+- Dependency checks have synthetic private/public, renamed I/O and target-specific
+  cases. This workspace contains platform crates, so there are no real feature
+  module edges yet. Future module crates must declare their ownership metadata.
+- Core deduplication and manifest spread precedence intentionally match the
+  TypeScript builder, including its behavior for missing fields. This is a
+  compatibility decision, not a stronger manifest-validation claim.
+- The loader preserves trusted built-in absolute SQL-directory declarations
+  without opening them; traversal is refused. Normalizing only the test export,
+  as suggested in review, would conceal the existing manifests' real shape.
+- Queue registration, rich app-map description validation and hostile add-on SQL
+  installation checks remain installer integration work. This slice loads and
+  queries those declarations rather than executing add-on code or SQL.
+- A failed heartbeat stops the handler rather than continuing after ownership may
+  be lost. External side effects still require idempotency or reconciliation.
+- The queue currently connects without database TLS for the private bundled
+  cluster. An external TLS-required Postgres is unsupported here. Browser HTTPS
+  is separate and belongs to the product host.
 
 ## Joining JS-38 and the product host
 

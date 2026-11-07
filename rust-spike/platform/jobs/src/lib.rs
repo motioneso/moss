@@ -95,8 +95,8 @@ impl Queue {
         let mut client = self.client.lock().await;
         let tx = client.transaction().await.map_err(database)?;
         // Expired claims are fenced. Attempts count starts, so retryLimit is additional starts.
-        tx.execute("UPDATE moss_queue.jobs SET state=CASE WHEN attempts>retry_limit THEN 'failed' ELSE 'pending' END, run_at=clock_timestamp()+make_interval(secs=>least(86400, retry_delay_seconds * CASE WHEN retry_backoff THEN power(2,least(attempts-1,16)) ELSE 1 END)::integer), lease_token=NULL, lease_until=NULL, failure_code='lease-expired' WHERE state='running' AND lease_until<=clock_timestamp()",&[]).await.map_err(database)?;
         let names: Vec<String> = self.specs.keys().cloned().collect();
+        tx.execute("UPDATE moss_queue.jobs SET state=CASE WHEN attempts>retry_limit THEN 'failed' ELSE 'pending' END, run_at=clock_timestamp()+make_interval(secs=>least(86400, retry_delay_seconds * CASE WHEN retry_backoff THEN power(2,least(attempts-1,16)) ELSE 1 END)::integer), lease_token=NULL, lease_until=NULL, failure_code='lease-expired' WHERE state='running' AND lease_until<=clock_timestamp() AND queue=ANY($1)",&[&names]).await.map_err(database)?;
         let token = Uuid::new_v4();
         let row=tx.query_opt("WITH candidate AS (SELECT id FROM moss_queue.jobs WHERE state='pending' AND run_at<=clock_timestamp() AND queue=ANY($1) ORDER BY run_at,id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE moss_queue.jobs j SET state='running',attempts=attempts+1,lease_token=$2,lease_until=clock_timestamp()+make_interval(secs=>lease_seconds) FROM candidate c WHERE j.id=c.id RETURNING j.id,j.actor_user_id,j.queue,j.payload",&[&names,&token]).await.map_err(database)?;
         let Some(row) = row else {
@@ -179,11 +179,25 @@ impl Queue {
         let mut client = self.client.lock().await;
         let tx = client.transaction().await.map_err(database)?;
         scope(&tx, actor).await?;
-        tx.execute("INSERT INTO moss_queue.schedules(id,actor_user_id,queue,payload,cron,timezone,next_at) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(id) DO UPDATE SET queue=excluded.queue,payload=excluded.payload,cron=excluded.cron,timezone=excluded.timezone,next_at=excluded.next_at",&[&id,&actor.user_id(),&name,&payload,&expression,&timezone,&at]).await.map_err(database)?;
+        tx.execute("INSERT INTO moss_queue.schedules(id,actor_user_id,queue,payload,cron,timezone,next_at) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(id) DO UPDATE SET queue=excluded.queue,payload=excluded.payload,cron=excluded.cron,timezone=excluded.timezone,next_at=excluded.next_at,disabled_reason=NULL",&[&id,&actor.user_id(),&name,&payload,&expression,&timezone,&at]).await.map_err(database)?;
         tx.commit().await.map_err(database)?;
         Ok(())
     }
-    /// One occurrence per schedule per tick; downtime catches up in bounded batches.
+    pub async fn unschedule(&self, actor: Actor, id: Uuid) -> Result<bool, Error> {
+        if self.role != Role::Producer {
+            return Err(Error::Unavailable);
+        }
+        let mut client = self.client.lock().await;
+        let tx = client.transaction().await.map_err(database)?;
+        scope(&tx, actor).await?;
+        let count = tx
+            .execute("DELETE FROM moss_queue.schedules WHERE id=$1", &[&id])
+            .await
+            .map_err(database)?;
+        tx.commit().await.map_err(database)?;
+        Ok(count == 1)
+    }
+    /// Missed occurrences coalesce to one job. Invalid rows are quarantined independently.
     pub async fn tick(&self) -> Result<u64, Error> {
         if self.role != Role::Worker {
             return Err(Error::Unavailable);
@@ -191,20 +205,39 @@ impl Queue {
         let mut client = self.client.lock().await;
         let tx = client.transaction().await.map_err(database)?;
         let names: Vec<String> = self.specs.keys().cloned().collect();
-        let rows=tx.query("SELECT id,actor_user_id,queue,payload,cron,timezone,next_at FROM moss_queue.schedules WHERE next_at<=clock_timestamp() AND queue=ANY($1) ORDER BY next_at,id FOR UPDATE SKIP LOCKED LIMIT 100",&[&names]).await.map_err(database)?;
+        let now: DateTime<Utc> = tx
+            .query_one("SELECT clock_timestamp()", &[])
+            .await
+            .map_err(database)?
+            .get(0);
+        let rows=tx.query("SELECT id,actor_user_id,queue,payload,cron,timezone,next_at FROM moss_queue.schedules WHERE disabled_reason IS NULL AND next_at<=$2 AND queue=ANY($1) ORDER BY next_at,id FOR UPDATE SKIP LOCKED LIMIT 100",&[&names,&now]).await.map_err(database)?;
+        let mut enqueued = 0;
         for row in &rows {
             let id: Uuid = row.get(0);
             let actor_id: Uuid = row.get(1);
             let name: String = row.get(2);
             let at: DateTime<Utc> = row.get(6);
             let spec = self.spec(&name)?;
-            let payload = spec.parse_payload(row.get(3))?;
-            if payload.actor_user_id() != actor_id {
-                return Err(Error::InvalidPayload);
-            }
+            let payload = match spec.parse_payload(row.get(3)) {
+                Ok(payload) if payload.actor_user_id() == actor_id => payload,
+                _ => {
+                    tx.execute("UPDATE moss_queue.schedules SET disabled_reason='invalid-payload' WHERE id=$1", &[&id]).await.map_err(database)?;
+                    continue;
+                }
+            };
+            let next = match next_occurrence(
+                &row.get::<_, String>(4),
+                &row.get::<_, String>(5),
+                at.max(now),
+            ) {
+                Ok(next) => next,
+                Err(_) => {
+                    tx.execute("UPDATE moss_queue.schedules SET disabled_reason='invalid-schedule' WHERE id=$1", &[&id]).await.map_err(database)?;
+                    continue;
+                }
+            };
             let key = Uuid::new_v5(&id, at.to_rfc3339().as_bytes());
-            insert(&tx, spec, &payload, key, at).await?;
-            let next = next_occurrence(&row.get::<_, String>(4), &row.get::<_, String>(5), at)?;
+            enqueued += u64::from(insert(&tx, spec, &payload, key, at).await?.is_some());
             tx.execute(
                 "UPDATE moss_queue.schedules SET next_at=$2 WHERE id=$1",
                 &[&id, &next],
@@ -213,7 +246,7 @@ impl Queue {
             .map_err(database)?;
         }
         tx.commit().await.map_err(database)?;
-        Ok(rows.len() as u64)
+        Ok(enqueued)
     }
 }
 async fn scope(tx: &Transaction<'_>, actor: Actor) -> Result<(), Error> {

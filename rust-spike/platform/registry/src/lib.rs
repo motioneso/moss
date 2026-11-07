@@ -89,16 +89,19 @@ impl Registry {
                     return Err(Error::InvalidDeclaration);
                 }
             }
-            for path in m
-                .database
-                .migrations
-                .iter()
-                .chain(&m.database.migration_directories)
-            {
+            for path in &m.database.migrations {
                 if path.starts_with('/')
                     || path.contains('\\')
                     || path.split('/').any(|p| p == "..")
                 {
+                    return Err(Error::InvalidDeclaration);
+                }
+            }
+            // Built-in TypeScript manifests resolve some bundled SQL directories
+            // to absolute host paths. Preserve those declarations, without opening
+            // them. The installer must authorize any path before executing SQL.
+            for path in &m.database.migration_directories {
+                if path.split(['/', '\\']).any(|p| p == "..") {
                     return Err(Error::InvalidDeclaration);
                 }
             }

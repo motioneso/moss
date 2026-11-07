@@ -14,6 +14,12 @@ fn payload() -> Value {
 fn payload_refuses_content_and_secrets() {
     let spec = spec();
     assert!(spec.parse_payload(payload()).is_ok());
+    let mut without_params = payload();
+    without_params.as_object_mut().unwrap().remove("params");
+    let parsed = spec.parse_payload(without_params).unwrap();
+    let stored = serde_json::to_value(parsed).unwrap();
+    assert!(stored.get("params").is_none());
+    assert!(spec.parse_payload(stored).is_ok());
     for key in ["content", "prompt", "secret", "apiKey", "token", "password"] {
         let mut p = payload();
         p[key] = json!("SENTINEL-private-value");

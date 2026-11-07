@@ -115,11 +115,12 @@ export async function startReference(port: number, apiPort: number) {
       }
       const bindings: Record<string, unknown> = {};
       if (config.chatBinding) bindings.chat = config.chatBinding;
-      if (config.transcriptionBinding) bindings.transcription = config.transcriptionBinding;
+      if (config.transcriptionBinding)
+        bindings["voice.transcription"] = config.transcriptionBinding;
       for (const [key, value] of [
         ["ai.service_bindings", bindings],
         ["ai.capability_routes", {}],
-        ["ai.chat_model_override.enabled", config.overrideEnabled ?? false]
+        ["ai.chat_model_override.enabled", { value: config.overrideEnabled ?? false }]
       ] as const) {
         await seed.query(
           "INSERT INTO app.instance_settings(key,value,updated_by_user_id) VALUES($1,$2::jsonb,$3) ON CONFLICT(key) DO UPDATE SET value=excluded.value",

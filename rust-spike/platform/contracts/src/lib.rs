@@ -136,6 +136,12 @@ pub fn valid_uuid(s: &str) -> bool {
             matches!(u.get_version_num(), 1..=5) && u.get_variant() == uuid::Variant::RFC4122
         })
 }
+fn job_kind(s: &str) -> bool {
+    identifier(s)
+        && s.as_bytes()[0].is_ascii_lowercase()
+        && s.bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_.-".contains(&b))
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -153,12 +159,9 @@ impl QueueSpec {
     pub fn validate(&self) -> Result<(), Error> {
         if !module_id(&self.module_id)
             || !self.name.starts_with(&format!("{}.", self.module_id))
-            || !identifier(&self.name)
+            || !job_kind(&self.name)
             || self.job_kinds.is_empty()
-            || self
-                .job_kinds
-                .iter()
-                .any(|k| !identifier(k) || !k.as_bytes()[0].is_ascii_lowercase())
+            || self.job_kinds.iter().any(|k| !job_kind(k))
             || self.params_schema.as_ref().is_some_and(|s| !s.valid())
             || self.lease_seconds == 0
             || self.lease_seconds > 86400
@@ -175,6 +178,14 @@ impl QueueSpec {
             .map_err(|_| Error::InvalidPayload)?
             .len()
             > 4096
+        {
+            return Err(Error::InvalidPayload);
+        }
+        if value.get("params").is_some_and(Value::is_null)
+            || !value
+                .get("actorUserId")
+                .and_then(Value::as_str)
+                .is_some_and(valid_uuid)
         {
             return Err(Error::InvalidPayload);
         }
@@ -207,7 +218,7 @@ impl QueueSpec {
     }
 }
 
-/// Constructible only by QueueSpec validation; no Debug or raw error value is exposed.
+/// Queue operations revalidate this envelope; no Debug or raw error value is exposed.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Metadata {
@@ -215,6 +226,7 @@ pub struct Metadata {
     module_id: String,
     job_kind: String,
     manifest_hash: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     params: Option<Value>,
 }
 impl Metadata {
