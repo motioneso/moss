@@ -134,14 +134,26 @@ const jamie = {
 
 describe("speakers in the summary run", () => {
   it("describes every speaker field in the output schema", () => {
-    const speakers = (MEETING_OUTPUT_SCHEMA as { properties: Record<string, any> }).properties
-      .speakers;
+    const speakers = (
+      MEETING_OUTPUT_SCHEMA as unknown as {
+        properties: Record<
+          string,
+          {
+            maxItems: number;
+            items: {
+              properties: Record<string, { description?: string }>;
+              required: string[];
+            };
+          }
+        >;
+      }
+    ).properties.speakers!;
     expect(speakers.maxItems).toBe(20);
     const props = speakers.items.properties;
     expect(Object.keys(props).sort()).toEqual(
       ["basis", "confidence", "evidence", "name", "speakerId"].sort()
     );
-    for (const key of Object.keys(props)) expect(props[key].description).toBeTruthy();
+    for (const key of Object.keys(props)) expect(props[key]?.description).toBeTruthy();
     expect(speakers.items.required).toContain("name");
   });
 
