@@ -16,7 +16,7 @@ All four facts hold, so the Phase 0a kill gate does not fire. Phase 0b was not s
 | 1. Rust checks the app's password hashes                           | Holds                       | 26/26 app-made cases agree. The app accepts 11/11 Rust-made hashes.                   |
 | 2. Rust opens the app's encrypted credentials                      | Holds                       | 27/27 envelopes and 4/4 family keys agree. The app opens all 4 Rust-made values.      |
 | 3. Rust reproduces every migration checksum                        | Holds                       | 331 core files, 80 module files and 3 pinned checksums agree. 37/37 edge cases agree. |
-| 4. Unlock and recovery with no terminal, on Linux with no keychain | Holds for every case tested | 36 tests, 26/26 planted bugs caught, 46 checks in a real browser.                     |
+| 4. Unlock and recovery with no terminal, on Linux with no keychain | Holds for every case tested | 39 tests, 28/28 planted bugs caught, 46 checks in a real browser.                     |
 
 The tests were seen to fail as well as pass:
 
@@ -24,7 +24,7 @@ The tests were seen to fail as well as pass:
   with the code. Three test the JavaScript-compatible helpers, and one writes values for the app
   to check.
 - Given three deliberately wrong Rust-made values, the app's check failed exactly those three.
-- 34 planted bugs, 8 for facts 1 to 3 and 26 for fact 4, were each caught.
+- 36 planted bugs, 8 for facts 1 to 3 and 28 for fact 4, were each caught.
 
 The red run, the failed check and every planted-bug run are attached to the task's proof.
 
@@ -194,7 +194,8 @@ from the 24 words and repairs a damaged or exposed key file, all through screens
   working only if it answers `OpenSession` within 3 seconds.
 - **No session bus.** This counts only when no bus address is set and the runtime folder has no
   `bus` socket. A bus that is there but refuses the connection, or does not finish connecting
-  within 3 seconds, counts as a broken keychain.
+  within 3 seconds, counts as a broken keychain. An empty or relative `XDG_RUNTIME_DIR` is ignored,
+  as the XDG spec asks, so the check uses `/run/user/<uid>` and never the current folder.
 - **Key file only with no keychain.** Moss offers the key file only when there is no session bus,
   or when nothing provides or can start the Secret Service. A keychain that is present but fails
   never leads to the file. The owner has to choose it.
@@ -216,6 +217,8 @@ from the 24 words and repairs a damaged or exposed key file, all through screens
   - Setup writes the test credential, then the bundle, then the key file.
   - Each write goes to a staging file, is synced, then renamed into place.
   - Setup refuses when a bundle or a key file already exists.
+  - Setup makes an existing key folder private before writing the key file, and refuses a folder
+    that is a link.
   - A failed write removes every file this setup wrote.
 - **Safe recovery.**
   - Recovery makes the key folder private before writing into it, and refuses a folder that is
@@ -231,6 +234,8 @@ from the 24 words and repairs a damaged or exposed key file, all through screens
   - It sends a strict content policy, no caching, no framing and no referrer.
   - The cookie does not stop other programs running as the same account. They can read the
     browser's cookies or the server's output.
+  - Browsers send a cookie to every port on 127.0.0.1. A server another account runs on another
+    port would receive it if the owner opened that server's page in the same browser.
 
 This matches each rule in "Keys and private data" that applies to a spike:
 
@@ -250,16 +255,16 @@ cargo test -p keystore --no-fail-fast
 ```
 
 ```
-tests/probe.rs: 11 passed
+tests/probe.rs: 12 passed
 tests/recovery.rs: 7 passed
-tests/store.rs: 18 passed
+tests/store.rs: 20 passed
 ```
 
 The keychain tests run a private D-Bus session bus. A fake keychain on it can work, refuse,
 never answer or fail to start. Other tests point the check at an address nothing listens on, a
-stale socket and a socket that never answers.
+stale socket and a socket that never answers, and give it an empty runtime folder setting.
 
-Planted bugs, all 26 caught by the test meant for them:
+Planted bugs, all 28 caught by the test meant for them:
 
 - a broken keychain also offers the key file
 - any answer from the keychain counts as working
@@ -268,6 +273,7 @@ Planted bugs, all 26 caught by the test meant for them:
 - no time limit on joining the session bus
 - the bus socket in the runtime folder is never asked
 - the set bus address is ignored
+- an empty runtime folder setting points the bus check at the current folder
 - setup writes the key file while a keychain is there
 - folder permissions not checked
 - key file permissions not checked
@@ -280,6 +286,7 @@ Planted bugs, all 26 caught by the test meant for them:
 - a damaged key file is deleted instead of kept
 - a kept key file is replaced by the next one within a second
 - recovery writes into the key folder without making it private
+- setup writes into an existing key folder without making it private
 - making it private follows a link
 - a pipe in place of the key file hangs "Make it private"
 - a pipe in place of the key file is made private as if it were the file
@@ -292,8 +299,9 @@ The browser proof drives the real screens in Chromium the way an owner would. Ea
 on its own session bus, with no keychain unless the step starts the fake one. All 46 checks pass.
 They include requests sent without the browser's cookie, as another account would send them.
 The first screen, the words page and a setup form with a valid token each get a 403, and the
-one-time link works only once. With the cookie check removed, or the link left reusable, the
-proof fails.
+one-time link works only once. Five guards were each removed in turn: the cookie check, the
+one-time link, the host name check, the form token check and the keychain check before saving.
+Each time the proof failed at the check meant for that guard.
 
 ```
 pnpm exec tsx rust-spike/keystore/proof/drive.ts <port> <scratch folder> <keystore-ui> <fake-secret-service>
@@ -390,6 +398,9 @@ and the real screens will follow the design system.
 - **Server limits.** The setup server handles one request at a time. It reads at most 64 KiB of a
   form and drops the rest without an error.
 - **Keys in memory.** Keys are not wiped from memory after use. This was not built.
+- **Stray test credential.** Setup checks for an old bundle or key file, but not an old test
+  credential. It replaces one, and a failed setup removes it. The file holds only a check value
+  that setup itself writes.
 - **A fresh key for an exposed key file.** "Make it private" fixes the permissions, but anyone
   who read the file still has the key. The real product should also offer a new recovery key.
 - **macOS and Windows.** Nothing was run on either.
