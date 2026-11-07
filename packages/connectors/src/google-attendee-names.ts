@@ -18,3 +18,11 @@ export function extractAttendeeNames(attendees: ReadonlyArray<unknown> | undefin
   }
   return names;
 }
+
+/** Event metadata for the attendee list: the count plus display names (no emails). */
+export function attendeeMetadata(attendees: ReadonlyArray<unknown> | undefined) {
+  return {
+    attendeeCount: attendees?.length ?? 0,
+    attendeeNames: extractAttendeeNames(attendees)
+  };
+}
