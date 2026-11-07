@@ -43,7 +43,8 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
 .rp b{display:block;font-size:var(--text-sm)}.rp small{color:var(--text-subtle);font-size:var(--text-xs)}
 .acts{grid-column:1/-1;display:flex;gap:var(--space-4)}
 .acts:empty{display:none}
-.pick{margin-bottom:var(--space-5)}
+.pick{margin:var(--space-2) 0 var(--space-4)}
+.pick .jds-brief__title{margin:0 0 var(--space-2);font-size:var(--text-base)}
 .pick .jds-radio-cards{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-1);margin-bottom:var(--space-3)}
 .pick .jds-radio-card{grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3)}
 .pick .jds-radio-card__label{font-size:var(--text-sm);grid-column:1;white-space:nowrap}
@@ -88,17 +89,17 @@ function mast(t,e){return '<header class="mast"><div><span class="jds-masthead__
 function acts(k){var a='';if(k==='you')return a;
 if(ST[k]==='guess')a+='<button class="link" data-c="'+k+'">Confirm</button>';
 a+='<button class="link" data-p="'+k+'">'+(ST[k]==='unknown'?'Name':'Change')+'</button>';return a}
-function list(){return ORDER.map(function(k){return '<div class="rp"><b>'+nm(k)+'</b><small>'+S[k].w+'</small><div class="acts">'+acts(k)+'</div></div>'}).join('')}
+function list(){return ORDER.map(function(k){return '<div class="rp"><b>'+nm(k)+'</b><small>'+S[k].w+'</small><div class="acts">'+acts(k)+'</div></div>'+(PK===k?picker():'')}).join('')}
 function strip(){var seg=[['priya',10],['sam',7],['you',6],['priya',9],['s3',3],['sam',8],['priya',6],['you',5]];
 return '<div class="strip">'+seg.map(function(g){return '<i class="spk" data-who="'+who(g[0])+'" data-state="'+ST[g[0]]+'" style="--f:'+g[1]+'" title="'+name(g[0])+'"></i>'}).join('')+'</div><div class="ticks"><span>10:02</span><span>10:41</span></div><div style="height:var(--space-4)"></div>'}
 function picker(){var o=[['priya','Priya Nair','calendar'],['sam','Sam Okoye','calendar'],['else','Someone else',''],['sure','Not sure','']];
-return '<div class="pick"><div class="railhead"><span class="jds-brief__kicker">'+name(PK)+'</span><h3 class="jds-brief__title">Who is this?</h3></div><div class="jds-radio-cards" role="radiogroup" aria-label="Who is this?">'+o.map(function(x){return '<label class="jds-radio-card"><input type="radio" name="who" value="'+x[0]+'"'+(PICK===x[0]?' checked':'')+'><span class="jds-radio-card__label">'+x[1]+'</span>'+(x[2]?'<span class="jds-radio-card__description">'+x[2]+'</span>':'')+'</label>'}).join('')+'</div>'
+return '<div class="pick"><h3 class="jds-brief__title">Who is this?</h3><div class="jds-radio-cards" role="radiogroup" aria-label="Who is this?">'+o.map(function(x){return '<label class="jds-radio-card"><input type="radio" name="who" value="'+x[0]+'"'+(PICK===x[0]?' checked':'')+'><span class="jds-radio-card__label">'+x[1]+'</span>'+(x[2]?'<span class="jds-radio-card__description">'+x[2]+'</span>':'')+'</label>'}).join('')+'</div>'
 +(PICK==='else'?'<div class="jds-field"><label class="jds-label" for="newn">Name</label><input class="jds-input" id="newn" value="'+NEWN+'"></div>':'')
 +'<div class="btns"><button class="jds-btn jds-btn--quiet jds-btn--sm" id="cancel">Cancel</button><button class="jds-btn jds-btn--primary jds-btn--sm" id="apply">Apply to all lines</button></div></div>'}
 function offer(){if(!OFFER)return '';
 if(OFFER==='saved')return '<div class="offer"><p>'+name(OFK)+' is in People.</p></div>';
 return '<div class="offer"><p>Save '+name(OFK)+' as a person?</p><div class="btns" style="margin-top:0"><button class="jds-btn jds-btn--secondary jds-btn--sm" id="save">Save</button><button class="jds-btn jds-btn--quiet jds-btn--sm" id="later">Not now</button></div></div>'}
-function summary(){var rail='<aside class="rail">'+(PK?picker():'')+offer()+'<div class="railhead"><span class="jds-brief__kicker">Who talked</span><h3 class="jds-brief__title">Speakers</h3></div>'+strip()+list()+'</aside>';
+function summary(){var rail='<aside class="rail">'+offer()+'<div class="railhead"><span class="jds-brief__kicker">Who talked</span><h3 class="jds-brief__title">Speakers</h3></div>'+strip()+list()+'</aside>';
 return mast('Launch planning','Tuesday 4 Nov · 39 min')+'<div class="grid"><div>'
 +sec('Overview','<p class="lead">'+nm('priya')+' and '+nm('sam')+' agreed to move the launch to March.</p>')
 +sec('Decisions',facts([['Launch moves to March.','sam'],['Budget stays as is.','s3']]))
