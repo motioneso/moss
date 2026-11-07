@@ -84,6 +84,10 @@ describe("speaker validation", () => {
   it("drops a name found in neither pack nor transcript", () => {
     expect(run([entry({ name: "Zed" })], ["Alex"]).speakers).toEqual([]);
   });
+  it("drops a short name that only sits inside longer words", () => {
+    // "ed" appears in "needed" and "reviewed" but nobody is called Ed.
+    expect(run([entry({ name: "Ed" })]).speakers).toEqual([]);
+  });
   it("accepts a name that is only in the pack", () => {
     const out = run([entry({ name: "Alex", basis: "calendar" })], ["Alex"]);
     expect(out.speakers?.[0]?.name).toBe("Alex");

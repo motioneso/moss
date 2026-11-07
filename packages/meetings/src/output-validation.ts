@@ -174,7 +174,12 @@ function list(
 const words = (name: string) => name.toLowerCase().split(/\s+/).filter(Boolean);
 
 function nameIsKnown(name: string, known: readonly string[], transcriptText: string): boolean {
-  if (transcriptText.includes(name.toLowerCase())) return true;
+  const spoken = ` ${transcriptText.replace(/[^\p{L}\p{N}']+/gu, " ")} `;
+  const target = name
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}']+/gu, " ")
+    .trim();
+  if (target && spoken.includes(` ${target} `)) return true;
   const wanted = words(name);
   return known.some((candidate) => {
     const have = words(candidate);
