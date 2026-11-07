@@ -3,6 +3,9 @@
 //!
 //!   keystore-ui --port 5180
 //!
+//! It prints a one-time link. Opening it gives that browser a cookie, and every other request
+//! needs the cookie, because any account on the computer can reach 127.0.0.1.
+//!
 //! Key locations come from XDG_CONFIG_HOME and XDG_DATA_HOME. Nothing is written until the
 //! owner has shown they wrote the recovery words down.
 
@@ -26,6 +29,10 @@ struct Pending {
 struct App {
     paths: Paths,
     port: u16,
+    /// The key in the printed link. Its first use swaps it for the cookie.
+    launch_key: Option<String>,
+    /// The cookie's value. Only the browser that opened the link holds it.
+    session: String,
     /// Every form carries it, so another site cannot post to this server.
     token: String,
     pending: Option<Pending>,
@@ -41,9 +48,16 @@ fn main() {
             std::process::exit(2);
         });
     let server = Server::http(("127.0.0.1", port)).expect("port is free");
-    let mut app =
-        App { paths: Paths::from_env(), port, token: hex::encode(rand::random::<[u8; 32]>()), pending: None };
-    println!("listening on http://127.0.0.1:{port}");
+    let launch_key = secret();
+    let mut app = App {
+        paths: Paths::from_env(),
+        port,
+        launch_key: Some(launch_key.clone()),
+        session: secret(),
+        token: secret(),
+        pending: None,
+    };
+    println!("listening on http://127.0.0.1:{port}/open?key={launch_key}");
     for request in server.incoming_requests() {
         app.serve(request);
     }
@@ -53,6 +67,10 @@ impl App {
     fn serve(&mut self, mut request: Request) {
         let response = if !self.host_allowed(&request) {
             plain(421, "This server answers only on 127.0.0.1 and localhost.")
+        } else if *request.method() == Method::Get && request.url().starts_with("/open?") {
+            self.open(&request)
+        } else if !self.has_session(&request) {
+            plain(403, "This page opens only in the browser Moss opened. Open it again from Moss.")
         } else if *request.method() == Method::Post {
             let mut body = String::new();
             let read = request.as_reader().take(64 * 1024).read_to_string(&mut body);
@@ -68,6 +86,42 @@ impl App {
             plain(405, "Not supported.")
         };
         let _ = request.respond(response);
+    }
+
+    /// Swaps the one-time key for the cookie. A browser that already holds the cookie just
+    /// goes to the first screen.
+    fn open(&mut self, request: &Request) -> Resp {
+        if self.has_session(request) {
+            return redirect("/");
+        }
+        let query = request.url().split_once('?').map_or("", |(_, query)| query);
+        let offered = form(query).remove("key").unwrap_or_default();
+        match self.launch_key.take() {
+            Some(key) if same_text(&offered, &key) => redirect("/").with_header(header(
+                "Set-Cookie",
+                &format!("{}={}; HttpOnly; SameSite=Strict; Path=/", self.cookie_name(), self.session),
+            )),
+            unused => {
+                self.launch_key = unused;
+                plain(403, "This link has been used already. Open Moss again for a new one.")
+            }
+        }
+    }
+
+    /// Named for the port, because browsers share 127.0.0.1 cookies across ports.
+    fn cookie_name(&self) -> String {
+        format!("moss-keys-{}", self.port)
+    }
+
+    fn has_session(&self, request: &Request) -> bool {
+        let name = self.cookie_name();
+        request
+            .headers()
+            .iter()
+            .filter(|h| h.field.equiv("Cookie"))
+            .flat_map(|h| h.value.as_str().split(';'))
+            .filter_map(|pair| pair.trim().split_once('='))
+            .any(|(cookie, value)| cookie == name && same_text(value, &self.session))
     }
 
     /// Refuses other host names, so a web page cannot reach this server through DNS tricks.
@@ -510,6 +564,10 @@ fn header(name: &str, value: &str) -> Header {
 
 fn esc(text: &str) -> String {
     text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&#39;")
+}
+
+fn secret() -> String {
+    hex::encode(rand::random::<[u8; 32]>())
 }
 
 /// Compares two strings in time that depends only on their lengths.

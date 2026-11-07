@@ -34,6 +34,8 @@ const scratch = argument(1);
 const uiBin = argument(2);
 const fakeBin = argument(3);
 const base = `http://127.0.0.1:${port}`;
+/** The one-time link the running server printed. */
+let launch = "";
 const homes = join(scratch, "proof-home");
 const shots = join(scratch, "proof-shots");
 rmSync(homes, { recursive: true, force: true });
@@ -130,8 +132,14 @@ async function start(at: Home, keychain: Keychain): Promise<ChildProcess> {
   exits.set(child, new Promise<void>((resolve) => child.once("exit", () => resolve())));
   await new Promise<void>((resolve, reject) => {
     child.once("exit", (code) => reject(new Error(`server exited early (${code})`)));
+    let printed = "";
     child.stdout?.on("data", (chunk: Buffer) => {
-      if (chunk.toString().includes("listening on")) resolve();
+      printed += chunk.toString();
+      const link = /listening on (\S+)\n/.exec(printed);
+      if (link) {
+        launch = link[1];
+        resolve();
+      }
     });
   });
   return child;
@@ -195,7 +203,16 @@ async function fillBoxes(page: Page, words: string[]): Promise<void> {
   }
 }
 
-/** A raw request, to send headers a browser would not. */
+/** The browser's cookie for this server, to send from outside the browser. */
+async function cookie(page: Page): Promise<string> {
+  const found = (await page.context().cookies(base)).find(
+    (each) => each.name === `moss-keys-${port}`
+  );
+  if (!found) throw new Error("the browser has no cookie for this server");
+  return `${found.name}=${found.value}`;
+}
+
+/** A raw request, as another account or a script would send it, outside the browser. */
 function raw(
   method: string,
   path: string,
@@ -221,7 +238,7 @@ try {
   const a = home("a");
   let server = await start(a, "none");
   running.push(server);
-  await page.goto(base);
+  await page.goto(launch);
   check(
     (await heading(page)) === "Where should Moss keep its keys?",
     "first start asks where to keep keys"
@@ -232,8 +249,21 @@ try {
     (await raw("GET", "/", { Host: `attacker.example:${port}` })) === 421,
     "another host name is refused"
   );
+  const local = { Host: `127.0.0.1:${port}` };
+  const posted = { ...local, "Content-Type": "application/x-www-form-urlencoded" };
+  const token = await page.locator('input[name="token"]').first().inputValue();
+  check((await raw("GET", "/", local)) === 403, "another account cannot open the screens");
   check(
-    (await raw("POST", "/setup", { Host: `127.0.0.1:${port}` }, "token=guess")) === 403,
+    (await raw("POST", "/setup", posted, `token=${token}`)) === 403,
+    "the page's form token alone does not let another account in"
+  );
+  const link = new URL(launch);
+  check(
+    (await raw("GET", link.pathname + link.search, local)) === 403,
+    "the one-time link works only once"
+  );
+  check(
+    (await raw("POST", "/setup", { ...posted, Cookie: await cookie(page) }, "token=guess")) === 403,
     "a form without this server's token is refused"
   );
 
@@ -248,9 +278,13 @@ try {
     !existsSync(a.keyFile) && !existsSync(a.bundle),
     "nothing is saved while the words are on screen"
   );
+  check(
+    (await raw("GET", "/setup/words", local)) === 403,
+    "another account cannot read the words on screen"
+  );
 
   // The owner goes back and starts again: the first words must never become valid.
-  await page.goto(base);
+  await page.goto(launch);
   await press(page, "Use a private file");
   const sheet = await readWords(page);
   check(
@@ -301,7 +335,7 @@ try {
   await stop(server);
   server = await start(a, "none");
   running.push(server);
-  await page.goto(base);
+  await page.goto(launch);
   check(
     (await heading(page)) === "Moss is unlocked",
     "after a restart Moss unlocks without asking"
@@ -313,7 +347,7 @@ try {
   await shot(page, "05-restart", "After a restart: unlocked, no prompt, same fingerprint");
 
   rmSync(a.keyFile);
-  await page.goto(base);
+  await page.goto(launch);
   check(
     (await heading(page)) === "Enter your recovery words",
     "a lost key file asks for the words"
@@ -374,7 +408,7 @@ try {
   await shot(page, "09-recovered", "Recovered from a pasted sheet; same fingerprint");
 
   writeFileSync(a.keyFile, "{ this is not a key file");
-  await page.goto(base);
+  await page.goto(launch);
   check(
     (await heading(page)) === "Enter your recovery words",
     "a damaged key file asks for the words"
@@ -400,7 +434,7 @@ try {
   );
 
   chmodSync(a.keyFile, 0o644);
-  await page.goto(base);
+  await page.goto(launch);
   check(
     (await heading(page)) === "Your key file isn't private",
     "a key file others can read is not used"
@@ -417,7 +451,7 @@ try {
   const b = home("b");
   server = await start(b, "broken");
   running.push(server);
-  await page.goto(base);
+  await page.goto(launch);
   check(
     (await heading(page)) === "Moss can't use this computer's keychain",
     "a broken keychain is reported"
@@ -430,7 +464,7 @@ try {
   const c = home("c");
   server = await start(c, "working");
   running.push(server);
-  await page.goto(base);
+  await page.goto(launch);
   check((await heading(page)) === "This computer has a keychain", "a working keychain is found");
   await shot(page, "14-keychain-found", "A working keychain is found; the spike stops there");
   await stop(server);
@@ -438,7 +472,7 @@ try {
   const d = home("d");
   server = await start(d, "no-bus");
   running.push(server);
-  await page.goto(base);
+  await page.goto(launch);
   check(
     (await heading(page)) === "Where should Moss keep its keys?",
     "no desktop session offers the key file"
