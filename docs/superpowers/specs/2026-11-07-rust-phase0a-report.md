@@ -16,10 +16,17 @@ All four facts hold, so the Phase 0a kill gate does not fire. Phase 0b was not s
 | 1. Rust checks the app's password hashes                           | Holds                       | 26/26 app-made cases agree. The app accepts 11/11 Rust-made hashes.                   |
 | 2. Rust opens the app's encrypted credentials                      | Holds                       | 27/27 envelopes and 4/4 family keys agree. The app opens all 4 Rust-made values.      |
 | 3. Rust reproduces every migration checksum                        | Holds                       | 331 core files, 80 module files and 3 pinned checksums agree. 37/37 edge cases agree. |
-| 4. Unlock and recovery with no terminal, on Linux with no keychain | Holds for every case tested | 27 tests, 17/17 planted bugs caught, 39 checks in a real browser.                     |
+| 4. Unlock and recovery with no terminal, on Linux with no keychain | Holds for every case tested | 36 tests, 26/26 planted bugs caught, 46 checks in a real browser.                     |
 
-Every test was also seen to fail. Before the Rust code existed, each one ran red. Afterwards 25
-planted bugs, 8 for facts 1 to 3 and 17 for fact 4, were each caught.
+The tests were seen to fail as well as pass:
+
+- Before the Rust code existed, 10 of the 14 tests for facts 1 to 3 ran red. The other four came
+  with the code. Three test the JavaScript-compatible helpers, and one writes values for the app
+  to check.
+- Given three deliberately wrong Rust-made values, the app's check failed exactly those three.
+- 34 planted bugs, 8 for facts 1 to 3 and 26 for fact 4, were each caught.
+
+The red run, the failed check and every planted-bug run are attached to the task's proof.
 
 One real difference turned up. Rust's Unicode tables are one version newer than Node's, so 68
 rare characters normalise differently. A password containing one of them would hash differently
@@ -61,8 +68,10 @@ NFKC: 272/272 blocks of 4096 code points agree with Node (Node Unicode 17.0, Rus
 From the repo root:
 
 ```
-pnpm exec tsx rust-spike/fixtures-gen/check-rust-made.ts rust-spike/target/tmp/rust-made.json
+pnpm exec tsx rust-spike/fixtures-gen/check-rust-made.ts <cargo target folder>/tmp/rust-made.json
 ```
+
+The cargo target folder is `rust-spike/target` unless `CARGO_TARGET_DIR` says otherwise.
 
 ```
 rust-made: 15/15 checks pass in the app's code (11 password hashes, 2 envelopes, 2 family key checks)
@@ -183,9 +192,15 @@ from the 24 words and repairs a damaged or exposed key file, all through screens
 - **Keychain check.** Moss asks the session bus for the Secret Service
   (`org.freedesktop.secrets`), which GNOME Keyring and KWallet both provide. A keychain counts as
   working only if it answers `OpenSession` within 3 seconds.
+- **No session bus.** This counts only when no bus address is set and the runtime folder has no
+  `bus` socket. A bus that is there but refuses the connection, or does not finish connecting
+  within 3 seconds, counts as a broken keychain.
 - **Key file only with no keychain.** Moss offers the key file only when there is no session bus,
   or when nothing provides or can start the Secret Service. A keychain that is present but fails
   never leads to the file. The owner has to choose it.
+- **A second check before saving.** Setup checks the keychain again when the owner finishes the
+  sheet check. The setup code itself refuses to write anything unless that check allows the key
+  file.
 - **Recovery key.** 256 random bits, written as 24 BIP39 words. The last word carries a checksum.
   There is no passphrase.
 - **Key file.** `$XDG_CONFIG_HOME/moss/keys/recovery-store`, mode 0600 in a 0700 folder, outside
@@ -202,9 +217,20 @@ from the 24 words and repairs a damaged or exposed key file, all through screens
   - Each write goes to a staging file, is synced, then renamed into place.
   - Setup refuses when a bundle or a key file already exists.
   - A failed write removes every file this setup wrote.
+- **Safe recovery.**
+  - Recovery makes the key folder private before writing into it, and refuses a folder that is
+    a link.
+  - A damaged key file is kept under a new name. Two in the same second get different names.
+  - "Make it private" opens the file without following links or waiting on a pipe, and changes
+    only a plain file.
 - **Screens.** `keystore-ui` serves setup and recovery on 127.0.0.1.
-  - It refuses other host names and forms without its per-run token.
+  - Every account on the computer can reach 127.0.0.1, so the server prints a one-time link.
+    Opening it gives that browser a cookie (HttpOnly, SameSite=Strict). Every other request
+    needs the cookie, or gets a 403. That includes the recovery words page.
+  - Forms also need a per-run token, and other host names are refused.
   - It sends a strict content policy, no caching, no framing and no referrer.
+  - The cookie does not stop other programs running as the same account. They can read the
+    browser's cookies or the server's output.
 
 This matches each rule in "Keys and private data" that applies to a spike:
 
@@ -224,19 +250,25 @@ cargo test -p keystore --no-fail-fast
 ```
 
 ```
-tests/probe.rs: 7 passed
+tests/probe.rs: 11 passed
 tests/recovery.rs: 7 passed
-tests/store.rs: 13 passed
+tests/store.rs: 18 passed
 ```
 
 The keychain tests run a private D-Bus session bus. A fake keychain on it can work, refuse,
-never answer or fail to start.
+never answer or fail to start. Other tests point the check at an address nothing listens on, a
+stale socket and a socket that never answers.
 
-Planted bugs, all 17 caught by the test meant for them:
+Planted bugs, all 26 caught by the test meant for them:
 
 - a broken keychain also offers the key file
 - any answer from the keychain counts as working
 - no time limit on the keychain's answer
+- a session bus that fails counts as no bus
+- no time limit on joining the session bus
+- the bus socket in the runtime folder is never asked
+- the set bus address is ignored
+- setup writes the key file while a keychain is there
 - folder permissions not checked
 - key file permissions not checked
 - sealed parts not bound to the bundle header
@@ -246,14 +278,22 @@ Planted bugs, all 17 caught by the test meant for them:
 - stored key name not checked against the key
 - typed words not matched to this setup first
 - a damaged key file is deleted instead of kept
+- a kept key file is replaced by the next one within a second
+- recovery writes into the key folder without making it private
 - making it private follows a link
+- a pipe in place of the key file hangs "Make it private"
+- a pipe in place of the key file is made private as if it were the file
 - three-letter prefixes accepted
 - a failed setup leaves its files behind
 - setup replaces a key file whose bundle is missing
 - a failed write leaves its staging file
 
 The browser proof drives the real screens in Chromium the way an owner would. Each server runs
-on its own session bus, with no keychain unless the step starts the fake one. All 39 checks pass.
+on its own session bus, with no keychain unless the step starts the fake one. All 46 checks pass.
+They include requests sent without the browser's cookie, as another account would send them.
+The first screen, the words page and a setup form with a valid token each get a 403, and the
+one-time link works only once. With the cookie check removed, or the link left reusable, the
+proof fails.
 
 ```
 pnpm exec tsx rust-spike/keystore/proof/drive.ts <port> <scratch folder> <keystore-ui> <fake-secret-service>
@@ -276,6 +316,7 @@ pnpm exec tsx rust-spike/keystore/proof/drive.ts <port> <scratch folder> <keysto
 | 13     | A broken keychain, with no key file offered                       |
 | 14     | A working keychain is found, where the spike stops                |
 | 15     | No desktop session at all, as on a server                         |
+| 16     | A keychain appeared before the sheet check, so nothing was saved  |
 
 The screenshots show throwaway words from a test run. They are attached to the task's proof,
 not committed.
@@ -331,6 +372,11 @@ and the real screens will follow the design system.
 - Flatpak and other sandboxes, where the keychain arrives through a portal, were not tested.
 - Server mode with a service account was not tested.
 - Storing keys in a working keychain was not built. The spike stops once one is found.
+- The 3-second limit may be too short for a keychain that starts on demand and shows an unlock
+  dialog. That fails safe, since the keychain counts as broken and no key file is offered, but
+  the owner sees an error.
+- No test used a real systemd user session, where the Secret Service starts on demand and may be
+  slow.
 
 ## Not proven
 
@@ -338,9 +384,12 @@ and the real screens will follow the design system.
   leaves something the owner can recover. A real crash between writes was not simulated.
 - **The Unicode difference.** The 68 code points were found and listed. Their effect on a real
   sign-in was not tried.
-- **Server-side refusal for a broken keychain.** The server checks the keychain again before it
-  writes anything. The browser proof cannot show this, because the broken-keychain page carries
-  no form to submit.
+- **Two setups at once.** Setup checks that no bundle or key file exists, then writes. Two setup
+  servers running at the same moment could both pass the check. One server handles one request at
+  a time, so this needs two servers.
+- **Server limits.** The setup server handles one request at a time. It reads at most 64 KiB of a
+  form and drops the rest without an error.
+- **Keys in memory.** Keys are not wiped from memory after use. This was not built.
 - **A fresh key for an exposed key file.** "Make it private" fixes the permissions, but anyone
   who read the file still has the key. The real product should also offer a new recovery key.
 - **macOS and Windows.** Nothing was run on either.

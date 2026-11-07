@@ -25,7 +25,8 @@ Nothing here touches the TypeScript app, its tests, a real secret or any databas
 
 Needs the Rust toolchain in `~/.cargo/bin`, `dbus-daemon` for the key store tests, and the
 repo's own `pnpm install`. Run the TypeScript scripts from the repo root and cargo from this
-folder.
+folder. The cargo target folder below is `rust-spike/target` unless `CARGO_TARGET_DIR` says
+otherwise.
 
 Regenerate the fixtures (only when the app's code changes):
 
@@ -40,7 +41,7 @@ cargo test -p portability --no-fail-fast -- --nocapture
 ```
 
 ```
-pnpm exec tsx rust-spike/fixtures-gen/check-rust-made.ts rust-spike/target/tmp/rust-made.json
+pnpm exec tsx rust-spike/fixtures-gen/check-rust-made.ts <cargo target folder>/tmp/rust-made.json
 ```
 
 Fact 4:
@@ -54,7 +55,7 @@ cargo build -p keystore --bins
 ```
 
 ```
-pnpm exec tsx rust-spike/keystore/proof/drive.ts <port> <scratch folder> rust-spike/target/debug/keystore-ui rust-spike/target/debug/fake-secret-service
+pnpm exec tsx rust-spike/keystore/proof/drive.ts <port> <scratch folder> <cargo target folder>/debug/keystore-ui <cargo target folder>/debug/fake-secret-service
 ```
 
 The browser proof takes a free port from `devports claim <name>` and writes its screenshots and
