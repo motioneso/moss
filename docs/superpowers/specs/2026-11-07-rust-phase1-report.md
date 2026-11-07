@@ -139,8 +139,9 @@ The machine runs Ubuntu 24.04 LTS on x86_64, with kernel 6.8 and glibc 2.39.
 | Supervisor crashed                | An abort made no crash dump and called no crash handler. Postgres stopped with it, and the next start had nothing to clean up                                                                | 36b, 37-up |
 | Mistyped root                     | `stop`, `status` and `check` failed with "no install at ..." and created nothing                                                                                                             | 37         |
 | Planted socket folder             | The program from before the fix sent the superuser password to a planted fake server. This one sent nothing. See below                                                                       | 39         |
+| After rebasing onto Phase 0b      | A fresh install applied all 331 migrations, passed `check`, reported encryption off with no claim, and stopped with nothing left running                                                     | 41         |
 
-Unit tests pass, 42 in `bundled-db` and 95 across the workspace.
+Unit tests pass, 42 in `bundled-db` and 116 across the workspace, which also holds Phase 0b's crates.
 
 ### Crash dumps on Linux
 
