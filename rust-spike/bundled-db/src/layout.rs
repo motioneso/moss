@@ -32,7 +32,17 @@ impl Layout {
         for dir in [&layout.run, &layout.secrets, &layout.logs] {
             owned_private_dir(dir)?;
         }
+        layout.check_run()?;
         Ok(layout)
+    }
+
+    /// Fails unless the socket folder holds only what this user put there.
+    ///
+    /// Call it before reading the state file or connecting. The folder may sit in a shared
+    /// temporary folder under a predictable name, so after a reboot another user could create it
+    /// first, with a state file and a socket of their own.
+    pub fn check_run(&self) -> io::Result<()> {
+        check_private_dir(&self.run, unsafe { libc::geteuid() })
     }
 
     /// The layout of an install that already exists. Creates and changes nothing.
@@ -122,6 +132,33 @@ fn owned_private_dir(path: &Path) -> io::Result<()> {
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
 }
 
+/// Fails unless `path` is a real folder owned by `uid` that no one else can open, inside a parent
+/// where no other user can rename it or put another folder in its place.
+fn check_private_dir(path: &Path, uid: u32) -> io::Result<()> {
+    use std::os::unix::fs::MetadataExt;
+
+    let refuse = |why: &str| Err(io::Error::other(format!("{} {why}", path.display())));
+    let meta = std::fs::symlink_metadata(path)?;
+    if !meta.is_dir() {
+        return refuse("is not a real folder");
+    }
+    if meta.uid() != uid {
+        return refuse("belongs to another user");
+    }
+    if meta.mode() & 0o077 != 0 {
+        return refuse("can be opened by other users");
+    }
+
+    // Others may write to a shared parent only if it is sticky, so they cannot move this folder.
+    let parent = std::fs::metadata(path.parent().unwrap_or(Path::new("/")))?;
+    let others_can_write = parent.mode() & 0o022 != 0;
+    let sticky = parent.mode() & 0o1000 != 0;
+    if (parent.uid() != uid && parent.uid() != 0) || (others_can_write && !sticky) {
+        return refuse("is in a folder where another user could replace it");
+    }
+    Ok(())
+}
+
 /// A new file only this user can read or write.
 pub fn private_file(path: &Path) -> io::Result<File> {
     use std::os::unix::fs::OpenOptionsExt;
@@ -155,6 +192,75 @@ mod tests {
         assert_eq!(opened.run, layout.run);
         assert_eq!(opened.data, layout.data);
         assert!(!opened.data.exists());
+    }
+
+    fn chmod(path: &Path, mode: u32) {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
+    }
+
+    /// A temporary folder closed to others. Ubuntu's umask would leave it group-writable.
+    fn private_tempdir() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        chmod(dir.path(), 0o700);
+        dir
+    }
+
+    fn me() -> u32 {
+        unsafe { libc::geteuid() }
+    }
+
+    /// `parent/run`, a folder with `mode`.
+    fn run_folder(parent: &Path, mode: u32) -> PathBuf {
+        let run = parent.join("run");
+        std::fs::create_dir(&run).unwrap();
+        chmod(&run, mode);
+        run
+    }
+
+    fn refusal(path: &Path, uid: u32) -> String {
+        check_private_dir(path, uid).unwrap_err().to_string()
+    }
+
+    #[test]
+    fn a_private_socket_folder_passes() {
+        let dir = private_tempdir();
+        check_private_dir(&run_folder(dir.path(), 0o700), me()).unwrap();
+    }
+
+    #[test]
+    fn a_planted_link_is_refused() {
+        let dir = private_tempdir();
+        let theirs = run_folder(dir.path(), 0o700);
+        let link = dir.path().join("moss-db-link");
+        std::os::unix::fs::symlink(&theirs, &link).unwrap();
+        assert!(refusal(&link, me()).ends_with("is not a real folder"));
+    }
+
+    #[test]
+    fn a_folder_of_another_user_is_refused() {
+        let dir = private_tempdir();
+        let run = run_folder(dir.path(), 0o700);
+        assert!(refusal(&run, me() + 1).ends_with("belongs to another user"));
+    }
+
+    #[test]
+    fn a_folder_others_can_open_is_refused() {
+        let dir = private_tempdir();
+        let run = run_folder(dir.path(), 0o755);
+        assert!(refusal(&run, me()).ends_with("can be opened by other users"));
+    }
+
+    #[test]
+    fn a_shared_parent_must_be_sticky() {
+        let dir = private_tempdir();
+        let shared = dir.path().join("shared");
+        std::fs::create_dir(&shared).unwrap();
+        let run = run_folder(&shared, 0o700);
+        chmod(&shared, 0o777);
+        assert!(refusal(&run, me()).ends_with("is in a folder where another user could replace it"));
+        chmod(&shared, 0o1777);
+        check_private_dir(&run, me()).unwrap();
     }
 
     #[test]

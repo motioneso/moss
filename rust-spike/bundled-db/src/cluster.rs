@@ -82,9 +82,11 @@ impl Endpoint {
         json!({ "socket_dir": self.socket_dir, "port": self.port })
     }
 
-    pub fn from_json(value: &Value) -> Option<Endpoint> {
+    /// The endpoint a state file names. A socket endpoint is always this install's own socket
+    /// folder `run`, whatever folder the file names.
+    pub fn from_json(value: &Value, run: &Path) -> Option<Endpoint> {
         Some(Endpoint {
-            socket_dir: value["socket_dir"].as_str().map(PathBuf::from),
+            socket_dir: value["socket_dir"].is_string().then(|| run.to_path_buf()),
             port: u16::try_from(value["port"].as_u64()?).ok()?,
         })
     }
@@ -510,7 +512,14 @@ fn write_state(layout: &Layout, pid: i32, endpoint: &Endpoint) -> Result<(), Str
     write_private(&layout.state_file(), state.to_string().as_bytes()).map_err(|e| format!("state file: {e}"))
 }
 
+/// The running install's state file. The socket folder is checked first, because whoever
+/// controls it chooses the server that the caller then sends a password to.
 pub fn read_state(layout: &Layout) -> Result<Value, String> {
+    match layout.check_run() {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Err("the database is not running".into()),
+        Err(error) => return Err(error.to_string()),
+        Ok(()) => {}
+    }
     let text = std::fs::read_to_string(layout.state_file()).map_err(|_| "the database is not running".to_string())?;
     serde_json::from_str(&text).map_err(|e| e.to_string())
 }
@@ -547,5 +556,74 @@ fn clean_env(command: &mut Command) {
         if name.to_string_lossy().starts_with("PG") {
             command.env_remove(name);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    /// An install whose socket folder is `run`, as when it falls back to a shared folder.
+    fn layout_with_run(root: &Path, run: PathBuf) -> Layout {
+        Layout {
+            data: root.join("db"),
+            run,
+            secrets: root.join("secrets"),
+            logs: root.join("logs"),
+            lock: root.join("moss-db.lock"),
+            root: root.to_path_buf(),
+        }
+    }
+
+    /// A temporary folder closed to others. Ubuntu's umask would leave it group-writable.
+    fn private_tempdir() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+        dir
+    }
+
+    const PLANTED: &str = r#"{"endpoint":{"socket_dir":"/someone/else","port":5432}}"#;
+
+    #[test]
+    fn a_planted_state_file_is_never_read() {
+        let dir = private_tempdir();
+        let theirs = dir.path().join("theirs");
+        std::fs::create_dir(&theirs).unwrap();
+        std::fs::write(theirs.join("state.json"), PLANTED).unwrap();
+
+        let link = dir.path().join("moss-db-link");
+        std::os::unix::fs::symlink(&theirs, &link).unwrap();
+        let error = read_state(&layout_with_run(dir.path(), link)).unwrap_err();
+        assert!(error.ends_with("is not a real folder"), "{error}");
+
+        std::fs::set_permissions(&theirs, std::fs::Permissions::from_mode(0o777)).unwrap();
+        let error = read_state(&layout_with_run(dir.path(), theirs)).unwrap_err();
+        assert!(error.ends_with("can be opened by other users"), "{error}");
+    }
+
+    #[test]
+    fn a_missing_socket_folder_means_not_running() {
+        let dir = private_tempdir();
+        let error = read_state(&layout_with_run(dir.path(), dir.path().join("gone"))).unwrap_err();
+        assert_eq!(error, "the database is not running");
+    }
+
+    #[test]
+    fn the_socket_is_always_in_this_installs_folder() {
+        let dir = private_tempdir();
+        let run = dir.path().join("run");
+        std::fs::create_dir(&run).unwrap();
+        std::fs::set_permissions(&run, std::fs::Permissions::from_mode(0o700)).unwrap();
+        std::fs::write(run.join("state.json"), PLANTED).unwrap();
+        let layout = layout_with_run(dir.path(), run.clone());
+
+        let state = read_state(&layout).unwrap();
+        let socket = Endpoint::from_json(&state["endpoint"], &layout.run).unwrap();
+        assert_eq!(socket.socket_dir.as_deref(), Some(run.as_path()));
+        assert_eq!(socket.port, 5432);
+
+        let tcp = Endpoint::from_json(&json!({ "socket_dir": null, "port": 5194 }), &layout.run).unwrap();
+        assert_eq!(tcp.socket_dir, None);
     }
 }

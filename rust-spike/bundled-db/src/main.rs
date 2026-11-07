@@ -257,7 +257,7 @@ fn status(options: &Options) -> Result<ExitCode, String> {
 fn check(options: &Options) -> Result<ExitCode, String> {
     let layout = Layout::open(options.root()?).map_err(|e| e.to_string())?;
     let state = cluster::read_state(&layout)?;
-    let endpoint = Endpoint::from_json(&state["endpoint"]).ok_or("the state file has no endpoint")?;
+    let endpoint = Endpoint::from_json(&state["endpoint"], &layout.run).ok_or("the state file has no endpoint")?;
     let superuser = secrets::existing(&layout, SUPERUSER)?;
     let sql = |e: postgres::Error| cluster::db_error(&e);
 
@@ -377,7 +377,7 @@ fn hold(options: &Options) -> Result<ExitCode, String> {
     let seconds = options.seconds.ok_or("give --seconds")?;
     let layout = Layout::open(options.root()?).map_err(|e| e.to_string())?;
     let state = cluster::read_state(&layout)?;
-    let endpoint = Endpoint::from_json(&state["endpoint"]).ok_or("the state file has no endpoint")?;
+    let endpoint = Endpoint::from_json(&state["endpoint"], &layout.run).ok_or("the state file has no endpoint")?;
     let superuser = secrets::existing(&layout, SUPERUSER)?;
     let sql = |e: postgres::Error| cluster::db_error(&e);
     let mut db = endpoint.connect(SUPERUSER, &superuser, PROOF_DATABASE)?;
