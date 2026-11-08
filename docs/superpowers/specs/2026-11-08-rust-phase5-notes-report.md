@@ -477,6 +477,25 @@ a scratch Cargo home and an existing scratch Rust toolchain. No standalone
 wit-bindgen CLI, global tool, or unlisted package was installed. Leptos and the
 shared UI/network crates are dependencies already used by this repository.
 
+### Browser and review corrections
+
+The first live Connections load reproduced a server error: the screen supplied
+`/api/m/notes/` even though the shared frame bridge adds that prefix. The screen
+now supplies module-relative paths. It uses the shared frame launcher from the
+latest main branch and includes the shared module document defaults, so its
+isolated document has the app's typography and colours. The live check also found
+that the opaque frame blocks native form submission. Linking now uses the bridge
+button directly, with Enter-key support, without adding form privileges to the frame.
+
+The first review found a major usability error: a rejected typed path closed the
+chooser and looked like a lost connection. Rejected paths now keep the chooser,
+entered path and saved link, explain the folder problem and focus the input.
+Unavailable roots explain the administrator action. Only an uncertain save forces
+an authoritative reload. The app map includes the path correction and root setup
+remediations. The review's receipt concern is also fixed: the interactive gate
+requires both a saved unlink and a revision showing prior writes. Its first-account
+fixture limit and incomplete invalid-input/path parity remain disclosed below.
+
 ### Remaining acceptance work
 
 1. Port manual sync, the fifteen-minute schedule, memory ingestion/search, sync

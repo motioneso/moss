@@ -53,9 +53,7 @@ pub fn package_files(root: &Path, component: Vec<u8>) -> Result<BTreeMap<String,
     // inherit the shell's typography, background or box sizing.
     files.insert(
         "ui/base.css".into(),
-        std::fs::read_to_string(root.join("apps/web/src/styles/boot.css"))?
-            .replace("@import \"./tokens.css\";", "")
-            .into_bytes(),
+        std::fs::read(root.join("rust-spike/module-ui/web/base.css"))?,
     );
     for name in ["app.mjs", "notes.css"] {
         files.insert(

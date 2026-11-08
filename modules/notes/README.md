@@ -84,7 +84,9 @@ share one account's root map with other accounts. Selection does not run sync ye
 `run-gate.sh`. Supply `NOTES_COMPONENT`, `CARGO_TARGET_DIR` and `NOTES_UI_OUT`.
 After the browser has linked a folder and confirmed unlinking, create the output
 folder's `finished` file containing `checked`. The gate verifies the real saved
-unlink, stops the server and releases its claimed port. This fixture is not the
+unlink and a preference revision showing prior writes, stops the server and releases
+its claimed port. The fixture bounds Tokio and compiler workers so its nested host
+runtimes do not each create a worker for every CPU on a shared machine. This fixture is not the
 assembled Phase 4 shell or proof from a separate physical device.
 
 The standard Notes gate now also compares actual legacy Settings handlers with

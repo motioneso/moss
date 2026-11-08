@@ -1,12 +1,12 @@
 /* global document, window */
-import { connectModuleFrame } from "/host-bridge.mjs";
+import { openModuleFrame } from "/host-bridge.mjs";
 const frame = document.getElementById("module");
 document.documentElement.dataset.theme = "sage";
 document.documentElement.dataset.colorMode = window.matchMedia("(prefers-color-scheme: dark)")
   .matches
   ? "dark"
   : "light";
-connectModuleFrame(frame, "notes", {
+openModuleFrame(frame, "notes", frame.dataset.src, {
   request: async (method, path, body) => {
     const response = await fetch(path, {
       method,
@@ -27,4 +27,3 @@ connectModuleFrame(frame, "notes", {
       "Chat is not connected in this package check.";
   }
 });
-frame.src = frame.dataset.src;

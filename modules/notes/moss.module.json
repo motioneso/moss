@@ -81,6 +81,12 @@
       "description": "Settings \u2192 Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. This checkpoint does not run sync or chat tools and is not a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
       "errors": [
         {
+          "code": "notes-folder-path-refused",
+          "class": "prerequisite",
+          "description": "The entered folder is outside the allowed roots, missing or unreadable. The chooser keeps the entered path so it can be corrected.",
+          "remediationRef": "notes.correct-folder-path"
+        },
+        {
           "code": "notes-folder-unavailable",
           "class": "prerequisite",
           "description": "The configured folder roots are missing or unavailable.",
@@ -89,11 +95,16 @@
         {
           "code": "notes-folder-request-failed",
           "class": "transient",
-          "description": "The linked folder could not be checked or saved. Writes stay disabled until it is checked again.",
+          "description": "The linked folder could not be checked, or a save had an uncertain result. Writes stay disabled until it is checked again.",
           "remediationRef": "notes.retry-folder"
         }
       ],
       "remediations": [
+        {
+          "id": "notes.correct-folder-path",
+          "description": "Correct the path or browse an allowed folder, then link it again.",
+          "path": "/settings/connections"
+        },
         {
           "id": "notes.configure-roots",
           "description": "Ask the host administrator to configure allowed folders for your account.",

@@ -1,6 +1,6 @@
 //! Notes stays inside Connections; no standalone Notes navigation is introduced.
 use leptos::prelude::*;
-use moss_module_ui::{Button, ButtonType, ButtonVariant, EmptyState, Field, FormLabel, Masthead};
+use moss_module_ui::{Button, ButtonVariant, EmptyState, Field, FormLabel, Masthead};
 fn action(id: &'static str, label: &'static str) -> impl IntoView {
     view! { <span data-action=id><Button variant=ButtonVariant::Secondary>{label}</Button></span> }
 }
@@ -20,12 +20,12 @@ pub fn render() -> String {
                 <section id="chooser" hidden aria-labelledby="chooser-heading">
                     <h3 id="chooser-heading" class="jds-section-head__title" tabindex="-1">"Choose a folder"</h3>
                     <p class="jds-caption">"These folders are on the server, which may be a different computer."</p>
-                    <form id="path-form" class="notes-fields">
+                    <div class="notes-fields">
                         <Field><FormLabel control_id="folder-path">"Folder path"</FormLabel>
                             <input id="folder-path" class="jds-input" autocomplete="off" required/>
                         </Field>
-                        <div class="notes-actions"><Button kind=ButtonType::Submit>"Link folder"</Button>{action("list-path","Open path")}{action("roots","Allowed folders")}{action("cancel","Cancel")}</div>
-                    </form>
+                        <div class="notes-actions"><span data-action="link"><Button>"Link folder"</Button></span>{action("list-path","Open path")}{action("roots","Allowed folders")}{action("cancel","Cancel")}</div>
+                    </div>
                     <p id="browse-error" role="alert"></p><p id="browse-path" class="jds-caption"></p>
                     <ul id="directories" class="notes-folders"></ul>
                 </section>

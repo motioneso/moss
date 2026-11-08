@@ -23,7 +23,7 @@ function render() {
   void client.resize(document.documentElement.scrollHeight).catch(() => {});
 }
 async function request(method, path, body) {
-  const reply = await client.request(method, `/api/m/notes/${path}`, body);
+  const reply = await client.request(method, `/${path}`, body);
   if (reply.status >= 400) {
     const error = new Error("Notes request failed");
     error.status = reply.status;
@@ -106,6 +106,7 @@ async function list(path) {
 }
 async function save(path) {
   if (!known) return;
+  $("browse-error").textContent = "";
   try {
     const result = await request("PUT", "notes-source", { path });
     linked = result.path;
@@ -116,14 +117,23 @@ async function save(path) {
       : "No folder linked.";
     $("notice").textContent = linked ? "Folder linked" : "Folder unlinked";
     focusAfter = action("browse");
-  } catch {
+  } catch (error) {
+    if (path !== null && (error.status === 400 || error.status === 503)) {
+      $("browse-error").textContent =
+        error.status === 503
+          ? "No allowed folders are available. Ask the server administrator to configure notes folders for your account."
+          : "Couldn't link that folder. Choose an allowed folder, or check its path and permissions.";
+      $("notice").textContent = "Folder was not changed.";
+      focusAfter = $("folder-path");
+      return;
+    }
     // A transport failure may follow a committed selection. Force an authoritative
     // read before allowing a second write rather than guessing which path won.
     known = false;
     browsing = false;
     confirming = false;
     $("load-error").hidden = false;
-    throw new Error("Folder save failed");
+    throw new Error("Folder save failed", { cause: error });
   }
 }
 action("reload").onclick = () => run(load);
@@ -156,9 +166,12 @@ action("cancel-unlink").onclick = () => {
   action("unlink").focus();
 };
 action("confirm-unlink").onclick = () => run(() => save(null));
-$("path-form").onsubmit = (event) => {
-  event.preventDefault();
-  run(() => save($("folder-path").value));
+action("link").onclick = () => run(() => save($("folder-path").value));
+$("folder-path").onkeydown = (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    action("link").click();
+  }
 };
 window.addEventListener("pagehide", () => client.dispose(), { once: true });
 void client
