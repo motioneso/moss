@@ -31,6 +31,7 @@ pub struct Task {
     pub updated_at: DateTime<Utc>,
     pub suggestion_metadata: Option<Value>,
     pub recurrence: Option<Value>,
+    pub recurrence_series_id: Option<String>,
 }
 impl Task {
     pub fn dto(&self, tags: &[Tag]) -> Value {

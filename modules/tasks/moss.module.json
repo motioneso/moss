@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "tasks",
   "name": "Tasks",
-  "description": "Tasks package data foundation; screens and guest binding are not yet available.",
+  "description": "Tasks component checkpoint with basic task, list, tag, activity and view preference routes. Screens, tools and jobs are unfinished.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -22,8 +22,8 @@
     },
     {
       "port": "context",
-      "operations": ["read"],
-      "resources": ["call"]
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
     }
   ],
   "database": {
@@ -53,7 +53,7 @@
   "features": [
     {
       "id": "tasks.package-data",
-      "description": "Native Tasks data foundation for existing tasks, lists, tags, activity and view preferences. The Rust package does not yet provide screens, chat tools or background jobs.",
+      "description": "Tasks component routes for task creation and updates, completion cascades, next recurrence, lists, tags, activity and view preferences. Full route parity, screens, chat tools and background jobs are unfinished.",
       "errors": [
         {
           "code": "task-not-accessible",
@@ -73,5 +73,97 @@
   "accounts": {
     "supportsUserDisable": false,
     "defaultEnabled": true
-  }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/tasks",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/:id/subtasks",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/preferences",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/lists",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/lists/:list_id/tags",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/:id/activity",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/tasks",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/tasks/lists",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/tasks/lists/:list_id/tags",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/tasks/:id/tags",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/tasks/:id/activity",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/tasks/:id",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/tasks/preferences",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/tasks/lists/:list_id",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/tasks/lists/:list_id/tags/:tag_id",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/tasks/:id/tags/:tag_id",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/tasks/lists/:list_id/tags/:tag_id",
+      "signIn": true
+    }
+  ]
 }

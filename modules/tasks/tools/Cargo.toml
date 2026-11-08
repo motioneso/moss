@@ -25,3 +25,7 @@ debug = 0
 [[bin]]
 name = "tasks-domain-check"
 path = "src/domain_check.rs"
+
+[[bin]]
+name = "tasks-pack"
+path = "src/pack.rs"

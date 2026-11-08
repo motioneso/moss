@@ -1,5 +1,5 @@
-//! Real database/host invocation, native package logic. The Wasm here is a test trampoline,
-//! not the Tasks Rust component; it exists only to obtain the real host-owned CallScope.
+//! Real database/host checks. Native fixtures retain the labeled sample trampoline;
+//! compiled route fixtures execute the actual Tasks component without that adapter.
 use access_context::AccessContext;
 use anyhow::Result;
 use moss_module_host::{
@@ -127,7 +127,9 @@ impl Ports for NativeFixture {
         })();
         match result {
             Ok(value) => Ok(json!({"status":200,"body":value})),
-            Err(error @ Error::Http(..)) => Ok(serde_json::to_value(error.response())?),
+            Err(error @ (Error::Http(..) | Error::Request(..))) => {
+                Ok(serde_json::to_value(error.response())?)
+            }
             Err(Error::Host(_)) => anyhow::bail!("Native Tasks host call failed"),
         }
     }
@@ -149,6 +151,9 @@ struct Fixture {
 }
 impl Fixture {
     fn open() -> Self {
+        Self::open_with(false)
+    }
+    fn open_with(component: bool) -> Self {
         assert_eq!(std::env::var("JARVIS_GATE_RUN").as_deref(), Ok("1"));
         let rt = tokio::runtime::Runtime::new().unwrap();
         let owner = Uuid::new_v4();
@@ -164,20 +169,32 @@ impl Fixture {
             (db,app)
         });
         let mut manifest = moss_tasks_checks::manifest().unwrap();
-        manifest.capabilities.push(Capability {
-            port: "kv".into(),
-            operations: ["run".into()].into(),
-            resources: ["native-tasks-check".into()].into(),
-            allow_private: false,
-        });
+        if !component {
+            manifest.capabilities.push(Capability {
+                port: "kv".into(),
+                operations: ["run".into()].into(),
+                resources: ["native-tasks-check".into()].into(),
+                allow_private: false,
+            });
+        }
         let next = Arc::new(ContextPorts::new(Arc::new(
             TransactionalDatabasePorts::new(database, Arc::new(DenyPorts)).unwrap(),
         )));
-        let ports = Arc::new(NativeFixture { next });
+        let ports: Arc<dyn Ports> = if component {
+            next
+        } else {
+            Arc::new(NativeFixture { next })
+        };
         let wasm = wat::parse_str(include_str!(
             "../../../../rust-spike/module-host/sample/module.wat"
         ))
         .unwrap();
+        let wasm = if component {
+            std::fs::read(std::env::var_os("TASKS_COMPONENT").expect("Build Tasks component first"))
+                .unwrap()
+        } else {
+            wasm
+        };
         Self {
             rt,
             db,
@@ -201,6 +218,22 @@ impl Fixture {
             self.ports.clone(),
             "route",
             &request.to_string(),
+        )?;
+        Ok(serde_json::from_str(&value)?)
+    }
+    fn route(&self, actor: Uuid, method: &str, path: &str, body: Value) -> Value {
+        self.try_route(actor, method, path, body).unwrap()
+    }
+    fn try_route(&self, actor: Uuid, method: &str, path: &str, body: Value) -> Result<Value> {
+        let mut request = moss_module_host::dispatch::resolve(&self.manifest.routes, method, path)?;
+        request.body = body;
+        let value = self.host.call(
+            &self.wasm,
+            self.manifest.clone(),
+            AccessContext::new(actor, "component-route"),
+            self.ports.clone(),
+            "route",
+            &serde_json::to_string(&request)?,
         )?;
         Ok(serde_json::from_str(&value)?)
     }
@@ -414,4 +447,295 @@ fn privacy_assertion_requires_rls() {
     );
     f.isolated(f.other);
     println!("PASS the same private-read and private-write assertions fail with Tasks RLS disabled and passes with RLS restored");
+}
+
+#[test]
+#[ignore = "Database work only through verify-gate"]
+fn compiled_tasks_routes_enforce_privacy_and_complete_recurring_tasks() {
+    let f = Fixture::open_with(true);
+    let list = f.route(f.owner, "POST", "/tasks/lists", json!({"name":"Personal"}));
+    assert_eq!(list["status"], 201);
+    let list_id = list["body"]["list"]["id"].as_str().unwrap();
+    f.seed_task(list_id);
+    let id = f.task.to_string();
+    let path = format!("/tasks/{id}");
+    let private_read = || {
+        let reply = f.route(f.other, "GET", "/tasks", Value::Null);
+        assert_eq!(reply["status"], 200);
+        assert_eq!(
+            reply["body"]["tasks"],
+            json!([]),
+            "compiled Tasks must hide another account's rows"
+        );
+    };
+    let private_write = || {
+        let reply = f.route(f.other, "PATCH", &path, json!({"title":"forbidden"}));
+        assert_eq!(
+            reply["status"], 404,
+            "compiled Tasks must refuse another account's update"
+        );
+    };
+    f.sql("ALTER TABLE app.tasks DISABLE ROW LEVEL SECURITY");
+    let read_failed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(private_read)).is_err();
+    let write_failed =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(private_write)).is_err();
+    f.sql("ALTER TABLE app.tasks ENABLE ROW LEVEL SECURITY; ALTER TABLE app.tasks FORCE ROW LEVEL SECURITY");
+    assert!(
+        read_failed && write_failed,
+        "both compiled privacy controls must fail with RLS removed"
+    );
+    private_read();
+    private_write();
+    assert_eq!(
+        f.route(f.owner, "GET", &path, Value::Null)["body"]["task"]["title"],
+        "forbidden"
+    );
+    assert_eq!(f.route(f.other, "GET", &path, Value::Null)["status"], 404);
+    println!("PASS compiled Tasks: identical read/write privacy assertions fail with RLS removed, then pass with RLS restored");
+    assert_eq!(f.route(f.admin, "GET", &path, Value::Null)["status"], 404);
+    assert_eq!(
+        f.route(f.admin, "PATCH", &path, json!({"title":"admin forbidden"}))["status"],
+        404
+    );
+    let created = f.route(f.owner,"POST","/tasks",json!({"title":"Daily check","recurrence":{"freq":"daily","interval":1,"occurrence_date":"2026-11-08"}}));
+    assert_eq!(created["status"], 201, "{created}");
+    let recurring = created["body"]["task"]["id"].as_str().unwrap();
+    let closed = f.route(
+        f.owner,
+        "PATCH",
+        &format!("/tasks/{recurring}"),
+        json!({"status":"done"}),
+    );
+    assert_eq!(closed["status"], 200, "{closed}");
+    let tasks = f.route(f.owner, "GET", "/tasks", Value::Null);
+    let tasks = tasks["body"]["tasks"].as_array().unwrap();
+    assert!(
+        tasks
+            .iter()
+            .any(|t| t["source"] == "recurrence"
+                && t["recurrence"]["occurrence_date"] == "2026-11-09")
+    );
+    assert_eq!(tasks.len(), 3);
+    assert!(tasks
+        .iter()
+        .all(|task| task["ownerUserId"] == f.owner.to_string()));
+    let closed = f.route(
+        f.owner,
+        "PATCH",
+        &format!("/tasks/{recurring}"),
+        json!({"status":"done"}),
+    );
+    assert_eq!(closed["status"], 200);
+    assert_eq!(
+        f.route(f.owner, "GET", "/tasks", Value::Null)["body"]["tasks"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+    println!("PASS compiled Tasks: admin denied; recurring completion creates one next occurrence and repeated completion stays idempotent");
+}
+
+#[test]
+#[ignore = "Database work only through verify-gate"]
+fn compiled_routes_preserve_tags_moves_nullable_fields_and_completion_cascades() {
+    let f = Fixture::open_with(true);
+    let first = f.route(f.owner, "POST", "/tasks/lists", json!({"name":"First"}));
+    assert_eq!(first["status"], 201);
+    let first = first["body"]["list"]["id"].as_str().unwrap();
+    let second = f.route(f.owner, "POST", "/tasks/lists", json!({"name":"Second"}));
+    assert_eq!(second["status"], 201);
+    let second = second["body"]["list"]["id"].as_str().unwrap();
+    let create = |title: &str, parent: Option<&str>| {
+        let result = f.route(
+            f.owner,
+            "POST",
+            "/tasks",
+            json!({
+                "title":title,"listId":first,"parentTaskId":parent,
+                "dueAt":"2026-11-08T10:00:00+02:00","effort":"quick"
+            }),
+        );
+        assert_eq!(result["status"], 201, "{result}");
+        assert_eq!(result["body"]["task"]["dueAt"], "2026-11-08T08:00:00.000Z");
+        result["body"]["task"]["id"].as_str().unwrap().to_owned()
+    };
+    let parent = create("Parent", None);
+    let child = create("Child", Some(&parent));
+    let tag = f.route(
+        f.owner,
+        "POST",
+        &format!("/tasks/lists/{first}/tags"),
+        json!({"name":"Check"}),
+    );
+    assert_eq!(tag["status"], 201, "{tag}");
+    let tag = tag["body"]["tag"]["id"].as_str().unwrap();
+    for id in [&parent, &child] {
+        let assigned = f.route(
+            f.owner,
+            "POST",
+            &format!("/tasks/{id}/tags"),
+            json!({"tagId":tag}),
+        );
+        assert_eq!(assigned["status"], 200, "{assigned}");
+        assert_eq!(
+            assigned["body"]["task"]["tags"].as_array().unwrap().len(),
+            1
+        );
+    }
+    // The parent UPDATE is rejected by the original self-parent trigger, after
+    // child moves and tag cleanup have executed. The host must roll all of it back.
+    match f.try_route(
+        f.owner,
+        "PATCH",
+        &format!("/tasks/{parent}"),
+        json!({"listId":second,"parentTaskId":parent}),
+    ) {
+        Err(_) => {}
+        Ok(reply) => assert!(reply["status"].as_u64().unwrap() >= 400, "{reply}"),
+    }
+    for id in [&parent, &child] {
+        let row = f.route(f.owner, "GET", &format!("/tasks/{id}"), Value::Null);
+        assert_eq!(row["body"]["task"]["listId"], first);
+        assert_eq!(row["body"]["task"]["tags"].as_array().unwrap().len(), 1);
+    }
+    let moved = f.route(
+        f.owner,
+        "PATCH",
+        &format!("/tasks/{parent}"),
+        json!({"listId":second,"dueAt":null,"effort":null}),
+    );
+    assert_eq!(moved["status"], 200, "{moved}");
+    assert!(moved["body"]["task"]["dueAt"].is_null());
+    assert!(moved["body"]["task"]["effort"].is_null());
+    for id in [&parent, &child] {
+        let result = f.route(f.owner, "GET", &format!("/tasks/{id}"), Value::Null);
+        assert_eq!(result["body"]["task"]["listId"], second);
+        assert_eq!(result["body"]["task"]["tags"], json!([]));
+    }
+    let closed = f.route(
+        f.owner,
+        "PATCH",
+        &format!("/tasks/{child}"),
+        json!({"status":"done"}),
+    );
+    assert_eq!(closed["status"], 200, "{closed}");
+    assert_eq!(
+        f.route(f.owner, "GET", &format!("/tasks/{parent}"), Value::Null)["body"]["task"]["status"],
+        "done"
+    );
+    let activity = f.route(
+        f.owner,
+        "GET",
+        &format!("/tasks/{parent}/activity"),
+        Value::Null,
+    );
+    assert!(activity["body"]["activity"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|a| a["activityType"] == "completed"));
+    assert_eq!(
+        f.route(
+            f.owner,
+            "PATCH",
+            &format!("/tasks/{parent}"),
+            json!({"status":"archived"})
+        )["status"],
+        200
+    );
+    assert_eq!(
+        f.route(f.owner, "GET", &format!("/tasks/{child}"), Value::Null)["body"]["task"]["status"],
+        "archived"
+    );
+    let view = f.route(
+        f.owner,
+        "PATCH",
+        "/tasks/preferences",
+        json!({"defaultView":"matrix"}),
+    );
+    assert_eq!(view["status"], 200, "{view}");
+    assert_eq!(
+        f.route(f.owner, "GET", "/tasks/preferences", Value::Null)["body"]["preferences"]
+            ["defaultView"],
+        "matrix"
+    );
+    assert_eq!(
+        f.route(f.other, "GET", "/tasks/preferences", Value::Null)["body"]["preferences"]
+            ["defaultView"],
+        "priority"
+    );
+    println!("PASS compiled Tasks: tags, atomic parent/child list moves, nullable dates, completion cascades, activity and isolated view preferences");
+}
+
+#[test]
+#[ignore = "Database work only through verify-gate"]
+fn compiled_quadrant_queries_match_the_priority_four_boundary() {
+    let f = Fixture::open_with(true);
+    let mut tasks = vec![];
+    for (title, priority) in [("Lower", 3), ("Higher", 4)] {
+        let result = f.route(
+            f.owner,
+            "POST",
+            "/tasks",
+            json!({"title":title,"priority":priority}),
+        );
+        assert_eq!(result["status"], 201, "{result}");
+        tasks.push(result["body"]["task"].clone());
+    }
+    let titles = |path: &str| {
+        let response = f.route(f.owner, "GET", path, Value::Null);
+        assert_eq!(response["status"], 200, "{response}");
+        let mut titles: Vec<String> = response["body"]["tasks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["title"].as_str().unwrap().to_owned())
+            .collect();
+        titles.sort();
+        titles
+    };
+    assert_eq!(
+        titles("/tasks?quadrant=schedule"),
+        vec!["Higher"],
+        "priority three must not enter the important quadrant"
+    );
+    assert_eq!(titles("/tasks?quadrant=eliminate"), vec!["Lower"]);
+    for task in &tasks {
+        assert_eq!(
+            f.route(
+                f.owner,
+                "PATCH",
+                &format!("/tasks/{}", task["id"].as_str().unwrap()),
+                json!({"dueAt":"2020-01-01T00:00:00Z"})
+            )["status"],
+            200
+        );
+    }
+    assert_eq!(titles("/tasks?quadrant=do"), vec!["Higher"]);
+    assert_eq!(titles("/tasks?quadrant=delegate"), vec!["Lower"]);
+    assert_eq!(
+        f.route(f.owner, "GET", "/tasks?quadrant=unknown", Value::Null)["status"],
+        400
+    );
+    let list = tasks[1]["listId"].as_str().unwrap();
+    let tag = f.route(
+        f.owner,
+        "POST",
+        &format!("/tasks/lists/{list}/tags"),
+        json!({"name":"Query check"}),
+    );
+    assert_eq!(tag["status"], 201, "{tag}");
+    let tag = tag["body"]["tag"]["id"].as_str().unwrap();
+    assert_eq!(
+        f.route(
+            f.owner,
+            "POST",
+            &format!("/tasks/{}/tags", tasks[1]["id"].as_str().unwrap()),
+            json!({"tagId":tag})
+        )["status"],
+        200
+    );
+    assert_eq!(titles(&format!("/tasks?tagId={tag}")), vec!["Higher"]);
+    println!("PASS compiled Tasks: priority-three/four boundary in all quadrants, query rejection and tag query filtering");
 }

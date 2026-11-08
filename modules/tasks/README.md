@@ -1,19 +1,37 @@
-# Tasks data foundation
+# Tasks component checkpoint
 
-This is an unfinished module package, not an installable Tasks replacement.
-`src/` contains native data primitives using only the pure module SDK, serde and
-chrono. `tools/` is a separate host-side verification crate and is never linked
-into the guest. The original SQL remains in `packages/tasks/sql/`; metadata tests
-check all nine files against the host's frozen inventory.
+This is an unfinished Tasks module package. Rust code now compiles into a real
+component and handles basic task, list, tag, activity and view preference routes.
+It is not a complete replacement for Tasks. Screens, chat tools, background jobs,
+People calls and full endpoint parity remain unfinished.
 
-From the repository root:
+`src/` uses the guest-safe SDK. `wit/` defines its ABI. Ben approved the pinned
+`wit-bindgen` generator on 2026-11-08, superseding the earlier decline. `tools/`
+is a separate host-side verification crate, never linked into the guest.
+The small `bindings/` crate uses the same approved generator graph's
+`wit-component` encoder to wrap the core Wasm. Building directly for WASI imports services the host deliberately
+refuses; the shipped build therefore targets `wasm32-unknown-unknown` and has no
+WASI adapter. No global tool or compiler target installation is required by
+these scripts: use an already provisioned Rust 1.95 toolchain with that target.
+Restore the locked Cargo dependencies into a worktree or scratch Cargo home first.
+
+From the repository root (set `CARGO_HOME`, `RUSTUP_HOME` and `CARGO_TARGET_DIR`
+to your task's scratch directories if needed):
 
 ```sh
 cargo +1.95.0 test --locked --offline --manifest-path modules/tasks/src/Cargo.toml
-cargo +1.95.0 test --locked --offline --manifest-path modules/tasks/tools/Cargo.toml --test metadata
+modules/tasks/tools/build-component.sh /tmp/tasks-component.wasm
+TASKS_COMPONENT=/tmp/tasks-component.wasm cargo +1.95.0 test --locked --offline --manifest-path modules/tasks/tools/Cargo.toml --test component --test metadata
+cargo +1.95.0 run --locked --offline --manifest-path modules/tasks/tools/Cargo.toml --bin tasks-pack -- /tmp/tasks-component.wasm /tmp/tasks.mosspkg
 cargo +1.95.0 build --locked --offline --manifest-path modules/tasks/tools/Cargo.toml --bin tasks-domain-check
 JS51_DOMAIN_BIN=modules/tasks/tools/target/debug/tasks-domain-check pnpm exec tsx modules/tasks/tools/recurrence-parity.ts
 ```
+
+When using `CARGO_TARGET_DIR`, point `JS51_DOMAIN_BIN` at that directory's
+`debug/tasks-domain-check` instead. The archive is reproducible and unsigned;
+registry trust, signing, installation and publication are separate checks.
+All nine SQL files come from the original `packages/tasks/sql/` and are checked
+against the host's frozen migration hashes. No migration bytes or ledger change.
 
 Database tests **must** use the repository's verify-gate workflow:
 
@@ -22,16 +40,19 @@ scripts/run-gate.sh start --gate modules/tasks/tools/gate.sh
 scripts/run-gate.sh wait --follow
 ```
 
-The gate uses real existing tables and real host-owned invocation transactions.
-A sample Wasm trampoline obtains that invocation context, then calls native
-Tasks logic through a test-only port. This proves neither a Tasks component ABI
-nor installed-package dispatch. The privacy control runs identical cross-account
-read/write assertions with RLS removed, requires them to fail, restores RLS, and
-requires them to pass. It alters only the gate's disposable database.
+The gate builds and validates the actual component before running the privacy
+checks. The new component test dispatches declared route envelopes through real
+Wasmtime, typed host calls and disposable PostgreSQL transactions. It removes
+Tasks RLS and requires the exact cross-account read/write assertions to fail,
+then restores RLS and requires them to pass. It also checks recurring completion
+and repeated completion. Earlier native data checks retain their explicitly
+labeled sample trampoline; those are not component-execution evidence.
 
-The recurrence comparison covers ordinary calendar dates and invalid inputs;
-extended years, JavaScript Date overflow and huge intervals are not parity claims.
-Full endpoint parity remains with `rust-spike/parity/` and has not been run against
-this data-only crate. Routes, tools, jobs, recurrence orchestration, People public
-API calls, component packaging and screens still need to be ported. See the Phase 5
-Tasks report for the pending binding-generator decision and continuation plan.
+No live Tasks page exists yet. The recurrence differential check covers ordinary
+calendar dates and invalid inputs, not full endpoint parity. Date parsing covers
+the ISO branch; offset-free timestamps currently use UTC because the host has no
+actor-timezone port. Lazy recurrence roll-forward needs that public host seam
+before it can preserve the actor's local day. The source Fastify schema layer,
+additional routes, queued work and public People calls also remain to be ported.
+The existing endpoint harness still targets the Phase 0b native server. See the
+Phase 5 Tasks report for the exact validation results and continuation boundary.

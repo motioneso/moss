@@ -21,12 +21,19 @@ pub const TABLES: &[&str] = &[TASKS, LISTS, TAGS, ASSIGNMENTS, ACTIVITY, PREFERE
 #[derive(Debug)]
 pub enum Error {
     Http(u16, &'static str),
+    Request(u16, String),
     Host(moss_module_sdk::Error),
 }
 impl Error {
+    pub fn http(status: u16, message: impl Into<String>) -> Self {
+        Self::Request(status, message.into())
+    }
     pub fn response(&self) -> moss_module_sdk::Response {
         match self {
             Self::Http(status, message) => {
+                moss_module_sdk::Response::new(*status, json!({"error":message}))
+            }
+            Self::Request(status, message) => {
                 moss_module_sdk::Response::new(*status, json!({"error":message}))
             }
             Self::Host(_) => {
@@ -46,7 +53,7 @@ impl From<serde_json::Error> for Error {
     }
 }
 pub type Result<T> = std::result::Result<T, Error>;
-fn values(value: Value) -> BTreeMap<String, Value> {
+pub(crate) fn values(value: Value) -> BTreeMap<String, Value> {
     value
         .as_object()
         .expect("internal object")
@@ -54,10 +61,10 @@ fn values(value: Value) -> BTreeMap<String, Value> {
         .into_iter()
         .collect()
 }
-fn and(filters: Vec<Filter>) -> Filter {
+pub(crate) fn and(filters: Vec<Filter>) -> Filter {
     Filter::And { filters }
 }
-fn order(column: &str, descending: bool) -> Order {
+pub(crate) fn order(column: &str, descending: bool) -> Order {
     Order {
         column: column.into(),
         descending,
@@ -83,7 +90,7 @@ fn except_id(id: &str) -> Filter {
 }
 
 pub struct Repository<'a, H: Host + ?Sized> {
-    client: Client<'a, H>,
+    pub(crate) client: Client<'a, H>,
 }
 impl<'a, H: Host + ?Sized> Repository<'a, H> {
     pub fn new(host: &'a H) -> Self {
@@ -91,14 +98,14 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
             client: Client(host),
         }
     }
-    fn query<T: DeserializeOwned>(&self, table: &str, q: &Query) -> Result<Vec<T>> {
+    pub(crate) fn query<T: DeserializeOwned>(&self, table: &str, q: &Query) -> Result<Vec<T>> {
         self.client
             .query(table, q)?
             .into_iter()
             .map(|v| serde_json::from_value(v).map_err(Into::into))
             .collect()
     }
-    fn all<T: DeserializeOwned>(
+    pub(crate) fn all<T: DeserializeOwned>(
         &self,
         table: &str,
         filter: Filter,
@@ -121,18 +128,22 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
             }
         }
     }
-    fn first<T: DeserializeOwned>(&self, table: &str, filter: Filter) -> Result<Option<T>> {
+    pub(crate) fn first<T: DeserializeOwned>(
+        &self,
+        table: &str,
+        filter: Filter,
+    ) -> Result<Option<T>> {
         let mut q = Query::select(filter);
         q.limit = Some(1);
         Ok(self.query(table, &q)?.into_iter().next())
     }
-    fn one<T: DeserializeOwned>(&self, table: &str, q: Query) -> Result<T> {
+    pub(crate) fn one<T: DeserializeOwned>(&self, table: &str, q: Query) -> Result<T> {
         self.query(table, &q)?
             .into_iter()
             .next()
             .ok_or_else(|| moss_module_sdk::Error::new("Expected Tasks row").into())
     }
-    fn now(&self) -> Result<String> {
+    pub(crate) fn now(&self) -> Result<String> {
         let context = self.client.0.call("context", "read", "call", json!({}))?;
         let now: DateTime<Utc> = serde_json::from_value(context["now"].clone())?;
         Ok(now.to_rfc3339_opts(SecondsFormat::Millis, true))
@@ -277,7 +288,7 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
         }
         Ok(())
     }
-    fn owned_task(&self, id: &str) -> Result<Task> {
+    pub(crate) fn owned_task(&self, id: &str) -> Result<Task> {
         self.first(TASKS, and(vec![Filter::Owned, Filter::eq("id", id)]))?
             .ok_or(Error::Http(404, "Task not found or not accessible"))
     }
