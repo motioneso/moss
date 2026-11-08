@@ -14,7 +14,10 @@ const dispose = openModuleFrame(frame, "calendar", frame.dataset.src, {
     if (!response.ok) throw new Error("Calendar request failed");
     return response.json();
   },
-  theme: () => ({ theme: "sage" }),
+  theme: () => ({
+    theme: "sage",
+    calendarEvent: new URL(location.href).searchParams.get("event")
+  }),
   navigate: (path) => {
     if (!["/calendar", "/settings/calendar"].includes(path)) throw new Error("Unavailable page");
     location.assign(path);

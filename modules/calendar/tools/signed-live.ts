@@ -20,13 +20,14 @@ import { setTimeout as delay } from "node:timers/promises";
 import pg from "pg";
 import { chromium } from "@playwright/test";
 import { getMossDatabaseUrls } from "@moss/db";
+import { readHttpOracle } from "./http-oracle.js";
 
 assert.equal(process.env.JARVIS_GATE_RUN, "1", "Use verify-gate");
 const out = process.env.CALENDAR_HTTPS_PROOF_DIR;
 assert(out, "Set a scratch CALENDAR_HTTPS_PROOF_DIR");
 mkdirSync(out, { recursive: true, mode: 0o700 });
 const port = Number(
-  execFileSync("devports", ["claim", `js72-https-${process.pid}`], { encoding: "utf8" }).trim()
+  execFileSync("devports", ["claim", `js78-https-${process.pid}`], { encoding: "utf8" }).trim()
 );
 const local = `https://127.0.0.1:${port}`;
 const address = Object.values(networkInterfaces())
@@ -209,6 +210,43 @@ try {
     (await request(`/api/m/calendar/events/${data.event}`, { cookie: other })).status,
     404
   );
+  for (const [actor, cookie] of [
+    [data.actor, owner],
+    [data.other, other]
+  ]) {
+    const paths = [
+      "/api/calendar/events",
+      `/api/calendar/events/${data.event}`,
+      `/api/calendar/events/${randomUUID()}`,
+      "/api/calendar/briefing-settings"
+    ];
+    const expected = await readHttpOracle(actor!, paths);
+    for (const [index, path] of paths.entries()) {
+      for (const url of [path, path.replace("/api/calendar/", "/api/m/calendar/")]) {
+        const result = await request(url, { cookie });
+        assert.deepEqual(
+          { status: result.status, body: JSON.parse(result.body) },
+          expected[index],
+          `Signed installed read route differs from production at ${url}`
+        );
+      }
+    }
+  }
+  assert.equal((await request("/api/calendar/events")).status, 401);
+  assert.equal(
+    (
+      await request("/api/calendar/briefing-settings", {
+        cookie: owner,
+        method: "PATCH",
+        body: { timeBlockMode: "auto" }
+      })
+    ).status,
+    405,
+    "Read aliases do not expose unfinished settings writes"
+  );
+  console.log(
+    "PASS 16 signed HTTP comparisons against production read routes through both URL prefixes"
+  );
   const foreign = await request("/api/m/calendar/events", { cookie: other });
   assert(!JSON.parse(foreign.body).events.some((e: { id: string }) => e.id === data.event));
   assert.equal(
@@ -265,12 +303,18 @@ try {
   );
   // The task browser is visible in Herdr. Its own session is opened by the task's wrapper.
   const wrapper = "/home/ben/.local/bin/herdr-browser";
-  execFileSync(
-    wrapper,
-    ["--args", "--no-sandbox", "--ignore-https-errors", "open", `${local}/sign-in`],
-    { stdio: "ignore" }
-  );
-  const cdp = execFileSync(wrapper, ["get", "cdp-url"], { encoding: "utf8" }).trim();
+  const browserEnv = {
+    ...process.env,
+    AGENT_BROWSER_ARGS: "--no-sandbox,--force-prefers-reduced-motion"
+  };
+  execFileSync(wrapper, ["--ignore-https-errors", "open", `${local}/sign-in`], {
+    stdio: "ignore",
+    env: browserEnv
+  });
+  const cdp = execFileSync(wrapper, ["--ignore-https-errors", "get", "cdp-url"], {
+    encoding: "utf8",
+    env: browserEnv
+  }).trim();
   browser = await chromium.connectOverCDP(cdp);
   const context = browser.contexts()[0];
   assert(context, "Task browser context is required");
@@ -281,7 +325,17 @@ try {
   await tab.getByLabel("Password").fill(password);
   await tab.getByRole("button", { name: "Sign in", exact: true }).click();
   await tab.waitForURL(`${local}/calendar`, { timeout: 120000 });
+  await tab.goto(`${local}/calendar?event=${encodeURIComponent(data.event)}`);
   const frame = tab.frameLocator("#calendar");
+  const screenshotDialog = async (filename: string) => {
+    await frame.getByRole("dialog").evaluate(async (dialog) => {
+      await Promise.all(dialog.getAnimations().map((animation) => animation.finished));
+    });
+    await tab.screenshot({ path: join(out, filename) });
+  };
+  await frame.getByRole("dialog").filter({ hasText: "Calendar package check" }).waitFor();
+  await screenshotDialog("signed-in-linked-event.png");
+  await frame.getByRole("button", { name: "Close", exact: true }).click();
   await frame.getByRole("button", { name: "Month", exact: true }).waitFor();
   await frame.getByRole("button", { name: "Month", exact: true }).click();
   assert.equal(
@@ -300,7 +354,7 @@ try {
     .first()
     .click();
   await frame.getByRole("dialog").waitFor();
-  await tab.screenshot({ path: join(out, "signed-in-event.png") });
+  await screenshotDialog("signed-in-event.png");
   await frame.getByRole("button", { name: "Close", exact: true }).click();
   await frame.getByRole("button", { name: "Week", exact: true }).click();
   await frame.getByRole("button", { name: "Day", exact: true }).click();
@@ -319,6 +373,27 @@ try {
   await frame.getByRole("alert").waitFor({ state: "detached" });
   await tab.setViewportSize({ width: 390, height: 844 });
   await tab.screenshot({ path: join(out, "signed-in-phone-width.png") });
+  // Change the real cache row: no network interception or response replacement.
+  await frame
+    .getByRole("button", { name: /Calendar package check/ })
+    .first()
+    .click();
+  await db.query(
+    "UPDATE app.calendar_events SET title='Updated calendar meeting', external_metadata='{\"attendeeCount\":1}' WHERE id=$1",
+    [data.event]
+  );
+  await frame
+    .getByRole("dialog")
+    .filter({ hasText: "Updated calendar meeting" })
+    .waitFor({ timeout: 120000 });
+  await frame.getByRole("dialog").getByText("1 person", { exact: true }).waitFor();
+  await screenshotDialog("signed-in-updated-event.png");
+  await db.query("DELETE FROM app.calendar_events WHERE id=$1", [data.event]);
+  await frame.getByRole("dialog").waitFor({ state: "detached", timeout: 120000 });
+  assert.equal(await frame.getByRole("button", { name: /Updated calendar meeting/ }).count(), 0);
+  console.log(
+    "PASS event deep link, updated open details and dismissal after actual cached-event removal"
+  );
   const previousCookie = (await context.cookies(local))
     .map((cookie) => `${cookie.name}=${cookie.value}`)
     .join("; ");
@@ -340,7 +415,7 @@ try {
   );
   writeFileSync(
     join(out, "result.txt"),
-    "PASS: real Rust HTTPS sign-in, installed Calendar screens, account isolation, static asset CSP/CORS, origin checks, LAN-address path, failure/retry and sign-out.\nNot proven: physical second device, production TLS trust, full shell/chat, provider writes/jobs and full Calendar parity.\n"
+    "PASS: real Rust HTTPS sign-in, installed Calendar screens, event deep links, live detail refresh/removal, production read-route comparisons, account isolation, static asset CSP/CORS, origin checks, LAN-address path, failure/retry and sign-out.\nNot proven: physical second device, production TLS trust, full shell/chat, provider writes/jobs and full Calendar parity.\n"
   );
   completed = true;
   if (process.env.CALENDAR_BROWSER_HOLD === "1") {

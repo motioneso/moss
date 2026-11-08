@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -193,7 +193,7 @@
     },
     {
       "id": "calendar.screens",
-      "description": "Packaged Rust Day, Week and Month screens, event details and saved view choice; failed refreshes retain loaded events. The Calendar web router connects the styled installed frame behind Rust sign-in and HTTPS, with account-scoped API dispatch and sign-out. Its public static route accepts opaque-frame stylesheet requests without an Origin header while retaining host, sharing and method checks. External-calendar status, settings edits, provider writes, full shell assembly and second-device acceptance remain open.",
+      "description": "Packaged Rust Day, Week and Month screens with saved views and event links. Details show duration, attendee and status wording, follow successful refreshes, and close when an event disappears. Failed refreshes retain loaded events and explicit retry shows progress. The Calendar web router serves installed frames behind Rust sign-in and HTTPS. Original event and briefing-settings read URLs dispatch through the installed package. External-calendar status, settings edits, provider writes, full shell assembly and second-device acceptance remain open.",
       "errors": [
         {
           "code": "calendar-page-unavailable",
@@ -232,7 +232,7 @@
       "id": "calendar",
       "label": "Calendar",
       "path": "/calendar",
-      "description": "Day, Week and Month views of visible cached events in the saved account timezone. Requires authenticated host frame assembly."
+      "description": "Day, Week and Month views of visible cached events in the saved account timezone. The Calendar web router supports signed-in event links at /calendar?event=<id> and installed-package read routing."
     }
   ],
   "settings": [

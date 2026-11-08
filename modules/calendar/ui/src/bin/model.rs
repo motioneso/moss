@@ -13,6 +13,7 @@ fn main() {
                 v["minute"].as_u64().unwrap() as u32,
                 model::twelve(v["format"].as_str())
             )),
+            "duration" => json!(model::duration(v["minutes"].as_i64().unwrap())),
             "events" => {
                 let events: Vec<Event> = serde_json::from_value(v["events"].clone()).unwrap();
                 let groups =

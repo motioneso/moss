@@ -87,6 +87,9 @@ pub fn router(
                 )
             }),
         )
+        .route("/api/calendar/events", get(dispatch))
+        .route("/api/calendar/events/{id}", get(dispatch))
+        .route("/api/calendar/briefing-settings", get(dispatch))
         .route("/api/m/calendar/{*path}", any(dispatch))
         .with_state(state);
     Ok(moss_network::web::router(network, private, shared).merge(assets))
@@ -253,6 +256,13 @@ async fn dispatch(
         .map(|v| v.as_str())
         .unwrap_or(uri.path())
         .to_owned();
+    // Only the three read aliases registered above enter through the legacy prefix.
+    // They still use the installed manifest, account enablement and per-call transaction.
+    let path = if let Some(rest) = path.strip_prefix("/api/calendar/") {
+        format!("/api/m/calendar/{rest}")
+    } else {
+        path
+    };
     let Ok(permit) = state.blocking.clone().try_acquire_owned() else {
         return unavailable();
     };
