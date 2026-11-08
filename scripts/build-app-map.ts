@@ -17,6 +17,7 @@ import {
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 export interface BuildAppMapInput {
+  readonly runtime?: "typescript" | "rust";
   readonly manifests: readonly MossModuleManifest[];
   readonly coreScreens: readonly CoreAppSurfaceDeclaration[];
   readonly coreSettings: readonly CoreAppSurfaceDeclaration[];
@@ -32,10 +33,16 @@ export function buildAppMap(input: BuildAppMapInput) {
   // setting or screen pointing at the same page (by id or path) is dropped, so the built map
   // never lists the same page twice under two owners; duplicates read as two different things
   // to Moss.
-  const coreScreenIds = new Set(input.coreScreens.map((surface) => surface.id));
-  const coreScreenPaths = new Set(input.coreScreens.map((surface) => surface.path));
-  const coreSettingIds = new Set(input.coreSettings.map((surface) => surface.id));
-  const coreSettingPaths = new Set(input.coreSettings.map((surface) => surface.path));
+  // Runtime-specific declarations must never advertise routes from a different app.
+  const runtime = input.runtime ?? "typescript";
+  const belongs = (entry: { readonly runtime?: "rust" }) =>
+    (entry.runtime ?? "typescript") === runtime;
+  const coreScreens = input.coreScreens.filter(belongs);
+  const coreSettings = input.coreSettings.filter(belongs);
+  const coreScreenIds = new Set(coreScreens.map((surface) => surface.id));
+  const coreScreenPaths = new Set(coreScreens.map((surface) => surface.path));
+  const coreSettingIds = new Set(coreSettings.map((surface) => surface.id));
+  const coreSettingPaths = new Set(coreSettings.map((surface) => surface.path));
 
   const screens = input.manifests.flatMap((manifest) =>
     (manifest.navigation ?? [])
@@ -63,17 +70,11 @@ export function buildAppMap(input: BuildAppMapInput) {
   return {
     schemaVersion: 1 as const,
     build: { version: input.version, buildId: input.buildId },
-    screens: [
-      ...input.coreScreens.map((surface) => ({ moduleId: "core", ...surface })),
-      ...screens
-    ],
-    settings: [
-      ...input.coreSettings.map((surface) => ({ moduleId: "core", ...surface })),
-      ...settings
-    ],
+    screens: [...coreScreens.map((surface) => ({ moduleId: "core", ...surface })), ...screens],
+    settings: [...coreSettings.map((surface) => ({ moduleId: "core", ...surface })), ...settings],
     features,
     errors: [
-      ...(input.coreErrors ?? []).map((error) => ({ moduleId: "core", ...error })),
+      ...(input.coreErrors ?? []).filter(belongs).map((error) => ({ moduleId: "core", ...error })),
       ...features.flatMap((feature) =>
         (feature.errors ?? []).map((error) => ({
           moduleId: feature.moduleId,
@@ -83,7 +84,7 @@ export function buildAppMap(input: BuildAppMapInput) {
       )
     ],
     remediations: [
-      ...(input.coreRemediations ?? []).map((remediation) => ({
+      ...(input.coreRemediations ?? []).filter(belongs).map((remediation) => ({
         moduleId: "core",
         ...remediation
       })),
@@ -105,8 +106,10 @@ export function writeAppMap(path: string, input: BuildAppMapInput): void {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  writeAppMap(resolve(root, "dist/app-map.json"), {
-    manifests: getBuiltInModuleManifests(),
+  const runtime = process.argv.includes("--rust") ? "rust" : "typescript";
+  writeAppMap(resolve(root, runtime === "rust" ? "dist/rust-app-map.json" : "dist/app-map.json"), {
+    runtime,
+    manifests: runtime === "rust" ? [] : getBuiltInModuleManifests(),
     coreScreens: CORE_APP_SCREENS,
     coreSettings: CORE_APP_SETTINGS,
     coreErrors: CORE_APP_ERRORS,

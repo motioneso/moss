@@ -29,6 +29,49 @@ describe("app-map integrity and truthfulness", () => {
     narrative: ""
   });
 
+  it("builds a separate Rust map with only real Rust routes", () => {
+    const rustMap = buildAppMap({
+      runtime: "rust",
+      manifests: [],
+      coreScreens: CORE_APP_SCREENS,
+      coreSettings: CORE_APP_SETTINGS,
+      coreErrors: CORE_APP_ERRORS,
+      coreRemediations: CORE_APP_REMEDIATIONS,
+      version: "test",
+      buildId: "test",
+      narrative: ""
+    });
+    expect(rustMap.screens.map((entry) => entry.id)).toEqual(["rust-sign-in"]);
+    expect(rustMap.settings.map((entry) => entry.id)).toEqual(["rust-network-sharing"]);
+    for (const entry of [...rustMap.screens, ...rustMap.settings, ...rustMap.remediations]) {
+      expect(rustRoutes.has(entry.path ?? "")).toBe(true);
+    }
+    expect(rustMap.errors.some((entry) => entry.code === "host_refused")).toBe(true);
+  });
+
+  it("keeps Rust-only declarations out of the production TypeScript app map", () => {
+    const production = buildAppMap({
+      manifests: [],
+      coreScreens: CORE_APP_SCREENS,
+      coreSettings: CORE_APP_SETTINGS,
+      coreErrors: CORE_APP_ERRORS,
+      coreRemediations: CORE_APP_REMEDIATIONS,
+      version: "test",
+      buildId: "test",
+      narrative: ""
+    });
+    for (const entries of [
+      production.screens,
+      production.settings,
+      production.errors,
+      production.remediations
+    ]) {
+      expect(entries.some((entry) => "runtime" in entry && entry.runtime === "rust")).toBe(false);
+    }
+    expect(production.errors.some((entry) => entry.code === "host_refused")).toBe(false);
+    expect(production.screens.some((entry) => entry.path === "/today")).toBe(true);
+  });
+
   it("distinguishes corrective input failures from unavailable approval details", () => {
     const feature = getBuiltInModuleManifests()
       .find((module) => module.id === "chat")

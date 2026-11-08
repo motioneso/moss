@@ -69,8 +69,10 @@ local even with the switch on. Firewall rules and external reachability remain o
 
 Every request checks an exact Host authority. Every state-changing request requires an Origin
 equal to that authority's configured HTTPS origin. Forwarded headers confer no trust. Sign-in
-uses five attempts per peer and one hundred total per minute, and at most four password checks
-concurrently. Browser sessions use the existing signed Secure, HttpOnly, SameSite=Lax cookie;
+uses five attempts per peer (IPv6 /64) and one hundred per minute for remote peers, with a
+separate local budget. Incomplete sign-in bodies time out after three seconds before taking one
+of four password-check slots; auth bodies are limited to sixteen kilobytes. Remote connections
+cannot consume the local connection reserve. Browser sessions use the existing signed Secure, HttpOnly, SameSite=Lax cookie;
 the response body's user fields are explicitly allowlisted. Sign out revokes the stored session.
 Unknown routes, static app files and private pages are behind the same authentication boundary.
 
@@ -78,3 +80,9 @@ The shell still labels Today as sample data. Its sample conversation and runner 
 selected by the authenticated actor, never a global `local` account. This phase adds no modules.
 
 Database/live checks must run through `scripts/run-gate.sh start --gate rust-spike/network/tools/gate.sh`.
+
+The app map is built separately for each runtime: `pnpm build:app-map` describes the existing
+TypeScript app; `pnpm exec tsx scripts/build-app-map.ts --rust` writes `dist/rust-app-map.json`
+with the new Rust-specific declarations. The TypeScript lookup service also filters Rust
+entries from mixed or stale artifacts. The Rust assistant's map consumption remains a later
+integration, alongside the module host.

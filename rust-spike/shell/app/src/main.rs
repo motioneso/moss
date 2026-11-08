@@ -2,7 +2,6 @@
 //! Supply --network <private configuration file>; see rust-spike/network/README.md.
 
 use std::collections::HashMap;
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -169,9 +168,10 @@ fn main() {
         let listener = tokio::net::TcpListener::bind(config.listen)
             .await
             .map_err(|_| "Cannot bind the configured HTTPS listener")?;
-        let addr = listener
-            .local_addr()
-            .map_err(|_| "Cannot read the listener address")?;
+        let desktop_origin = config
+            .local_origin()
+            .ok_or("No local HTTPS origin")?
+            .to_owned();
         let network = Network::new(platform.clone(), config, args.network)?;
         let data = Arc::new(Accounts {
             platform,
@@ -179,9 +179,9 @@ fn main() {
             data: Mutex::new(HashMap::new()),
         });
         let app = web::router(network, router(data, args.web.clone()), args.web);
-        Ok::<_, String>((listener, acceptor, app, addr))
+        Ok::<_, String>((listener, acceptor, app, desktop_origin))
     });
-    let (listener, acceptor, app, addr) = match prepared {
+    let (listener, acceptor, app, desktop_origin) = match prepared {
         Ok(parts) => parts,
         Err(_) => {
             eprintln!("moss-shell: could not start secure HTTPS; check private configuration, certificates and runtime database roles");
@@ -197,19 +197,18 @@ fn main() {
         }
     } else {
         runtime.spawn(tls::serve(listener, acceptor, app));
-        desktop::run(addr);
+        desktop::run(desktop_origin);
     }
 }
 
 mod desktop {
-    use super::SocketAddr;
     use tao::dpi::LogicalSize;
     use tao::event::{Event, WindowEvent};
     use tao::event_loop::{ControlFlow, EventLoop};
     use tao::window::WindowBuilder;
     use wry::WebViewBuilder;
 
-    pub fn run(addr: SocketAddr) {
+    pub fn run(origin: String) {
         let event_loop = EventLoop::new();
         let window = WindowBuilder::new()
             .with_title("Moss")
@@ -218,7 +217,7 @@ mod desktop {
             .build(&event_loop)
             .expect("window");
 
-        let builder = WebViewBuilder::new().with_url(format!("https://{addr}/today"));
+        let builder = WebViewBuilder::new().with_url(format!("{origin}/today"));
 
         #[cfg(not(target_os = "linux"))]
         let _webview = builder.build(&window).expect("webview");

@@ -10,6 +10,7 @@ export interface CoreAppSurfaceDeclaration {
 }
 
 export interface CoreAppErrorDeclaration {
+  readonly runtime?: "rust";
   readonly code: string;
   readonly class: "prerequisite" | "transient" | "validation" | "permission" | "bug";
   readonly remediationRef?: string;
@@ -568,19 +569,36 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
 
 export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
   {
+    code: "sign_in_body_timeout",
+    runtime: "rust",
+    class: "transient",
+    remediationRef: "rust-sign-in-retry",
+    description: "Rust Moss stopped waiting for an incomplete sign-in request after three seconds."
+  },
+  {
+    code: "sign_in_body_too_large",
+    runtime: "rust",
+    class: "validation",
+    remediationRef: "rust-sign-in-retry",
+    description: "Rust Moss refused a sign-in body larger than sixteen kilobytes."
+  },
+  {
     code: "host_refused",
+    runtime: "rust",
     class: "permission",
     remediationRef: "rust-trusted-address",
     description: "Rust Moss refused an address not listed as a trusted HTTPS authority."
   },
   {
     code: "origin_or_sharing_refused",
+    runtime: "rust",
     class: "permission",
     remediationRef: "rust-trusted-address",
     description: "Rust Moss refused a cross-origin request or remote access while sharing is off."
   },
   {
     code: "sign_in_rate_limited",
+    runtime: "rust",
     class: "transient",
     remediationRef: "rust-sign-in-wait",
     description: "Rust Moss reached its sign-in attempt or concurrent password-check limit."
@@ -773,6 +791,13 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
 ];
 
 export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
+  {
+    id: "rust-sign-in-retry",
+    runtime: "rust",
+    path: "/sign-in",
+    scope: "user",
+    description: "Reload sign-in and submit the form again over a working connection."
+  },
   {
     id: "rust-trusted-address",
     runtime: "rust",

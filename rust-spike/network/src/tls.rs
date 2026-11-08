@@ -49,14 +49,20 @@ pub async fn serve(
     acceptor: TlsAcceptor,
     app: Router,
 ) -> Result<(), String> {
-    let slots = Arc::new(Semaphore::new(256));
+    // Remote connections cannot consume the owner's loopback reserve.
+    let local_slots = Arc::new(Semaphore::new(32));
+    let remote_slots = Arc::new(Semaphore::new(224));
     let mut connections = tokio::task::JoinSet::new();
     loop {
         tokio::select! {
             _ = tokio::signal::ctrl_c() => break,
             Some(_) = connections.join_next(), if !connections.is_empty() => {},
             accepted = listener.accept() => {
-                let (stream, peer) = accepted.map_err(|_| "TLS listener stopped")?;
+                let (stream, peer) = match accepted {
+                    Ok(connection) => connection,
+                    Err(_) => { tokio::time::sleep(Duration::from_millis(100)).await; continue; }
+                };
+                let slots = if crate::policy::loopback(peer.ip()) { &local_slots } else { &remote_slots };
                 let Ok(permit) = slots.clone().try_acquire_owned() else { continue };
                 let acceptor = acceptor.clone();
                 let app = app.clone().layer(Extension(ConnectInfo(peer)));
@@ -113,7 +119,7 @@ pub fn local_certificate(folder: &Path, origins: &[String]) -> Result<(), String
     }
     let key = folder.join("key.pem");
     let cert = folder.join("certificate.pem");
-    let status = Command::new("openssl").args(["req", "-x509", "-newkey", "rsa:3072", "-sha256", "-nodes", "-days", "30", "-subj", "/CN=Moss local", "-addext", &format!("subjectAltName={}", sans.join(",")), "-addext", "basicConstraints=critical,CA:FALSE", "-keyout"])
+    let status = Command::new("openssl").args(["req", "-x509", "-newkey", "rsa:3072", "-sha256", "-nodes", "-days", "30", "-subj", "/CN=Moss local", "-addext", &format!("subjectAltName={}", sans.join(",")), "-addext", "basicConstraints=critical,CA:FALSE", "-addext", "extendedKeyUsage=serverAuth", "-keyout"])
         .arg(&key).arg("-out").arg(&cert).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())
         .status().map_err(|_| "Local certificates need the installed OpenSSL command; alternatively supply a certificate and key")?;
     if !status.success() {

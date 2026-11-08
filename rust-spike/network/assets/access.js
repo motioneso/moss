@@ -6,6 +6,8 @@ const say = (message) => {
 };
 const explanation = (code) =>
   ({
+    sign_in_body_timeout: "That connection was too slow. Try signing in again.",
+    sign_in_body_too_large: "This sign-in request is too large. Reload the page and try again.",
     sign_in_rate_limited: "Too many tries. Wait a minute, then try again.",
     INVALID_EMAIL_OR_PASSWORD: "The email or password did not match. Try again.",
     setup_is_complete: "Moss already has an owner. Go back and sign in.",
@@ -54,7 +56,11 @@ if (document.getElementById("setup") || document.getElementById("setup-link")) {
     .then(({ complete }) => {
       const form = document.getElementById("setup");
       if (form) {
-        form.hidden = complete;
+        if (complete) form.remove();
+        else {
+          form.hidden = false;
+          form.classList.add("auth-form");
+        }
         say(
           complete
             ? "Moss already has an owner. Go back and sign in."

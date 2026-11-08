@@ -84,6 +84,7 @@ interface Reply {
   status: number;
   headers: IncomingHttpHeaders;
   body: string;
+  bytes: Buffer;
 }
 async function request(
   base: string,
@@ -101,6 +102,7 @@ async function request(
   return new Promise((ok, fail) => {
     const req = https.request(
       {
+        agent: false,
         hostname: url.hostname,
         port: url.port,
         path,
@@ -123,14 +125,22 @@ async function request(
         }
       },
       (response) => {
-        let body = "";
-        response.on("data", (chunk) => {
-          body += chunk;
-          if (body.length > 2_000_000) req.destroy(new Error("Response limit"));
+        const chunks: Buffer[] = [];
+        let size = 0;
+        response.on("data", (chunk: Buffer) => {
+          chunks.push(chunk);
+          size += chunk.length;
+          if (size > 2_000_000) req.destroy(new Error("Response limit"));
         });
-        response.on("end", () =>
-          ok({ status: response.statusCode ?? 0, headers: response.headers, body })
-        );
+        response.on("end", () => {
+          const bytes = Buffer.concat(chunks);
+          ok({
+            status: response.statusCode ?? 0,
+            headers: response.headers,
+            body: bytes.toString("utf8"),
+            bytes
+          });
+        });
       }
     );
     req.setTimeout(30_000, () => req.destroy(new Error("Request deadline")));
@@ -152,6 +162,7 @@ function cookie(reply: Reply): string {
     "Safe cookie attributes required"
   );
   const raw = decodeURIComponent(value.slice(value.indexOf("=") + 1)).split(".")[0];
+  assert(raw, "Signed cookie must contain a session token");
   secrets.push(raw, value);
   assert(
     !reply.body.includes(raw) && !reply.body.includes('"token"'),
@@ -294,6 +305,11 @@ try {
   });
   assert.equal(certificateReply.status, 200);
   assert.equal(certificateReply.headers["content-type"], "application/pkix-cert");
+  assert.deepEqual(
+    certificateReply.bytes,
+    new X509Certificate(ca).raw,
+    "Download must contain exactly the public leaf certificate"
+  );
   assert.equal(
     JSON.parse(status.body).fingerprint.replaceAll(" ", ""),
     new X509Certificate(ca).fingerprint256
@@ -312,6 +328,36 @@ try {
   const shell = await request(second, "/api/shell", { cookie: remoteCookie });
   assert.equal(shell.status, 200);
   assert.equal(JSON.parse(shell.body).account.display_name, "Rust proof owner");
+  // Four incomplete bodies must never occupy the four password-check slots.
+  const stalled = Array.from({ length: 4 }, () => {
+    const req = https.request({
+      hostname: "127.0.0.1",
+      port,
+      localAddress: "127.0.0.3",
+      ca,
+      rejectUnauthorized: true,
+      servername: "localhost",
+      method: "POST",
+      path: "/api/auth/sign-in/email",
+      headers: { origin: local, "content-type": "application/json", "content-length": "100" }
+    });
+    req.on("error", () => {});
+    req.flushHeaders();
+    return req;
+  });
+  try {
+    await delay(300);
+    const normal = await request(local, "/api/auth/sign-in/email", {
+      method: "POST",
+      body: { email, password }
+    });
+    assert.equal(normal.status, 200, "Stalled bodies blocked normal sign-in");
+    cookie(normal);
+    console.log("PASS four stalled sign-in bodies do not block a complete password sign-in");
+  } finally {
+    for (const req of stalled) req.destroy();
+  }
+
   console.log(
     "PASS second network address: real password sign-in, private account and Today read over verified TLS"
   );
@@ -337,7 +383,49 @@ try {
     ).status,
     403
   );
+  const incompleteStarted = Date.now();
+  try {
+    const reply = await request(local, "/api/auth/sign-in/email", {
+      method: "POST",
+      peer: "127.0.0.4",
+      headers: { "content-length": "100", "content-type": "application/json" }
+    });
+    assert.equal(reply.status, 408, "Incomplete sign-in body did not reach its deadline");
+  } catch (error) {
+    // Hyper may close an incomplete HTTP/1 request when its body is dropped at the deadline.
+    assert(
+      error instanceof Error && "code" in error && error.code === "ECONNRESET",
+      "Incomplete body failed unexpectedly"
+    );
+  }
+  assert(
+    Date.now() - incompleteStarted >= 2500 && Date.now() - incompleteStarted < 10000,
+    "Incomplete sign-in connection did not close at its three-second deadline"
+  );
+  console.log("PASS incomplete sign-in body is refused at its three-second deadline");
+  try {
+    const oversized = await request(local, "/api/auth/sign-in/email", {
+      method: "POST",
+      peer: "127.0.0.4",
+      body: { padding: "x".repeat(17000) }
+    });
+    assert.equal(oversized.status, 413, "Oversized sign-in body was not refused");
+  } catch (error) {
+    // Closing a connection with an unread, rejected body is also a safe HTTP refusal.
+    assert(
+      error instanceof Error && "code" in error && error.code === "ECONNRESET",
+      "Oversized body failed unexpectedly"
+    );
+  }
+  assert(
+    new X509Certificate(ca).keyUsage?.includes("1.3.6.1.5.5.7.3.1"),
+    "Local certificate lacks serverAuth usage"
+  );
+  console.log(
+    "PASS incomplete and oversized sign-in bodies refused; local certificate declares serverAuth"
+  );
   const token = secrets[secrets.length - 2];
+  assert(token, "A real sign-in token is required for the log probes");
   await request(second, `/private/${token}?session=${token}`, {
     cookie: remoteCookie,
     headers: { "user-agent": token }

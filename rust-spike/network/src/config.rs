@@ -36,6 +36,24 @@ impl Config {
         Ok(config)
     }
 
+    pub fn local_origin(&self) -> Option<&str> {
+        self.origins
+            .iter()
+            .find(|origin| {
+                url::Url::parse(origin)
+                    .ok()
+                    .and_then(|url| url.host_str().map(str::to_owned))
+                    .is_some_and(|host| {
+                        host == "localhost"
+                            || host
+                                .trim_matches(['[', ']'])
+                                .parse::<std::net::IpAddr>()
+                                .is_ok_and(crate::policy::loopback)
+                    })
+            })
+            .map(String::as_str)
+    }
+
     pub fn policy(&self) -> Result<Policy, String> {
         let origins: Vec<&str> = self.origins.iter().map(String::as_str).collect();
         let policy = Policy::new(&origins, self.sharing).map_err(str::to_owned)?;

@@ -22,8 +22,16 @@ use safety_core::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Instant};
-use tokio::sync::{Mutex, Semaphore};
+use std::{
+    net::SocketAddr,
+    path::PathBuf,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use tokio::{
+    sync::{Mutex, Semaphore},
+    time::timeout,
+};
 use tokio_rustls::rustls::pki_types::{pem::PemObject, CertificateDer};
 
 pub struct Network {
@@ -90,8 +98,12 @@ pub fn router(network: Arc<Network>, private: Router, web: PathBuf) -> Router {
         .merge(auth_routes)
         .merge(pages)
         .merge(assets)
-        .layer(DefaultBodyLimit::max(16 * 1024))
+        .layer(DefaultBodyLimit::max(2 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(network, boundary))
+}
+
+fn theme_asset(path: &str) -> bool {
+    matches!(path, "/app.css" | "/boot-theme.js" | "/icon.svg") || path.starts_with("/fonts/")
 }
 
 fn public(path: &str) -> bool {
@@ -119,11 +131,21 @@ fn denied(status: u16, code: &'static str) -> Response {
 
 async fn boundary(State(n): State<Arc<Network>>, mut request: Request, next: Next) -> Response {
     // The label is fixed; paths, queries, headers, bodies and response cookies are never logged.
+    let cache = if theme_asset(request.uri().path()) {
+        "private, max-age=3600"
+    } else {
+        "no-store"
+    };
     let response = guarded(&n, &mut request, next).await;
     let mut response = response;
+    let cache = if response.status().is_success() {
+        cache
+    } else {
+        "no-store"
+    };
     response
         .headers_mut()
-        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static(cache));
     response
         .headers_mut()
         .insert("referrer-policy", HeaderValue::from_static("no-referrer"));
@@ -171,6 +193,14 @@ async fn guarded(n: &Arc<Network>, request: &mut Request, next: Next) -> Respons
         if !n.limits.lock().await.allow(peer.ip(), Instant::now()) {
             return limited();
         }
+        // Bound body reads before taking scarce hashing slots or the owner-setup mutex.
+        let body = std::mem::replace(request.body_mut(), Body::empty());
+        let bytes = match timeout(Duration::from_secs(3), to_bytes(body, 16 * 1024)).await {
+            Err(_) => return denied(408, "sign_in_body_timeout"),
+            Ok(Err(_)) => return denied(413, "sign_in_body_too_large"),
+            Ok(Ok(bytes)) => bytes,
+        };
+        *request.body_mut() = Body::from(bytes);
         match n.hashing.try_acquire() {
             Ok(p) => Some(p),
             Err(_) => return limited(),

@@ -25,14 +25,17 @@ refused; a different address in the same trust list is not a substitute. Cross-s
 requests are refused. Forwarded headers grant neither network nor rate-limit trust. Owner setup
 requires both a loopback peer and loopback authority and closes once an owner exists.
 
-Sign-in allows five attempts per peer and one hundred across all peers per minute, with at most
-four password checks running together. Request logs contain a fixed event label and status,
+Sign-in allows five attempts per peer (IPv6 addresses share a /64 bucket) and one hundred remote
+attempts per minute, with a separate local budget. Incomplete sign-in bodies time out after three
+seconds before taking a password-check slot or setup lock. Auth bodies are limited to sixteen
+kilobytes; chat retains axum's two-megabyte default. At most four password checks run together.
+Remote connections cannot consume the owner's local connection reserve. Request logs contain a fixed event label and status,
 without request paths, queries, headers or bodies. The TLS layer does not log parser input.
 
 ## Certificates and setup
 
 The local-certificate command uses the already installed OpenSSL to make a thirty-day
-certificate for the exact configured names and addresses. It creates a private folder and
+certificate for the exact configured names and addresses, including server-authentication usage. It creates a private folder and
 owner-only key. It does not install tools or trust roots. The server also loads supplied PEM
 chains and keys, including certificates obtained through an operator's existing Tailscale
 workflow. There is no plaintext or forwarded-proxy bypass mode.
@@ -56,7 +59,7 @@ All database checks used verify-gate's fresh throwaway Postgres, built from the 
 migrations. No installed app or real account data was changed. Development ports were claimed
 and released through devports. No global tools were installed.
 
-- Seven Rust tests pass, covering Host/origin refusal, remote access while sharing is off,
+- Eight Rust tests pass, covering Host/origin refusal, remote access while sharing is off,
   duplicate headers, exact address matching, the live policy switch, sign-in limits and browser
   response filtering. The initial three policy tests were observed failing before the guard.
 - Three removal controls build deliberately weakened copies outside the worktree and run the
@@ -79,10 +82,32 @@ data`. Adding request logging fails with `Session token or password appeared in 
   desktop screenshots are in the task's proof artifact, outside this public repository.
   The isolated browser accepts the test certificate; certificate/hostname verification is
   independently enforced by the live HTTPS client above.
-- The Rust shell and wasm UI build. Rust tests and network clippy pass. App-map integrity tests
-  check the new Rust declarations against actual Rust routes; existing TypeScript routes keep
-  their existing checks. Repository lint, format, file-size and type checks pass; their output is retained in the
+- The Rust shell and wasm UI build. Rust tests and network clippy pass. App-map tests check the Rust declarations against real Rust routes.
+  The production build and lookup service exclude Rust entries; `scripts/build-app-map.ts --rust`
+  produces a separate Rust artifact. A mixed-artifact lookup test also covers this boundary. Repository lint, format, file-size and type checks pass; their output is retained in the
   proof artifact.
+
+## Independent review and corrections
+
+The first Claude review found two major issues. Both were reproduced before correction:
+
+```text
+Stalled bodies blocked normal sign-in
+429 !== 200
+app-map integrity: 1 failed | 17 passed
+```
+
+Reading incomplete bodies before taking scarce slots fixes the first; the same live test now
+signs in normally while four other requests remain unfinished. Separate runtime map builds and
+lookup filtering fix the second. The final live check also verifies the body deadline, oversized
+body refusal and the downloaded certificate's exact public bytes.
+
+Minor findings addressed: separate local sign-in/connection budgets; IPv6 /64 limiting; retrying
+transient accept errors; certificate server-auth usage; the desktop's configured local origin;
+caching public theme files while keeping private replies uncacheable; and restoring the chat
+body limit. The initial actual Host/origin failing-first output is recorded in the proof artifact;
+a broken intermediate commit is not required to preserve that observation. Physical iPhone
+qualification remains unproven, as listed below. No claim of automatic device trust is made.
 
 ## Limits and next integration
 

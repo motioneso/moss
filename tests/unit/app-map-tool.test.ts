@@ -54,6 +54,40 @@ const artifact = {
 } as const;
 
 describe("AppMapReadService", () => {
+  it("hides Rust-only entries from every production lookup even in a mixed artifact", async () => {
+    const entry = {
+      moduleId: "core",
+      runtime: "rust" as const,
+      id: "rust-only",
+      code: "rust-only",
+      description: "Rust only",
+      path: "/sign-in"
+    };
+    const mixed = {
+      ...artifact,
+      screens: [entry],
+      settings: [entry],
+      features: [entry],
+      errors: [entry],
+      remediations: [entry]
+    };
+    const service = createAppMapReadService({
+      artifact: mixed,
+      resolveActiveModules: async () => [],
+      resolveFeatureFlagState: () => true,
+      getUser: async () => ({ is_instance_admin: true }),
+      logGap: vi.fn()
+    });
+    for (const input of [
+      { screenId: "rust-only" },
+      { settingId: "rust-only" },
+      { errorCode: "rust-only" },
+      { query: "Rust only" }
+    ]) {
+      expect((await service.query({} as never, "owner", input)).items).toEqual([]);
+    }
+  });
+
   it.each(["screen", "screen scope"])(
     "filters inactive, admin-only, and live flagged-OFF entries before slicing for %s",
     async (query) => {
