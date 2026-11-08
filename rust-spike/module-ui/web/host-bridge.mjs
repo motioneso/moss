@@ -142,7 +142,9 @@ export function openModuleFrame(frame, moduleId, verifiedSrc, callbacks) {
     !url.pathname.startsWith(`/module-ui/${moduleId}/`)
   )
     throw new Error("Use the verified module screen URL");
-  const bootstrapToken = hostWindow.crypto.randomUUID().replaceAll("-", "");
+  const bootstrapToken = Array.from(hostWindow.crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
   url.hash = new URLSearchParams({ "moss-bootstrap": bootstrapToken }).toString();
   const dispose = connectModuleFrame(frame, moduleId, { ...callbacks, bootstrapToken });
   frame.src = url.href;

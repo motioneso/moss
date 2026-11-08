@@ -161,7 +161,14 @@ test("fresh verified-screen token accepts queued initial bootstrap after load, n
   let calls = 0;
   const hostWindow = {
     location: new URL("https://moss.example.test/calendar"),
-    crypto: { randomUUID: () => token },
+    crypto: {
+      // Non-secure LAN origins expose getRandomValues, but not randomUUID.
+      getRandomValues(bytes) {
+        for (let i = 0; i < bytes.length; i++)
+          bytes[i] = parseInt(token.slice(i * 2, i * 2 + 2), 16);
+        return bytes;
+      }
+    },
     addEventListener(_, fn) {
       receive = fn;
     },

@@ -77,6 +77,28 @@ is not signed-in Moss. This is useful screen/package proof, **not** authenticate
 shell, provider, second-device or HTTPS acceptance. All database runs use verify-gate.
 Command receipts and real screenshots are published in the task proof artifact.
 
+## Review checkpoint
+
+Both allotted independent review rounds were recorded on their reviewed commits.
+The second round found that the frame opener used `randomUUID`, unavailable on
+non-secure LAN origins. The same bootstrap test failed with that API absent, then
+passed after switching to `getRandomValues`. CI also exposed missing dependency
+preparation for the newly added offline UI build; the workflow now fetches the UI
+and binding-generator lockfiles and watches both shared inputs. These final fixes
+require another authorized review round before this checkpoint can be ready.
+
+Minor findings remain visible rather than blocking the screen checkpoint: an open
+event peek is a snapshot until closed; explicit retry has no progress indicator;
+toolbar controls wait for a saved view response (up to the bridge timeout). The
+canonical reset adds shared `body`, `box-sizing` and `.center-screen` rules; the
+counter example was not visually verified. The older host `frame_check` example
+still uses the load-sensitive lower-level bridge and needs a separate update.
+Browser receipts initially relied on timestamps rather than installed-asset hashes.
+The differential runner does not cover every heading, date-range or overflow-order
+case. The KV fault witness detects a missing Calendar-specific rejection; it does
+not additionally pin the downstream service's successful write result. These are
+documented follow-ups below the required major-finding bar, not parity claims.
+
 ## Remaining acceptance work
 
 1. Preserve all thirteen original HTTP contracts, including request envelopes,
