@@ -38,6 +38,10 @@ name = "export"
 path = "tests/export.rs"
 
 [[test]]
+name = "approval_api"
+path = "tests/approval_api.rs"
+
+[[test]]
 name = "write_tools"
 path = "tests/write_tools.rs"
 required-features = ["write-tools"]

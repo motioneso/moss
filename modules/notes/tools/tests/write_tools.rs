@@ -51,7 +51,7 @@ struct Services {
 impl Ports for Services {
     fn invoke(&self, scope: &CallScope, port: &str, r: &Request) -> Result<Value> {
         match (port, r.operation.as_str()) {
-            ("vault", "folder.get") => {
+            ("vault", "folder.resolve") => {
                 Ok(json!({"status":200,"body":self.paths[&scope.access().actor_user_id()]}))
             }
             ("jobs", "enqueue-options") => {

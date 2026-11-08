@@ -47,14 +47,17 @@ impl FolderSettingsPorts {
             params.keys().all(|key| key == "path"),
             "Unknown folder parameter"
         );
-        if request.operation == "folder.get" || request.operation == "folder.status" {
+        if matches!(
+            request.operation.as_str(),
+            "folder.get" | "folder.status" | "folder.resolve"
+        ) {
             ensure!(params.is_empty(), "Folder read takes no parameters");
-            let key = if request.operation == "folder.get" {
+            let key = if request.operation != "folder.status" {
                 &config.path_key
             } else {
                 &config.status_key
             };
-            return self.runtime.block_on(async {
+            let response = self.runtime.block_on(async {
                 tokio::time::timeout(scope.remaining(), async {
                     let cx = DataContext::open_bounded(
                         &self.database,
@@ -78,7 +81,12 @@ impl FolderSettingsPorts {
                 })
                 .await
                 .context("Folder settings deadline exceeded")?
-            });
+            })?;
+            return if request.operation == "folder.resolve" {
+                Ok(resolve_source(scope, config, &response["body"]))
+            } else {
+                Ok(response)
+            };
         }
         let path = params.get("path").unwrap_or(&Value::Null);
         ensure!(path.is_null() || path.is_string(), "Invalid folder path");
@@ -156,7 +164,7 @@ impl Ports for FolderSettingsPorts {
         ensure!(
             matches!(
                 request.operation.as_str(),
-                "folder.get" | "folder.status" | "folder.list" | "folder.set"
+                "folder.get" | "folder.status" | "folder.list" | "folder.set" | "folder.resolve"
             ),
             "Unknown folder operation"
         );
@@ -169,4 +177,35 @@ impl Ports for FolderSettingsPorts {
 }
 fn error(status: u16, message: &str) -> Value {
     json!({"status":status,"body":{"error":message}})
+}
+
+/// A canonical source for action versions, bound to this account's saved choice.
+/// No caller-selected path or preference key is accepted by folder.resolve.
+fn resolve_source(scope: &CallScope, config: &FolderSetting, value: &Value) -> Value {
+    let Some(path) = value.as_str().filter(|s| !s.is_empty()) else {
+        return error(409, "Notes source is not configured");
+    };
+    let roots = config
+        .roots
+        .get(&scope.access().actor_user_id())
+        .cloned()
+        .unwrap_or_default();
+    let allowed = AllowedRoots::for_account(scope.access(), roots.clone());
+    if roots.is_empty()
+        || !roots
+            .iter()
+            .any(|root| VaultContext::at_allowed_root(scope.access(), root, &allowed).is_ok())
+    {
+        return error(503, "Notes roots not configured on this server");
+    }
+    match VaultContext::at_allowed_root(scope.access(), std::path::Path::new(path), &allowed) {
+        Ok(folder) => json!({"status":200,"body":folder.folder_identity()}),
+        Err(vault::VaultError::Escape(_)) => {
+            error(400, "Notes source path is not within an allowed notes root")
+        }
+        Err(_) => error(
+            400,
+            "Notes source path does not exist or cannot be resolved",
+        ),
+    }
 }

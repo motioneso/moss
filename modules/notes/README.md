@@ -143,7 +143,48 @@ NOTES_TOOL_COMPONENT=/tmp/notes-tools.wasm CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/
 ```
 
 The manually refreshed corpus executes actual TypeScript write handlers (55 cases)
-and approval hooks (41 cases), with explicit filesystem/sync/target stand-ins.
+and approval hooks (48 cases), with explicit filesystem/sync/target stand-ins.
 The real-component tests use actual temporary files and the linked-folder adapter,
 with a queue acknowledgement stand-in. These are tool-boundary checks, not installed
 chat, HTTP differential, full sync or second-device proof.
+
+## Installed action details (part six)
+
+Package version `0.1.1` declares `prepareNoteAction` version `1.0.0`.
+Call it through the host's public API with this envelope:
+
+```json
+{
+  "name": "prepareNoteAction",
+  "parameters": {
+    "tool": "notes.delete",
+    "inputJson": "{\"path\":\"Journal/note.md\"}"
+  }
+}
+```
+
+`inputJson` is the serialized original tool input. Keeping it as a string preserves
+submitted field order through the SDK's deterministic JSON maps. The result is
+`{ "ok": details }`, `{ "ok": null }` for undisclosable fields, or
+`{ "error": { "statusCode": 409, "error": "Notes source is not configured" } }`
+for a prerequisite failure. The details match the legacy approval hook, including
+its opaque `version`. Keep that version on the server. It is neither a permission
+nor an approval token; the eventual approval executor must recheck it before writing.
+
+The host composes both `FolderSettingsPorts` and `LinkedNotesPorts` using the same
+account-specific roots and `notes-source-path` preference. The new `folder.resolve`
+operation takes `{}`, resolves the saved source to its canonical identity and
+returns fixed prerequisite errors. It accepts no caller-selected root or account.
+The ordinary component imports only database and vault ports and grants no write
+or queue operations. This API does not enable installed chat execution or sync.
+
+The standard database gate now additionally executes actual TypeScript approval
+hooks against temporary files and real actor-scoped preferences, compares their
+results with the installed compiled package for app and worker roles, and removes
+preference RLS to prove the cross-account approval assertion detects exposure.
+It checks canonical root aliases, invalid approval fields, source prerequisites,
+no mutation during preparation and content-sensitive versions. This remains a
+checkpoint: symlink descendants, all missing-file/path errors, Windows paths and
+concurrent folder changes do not have complete legacy parity. The existing
+Connections UI is unchanged; full shell/chat and physical second-device checks
+remain on the continuation list.

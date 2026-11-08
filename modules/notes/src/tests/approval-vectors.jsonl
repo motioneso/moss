@@ -1,3 +1,10 @@
+{"files":{},"request":{"tool":"notes.create","parameters":{"path":"new.md","content":null}},"expected":null}
+{"files":{},"request":{"tool":"notes.create","parameters":{"path":"new.md"}},"expected":null}
+{"files":{},"request":{"tool":"notes.create","parameters":{"path":"new.md","content":"new","overwrite":null}},"expected":null}
+{"files":{"note.md":"old"},"request":{"tool":"notes.edit","parameters":{"path":"note.md","oldText":"","newText":"new"}},"expected":{"target":"note.md","fields":[{"label":"Replace","value":""},{"label":"With","value":"new"}],"version":"6b82884d7fb6241834120870eec135229935a62109fd1c0d0923a238e7dfe1ae"}}
+{"files":{"note.md":"old"},"request":{"tool":"notes.edit","parameters":{"path":"note.md","oldText":"old","newText":3}},"expected":null}
+{"files":{"note.md":"old"},"request":{"tool":"notes.delete","parameters":{"path":"note.md","actorUserId":"other"}},"expected":null}
+{"files":{},"request":{"tool":"notes.delete","parameters":{"path":3}},"expected":null}
 {"files":{},"request":{"tool":"notes.create","parameters":{"path":"note.md","content":""}},"expected":{"title":"Create note","target":"note.md","fields":[{"label":"Content","value":""}],"version":"91c92e77b88d11e336a01a3fac5ee0da1d5e2c3325404944b6ac7f9a018d17c9"}}
 {"files":{"note.md":"original","Journal/day.md":"original"},"request":{"tool":"notes.create","parameters":{"path":"note.md","content":"","overwrite":true}},"expected":{"title":"Overwrite note","target":"note.md","fields":[{"label":"Content","value":""},{"label":"Replace existing content","value":"Yes"}],"version":"18973d91b93d8a5f351b808b35e3a797effa15f2a2a7c51e0673b62ac854880f"}}
 {"files":{},"request":{"tool":"notes.create","parameters":{"path":"note.md","content":"Private café 😀\r\n"}},"expected":{"title":"Create note","target":"note.md","fields":[{"label":"Content","value":"Private café 😀\r\n"}],"version":"91c92e77b88d11e336a01a3fac5ee0da1d5e2c3325404944b6ac7f9a018d17c9"}}
