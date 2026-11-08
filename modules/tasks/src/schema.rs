@@ -22,6 +22,7 @@ pub enum Schema {
     Boolean,
     Null,
     AnyOf(Vec<Schema>),
+    Array(Box<Schema>),
 }
 
 #[derive(Clone, Debug)]
@@ -105,6 +106,20 @@ fn check(schema: &Schema, value: &mut Value, path: &str, issues: &mut Vec<Issue>
         false
     };
     match schema {
+        Schema::Array(item) => {
+            if !value.is_array() && !value.is_object() {
+                *value = Value::Array(vec![value.take()]);
+            }
+            let Value::Array(items) = value else {
+                return issue(issues, "must be array".into());
+            };
+            for (index, value) in items.iter_mut().enumerate() {
+                if !check(item, value, &format!("{path}/{index}"), issues) {
+                    return false;
+                }
+            }
+            true
+        }
         Schema::AnyOf(branches) => {
             let mark = issues.len();
             for branch in branches {

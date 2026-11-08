@@ -2,11 +2,11 @@
 
 This is an unfinished Tasks module package. Rust code now compiles into a real
 component and handles basic task, list, tag, activity and view preference routes.
-It also handles four read tools: `tasks.get`, `tasks.listLists`, `tasks.listTags`
-and `tasks.activity`, with request schemas enforced inside the guest. It is not a
+It also handles sixteen tools: four reads and twelve mutations, with request
+schemas enforced inside the guest. It is not a
 complete replacement for Tasks. A package screen now covers list and priority views,
 task editing, subtasks, tags, comments and list creation/renaming. Full screen parity,
-nineteen other chat tools, background
+seven other chat tools, background
 jobs, People calls and full endpoint parity remain unfinished.
 
 `src/` uses the guest-safe SDK. `wit/` defines its ABI. Ben approved the pinned
@@ -74,7 +74,13 @@ The script builds both servers, claims and releases ports, and writes
 `report.json` plus server logs to the output folder. It reuses the existing
 cases and TypeScript server unchanged. Expected failures from unported routes,
 tools and jobs are reported as failures; this script is not an installed package
-or live UI proof. The unchanged harness does not yet compare the four new tools.
+or live UI proof. The endpoint harness does not compare tools; the database gate
+separately compares the twelve mutation handlers with the TypeScript executors,
+including set-value fields, cascades, recurrence and selected rejected operations.
+It also checks persisted task effects and tags dropped by list moves; it does not
+claim exhaustive input/error-message parity. Empty titles remain rejected by the
+unchanged database constraint. A shared-parent removal control strips the real
+`Owned` query predicate and counts attempted inserts before and after restoration.
 
 The package screen is rendered with the shared Leptos kit; its controller uses
 the public parent bridge. The interactive check below creates a disposable signed
@@ -112,3 +118,28 @@ form submission; validation and authenticated bridge writes remain in place.
 See the final part 6 section of the Tasks report for current live verification
 and remaining parity work. The fixture remains separate from the application
 shell and physical-device acceptance.
+
+Part 7 adds the ordered breakdown route and twelve mutation handlers:
+`tasks.create`, `tasks.update`, `tasks.updateStatus`, `tasks.breakDown`,
+`tasks.addActivity`, `tasks.assignTag`, `tasks.unassignTag`, `tasks.createList`,
+`tasks.renameList`, `tasks.createTag`, `tasks.renameTag` and `tasks.deleteTag`.
+Together with the four read handlers, sixteen are declared. Tools preserve
+supplied text; the HTTP breakdown route trims its steps. Tool inputs are typed
+JSON, without the HTTP form coercions. The current host still requires one-use
+account approval; legacy automatic-action policy and chat presentations are not
+ported by these handlers.
+
+The database gate now compares these mutation handlers against the current
+TypeScript executors using two synthetic accounts and the actual component.
+Only generated identifiers and clock timestamps are canonicalized. The endpoint
+harness keeps every existing case unchanged and adds the package's breakdown
+cases from `tests/parity/`. Failed comparisons remain failures.
+
+Remaining: eight HTTP endpoints (search interpretation, deferred status, list
+deletion, focus, at-risk, overdue and both assistant-policy routes); seven tools
+(summary, list, heartbeat window, focus, at-risk, overdue and deleteList); both
+job kinds, timezone and lazy recurrence contracts, public People linkage, policy
+and feedback orchestration, full screen/settings parity, real-shell integration,
+performance budgets and second-device HTTPS proof. The legacy HTTP list route
+only applies tag and quadrant filters; the wider filter set belongs to its
+repository/tool contract and must not be silently added to that HTTP route.

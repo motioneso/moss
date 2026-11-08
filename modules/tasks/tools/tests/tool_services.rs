@@ -73,7 +73,7 @@ fn declared_tools_reach_host_offers_and_the_account_approval_guard() {
         serde_json::from_str::<Value>(&output).unwrap()
     };
     for tool in manifest.tools.keys() {
-        assert_eq!(call("offer", tool)["ok"]["risk"], "read");
+        assert_eq!(call("offer", tool)["ok"]["risk"], manifest.tools[tool].risk);
         assert_eq!(
             call("run", tool)["error"],
             "This tool needs the account's approval"

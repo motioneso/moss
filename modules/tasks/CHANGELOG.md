@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add twelve compiled task, list, tag, activity and breakdown action handlers.
+- Add ordered task breakdown with parent activity and invocation rollback.
+- Compare mutation results with current TypeScript executors in the disposable gate.
+
 - Repair initial screen loading when the frame loads before its bridge connects.
 - Save task, list, tag, subtask and comment forms through the sandbox bridge.
 - Apply the shared document typography inside the isolated package screen.

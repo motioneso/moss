@@ -8,6 +8,7 @@ pub fn request_schema(method: &str, path: &str) -> Option<Schema> {
         ("POST", "/tasks") => Some(schemas::create_task()),
         ("PATCH", "/tasks/:id") => Some(schemas::update_task()),
         ("POST", "/tasks/:id/activity") => Some(schemas::add_activity()),
+        ("POST", "/tasks/:id/breakdown") => Some(schemas::breakdown()),
         ("POST", "/tasks/:id/tags") => Some(schemas::assign_tag()),
         ("PATCH", "/tasks/preferences") => Some(schemas::update_preferences()),
         ("POST", "/tasks/lists" | "/tasks/lists/:list_id/tags")

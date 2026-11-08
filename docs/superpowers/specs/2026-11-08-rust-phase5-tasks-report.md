@@ -832,3 +832,95 @@ The first post-merge gates stopped at the locked dependency check: main added
 that existing dependency edge. An offline refresh changes only that one entry;
 no dependency version or new tool installation is introduced. The gates are
 rerun on the resulting clean commit.
+
+## Tasks part 7 checkpoint (JS-74, Card 526)
+
+This continuation adds twelve assistant mutation handlers and the ordered
+breakdown route inside `modules/tasks/`. It is a bounded checkpoint under the
+brief's context rule, not completion of Phase 5 or a replacement for the current
+Tasks app. Workshop and Food remain excluded.
+
+### Actions and ordered breakdown
+
+Sixteen tools are now declared: the existing four read handlers plus create,
+update, update status, break down, add activity, assign/unassign tag, create/rename
+list, create/rename tag and delete tag. They call the existing account-scoped
+query primitives. Tool text reaches the existing database constraints without
+trimming: valid titles retain whitespace, descriptions may be empty, and blank
+titles are rejected. Nullable tool fields retain null rather than HTTP form coercion.
+Completion reuses the existing cascade and next-occurrence code. The host keeps
+its one-use account approval guard. Automatic-action policies, approval
+presentations, background authorization and installed chat integration remain
+unfinished; tool handlers alone do not prove those joins.
+
+`POST /tasks/:id/breakdown` validates and trims ordered steps, creates children in
+the parent's list and records the existing `broken_down` activity. The existing
+database trigger rejects grandchildren. All calls share the invocation's host
+transaction. The hierarchy check verifies rejection before a grandchild is
+persisted; failure after a partial breakdown is not separately proved here. Empty
+breakdowns retain the legacy no-op behavior, including for an absent parent.
+
+The package app map and changelog describe these actions and their limits.
+No existing migration or shared host source is changed. The pinned approved
+wit-bindgen graph and provisioned Rust/Wasm toolchain are reused in scratch;
+nothing is installed globally. The offline host-tools lockfile refresh produces
+no diff on this main revision.
+
+### Validation and limits
+
+The new checks execute the compiled component, compare mutation results against
+current TypeScript executors and extend the endpoint harness with breakdown
+cases while retaining every historical case unchanged. Development and final
+receipts, privacy removal controls and independent review are recorded in the
+task proof artifact. The development endpoint run on `307733191` completed:
+**69 of 84 cases match, 15 fail**. All seven added breakdown cases match; the
+fifteen remaining failures are the previously listed deferred-status, focus,
+at-risk, timezone-overdue and list-deletion gaps. The first attempt timed out
+starting the TypeScript server; the second completed the suite.
+
+The first review found three major verification gaps: the removal control stopped
+after its first assertion; view-shared parent ownership was untested; and tool
+comparisons omitted set-value, cascade and failure scenarios. Checks now exercise
+update, status and activity controls separately, foreign task/list/tag targets for
+another user and an admin, and a real shared-parent query with its `Owned`
+predicate removed and restored. The query control records actual attempted inserts;
+it does not fabricate database responses or claim that all database protections
+were removed. The tool differential covers dates, effort, parent relationships,
+list moves and dropped tags, recurring completion, persisted cascades, missing
+targets and rejected relationships. This remains bounded coverage, not exhaustive
+input or error-message parity. Generic host errors and stricter input-schema
+rejections still differ from legacy executor error details.
+
+The first action check incorrectly expected a blank title to persist despite the
+unchanged SQL constraint; the corrected check requires rejection on both sides.
+The hierarchy check likewise now asserts the actual HTTP 500 response rather
+than expecting the route adapter itself to throw. Native guest checks at this
+checkpoint pass ten unit and five integration checks. The current-build database,
+static and signed-install UI receipts are attached to the proof rather than
+reusing old successful receipts as evidence for changed inputs.
+
+The installed HTTPS fixture rendered the real package screen, saved a task through
+the form and returned two ordered children from the new installed breakdown route.
+Its first completion receipt hit a file-notification race (the runner read the
+new file before its contents arrived); the runner now waits for nonempty content.
+This remains loopback fixture evidence, not full-shell or physical-device proof.
+Rustfmt is absent from the provisioned toolchain; no component was installed.
+
+### Remaining work after part 7
+
+- Eight endpoints remain: search interpretation, deferred status, list deletion,
+  focus, at-risk, overdue, and GET/PATCH assistant-action preferences.
+- Seven tools remain: summary, list, heartbeat window, focus, at-risk, overdue
+  and deleteList. Both job kinds, recurrence scheduling/lazy roll-forward,
+  actor timezone, People public APIs, feedback and action-policy orchestration
+  remain as listed above.
+- Full screen/settings parity, the authenticated application shell, large-account
+  budgets and a real second device over HTTPS remain unproved. The signed-install
+  fixture is a separate loopback frame and must not be called the application
+  shell or a remote-device check.
+- Correction to the part 4 list: current TypeScript `GET /api/tasks` only applies
+  `tagId` and `quadrant`. The additional list/status/priority/date filters are a
+  repository and tool contract, not current HTTP behavior. This checkpoint
+  preserves that distinction.
+
+Part of https://github.com/motioneso/moss/issues/4027. Release note Category: N/A.

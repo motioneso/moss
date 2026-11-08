@@ -1,9 +1,8 @@
-//! Read tools that do not advance recurrence or call other modules. The host
+//! Tools do not advance recurrence on reads or call other modules. The host
 //! selects the actor and enforces the account's tool approval policy.
 use crate::{
     repository::{Error, Repository, Result},
     rows::Task,
-    schema::{self, Schema},
 };
 use moss_module_sdk::Host;
 use serde::Deserialize;
@@ -17,19 +16,12 @@ pub struct ToolRequest {
 }
 
 pub fn handle<H: Host + ?Sized>(host: &H, request: ToolRequest) -> Result<Value> {
-    let mut input = request.parameters;
-    let required: &'static [&'static str] = match request.tool.as_str() {
-        "tasks.get" | "tasks.activity" => &["taskId"],
-        "tasks.listTags" => &["listId"],
-        "tasks.listLists" => &[],
-        _ => return Err(Error::Http(400, "Unknown Tasks tool")),
-    };
-    let properties = required
-        .iter()
-        .map(|key| (*key, Schema::string()))
-        .collect();
-    schema::validate(&Schema::object(required, properties), &mut input, "input")
-        .map_err(|e| Error::http(400, e.message))?;
+    let input = request.parameters;
+    let schema =
+        crate::tool_schemas::input(&request.tool).ok_or(Error::Http(400, "Unknown Tasks tool"))?;
+    if !crate::tool_schemas::validate(&schema, &input) {
+        return Err(Error::Http(400, "Invalid Tasks tool input"));
+    }
     let repo = Repository::new(host);
     Ok(match request.tool.as_str() {
         "tasks.listLists" => {
@@ -58,7 +50,7 @@ pub fn handle<H: Host + ?Sized>(host: &H, request: ToolRequest) -> Result<Value>
                 .collect::<Vec<_>>();
             json!({"data":{"task":task_json(&repo,task)?,"subtasks":subtasks,"activity":activity}})
         }
-        _ => unreachable!("tool name validated above"),
+        _ => return crate::mutations::execute(&repo, &request.tool, &input),
     })
 }
 
