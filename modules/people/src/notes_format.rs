@@ -1,7 +1,6 @@
 use crate::js_space;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::OnceLock};
+use std::collections::BTreeMap;
 
 pub const PEOPLE_MANAGED_START: &str = "<!-- jarvis:people:start -->";
 pub const PEOPLE_MANAGED_END: &str = "<!-- jarvis:people:end -->";
@@ -36,9 +35,7 @@ enum Field {
 }
 
 fn parse_frontmatter(block: &str) -> Option<Frontmatter> {
-    static KEY: OnceLock<Regex> = OnceLock::new();
-    let key = KEY.get_or_init(|| Regex::new(r"^([A-Za-z][A-Za-z0-9]*):(.*)$").unwrap());
-    let mut fields = HashMap::<String, Field>::new();
+    let mut fields = BTreeMap::<String, Field>::new();
     let mut current_array: Option<String> = None;
     for raw in block.split('\n') {
         let line = raw.trim_end_matches(js_space);
@@ -48,16 +45,28 @@ fn parse_frontmatter(block: &str) -> Option<Frontmatter> {
         let item = line.trim_start_matches(js_space).strip_prefix('-');
         if let (Some(item), Some(current)) = (item, current_array.as_ref()) {
             // The JS pattern's (.+) requires at least one character after the hyphen.
-            if !item.is_empty() {
+            if !item.is_empty() && js_dot_text(item.trim_start_matches(js_space)) {
                 if let Some(Field::Array(items)) = fields.get_mut(current) {
                     items.push(item.trim_matches(js_space).into());
                     continue;
                 }
             }
         }
-        let captures = key.captures(line)?;
-        let name = captures.get(1)?.as_str().to_string();
-        let value = captures.get(2)?.as_str().trim_matches(js_space);
+        // Match the legacy ASCII key grammar without initializing a regex engine
+        // inside every fresh Wasm invocation.
+        let (name, value) = line.split_once(':')?;
+        if !name.as_bytes().first().is_some_and(u8::is_ascii_alphabetic)
+            || !name.bytes().all(|c| c.is_ascii_alphanumeric())
+        {
+            return None;
+        }
+        let name = name.to_owned();
+        let value = value.trim_matches(js_space);
+        // JS /^key:\s*(.*)$/ permits leading whitespace (including line
+        // separators), but its dot cannot consume an embedded line terminator.
+        if !js_dot_text(value) {
+            return None;
+        }
         current_array = None;
         if matches!(name.as_str(), "aliases" | "emails" | "phones") {
             fields.insert(name.clone(), Field::Array(vec![]));
@@ -93,6 +102,10 @@ fn parse_frontmatter(block: &str) -> Option<Frontmatter> {
         phones: array("phones"),
         status,
     })
+}
+
+fn js_dot_text(value: &str) -> bool {
+    !value.contains(['\r', '\n', '\u{2028}', '\u{2029}'])
 }
 
 pub fn parse_people_note(content: &str) -> Option<PeopleNote> {

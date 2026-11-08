@@ -62,6 +62,15 @@ const notes = [
   "---\ndisplayName: First\ndisplayName: Last\nstatus: active\nextra: ignored\n---\n",
   "---\ndisplayName: Alice\nstatus: active\naliases:\n  - \n---\n"
 ];
+// JavaScript's dot excludes all four line terminators, while its leading \s accepts
+// them. Cover embedded values separately from leading/trailing whitespace and CRLF.
+const edgeNotes: string[] = [];
+for (const separator of ["\r", "\u2028", "\u2029"]) {
+  for (const value of [`Al${separator}ice`, `${separator}Alice`, `Alice${separator}`]) {
+    edgeNotes.push(`---\ndisplayName: ${value}\nstatus: active\n---\n`);
+    edgeNotes.push(`---\ndisplayName: Alice\nstatus: active\naliases:\n  - ${value}\n---\n`);
+  }
+}
 for (const body of ["# Alice\n\nHuman notes\n", "", "Body\ufeff", "Body\u0085"]) {
   const note = { frontmatter, body };
   const content = formatPeopleNote(note);
@@ -96,8 +105,17 @@ for (const signals of [[], [0.4], [0.4, 0.8, 0.2], [0.99, 0.8]].map((confidences
   cases.push({ op: "match", signals, expected: [...matchResult(signals)] });
 }
 process.stdout.write(
-  await format(JSON.stringify(cases, null, 2), {
-    ...(await resolveConfig(fileURLToPath(import.meta.url))),
-    parser: "json"
-  })
+  await format(
+    JSON.stringify(
+      process.argv.includes("--note-lines")
+        ? edgeNotes.map((content) => ({ op: "parse", content, expected: parsePeopleNote(content) }))
+        : cases,
+      null,
+      2
+    ),
+    {
+      ...(await resolveConfig(fileURLToPath(import.meta.url))),
+      parser: "json"
+    }
+  )
 );

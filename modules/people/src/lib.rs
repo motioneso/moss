@@ -1,7 +1,30 @@
 //! People & Context. Pure domain logic; all persistence belongs to the module SDK ports.
+pub mod guest;
 pub mod matching;
+mod name_lookup;
 pub mod note_edits;
 pub mod notes_format;
+pub mod notes_service;
+pub mod repository;
+pub mod repository_mutations;
+mod review;
+mod routes;
+mod tools;
+
+#[cfg(all(feature = "generated-component", feature = "component"))]
+compile_error!("Select either the generated or handwritten component binding");
+#[cfg(all(feature = "generated-component", target_arch = "wasm32"))]
+mod generated_component;
+
+#[cfg(all(feature = "component", target_arch = "wasm32"))]
+moss_module_sdk::export_module!(
+    crate::guest::handle,
+    [
+        moss_module_sdk::component::ports::DB,
+        moss_module_sdk::component::ports::CONTEXT,
+        moss_module_sdk::component::ports::VAULT,
+    ]
+);
 
 /// ECMAScript WhiteSpace + LineTerminator, as used by the existing note format and matching.
 pub(crate) fn js_space(c: char) -> bool {

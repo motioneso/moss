@@ -34,6 +34,7 @@ impl Canon {
                 }
                 Value::Object(out)
             }
+            Value::Number(_) => json_numbers(value),
             other => other.clone(),
         }
     }
@@ -64,6 +65,26 @@ impl Canon {
             }
         }
         text.to_owned()
+    }
+}
+
+/// JavaScript writes integral numbers as `1`; PostgreSQL JSONB may spell them
+/// `1.0`. Normalize only exactly representable integral floats. All other values,
+/// including large integer tokens, IDs and timestamps, remain unchanged.
+pub fn json_numbers(value: &Value) -> Value {
+    match value {
+        Value::Number(n) if n.is_f64() => {
+            let number = n.as_f64().unwrap();
+            if number.fract() == 0.0 && number.abs() <= 9_007_199_254_740_991.0 {
+                Value::from(number as i64)
+            } else {
+                value.clone()
+            }
+        }
+        Value::Array(items) => Value::Array(items.iter().map(json_numbers).collect()),
+        Value::Object(map) => Value::Object(map.iter().map(|(key, value)|
+            (key.clone(), json_numbers(value))).collect()),
+        _ => value.clone(),
     }
 }
 
@@ -163,6 +184,14 @@ pub fn contains(actual: &Value, expected: &Value) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn integral_json_floats_match_javascript_without_rounding_large_integers() {
+        let mut canon = Canon::new(Utc::now(), &HashSet::new());
+        assert_eq!(canon.value(&json!([1.0, -0.0, 0.75])), json!([1, 0, 0.75]));
+        assert_ne!(canon.value(&json!(9007199254740992_u64)),
+            canon.value(&json!(9007199254740993_u64)));
+    }
 
     #[test]
     fn labels_new_ids_and_keeps_known_ones() {

@@ -21,10 +21,40 @@ fn column(value: &str) -> Result<String> {
     Ok(format!("\"{value}\""))
 }
 pub fn compile(table: &str, query: &Query) -> Result<Statement> {
+    compile_with_nulls_first(table, query, &[])
+}
+/// Optional wire extension; legacy SDK Query and Order struct literals stay unchanged.
+pub fn parse(mut parameters: Value) -> Result<(Query, Vec<String>)> {
+    let object = parameters
+        .as_object_mut()
+        .ok_or_else(|| anyhow::anyhow!("Expected a typed query"))?;
+    let nulls_first = match object.remove("nullsFirst") {
+        Some(value) => serde_json::from_value(value)?,
+        None => Vec::new(),
+    };
+    Ok((serde_json::from_value(parameters)?, nulls_first))
+}
+pub fn compile_with_nulls_first(
+    table: &str,
+    query: &Query,
+    nulls_first: &[String],
+) -> Result<Statement> {
     let name = table
         .strip_prefix("app.")
         .ok_or_else(|| anyhow::anyhow!("Invalid owned table"))?;
     column(name)?;
+    ensure!(
+        nulls_first.len() <= 8
+            && nulls_first
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+                == nulls_first.len()
+            && nulls_first
+                .iter()
+                .all(|name| query.order.iter().any(|order| &order.column == name)),
+        "NULLS FIRST needs distinct ordered columns"
+    );
     ensure!(
         query.order.len() <= 8 && query.values.len() <= 64 && query.offset <= 1_000_000,
         "Typed query exceeds its limit"
@@ -44,9 +74,14 @@ pub fn compile(table: &str, query: &Query) -> Result<Statement> {
         .iter()
         .map(|o| {
             Ok(format!(
-                "row.{} {} NULLS LAST",
+                "row.{} {} NULLS {}",
                 column(&o.column)?,
-                if o.descending { "DESC" } else { "ASC" }
+                if o.descending { "DESC" } else { "ASC" },
+                if nulls_first.contains(&o.column) {
+                    "FIRST"
+                } else {
+                    "LAST"
+                }
             ))
         })
         .collect::<Result<Vec<_>>>()?
@@ -84,8 +119,41 @@ pub fn compile(table: &str, query: &Query) -> Result<Statement> {
                 .collect::<Result<Vec<_>>>()?
                 .join(",");
             let n = builder.parameter(serde_json::to_value(&query.values)?);
-            format!("INSERT INTO {table} AS row ({columns}) SELECT {columns} FROM jsonb_populate_record(NULL::{table},${n}) {} RETURNING to_jsonb(row)",
-                if query.conflict == Conflict::Ignore { "ON CONFLICT DO NOTHING" } else { "" })
+            let conflict = match &query.conflict {
+                Conflict::Error => String::new(),
+                Conflict::Ignore => "ON CONFLICT DO NOTHING".into(),
+                Conflict::Update { columns, values } => {
+                    ensure!(
+                        !columns.is_empty()
+                            && columns.len() <= 8
+                            && !values.is_empty()
+                            && values.len() <= 64
+                            && !values.contains_key("owner_user_id")
+                            && columns
+                                .iter()
+                                .all(|c| c == "owner_user_id" || query.values.contains_key(c))
+                            && columns
+                                .iter()
+                                .collect::<std::collections::BTreeSet<_>>()
+                                .len()
+                                == columns.len(),
+                        "Invalid conflict update"
+                    );
+                    let target = columns
+                        .iter()
+                        .map(|c| column(c))
+                        .collect::<Result<Vec<_>>>()?
+                        .join(",");
+                    let updates = values
+                        .keys()
+                        .map(|c| column(c))
+                        .collect::<Result<Vec<_>>>()?
+                        .join(",");
+                    let parameter = builder.parameter(serde_json::to_value(values)?);
+                    format!("ON CONFLICT ({target}) DO UPDATE SET ({updates})=(SELECT {updates} FROM jsonb_populate_record(NULL::{table},${parameter})) WHERE row.owner_user_id = app.current_actor_user_id()")
+                }
+            };
+            format!("INSERT INTO {table} AS row ({columns}) SELECT {columns} FROM jsonb_populate_record(NULL::{table},${n}) {conflict} RETURNING to_jsonb(row)")
         }
         Kind::Update | Kind::Delete => {
             ensure!(
@@ -170,6 +238,10 @@ impl Builder<'_> {
                 ensure!(!value.is_null(), "Use the typed null filter");
                 let c = column(name)?;
                 let n = self.parameter(json!({name:value}));
+                if matches!(op, Compare::LowerEq) {
+                    ensure!(value.is_string(), "Lowercase equality needs text");
+                    return Ok(format!("lower(row.{c}::text) = (${n}::jsonb ->> '{name}')"));
+                }
                 let op = match op {
                     Compare::Eq => "=",
                     Compare::Ne => "<>",
@@ -179,6 +251,7 @@ impl Builder<'_> {
                     Compare::Ge => ">=",
                     Compare::Like => "LIKE",
                     Compare::ILike => "ILIKE",
+                    Compare::LowerEq => unreachable!(),
                 };
                 format!(
                     "row.{c} {op} (SELECT {c} FROM jsonb_populate_record(NULL::{},${n}))",
@@ -212,9 +285,9 @@ impl Builder<'_> {
 
 /// Validation used before a guest reaches any database adapter.
 pub fn validate(parameters: Value) -> Result<()> {
-    let query: Query = serde_json::from_value(parameters)?;
+    let (query, nulls_first) = parse(parameters)?;
     // The placeholder table is never executed; it validates all guest-controlled syntax.
-    compile("app.validation", &query)?;
+    compile_with_nulls_first("app.validation", &query, &nulls_first)?;
     if query.values.contains_key("owner_user_id") {
         bail!("The host sets ownership");
     }

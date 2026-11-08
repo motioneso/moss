@@ -32,6 +32,23 @@ resource, serde_json::Value) -> Result<Value>` at the component ABI boundary.
 public API dispatcher. `Client::query(table, &Query)` sends `db/query`.
 This checkpoint supplies contracts, not a generated Rust component ABI binding.
 
+The optional SDK `component` feature now supplies a handwritten canonical ABI and
+`export_module!` macro for compiled Rust guests. `guest_component::wrap` and the
+`wrap_guest` build example lift a Rust `wasm32-unknown-unknown` core into the same
+Moss string/result component interface. They reject imports outside Moss ports and
+the shared memory, and validate the completed component. This path uses the existing
+Wasmtime/WAT dependencies; it adds no generator, WASI adapter or native module driver.
+It does not fulfill the package spec's `wasm32-wasip2` shipping-build requirement.
+
+An additional build-time `guest_component::wrap_generated` entry accepts the canonical
+exports emitted by the approved `wit-bindgen` generator. The `wrap_generated_guest` example
+and People build script compile a `wasm32-wasip2` core with `--skip-wit-component` and shared
+memory, then assemble the existing Moss component interface. Standard-library WASI function
+imports become internal trap-only functions; invoking one fails, rather than reaching a host
+service. Foreign non-Moss/non-WASI imports remain rejected. The runtime's import validator
+and linker are unchanged. This path provides generated allocation/result ownership without
+granting WASI authority, and leaves the handwritten assembly available.
+
 Typed queries allow select/insert/update/delete, explicit nested filters, ordering,
 paging and insert conflict-ignore. They accept checked identifiers and bound JSON
 values, never SQL. Mutations reject a bare `Filter::All`; nested tautologies and broad account filters
@@ -42,6 +59,13 @@ remain the privacy boundary. Select queries are bounded to a thousand returned r
 Update/delete return all affected rows and have no row-count cap. SQL errors poison the whole invocation even if the
 guest catches them. Legacy database operations retain their existing transaction
 behavior; do not mix them into an atomic typed-query operation.
+
+The additive `lower-eq` comparison applies PostgreSQL `lower(column::text)` and compares it
+with the bound text parameter exactly. The caller normalizes the parameter; `%` and `_`
+are literal characters rather than patterns. The optional query-level `nullsFirst` list
+names distinct columns already present in `order`. `Client::query_with_nulls_first` opts in
+without adding required fields to existing Rust `Order` literals. The default remains
+NULLS LAST; People opts into NULLS FIRST for legacy descending link dates.
 
 The opt-in wrapper uses additive `DataContext::open_bounded` and `commit_bounded`
 helpers. Pool acquisition, context initialization, queries and completion share

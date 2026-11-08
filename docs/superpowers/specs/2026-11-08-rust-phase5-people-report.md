@@ -1,12 +1,16 @@
 # Rust Phase 5: People & Context
 
-Task JS-45, Card 523. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
+Tasks JS-45 (part one) and JS-50 (part two), Card 523.
+Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
 Release note Category: N/A.
 
-Status: **People part one: internal core and additive host prerequisites.** The coordinator
-approved this smaller slice and a fresh part-two task to finish the port. People is not yet
-an installable Rust package or reachable through the Rust UI. This report does not claim
-full parity, database privacy, live UI or second-device verification.
+Status: **People part two: partial merge checkpoint.** On 2026-11-08 the user authorized
+merging this bounded checkpoint and continuing the unfinished work in People part three.
+This supersedes the earlier hold on JS-50 readiness; full People parity remains open. Part one
+merged separately; the latest checkpoints below consume the merged shared host and Notes
+adapter. People is not yet an installable Rust package or reachable through the Rust UI.
+The database checks below cover their stated boundaries. Full parity, installed chat,
+live UI and second-device verification remain open.
 
 ## Scope and dependencies
 
@@ -216,3 +220,336 @@ pure fixtures nor the queue test is proof of People persistence or the installed
    project checks, obtain independent review, publish proof and request acceptance for part two.
 
 The next task must not close full People parity until steps one through seven are proven.
+
+## People part two progress (JS-50)
+
+The continuation starts from merged shared-host checkpoint `1ff33decd` (PR 4044).
+Its report is `2026-11-08-rust-phase5-tasks-report.md`; there is no separate Phase 4c
+report at this baseline. The generic Notes adapter was absent at that baseline. Its merged foundation from
+PR 4047 is now consumed unchanged; People does not duplicate its filesystem implementation. People
+preferences remain in `app.preferences`.
+
+The frontmatter gap above now has eighteen additional differential fixtures for
+embedded, leading and trailing carriage returns and Unicode line/paragraph separators.
+The new fixture first failed on an embedded carriage return; the narrowed Rust parser
+then passed all one hundred and ten pure differential cases. A separate regression
+keeps dollar replacement tokens literal and proves that repeating a managed-note
+update does not duplicate human text. This is a deliberate correction to the legacy
+JavaScript replacement behavior, not a claim of byte parity for that corrupting case.
+
+### Generated guest binding decision (superseded)
+
+The initial checkpoint did not have approval for a generator. Ben explicitly approved
+`wit-bindgen` on 2026-11-08, confined to this worktree or scratch space. The later generated
+guest checkpoint records its use. `wit-bindgen`'s Rust generator supplies canonical ABI
+imports/exports, string/result ownership and component type metadata from the host WIT.
+A small People adapter implements the shared SDK's `Host::call` edge with those imports. The existing
+handwritten WAT component path remains available for host verification. The later compiled
+guest checkpoint below adds a handwritten ABI without installing a generator. A Wasm trampoline
+calling a native test driver is not proof of a compiled People guest, package installation
+or the real application. Installing a generator would not itself prove any of those.
+
+Full People parity remains open until all seven continuation steps are demonstrated.
+
+### Native persistence and privacy checkpoint
+
+This checkpoint adds a partial People repository through the merged SDK's typed-query and
+context ports. It includes person list/read/detail, identity-first exact resolution,
+identity/link reads, email identities, projection writes, find-or-create, note-identity
+removal and the unchanged composite indexing-state key. Every read and update includes
+owner filtering; the host supplies insert ownership and finalizes the invocation transaction.
+The legacy SQL bytes, seven-table inventory and `core-legacy` ledger identity remain unchanged.
+
+Two additive query options preserve legacy behavior: exact lower-case text equality without
+SQL wildcard expansion, and explicit null-first ordering. Existing query defaults remain
+null-last. Native lists page beyond the host's thousand-row select cap. Empty optional filters
+and a zero limit retain the old repository's behavior. The differential oracle found that
+confidence is a decimal string on the old wire path; the Rust response and public contract
+now preserve that actual value. Timestamp responses preserve JavaScript millisecond UTC form.
+
+The isolated database check runs the actual TypeScript repository/service and native Rust
+repository against the same synthetic committed rows. It compares read responses exactly,
+then compares projection responses and persisted rows using the existing parity harness's
+ID/time normalization. It also exercises repeated composite-state updates, forged person IDs,
+rollback after a projection and a list of more than a thousand rows. The handwritten Wasm
+trampoline invokes a native driver through the real shared ports and call scope. This is
+native persistence evidence, **not** the complete HTTP parity harness or a compiled guest.
+
+The separate privacy matrix runs the unchanged tables under both runtime app and worker roles.
+For another user and an instance administrator it runs the same read/insert/update/delete
+checks with RLS temporarily removed in the disposable gate database, observes violations,
+restores forced RLS and requires no violations. Owner controls prove allowed operations and
+reject owner reassignment. Events preserve their existing append-only grants: removing RLS
+exposes reads/inserts, while update/delete remain denied by grants. Test mutations roll back;
+synthetic users are removed. No installed application's database is used.
+
+No app-map surface changes in this checkpoint: the installed product gains no screen,
+setting, tool or package yet. Step five must add the Rust package's truthful metadata with
+its actual Settings pane. Existing People declarations are not evidence of a Rust surface.
+
+### Remaining work by continuation step
+
+1. The repository consumes the shared query/context contracts. The compiled guest now uses
+   the handwritten `Host::call` ABI described below and the generated
+   `wasm32-wasip2` path verified below. JS-47's merged generic linked-notes
+   adapter is consumed unchanged. Ben has approved the pinned generator dependency.
+2. Native identity/link mutations, match review and merge/split now have the differential
+   checkpoint below. Register them through actual handlers, complete indexing response
+   mapping and prove the remaining error/edge cases. `findPeopleByNames` runs in the
+   compiled guest; installed public API routing remains open. Projection upserts now use
+   an atomic conflict update and a concurrent-call regression. Multi-page reads use the host's read-committed transaction;
+   a stable snapshot under concurrent changes remains unproven. Register responses/errors
+   through actual handlers and complete indexing response mapping.
+3. The canonical-note service now consumes the merged adapter as described below. Complete
+   the legacy rename/archive projection fallback, safe HTTP errors and actual ingest nudges.
+   The service checkpoint does not prove crash recovery or unlimited-folder parity.
+4. The compiled guest now implements all seven tool execution functions, as described below.
+   Connect them and both job kinds to installed host dispatch. Verify approval blocks,
+   metadata-only payloads, retries, source versions, cooldown, repeated indexing and delay.
+5. Package the verified component build and complete installation and the shared-frame Settings pane; retain preferences
+   in `app.preferences`. Update app-map navigation, settings, features and recovery metadata.
+6. Extend the HTTP parity harness across all remaining behavior. The new native differential
+   and failing-first database matrix cover only the bounded checkpoint described above.
+7. Run the authenticated Rust app, exercise real People Settings and chat, then prove the
+   HTTPS/trusted-origin path from a second device. No UI screenshot or device proof exists
+   for this checkpoint. Do not request full People acceptance on its strength.
+
+The full continuation is too large for the requested bounded session. Preserve this tested
+checkpoint and continue from the list above; it is not a completed People part two delivery.
+
+### Checkpoint verification
+
+Observed locally on this work: the People native tests (including all one hundred and ten
+TypeScript differential vectors), SDK contract tests, strict People/host clippy, Rust
+formatting, root lint, Prettier, file-size check and complete project typecheck passed.
+The narrowed database gate passed with its protection-removal controls and restored-policy
+checks, and removed its disposable database container with exit code zero. These checks do
+not replace CI or any of the missing assembled-application proof.
+
+Reproduce database verification with `scripts/run-gate.sh start --gate
+rust-spike/module-host/tools/people-gate.sh`, followed by `scripts/run-gate.sh wait --follow`.
+Set `CARGO_TARGET_DIR` outside the checkout and use the pinned Rust toolchain. The recipe
+proof records actual command output and the unproven areas; its files stay outside commits.
+
+### Compiled guest checkpoint
+
+The SDK's optional `component` feature now has handwritten canonical ABI imports, owned
+string/result allocation and finalization, and an export macro. The additive host build
+wrapper turns the compiled Rust core into the existing Moss WIT component using the already
+declared Wasmtime and WAT crates. It rejects imports outside shared memory and Moss ports,
+then validates the completed component. Legacy assembly remains available. No third-party
+package or generator was installed.
+
+The real compiled People guest handles `resolve`, `getPerson` and
+`listEmailIdentityValues`. The boundary check exercises long Unicode inputs/results, missing
+capabilities, invalid parameters, host errors and call completion. The disposable database
+gate compares those guest responses exactly with the actual TypeScript service/repository
+on the same synthetic legacy rows, including literal wildcard characters, rejected identities,
+archived people and null-first recent links. Other-user and administrator reads return no
+private person or email data. The separate failing-first RLS matrix remains the privacy
+protection-removal proof; a passing guest read is not a substitute for that matrix.
+
+This build uses an already available `wasm32-unknown-unknown` standard library and the
+handwritten wrapper. The spec's `wasm32-wasip2` shipping build remains unproven. This is not
+an installed package, route parity, Settings/chat integration or second-device proof.
+At that checkpoint the generator decision remained open. Ben subsequently approved
+`wit-bindgen`, as recorded below; its ownership/type metadata does not supply the missing
+module behavior or live proof.
+
+### Persistence mutations and public name lookup checkpoint
+
+The compiled guest now also handles `findPeopleByNames`, compared with the current
+TypeScript helper on the same committed PostgreSQL rows. Cases cover exact active
+names/aliases, case folding, duplicate requests, the raw thirty-name cap, wildcard
+characters, first-created ordering and summary truncation. Another account and an
+administrator receive no matches. One exceptional compatibility gap remains: if the
+legacy UTF-16 summary cutoff splits a surrogate pair, Rust rejects the response because
+the shared JSON value model cannot represent the lone surrogate. Ordinary Unicode
+summaries are covered; this is not full Unicode wire parity.
+
+The internal repository now supports identity/link/source/candidate writes, candidate
+review, merge and split. A rollback-only TypeScript oracle executes those existing
+repository/service operations and records responses plus all seven tables. The native
+Rust driver executes the same workflow through Wasmtime and shared transactional ports;
+the existing parity harness compares generated IDs, timestamps and persisted rows.
+Integral JSON floats normalize to JavaScript's integral number spelling without rounding
+large integers. Mutation handlers, canonical-note coordination and HTTP parity are still open.
+
+Typed queries gain a bounded owner-scoped conflict-update option for atomic projection,
+link, candidate and composite-state upserts. The guest cannot change ownership. A pair of
+concurrent host calls proves both projections succeed for the same new person ID. Active
+unique email/source identities retain conflict-ignore then update because their legacy
+unique index is partial. Background calls now keep the configured worker database role;
+a real compiled guest read first failed under the old hardcoded app-role switch and passed
+with the pool's actual runtime role. This does not change module-ledger role selection.
+
+The current disposable database run passed compiled read/name responses, native mutation
+responses and persisted rows, concurrent projections, rollback, forged IDs, paging and the
+failing-first raw RLS matrix. It does not prove installed public API routing, tools/jobs,
+linked-note operations, a package or a live Settings/chat/device path. No screen or setting
+ships at this checkpoint, so no app-map surface has been added yet.
+
+### Linked canonical-note service checkpoint
+
+People now consumes the merged Notes foundation from PR 4047 through its public host
+contract. Trusted composition maps `people-notes` to the unchanged `people-notes-folder`
+account preference, with legacy relative folders resolved against `notes-source-path`.
+Allowed roots remain trusted account configuration. No preference moved to module storage.
+The guest performs no filesystem I/O.
+
+Create, update, archive and refresh use fresh host reads, canonical-ID checks, occupied-file
+checks and compare-write. Projections and note alias/email identities use the existing legacy
+tables in the same invocation. Phones remain note text, matching the old service. Refresh
+retains malformed-note counts, missing/duplicate-ID review and missing-canonical-note review.
+Guest scans refuse more than two thousand entries or four MiB of text rather than returning
+partial projections. These additional bounds remain a compatibility limit, not a claim of
+unlimited-folder parity.
+
+The first compiled-note check failed on create with the old guest. The initial follow-up
+also loaded the old artifact because the component wrapper was still compiling; that result
+is not a verification of the new implementation. Subsequent checks wait for build completion
+and record the actual component hash. The new guest imports the generic vault port, so its
+read-only fixture manifests now declare that import too; their read tests still connect no
+filesystem service.
+
+The new integration check uses the compiled guest, merged adapter, real `app.preferences`
+and legacy database tables. It compares canonical create/update/archive responses and note
+bytes with the actual TypeScript `PeopleNotesService` running through `VaultContext` in a
+rollback-only oracle. Fault controls interleave a real external edit and force a failure
+after actual file publication. A separate fault interrupts after projection and
+note-identity deletion; its first test implementation incorrectly stopped before projection
+and left the fault armed for refresh. The corrected run reaches the intended later failure.
+The test also attempts projection using another owner's
+real person ID after publication. Expected behavior is to restore unchanged originals, retain
+external edits, reject the foreign projection and leave database state unchanged. These are
+file compensation checks, never a distributed transaction or process-crash recovery claim.
+The compiled note workflow passed in the corrected disposable database run, including
+the real TypeScript response/byte comparisons and both publication and projection failures.
+The merged adapter's own failing-first preference tests are included in the People gate.
+
+Partial route entry points exercise this service; they are not installed HTTP dispatch.
+The old rename/archive fallback to projection-only changes when canonical notes are
+missing/unavailable, safe HTTP status/error mapping and actual ingest nudges still need
+implementation. The adapter's limitations at that checkpoint are documented in
+`modules/notes/HOST_ADAPTER.md`; the later dependency refresh below consumes its Unix
+read-only-folder fix. External-editor races and crash reconciliation remain open. Package,
+Settings, tools/jobs, app-map surfaces, full HTTP parity and actual UI/device proof remain
+open. This checkpoint alone does not establish full People parity.
+
+### Generated guest and tool-execution checkpoint
+
+Ben approved `wit-bindgen` on 2026-11-08. People now declares optional, pinned version
+`0.57.1`, with its normal locked transitive dependencies. Generator dependencies, the
+pinned compiler's target and build outputs were kept in task-local scratch caches; no
+program, package or compiler target was installed globally. The generator consumes the
+shared host WIT and selects only the People database, context and linked-notes ports.
+Its generated code owns canonical imports/exports, allocation and returned strings/results.
+The SDK's handwritten component path is retained for comparison and compatibility.
+
+The first generated `wasm32-wasip2` component was rejected by the unchanged host validator:
+the Rust standard library brought in a WASI poll import. Trimming and abort-on-panic did not
+remove that boundary. The additive build wrapper now closes WASI core function imports
+with internal trap-only functions, then lifts the generator's canonical exports. It gives
+no WASI service to the host linker. A normal People operation must use the declared Moss
+ports; an attempted WASI call fails the invocation. Unknown foreign imports remain errors.
+The note parser uses a tree map so it does not request randomized hash seeds.
+
+The real generated People guest passed the existing canonical ABI check, including long
+Unicode strings, malformed inputs, missing capabilities, redacted host errors and call
+finalization. Build-wrapper fixtures separately check that a closed WASI call traps and a
+foreign import is rejected. These fixtures are boundary tests, not product or privacy proof.
+The trap assertion was observed failing after replacing the traps with zero-returning
+functions, then passing after restoring the same source. The restored implementation is
+committed; the weakened control is not shipped.
+The complete generated build is reproducible through
+`modules/people/tools/build-generated-component.sh`; its optional guest cache variables are
+documented in the People README. No new third-party CLI is required.
+
+All seven existing tools now have execution handlers in the compiled People guest. The
+rollback-only oracle calls the actual TypeScript tool execute functions, then the Rust test
+runs the same requests on their original synthetic database rows. It compares response
+shapes, citation tokens, column order, match review, merge and identity split through the
+existing parity normalizer. It verifies that refusing an explicit merge/split candidate
+leaves that candidate pending, and exercises other-user and administrator read/mutation
+attempts. The old compiled component first failed because the tool handler was unavailable.
+The first new test reached all tool responses, then exposed an enum-to-text decoding error
+in its own assertion. After correcting that assertion, the handwritten guest run passed.
+These are execution-seam checks; installed chat, its approval policy and app-action blocks
+are still unproven.
+
+The first complete generated-guest run stopped at the canonical-note response comparison:
+compilation and other suites had separated the real TypeScript and Rust operations by more
+than ten minutes. Both normalizers incorrectly used the later comparison time. Each oracle
+now records its own operation start, and each Rust workflow captures its start before
+running. The existing ten-minute normalization window and comparison fields are unchanged.
+Pre-existing synthetic rows have explicit historical timestamps, so they remain exact
+shared fixtures rather than being treated as fresh writes on only one side of a long run.
+This is a test-clock correction, not a People behavior change.
+
+The complete generated-guest People gate then passed all seven suites, with eight tests
+and exit code zero. It exercised the real generated ABI, public APIs against TypeScript,
+canonical-note responses and bytes, conflict/compensation cases, persisted mutations,
+all seven tool executors, and the failing-first legacy-table and preference privacy
+matrices. Both runtime roles were checked, including other-user and administrator access.
+The throwaway database container was removed. The first clock-anchor run still failed
+on a pre-existing tool link's timestamp; the successful confirmation includes the fixed
+historical fixture dates in `55c6503e8`.
+
+The successful run is `20261108-055807-EpLAN0`, with input fingerprint
+`sha256:4c2043d149b269adbe3a5aeba7962df6079b875eed3be600ecd9f23ffd8b8c5e`.
+It began on `5ba163741` with the clock/fixture changes present; those source changes were
+then committed as `55c6503e8`. Its pinned generated component digest is
+`sha256:b9e8557b3e782fae4d7d2828432f5edc3c4a0196a00ebfcb9b823449adab94ff`.
+These are guest/host integration receipts, not an installed package, HTTP parity, CI,
+chat approval-policy or UI/device proof. One review round covered the earlier persistence
+checkpoint; the remaining round must review the final partial checkpoint before Ready.
+Its outcome belongs in the task's review record and proof.
+
+Repository-wide lint passed at this checkpoint. Scoped lint and formatting for the changed
+TypeScript oracles, report formatting, both pinned Rust formatting checks and
+`git diff --check` passed. Repository-wide formatting and file-size checks subsequently
+passed. Type checking must also pass before this partial checkpoint requests acceptance.
+The final check results, including checks after the dependency refresh, belong in the
+acceptance proof rather than being inferred from the earlier gate receipt.
+
+No installed screen, setting or package ships in this checkpoint, so the existing app map
+must not advertise a Rust People surface. Add the package's truthful navigation, settings,
+features and recovery metadata together with its working Settings pane in step five.
+
+The remaining work still exceeds a single bounded continuation: finish metadata-only jobs
+and provider/indexing dispatch; complete HTTP routes, safe errors and projection fallbacks;
+connect shared account preferences and ingest nudges; build and install the real package
+and shared-frame Settings pane; extend HTTP parity; and prove signed-in UI/chat plus a second
+device over the approved HTTPS path. The assembled shell at this checkpoint still uses its
+stub contract; a module frame fixture is not a substitute for that final application check.
+All seven steps must be demonstrated before closing full People parity. The user's later
+authorization permits JS-50 to request acceptance for this partial checkpoint only.
+
+Before that request, the consumed Notes dependency was refreshed to match the already
+merged Notes part-two files on main. This includes per-invocation adapter locks, Unix
+read-only-folder support and their tests; People does not maintain a duplicate adapter.
+The equivalent legacy runtime-role selection also matches main, avoiding a merge conflict
+with the shared-host change. A fresh gate against the final checkpoint and the final review
+are recorded in the acceptance proof. No installed UI or device proof is supplied by this
+internal checkpoint; those checks remain explicitly assigned to People part three.
+
+PR CI found a shared-SDK source-compatibility regression before acceptance: adding a
+required `Order` field broke Calendar's existing struct literals. A dedicated SDK test
+reproduced the same compiler error. `Order` now retains its original two fields and default
+wire shape. The additive `Client::query_with_nulls_first` method supplies a query-level
+`nullsFirst` list; the host accepts only distinct columns already present in the ordering.
+People opts into that method for its legacy descending order, while other callers keep
+their original behavior. The earlier unfinished review was interrupted so the final review
+and rebuilt guest/database proof cover this corrected revision.
+
+The next implementation step is the two job kinds. The merged host deliberately permits
+only UUID IDs, flags, counts and fixed choices as queue parameters; its underlying contract
+explicitly excludes free text. People must retain the original source hash and optional
+source version without coercing them into UUIDs or silently discarding them. Keep that
+data behind an account-scoped command reference and make each new indexing cycle a new
+command, while retries retain the same command identity. The current checkpoint has not
+implemented that command storage/dispatch or the provider seam. In particular, a permanent
+queue deduplication key must not suppress later indexing of the same source.
+The existing account key-value port locks individual get/set operations but has no atomic
+read-modify-write operation. A command collection cannot safely be implemented as concurrent
+get/replace calls on one map; its storage seam must preserve simultaneous enqueues.
