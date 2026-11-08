@@ -104,6 +104,32 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
     }
     let settings = call(f.a, "GET", "/briefing-settings", Value::Null);
     assert_eq!(settings["body"]["settings"]["prepTaskMode"], "auto");
+    let display = call(f.a, "GET", "/display-settings", Value::Null);
+    assert_eq!(display["status"], 200);
+    assert!(display["body"]["now"].as_str().is_some());
+    let view = json!({"view":"week","cursor":"2026-11-08","workWeek":true});
+    assert_eq!(
+        call(f.a, "PATCH", "/display-settings", view.clone())["status"],
+        200
+    );
+    assert_eq!(
+        call(f.a, "GET", "/display-settings", Value::Null)["body"]["view"],
+        view
+    );
+    assert_eq!(
+        call(f.b, "GET", "/display-settings", Value::Null)["body"]["view"],
+        Value::Null
+    );
+    assert_eq!(
+        call(f.admin, "GET", "/display-settings", Value::Null)["body"]["view"],
+        Value::Null
+    );
+    let bad = json!({"view":"month","cursor":"2026-11-08","workWeek":false,"timeBlockMode":"auto"});
+    assert_eq!(call(f.a, "PATCH", "/display-settings", bad)["status"], 400);
+    assert_eq!(
+        call(f.a, "GET", "/display-settings", Value::Null)["body"]["view"],
+        view
+    );
     assert_eq!(
         call(f.b, "GET", "/briefing-settings", Value::Null)["body"]["settings"]["prepTaskMode"],
         "suggest"

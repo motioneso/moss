@@ -1,7 +1,7 @@
 # Shared module UI kit
 
 Initial Leptos versions of Park Press Button, Field, FormLabel, EmptyState and
-Masthead. Markup and options follow `packages/ui`; styling comes from its authored
+Masthead, plus Calendar event chips, month cells and a native modal peek. Markup and options follow `packages/ui`; styling comes from its authored
 CSS and the app tokens. This is a starting set, not a complete React component port.
 Use `ssr` for native rendering tests and `csr` for browser WebAssembly builds.
 
@@ -12,7 +12,7 @@ python3 rust-spike/module-ui/build-assets.py /tmp/moss-module-shared
 node --test rust-spike/module-ui/web/bridge.test.mjs
 ```
 
-The build script expands canonical CSS imports and copies canonical fonts into
+The build script includes the canonical startup reset, expands canonical CSS imports and copies canonical fonts into
 the selected output directory; generated assets stay out of commits. Serve that
 directory at `/module-shared/`. Module screens use the host's opaque iframe and
 `web/guest-bridge.mjs`, not direct authenticated HTTP. The signed-in parent installs

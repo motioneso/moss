@@ -1,8 +1,10 @@
-# Calendar Rust package: data and two chat tools
+# Calendar Rust package: cached-event screens and two chat tools
 
 Part of #4027. This is the package and data foundation, **not the full Calendar port**.
-The existing TypeScript app stays in place. Screens, settings writes, the remaining four
-chat tools, jobs, provider execution and the assembled HTTP/UI parity gate remain open.
+The existing TypeScript app stays in place. Version 0.3.0 adds packaged Day, Week and
+Month screens, event details and view-only automation settings. Authenticated shell
+composition, settings writes, the remaining four chat tools, jobs, provider execution
+and the assembled HTTP/UI parity gate remain open.
 
 Version 0.2.0 adds `calendar.heartbeatWindow` (owned cache reads) and
 `calendar.dayPlanDraft` (typed evening intent and untimed task proposals). The latter
@@ -23,7 +25,7 @@ retain owner-only rules. A draft cannot overwrite recorded placement.
 
 `host/` is a **trusted host wrapper**, separate from the guest. Use `CalendarPorts::new` in
 `Application::open_extended_with`. It reads only the seven existing Calendar preference keys
-through the authenticated data context, plus the actor's saved locale timezone for chat.
+through the authenticated data context, plus the actor's saved locale timezone and clock format.
 `with_references` accepts actor-scoped public Tasks and
 Briefing projections; no other module's tables are queried here. Without those projections,
 drafts containing task references or a source run fail before committing. The returned task
@@ -45,7 +47,7 @@ scripts/run-gate.sh start --gate ./modules/calendar/tools/gate.sh
 scripts/run-gate.sh wait --follow
 ```
 
-`check.sh` builds the native tests and Rust Wasm library, compares pure data behavior with the
+`check.sh` builds the native tests and both Rust Wasm libraries, compares pure data behavior with the
 existing TypeScript implementation, and loads the shipped component with the real host.
 The package builder wraps the pure core library in the existing `moss:module` component ABI
 without WASI imports. It uses `wasm32-unknown-unknown`, rather than the spec's proposed
@@ -76,3 +78,26 @@ cargo +1.95.0 run --locked --offline --manifest-path modules/calendar/host/Cargo
 
 A production registry must sign the digest using its approved first-party publisher. Tests
 use fresh ephemeral keys and do not establish a production publishing configuration.
+
+## Packaged screens checkpoint
+
+The UI is a Rust/Leptos crate in `ui/`. It uses the shared module UI kit and authored
+Calendar CSS, receives account data exclusively through the parent MessagePort bridge,
+and keeps the iframe opaque. The module declares its screen, navigation, settings and
+feature metadata. Display choices use account-scoped package KV under `calendar.ui-view`;
+they cannot alter automation permission or provider data. This replaces device-local
+storage for these choices, because the opaque iframe cannot safely use app-origin storage.
+
+Builds use separate host, guest and UI targets. Set `CALENDAR_UI_TARGET`,
+`CALENDAR_UI_DIR` and `CALENDAR_BINDGEN_TARGET` to choose scratch directories.
+The existing project-local `rust-spike/ui/bindgen` helper generates the browser module;
+no CLI is installed. Packaging requires the generated directory in `CALENDAR_UI_DIR`.
+
+For a disposable **synthetic-account** browser check, claim a dev port, generate shared
+assets and launch `tools/ui-live.sh` through `scripts/run-gate.sh`. Set
+`CALENDAR_BROWSER_PORT`, `CALENDAR_SHARED_DIR` and `CALENDAR_BROWSER_DONE` (a scratch
+sentinel path). Creating the sentinel stops the fixture; it also expires after half an
+hour. This uses a real signed registry installation, database, component and iframe,
+but does not provide sign-in, production shell composition, provider execution or
+second-device HTTPS proof. It binds only to loopback intentionally. Do not use it as a
+production server or represent it as final Calendar acceptance.

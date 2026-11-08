@@ -48,7 +48,7 @@ impl AssetPolicy {
         let base = format!("{}/module-ui/{id}/{digest}/ui/", self.origin);
         let shared = format!("{}/module-shared/", self.origin);
         BTreeMap::from([
-            ("Content-Security-Policy".into(),format!("default-src 'none'; sandbox allow-scripts; script-src {base} 'wasm-unsafe-eval'; style-src {base} {shared}park-press.css; connect-src {base}; img-src {base}; font-src {shared}; base-uri 'none'; form-action 'none'; frame-ancestors 'self'")),
+            ("Content-Security-Policy".into(),format!("default-src 'none'; sandbox allow-scripts; script-src {base} 'wasm-unsafe-eval'; style-src {base} {shared}park-press.css; style-src-attr 'unsafe-inline'; connect-src {base}; img-src {base}; font-src {shared}; base-uri 'none'; form-action 'none'; frame-ancestors 'self'")),
             ("Access-Control-Allow-Origin".into(),"null".into()),
             ("Cross-Origin-Resource-Policy".into(),"cross-origin".into()),
             ("X-Content-Type-Options".into(),"nosniff".into()),

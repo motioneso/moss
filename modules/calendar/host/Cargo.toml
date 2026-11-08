@@ -3,6 +3,11 @@ name = "moss-calendar-host"
 version = "0.1.0"
 edition = "2021"
 publish = false
+autoexamples = false
+
+[[example]]
+name = "ui_check"
+path = "examples/ui_check.rs"
 
 [workspace]
 

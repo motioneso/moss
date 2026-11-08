@@ -1,0 +1,47 @@
+/* Module-owned layout only; identity comes from the shared Park Press stylesheet. */
+body {
+  margin: 0;
+}
+.cal-wrap {
+  height: 100dvh;
+  max-height: 100dvh;
+  --cal-h: 58px;
+}
+.cal-month__grid {
+  grid-auto-rows: minmax(112px, 1fr);
+}
+.cal-native-dialog {
+  margin: 0 0 0 auto;
+  max-height: 100dvh;
+  max-width: min(100vw, 460px);
+}
+.cal-native-dialog:not([open]) {
+  display: none;
+}
+.cal-native-dialog::backdrop {
+  background: var(--scrim, var(--overlay-bg));
+}
+.cal-notice {
+  padding: 0 var(--space-4) var(--space-3);
+}
+.calendar-settings {
+  max-width: 760px;
+  margin: auto;
+  padding: var(--space-4);
+}
+.calendar-settings dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+.calendar-settings dt,
+.calendar-settings dd {
+  margin: 0;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.calendar-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
