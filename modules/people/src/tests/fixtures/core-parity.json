@@ -248,46 +248,31 @@
   {
     "op": "signature",
     "kind": "create_person",
-    "ids": [
-      "b",
-      "a"
-    ],
+    "ids": ["b", "a"],
     "expected": "de3fcc57fec6447ea5175947c33886e7"
   },
   {
     "op": "signature",
     "kind": "create_person",
-    "ids": [
-      "a|b",
-      "c"
-    ],
+    "ids": ["a|b", "c"],
     "expected": "d24b2ae0712d7db8cea613cbe1ce930f"
   },
   {
     "op": "signature",
     "kind": "create_person",
-    "ids": [
-      "😀",
-      ""
-    ],
+    "ids": ["😀", ""],
     "expected": "837a1066e7714ca2d833f5be5e874c7e"
   },
   {
     "op": "signature",
     "kind": "create_person",
-    "ids": [
-      "same",
-      "same"
-    ],
+    "ids": ["same", "same"],
     "expected": "fe595f6d7b65704c394790b932df936a"
   },
   {
     "op": "signature",
     "kind": "create_person",
-    "ids": [
-      "résumé.md",
-      "名字.md"
-    ],
+    "ids": ["résumé.md", "名字.md"],
     "expected": "3f72b29ea3a425c70eeddd5fb92a3584"
   },
   {
@@ -299,46 +284,31 @@
   {
     "op": "signature",
     "kind": "link_identity",
-    "ids": [
-      "b",
-      "a"
-    ],
+    "ids": ["b", "a"],
     "expected": "b9e162aa37b377b01556b6f965e6d4f9"
   },
   {
     "op": "signature",
     "kind": "link_identity",
-    "ids": [
-      "a|b",
-      "c"
-    ],
+    "ids": ["a|b", "c"],
     "expected": "a60881a9139b3a5914bd5a011b13de37"
   },
   {
     "op": "signature",
     "kind": "link_identity",
-    "ids": [
-      "😀",
-      ""
-    ],
+    "ids": ["😀", ""],
     "expected": "93571d57e557806ae21970dacd8fe028"
   },
   {
     "op": "signature",
     "kind": "link_identity",
-    "ids": [
-      "same",
-      "same"
-    ],
+    "ids": ["same", "same"],
     "expected": "dc86fa16932618e18690e7ae7a33a51a"
   },
   {
     "op": "signature",
     "kind": "link_identity",
-    "ids": [
-      "résumé.md",
-      "名字.md"
-    ],
+    "ids": ["résumé.md", "名字.md"],
     "expected": "85341be64bfe226f5557b7d36a30a176"
   },
   {
@@ -350,46 +320,31 @@
   {
     "op": "signature",
     "kind": "merge_people",
-    "ids": [
-      "b",
-      "a"
-    ],
+    "ids": ["b", "a"],
     "expected": "3f68989dee72991d87ce2886b3204f69"
   },
   {
     "op": "signature",
     "kind": "merge_people",
-    "ids": [
-      "a|b",
-      "c"
-    ],
+    "ids": ["a|b", "c"],
     "expected": "c87302cd792974468b399c309bd9693c"
   },
   {
     "op": "signature",
     "kind": "merge_people",
-    "ids": [
-      "😀",
-      ""
-    ],
+    "ids": ["😀", ""],
     "expected": "175d47a8174ac8d477cbdefbb90551d1"
   },
   {
     "op": "signature",
     "kind": "merge_people",
-    "ids": [
-      "same",
-      "same"
-    ],
+    "ids": ["same", "same"],
     "expected": "318d2a4c251693a4b5c52fd0889dc20b"
   },
   {
     "op": "signature",
     "kind": "merge_people",
-    "ids": [
-      "résumé.md",
-      "名字.md"
-    ],
+    "ids": ["résumé.md", "名字.md"],
     "expected": "c6e90e59ca520eea10813e10874b934e"
   },
   {
@@ -401,46 +356,31 @@
   {
     "op": "signature",
     "kind": "split_identity",
-    "ids": [
-      "b",
-      "a"
-    ],
+    "ids": ["b", "a"],
     "expected": "a700d41423777bdebf962e7d7c87e423"
   },
   {
     "op": "signature",
     "kind": "split_identity",
-    "ids": [
-      "a|b",
-      "c"
-    ],
+    "ids": ["a|b", "c"],
     "expected": "ab6e8b8398ac22015f79ca9f6540d5f6"
   },
   {
     "op": "signature",
     "kind": "split_identity",
-    "ids": [
-      "😀",
-      ""
-    ],
+    "ids": ["😀", ""],
     "expected": "ad551e24a3a6c1013566e8d77751f4c4"
   },
   {
     "op": "signature",
     "kind": "split_identity",
-    "ids": [
-      "same",
-      "same"
-    ],
+    "ids": ["same", "same"],
     "expected": "6578b7e08339a4b2ad4bcced8c1d05d2"
   },
   {
     "op": "signature",
     "kind": "split_identity",
-    "ids": [
-      "résumé.md",
-      "名字.md"
-    ],
+    "ids": ["résumé.md", "名字.md"],
     "expected": "2f04814a8b11a037b404664657e91098"
   },
   {
@@ -449,16 +389,9 @@
       "frontmatter": {
         "jarvisPersonId": "00000000-0000-4000-8000-000000000123",
         "displayName": "Alice Example",
-        "aliases": [
-          "Al",
-          "A Example"
-        ],
-        "emails": [
-          "Alice@example.test"
-        ],
-        "phones": [
-          "+1 555 0100"
-        ],
+        "aliases": ["Al", "A Example"],
+        "emails": ["Alice@example.test"],
+        "phones": ["+1 555 0100"],
         "status": "active"
       },
       "body": "# Alice\n\nHuman notes\n"
@@ -471,16 +404,9 @@
       "frontmatter": {
         "jarvisPersonId": "00000000-0000-4000-8000-000000000123",
         "displayName": "Alice Example",
-        "aliases": [
-          "Al",
-          "A Example"
-        ],
-        "emails": [
-          "Alice@example.test"
-        ],
-        "phones": [
-          "+1 555 0100"
-        ],
+        "aliases": ["Al", "A Example"],
+        "emails": ["Alice@example.test"],
+        "phones": ["+1 555 0100"],
         "status": "active"
       },
       "body": ""
@@ -493,16 +419,9 @@
       "frontmatter": {
         "jarvisPersonId": "00000000-0000-4000-8000-000000000123",
         "displayName": "Alice Example",
-        "aliases": [
-          "Al",
-          "A Example"
-        ],
-        "emails": [
-          "Alice@example.test"
-        ],
-        "phones": [
-          "+1 555 0100"
-        ],
+        "aliases": ["Al", "A Example"],
+        "emails": ["Alice@example.test"],
+        "phones": ["+1 555 0100"],
         "status": "active"
       },
       "body": "Body﻿"
@@ -515,16 +434,9 @@
       "frontmatter": {
         "jarvisPersonId": "00000000-0000-4000-8000-000000000123",
         "displayName": "Alice Example",
-        "aliases": [
-          "Al",
-          "A Example"
-        ],
-        "emails": [
-          "Alice@example.test"
-        ],
-        "phones": [
-          "+1 555 0100"
-        ],
+        "aliases": ["Al", "A Example"],
+        "emails": ["Alice@example.test"],
+        "phones": ["+1 555 0100"],
         "status": "active"
       },
       "body": "Body"
@@ -588,9 +500,7 @@
       "frontmatter": {
         "jarvisPersonId": null,
         "displayName": "Alice",
-        "aliases": [
-          "Al"
-        ],
+        "aliases": ["Al"],
         "emails": [],
         "phones": [],
         "status": "active"
@@ -610,10 +520,7 @@
       "frontmatter": {
         "jarvisPersonId": null,
         "displayName": "Alice",
-        "aliases": [
-          "Al",
-          "Another"
-        ],
+        "aliases": ["Al", "Another"],
         "emails": [],
         "phones": [],
         "status": "active"
@@ -648,16 +555,9 @@
       "frontmatter": {
         "jarvisPersonId": "00000000-0000-4000-8000-000000000123",
         "displayName": "Alice Example",
-        "aliases": [
-          "Al",
-          "A Example"
-        ],
-        "emails": [
-          "Alice@example.test"
-        ],
-        "phones": [
-          "+1 555 0100"
-        ],
+        "aliases": ["Al", "A Example"],
+        "emails": ["Alice@example.test"],
+        "phones": ["+1 555 0100"],
         "status": "active"
       },
       "body": "# Alice\n\nHuman notes\n"
@@ -670,16 +570,9 @@
       "frontmatter": {
         "jarvisPersonId": "00000000-0000-4000-8000-000000000123",
         "displayName": "Alice Example",
-        "aliases": [
-          "Al",
-          "A Example"
-        ],
-        "emails": [
-          "Alice@example.test"
-        ],
-        "phones": [
-          "+1 555 0100"
-        ],
+        "aliases": ["Al", "A Example"],
+        "emails": ["Alice@example.test"],
+        "phones": ["+1 555 0100"],
         "status": "active"
       },
       "body": ""
@@ -692,16 +585,9 @@
       "frontmatter": {
         "jarvisPersonId": "00000000-0000-4000-8000-000000000123",
         "displayName": "Alice Example",
-        "aliases": [
-          "Al",
-          "A Example"
-        ],
-        "emails": [
-          "Alice@example.test"
-        ],
-        "phones": [
-          "+1 555 0100"
-        ],
+        "aliases": ["Al", "A Example"],
+        "emails": ["Alice@example.test"],
+        "phones": ["+1 555 0100"],
         "status": "active"
       },
       "body": "Body\n"
@@ -714,16 +600,9 @@
       "frontmatter": {
         "jarvisPersonId": "00000000-0000-4000-8000-000000000123",
         "displayName": "Alice Example",
-        "aliases": [
-          "Al",
-          "A Example"
-        ],
-        "emails": [
-          "Alice@example.test"
-        ],
-        "phones": [
-          "+1 555 0100"
-        ],
+        "aliases": ["Al", "A Example"],
+        "emails": ["Alice@example.test"],
+        "phones": ["+1 555 0100"],
         "status": "active"
       },
       "body": "Body\n"

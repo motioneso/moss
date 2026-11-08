@@ -6,7 +6,9 @@ impl VaultContext {
     /// Scope a host-owned module data root to the authenticated account. A plain Root
     /// cannot enter a registered canonical vault, including through this constructor.
     pub fn for_module_files(root: &Root, access: &AccessContext) -> Result<Self, VaultError> {
-        Ok(Self { root: root.create_subdir(&access.actor_user_id().to_string())? })
+        Ok(Self {
+            root: root.create_subdir(&access.actor_user_id().to_string())?,
+        })
     }
 }
 
@@ -23,7 +25,9 @@ mod tests {
         first.write("note", b"private").unwrap();
         let second = VaultContext::for_module_files(&root, &b).unwrap();
         assert!(second.read("note").is_err());
-        assert!(second.read(&format!("../{}/note", a.actor_user_id())).is_err());
+        assert!(second
+            .read(&format!("../{}/note", a.actor_user_id()))
+            .is_err());
         // A previously opened plain handle must not reopen a now-protected vault.
         let plain = Root::create(&tmp.path().join("vaults")).unwrap();
         let _vaults = crate::Vaults::create(plain.path()).unwrap();

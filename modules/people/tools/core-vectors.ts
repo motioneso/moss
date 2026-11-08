@@ -1,4 +1,6 @@
 // Record outputs from the current implementation, without database or filesystem mutations.
+import { fileURLToPath } from "node:url";
+import { format, resolveConfig } from "prettier";
 import {
   candidateSignature,
   matchResult,
@@ -93,4 +95,9 @@ for (const signals of [[], [0.4], [0.4, 0.8, 0.2], [0.99, 0.8]].map((confidences
 )) {
   cases.push({ op: "match", signals, expected: [...matchResult(signals)] });
 }
-process.stdout.write(JSON.stringify(cases, null, 2) + "\n");
+process.stdout.write(
+  await format(JSON.stringify(cases, null, 2), {
+    ...(await resolveConfig(fileURLToPath(import.meta.url))),
+    parser: "json"
+  })
+);

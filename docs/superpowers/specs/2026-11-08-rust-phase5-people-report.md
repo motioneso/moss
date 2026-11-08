@@ -136,6 +136,23 @@ This is a target contract, not a claim that package handlers exist yet. No scree
 setting or user-facing capability ships in this slice, so the current app map is unchanged.
 Part two must add the package metadata in the same change as its working surfaces.
 
+### Minor compatibility gaps from independent review
+
+The first review found no major or blocking issue in the approved slice. Two rare pure
+note-format differences remain for part two; the ninety-two vectors do not cover these cases:
+
+- Managed text containing JavaScript replacement tokens such as `$&` or `$$` is inserted
+  literally by Rust. Current TypeScript expands those tokens, which can duplicate an old
+  managed section or change dollar signs. Keep this gap visible rather than claiming full
+  parity or silently copying the existing note-corruption behavior. Part two must add an
+  explicit regression and settle the compatibility behavior before full-parity acceptance.
+- Embedded carriage returns and Unicode line/paragraph separators inside frontmatter values
+  are accepted by Rust but rejected by TypeScript's line patterns. Add differential fixtures
+  and narrow the Rust parser in part two. Ordinary CRLF endings are already covered.
+
+These are below the task's must-fix review level and are deferred with the rest of complete
+People parity. This slice does not expose the new note writer to users.
+
 ## Verification
 
 From `~/Jarv1s`, the pure crate's README gives the native test, strict Clippy, formatting and
@@ -158,7 +175,10 @@ pure fixtures nor the queue test is proof of People persistence or the installed
 1. **Integrate public host contracts.** Consume JS-46's merged SDK, typed filtered/composite-key
    queries, guest-invocation transactions, `finish_call`, parameterized dispatch, shared frame
    and context ports. Context supplies the authenticated actor, current UTC time and UUIDs.
-   Keep legacy assembly working. Consume JS-47's linked-notes adapter instead of duplicating
+   Read `rust-spike/module-host/EXTENDED_HOST.md` once merged. The SDK currently supplies pure
+   `Host::call` contracts; its generated Rust component-ABI guest binding is still continuation
+   work. Complete that seam additively before building the People component. Keep legacy
+   assembly working. Consume JS-47's linked-notes adapter instead of duplicating
    its filesystem implementation. The trusted resource is `people-notes`, mapped to the
    existing account preference `people-notes-folder`; resolve legacy relative folders against
    `notes-source-path`. Host configuration chooses per-account allowed roots, never a guest.
@@ -184,7 +204,8 @@ pure fixtures nor the queue test is proof of People persistence or the installed
    setting, using the shared Leptos kit/frame. Add truthful app-map navigation, settings,
    features, errors and remediations in that same change. Workshop and Food stay excluded.
 6. **Prove full parity and privacy.** Extend the parity harness to compare persisted rows and
-   responses with current People. Through verify-gate, observe the same privacy tests fail
+   responses with current People, including the two note-format gaps above. Through
+   verify-gate, observe the same privacy tests fail
    without protection and pass with it: other-user and admin reads/inserts/updates/deletes,
    both runtime app and worker roles, default owner-only behavior. This slice's chosen-folder
    tests do not substitute for database RLS or linked-notes integration proof.
