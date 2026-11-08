@@ -48,3 +48,5 @@ pub mod transactional_database;
 pub mod dispatch;
 
 pub mod context;
+
+pub mod frame;
