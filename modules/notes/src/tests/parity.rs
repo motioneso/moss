@@ -44,7 +44,10 @@ fn run(op: &str, v: &Value) -> Result<Value, String> {
 }
 #[test]
 fn matches_legacy_typescript_results() {
-    let vectors: Vec<Value> = serde_json::from_str(include_str!("domain-vectors.json")).unwrap();
+    let vectors: Vec<Value> = include_str!("domain-vectors.jsonl")
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
     assert!(
         vectors.len() >= 90,
         "the differential corpus must stay populated"

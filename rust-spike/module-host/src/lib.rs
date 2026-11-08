@@ -10,6 +10,7 @@ pub mod trust;
 pub mod database;
 pub mod lifecycle;
 pub mod local;
+pub mod linked_notes;
 pub mod migrations;
 pub mod postgres;
 

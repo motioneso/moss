@@ -147,7 +147,7 @@ for (const input of [
   record("snapshot", input, () => snapshotKey(input));
 }
 writeFileSync(
-  fileURLToPath(new URL("../src/tests/domain-vectors.json", import.meta.url)),
-  JSON.stringify(vectors, null, 2) + "\n"
+  fileURLToPath(new URL("../src/tests/domain-vectors.jsonl", import.meta.url)),
+  vectors.map((vector) => JSON.stringify(vector)).join("\n") + "\n"
 );
 console.log(`Recorded ${vectors.length} results from the existing TypeScript Notes functions`);

@@ -3,7 +3,7 @@ use crate::{no_follow, set_create_mode, Entry, EntryKind, VaultContext, VaultErr
 use std::{
     fs::{self, File, OpenOptions},
     io::{self, Read},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 pub struct FolderLock {
@@ -12,6 +12,10 @@ pub struct FolderLock {
 }
 
 impl VaultContext {
+    /// Trusted host identity for the exact folder this guarded context opened.
+    pub fn folder_identity(&self) -> &Path {
+        &self.root.path
+    }
     /// A private, non-Markdown lock file; external editors do not participate in this lock.
     /// try_lock refuses contention rather than waiting beyond the guest's call deadline.
     pub fn try_lock_folder(&self) -> Result<FolderLock, VaultError> {
@@ -20,6 +24,9 @@ impl VaultContext {
         options.create(true).truncate(false).read(true).write(true);
         set_create_mode(&mut options, 0o600);
         let file = no_follow(&mut options).open(path)?;
+        if !file.metadata()?.is_file() {
+            return Err(VaultError::BadPath("expected a regular folder lock".into()));
+        }
         file.try_lock()
             .map_err(|error| VaultError::Io(io::Error::other(error.to_string())))?;
         Ok(FolderLock {
@@ -30,7 +37,15 @@ impl VaultContext {
 
     pub fn read_limited(&self, relative: &str, limit: usize) -> Result<Vec<u8>, VaultError> {
         let path = self.root.resolve(relative, true)?;
-        let file = no_follow(OpenOptions::new().read(true)).open(path)?;
+        let mut options = OpenOptions::new();
+        options.read(true);
+        no_follow(&mut options);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+        }
+        let file = options.open(path)?;
         if !file.metadata()?.is_file() {
             return Err(VaultError::BadPath("expected a regular note file".into()));
         }
@@ -153,6 +168,29 @@ mod tests {
         assert_eq!(context.read_limited("large.md", 5).unwrap(), b"12345");
         assert!(context.read_limited("", 5).is_err());
         assert!(context.list_limited("", 0).is_err());
+    }
+    #[cfg(unix)]
+    #[test]
+    fn a_named_pipe_is_refused_without_waiting_for_a_writer() {
+        use std::os::unix::ffi::OsStrExt;
+        let (_dir, context) = fixture();
+        let path = std::ffi::CString::new(
+            context
+                .folder_identity()
+                .join("pipe.md")
+                .as_os_str()
+                .as_bytes(),
+        )
+        .unwrap();
+        // The fixture path is NUL-terminated and belongs to this test's temp folder.
+        assert_eq!(unsafe { libc::mkfifo(path.as_ptr(), 0o600) }, 0);
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(context.read_limited("pipe.md", 100).is_err());
+        });
+        assert!(rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("a note read blocked on a pipe"));
     }
     #[test]
     fn compare_write_delete_and_conflicting_editor() {
