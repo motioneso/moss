@@ -13,6 +13,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 const RESOURCE: &str = "people-notes";
+const UNAVAILABLE: &str = "People notes folder is unavailable";
 #[derive(Deserialize)]
 struct CurrentNote {
     path: String,
@@ -33,12 +34,11 @@ impl<'a, H: Host + ?Sized> NotesService<'a, H> {
         }
     }
     fn read(&self, path: &str) -> Result<CurrentNote> {
-        Ok(serde_json::from_value(self.host.call(
-            "vault",
-            "notes.read",
-            RESOURCE,
-            json!({"path":path}),
-        )?)?)
+        Ok(serde_json::from_value(
+            self.host
+                .call("vault", "notes.read", RESOURCE, json!({"path":path}))
+                .map_err(|_| Error::new(UNAVAILABLE))?,
+        )?)
     }
     fn write(&self, current: &CurrentNote, content: &str) -> Result<()> {
         self.host.call("vault", "notes.compare-write", RESOURCE,
@@ -51,9 +51,10 @@ impl<'a, H: Host + ?Sized> NotesService<'a, H> {
         let mut total = 0usize;
         let mut bytes = 0usize;
         while let Some(directory) = directories.pop() {
-            let listing =
-                self.host
-                    .call("vault", "notes.list", RESOURCE, json!({"path":directory}))?;
+            let listing = self
+                .host
+                .call("vault", "notes.list", RESOURCE, json!({"path":directory}))
+                .map_err(|_| Error::new(UNAVAILABLE))?;
             let entries = listing["entries"]
                 .as_array()
                 .ok_or_else(|| Error::new("Invalid notes listing"))?;
@@ -158,20 +159,53 @@ impl<'a, H: Host + ?Sized> NotesService<'a, H> {
         Ok(json!({"person":person,"notePath":selected.path}))
     }
     pub fn update(&self, id: &str, patch: &UpdateNote) -> Result<Value> {
+        let (current, content) = self.prepare_update(id, patch)?;
+        self.publish_update(&current, &content)
+    }
+    fn prepare_update(&self, id: &str, patch: &UpdateNote) -> Result<(CurrentNote, String)> {
         let note = note_edits::find_canonical_note(&self.files()?, id)
             .map_err(|e| Error::new(e.to_string()))?;
         // Read again after discovery, and recheck its canonical ID before compare-write.
         let current = self.read(&note.path)?;
         let content = note_edits::update_note(current.content.as_deref(), id, patch)
             .map_err(|e| Error::new(e.to_string()))?;
-        self.write(&current, &content)?;
-        let parsed = parse_people_note(&content)
+        Ok((current, content))
+    }
+    fn publish_update(&self, current: &CurrentNote, content: &str) -> Result<Value> {
+        self.write(current, content)?;
+        let parsed = parse_people_note(content)
             .ok_or_else(|| Error::new("Invalid canonical People note"))?;
-        let person = self.project(&note.path, &parsed)?;
-        Ok(json!({"person":person,"notePath":note.path}))
+        let person = self.project(&current.path, &parsed)?;
+        Ok(json!({"person":person,"notePath":current.path}))
     }
     pub fn refresh(&self) -> Result<Value> {
-        let files = self.files()?;
+        self.refresh_files(self.files()?)
+    }
+    /// Only pre-publication failures permit the old projection-only HTTP fallback.
+    /// Compare-write, projection and finalization failures abort the whole call.
+    pub fn update_for_route(&self, id: &str, patch: &UpdateNote) -> Result<Option<Value>> {
+        let (current, content) = match self.prepare_update(id, patch) {
+            Ok(prepared) => prepared,
+            Err(error)
+                if error.message == UNAVAILABLE
+                    || error.message
+                        == note_edits::EditError::CanonicalNoteNotFound.to_string() =>
+            {
+                return Ok(None)
+            }
+            Err(error) => return Err(error),
+        };
+        self.publish_update(&current, &content).map(Some)
+    }
+    pub fn refresh_for_route(&self) -> Result<Option<Value>> {
+        let files = match self.files() {
+            Ok(files) => files,
+            Err(error) if error.message == UNAVAILABLE => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        self.refresh_files(files).map(Some)
+    }
+    fn refresh_files(&self, files: Vec<NoteFile>) -> Result<Value> {
         let people: Vec<_> = self
             .repo
             .list_people(None, None, None)?

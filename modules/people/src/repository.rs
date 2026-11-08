@@ -262,6 +262,26 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
         let now = self.now()?;
         Ok(person_response(&self.insert(PEOPLE, json!({"display_name":name,"status":"active","confidence":0.5,"created_at":now,"updated_at":now}))?))
     }
+    /// Legacy HTTP fallback when a canonical note is absent or unavailable.
+    /// Retains summaries, confidence and archive metadata that a note projection replaces.
+    pub fn update_projection(&self, person_id: &str, patch: &Value) -> Result<Value> {
+        let mut values = json!({"updated_at":self.now()?});
+        for (key, column) in [
+            ("displayName", "display_name"),
+            ("relationshipSummary", "relationship_summary"),
+            ("contextSummary", "context_summary"),
+            ("status", "status"),
+        ] {
+            if let Some(value) = patch.get(key) {
+                values[column] = value.clone();
+            }
+        }
+        Ok(person_response(&first(self.update(
+            PEOPLE,
+            Filter::eq("id", person_id),
+            values,
+        )?)?))
+    }
     pub fn delete_note_identities(&self, person_id: &str) -> Result<()> {
         self.query(
             IDENTITIES,

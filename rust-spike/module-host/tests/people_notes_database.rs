@@ -163,7 +163,9 @@ fn compiled_people_coordinates_canonical_notes_and_projection() {
                 &json!({"method":method,"path":path,"body":body,"params":params}).to_string(),
             )?;
             let reply: Value = serde_json::from_str(&reply)?;
-            assert_eq!(reply["status"], 200);
+            if reply["status"] != 200 {
+                anyhow::bail!("People route refused with status {}", reply["status"]);
+            }
             Ok(reply["body"].clone())
         };
     // An empty existing file is a collision, not an available destination.
@@ -358,7 +360,7 @@ fn compiled_people_coordinates_canonical_notes_and_projection() {
     )
     .unwrap();
     let changed = std::fs::read_to_string(folder.join(oracle_path)).unwrap();
-    let archived = run(
+    let mut archived = run(
         actor,
         "POST",
         "/people/:id/archive",
@@ -366,6 +368,9 @@ fn compiled_people_coordinates_canonical_notes_and_projection() {
         json!({"id":oracle_id}),
     )
     .unwrap();
+    // The HTTP archive response also reports archived:true; this oracle compares
+    // the underlying legacy note service's person/notePath result separately.
+    archived.as_object_mut().unwrap().remove("archived");
     let final_text = std::fs::read_to_string(folder.join(oracle_path)).unwrap();
     let known = std::collections::HashSet::new();
     let expected_start = oracle["notes"]["startedAt"]
