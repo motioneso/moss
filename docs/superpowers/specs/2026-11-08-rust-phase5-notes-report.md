@@ -611,10 +611,10 @@ toolchain lacked the Wasm target; the prepared scratch toolchain used by earlier
 People work supplies it. The declared `serde_json` dependency enables its existing
 `preserve_order` feature so approval fields retain submitted order.
 
-Real-component, privacy-control, disposable database, SQL-harness and root-check
-results are recorded below only after their current runs finish. Reproduction is
-in `modules/notes/README.md`. No complete Notes UI or physical-device proof is
-claimed by this part.
+Final real-component, privacy-control, disposable database, SQL-harness and root-check
+receipts are recorded in the proof artifact and checkpoint PR #4067. Reproduction
+is in `modules/notes/README.md`. This report does not independently certify a
+pending command. No complete Notes UI or physical-device proof is claimed by this part.
 
 ### Remaining work after part five
 
@@ -646,4 +646,11 @@ saved). The account-guard removal control runs in a temporary source copy and
 never edits the worktree's host protection. Concurrent-change refusals remain
 generic service-unavailable errors instead of the legacy conflict/retry hint;
 that error parity remains unfinished with the other disclosed input/path cases.
-Final check receipts below supersede pending statements only when recorded.
+The first root lint run found one prefer-const error in the new oracle script;
+it was corrected. The final native default/feature suites, strict all-feature
+Clippy, scoped TypeScript/ESLint/format checks and oracle refresh passed. The
+refreshed corpus has no changes. The ordinary and tool-check Wasm builds also
+succeeded. Later gate and root-check receipts belong to the proof artifact and
+[checkpoint PR #4067](https://github.com/motioneso/moss/pull/4067), which record
+failures and limits as well as successful checks. Full Notes acceptance is still
+unfinished; this PR is a continuation checkpoint only.
