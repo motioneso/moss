@@ -21,7 +21,8 @@ same file installs on Windows, macOS and Linux, with no admin rights, into Moss'
 
 First-party modules use the same format. The installer carries a set of them inside it, so a fresh
 install with no network still has calendar, tasks, notes and the rest. Updates to those modules
-then arrive through the registry, without a new Moss release.
+then arrive through the registry. A new Moss release is needed only for host changes, and for
+new first-party SQL that needs the legacy exception (4.6).
 
 The host stays small and trusted. It owns sign-in, accounts, chat and agents, memory, the vault,
 the AI router, the job queue and the app frame. A module reaches anything only through ports the
@@ -122,8 +123,8 @@ dropping a field a newer Moss would enforce is how a limit goes missing.
 The code is one WebAssembly component compiled for `wasm32-wasip2`. One file runs on all three
 systems and every CPU, so a package never needs a per-OS build.
 
-- The interface is a WIT world named `moss:module`, versioned. Version 1 is every port in 5.1.
-  Slices M2 and M2b build the general ports. The `connectors`, `browser` and `audio` ports are
+- The interface is a WIT world named `moss:module`, versioned. Version 1 is the general ports in
+  5.1, built by slices M2 and M2b. The `connectors`, `browser` and `audio` ports are
   built in Phase 5 by the first module that needs each, before that module ports (9.2).
 - Each port is its own versioned WIT interface. Adding a port is a minor version (`@1.1`) and
   breaks no package. Changing or removing one is a major version. Version 1 is frozen when the
@@ -159,8 +160,11 @@ Module screens open in a sandboxed frame inside the Moss app frame.
 - The frame has `sandbox="allow-scripts"` and no same-origin permission, so its origin is opaque.
   It cannot read Moss cookies, local storage or the host page.
 - Moss serves `ui/` files from a versioned path with a strict content-security policy. The policy
-  allows scripts and styles only from that path and the shared Park Press stylesheet, allows no
-  network requests, and adds `'wasm-unsafe-eval'` so a Leptos bundle can start.
+  allows scripts and styles only from that path and the shared Park Press stylesheet, allows
+  network requests to that same versioned path only (a Leptos bundle fetches its own `.wasm`
+  file), and adds `'wasm-unsafe-eval'` so the bundle can start. Because the frame's origin is
+  opaque, these files are served with cross-origin headers that accept the `null` origin. No
+  other route accepts it.
 - Every `ui/` response also carries `sandbox allow-scripts` in that policy header. A person who
   opens the path straight in a tab still gets an opaque origin, so the module's script never runs
   with Moss's own origin, storage or script-readable cookies. The Rust host's session cookie
@@ -181,14 +185,17 @@ Module screens open in a sandboxed frame inside the Moss app frame.
   is the default. A table that people can share declares `"access": "owner-or-share"` and names
   its share key column in the manifest. The host then generates the owner-or-share rules from the
   host's share model, the same shape Tasks ships today in
-  `packages/tasks/sql/0019_tasks_owner_or_share.sql`. Module SQL never writes policies itself.
-  Recipient-only tables are not offered in version 1.
+  `packages/tasks/sql/0019_tasks_owner_or_share.sql`. New module SQL never writes policies
+  itself. Recipient-only tables are not offered in version 1.
+- Generated rules force row security on the table owner too, as
+  `packages/db/src/module-rls-emitter.ts` does today, so the owner role cannot skip it.
 - DDL, generated policies and the ledger row commit in one transaction, through a narrow host
   operation. This closes today's window between DDL and ledger commits (companion doc, rule 9).
 - Applied files are hash-checked on every start, not only by version. This is new behaviour the
   companion doc requires.
-- Module DDL runs as a per-module owner role that the host creates. That role owns only the
-  module's tables and has no rights on core or other modules' tables.
+- New module DDL runs as a per-module owner role that the host creates. That role owns only the
+  tables new SQL creates. Its one right on core is `REFERENCES` on `app.users (id)`, for owner
+  foreign keys. It has no rights on other modules' tables.
 - New SQL passes a parsed-statement check. This covers every third-party file, and every
   first-party file not in the host's compiled inventory (below). Allowed statements are
   `CREATE TABLE`, `CREATE INDEX`, `ALTER TABLE ... ADD COLUMN`, `ALTER TABLE ... ADD CONSTRAINT`
@@ -208,6 +215,12 @@ Module screens open in a sandboxed frame inside the Moss app frame.
   part of Moss. A package signed with the first-party key gets no other exception. Any first-party
   file not in the compiled inventory goes through the parsed-statement check like third-party
   SQL, or waits for a host release that adds it to the inventory.
+- Inventory files run exactly as today: as the existing migration role, with the policies,
+  runtime-role names, core functions (such as `app.has_share`) and row-security switches they
+  already contain. The host generates no rules for tables those files create, so nothing doubles
+  up. Generated rules and the restricted owner role apply only to tables made by new SQL. When a
+  legacy module later adds a new table, that table is declared in the manifest, created by new
+  SQL, and gets generated rules like any other.
 - A new version that adds any migration file is treated as asking for more (4.4), so it waits
   for an admin rather than installing on its own.
 
@@ -349,12 +362,15 @@ modules untouched.
   narrows capabilities and adds no migration file installs at a quiet time. One that asks for
   more, or adds a migration file, waits on the update screen for an admin.
 - Security updates marked `urgent` in the index install as soon as they are seen, under the same
-  capability rule.
+  rule. An urgent update that asks for more or adds a migration file still waits for an admin,
+  and the update screen marks it urgent.
 
 ### 4.5 Offline and self-hosted registries
 
-- **Package file import.** An admin can pick a `.mosspkg` and its `.sig` from disk. It goes
-  through steps 7 to 10 of 4.3 against the trusted publisher keys.
+- **Package file import.** An admin can pick a `.mosspkg` and its `.sig` from disk. The
+  publisher key must be one that a registry this install already trusts binds to the module's
+  id prefix (step 7). The file then goes through step 5, step 8, the install-time checks of
+  step 9 without the index comparison, and step 10.
 - **Offline registry folder.** Any registry folder can be added by path. Moss verifies it exactly
   like a remote one.
 - **Self-hosted registry.** An admin adds a registry by URL. Moss shows the root key fingerprint
@@ -365,6 +381,8 @@ modules untouched.
   signatures.
 - Several registries can be active. The same id from two registries is refused unless both point
   at the same publisher key.
+- Bare ids belong to the Moss first-party key compiled into the host, in every registry. A
+  self-hosted root key cannot bind any key to bare ids, and Moss refuses one that tries.
 
 ### 4.6 How first-party modules ship
 
@@ -397,21 +415,25 @@ like a compose file.
 
 ### 5.1 What a module may touch
 
-| Port          | What it allows                                                                                                                             |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `db`          | Typed queries on its own tables only, run by the host inside the caller's data context. The host sets the actor; the module never can.     |
-| `kv`          | Its own key-value namespaces, per account or install-wide as declared                                                                      |
-| `vault`       | Its own files folder through the vault context. Reading the account's notes needs a declared `vault.notes.read` capability                 |
-| `fetch`       | HTTPS to declared hosts only. The host resolves DNS, refuses private addresses unless declared, and follows redirects only within the list |
-| `credentials` | Brokered requests to the hosts bound to each credential. The module never sees the value (see below)                                       |
-| `ai`          | Capability requests (summarize, structured output and so on). The router picks the account's model; the module never names a provider      |
-| `embed`       | Embeddings through the host's embedding service                                                                                            |
-| `jobs`        | Enqueue on its own declared queues, with the declared typed parameters only                                                                |
-| `events`      | Publish its declared events; subscribe to other modules' public events                                                                     |
-| `api`         | Call public APIs of modules listed in `requires`                                                                                           |
-| `notify`      | Post notifications to the account that triggered the call                                                                                  |
-| `attachments` | Read attachments the account handed to it                                                                                                  |
-| `tools`       | Offer chat tools with declared risk levels, run under today's approval rules                                                               |
+| Port           | What it allows                                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `db`           | Typed queries on its own tables only, run by the host inside the caller's data context. The host sets the actor; the module never can.     |
+| `kv`           | Its own key-value namespaces, per account or install-wide as declared                                                                      |
+| `vault`        | Its own files folder through the vault context. Reading the account's notes needs a declared `vault.notes.read` capability                 |
+| `fetch`        | HTTPS to declared hosts only. The host resolves DNS, refuses private addresses unless declared, and follows redirects only within the list |
+| `credentials`  | Brokered requests to the hosts bound to each credential. The module never sees the value (see below)                                       |
+| `ai`           | Capability requests (summarize, structured output and so on). The router picks the account's model; the module never names a provider      |
+| `embed`        | Embeddings through the host's embedding service                                                                                            |
+| `jobs`         | Enqueue on its own declared queues, with the declared typed parameters only                                                                |
+| `events`       | Publish its declared events; subscribe to other modules' public events                                                                     |
+| `api`          | Call public APIs of modules listed in `requires`                                                                                           |
+| `notify`       | Post notifications to the account that triggered the call                                                                                  |
+| `attachments`  | Read attachments the account handed to it                                                                                                  |
+| `tools`        | Offer chat tools with declared risk levels, run under today's approval rules                                                               |
+| `actionPolicy` | Read the account's approval policy for its own tools, as today                                                                             |
+| `connectors`   | Brokered calls through the host's connectors, so OAuth tokens stay in the host. Built in Phase 5 (`@1.x`)                                  |
+| `browser`      | A headless browser render of a declared host, for sports. Built in Phase 5 (`@1.x`)                                                        |
+| `audio`        | Audio from the companion apps, for meetings. Built in Phase 5 (`@1.x`)                                                                     |
 
 Brokered credentials follow decision 7.11 of the plan, and work like this:
 
@@ -437,16 +459,16 @@ A module gets no clock finer than a millisecond, no random device beyond the hos
 no environment and no file system outside the vault port.
 
 A real need beyond this list becomes a new named port, reviewed and added to the interface. It
-never becomes a native escape hatch. Two first-party needs are known now. The sports module needs
-a headless browser render, and meetings needs audio from the companion apps. Both become host
-ports in interface version 1.
+never becomes a native escape hatch. The `connectors`, `browser` and `audio` ports above are the
+known first-party needs. They are built in Phase 5, likely after version 1 freezes, so they
+arrive as minor additions (`@1.x`) that break no package.
 
 ### 5.2 How the hard invariants hold for downloaded code
 
 | Invariant                         | How it holds                                                                                                                                                                                                               |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | No admin private-data bypass      | Modules run under per-module runtime roles with `NOBYPASSRLS`. Admin installs a module; that gives no read of anyone's data                                                                                                |
-| Private by default                | Generated owner-only RLS on every owned table. Shared tables are declared and get generated owner-or-share rules from the host's share model, never module SQL (3.6)                                                       |
+| Private by default                | Generated owner-only RLS on every owned table. Shared tables are declared and get generated owner-or-share rules from the host's share model, never new module SQL. Legacy inventory files keep their own rules (3.6)      |
 | Data only through a data context  | The `db` port opens the caller's data context. A module has no connection, no pool and no way to name another role                                                                                                         |
 | Vault only through `VaultContext` | The `vault` port is the only file access. WebAssembly has no other file import linked                                                                                                                                      |
 | Secrets never escape              | Brokered credentials bound to hosts, and tokens kept in the host. Values never enter the guest unless decision 7.11's finance exception is used. Sentinel tests plant a marker credential and inspect every module surface |
@@ -455,7 +477,7 @@ ports in interface version 1.
 | Provider-agnostic AI              | The `ai` port takes capabilities only. Publish review and the install-time check refuse provider or model names in the manifest                                                                                            |
 | Module isolation                  | Only linked ports exist. Cross-module calls go through declared public APIs and events. SQL that references another module's tables is refused at install                                                                  |
 | Never edit an applied migration   | Published SQL files are immutable; changed bytes are refused at publish and at install; applied files are hash-checked at every start                                                                                      |
-| Secrets in prompts                | AI calls go through the host router, which applies today's prompt rules; credentials are not reachable from the guest                                                                                                      |
+| Secrets in prompts                | AI calls go through the host router, which applies today's prompt rules. Credentials are not reachable from the guest, except under decision 7.11's finance exception                                                      |
 
 ### 5.3 Signing keys
 
@@ -468,8 +490,9 @@ ports in interface version 1.
 
 Publisher keys live in `registry.json`, each bound to the id prefix it may sign (the Moss
 first-party key to bare ids, `acme` to `acme.*`). Only the offline root key can add, bind or
-replace one. A stolen index signing key can therefore hide or replay entries until the serial and
-expiry checks catch it, but it cannot sign a package for any module. Moss also remembers which
+replace one. A stolen index signing key can sign a fresh index with a higher serial, so it can
+hide entries or offer an older signed version. It cannot sign a package for any module, and it
+cannot lift a revocation (5.6). Moss also remembers which
 publisher key signed each installed module, and refuses an update signed by a different key unless
 the root key approved the replacement.
 
@@ -512,15 +535,17 @@ for the TypeScript catalog only.
   seeing a revocation keeps it.
 - A revoked publisher key blocks every package it signed, unless a later version is signed by a
   replacement key the root key approved.
-- Rollback protection (4.3 step 3) stops an old index from undoing a revocation.
+- Once seen, a revocation stays in force on this install. A later index that drops it changes
+  nothing. Only a statement signed by the registry's root key can lift it.
+- Rollback protection (4.3 step 3) also stops an old index from being replayed.
 
 ## 6. Several accounts and other devices
 
 - **Installed per machine.** One install holds one copy of each module version. An admin installs
   and removes, because that is configuration power.
-- **Enabled per account.** An installed module is on for every account unless the manifest
-  forbids switching it off, and each account can turn it off for itself, as today's deny-list
-  does. An admin can turn it off install-wide, which wins for everyone.
+- **Enabled per account.** An installed module starts on or off for each account as the
+  manifest's `accounts` default says. Each account can switch it for itself unless the manifest
+  forbids switching it off, as today's deny-list does. An admin can turn it off install-wide, which wins for everyone.
 - **Data per account.** RLS keeps each account's rows separate. Module files sit in a folder per
   account under the module's files folder.
 - **Accounts that are not admins** can ask an admin to install a module from the browse screen.
@@ -653,21 +678,21 @@ before meetings. Each gets the same escape-probe gate as M2.
 
 Sizes are complexity. Every gate is a measurement that ends with a go plan, never a quiet stop.
 
-| Slice | Builds                                                                                                                                                                                               | Size | Kill gate                                                                                                                                                                                                                               |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M1    | Package format and manifest v2: schema, pack, inspect and verify commands, deterministic digests                                                                                                     | S    | Same inputs give the same digest on all three systems. Links, `..`, absolute paths, upper-case names and unknown fields are each refused, each with a negative control                                                                  |
-| M2    | WebAssembly host and interface v1: wasmtime host, `moss:module@1` WIT world, ports `kv`, `db`, `jobs`, `fetch`, `ai`, `notify`, limits                                                               | M    | Escape probes (file open, socket, role switch, actor change, multi-statement, cross-module table, undeclared host, private address) are all refused, each seen passing with its guard removed                                           |
-| M2b   | The other general ports: `vault`, `credentials` (host binding and token exchange), `embed`, `events`, `api`, `attachments`, `tools`, `actionPolicy`                                                  | M    | Escape probes for each (other account's vault, credential to an unbound host, token visible in a response, undeclared event or API) are refused, each seen passing with its guard removed                                               |
-| M3    | Module SDK, both builds, and Tasks moved onto the rule                                                                                                                                               | M    | Tasks passes its parity checks as a WebAssembly component. The speed budget is set here, as p95 route time and job time against the native build. If it misses, record the gap and fix the host or mark Tasks native                    |
-| M4    | Installer: install, upgrade, rollback, remove, delete data, restore; SQL subset check; compiled inventory; install-time import check; one-transaction DDL and ledger; generated owner-or-share rules | M    | A crash between DDL and ledger leaves nothing half-done. Uninstall then reinstall keeps every row. A failed upgrade restores the snapshot. Each SQL refusal and an undeclared import each have a test. Tasks' shared lists still share  |
-| M5    | Module frame and bridge, Leptos component kit, Tasks screen in the frame                                                                                                                             | M    | Ben's look check on a phone and a desktop for Tasks in the frame. The frame, and the screen path opened straight in a tab, cannot read host cookies or storage, proved by tests that fail with the sandbox removed                      |
-| M6    | Registry client: index and key checks, serial and expiry, digest and publisher checks, pins, cache, file import, folder and URL registries                                                           | M    | Tampered index, tampered package, wrong publisher, publisher key outside its prefix, changed publisher key on update, replayed old index, expired index and revoked digest each fail closed with a named reason                         |
-| M7    | Publishing: CI builds and signs first-party packages, publishes the static Moss registry, bundles packages for installers                                                                            | S    | A fresh install from the stand-in installer, with no network and a past-expiry index, has the default modules. The same install online picks up a newer published version, and the capability rule holds                                |
-| M8    | Several accounts and remote: per-account switches, install-wide off, module screens from a phone over the home network and tailnet                                                                   | S    | Two accounts on one install see only their own module data. A phone opens a module screen remotely and its routes refuse a request with no session                                                                                      |
-| M9    | Screens S1 to S11 after Ben's mockups                                                                                                                                                                | M    | Live-path proof on a dev install: browse, install, update with a new capability, remove, delete data and restore                                                                                                                        |
-| M10   | Review and revocation: capability diff, publish checks, revocation handling, activity log                                                                                                            | S    | A revoked module stops for every account at the next index read, and stays stopped after going offline                                                                                                                                  |
-| M11   | Local packages: install a package built on this machine, signed with the install-local key, private to its builder                                                                                   | S    | A locally built package installs privately for its builder and passes the same checks as a downloaded package                                                                                                                           |
-| M12   | Finance and meals ported as packages, as they are, with no redesign                                                                                                                                  | M    | Finance passes its tests as a package, on its existing `module-legacy` ledger, with its token exchange run by the host. If a port cannot express what finance needs, add the port (or use the 7.11 exception, 5.1) before porting meals |
+| Slice | Builds                                                                                                                                                                                               | Size | Kill gate                                                                                                                                                                                                                                                                                    |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1    | Package format and manifest v2: schema, pack, inspect and verify commands, deterministic digests                                                                                                     | S    | Same inputs give the same digest on all three systems. Links, `..`, absolute paths, upper-case names and unknown fields are each refused, each with a negative control                                                                                                                       |
+| M2    | WebAssembly host and interface v1: wasmtime host, `moss:module@1` WIT world, ports `kv`, `db`, `jobs`, `fetch`, `ai`, `notify`, limits                                                               | M    | Escape probes (file open, socket, role switch, actor change, multi-statement, cross-module table, undeclared host, private address) are all refused, each seen passing with its guard removed                                                                                                |
+| M2b   | The other general ports: `vault`, `credentials` (host binding and token exchange), `embed`, `events`, `api`, `attachments`, `tools`, `actionPolicy`                                                  | M    | Escape probes for each (other account's vault, credential to an unbound host, token visible in a response, undeclared event or API) are refused, each seen passing with its guard removed                                                                                                    |
+| M3    | Module SDK, both builds, and Tasks moved onto the rule. Until M4 lands, Tasks' tables come up through the existing native migration path                                                             | M    | Tasks passes its parity checks as a WebAssembly component. The speed budget is set here, as p95 route time and job time against the native build. If it misses, record the gap and fix the host or mark Tasks native                                                                         |
+| M4    | Installer: install, upgrade, rollback, remove, delete data, restore; SQL subset check; compiled inventory; install-time import check; one-transaction DDL and ledger; generated owner-or-share rules | M    | A crash between DDL and ledger leaves nothing half-done. Uninstall then reinstall keeps every row. A failed upgrade restores the snapshot. Each SQL refusal and an undeclared import each have a test. Tasks' legacy SQL runs unchanged and its shared lists still share                     |
+| M5    | Module frame and bridge, Leptos component kit, Tasks screen in the frame                                                                                                                             | M    | Ben's look check on a phone and a desktop for Tasks in the frame. The frame, and the screen path opened straight in a tab, cannot read host cookies or storage, proved by tests that fail with the sandbox removed                                                                           |
+| M6    | Registry client: index and key checks, serial and expiry, digest and publisher checks, pins, cache, file import, folder and URL registries                                                           | M    | Tampered index, tampered package, wrong publisher, publisher key outside its prefix, changed publisher key on update, replayed old index, expired index and revoked digest each fail closed with a named reason. A new higher-serial index that drops a revocation leaves the module blocked |
+| M7    | Publishing: CI builds and signs first-party packages, publishes the static Moss registry, bundles packages for installers                                                                            | S    | A fresh install from the stand-in installer, with no network and a past-expiry index, has the default modules. The same install online picks up a newer published version, and the capability rule holds                                                                                     |
+| M8    | Several accounts and remote: per-account switches, install-wide off, module screens from a phone over the home network and tailnet                                                                   | S    | Two accounts on one install see only their own module data. A phone opens a module screen remotely and its routes refuse a request with no session                                                                                                                                           |
+| M9    | Screens S1 to S11 after Ben's mockups                                                                                                                                                                | M    | Live-path proof on a dev install: browse, install, update with a new capability, remove, delete data and restore                                                                                                                                                                             |
+| M10   | Review and revocation: capability diff, publish checks, revocation handling, activity log                                                                                                            | S    | A revoked module stops for every account at the next index read, and stays stopped after going offline                                                                                                                                                                                       |
+| M11   | Local packages: install a package built on this machine, signed with the install-local key, private to its builder                                                                                   | S    | A locally built package installs privately for its builder and passes the same checks as a downloaded package                                                                                                                                                                                |
+| M12   | Finance and meals ported as packages, as they are, with no redesign                                                                                                                                  | M    | Finance passes its tests as a package, on its existing `module-legacy` ledger, with its token exchange run by the host. If a port cannot express what finance needs, add the port (or use the 7.11 exception, 5.1) before porting meals                                                      |
 
 ### 9.3 If a gate misses
 
