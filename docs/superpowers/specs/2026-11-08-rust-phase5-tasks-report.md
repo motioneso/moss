@@ -924,3 +924,43 @@ Rustfmt is absent from the provisioned toolchain; no component was installed.
   preserves that distinction.
 
 Part of https://github.com/motioneso/moss/issues/4027. Release note Category: N/A.
+
+## Tasks part 8 checkpoint (JS-77, Card 526)
+
+This bounded continuation adds the heartbeat read tool and deferred-status route
+and worker under `modules/tasks/`. It remains an unfinished Tasks replacement.
+All earlier acceptance gaps remain unless explicitly closed below. Workshop and
+Food are excluded. Part of #4027; release note Category N/A.
+
+The heartbeat query returns at most twenty owned open tasks plus one lookahead
+row, and separately checks the next later due date. It matches the existing
+material revision, Unicode UTF-16 hashing, truncation and next-boundary shapes.
+View sharing does not authorize this read. It never advances recurrence. The
+host's one-use tool approval remains; background authorization and scheduling
+are not joined by declaring this handler.
+
+Deferred status now enqueues task/status metadata through the jobs port, whose
+host envelope captures the account. The job handler reuses status completion,
+cascade and recurrence mutations in the invocation transaction. The host's
+namespaced queue uses kebab-case parameter names; HTTP and worker result shapes
+retain their legacy names. This is not full queue parity: the public host fixes
+retry/backoff and retention defaults, and its parameter schema cannot retain the
+optional arbitrary request key. That key is parsed but not persisted; the legacy
+route did not use it as a singleton key. The existing endpoint harness observes
+the old spike queue rather than this module queue; its deferred-status case
+therefore remains an acceptance gap even when the separate real-queue test passes.
+
+The branch originally pointed at Phase 0a. With no task commits or local edits,
+it was advanced to merged main, including Tasks part 7, before implementation.
+The tools lockfile was resolved offline against the existing scratch cache; the
+shared UI dependency edge was already current. No global tool or target was
+installed. Builds reuse the approved pinned wit-bindgen graph and scratch Rust
+1.95 toolchain. Formatting uses the already installed system Rust 1.95 rustfmt;
+the scratch toolchain has no rustfmt component.
+
+Verification receipts and remaining acceptance are recorded below after the
+current gates and independent review. The signed-install frame remains a fixture,
+not the authenticated application shell or a second physical device. Further work
+includes seven endpoints, six tools, recurrence jobs and scheduling, queue policy
+parity, actor timezone/lazy recurrence, People public APIs, policy/feedback, full
+screens/settings, the application join, performance and second-device HTTPS.

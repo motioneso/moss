@@ -120,6 +120,10 @@ fn dispatch<H: Host + ?Sized>(repo: &Repository<'_, H>, r: &RouteRequest) -> Res
             status = 201;
             json!({"tasks":tasks_json(repo,repo.break_down(param(r,"id")?, &steps)?)?})
         }
+        ("POST", "/tasks/:id/deferred-status") => {
+            status = 202;
+            crate::jobs::enqueue(repo, param(r, "id")?, &r.body)?
+        }
         ("GET", "/tasks/preferences") => json!({"preferences":repo.preferences()?.dto()}),
         ("PATCH", "/tasks/preferences") => {
             let body = parse::require_object(&r.body)?;

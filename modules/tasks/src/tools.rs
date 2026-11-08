@@ -24,6 +24,7 @@ pub fn handle<H: Host + ?Sized>(host: &H, request: ToolRequest) -> Result<Value>
     }
     let repo = Repository::new(host);
     Ok(match request.tool.as_str() {
+        "tasks.heartbeatWindow" => return crate::heartbeat::execute(&repo, &input),
         "tasks.listLists" => {
             json!({"data":{"items":repo.lists()?.iter().map(|v|v.dto()).collect::<Vec<_>>()}})
         }

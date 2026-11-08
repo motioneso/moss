@@ -1,5 +1,6 @@
 //! Status values accepted by the existing create/update routes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum TaskStatus {
     Todo,
     Suggested,
