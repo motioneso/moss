@@ -830,11 +830,14 @@ remove the host's existing resource limits or establish unlimited-dataset parity
 The legacy relative `GET /people/notes-directories` is separate from the additive absolute
 root chooser. Empty folder saves clear the shared preference. Installed checks exercise
 folder save, relative root/child listing, traversal refusal and clear, plus other-user
-and administrator folder/API attempts. The app-map manifest declares the new browse
+and administrator folder/API attempts. The directory checks use accounts without allowed
+roots and do not establish a failing-first directory privacy property; the broader gate
+separately removes/restores RLS around the same database/privacy assertions. The app-map
+manifest declares the new browse
 contract and validation recovery guidance. No shared shell or sibling-module source was
 changed, and the four public API versions and existing job kinds remain stable.
 
-No tool or target was installed globally. The approved pinned `wit-bindgen` and existing
+No tool or target was installed globally. The approved pinned `wit-bindgen` (`=0.57.1`) and existing
 scratch Cargo/Rustup caches build the generated component. UI output and test packages
 stay in scratch. The UI lockfile refresh records an already declared shared dependency;
 no new UI package was introduced.
@@ -844,6 +847,12 @@ no new UI package was introduced.
 The exact pre-change People source was archived from the base and compiled separately.
 The expanded route oracle failed against that component: `POST /people` with a scalar
 body returned 500 instead of Fastify's 400 `body must be object` (gate exit 101).
+Independent review found a test borrow error and incorrect root-array acceptance. The
+borrow fix compiles. A new native regression reproduced a root-array folder request
+returning 200 and clearing its saved preference, then passed after arrays were rejected
+with Fastify's 400 response. The installed regression also asserts that such a request
+leaves the real shared folder preference unchanged. Review also prompted the explicit
+binding version and narrower wording for directory-account fixture refusals.
 Final verification results are recorded below and in the task proof recipe.
 
 ### Exact remaining work after part six

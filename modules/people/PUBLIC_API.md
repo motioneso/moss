@@ -127,14 +127,16 @@ Publication happens after commit, with deterministic child command IDs for retri
 an at-least-once seam, not an atomic database/queue outbox. A publication failure returns an
 error for queue retry; another indexing pass can append another legacy event.
 
-The installed package must still declare both queue schemas, retries and capability grants.
-This checkpoint does not connect ingest nudges, installed HTTP, chat or Settings.
+The package declares both command-reference queue schemas and capability grants. Installed
+scheduler retries and real provider composition still require qualification. This checkpoint
+does not connect ingest nudges, network HTTP, or the real chat and Settings application.
 
 ## Internal route-envelope checkpoint
 
 The guest accepts the shared SDK's `RouteRequest` for the paths below. `path` is the
 matched template; IDs come from `params`, decoded query values from `query`, and JSON
-input from `body`. These are not installed endpoints or new consumer API names.
+input from `body`. The installed gate replays these envelopes through namespaced dispatch;
+they are not new consumer API names. Network HTTP composition remains open.
 
 | Method | Template                                | Result body                                                |
 | ------ | --------------------------------------- | ---------------------------------------------------------- |

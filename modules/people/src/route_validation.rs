@@ -47,18 +47,9 @@ fn schema(method: &str, path: &str) -> Option<Kind> {
 pub fn validate(request: &mut RouteRequest) -> Option<Response> {
     let schema = schema(&request.method, &request.path)?;
     let mut errors = vec![];
-    // Ajv cannot replace the caller's root value; property coercions do mutate it.
     let mut body = request.body.clone();
     if check(&schema, &mut body, "body", &mut errors) {
-        if request.body.is_object() {
-            request.body = body;
-        } else if request.method == "PUT" {
-            request.body = json!({"folder":null});
-        } else {
-            // Handlers read named members from the original root array, where
-            // those members are undefined even when Ajv accepted its only item.
-            request.body = json!({});
-        }
+        request.body = body;
         None
     } else {
         Some(Response::new(400, json!({"error":errors.join(", ")})))
@@ -128,7 +119,6 @@ fn check(
             }
         }
         Object(fields) => {
-            unwrap_single(value);
             let Some(object) = value.as_object_mut() else {
                 return fail(errors, "must be object".into());
             };

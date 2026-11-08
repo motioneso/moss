@@ -307,8 +307,25 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
             )["status"],
             200
         );
-        assert_eq!(request(owner, "PATCH", &format!("/people/{}", oracle["ids"]["primary"].as_str().unwrap()), json!({"aliases":{}}))["status"], 200,
-            "A missing canonical note uses the legacy projection fallback before reading unvalidated note-only fields");
+        assert_eq!(
+            request(
+                owner,
+                "PUT",
+                "/people/notes-settings",
+                json!([{"folder":"Work"}])
+            ),
+            json!({"status":400,"body":{"error":"body must be object"}})
+        );
+        assert_eq!(
+            request(owner, "GET", "/people/notes-settings", Value::Null),
+            json!({"status":200,"body":{"folder":notes_root}})
+        );
+        let person_path = format!("/people/{}", oracle["ids"]["primary"].as_str().unwrap());
+        assert_eq!(
+            request(owner, "PATCH", &person_path, json!({"aliases":{}}))["status"],
+            200,
+            "A missing canonical note falls back before reading note-only fields"
+        );
         assert_eq!(
             request(owner, "GET", "/people/notes-directories", Value::Null),
             json!({"status":200,"body":{"path":null,"directories":[{"name":"Family","path":"Family"},{"name":"Work","path":"Work"}]}})
@@ -342,7 +359,7 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
             request(owner, "PUT", "/people/notes-settings", json!({"folder":""})),
             json!({"status":200,"body":{"folder":null}})
         );
-        println!("Installed folder save, relative root/child browsing, traversal refusal, other-user/admin isolation and clear passed");
+        println!("Installed folder save, invalid root-array refusal without clearing, relative root/child browsing, traversal refusal, other-user/admin fixture refusals and clear passed");
         installed::clear_catalog(database, admin);
     }
     println!("{} legacy route responses and all seven table snapshots matched, including other-user/admin attempts",oracle["cases"].as_array().unwrap().len());

@@ -165,7 +165,7 @@ export async function routesOracle() {
       { status: "unknown" },
       { status: null },
       { aliases: {} },
-      ...[23, 23.5, -0, 1e20, 1e21, 1e-6, 1e-7, 9007199254740993].map((displayName) => ({
+      ...[23, 23.5, -0, 1e20, 1e21, 1e-6, 1e-7, Number("9007199254740993")].map((displayName) => ({
         displayName
       })),
       { displayName: null },
