@@ -5,6 +5,10 @@ use moss_tasks_module::repository::TABLES;
 #[test]
 fn package_owns_every_existing_tasks_table() {
     let m = manifest().expect("Tasks manifest must accept all six legacy tables");
+    assert!(
+        !m.accounts.supports_user_disable,
+        "Tasks is a required module"
+    );
     for table in TABLES {
         assert!(m.database.owned_tables.iter().any(|t| t == table));
         assert!(

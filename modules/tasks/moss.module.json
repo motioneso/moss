@@ -22,8 +22,8 @@
     },
     {
       "port": "context",
-      "operations": ["read", "uuid"],
-      "resources": ["call", "new"]
+      "operations": ["read"],
+      "resources": ["call"]
     }
   ],
   "database": {
@@ -71,7 +71,7 @@
   "screens": {},
   "icons": ["icons/tasks.svg"],
   "accounts": {
-    "supportsUserDisable": true,
+    "supportsUserDisable": false,
     "defaultEnabled": true
   }
 }

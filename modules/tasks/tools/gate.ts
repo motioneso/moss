@@ -27,4 +27,10 @@ const run = spawnSync(
     }
   }
 );
-process.exit(run.status ?? 1);
+if (run.status !== 0) process.exit(run.status ?? 1);
+const legacy = spawnSync(
+  "pnpm",
+  ["exec", "tsx", "scripts/test-integration.ts", "tests/integration/tasks.test.ts"],
+  { stdio: "inherit", env: process.env }
+);
+process.exit(legacy.status ?? 1);

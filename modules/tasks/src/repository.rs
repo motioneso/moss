@@ -64,6 +64,24 @@ fn order(column: &str, descending: bool) -> Order {
     }
 }
 
+fn literal_name(name: &str) -> Filter {
+    Filter::Compare {
+        column: "name".into(),
+        op: moss_module_sdk::query::Compare::ILike,
+        value: json!(name
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_")),
+    }
+}
+fn except_id(id: &str) -> Filter {
+    Filter::Compare {
+        column: "id".into(),
+        op: moss_module_sdk::query::Compare::Ne,
+        value: json!(id),
+    }
+}
+
 pub struct Repository<'a, H: Host + ?Sized> {
     client: Client<'a, H>,
 }
@@ -163,15 +181,7 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
     }
     /// Pattern characters must be literal: ILIKE supplies case-insensitive matching, not search.
     pub fn get_or_create_list(&self, name: &str) -> Result<List> {
-        let pattern = name
-            .replace('\\', "\\\\")
-            .replace('%', "\\%")
-            .replace('_', "\\_");
-        let filter = Filter::Compare {
-            column: "name".into(),
-            op: moss_module_sdk::query::Compare::ILike,
-            value: json!(pattern),
-        };
+        let filter = literal_name(name);
         if let Some(row) = self.first(LISTS, filter.clone())? {
             return Ok(row);
         }
@@ -184,6 +194,15 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
             .ok_or_else(|| moss_module_sdk::Error::new("List creation lost its row").into())
     }
     pub fn rename_list(&self, id: &str, name: &str) -> Result<List> {
+        if self.first::<List>(LISTS, Filter::eq("id", id))?.is_none() {
+            return Err(Error::Http(404, "List not found or not accessible"));
+        }
+        if self
+            .first::<List>(LISTS, and(vec![literal_name(name), except_id(id)]))?
+            .is_some()
+        {
+            return Err(Error::Http(409, "A list with that name already exists"));
+        }
         self.query(
             LISTS,
             &Query::update(
@@ -212,6 +231,31 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
         )
     }
     pub fn rename_tag(&self, list: &str, id: &str, name: &str) -> Result<Tag> {
+        if self
+            .first::<Tag>(
+                TAGS,
+                and(vec![Filter::eq("list_id", list), Filter::eq("id", id)]),
+            )?
+            .is_none()
+        {
+            return Err(Error::Http(404, "Tag not found or not accessible"));
+        }
+        if self
+            .first::<Tag>(
+                TAGS,
+                and(vec![
+                    Filter::eq("list_id", list),
+                    literal_name(name),
+                    except_id(id),
+                ]),
+            )?
+            .is_some()
+        {
+            return Err(Error::Http(
+                409,
+                "A tag with that name already exists in this list",
+            ));
+        }
         self.query(
             TAGS,
             &Query::update(

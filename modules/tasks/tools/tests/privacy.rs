@@ -263,6 +263,28 @@ fn native_tasks_use_real_legacy_tables_and_private_host_transactions() {
         json!({"action":"create-tag","list":list_id,"name":"Private tag"}),
     );
     let tag_id = tag["id"].as_str().unwrap();
+    let duplicate_list = f
+        .run(
+            f.owner,
+            json!({"action":"rename-list","id":literal["id"],"name":"pErSoNaL"}),
+        )
+        .unwrap();
+    assert_eq!(duplicate_list["status"], 409);
+    assert_eq!(
+        duplicate_list["body"]["error"],
+        "A list with that name already exists"
+    );
+    let second_tag = f.body(
+        f.owner,
+        json!({"action":"create-tag","list":list_id,"name":"Second tag"}),
+    );
+    let duplicate_tag = f.run(f.owner, json!({"action":"rename-tag","list":list_id,"id":second_tag["id"],"name":"pRiVaTe TaG"})).unwrap();
+    assert_eq!(duplicate_tag["status"], 409);
+    assert_eq!(
+        duplicate_tag["body"]["error"],
+        "A tag with that name already exists in this list"
+    );
+
     f.body(f.owner, json!({"action":"assign","id":f.task,"tag":tag_id}));
     f.body(f.owner, json!({"action":"assign","id":f.task,"tag":tag_id}));
     assert_eq!(

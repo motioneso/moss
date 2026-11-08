@@ -191,3 +191,64 @@ original continuation or authorize a native-only production module.
 6. Exercise signup/sign-in and Tasks through the real Rust shell over HTTPS,
    including trusted-origin refusal and a second physical device over LAN or
    tailnet. No live UI or second-device proof is claimed for this checkpoint.
+
+### Checkpoint verification
+
+The first disposable database run ended with `rc=0` (receipt suffix
+`041644-DS4P7e`). Both tests passed through real host-owned transactions and the
+original Tasks schema. The removal control deliberately caught two assertion
+failures: another user could read and update the task while Tasks RLS was
+removed. Restoring RLS made both exact assertions pass again. This is a
+protection-removal control performed after the native implementation, not a
+claim that the Rust component or UI was tested failing first.
+
+The protected run also exercises all six table reads for another user and an
+instance admin, owner-only list/tag mutation and assignment operations, refusal
+of forged ownership and foreign activity writes, explicit manage sharing,
+per-account preferences and rollback of a list rename after a failed invocation.
+The Wasm in this check is the host's existing sample trampoline; Tasks logic
+executes natively through a test adapter. The results establish native data and
+host transaction behavior only.
+
+Three native row/recurrence/error tests, two metadata/hash checks, 48 recurrence
+comparisons against TypeScript, strict clippy for both new crates, and rustfmt
+checks for both crates passed. The final proof artifact records repository
+checks, the final database receipt and independent review results separately.
+See `modules/tasks/README.md` for reproduction commands. There is no screenshot:
+this checkpoint adds no runnable page to exercise or photograph.
+
+### JS-51 independent review corrections
+
+The first review of `09eb34b02` found three major issues. The existing Tasks
+integration assertion still listed only two tables; it now expects the corrected
+six-table declaration and is included in the disposable gate. Tasks is required
+in today's application, so the package now forbids per-account disabling. A new
+metadata assertion reproduced that mismatch before the flag was corrected.
+The duplicate-list rename gate also reproduced an aborted host call instead of
+the existing conflict response. List and tag renames now check visible,
+case-insensitive names and return the original conflict messages before issuing
+a conflicting update. Foreign targets still return not-found first. The final
+gate exercises both duplicate renames.
+
+The reviewer also included duplicate tag creation in that major finding. That
+part is rejected: `TasksListsRepository.createTag` in `packages/tasks/src/lists.ts`
+performs a plain insert without the rename methods' conflict translation;
+`packages/tasks/src/routes.ts` forwards its error through the generic handler.
+Changing that to a new conflict response here would change the source behavior.
+
+The unused context UUID grant was removed. Remaining minor findings are recorded
+rather than presented as proof: only the Tasks table has an RLS-removal control;
+other-table assertions lack individual removal controls, and two host-refusal
+assertions check only that the call fails. Recurrence numbers may serialize with
+an integral decimal spelling, although the current JSON/TypeScript consumers and
+the differential comparison treat them equally. Tag assembly currently scans
+owner-visible tags. This unfinished package deliberately retains the Tasks id
+and provisional app-map feature without advertising navigation. No CI workflow
+runs these new checks yet; reproduction is explicit in the README.
+
+One additional limit is concurrent duplicate renaming: a different invocation
+can win after the preflight query, and the current host deliberately fails the
+whole invocation on a SQL constraint error. That rare race does not yet preserve
+the original conflict response. Full route parity requires a safe structured
+constraint-error contract in the shared host, plus a concurrent regression,
+before this package can replace Tasks. No raw database error is exposed.
