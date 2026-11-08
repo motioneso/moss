@@ -556,6 +556,11 @@ the gate.
 **Kill gate.** Today and the chat drawer pass Ben's look check on a phone and a desktop, using the
 carried-over CSS. If the CSS cannot be reused cleanly, re-size Phase 5 before it starts.
 
+> **Amended 2026-11-07 (JS-41).** Modules ship as signed packages from a download registry.
+> A new Phase 4b (module host and package format) runs before Phase 5, and every Phase 5 module
+> follows the package rule. Workshop and Food are not ported. See
+> `docs/superpowers/specs/2026-11-07-rust-module-packages-and-registry-design.md` sections 7 and 9.
+
 ### Phase 5: in-repo modules and connectors (XL)
 
 - Port modules in dependency order: people, tasks, notes, calendar, email and connectors, memory
