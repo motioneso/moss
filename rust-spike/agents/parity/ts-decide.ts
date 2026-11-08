@@ -2,13 +2,26 @@
 import { readFileSync } from "node:fs";
 import { classifyAcpPermission } from "../../../packages/acp/src/permissions.ts";
 
-const cases = JSON.parse(readFileSync(process.argv[2], "utf8"));
-const out = cases.map((c: any) =>
+type Case = {
+  tool: string;
+  raw: Record<string, unknown> | null;
+  locations: string[];
+  cwd: string;
+  home: string;
+};
+
+const cases: Case[] = JSON.parse(readFileSync(process.argv[2], "utf8"));
+const out = cases.map((c) =>
   classifyAcpPermission(
     {
-      sessionId: "s", turnId: "t", toolCallId: "c", title: "x", kind: null,
-      toolName: c.tool, rawInput: c.raw,
-      locations: c.locations.map((path: string) => ({ path })),
+      sessionId: "s",
+      turnId: "t",
+      toolCallId: "c",
+      title: "x",
+      kind: null,
+      toolName: c.tool,
+      rawInput: c.raw,
+      locations: c.locations.map((path: string) => ({ path }))
     },
     { cwd: c.cwd, home: c.home }
   )
