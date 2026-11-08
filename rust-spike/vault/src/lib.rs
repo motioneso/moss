@@ -16,6 +16,9 @@
 //! link between the check and the open could still be followed. `openat2` with
 //! `RESOLVE_BENEATH` closes that on Linux and is the next step.
 
+mod allowed_roots;
+pub use allowed_roots::AllowedRoots;
+
 use std::fmt;
 
 pub use access_context::AccessContext;
@@ -24,6 +27,8 @@ use std::io::{self, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+
+mod module_files;
 
 #[derive(Debug)]
 pub enum VaultError {

@@ -91,7 +91,7 @@ impl ServicePorts {
     pub(crate) fn account(&self, id: &str, access: &AccessContext) -> Result<VaultContext> {
         ensure!(crate::manifest::identifier(id), "Invalid module id");
         let module = self.files.create_subdir(id)?;
-        let cx = VaultContext::for_access(&module, access)?;
+        let cx = VaultContext::for_module_files(&module, access)?;
         cx.create_dir("host")?;
         Ok(cx)
     }
