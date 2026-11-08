@@ -1,4 +1,4 @@
-use moss_module_host::typed_query::compile;
+use moss_module_host::typed_query::{compile, compile_with_nulls_first};
 use moss_module_sdk::query::{Compare, Filter, Order, Query};
 use serde_json::json;
 
@@ -33,14 +33,15 @@ fn recent_people_links_keep_legacy_nulls_first_without_changing_the_default() {
         order: vec![Order {
             column: "occurred_at".into(),
             descending: true,
-            nulls_first: true,
         }],
         ..Query::default()
     };
-    assert!(compile("app.person_context_links", &query)
-        .unwrap()
-        .sql
-        .contains("DESC NULLS FIRST"));
+    assert!(
+        compile_with_nulls_first("app.person_context_links", &query, &["occurred_at".into()])
+            .unwrap()
+            .sql
+            .contains("DESC NULLS FIRST")
+    );
     let old: Query = serde_json::from_value(
         json!({"kind":"select","order":[{"column":"occurred_at","descending":true}]}),
     )
