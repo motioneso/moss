@@ -184,7 +184,21 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         reopened
     });
     let owner = Uuid::parse_str(oracle["actor"].as_str().unwrap()).unwrap();
-    for case in oracle["cases"].as_array().unwrap() {
+    let note_path = notes_root.join(oracle["configuredNotes"]["path"].as_str().unwrap());
+    for (index, case) in oracle["cases"].as_array().unwrap().iter().enumerate() {
+        if index == oracle["configuredNotes"]["start"].as_u64().unwrap() as usize {
+            std::fs::write(
+                &note_path,
+                oracle["configuredNotes"]["content"].as_str().unwrap(),
+            )
+            .unwrap();
+            rt.block_on(async {
+                bootstrap.execute(
+                    "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'people-notes-folder',$2)",
+                    &[&owner, &json!(notes_root)],
+                ).await.unwrap();
+            });
+        }
         let method = case["method"].as_str().unwrap();
         let path = case["path"].as_str().unwrap();
         let mut request = dispatch::resolve(&manifest.routes, method, path).unwrap();
@@ -236,7 +250,15 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
                 "Rows differ after {method} {path}: {table}"
             );
         }
+        if let Some(content) = case["noteContent"].as_str() {
+            assert_eq!(
+                std::fs::read_to_string(&note_path).unwrap(),
+                content,
+                "Canonical note bytes differ after {method} {path}, case {index}"
+            );
+        }
     }
+    std::fs::remove_file(note_path).unwrap();
     if let Some(installer) = &installer {
         for (name, parameters) in [
             ("findPeopleByNames", json!({"names":["Route split"]})),

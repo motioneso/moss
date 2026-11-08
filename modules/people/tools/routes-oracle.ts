@@ -1,10 +1,15 @@
 // Legacy HTTP handlers, real account transactions and disposable database rows.
 import { randomUUID } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import Fastify from "fastify";
 import pg from "pg";
 import { createDatabase, DataContextRunner, getMossDatabaseUrls } from "@moss/db";
 import { registerPeopleRoutes } from "../../../packages/people/src/routes.js";
 import { setMossErrorHandler } from "../../../apps/api/src/error-handling.js";
+import { VaultContextRunner } from "@moss/vault";
+import { formatPeopleNote } from "../../../packages/people/src/notes-format.js";
 
 export const peopleTables = [
   "app.person_context_people",
@@ -24,6 +29,11 @@ export async function routesOracle() {
   const actors = [randomUUID(), randomUUID(), randomUUID()];
   const [actor, other, admin] = actors;
   if (!actor || !other || !admin) throw new Error("Missing fixture actors");
+  const notesRoot = await mkdtemp(join(tmpdir(), "moss-people-http-notes-"));
+  const selected = join(notesRoot, "People");
+  await mkdir(selected);
+  const previousRoots = process.env.MOSS_NOTES_ROOTS;
+  const previousLegacyRoots = process.env.JARVIS_NOTES_ROOTS;
   const ids = Object.fromEntries(
     ["primary", "secondary", "identity", "link", "accept", "reject", "suppress", "explicit"].map(
       (name) => [name, randomUUID()]
@@ -33,7 +43,8 @@ export async function routesOracle() {
     const app = Fastify();
     registerPeopleRoutes(app, {
       resolveAccessContext: async () => ({ actorUserId, requestId: "people-route-oracle" }),
-      dataContext: new DataContextRunner(database)
+      dataContext: new DataContextRunner(database),
+      vaultRunner: new VaultContextRunner(join(notesRoot, "private"))
     });
     setMossErrorHandler(app);
     return app;
@@ -42,10 +53,15 @@ export async function routesOracle() {
     try {
       await bootstrap.query("DELETE FROM app.users WHERE id=ANY($1::uuid[])", [actors]);
     } finally {
+      if (previousRoots === undefined) delete process.env.MOSS_NOTES_ROOTS;
+      else process.env.MOSS_NOTES_ROOTS = previousRoots;
+      if (previousLegacyRoots === undefined) delete process.env.JARVIS_NOTES_ROOTS;
+      else process.env.JARVIS_NOTES_ROOTS = previousLegacyRoots;
       await Promise.allSettled([
         bootstrap.end(),
         database.destroy(),
-        ...apps.map((a) => a.close())
+        ...apps.map((a) => a.close()),
+        rm(notesRoot, { recursive: true, force: true })
       ]);
     }
   };
@@ -101,7 +117,9 @@ export async function routesOracle() {
       body?: unknown;
       expected: unknown;
       rows: Record<string, unknown>;
+      noteContent?: string;
     }[] = [];
+    let configuredNote: string | undefined;
     const run = async (
       method: "GET" | "POST" | "PATCH" | "PUT",
       path: string,
@@ -132,7 +150,10 @@ export async function routesOracle() {
         path,
         ...(body !== undefined ? { body } : {}),
         expected: { status: response.statusCode, body: response.json() },
-        rows
+        rows,
+        ...(configuredNote
+          ? { noteContent: await readFile(join(selected, configuredNote), "utf8") }
+          : {})
       });
     };
     await run("GET", "/people");
@@ -239,7 +260,47 @@ export async function routesOracle() {
       );
       await run("POST", `/people/match-candidates/${ids.reject}/reject`, undefined, index);
     }
+    // Replay actual note-backed HTTP edits, not just the no-folder fallback.
+    // Fixed canonical ID/path permit exact file-byte comparison across runtimes.
+    configuredNote = "Route-Alpha.md";
+    const noteContent = formatPeopleNote({
+      frontmatter: {
+        jarvisPersonId: ids.primary!,
+        displayName: "Route Alpha",
+        aliases: ["Original"],
+        emails: ["route@example.test"],
+        phones: ["123"],
+        status: "active"
+      },
+      body: "# Route Alpha\n\nHuman 🪴 text.\n<!-- jarvis:people:start -->\nOld summary\n<!-- jarvis:people:end -->\nHuman suffix.\n"
+    });
+    await writeFile(join(selected, configuredNote), noteContent);
+    process.env.MOSS_NOTES_ROOTS = notesRoot;
+    process.env.JARVIS_NOTES_ROOTS = notesRoot;
+    await bootstrap.query(
+      "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'people-notes-folder',$2)",
+      [actor, JSON.stringify(selected)]
+    );
+    const configuredStart = cases.length;
+    for (const body of [
+      { displayName: "Note-backed edit" },
+      { aliases: [23, true, null, ["Nested", null], {}] },
+      { aliases: "" },
+      { emails: [23, false, null, ["Nested", null], {}] },
+      { phones: { length: 0 } },
+      { aliases: { length: 1 } },
+      { aliases: [{ toString: "not callable" }] },
+      { displayName: "Restored", aliases: null, emails: null, phones: null },
+      { displayName: "Final note-backed edit" }
+    ])
+      await run("PATCH", `/people/${ids.primary}`, body);
+    for (const index of [1, 2])
+      await run("PATCH", `/people/${ids.primary}`, { displayName: "Must stay private" }, index);
     // Rust replays the workflow from exactly these original synthetic rows.
+    await bootstrap.query(
+      "DELETE FROM app.preferences WHERE owner_user_id=$1 AND key='people-notes-folder'",
+      [actor]
+    );
     await seed();
     return {
       value: {
@@ -249,6 +310,7 @@ export async function routesOracle() {
         ids,
         startedAt,
         cases,
+        configuredNotes: { start: configuredStart, path: configuredNote, content: noteContent },
         knownIds: [...actors, ...Object.values(ids)]
       },
       cleanup
