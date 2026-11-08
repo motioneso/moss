@@ -187,9 +187,15 @@ impl ServicePorts {
 pub(crate) fn sanitize(value: &mut Value, fields: &SecretFields) {
     match value {
         Value::Object(object) => {
-            object.retain(|name, _| !sensitive_name(name));
-            for child in object.values_mut() {
-                sanitize(child, fields);
+            let original = std::mem::take(object);
+            for (name, mut child) in original {
+                if sensitive_name(&name) {
+                    continue;
+                }
+                let mut key = Value::String(name);
+                sanitize(&mut key, fields);
+                sanitize(&mut child, fields);
+                object.insert(key.as_str().expect("sanitized string").to_owned(), child);
             }
         }
         Value::Array(array) => {

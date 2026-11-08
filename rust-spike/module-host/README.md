@@ -1,17 +1,42 @@
-# Module host checkpoint
+# Rust module host
 
-This is an isolated Rust library for Phase 4b. It is **not wired into the running Moss app**.
-The phase is incomplete; see the report and its remaining-work list before building on it.
+Phase 4b is an isolated library under `rust-spike/module-host/`. It supplies the package,
+registry, Wasmtime and lifecycle services for the Rust application. It adds no registry screens
+and does not replace the running Docker app. The implementation and proof limits are recorded
+in `docs/superpowers/specs/2026-11-08-rust-phase4b-report.md`.
 
-The sample is a real WebAssembly component in `sample/module.wat`. Tests turn it into wasm,
-create a deterministic `.mosspkg`, sign its digest with ephemeral Ed25519 keys, publish a signed
-registry folder and install it through `Installer`. The guest uses the host's account-scoped
-key-value port. No private signing material or pretrusted production keys are included.
+The sample in `sample/module.wat` is a real WebAssembly component. Tests build a deterministic
+`.mosspkg`, sign it with fresh test keys, publish a signed registry and install it through the
+real host. No production signing keys or pretrusted registry address ship with this library.
+
+## Joining the application
+
+`Application::open` connects the existing account database, typed database port, Phase 2b queue,
+service ports, installer and Wasmtime host. The authenticated server supplies an `AccessContext`
+and calls `dispatch` for declared `/api/m/<module>/...` routes. Workers call `Installer::run_job`.
+Both interfaces are synchronous: call them on a bounded blocking executor, never directly from
+an async request task. The application supplies its trusted keys, secret cipher, AI router and
+optional compiled-cache key. The queue and module-host schema constants must be applied by the
+application's migration bootstrap first.
+
+The bridges directory contains Cargo manifests pointing at unchanged Phase 2b source files.
+It avoids changing those crates' workspace declarations or copying their implementation.
+
+`FileLifecycle` supports files-only modules; `PostgresLifecycle` adds transactional migrations,
+sharing policies, both historical ledgers, startup audits and durable queue fencing. The
+compiled legacy inventory is a release input, not something a downloaded package can extend.
+Its two frozen meeting sidecars have trusted Rust implementations; downloaded JavaScript never
+executes as a migration.
+
+Registry settings, signed metadata, serial floors, revocations and publisher bindings persist.
+Folder sources support offline mirrors; HTTPS sources accept an explicit public CA for that
+source only. `preview_list` returns one consent per package, bound to both package digest and
+previous installation. `apply_list` accepts those exact consents. A failed install retains the
+old version and pin. Snapshot APIs list, expire and explicitly restore retained recovery points.
 
 ## Verify
 
-Run from `~/Jarv1s`. Rust 1.95 is the toolchain used for this checkpoint. Keep Cargo output outside
-the checkout so the repository's format checker does not scan generated fingerprints.
+Run from `~/Jarv1s`. Use Rust 1.95 and keep build output outside the checkout.
 
 ```sh
 CARGO_TARGET_DIR=/tmp/moss-module-host-target cargo +1.95.0 test --locked --manifest-path rust-spike/module-host/Cargo.toml
@@ -20,32 +45,23 @@ cargo +1.95.0 fmt --manifest-path rust-spike/module-host/Cargo.toml --check
 CARGO_TARGET_DIR=/tmp/moss-module-host-target python3 rust-spike/module-host/tools/remove-protections.py
 ```
 
-Database tests refuse to run without the verify-gate marker. The wrapper starts a fresh,
-disposable PostgreSQL server, migrates it, runs the two real database tests serially, and removes
-it afterwards. Never run the ignored tests against a normal development database.
+Database tests run only through verify-gate. The wrapper creates and migrates a disposable
+PostgreSQL server, runs the database tests serially, then removes the server. Never run ignored
+database tests against a normal development database.
 
 ```sh
 CARGO_TARGET_DIR=/tmp/moss-module-host-target scripts/run-gate.sh start --gate ./rust-spike/module-host/tools/gate.sh
 scripts/run-gate.sh wait --follow
 ```
 
-`tools/remove-protections.py` removes one named protection at a time in a disposable sibling
-copy and requires its corresponding assertion to fail. It never changes the original source.
-There are no runtime bypass settings.
+The explicit HTTPS proof uses the already installed `openssl`, `python3` and `devports`. It
+claims a development port, starts a temporary TLS file server, checks the real transport and
+releases the port on completion. It changes no system trust settings.
 
-## Boundaries and current limits
+```sh
+CARGO_TARGET_DIR=/tmp/moss-module-host-target cargo +1.95.0 test --locked --manifest-path rust-spike/module-host/Cargo.toml --test registry real_self_hosted_https -- --ignored --nocapture
+```
 
-`runtime::Ports` is a trusted host-side service interface. The guest never implements it.
-`LocalPorts` supplies account-scoped key-value data, module files and bounded HTTPS GET.
-`DatabasePorts` adds typed queries on owned tables through the caller's `DataContext` and a
-restricted module role. Other named WIT ports currently refuse calls until real services are
-connected. They must not be described as implemented features.
-
-`FileLifecycle` refuses database-owning or scheduled-job modules. `PostgresLifecycle` handles the
-new owner-only SQL ledger; it also refuses scheduled-job and legacy-ledger modules. Production
-startup, queue integration, credential services, sharing policies, recovery after a process
-crash, and full schema restoration still need work. Do not install production packages with this
-checkpoint.
-
-The PostgreSQL adapters are synchronous and own Tokio runtimes. Production assembly needs a
-bounded blocking executor; do not call these methods directly from an async request task.
+The removal-control runner changes disposable sibling copies and requires each matching
+assertion to fail. It never adds a bypass option to the delivered host. Use its log alongside
+the passing protected tests; a stand-in upstream is not proof of a live provider integration.

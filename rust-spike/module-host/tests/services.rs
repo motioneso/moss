@@ -205,7 +205,9 @@ impl moss_module_host::network::Transport for EchoRemote {
             json!({"access_token":"test-only-access-token","refresh_token":"test-only-refresh-token","expires_in":3600})
         } else {
             let header = r.headers.get("authorization").unwrap().to_str().unwrap();
-            json!({"echo":header,"access_token":"should never return this field","nested":{"echo":header}})
+            use base64::Engine;
+            let encoded = base64::engine::general_purpose::STANDARD.encode(header);
+            json!({"echo":header,"access_token":"should never return this field","nested":{"echo":header,encoded:"safe"}})
         };
         Ok(moss_module_host::network::Response {
             status: 200,
@@ -269,6 +271,12 @@ fn credential_exchange_and_echo_redaction_use_the_real_guest_and_encrypted_store
     let out = call(&host, services.clone(), &m, a, "credentials", r.clone()).unwrap();
     assert_eq!(out["body"]["echo"], "[redacted]");
     assert!(out["body"].get("access_token").is_none());
+    use base64::Engine;
+    assert!(
+        !out.to_string()
+            .contains(&base64::engine::general_purpose::STANDARD.encode("test-only-access-token")),
+        "A credential encoded in an object key must also be redacted"
+    );
     assert!(call(&host, services.clone(), &m, b, "credentials", r.clone()).is_err());
     assert!(call(&host,services.clone(),&m,a,"credentials",json!({"operation":"request","resource":"other.test","parameters":{"url":"https://other.test/data","credential":"api"}})).is_err());
     assert_eq!(remote.0.load(std::sync::atomic::Ordering::SeqCst), 2);
