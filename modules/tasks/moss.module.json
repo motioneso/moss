@@ -264,7 +264,7 @@
       "risk": "read"
     },
     "tasks.listLists": {
-      "description": "List the account\u2019s task lists.",
+      "description": "List the account’s task lists.",
       "risk": "read"
     },
     "tasks.listTags": {
@@ -272,7 +272,7 @@
       "risk": "read"
     },
     "tasks.activity": {
-      "description": "Read a task\u2019s activity.",
+      "description": "Read a task’s activity.",
       "risk": "read"
     },
     "tasks.create": {

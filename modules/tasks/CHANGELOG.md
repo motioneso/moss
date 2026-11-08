@@ -4,7 +4,7 @@
 
 - Add bounded owner-only heartbeat reads with revisions and time boundaries.
 - Add deferred-status enqueue and worker handlers using the captured account.
-- Check real queue execution and exact heartbeat results on a disposable database.
+- Check real queue enqueue/claim, a directly invoked compiled handler, and exact heartbeat results on a disposable database.
 - Full queue policy parity, background authorization and remote-device proof remain unfinished.
 
 - Add twelve compiled task, list, tag, activity and breakdown action handlers.

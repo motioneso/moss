@@ -152,5 +152,6 @@ and retention options; the optional request key is parsed but not retained or us
 for deduplication (the legacy route did not use it as a singleton key either).
 Full deferred-job parity and the endpoint harness queue observer remain unfinished.
 The database gate compares heartbeat results exactly with the TypeScript executor
-and runs a real PostgreSQL queue plus compiled worker. Privacy removal controls
+and enqueues/claims from a real PostgreSQL queue, then directly invokes the compiled
+handler with the claimed actor. Installed automatic worker dispatch is not proved. Privacy removal controls
 are separate from any claim of complete package or physical-device acceptance.

@@ -109,6 +109,7 @@ mod tests {
         assert_eq!(revision(&[]), "0-811c9dc5");
         // Values obtained from the existing TypeScript heartbeatRevision helper.
         assert_eq!(revision(&["a".into()]), "1-3224db49");
+        assert_eq!(revision(&["🪴 café".into()]), "1-0e166da1");
         assert_ne!(revision(&["a".into()]), revision(&["a".into(), "b".into()]));
     }
 }

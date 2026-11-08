@@ -85,8 +85,11 @@ fn compiled_deferred_status_uses_real_queue_and_captured_actor() {
     // The exact worker assertion fails with RLS removed and passes after restoration.
     for removed in [false, true, false] {
         f.sql(if removed {"ALTER TABLE app.tasks DISABLE ROW LEVEL SECURITY"} else {"ALTER TABLE app.tasks ENABLE ROW LEVEL SECURITY; ALTER TABLE app.tasks FORCE ROW LEVEL SECURITY"});
+        let output: Value = serde_json::from_str(&invoke(f.other).unwrap()).unwrap();
+        if removed {
+            assert_eq!(output, json!({"taskId":id,"updated":true,"status":"done"}));
+        }
         let assert_private = || {
-            let output: Value = serde_json::from_str(&invoke(f.other).unwrap()).unwrap();
             assert_eq!(
                 output,
                 json!({"taskId":id,"updated":false,"status":null}),

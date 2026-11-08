@@ -946,9 +946,11 @@ namespaced queue uses kebab-case parameter names; HTTP and worker result shapes
 retain their legacy names. This is not full queue parity: the public host fixes
 retry/backoff and retention defaults, and its parameter schema cannot retain the
 optional arbitrary request key. That key is parsed but not persisted; the legacy
-route did not use it as a singleton key. The existing endpoint harness observes
-the old spike queue rather than this module queue; its deferred-status case
-therefore remains an acceptance gap even when the separate real-queue test passes.
+route did not use it as a singleton key. The endpoint adapter still denies the
+jobs port, and the existing harness observes the old spike queue rather than this
+module queue. Its deferred-status case remains an acceptance gap. The dedicated
+test enqueues and claims through PostgreSQL, then invokes the compiled handler
+directly with the claimed actor; it does not prove installed worker dispatch.
 
 The branch originally pointed at Phase 0a. With no task commits or local edits,
 it was advanced to merged main, including Tasks part 7, before implementation.
@@ -958,8 +960,16 @@ installed. Builds reuse the approved pinned wit-bindgen graph and scratch Rust
 1.95 toolchain. Formatting uses the already installed system Rust 1.95 rustfmt;
 the scratch toolchain has no rustfmt component.
 
-Verification receipts and remaining acceptance are recorded below after the
-current gates and independent review. The signed-install frame remains a fixture,
+Final gate receipts and review results belong to the task proof and checkpoint PR.
+Native guest checks pass eleven unit and five integration checks, including a
+non-BMP UTF-16 hash vector; the host-tools Cargo check also passes. The first
+independent review found no blockers or majors. Its four minor findings were
+addressed: precise removal outcomes, Unicode coverage, queue-test wording and
+unrelated manifest escaping. Removal controls now require successful calls and
+the specific exposed row/result before catching the expected privacy assertion,
+so an unrelated invocation error cannot count as evidence of a removed guard.
+
+The signed-install frame remains a fixture,
 not the authenticated application shell or a second physical device. Further work
 includes seven endpoints, six tools, recurrence jobs and scheduling, queue policy
 parity, actor timezone/lazy recurrence, People public APIs, policy/feedback, full

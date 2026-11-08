@@ -68,9 +68,17 @@ fn compiled_heartbeat_is_bounded_read_only_and_owner_only_with_removal_control()
     f.ports = control.clone();
     for remove in [false, true, false] {
         control.remove.store(remove, Ordering::SeqCst);
+        let output = f.tool(f.other, "tasks.heartbeatWindow", json!({})).unwrap();
+        if remove {
+            assert_eq!(output["data"]["items"].as_array().unwrap().len(), 1);
+            assert_eq!(
+                output["data"]["items"][0]["entityKey"],
+                format!("task:{id}")
+            );
+        }
         let assert_private = || {
             assert_eq!(
-                f.tool(f.other, "tasks.heartbeatWindow", json!({})).unwrap()["data"]["items"],
+                output["data"]["items"],
                 json!([]),
                 "background reads must exclude shared tasks"
             )
