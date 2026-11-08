@@ -19,6 +19,7 @@ export async function notesOracle(scope: unknown, ownerUserId: string): Promise<
       [root],
       async (context) => {
         const service = new PeopleNotesService();
+        const startedAt = new Date().toISOString();
         const created = await service.createPersonNote(scope, context, ownerUserId, {
           displayName: "Note Oracle",
           aliases: ["Oracle"],
@@ -44,7 +45,11 @@ export async function notesOracle(scope: unknown, ownerUserId: string): Promise<
           created.person.id
         );
         const final = await readVaultFile(context, created.notePath);
-        return { responses: [created, updated, archived], contents: [initial, changed, final] };
+        return {
+          startedAt,
+          responses: [created, updated, archived],
+          contents: [initial, changed, final]
+        };
       }
     );
   } finally {

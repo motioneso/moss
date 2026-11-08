@@ -8,6 +8,7 @@ export async function mutationOracle(scope: unknown, ownerUserId: string): Promi
   assertDataContextDb(scope);
   const repo = new PeopleRepository();
   const service = new PersonContextService(repo);
+  const startedAt = new Date().toISOString();
   const alpha = await repo.findOrCreatePerson(scope, ownerUserId, "Mutation Alpha");
   const beta = await repo.findOrCreatePerson(scope, ownerUserId, "Mutation Beta");
   const identityInput = {
@@ -141,5 +142,5 @@ export async function mutationOracle(scope: unknown, ownerUserId: string): Promi
     );
     rows[table] = result.rows.map((row) => row.row);
   }
-  return { responses, rows };
+  return { startedAt, responses, rows };
 }

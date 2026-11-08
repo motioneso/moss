@@ -270,12 +270,17 @@ fn native_people_repository_uses_real_transactional_ports() {
         parity_canon::json_numbers(&oracle["rows"]),
         "Native reads changed the persisted TypeScript projection"
     );
+    let actual_start = chrono::Utc::now();
     let actual: Value =
         serde_json::from_str(&run(oracle_actor, "mutations", json!({})).unwrap()).unwrap();
     let known = std::collections::HashSet::from([oracle_actor.to_string()]);
-    let start = chrono::Utc::now();
-    let mut expected_canon = parity_canon::Canon::new(start, &known);
-    let mut actual_canon = parity_canon::Canon::new(start, &known);
+    let expected_start = oracle["mutation"]["startedAt"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let mut expected_canon = parity_canon::Canon::new(expected_start, &known);
+    let mut actual_canon = parity_canon::Canon::new(actual_start, &known);
     let expected = expected_canon.value(&oracle["mutation"]["responses"]);
     let got = actual_canon.value(&actual["responses"]);
     assert!(
@@ -288,6 +293,7 @@ fn native_people_repository_uses_real_transactional_ports() {
         let got = actual_canon.rows(actual["rows"][table].as_array().unwrap());
         assert_eq!(got, expected, "People persisted mutation parity: {table}");
     }
+    let actual_start = chrono::Utc::now();
     let projection = serde_json::from_str::<Value>(
         &run(
             oracle_actor,
@@ -310,13 +316,17 @@ fn native_people_repository_uses_real_transactional_ports() {
         oracle_actor.to_string(),
         oracle["projectionId"].as_str().unwrap().to_owned(),
     ]);
-    let start = chrono::Utc::now();
+    let expected_start = oracle["projectionStartedAt"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
     for (actual, expected) in [
         (&projection, &oracle["projection"]),
         (&projection_row, &oracle["projectionRow"]),
     ] {
-        let actual = parity_canon::Canon::new(start, &known).value(actual);
-        let expected = parity_canon::Canon::new(start, &known).value(expected);
+        let actual = parity_canon::Canon::new(actual_start, &known).value(actual);
+        let expected = parity_canon::Canon::new(expected_start, &known).value(expected);
         assert!(
             parity_canon::diff(&expected, &actual, 10).is_empty(),
             "People persisted projection parity: {:?}",

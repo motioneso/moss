@@ -28,13 +28,13 @@ export async function toolsOracle(
     [primary, secondary, actor]
   );
   await bootstrap.query(
-    `INSERT INTO app.person_context_identities(id,owner_user_id,person_id,identity_kind,source_kind,normalized_value,display_value)
-     VALUES($1,$2,$3,'email_address','email','tools@example.test','Tool address')`,
+    `INSERT INTO app.person_context_identities(id,owner_user_id,person_id,identity_kind,source_kind,normalized_value,display_value,first_seen_at,last_seen_at,created_at,updated_at)
+     VALUES($1,$2,$3,'email_address','email','tools@example.test','Tool address','2020-01-01Z','2020-01-01Z','2020-01-01Z','2020-01-01Z')`,
     [identity, actor, secondary]
   );
   await bootstrap.query(
-    `INSERT INTO app.person_context_links(id,owner_user_id,person_id,source_kind,source_ref,source_ref_hash,link_kind,summary,occurred_at,created_at)
-     VALUES($1,$2,$3,'email','tool-ref','tool-hash','sender','Tool summary','2020-01-01Z','2020-01-01Z')`,
+    `INSERT INTO app.person_context_links(id,owner_user_id,person_id,source_kind,source_ref,source_ref_hash,link_kind,summary,occurred_at,created_at,updated_at)
+     VALUES($1,$2,$3,'email','tool-ref','tool-hash','sender','Tool summary','2020-01-01Z','2020-01-01Z','2020-01-01Z')`,
     [link, actor, primary]
   );
   for (const [id, kind] of [
@@ -43,8 +43,8 @@ export async function toolsOracle(
     [explicit, "merge_people"]
   ]) {
     await bootstrap.query(
-      `INSERT INTO app.person_context_match_candidates(id,owner_user_id,candidate_kind,candidate_signature,primary_person_id,identity_id)
-       VALUES($1,$2,$3,$4,$5,$6)`,
+      `INSERT INTO app.person_context_match_candidates(id,owner_user_id,candidate_kind,candidate_signature,primary_person_id,identity_id,created_at,updated_at)
+       VALUES($1,$2,$3,$4,$5,$6,'2020-01-01Z','2020-01-01Z')`,
       [id, actor, kind, id, primary, identity]
     );
   }
@@ -72,6 +72,7 @@ export async function toolsOracle(
   const rollback = new Error("Roll back the legacy tool oracle");
   try {
     await runner.withDataContext({ actorUserId: actor }, async (scope) => {
+      const startedAt = new Date().toISOString();
       for (const request of requests) {
         const execute = PEOPLE_TOOLS.find((tool) => tool.name === request.tool)?.execute;
         if (!execute) throw new Error(`Legacy tool missing: ${request.tool}`);
@@ -89,6 +90,7 @@ export async function toolsOracle(
         }
       }
       result = {
+        startedAt,
         actor,
         primary,
         secondary,

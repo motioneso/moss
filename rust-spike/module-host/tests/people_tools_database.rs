@@ -68,7 +68,8 @@ fn compiled_people_tools_match_the_legacy_execute_functions() {
         .iter()
         .map(|v| v.as_str().unwrap().to_owned())
         .collect();
-    let mut expected = parity_canon::Canon::new(chrono::Utc::now(), &known);
+    let expected_start = tools["startedAt"].as_str().unwrap().parse().unwrap();
+    let mut expected = parity_canon::Canon::new(expected_start, &known);
     let mut actual = parity_canon::Canon::new(chrono::Utc::now(), &known);
     for case in tools["cases"].as_array().unwrap() {
         if case["error"].is_string() {

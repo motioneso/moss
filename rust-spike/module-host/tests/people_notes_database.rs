@@ -338,6 +338,7 @@ fn compiled_people_coordinates_canonical_notes_and_projection() {
         &std::fs::read(std::env::var("JS50_PEOPLE_ORACLE").unwrap()).unwrap(),
     )
     .unwrap();
+    let actual_start = chrono::Utc::now();
     let created=run(actor,"POST","/people",json!({"displayName":"Note Oracle","aliases":["Oracle"],"emails":["oracle@example.test"],"phones":["123"]}),json!({})).unwrap();
     let oracle_id = created["person"]["id"].as_str().unwrap();
     let oracle_path = created["notePath"].as_str().unwrap();
@@ -366,8 +367,13 @@ fn compiled_people_coordinates_canonical_notes_and_projection() {
     .unwrap();
     let final_text = std::fs::read_to_string(folder.join(oracle_path)).unwrap();
     let known = std::collections::HashSet::new();
-    let mut expected = parity_canon::Canon::new(chrono::Utc::now(), &known);
-    let mut actual = parity_canon::Canon::new(chrono::Utc::now(), &known);
+    let expected_start = oracle["notes"]["startedAt"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let mut expected = parity_canon::Canon::new(expected_start, &known);
+    let mut actual = parity_canon::Canon::new(actual_start, &known);
     assert_eq!(
         actual.value(&json!([created, updated, archived])),
         expected.value(&oracle["notes"]["responses"]),

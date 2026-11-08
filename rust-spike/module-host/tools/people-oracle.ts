@@ -48,28 +48,28 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
       [person, archived, actor]
     );
     await bootstrap.query(
-      `INSERT INTO app.person_context_identities(owner_user_id,person_id,identity_kind,source_kind,normalized_value,display_value,status,confidence)
-      VALUES($1,$2,'alias','manual','Al_%','Al_%','active',0.75),($1,$3,'email_address','email','archived@example.test','archived@example.test','rejected',0.5)`,
+      `INSERT INTO app.person_context_identities(owner_user_id,person_id,identity_kind,source_kind,normalized_value,display_value,status,confidence,first_seen_at,last_seen_at,created_at,updated_at)
+      VALUES($1,$2,'alias','manual','Al_%','Al_%','active',0.75,'2020-01-01Z','2020-01-01Z','2020-01-01Z','2020-01-01Z'),($1,$3,'email_address','email','archived@example.test','archived@example.test','rejected',0.5,'2020-01-01Z','2020-01-01Z','2020-01-01Z','2020-01-01Z')`,
       [actor, person, archived]
     );
     await bootstrap.query(
-      `INSERT INTO app.person_context_links(owner_user_id,person_id,source_kind,source_ref,source_ref_hash,link_kind,occurred_at,created_at)
-      SELECT $1,$2,'manual','private-ref-'||n,'hash-'||n,'related',CASE WHEN n=1 THEN NULL ELSE '2020-01-02T03:04:05Z'::timestamptz+n*INTERVAL '1 second' END,'2020-01-02T03:04:05Z'::timestamptz+n*INTERVAL '1 second'
+      `INSERT INTO app.person_context_links(owner_user_id,person_id,source_kind,source_ref,source_ref_hash,link_kind,occurred_at,created_at,updated_at)
+      SELECT $1,$2,'manual','private-ref-'||n,'hash-'||n,'related',CASE WHEN n=1 THEN NULL ELSE '2020-01-02T03:04:05Z'::timestamptz+n*INTERVAL '1 second' END,'2020-01-02T03:04:05Z'::timestamptz+n*INTERVAL '1 second','2020-01-01Z'::timestamptz
       FROM generate_series(1,24) n`,
       [actor, person]
     );
     const aliasPerson = randomUUID();
     await bootstrap.query(
-      `INSERT INTO app.person_context_people(id,owner_user_id,display_name,relationship_summary,context_summary,status,created_at)
-       VALUES($1,$2,'Alias Person',$3,$4,'active','2019-01-01Z')`,
+      `INSERT INTO app.person_context_people(id,owner_user_id,display_name,relationship_summary,context_summary,status,created_at,updated_at)
+       VALUES($1,$2,'Alias Person',$3,$4,'active','2019-01-01Z','2019-01-01Z')`,
       [aliasPerson, actor, " \r\n  Role line \r\nsecond line", `\nX${"🪴".repeat(100)}\nignored`]
     );
     await bootstrap.query(
-      `INSERT INTO app.person_context_identities(owner_user_id,person_id,identity_kind,source_kind,normalized_value,display_value,status)
-       VALUES($1,$2,'alias','manual','first alias','First Alias','active'),
-             ($1,$2,'display_name','manual','friendly name','Friendly Name','active'),
-             ($1,$2,'alias','manual','inactive','Inactive','rejected'),
-             ($1,$3,'alias','manual','archived alias','Archived Alias','active')`,
+      `INSERT INTO app.person_context_identities(owner_user_id,person_id,identity_kind,source_kind,normalized_value,display_value,status,first_seen_at,last_seen_at,created_at,updated_at)
+       VALUES($1,$2,'alias','manual','first alias','First Alias','active','2020-01-01Z','2020-01-01Z','2020-01-01Z','2020-01-01Z'),
+             ($1,$2,'display_name','manual','friendly name','Friendly Name','active','2020-01-01Z','2020-01-01Z','2020-01-01Z','2020-01-01Z'),
+             ($1,$2,'alias','manual','inactive','Inactive','rejected','2020-01-01Z','2020-01-01Z','2020-01-01Z','2020-01-01Z'),
+             ($1,$3,'alias','manual','archived alias','Archived Alias','active','2020-01-01Z','2020-01-01Z','2020-01-01Z','2020-01-01Z')`,
       [actor, aliasPerson, archived]
     );
     const runner = new DataContextRunner(app);
@@ -185,6 +185,7 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
       )
     ).rows.map((r: { row: unknown }) => r.row);
     const projectionId = randomUUID();
+    const projectionStartedAt = new Date().toISOString();
     const projection = await runner.withDataContext({ actorUserId: actor }, (scope) =>
       repo.upsertPersonProjection(scope, {
         ownerUserId: actor,
@@ -227,6 +228,7 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
         projection,
         projectionRow: projectionRow.row,
         projectionId,
+        projectionStartedAt,
         mutation,
         notes,
         tools
