@@ -88,7 +88,7 @@
     },
     {
       "id": "tasks.package-screens",
-      "description": "Package screen using the shared UI kit and parent bridge: list and priority views; status, list, text and tag filters; create and edit tasks; completion and suggestion review; list creation and renaming; subtasks; tag creation and assignment; activity comments; saved default view. Dates currently display in UTC. Full legacy screen and setting parity is unfinished.",
+      "description": "Package screen using the shared UI kit, authored typography and parent bridge: task loading; list and priority views; status, list, text and tag filters; create and edit tasks; completion and suggestion review; list creation and renaming; subtasks; tag creation and assignment; activity comments; saved default view. Dates currently display in UTC. Full legacy screen and setting parity is unfinished.",
       "remediations": [
         {
           "id": "reload-tasks",

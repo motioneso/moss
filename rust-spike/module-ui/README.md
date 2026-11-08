@@ -1,7 +1,7 @@
 # Shared module UI kit
 
 Initial Leptos versions of Park Press Button, Field, FormLabel, EmptyState and
-Masthead, plus Calendar event chips, month cells and a native modal peek. Markup and options follow `packages/ui`; styling comes from its authored
+Masthead. Markup and options follow `packages/ui`; styling comes from its authored
 CSS and the app tokens. This is a starting set, not a complete React component port.
 Use `ssr` for native rendering tests and `csr` for browser WebAssembly builds.
 
@@ -13,18 +13,30 @@ node --test rust-spike/module-ui/web/bridge.test.mjs
 ```
 
 The build script includes the canonical startup reset, expands canonical CSS imports and copies canonical fonts into
-the selected output directory; generated assets stay out of commits. Serve that
+the selected output directory. Shared document foundations apply the authored
+sans body type, display headings and sizing inside isolated frames, which cannot
+inherit parent styles. Generated assets stay out of commits. Serve that
 directory at `/module-shared/`. Module screens use the host's opaque iframe and
 `web/guest-bridge.mjs`, not direct authenticated HTTP. The signed-in parent installs
 `web/host-bridge.mjs` and supplies its authenticated request and shell callbacks.
-Use `openModuleFrame(frame, moduleId, verifiedScreen.src, callbacks)` to attach the
-parent bridge and assign the verified screen URL together. It pins the initial
-document with a fresh fragment nonce, allowing its queued connection message to
-arrive after the first load. Never reuse that nonce or pass an unverified URL. The guest
-constructs `moduleClient` during initial document startup, transferring a command
-port before the first load. Only that document port carries commands; later
-bootstrap messages are ignored even before navigation finishes. The lower-level `connectModuleFrame` without a nonce requires a connection before
-the first load and fails closed otherwise; browser task ordering can violate that
-requirement, so use `openModuleFrame` for real screens. Any later load revokes the bridge. Never automatically reconnect it.
+Pass the installer-verified `screenUrl` in the parent bridge's options; the bridge
+attaches its listeners and opens that URL with a random document key in the fragment.
+The guest constructs `moduleClient` during initial document startup, transferring a
+command port with that key. The queued connection message may arrive before or after the first load.
+Another document without that key cannot claim the waiting connection. Legacy
+callers that assign the URL themselves keep the original strict startup timing;
+they must supply `screenUrl` to support either event order.
+Only the accepted document port carries commands; later bootstrap messages are
+ignored even before navigation finishes. Any subsequent load revokes the bridge,
+including a bridge that has not yet connected. Never automatically reconnect it.
 Replies use transferred message ports so a navigated iframe cannot receive a
 previous document's private response. Dispose both ends when their views close.
+
+The public `openModuleFrame(frame, moduleId, verifiedScreen.src, callbacks)` helper
+also remains supported. It attaches the bridge and opens the verified URL with a
+fresh `moss-bootstrap` fragment token. The guest echoes that token instead of the
+`moss-frame` document key used by `connectModuleFrame` with `screenUrl`. Both
+openers preserve the same source/origin checks, document-bound command ports and
+navigation revocation; choose one opener per frame. The lower-level unkeyed
+connection still requires its connection before the first load. Never reuse a
+fragment key or token or pass an unverified screen URL.

@@ -1,15 +1,39 @@
-/** Attach before assigning the verified frame URL. Commands use the initial
+/** Supply the verified screenUrl to bind and open the initial document. Commands use its
  * document's transferred port; later frame loads revoke the connection.
  * `request` runs the signed-in own-module route;
- * theme/navigation/chat callbacks belong to the host. No credentials cross this channel. */
+ * theme/navigation/chat callbacks belong to the host. Account session credentials stay there. */
 export function connectModuleFrame(
   frame,
   moduleId,
-  { request, theme, navigate, chat, hostWindow = globalThis.window, bootstrapToken = null }
+  {
+    request,
+    theme,
+    navigate,
+    chat,
+    screenUrl,
+    hostWindow = globalThis.window,
+    bootstrapToken = null
+  }
 ) {
   if (!/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*$/.test(moduleId)) throw new Error("Invalid module");
+  if (
+    screenUrl !== undefined &&
+    (typeof screenUrl !== "string" ||
+      !screenUrl.startsWith(`/module-ui/${moduleId}/`) ||
+      /[\\?#\s]/.test(screenUrl) ||
+      new URL(screenUrl, "https://moss.invalid").pathname !== screenUrl)
+  )
+    throw new Error("Invalid screen URL");
   if (bootstrapToken !== null && !/^[a-f0-9]{32}$/.test(bootstrapToken))
     throw new Error("Invalid bootstrap token");
+  if (screenUrl !== undefined && bootstrapToken !== null)
+    throw new Error("Choose one verified screen opener");
+  const documentKey =
+    screenUrl === undefined
+      ? null
+      : Array.from(globalThis.crypto.getRandomValues(new Uint8Array(32)), (byte) =>
+          byte.toString(16).padStart(2, "0")
+        ).join("");
   let live = true;
   let commandPort;
   let loaded = false;
@@ -103,6 +127,7 @@ export function connectModuleFrame(
       event.origin !== "null" ||
       event.data?.channel !== "moss.module.v1" ||
       event.data?.type !== "connect" ||
+      (documentKey !== null && event.data?.documentKey !== documentKey) ||
       (bootstrapToken !== null && event.data?.bootstrapToken !== bootstrapToken)
     )
       return;
@@ -114,7 +139,11 @@ export function connectModuleFrame(
     hostWindow.removeEventListener("message", connect);
   };
   const onLoad = () => {
-    if (loaded || (!commandPort && bootstrapToken === null)) dispose();
+    // postMessage queues a task: the initial document's load may be delivered
+    // before its connect message. Either initial ordering is valid; a subsequent
+    // load always revokes the one-shot bridge, even if it never connected.
+    // Legacy callers without a keyed URL retain the original fail-closed timing.
+    if (loaded || (!commandPort && documentKey === null && bootstrapToken === null)) dispose();
     loaded = true;
   };
   hostWindow.addEventListener("message", connect);
@@ -126,6 +155,7 @@ export function connectModuleFrame(
     frame.removeEventListener("load", onLoad);
   };
   frame.addEventListener("load", onLoad);
+  if (documentKey !== null) frame.src = `${screenUrl}#moss-frame=${documentKey}`;
   return dispose;
 }
 

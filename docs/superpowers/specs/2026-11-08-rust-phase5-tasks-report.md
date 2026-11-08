@@ -715,3 +715,120 @@ and repeat task/list/tag/comment/view/draft checks through the installed UI.
 The screen controller is implemented but remains **unverified on the live path**.
 No successful task creation through the browser, real-shell integration,
 physical second-device access or complete phase parity is claimed.
+
+## Tasks part 6 checkpoint (JS-70, Card 526)
+
+This continuation repairs the installed package screen's startup failure. It is
+a partial checkpoint under the brief's context-boundary rule, not completion of
+Phase 5. Full endpoint, tool, job and legacy-screen parity still needs more work.
+
+### Loading repair and shared document styles
+
+The initial frame load can arrive before the guest's queued connection message.
+The old bridge closed at that boundary, so the browser displayed “Tasks could not
+load” without issuing account-data requests. A regression reproduced that event
+order, and the actual signed-install HTTPS fixture reproduced the load-error screen.
+
+The public bridge now accepts an installer-verified `screenUrl`, adds a random
+document key in its fragment, attaches listeners and opens the frame. The guest
+returns that key with its document-bound command port. This permits either
+initial event order while refusing a different document's connection without the
+key. Existing unkeyed callers keep their original strict timing. Tasks and the
+shared frame example use the keyed path. A later frame load revokes the bridge;
+responses still waiting on the host are discarded after revocation. No account
+session credential is passed into the package.
+
+Twelve bridge checks cover both initial orders, wrong origin/source/key, later
+connections, navigation before connection, late replies, path restrictions,
+bounded resize, disposal and timeout. Removing the document-key check, the
+frame-source check or navigation revocation in separate disposable copies makes
+the checks fail assertions. The protected suite and five controller-model checks
+pass. These controls test the bridge guards, not every browser navigation race.
+
+The live frame also exposed missing document typography: isolated documents do
+not inherit the parent page's body font. The shared module stylesheet now supplies
+the authored sans body type, display headings, sizing and inherited control fonts.
+Tasks keeps its layout-only stylesheet. Its app map and changelog describe the
+loading and typography repair without claiming full parity.
+
+### Verification and remaining acceptance
+
+Live interaction and differential results are recorded in this section.
+The task proof contains the command receipts and screenshots.
+The disposable privacy/data gate passes: six compiled/native privacy checks
+and twenty-nine legacy integration checks, including failing-first controls. The UI fixture installs a real signed package and routes
+real account data through the Rust host, but it remains a small fixture frame;
+it is not the authenticated Phase 4 application shell. A local browser or narrow
+viewport does not prove a second physical device.
+
+A second live failure was reproduced after loading: native form submission is
+blocked by the package sandbox before the `submit` event. Save buttons now handle
+activation directly, validate the form, and call the existing public bridge.
+The sandbox and CSP stay unchanged. The installed browser check now confirms
+list creation and renaming, task creation and editing, subtasks, tag assignment,
+comments, completion and the Done filter. Draft protection offers Keep editing
+and Discard changes. The saved Grid preference survives a full reload, as do the
+edited task, tag, subtask and comment. Both desktop and narrow layouts were
+inspected; screenshots are in the task proof artifact. The persistence gate
+confirms exactly one browser-created proof task in the real Tasks table.
+Native keyboard selection was used for the Done filter: the task browser
+CLI's select helper updates the value without the `input` event this control uses.
+
+The nine missing HTTP endpoints, nineteen tools, both queues and schedule
+reconciliation listed in part 4 remain unfinished. Public actor-timezone and
+transactional list-deletion contracts, People links, assistant policy/feedback,
+full screen/settings parity, speed budgets and the real-shell join remain.
+Second-device HTTPS proof and full differential green are still required.
+The exact next priority is now to finish these parity gaps and the application
+join, rather than reimplement the bridge or mistake the fixture for the shell.
+
+No global tool, package or target was installed. The build reuses the previously
+approved scratch Rust/Wasm toolchain and pinned `wit-bindgen` dependency graph.
+Host, native guest and Wasm output folders are separate. JavaScript dependencies
+were restored from the repository's frozen lockfile in this worktree. Database
+work runs only through `scripts/run-gate.sh` on disposable servers.
+
+### Checkpoint verification record
+
+- `node --test rust-spike/module-ui/web/bridge.test.mjs modules/tasks/ui/model.test.mjs`: seventeen passing checks; original initial-load regression failed first.
+- Scoped ESLint and Prettier checks pass. `pnpm verify:static` passes (lint, formatting, repository invariants, type checks and app map build).
+- Native guest: thirteen checks pass across unit, public schema and repository contract suites.
+- Shared frame example: `cargo +1.95.0 check --locked --offline --manifest-path rust-spike/module-host/Cargo.toml --example frame_check` passes.
+- Disposable data gate: two component checks, two metadata checks, one tool-service check, six privacy/data checks and twenty-nine legacy integration checks pass. Cross-account read and write assertions fail with RLS removed and pass with it restored.
+- Full differential gate: **62 of 77 match, 15 fail**. The failures cover deferred status work; focus, at-risk and timezone-based overdue routes; and list deletion/moves. This is current evidence, not reuse of the earlier checkpoint's result.
+- Signed-install UI gate: certificate-verifying HTTPS, sign-in redirection, unknown Host/Origin refusal, signed registry selection/download/install and browser persistence pass. The frame makes real `/api/m/tasks/...` calls through the installed router. Chrome uses a temporary self-signed-certificate exception; the separate Node network assertions verify the generated certificate.
+- Clippy was unavailable in the existing scratch toolchain. No Rust domain logic or migration changes were made here. No claim of complete browser, accessibility, performance, real-shell or remote-device acceptance is made.
+
+Exact commit/fingerprint receipts and failures are attached to the task proof;
+these distinguish each tested build rather than treating earlier runs as final. A future
+continuation should start with the remaining parity routes/jobs and real-shell
+join. The temporary fixture is loopback-only and was stopped after this check;
+it is not a deployed application or a second physical device.
+
+The first independent review found that `randomUUID` would fail in a plain HTTP
+LAN caller of the shared bridge. The key now uses `getRandomValues`, available
+without a secure context; application access still requires HTTPS. Screen URLs
+are also checked after URL normalization to reject dot-segment escapes. Both
+regressions fail first and then pass after repair. The review's remaining minor
+notes are limited automated form coverage and untested initial blank-frame load
+behavior in other browsers. Actual Save and Enter-key list creation were checked
+in the signed installed Chrome fixture; other-browser timing remains unproven.
+
+### Main-branch reconciliation
+
+The current main branch independently added the public `openModuleFrame` helper
+and its `moss-bootstrap` fragment protocol for Calendar. The conflict resolution
+keeps that interface and its tests alongside Tasks' `screenUrl`/`moss-frame`
+contract; existing Calendar and People callers remain supported. The shared guest
+echoes whichever initial fragment it receives. Both paths keep source/origin
+checks, private command ports and load revocation. The asset build keeps main's
+startup reset and base styles plus Tasks' document foundations. No generated
+inventory entries were discarded. The combined bridge/controller suite has
+nineteen checks; the timeout check now waits for message delivery before closing
+its received port so machine load cannot cause a cleanup-only failure.
+
+The first post-merge gates stopped at the locked dependency check: main added
+`web-sys` to the shared module UI, so the Tasks verification lockfile also needed
+that existing dependency edge. An offline refresh changes only that one entry;
+no dependency version or new tool installation is introduced. The gates are
+rerun on the resulting clean commit.

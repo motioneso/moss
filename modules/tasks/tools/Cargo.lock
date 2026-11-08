@@ -1849,6 +1849,7 @@ name = "moss-module-ui"
 version = "0.1.0"
 dependencies = [
  "leptos",
+ "web-sys",
 ]
 
 [[package]]

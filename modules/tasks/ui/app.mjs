@@ -301,14 +301,11 @@ function manageLists() {
       const save = text("button", "Save name", "jds-btn jds-btn--secondary");
       save.type = "submit";
       form.append(label, input, save);
-      form.addEventListener("submit", (event) => {
-        event.preventDefault();
-        void run(async () => {
-          await api("PATCH", `/tasks/lists/${list.id}`, { name: input.value });
-          state.listDrafts.delete(list.id);
-          await load();
-          manageLists();
-        });
+      bindForm(form, async () => {
+        await api("PATCH", `/tasks/lists/${list.id}`, { name: input.value });
+        state.listDrafts.delete(list.id);
+        await load();
+        manageLists();
       });
       return form;
     })
@@ -356,11 +353,19 @@ $("view").addEventListener("change", () =>
     await load();
   })
 );
-function submit(id, action) {
-  $(id).addEventListener("submit", (event) => {
+function bindForm(form, action) {
+  const save = (event) => {
     event.preventDefault();
-    void run(action);
-  });
+    if (form.reportValidity()) void run(action);
+  };
+  // The opaque package sandbox blocks native form submission before its submit
+  // event. Handle submit-button activation (including implicit Enter clicks)
+  // directly; all writes still use the authenticated public host bridge.
+  form.querySelector('button[type="submit"]').addEventListener("click", save);
+  form.addEventListener("submit", save);
+}
+function submit(id, action) {
+  bindForm($(id), action);
 }
 submit("task-form", async () => {
   const form = Object.fromEntries(new FormData($("task-form")));

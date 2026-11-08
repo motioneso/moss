@@ -24,6 +24,7 @@ def build(out: Path) -> None:
         ROOT / "apps/web/src/styles/boot.css",
         ROOT / "packages/ui/src/styles.css",
         ROOT / "rust-spike/module-ui/web/base.css",
+        ROOT / "rust-spike/module-ui/web/document.css",
     ])
     css = css.replace('url("/fonts/', 'url("/module-shared/fonts/')
     (out / "park-press.css").write_text(css)
