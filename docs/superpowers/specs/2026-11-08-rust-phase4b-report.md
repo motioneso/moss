@@ -1,7 +1,7 @@
 # Rust Phase 4b: module host and package format
 
-Status: implementation expanded through the requested host integration; final independent review
-is pending because both original review rounds were used on earlier checkpoints.
+Status: requested host integration implemented. The proof artifact records the final checks and
+independent review verdict; this report does not claim whole-application parity.
 
 Part of https://github.com/motioneso/moss/issues/4027. Card: 511. Release note Category: N/A.
 The changes stay under `rust-spike/module-host/` and this report. No sibling phase source,
@@ -52,6 +52,15 @@ The expanded tests caught and fixed these faults:
   test failed before the fix; response redaction now visits keys as well as values.
 - Core ledger rows were captured without being reinserted on restore. Recovery now restores
   those exact rows and refuses conflicting identities.
+- A schedule-only module could create a schedule but not execute its job. A real scheduler and
+  Wasm regression failed before the fix and passes both before and after an upgrade. Direct
+  enqueue remains refused without that separate permission.
+- Upgrade data migrations silently changed no existing rows under forced row security. The
+  same two-account update/delete regression failed before the fix and now passes. The host
+  temporarily relaxes FORCE for the table's restricted owner inside the migration transaction,
+  restores it before commit, and keeps runtime row policies enabled.
+- Removal could return before recovering an interrupted install. Its regression failed with
+  the recovery journal still present; removal now recovers before reading the catalog.
 
 The database gate covers ordinary and sharing access, health-specific upgrade rollback,
 serial/identity/generated columns, repeated simulated interrupted-change recovery, retained
@@ -104,7 +113,14 @@ precise reviewed commit are recorded in the proof artifact before acceptance.
 
 Claude reviewed `6092ad216` and `3b54c02a5`. Both rounds identified the earlier checkpoint as
 incomplete. The continuation implements the service, queue, SQL, recovery, approval and pin
-work that those checkpoints lacked. Fresh review must assess this final implementation.
+work that those checkpoints lacked. The third review of `46f981865` identified the schedule-only
+and data-migration failures above. They were reproduced and fixed in `f44c30a85` and `94d0dcfb1`;
+the minor removal-recovery finding was reproduced and fixed in `5169e8d96`. A further review of
+the corrected final commit is required before acceptance.
+
+Two suggestions below the must-fix threshold remain explicit: calls still reverify package
+files to detect disk changes, with a cost that grows with package size; exhaustive partial-restore
+failure coverage remains limited. Snapshot expiry and repeated database restore do have tests.
 
 The earlier suggestion to delete purge snapshots immediately was rejected: design section 3.9
 requires thirty-day recovery retention. Expiry and cleanup are now implemented. The PostgreSQL
