@@ -797,3 +797,70 @@ Rust files pass a scoped check without rewriting that unrelated file.
 
 Verification receipts and the fresh independent review belong in the task proof artifact.
 Do not promote this checkpoint to complete People parity or device acceptance.
+
+## People part six: installed dispatch checkpoint (JS-73)
+
+Card 523. This branch began at an old Phase 0a snapshot and was advanced, before editing,
+to merged main `33cf5da15`. This is a bounded checkpoint. It does not complete the People
+port or qualify the authenticated Rust application's module composition.
+
+### What changed
+
+The route gate can now accept the actual `.mossmod` package, pin its bytes and component
+hash, sign a temporary folder registry, download/install it with `PostgresLifecycle` and
+`PostgresCatalog`, and reopen the installer. The People migration uses its unchanged
+`core-legacy` SQL identity. Replayed legacy responses and all seven table snapshots go
+through `Installer::dispatch_extended`. A separate installed consumer fixture calls the
+four unchanged public APIs. The Settings HTML is retrieved from installed assets; this is
+not proof that a browser loads or operates the screen. The provider dependency and
+unavailable AI service are explicit fixtures, not real provider delivery.
+
+People now validates the legacy POST/PATCH/folder-setting body schemas before handlers,
+including required fields, string/string-array coercion, union errors and root-array
+behavior. The expanded oracle uses real Fastify/Ajv and real disposable database rows.
+Unknown properties remain present. Rename defers note-only field parsing until after
+folder availability and canonical-note discovery, preserving projection fallback when
+no note exists. Ignored summary fields do not break a note-backed edit.
+
+Repeated search values use JavaScript array joining; repeated equality filters use
+node-postgres array encoding. Positive limits above the SDK page space use an uncapped
+scan if the count fits PostgreSQL `int8`; larger or negative values fail. This does not
+remove the host's existing resource limits or establish unlimited-dataset parity.
+
+The legacy relative `GET /people/notes-directories` is separate from the additive absolute
+root chooser. Empty folder saves clear the shared preference. Installed checks exercise
+folder save, relative root/child listing, traversal refusal and clear, plus other-user
+and administrator folder/API attempts. The app-map manifest declares the new browse
+contract and validation recovery guidance. No shared shell or sibling-module source was
+changed, and the four public API versions and existing job kinds remain stable.
+
+No tool or target was installed globally. The approved pinned `wit-bindgen` and existing
+scratch Cargo/Rustup caches build the generated component. UI output and test packages
+stay in scratch. The UI lockfile refresh records an already declared shared dependency;
+no new UI package was introduced.
+
+### Verification receipts
+
+The exact pre-change People source was archived from the base and compiled separately.
+The expanded route oracle failed against that component: `POST /people` with a scalar
+body returned 500 instead of Fastify's 400 `body must be object` (gate exit 101).
+Final verification results are recorded below and in the task proof recipe.
+
+### Exact remaining work after part six
+
+1. Compose the authenticated Rust shell with the installed frame, shared preferences and
+   linked-note adapters. Exercise actual Settings reads/writes and real chat approvals,
+   blocked app actions and policy behavior. Installed library dispatch is not a running
+   application or network HTTP listener.
+2. Finish index-refresh/cooldown, ingest nudges, actual source-provider dependencies and
+   sustained command quotas/retention. The registry test's provider is a fixture.
+3. Broaden complete HTTP parity: configured-folder legacy filesystem comparisons,
+   locale-sensitive mixed-case/Unicode directory ordering, unusual note-only values,
+   backend-error classification and numeric edge cases beyond the oracle vectors. The
+   current directory listing uses Rust string ordering, not JavaScript `localeCompare`.
+4. Run the real installed Rust UI at desktop and phone widths, then sign in from a second
+   physical device over HTTPS, including trusted-origin and cross-account privacy checks.
+   No UI browser, LAN/tailnet or physical-device proof is supplied by this checkpoint.
+
+Keep full People parity and live-device acceptance open. The next slice should prioritize
+working installed screens and chat over additional test scaffolding.

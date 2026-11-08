@@ -1,8 +1,9 @@
 # People & Context
 
-The Rust checkpoint contains the pure People core, canonical-note decisions, TypeScript
-differential fixtures, an SDK-backed repository, canonical-note service and two job handlers. It is not yet an
-installable package or a working Rust People screen.
+The Rust checkpoint contains the People core, SDK-backed repository, canonical-note service,
+two job handlers, route envelopes and a packaged Leptos Settings pane. The installed-package
+gate exercises registry installation and dispatch. The authenticated Rust application still
+needs to compose that package into its real Settings and chat flows.
 The [delivery report](../../docs/superpowers/specs/2026-11-08-rust-phase5-people-report.md)
 records each delivered slice and the exact remaining continuation work.
 
@@ -53,7 +54,8 @@ The wrapper closes standard-library WASI functions with local traps. They confer
 filesystem, network, clock or randomness service. Normal module work must use the declared
 Moss ports. Calling a closed WASI function fails the invocation; the host's runtime import
 rules remain unchanged. The note parser uses a tree map rather than randomized hashing.
-This build is still an internal component, not an installed module or a complete Settings UI.
+This command builds only the component. Build the Settings assets and package below before
+qualifying installation; component tests alone do not prove an installed application.
 
 The database differential and failing-first privacy matrix use a disposable verify-gate
 server, the unchanged seven legacy tables, and both production runtime roles:
@@ -91,11 +93,12 @@ This checkpoint adds list/resolve/detail/links, match review, merge/split and
 create/update/archive/refresh route envelopes. Rename/archive retain the projection fallback
 when canonical notes are missing/unavailable; failures after publication still abort and
 compensate. Internal errors return the fixed HTTP error body rather than host details.
-It has no installed HTTP routing or UI. Folder settings, directory browsing, index-refresh
-routes, ingest nudges and Fastify-compatible body validation remain continuation work.
+Folder settings, relative directory browsing and legacy body-schema validation are included.
+Index-refresh, ingest nudges and complete HTTP compatibility remain continuation work.
 Scans fail explicitly above two thousand entries or four MiB of text;
 individual files retain the adapter's size bound. This bounded scan is not unlimited-folder
-parity. No People screen or Settings choice is declared as available yet.
+parity. The manifest declares the packaged Settings screen; real shell reachability remains
+unqualified.
 
 The additional route-envelope differential gate uses the real legacy Fastify handlers,
 disposable PostgreSQL and the compiled guest with the shared route resolver. It compares
@@ -106,9 +109,11 @@ JS50_PEOPLE_COMPONENT=/tmp/moss-people-generated.wasm CARGO_BUILD_JOBS=2 CARGO_T
 scripts/run-gate.sh wait --follow
 ```
 
-This covers the enumerated valid-body workflows and selected query/error cases. It does
-not exercise an HTTP listener, installed package, browser, malformed-body compatibility,
-chat approvals or a second device. Those remain required for full People acceptance.
+This covers the enumerated workflows, malformed bodies, coercion and query/error cases.
+Without `JS73_PEOPLE_PACKAGE` it exercises the compiled guest directly. Add that variable
+with the package path to replay through signed registry installation, reload and installed
+dispatch, and check the four public APIs through an installed consumer fixture. It does not
+exercise an HTTP listener, browser, real chat approvals or a second physical device.
 
 ## Part five Settings checkpoint
 
@@ -150,3 +155,31 @@ This build does not publish or install a registry package. The authenticated she
 needs to compose the installer/frame, these host adapters and provider dependencies. A build,
 render test or standalone screen preview is not proof of installed Settings, chat or a
 second physical device. See the report for the remaining acceptance work.
+
+## Part six installed-dispatch checkpoint
+
+Build the component, UI and unsigned package using the commands above, then run:
+
+```sh
+JS50_PEOPLE_COMPONENT=/tmp/moss-people-generated.wasm JS73_PEOPLE_PACKAGE=/tmp/people.mossmod CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/moss-module-host-target scripts/run-gate.sh start --gate modules/people/tools/routes-gate.sh
+scripts/run-gate.sh wait --follow
+```
+
+The gate pins both artifacts, signs a temporary registry, downloads and installs the actual
+People package with `PostgresLifecycle` and its unchanged legacy SQL, then reopens the
+installer. A separate installed consumer calls all four public lookup APIs. The provider
+package and unavailable AI service are explicit fixtures; no real source delivery is claimed.
+The gate checks the Settings HTML asset, not a rendered or authenticated installed screen.
+
+The legacy `/people/notes-directories` endpoint browses relative to the selected folder;
+the additive `/people/note-folders` endpoint remains the absolute-root chooser. Empty folder
+saves clear the existing preference. Body validation retains Fastify's coercion and safe
+400 error text for the cases in the oracle. Repeated equality filters use node-postgres
+array text; repeated search values use JavaScript array joining. Positive limits above the
+SDK's `u32` page space scan without a limit if they fit PostgreSQL `int8`.
+
+Remaining acceptance: compose the real installed shell and chat; index-refresh/cooldown,
+ingest nudges, real source providers and command retention/quotas; broaden HTTP parity
+(including locale-sensitive directory ordering and unusual note-only values); and run the
+real UI on desktop and a second physical device over HTTPS with sign-in, origin and privacy
+checks. This is a checkpoint, not full People acceptance. Exact receipts are in the report.
