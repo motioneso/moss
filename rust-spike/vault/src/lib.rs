@@ -7,13 +7,16 @@
 //! followed on the way in, and the last name is opened with `O_NOFOLLOW` on Unix. Folders are
 //! made private to the owner (0700) and files 0600.
 //!
-//! A [`VaultContext`] is one user's vault: the folder named by their id under the vaults root.
+//! A [`VaultContext`] is the acting user's vault: the folder named by their id under the vaults
+//! root. It opens only from an [`AccessContext`], as `withVaultContext` does in TypeScript.
 //!
 //! Known gap: names are checked one by one and then opened by path, so a folder swapped for a
 //! link between the check and the open could still be followed. `openat2` with
 //! `RESOLVE_BENEATH` closes that on Linux and is the next step.
 
 use std::fmt;
+
+pub use access_context::AccessContext;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -233,17 +236,14 @@ pub fn canonical_dir(path: &Path) -> Result<PathBuf, VaultError> {
     Ok(Root::open(path)?.path)
 }
 
-/// One user's vault: `<vaults>/<user id>`, created private to the owner.
+/// The acting user's vault: `<vaults>/<actor id>`, created private to the owner.
 pub struct VaultContext {
     root: Root,
 }
 
 impl VaultContext {
-    pub fn for_user(vaults: &Root, user_id: &str) -> Result<VaultContext, VaultError> {
-        if !is_uuid(user_id) {
-            return Err(VaultError::BadPath(user_id.to_owned()));
-        }
-        Ok(VaultContext { root: vaults.create_subdir(&user_id.to_ascii_lowercase())? })
+    pub fn for_access(vaults: &Root, access: &AccessContext) -> Result<VaultContext, VaultError> {
+        Ok(VaultContext { root: vaults.create_subdir(&access.actor_user_id().to_string())? })
     }
 
     pub fn read(&self, relative: &str) -> Result<Vec<u8>, VaultError> {
@@ -269,15 +269,6 @@ impl VaultContext {
     pub fn remove(&self, relative: &str) -> Result<(), VaultError> {
         self.root.remove(relative)
     }
-}
-
-fn is_uuid(text: &str) -> bool {
-    let bytes = text.as_bytes();
-    bytes.len() == 36
-        && bytes.iter().enumerate().all(|(index, byte)| match index {
-            8 | 13 | 18 | 23 => *byte == b'-',
-            _ => byte.is_ascii_hexdigit(),
-        })
 }
 
 #[cfg(unix)]
@@ -318,6 +309,11 @@ mod tests {
     const USER_A: &str = "00000000-0000-4000-8000-000000000001";
     const USER_B: &str = "00000000-0000-4000-8000-000000000002";
 
+    fn open(vaults: &Root, user_id: &str) -> VaultContext {
+        let access = AccessContext::new(user_id.parse().unwrap(), "test");
+        VaultContext::for_access(vaults, &access).unwrap()
+    }
+
     fn vaults() -> (tempfile::TempDir, Root) {
         let dir = tempfile::tempdir().unwrap();
         let root = Root::create(&dir.path().join("vaults")).unwrap();
@@ -327,7 +323,7 @@ mod tests {
     #[test]
     fn reads_back_what_it_wrote() {
         let (_dir, vaults) = vaults();
-        let vault = VaultContext::for_user(&vaults, USER_A).unwrap();
+        let vault = open(&vaults, USER_A);
         vault.create_dir("notes").unwrap();
         vault.write("notes/today.md", b"hello").unwrap();
         assert_eq!(vault.read("notes/today.md").unwrap(), b"hello");
@@ -340,8 +336,8 @@ mod tests {
     #[test]
     fn refuses_paths_that_climb_out() {
         let (_dir, vaults) = vaults();
-        let a = VaultContext::for_user(&vaults, USER_A).unwrap();
-        let b = VaultContext::for_user(&vaults, USER_B).unwrap();
+        let a = open(&vaults, USER_A);
+        let b = open(&vaults, USER_B);
         b.write("private.md", b"b only").unwrap();
         for path in [
             format!("../{USER_B}/private.md"),
@@ -356,7 +352,6 @@ mod tests {
             assert!(matches!(a.read(&path), Err(VaultError::BadPath(_))), "read {path:?}");
             assert!(matches!(a.write(&path, b"x"), Err(VaultError::BadPath(_))), "write {path:?}");
         }
-        assert!(VaultContext::for_user(&vaults, "../x").is_err());
     }
 
     #[cfg(unix)]
@@ -365,7 +360,7 @@ mod tests {
         let (dir, vaults) = vaults();
         let outside = dir.path().join("outside.txt");
         fs::write(&outside, b"outside").unwrap();
-        let a = VaultContext::for_user(&vaults, USER_A).unwrap();
+        let a = open(&vaults, USER_A);
         let a_dir = vaults.path().join(USER_A);
         std::os::unix::fs::symlink(&outside, a_dir.join("link.txt")).unwrap();
         std::os::unix::fs::symlink(dir.path(), a_dir.join("linkdir")).unwrap();
@@ -381,7 +376,7 @@ mod tests {
     fn keeps_files_private_to_the_owner() {
         use std::os::unix::fs::PermissionsExt;
         let (_dir, vaults) = vaults();
-        let a = VaultContext::for_user(&vaults, USER_A).unwrap();
+        let a = open(&vaults, USER_A);
         a.write("secret.md", b"x").unwrap();
         let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode(&vaults.path().join(USER_A)), 0o700);

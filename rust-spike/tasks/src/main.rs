@@ -16,6 +16,7 @@
 
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::process::ExitCode;
 use std::sync::Arc;
 
 use safety_core::auth::SessionCookies;
@@ -24,10 +25,22 @@ use safety_core::http::{self, Platform};
 use safety_core::origin::TrustedOrigins;
 use safety_core::secret::SecretCipher;
 use tasks::{jobs, routes};
+use serde_json::json;
 use tokio::signal::unix::{signal, SignalKind};
 
+/// Start-up and serve errors go through the redacting log writer like every other line.
 #[tokio::main]
-async fn main() -> Result<(), String> {
+async fn main() -> ExitCode {
+    match run().await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            http::log(json!({ "level": "error", "msg": "server stopped", "error": error }));
+            ExitCode::FAILURE
+        }
+    }
+}
+
+async fn run() -> Result<(), String> {
     if std::env::var("JARVIS_GATE_RUN").as_deref() != Ok("1") {
         return Err("refusing to start: JARVIS_GATE_RUN=1 is not set".into());
     }
@@ -53,7 +66,7 @@ async fn main() -> Result<(), String> {
 
     let address = SocketAddr::new(host, port);
     let listener = tokio::net::TcpListener::bind(address).await.map_err(|error| error.to_string())?;
-    eprintln!("tasks spike listening on {address}");
+    http::log(json!({ "level": "info", "msg": format!("tasks spike listening on {address}") }));
     let mut tasks = routes::router(routes::AppState { platform: platform.clone() });
     if let Some(dir) = env.get("TASKS_SPIKE_STATIC_DIR") {
         tasks = tasks.fallback_service(tower_http::services::ServeDir::new(dir));

@@ -7,13 +7,13 @@
 # Rules:
 # 1. File access goes through the vault crate: no std::fs, tokio::fs or Path calls that touch
 #    the disk.
-# 2. Only tasks/src/main.rs serves files, through ServeDir, for the built screens.
+# 2. Only tasks/src/main.rs serves files, through ServeDir, for the built screens. A
+#    hand-written file reply needs disk access, which rule 1 catches.
 # 3. Secret::expose_secret is called only where a secret must be used: sealing
 #    (safety-core/src/secret.rs), and signing cookies and hashing passwords (safety-core/src/auth.rs).
 # 4. The server never reads the bootstrap or migration database URL, so it has no connection
 #    that skips row-level security.
-# 5. Only the redacting log writer (safety-core/src/http.rs), the redacted error fallback
-#    (safety-core/src/error.rs) and the start-up line (tasks/src/main.rs) print.
+# 5. Only the redacting log writer (safety-core/src/http.rs) prints.
 #
 # Items marked #[cfg(test)] and whole-line comments are not checked. Tests build fixtures on
 # disk and handle secrets on purpose. A test item ends at its first closing brace in column 0,
@@ -57,11 +57,11 @@ rule() {
 
 rule "1 file access goes through the vault crate" \
   '\b(std|tokio)::fs\b|std::os::unix::fs|use std::\{[^}]*\bfs\b|\bFile::(open|create)\b|\bOpenOptions\b|\.(exists|try_exists|is_file|is_dir|metadata|symlink_metadata|read_dir|read_link|canonicalize)\('
-rule "2 only the start-up code serves files" '\bServeDir\b' tasks/src/main.rs
+rule "2 only the start-up code serves files" '\bServe(Dir|File)\b|tower_http::services' tasks/src/main.rs
 rule "3 secrets are read only where they are used" '\bexpose_secret\(' \
   safety-core/src/secret.rs safety-core/src/auth.rs
 rule "4 no connection that skips row-level security" 'BOOTSTRAP_DATABASE_URL|MIGRATION_DATABASE_URL'
 rule "5 every log line goes through the redacting writer" '\b(eprintln|println|eprint|print|dbg)!' \
-  safety-core/src/http.rs safety-core/src/error.rs tasks/src/main.rs
+  safety-core/src/http.rs
 
 [ "$failed" -eq 0 ]

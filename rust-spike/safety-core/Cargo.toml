@@ -11,6 +11,7 @@ base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 deadpool-postgres = "0.14"
 hmac = "0.12"
+access-context = { path = "../access-context" }
 portability = { path = "../portability" }
 vault = { path = "../vault" }
 rand = "0.8"

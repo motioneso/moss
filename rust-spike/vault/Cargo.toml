@@ -6,6 +6,7 @@ publish.workspace = true
 description = "Phase 2 part 1: the only way Rust code reads or writes files in a user's vault"
 
 [dependencies]
+access-context = { path = "../access-context" }
 
 [dev-dependencies]
 tempfile = "3"

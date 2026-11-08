@@ -703,6 +703,64 @@
     "note": "Delete and reject are only called where a guard refuses them, because the Rust server answers 501 once every guard passes."
   },
   {
+    "name": "safety: the bootstrap owner cannot be deactivated, demoted or deleted",
+    "source": "packages/settings/src/repository.ts 435 and 472, routes.ts 680: the bootstrap owner keeps the instance",
+    "seed": [
+      "update app.users set is_bootstrap_owner = true, is_instance_admin = true where id = '{{userB}}'"
+    ],
+    "steps": [
+      {
+        "id": "deactivate the owner",
+        "method": "POST",
+        "path": "/api/admin/users/{{userB}}/deactivate",
+        "as": "admin",
+        "expect": {
+          "status": 409,
+          "body": {
+            "error": "The bootstrap owner cannot be deactivated"
+          }
+        }
+      },
+      {
+        "id": "demote the owner",
+        "method": "POST",
+        "path": "/api/admin/users/{{userB}}/demote",
+        "as": "admin",
+        "expect": {
+          "status": 409,
+          "body": {
+            "error": "The bootstrap owner cannot be demoted"
+          }
+        }
+      },
+      {
+        "id": "delete the owner",
+        "method": "DELETE",
+        "path": "/api/admin/users/{{userB}}",
+        "as": "admin",
+        "expect": {
+          "status": 409,
+          "body": {
+            "error": "The bootstrap owner cannot be deleted"
+          }
+        }
+      },
+      {
+        "id": "the owner is unchanged",
+        "sql": "select status, is_instance_admin from app.get_user_by_id('{{userB}}'::uuid)",
+        "as": "admin",
+        "expect": {
+          "rows": [
+            {
+              "status": "active",
+              "is_instance_admin": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
     "name": "safety: connectors are private and never return the secret",
     "source": "Hard invariant: secrets never escape; connector secrets are AES-256-GCM at rest",
     "steps": [

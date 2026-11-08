@@ -309,7 +309,15 @@ mod tests {
         assert!(!load_dir(&dir, None).unwrap().is_empty());
 
         // The filters tools/remove-protections.sh passes to --only.
-        for filter in ["safety: connectors", "safety: admin", "safety: password"] {
+        for filter in [
+            "safety: member isolation",
+            "safety: admin",
+            "safety: account lifecycle",
+            "safety: account guardrails hold",
+            "safety: the bootstrap owner",
+            "safety: connectors",
+            "safety: password",
+        ] {
             assert_eq!(load_dir(&dir, Some(filter)).unwrap().len(), 1, "{filter}");
         }
     }

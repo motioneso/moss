@@ -129,7 +129,7 @@ if wanted static-rules "$@"; then
   plant static-rules safety-core/src/views.rs \
     '$a fn sneak(secret: \&crate::secret::Secret) -> String {\n    eprintln!("{}", secret.expose_secret());\n    let _ = std::env::var("MOSS_BOOTSTRAP_DATABASE_URL");\n    std::fs::read_to_string("/etc/hostname").unwrap_or_default()\n}'
   plant static-rules tasks/src/routes.rs \
-    '$a fn files() -> tower_http::services::ServeDir { tower_http::services::ServeDir::new("/") }'
+    '$a fn files() -> tower_http::services::ServeDir { tower_http::services::ServeDir::new("/") }\nfn file() -> tower_http::services::ServeFile { tower_http::services::ServeFile::new("/etc/hostname") }'
   expect static-rules 1 "$root/rust-spike/tools/check-safety-rules.sh" "$work/static-rules/rust-spike"
 fi
 
@@ -167,6 +167,69 @@ if wanted password-logged "$@"; then
     '/^async fn sign_in(/,/^}/ s/^    let body = parse_body(&body)\.ok_or(fail(400, "VALIDATION_ERROR", "Invalid body"))?;$/&\n    eprintln!("sign-in body: {body}");/'
   build_server password-logged
   expect password-logged 1 parity password-logged "safety: password"
+fi
+
+# Requests run as someone other than the signed-in user.
+if wanted wrong-actor "$@"; then
+  copy wrong-actor
+  plant wrong-actor safety-core/src/db.rs \
+    's/&\[&access\.actor_user_id()\.to_string(), &access\.request_id()\]/\&[\&"00000000-0000-4000-8000-000000000001".to_string(), \&access.request_id()]/'
+  build_server wrong-actor
+  expect wrong-actor 1 parity wrong-actor "safety: member isolation"
+fi
+
+# Pending and deactivated accounts are served like active ones.
+if wanted account-status "$@"; then
+  copy account-status
+  plant account-status safety-core/src/auth.rs \
+    's/^    match row\.get::<_, String>(0)\.as_str() {$/    match "active" {/'
+  build_server account-status
+  expect account-status 1 parity account-status "safety: account lifecycle"
+fi
+
+# Deactivating an account leaves its sessions signed in.
+if wanted session-revoke "$@"; then
+  copy session-revoke
+  plant session-revoke safety-core/src/admin.rs \
+    '/^    revoke_user_sessions(&platform\.auth, updated\.get("id"))\.await?;$/d'
+  build_server session-revoke
+  expect session-revoke 1 parity session-revoke "safety: account lifecycle"
+fi
+
+# A member can use the admin routes.
+if wanted admin-check "$@"; then
+  copy admin-check
+  plant admin-check safety-core/src/admin.rs \
+    's/^    if !row\.get::<_, bool>(0) {$/    if false \&\& !row.get::<_, bool>(0) {/'
+  build_server admin-check
+  expect admin-check 1 parity admin-check "safety: account guardrails hold"
+fi
+
+# An admin can deactivate their own account.
+if wanted self-deactivate "$@"; then
+  copy self-deactivate
+  plant self-deactivate safety-core/src/admin.rs \
+    's/^    if deactivating && target == cx\.actor_user_id() {$/    if false \&\& target == cx.actor_user_id() {/'
+  build_server self-deactivate
+  expect self-deactivate 1 parity self-deactivate "safety: account guardrails hold"
+fi
+
+# The last active admin can be demoted or deactivated.
+if wanted last-admin "$@"; then
+  copy last-admin
+  plant last-admin safety-core/src/admin.rs \
+    's/^        None => Err(ApiError::http(409, "Cannot remove the last active admin")),$/        None => Ok(()),/'
+  build_server last-admin
+  expect last-admin 1 parity last-admin "safety: account guardrails hold"
+fi
+
+# The bootstrap owner can be deactivated, demoted or deleted.
+if wanted bootstrap-owner "$@"; then
+  copy bootstrap-owner
+  plant bootstrap-owner safety-core/src/admin.rs \
+    's/user\.get::<_, bool>("is_bootstrap_owner") {$/false \&\& &/'
+  build_server bootstrap-owner
+  expect bootstrap-owner 1 parity bootstrap-owner "safety: the bootstrap owner"
 fi
 
 [ "$missed" -eq 0 ]

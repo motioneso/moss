@@ -45,6 +45,7 @@ databases in a scratch folder and never touches the dev or prod database.
 | `bundled-db/pg-module/`                   | Phase 1: a Postgres add-on that stops crash dumps of the database on Linux |
 | `bundled-db/proof/linux/`                 | Phase 1: builds the Linux bundle and runs the crash and leftover proofs    |
 | `bundled-db/proof/mac/`                   | Phase 1: the same steps by hand on a Mac, plus the signing tests           |
+| `access-context/`                         | Phase 2a: who is acting, shared by the safety core and the vault           |
 | `safety-core/`                            | Phase 2a: sign-in, admin routes, data context, secrets, redaction          |
 | `vault/`                                  | Phase 2a: file access that cannot leave its folder                         |
 | `parity/cases/20-safety.json`             | Phase 2a: the safety cases, run against both servers                       |
@@ -192,10 +193,10 @@ The safety cases in `parity/cases/20-safety.json` run as part of the side-by-sid
 servers run in test mode there, which turns off the sign-in origin check, so that check is covered
 by unit tests instead.
 
-The safety-core and vault unit tests need no database. From this folder:
+The safety-core, vault and access-context unit tests need no database. From this folder:
 
 ```
-cargo test -p safety-core -p vault
+cargo test -p safety-core -p vault -p access-context
 ```
 
 The rules check needs no database either. It exits 1 and prints the lines if any rule breaks.
@@ -204,7 +205,7 @@ The rules check needs no database either. It exits 1 and prints the lines if any
 tools/check-safety-rules.sh .
 ```
 
-The protection-removal run needs a gate run, because four of its removals start servers on a
+The protection-removal run needs a gate run, because 11 of its 17 removals start servers on a
 database. It exits 0 only if every removal makes a test fail. Each removal's diff and output go
 to `target/protections` unless `PROTECTIONS_OUT` says otherwise.
 

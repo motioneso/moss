@@ -75,7 +75,7 @@ impl ApiError {
                 (403, json!({ "error": message, "code": code }))
             }
             ApiError::Internal(detail) => {
-                eprintln!("server: unhandled route error: {}", crate::redact::redact_text(&detail));
+                crate::http::log(json!({ "level": "error", "msg": "unhandled route error", "detail": detail }));
                 (500, json!({ "error": "Internal server error" }))
             }
         }
