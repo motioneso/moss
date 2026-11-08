@@ -33,6 +33,16 @@ use std::{
 };
 use uuid::Uuid;
 
+#[test]
+fn shipping_people_manifest_is_valid_and_has_no_provider_map_write() {
+    let manifest: Manifest =
+        serde_json::from_str(include_str!("../../../modules/people/moss.module.json")).unwrap();
+    manifest.validate(&"0.1.0".parse().unwrap()).unwrap();
+    let kv = manifest.capability("kv").unwrap();
+    assert!(kv.operations.contains("get") && kv.resources.contains("person-providers"));
+    assert!(!kv.operations.contains("set") && !kv.operations.contains("delete"));
+}
+
 struct Provider {
     next: Arc<dyn Ports>,
     signals: Value,

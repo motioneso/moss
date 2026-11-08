@@ -34,18 +34,14 @@
     {
       "port": "kv",
       "operations": [
+        "get",
         "records.get",
         "records.put",
         "preference.read",
         "preference.write",
         "preference.folders"
       ],
-      "resources": ["people-commands", "people-folder", "people-suggestions"]
-    },
-    {
-      "port": "kv",
-      "operations": ["get"],
-      "resources": ["person-providers"]
+      "resources": ["people-commands", "people-folder", "people-suggestions", "person-providers"]
     },
     {
       "port": "jobs",
