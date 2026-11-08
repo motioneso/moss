@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "notes",
   "name": "Notes",
-  "description": "Choose your notes folder, export managed-source details and prepare note changes for approval.",
+  "description": "Notes package checkpoint with folder selection, managed-source export, read-only action details and search of existing indexed notes. Sync, write tools and publication are not offered yet.",
   "publisher": "Moss",
   "version": "0.1.1",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -28,7 +28,8 @@
         "folder.list",
         "folder.set",
         "folder.resolve",
-        "notes.read"
+        "notes.read",
+        "index.search"
       ],
       "resources": ["source"]
     }
@@ -86,7 +87,7 @@
     },
     {
       "id": "notes.folder-settings",
-      "description": "Settings → Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. This checkpoint does not run sync or chat tools and is not a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
+      "description": "Settings \u2192 Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. This checkpoint does not run sync or chat tools and is not a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
       "errors": [
         {
           "code": "notes-folder-path-refused",
@@ -154,6 +155,25 @@
           "path": "/settings/connections"
         }
       ]
+    },
+    {
+      "id": "notes.semantic-search",
+      "description": "The read-only notes.search tool returns your existing indexed Notes chunks in semantic order, with source paths and line ranges. The host must connect core memory and your configured query embedding service. Sync and automatic chat recall are not implemented yet; file changes are not indexed by this checkpoint.",
+      "errors": [
+        {
+          "code": "notes-search-unavailable",
+          "class": "prerequisite",
+          "description": "The memory search adapter or query embedding service is unavailable.",
+          "remediationRef": "notes.configure-search"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "notes.configure-search",
+          "description": "Ask the host administrator to connect core memory search and the configured query embedding service.",
+          "path": "/settings/connections"
+        }
+      ]
     }
   ],
   "screens": {
@@ -185,5 +205,11 @@
       "path": "/notes-last-sync",
       "signIn": true
     }
-  ]
+  ],
+  "tools": {
+    "notes.search": {
+      "description": "Search your indexed notes by meaning. Returns source paths, line ranges and text. New file changes need sync, which is not available in this checkpoint.",
+      "risk": "read"
+    }
+  }
 }

@@ -8,7 +8,7 @@ The guest uses only `moss-module-sdk` database queries on Notes-owned tables.
 
 Notes remains required and has no standalone screen. This package is a continuation
 checkpoint: Connections folder selection and saved sync status now have a package screen and
-installed routes. Chat tools, actual sync, managed publication, private note export,
+installed routes. Read-only indexed search now has a package tool and host adapter. Write tools, actual sync, managed publication, private note export,
 daily archives and the account export screen join are unfinished. The Connections
 screen still needs joining into the assembled Phase 4 settings shell. Do not replace a
 working legacy Notes installation with this checkpoint.
@@ -99,9 +99,9 @@ sync scheduling remain unfinished. Existing linked-file platform limits apply.
 
 The `write-tools` Cargo feature contains `notes.create`, `notes.edit` and
 `notes.delete` execution plus read-only approval details. It is off by default.
-The package still offers no chat tools or sync job. Do not enable this feature
+The package offers read-only indexed search but no write tools or sync job. Do not enable this feature
 in a release package until the core memory/sync worker and approval join exist.
-`notes.search` remains unported; embeddings alone do not provide memory retrieval.
+`notes.search` is now ported separately; see the indexed-search checkpoint below.
 
 The separate tool-check component uses the same generated ABI and SDK calls with
 extra permissions supplied only by its test manifest. It reads the actor's selected
@@ -188,3 +188,44 @@ checkpoint: symlink descendants, all missing-file/path errors, Windows paths and
 concurrent folder changes do not have complete legacy parity. The existing
 Connections UI is unchanged; full shell/chat and physical second-device checks
 remain on the continuation list.
+
+## Indexed-search checkpoint (part seven)
+
+The ordinary component now offers `notes.search`. It preserves the legacy query
+trim, empty-query no-op, default limit of eight, one-to-twenty clamp and four-field
+chunk projection. The input corpus executes the actual legacy handler with an
+explicit retrieval stand-in. Unknown input fields are rejected more strictly than
+legacy, rather than accepting actor/source overrides.
+
+The guest calls `vault/index.search` on the `source` alias. It has no database
+grant on core memory tables and cannot select a source kind, actor or embedding
+model. Assembly must wrap its ports in `MemorySearchPorts`, binding
+`("notes", "source")` to `"notes"`, and supply `QueryEmbeddings`. That trusted
+service must resolve the actor's configured query embedding model, including any
+query prefix, and honor the invocation deadline. No production implementation of
+that service, local model port, or app-shell chat join is included here. A missing
+adapter/provider fails closed. This is installed tool-boundary support, not a claim
+that chat search works in the assembled app.
+
+The host reads existing `app.memory_chunks` with the same source-kind, non-null
+embedding, explicit owner predicate, cosine ordering and limit as legacy, under
+the app/worker data context and existing RLS. It never indexes a new file. Search
+can therefore use migrated index data; new folder selections or edits need the
+still-unfinished sync worker. The ordinary package still has no write grants or
+sync job, and is not a replacement for working legacy Notes.
+
+```sh
+pnpm exec tsx modules/notes/tools/search-parity.ts
+CARGO_TARGET_DIR=/tmp/notes-domain cargo +1.95.0 test --locked --manifest-path modules/notes/src/Cargo.toml --test search
+```
+
+The standard Notes database gate now also creates two synthetic index owners and
+an unrelated administrator, executes the actual legacy search body with the real
+memory retriever/repository, then compares the installed compiled Notes tool in
+both runtime roles. Only query embeddings are a named deterministic stand-in;
+no actual model-quality or provider-configuration claim is made. The checks cover
+semantic ordering, limit, exact text/line projection, null embeddings, other source
+kinds and empty queries. Direct database cross-account read/update/delete privacy
+assertions must fail with memory RLS removed, then pass restored. The compiled
+search must remain owner-only even during that removal because of its independent
+owner predicate. These are distinct protections and distinct assertions.

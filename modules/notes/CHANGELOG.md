@@ -12,3 +12,5 @@ private note export, daily archives and the account export screen join are unfin
 
 - Add Connections folder browse/link/unlink and saved sync status through installed guest routes; sync and chat remain unfinished.
 - Keep rejected folder paths editable and use the shared frame launcher and document styles.
+
+- Add read-only search of existing indexed notes, with a core-memory adapter and installed guest comparisons. Query-provider assembly, sync and live chat remain unfinished.
