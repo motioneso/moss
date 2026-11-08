@@ -86,7 +86,11 @@ module spec.
 ## Checkpoint verification and remaining work
 
 The pure crate ports identity normalization, candidate signatures, signal grouping, note
-frontmatter parsing/formatting and managed-section replacement. Its differential fixtures
+frontmatter parsing/formatting and managed-section replacement. It now also creates canonical
+note content, updates a freshly supplied note while rechecking its canonical ID, chooses
+between the two legacy destination names and plans refresh projections/review candidates.
+Five native tests cover these decisions, including empty-file collisions, human body retention,
+changed IDs, duplicates and missing notes. They do not prove host-coordinated file writes. Its differential fixtures
 come from the current TypeScript functions, including Unicode whitespace and UTF-16 sorting.
 
 The additive vault constructor now binds allowed notes roots to an authenticated account and
@@ -97,6 +101,15 @@ symlink selection. With the guards removed, the cross-account read/write and con
 tests failed; restoring them passed all fourteen vault tests and strict Clippy. This tests the
 new constructor only: the notes host adapter and database RLS remain unproven. The existing
 vault component-check/open race described in its crate documentation is unchanged.
+
+The host's lowercase-only tool-name validation rejected existing names such as
+`people.getContext`. A separate tool-name helper now accepts the existing camelCase names;
+module IDs and file paths keep their original validators. The standalone legacy-name test
+failed under the old rule and passed after the change. A full manifest regression is included;
+its host build still needs the shared assembly compatibility fix before it can run.
+
+The planned public API and consumer contract are documented in `modules/people/PUBLIC_API.md`.
+This is a target contract, not a claim that package handlers exist yet.
 
 Before ready, complete and record all of the following:
 

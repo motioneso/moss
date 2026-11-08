@@ -1,5 +1,6 @@
 //! People & Context. Pure domain logic; all persistence belongs to the module SDK ports.
 pub mod matching;
+pub mod note_edits;
 pub mod notes_format;
 
 /// ECMAScript WhiteSpace + LineTerminator, as used by the existing note format and matching.
