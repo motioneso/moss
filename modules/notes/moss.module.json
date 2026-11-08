@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "notes",
   "name": "Notes",
-  "description": "Notes package checkpoint with the existing managed-source account export. Folder controls, chat tools, sync and publication are unfinished.",
+  "description": "Notes package checkpoint with folder selection in Settings \u2192 Connections and the existing managed-source account export. Sync, chat tools and publication remain unfinished.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -19,6 +19,11 @@
         "app.notes_contribution_proposals",
         "app.notes_contribution_operations"
       ]
+    },
+    {
+      "port": "vault",
+      "operations": ["folder.get", "folder.status", "folder.list", "folder.set"],
+      "resources": ["source"]
     }
   ],
   "database": {
@@ -41,11 +46,20 @@
     "collectManagedNotesExportSection": "1.0.0"
   },
   "navigation": [],
-  "settings": [],
+  "settings": [
+    {
+      "id": "notes.source",
+      "label": "Notes folder",
+      "description": "Browse, link, change or unlink your allowed notes folder. View saved sync status. Sync and chat tools are not available in this checkpoint.",
+      "path": "/settings/connections",
+      "scope": "user",
+      "entry": "ui/index.html"
+    }
+  ],
   "features": [
     {
       "id": "notes.managed-source-export",
-      "description": "The Notes package provides the managed-source account-export section through its public API. It includes saved source status, destination labels, contributions, proposals and operation receipts visible to the calling account. The account export screen is not joined yet; folder controls, chat tools and sync are unfinished. Notes has no standalone screen or navigation entry.",
+      "description": "The Notes package provides the managed-source account-export section through its public API. It includes saved source status, destination labels, contributions, proposals and operation receipts visible to the calling account. The account export screen is not joined yet; chat tools and sync are unfinished. Notes has no standalone screen or navigation entry.",
       "errors": [
         {
           "code": "notes-export-unavailable",
@@ -61,12 +75,66 @@
           "path": "/settings"
         }
       ]
+    },
+    {
+      "id": "notes.folder-settings",
+      "description": "Settings \u2192 Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. This checkpoint does not run sync or chat tools and is not a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
+      "errors": [
+        {
+          "code": "notes-folder-unavailable",
+          "class": "prerequisite",
+          "description": "The configured folder roots are missing or unavailable.",
+          "remediationRef": "notes.configure-roots"
+        },
+        {
+          "code": "notes-folder-request-failed",
+          "class": "transient",
+          "description": "The linked folder could not be checked or saved. Writes stay disabled until it is checked again.",
+          "remediationRef": "notes.retry-folder"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "notes.configure-roots",
+          "description": "Ask the host administrator to configure allowed folders for your account.",
+          "path": "/settings/connections"
+        },
+        {
+          "id": "notes.retry-folder",
+          "description": "Check the connection and use Try again before changing the folder.",
+          "path": "/settings/connections"
+        }
+      ]
     }
   ],
-  "screens": {},
+  "screens": {
+    "/settings/connections": "ui/index.html"
+  },
   "icons": ["icons/notes.svg"],
   "accounts": {
     "supportsUserDisable": false,
     "defaultEnabled": true
-  }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/notes-source",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/notes-source",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/notes-source/directories",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/notes-last-sync",
+      "signIn": true
+    }
+  ]
 }

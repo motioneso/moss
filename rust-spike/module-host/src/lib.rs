@@ -57,3 +57,4 @@ pub mod frame;
 pub mod guest_component;
 
 pub mod account_preferences;
+pub mod folder_settings;

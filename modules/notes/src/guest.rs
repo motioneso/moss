@@ -16,6 +16,7 @@ struct Empty {}
 pub fn handle(host: &impl Host, kind: &str, payload: &str) -> Result<String> {
     match kind {
         "health" | "install" => Ok("{}".into()),
+        "route" => crate::routes::handle(host, payload),
         "api" => {
             let request: ApiRequest = serde_json::from_str(payload)?;
             let _ = request.parameters;
