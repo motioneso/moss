@@ -120,8 +120,9 @@ RUSTUP_HOME=/path/to/task-local/rustup CARGO_TARGET_DIR=/tmp/moss-people-ui modu
 cargo +1.95.0 test --locked --manifest-path modules/people/ui/Cargo.toml --no-default-features --features ssr
 ```
 
-The parent bridge's authenticated `request` callback must return the shared `{status, body}`
-route envelope. The screen never fetches account data directly. Supply shared assets from
+The parent bridge's authenticated `request` callback must return the decoded response body
+directly and throw on failed requests. Unwrap the guest route's `{status, body}` envelope
+before returning from that callback. The screen never fetches account data directly. Supply shared assets from
 `rust-spike/module-ui/build-assets.py` at `/module-shared/` and attach the parent bridge
 before assigning the verified iframe URL. The parent supplies `theme` and `colorMode` strings.
 
