@@ -271,3 +271,78 @@ differ from the unique indexes' `lower(name)` for some names. The database still
 refuses duplicates, but the structured conflict-response gap described above
 covers these cases too. The shared inventory may conflict with sibling work;
 regenerate it with the repository's existing inventory script if necessary.
+
+## Tasks part 3 component checkpoint (JS-53, Card 526)
+
+This continuation starts at merged main commit `9f57cc1e8` (Tasks data PR #4048
+and shared-host PR #4044). Work remains under `modules/tasks/` plus this report.
+This is a bounded implementation checkpoint, **not full Phase 5 acceptance**.
+The remaining routes, tools, jobs, screens and live-device proof are substantial
+enough to require more than one further context window. The brief explicitly
+requires saving a clean checkpoint in that situation instead of relaying again.
+
+### Binding approval and build
+
+Ben approved `wit-bindgen` on 2026-11-08, overriding the earlier decline recorded
+above. This checkpoint uses exact version `0.57.1`, with macros and reallocation
+support only, to generate the canonical ABI from `wit/tasks.wit`. The provisional
+handwritten ABI was discarded. Host-side `wit-component` `0.247.0` already belongs
+to that approved generator's transitive graph and wraps the generated core Wasm;
+it adds no separate third-party toolchain. The lockfiles retain the exact inputs.
+New dependency downloads stayed in scratch Cargo storage. No global tool, compiler
+target, production app or production data was installed or changed.
+
+A direct `wasm32-wasip2` build succeeded but includes WASI I/O and CLI imports.
+The module host refuses those imports, so the supported build uses the existing
+`wasm32-unknown-unknown` target and the component encoder, without any WASI adapter.
+The host validation test must pass before calling that output runnable.
+
+### New component surfaces
+
+The component exports the host's `handle` contract, imports only the declared
+Moss database and context interfaces, and delegates to the same Rust domain code
+used by native checks. Context supplies actor, time and recurrence-series UUIDs.
+The manifest declares basic task create/read/update, subtask reads, list
+create/read/rename, tags and assignments, activity, and view preferences. Task
+updates include list-move tag cleanup, child list moves, completion cascades that
+skip staged suggestions, parent auto-close, and next-recurring-occurrence
+creation. Host transactions own success and rollback. These are ported paths to
+verify, not a claim of complete existing endpoint parity.
+
+The archive builder uses sorted, zero-time package entries, the actual component,
+icon, license, notice, changelog and all nine original, hash-checked migrations.
+It produces an unsigned archive and validates it with the real package reader.
+That is package-format evidence, not signed install or registry-download proof.
+The app-map feature describes this incomplete component; no navigation, screen
+or setting entry promises a Tasks page that does not exist.
+
+### Validation and remaining work
+
+Validation is in progress; final commands, outcomes and independent review are
+recorded below before the checkpoint is committed. The new real-component gate
+requires failing-first cross-account read and write controls, restored owner-only
+privacy, admin refusal, recurring completion and repeated-completion idempotency.
+Earlier native test adapters stay labeled as native evidence.
+
+Not proven and still required before the full task can be Ready:
+
+- Complete route schemas and errors, list deletion/reassignment, focus, drift,
+  search, agency preferences, deferred status, and the remaining source endpoints.
+- Actor timezone/preferences through a public core contract. ISO timestamps with
+  no offset currently use UTC rather than the legacy process-local timezone;
+  lazy recurrence roll-forward is deliberately absent rather than advancing a
+  still-due task on the wrong local day. JavaScript legacy free-text dates and
+  exceptional date/interval ranges are also outside this checkpoint's claims.
+- Exact chat tools, suggestion and feedback behavior, public APIs, typed job
+  kinds, scheduling and recurrence orchestration. People must remain behind its
+  declared public interface; no People tables or internals were accessed.
+- Full endpoint parity through `rust-spike/parity/` against this component. The
+  existing runner still launches the Phase 0b native Tasks server, so running it
+  unchanged would not prove this port.
+- Signed installation and registry selection/download of this actual package.
+- Packaged Tasks screens using the shared UI kit and frame bridge, authenticated
+  Rust shell integration, HTTPS/trusted-origin behavior and a real second-device
+  UI check. The present shell does not yet wire installed module frames/routes.
+- A single final PR, Part of #4027, release note Category N/A, plus independent
+  review and the live proof recipe before full acceptance. No push or merge is
+  authorized in this task run. Workshop and Food remain excluded.

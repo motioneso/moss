@@ -24,3 +24,22 @@ pub fn legacy_files(root: &Path) -> Result<std::collections::BTreeMap<String, Ve
     }
     Ok(files)
 }
+
+/// Reproducible package inputs. SQL comes from the original, hash-checked module ledger.
+pub fn package_files(
+    root: &Path,
+    component: Vec<u8>,
+) -> Result<std::collections::BTreeMap<String, Vec<u8>>> {
+    let mut files = legacy_files(root)?;
+    for (name, path) in [
+        ("moss.module.json", "modules/tasks/moss.module.json"),
+        ("icons/tasks.svg", "modules/tasks/icons/tasks.svg"),
+        ("LICENSE", "LICENSE"),
+        ("NOTICE", "modules/tasks/NOTICE"),
+        ("CHANGELOG.md", "modules/tasks/CHANGELOG.md"),
+    ] {
+        files.insert(name.into(), std::fs::read(root.join(path))?);
+    }
+    files.insert("code/module.wasm".into(), component);
+    Ok(files)
+}

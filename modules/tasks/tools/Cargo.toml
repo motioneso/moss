@@ -8,6 +8,8 @@ publish = false
 
 [dependencies]
 anyhow = "1"
+# Already pinned in the approved wit-bindgen build graph.
+wit-component = "=0.247.0"
 moss-tasks-module = { path = "../src" }
 moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
 moss-module-host = { path = "../../../rust-spike/module-host" }
@@ -25,3 +27,11 @@ debug = 0
 [[bin]]
 name = "tasks-domain-check"
 path = "src/domain_check.rs"
+
+[[bin]]
+name = "tasks-pack"
+path = "src/pack.rs"
+
+[[bin]]
+name = "tasks-component"
+path = "src/build_component.rs"
