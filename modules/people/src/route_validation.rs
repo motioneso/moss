@@ -157,7 +157,7 @@ fn check(
 
 // JS first rounds JSON numbers to binary64 and uses scientific notation outside
 // [1e-6, 1e21). Rust Display supplies shortest digits; retain JS exponent spelling.
-fn number_text(number: &serde_json::Number) -> std::string::String {
+pub(crate) fn number_text(number: &serde_json::Number) -> std::string::String {
     let n = number.as_f64().unwrap_or(0.0);
     if n == 0.0 {
         return "0".into();

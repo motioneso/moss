@@ -1,5 +1,9 @@
 // Legacy HTTP handlers, real account transactions and disposable database rows.
 import { randomUUID } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { VaultContextRunner } from "@moss/vault";
 import Fastify from "fastify";
 import pg from "pg";
 import { createDatabase, DataContextRunner, getMossDatabaseUrls } from "@moss/db";
@@ -29,11 +33,18 @@ export async function routesOracle() {
       (name) => [name, randomUUID()]
     )
   );
+  const root = await mkdtemp(join(tmpdir(), "moss-people-http-folders-"));
+  const selected = join(root, "People");
+  await mkdir(join(selected, "Family", "Friends"), { recursive: true });
+  await mkdir(join(selected, "Work"));
+  const oldRoots = process.env.MOSS_NOTES_ROOTS;
+  process.env.MOSS_NOTES_ROOTS = root;
   const apps = actors.map((actorUserId) => {
     const app = Fastify();
     registerPeopleRoutes(app, {
       resolveAccessContext: async () => ({ actorUserId, requestId: "people-route-oracle" }),
-      dataContext: new DataContextRunner(database)
+      dataContext: new DataContextRunner(database),
+      vaultRunner: new VaultContextRunner(join(root, "private"))
     });
     setMossErrorHandler(app);
     return app;
@@ -42,6 +53,9 @@ export async function routesOracle() {
     try {
       await bootstrap.query("DELETE FROM app.users WHERE id=ANY($1::uuid[])", [actors]);
     } finally {
+      if (oldRoots === undefined) delete process.env.MOSS_NOTES_ROOTS;
+      else process.env.MOSS_NOTES_ROOTS = oldRoots;
+      await rm(root, { recursive: true, force: true });
       await Promise.allSettled([
         bootstrap.end(),
         database.destroy(),
@@ -94,11 +108,14 @@ export async function routesOracle() {
     }
     await seed();
     const startedAt = new Date().toISOString();
+    let configured = false;
     const cases: {
       actor: string;
       method: string;
       path: string;
       body?: unknown;
+      configured?: boolean;
+      files?: Record<string, string>;
       expected: unknown;
       rows: Record<string, unknown>;
     }[] = [];
@@ -131,6 +148,12 @@ export async function routesOracle() {
         method,
         path,
         ...(body !== undefined ? { body } : {}),
+        ...(configured
+          ? {
+              configured: true,
+              files: { "Route.md": await readFile(join(selected, "Route.md"), "utf8") }
+            }
+          : {}),
         expected: { status: response.statusCode, body: response.json() },
         rows
       });
@@ -239,6 +262,47 @@ export async function routesOracle() {
       );
       await run("POST", `/people/match-candidates/${ids.reject}/reject`, undefined, index);
     }
+    // Same HTTP handlers with a real chosen folder and canonical file. Capture
+    // bytes even after rejected edits so partial publication cannot hide in rows.
+    const folderSeed = {
+      "Route.md": `---
+jarvisPersonId: ${ids.primary}
+displayName: Route canonical
+aliases: []
+emails: []
+phones: []
+status: active
+---
+Human text stays.
+`
+    };
+    await writeFile(join(selected, "Route.md"), folderSeed["Route.md"]);
+    await bootstrap.query(
+      "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'people-notes-folder',$2) ON CONFLICT(owner_user_id,key) DO UPDATE SET value_json=EXCLUDED.value_json",
+      [actor, JSON.stringify(selected)]
+    );
+    configured = true;
+    await run("GET", "/people/notes-directories");
+    await run("GET", "/people/notes-directories?path=Family");
+    await run("PATCH", `/people/${ids.primary}`, { displayName: "Canonical renamed" });
+    await run("PATCH", `/people/${ids.primary}`, { relationshipSummary: {}, contextSummary: [1] });
+    await run("PATCH", `/people/${ids.primary}`, { aliases: "", emails: "", phones: "" });
+    await run("PATCH", `/people/${ids.primary}`, {
+      aliases: [1, true, null, {}, ["A", null, "B"]]
+    });
+    await run("PATCH", `/people/${ids.primary}`, {
+      emails: [null, false, 12],
+      phones: [null, ["1", "2"]]
+    });
+    await run("PATCH", `/people/${ids.primary}`, { aliases: { length: 0 }, emails: { length: 0 } });
+    await run("PATCH", `/people/${ids.primary}`, { aliases: [{ toString: null }] });
+    await run("PATCH", `/people/${ids.primary}`, { phones: {} });
+    await run("POST", `/people/${ids.primary}/archive`);
+    await run("PATCH", `/people/${ids.primary}`, { status: "active" });
+    await bootstrap.query(
+      "DELETE FROM app.preferences WHERE owner_user_id=$1 AND key='people-notes-folder'",
+      [actor]
+    );
     // Rust replays the workflow from exactly these original synthetic rows.
     await seed();
     return {
@@ -249,6 +313,7 @@ export async function routesOracle() {
         ids,
         startedAt,
         cases,
+        folderSeed,
         knownIds: [...actors, ...Object.values(ids)]
       },
       cleanup

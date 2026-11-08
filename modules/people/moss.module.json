@@ -145,6 +145,10 @@
       "description": "Suggest note updates is on by default; the account switch preserves the existing sourceBehaviors preference."
     },
     {
+      "id": "people.canonical-edits",
+      "description": "Renaming, archiving and contact-list edits update the canonical People note and its contact projection together. Empty contact lists can be cleared; summary fields stay unchanged on note-backed edits."
+    },
+    {
       "id": "people.relative-folder-browse",
       "description": "Browse directories relative to the selected People folder through the legacy API. The Settings chooser still uses allowed absolute notes roots."
     }

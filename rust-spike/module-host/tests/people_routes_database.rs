@@ -184,7 +184,18 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         reopened
     });
     let owner = Uuid::parse_str(oracle["actor"].as_str().unwrap()).unwrap();
+    let mut configured = false;
     for case in oracle["cases"].as_array().unwrap() {
+        if !configured && case["configured"] == true {
+            for (path, content) in oracle["folderSeed"].as_object().unwrap() {
+                std::fs::write(notes_root.join(path), content.as_str().unwrap()).unwrap();
+            }
+            rt.block_on(bootstrap.execute(
+                "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'people-notes-folder',$2) ON CONFLICT(owner_user_id,key) DO UPDATE SET value_json=EXCLUDED.value_json",
+                &[&owner, &json!(notes_root)],
+            )).unwrap();
+            configured = true;
+        }
         let method = case["method"].as_str().unwrap();
         let path = case["path"].as_str().unwrap();
         let mut request = dispatch::resolve(&manifest.routes, method, path).unwrap();
@@ -217,6 +228,15 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
             expected.value(&case["expected"]),
             "Route response differs: {method} {path}"
         );
+        if let Some(files) = case["files"].as_object() {
+            for (file, content) in files {
+                assert_eq!(
+                    std::fs::read_to_string(notes_root.join(file)).unwrap(),
+                    content.as_str().unwrap(),
+                    "Canonical file differs after {method} {path}: {file}"
+                );
+            }
+        }
         for table in TABLES {
             let rows: Vec<Value> = rt.block_on(async {
                 bootstrap
@@ -239,8 +259,8 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
     }
     if let Some(installer) = &installer {
         for (name, parameters) in [
-            ("findPeopleByNames", json!({"names":["Route split"]})),
-            ("resolve", json!({"query":"Route split"})),
+            ("findPeopleByNames", json!({"names":["Canonical renamed"]})),
+            ("resolve", json!({"query":"Canonical renamed"})),
             ("getPerson", json!({"personId":oracle["ids"]["primary"]})),
             ("listEmailIdentityValues", json!({})),
         ] {
@@ -255,6 +275,16 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
                     &json!({"name":name,"parameters":parameters}).to_string(),
                 )
                 .unwrap();
+            if name == "findPeopleByNames" {
+                assert!(
+                    !serde_json::from_str::<Value>(&direct)
+                        .unwrap()
+                        .as_array()
+                        .unwrap()
+                        .is_empty(),
+                    "Owner lookup must find the private fixture before testing isolation"
+                );
+            }
             let routed = installer.call("people.consumer",access,"route",&json!({"operation":"call","resource":"people","parameters":{"name":name,"parameters":parameters}}).to_string()).unwrap();
             assert_eq!(
                 serde_json::from_str::<Value>(&routed).unwrap(),
@@ -263,7 +293,7 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
             );
         }
         for key in ["other", "admin"] {
-            let reply = installer.call("people.consumer",AccessContext::new(Uuid::parse_str(oracle[key].as_str().unwrap()).unwrap(),"consumer-privacy"),"route",&json!({"operation":"call","resource":"people","parameters":{"name":"findPeopleByNames","parameters":{"names":["Route split"]}}}).to_string()).unwrap();
+            let reply = installer.call("people.consumer",AccessContext::new(Uuid::parse_str(oracle[key].as_str().unwrap()).unwrap(),"consumer-privacy"),"route",&json!({"operation":"call","resource":"people","parameters":{"name":"findPeopleByNames","parameters":{"names":["Canonical renamed"]}}}).to_string()).unwrap();
             assert_eq!(serde_json::from_str::<Value>(&reply).unwrap(), json!([]));
         }
         let screen = installer
