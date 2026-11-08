@@ -39,7 +39,7 @@ impl ToolHost for ProbeTools {
         }]
     }
 
-    fn call(&self, _name: &str, _args: Value) -> ToolFuture {
+    fn call(&self, _account: &str, _name: &str, _args: Value) -> ToolFuture {
         let w = self.word.clone();
         Box::pin(async move { Ok(w) })
     }
@@ -68,6 +68,7 @@ async fn main() {
     let word = format!("moss-{}", &moss_agents::hello::random_secret()[..10]);
     let host = Arc::new(ProbeTools { word: word.clone() });
     let gw = GatewayHost::start(
+        "probe",
         &work,
         host,
         Arc::new(|_, _| Box::pin(async { Answer::Deny })),
@@ -128,7 +129,7 @@ async fn main() {
             args: vec![],
             env: vec![
                 ("MOSS_TOOL_SOCKET".into(), gw.socket.to_string_lossy().into()),
-                ("MOSS_TOOL_LEASE".into(), gw.lease().into()),
+                ("MOSS_TOOL_LEASE_FILE".into(), gw.lease_file.to_string_lossy().into_owned()),
             ],
         }),
         confinement: None,

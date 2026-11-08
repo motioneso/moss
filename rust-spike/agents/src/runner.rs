@@ -25,8 +25,9 @@ pub struct AccountSetup {
     pub kind: AgentKind,
     /// The agent's native program.
     pub program: PathBuf,
-    /// Where the agent finds its own sign-in. Each account has its own; on a one-person
-    /// install it is that person's home folder.
+    /// Where the agent finds its own sign-in. The agent can write it, so no two accounts may
+    /// share one, and it must not hold the Moss data folder. On a one-person install it is that
+    /// person's home folder.
     pub sign_in_home: PathBuf,
     /// Leave empty to use the model the person set up in the agent.
     pub model: Option<String>,
@@ -67,6 +68,9 @@ pub type AskPerson = Arc<dyn Fn(ApprovalCard) -> ApprovalFuture + Send + Sync>;
 /// is refused.
 type Slot = Arc<Mutex<Option<AskPerson>>>;
 
+/// Starts at most once, without holding the account list while the agent starts.
+type StartCell = Arc<tokio::sync::OnceCell<Arc<tokio::sync::Mutex<Account>>>>;
+
 struct Account {
     session: AgentSession,
     _gateway: GatewayHost,
@@ -77,7 +81,9 @@ pub struct Runner {
     cfg: RunnerConfig,
     tools: Arc<dyn ToolHost>,
     facts: CallFactsFn,
-    accounts: tokio::sync::Mutex<HashMap<String, Arc<tokio::sync::Mutex<Account>>>>,
+    accounts: Mutex<HashMap<String, StartCell>>,
+    /// Which account holds each sign-in home.
+    sign_ins: Mutex<HashMap<PathBuf, String>>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -88,6 +94,10 @@ pub enum RunnerError {
     Folders(std::io::Error),
     #[error("the Moss data folder must not sit inside a system folder every agent can reach")]
     RootExposed,
+    #[error("an agent's sign-in folder must not hold the Moss data folder or another account's folders")]
+    SignInOverlap,
+    #[error("another account already uses this sign-in folder")]
+    SignInShared,
     #[error(transparent)]
     Agent(#[from] AgentError),
 }
@@ -107,6 +117,7 @@ impl Runner {
             tools,
             facts,
             accounts: Default::default(),
+            sign_ins: Default::default(),
         }
     }
 
@@ -119,12 +130,28 @@ impl Runner {
         }
     }
 
-    fn prepare(&self, account: &str) -> Result<AccountFolders, RunnerError> {
+    fn prepare(&self, account: &str, setup: &AccountSetup) -> Result<AccountFolders, RunnerError> {
         if !valid_account(account) {
             return Err(RunnerError::BadAccount);
         }
-        if SYSTEM_READ.iter().chain(SYSTEM_WRITE).chain(["/tmp"].iter()).any(|s| self.cfg.root.starts_with(s)) {
+        std::fs::create_dir_all(&self.cfg.root).map_err(RunnerError::Folders)?;
+        let root = std::fs::canonicalize(&self.cfg.root).map_err(RunnerError::Folders)?;
+        if SYSTEM_READ.iter().chain(SYSTEM_WRITE).chain(["/tmp", "/dev"].iter()).any(|s| root.starts_with(s)) {
             return Err(RunnerError::RootExposed);
+        }
+        let home = std::fs::canonicalize(&setup.sign_in_home).map_err(RunnerError::Folders)?;
+        if root.starts_with(&home) || (home.starts_with(&root) && !home.starts_with(root.join("accounts").join(account))) {
+            return Err(RunnerError::SignInOverlap);
+        }
+        {
+            let mut taken = self.sign_ins.lock().unwrap();
+            let clash = taken
+                .iter()
+                .any(|(h, owner)| owner != account && (h.starts_with(&home) || home.starts_with(h)));
+            if clash {
+                return Err(RunnerError::SignInShared);
+            }
+            taken.insert(home, account.to_string());
         }
         let f = self.folders(account);
         let base = f.work.parent().expect("account folder").to_path_buf();
@@ -169,7 +196,7 @@ impl Runner {
                     read.push(dir);
                 }
             }
-            let mut write: Vec<PathBuf> = SYSTEM_WRITE.iter().map(PathBuf::from).collect();
+            let mut write: Vec<PathBuf> = SYSTEM_WRITE.iter().map(PathBuf::from).filter(|p| p.exists()).collect();
             // Agents keep sessions and caches beside their sign-in, so that folder is writable.
             write.extend([setup.sign_in_home.clone(), f.work.clone(), f.agent_home.clone(), f.run.clone()]);
             Confinement {
@@ -192,11 +219,13 @@ impl Runner {
 
     /// Starts the account's agent if it is not running. One agent per account, ever.
     async fn account(&self, account: &str, setup: &AccountSetup) -> Result<Arc<tokio::sync::Mutex<Account>>, RunnerError> {
-        let mut all = self.accounts.lock().await;
-        if let Some(a) = all.get(account) {
-            return Ok(a.clone());
-        }
-        let f = self.prepare(account)?;
+        let cell = self.accounts.lock().unwrap().entry(account.to_string()).or_default().clone();
+        let acct = cell.get_or_try_init(|| self.start(account, setup)).await?;
+        Ok(acct.clone())
+    }
+
+    async fn start(&self, account: &str, setup: &AccountSetup) -> Result<Arc<tokio::sync::Mutex<Account>>, RunnerError> {
+        let f = self.prepare(account, setup)?;
         let slot: Slot = Arc::default();
 
         let gw_slot = slot.clone();
@@ -216,25 +245,24 @@ impl Runner {
                 }
             })
         });
-        let gateway = GatewayHost::start(&f.run, self.tools.clone(), confirm, self.facts.clone())
+        let gateway = GatewayHost::start(account, &f.run, self.tools.clone(), confirm, self.facts.clone())
             .map_err(RunnerError::Folders)?;
         let tools = ToolServer {
             command: self.cfg.gateway_bin.clone(),
             args: vec![],
             env: vec![
                 ("MOSS_TOOL_SOCKET".into(), gateway.socket.to_string_lossy().into()),
-                ("MOSS_TOOL_LEASE".into(), gateway.lease().into()),
+                ("MOSS_TOOL_LEASE_FILE".into(), gateway.lease_file.to_string_lossy().into_owned()),
             ],
         };
         let spec = self.launch_spec(setup, &f, tools);
-        let session = AgentSession::start(&spec, approver(f.work.clone(), slot.clone())).await?;
-        let acct = Arc::new(tokio::sync::Mutex::new(Account {
+        let approve = approver(f.work.clone(), setup.sign_in_home.clone(), slot.clone());
+        let session = AgentSession::start(&spec, approve).await?;
+        Ok(Arc::new(tokio::sync::Mutex::new(Account {
             session,
             _gateway: gateway,
             slot,
-        }));
-        all.insert(account.to_string(), acct.clone());
-        Ok(acct)
+        })))
     }
 
     /// Runs one chat turn for the account. Turns for one account run one at a time.
@@ -254,29 +282,32 @@ impl Runner {
         if out.is_err() {
             // A failed agent is started fresh next turn rather than reused half-broken.
             drop(a);
+            drop(acct);
             self.stop(account).await;
         }
         Ok(out?)
     }
 
     pub async fn pid(&self, account: &str) -> Option<u32> {
-        let acct = self.accounts.lock().await.get(account)?.clone();
+        let cell = self.accounts.lock().unwrap().get(account)?.clone();
+        let acct = cell.get()?.clone();
         let pid = acct.lock().await.session.pid();
         pid
     }
 
     pub async fn stop(&self, account: &str) {
-        let acct = self.accounts.lock().await.remove(account);
-        if let Some(acct) = acct {
-            if let Ok(a) = Arc::try_unwrap(acct) {
-                a.into_inner().session.shutdown().await;
-            }
+        let cell = self.accounts.lock().unwrap().remove(account);
+        let acct = cell.and_then(|c| Arc::try_unwrap(c).ok()).and_then(|c| c.into_inner());
+        if let Some(Ok(a)) = acct.map(Arc::try_unwrap) {
+            a.into_inner().session.shutdown().await;
         }
     }
 }
 
 /// The agent's own permission asks. The policy settles most; the rest become approval cards.
-fn approver(cwd: PathBuf, slot: Slot) -> Approver {
+/// `home` is the agent's HOME. As in the TypeScript chat, anything under it is refused outright,
+/// so a person cannot approve an agent reading its own sign-in token.
+fn approver(cwd: PathBuf, home: PathBuf, slot: Slot) -> Approver {
     Arc::new(move |ask: PermissionAsk| {
         let decision = policy::classify(
             &policy::Request {
@@ -284,7 +315,7 @@ fn approver(cwd: PathBuf, slot: Slot) -> Approver {
                 raw_input: &ask.raw_input,
                 locations: &ask.paths,
             },
-            &policy::Folders { cwd: &cwd, home: None },
+            &policy::Folders { cwd: &cwd, home: Some(&home) },
         );
         let person = slot.lock().unwrap().clone();
         Box::pin(async move {
@@ -307,7 +338,8 @@ fn approver(cwd: PathBuf, slot: Slot) -> Approver {
     })
 }
 
-/// Facts for a runner with no YOLO switch or marks yet: every call routes on its tool alone.
+/// Facts for a runner with no YOLO switch, outside-content taint or marks yet: every call
+/// routes on its tool alone.
 pub fn plain_facts() -> CallFactsFn {
     Arc::new(CallFacts::default)
 }
@@ -321,7 +353,7 @@ mod tests {
         fn tools(&self) -> Vec<crate::gateway::ToolDef> {
             vec![]
         }
-        fn call(&self, _: &str, _: Value) -> crate::gateway::ToolFuture {
+        fn call(&self, _: &str, _: &str, _: Value) -> crate::gateway::ToolFuture {
             Box::pin(async { Err("none".into()) })
         }
     }
@@ -338,10 +370,95 @@ mod tests {
         )
     }
 
+    fn setup(home: &Path) -> AccountSetup {
+        AccountSetup {
+            kind: AgentKind::Codex,
+            program: "/bin/sh".into(),
+            sign_in_home: home.into(),
+            model: None,
+        }
+    }
+
     #[test]
     fn data_root_under_a_system_folder_is_refused() {
-        let r = runner(Path::new("/tmp/moss"));
-        assert!(matches!(r.prepare("alice"), Err(RunnerError::RootExposed)));
+        let r = runner(Path::new("/tmp/moss-runner-test"));
+        let home = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
+        assert!(matches!(r.prepare("alice", &setup(home.path())), Err(RunnerError::RootExposed)));
+    }
+
+    #[test]
+    fn sign_in_home_holding_the_data_folder_is_refused() {
+        let home = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
+        let r = runner(&home.path().join("moss"));
+        assert!(matches!(r.prepare("alice", &setup(home.path())), Err(RunnerError::SignInOverlap)));
+        // Inside the data folder but in another account's tree.
+        let bob = home.path().join("moss/accounts/bob/home");
+        std::fs::create_dir_all(&bob).unwrap();
+        assert!(matches!(r.prepare("alice", &setup(&bob)), Err(RunnerError::SignInOverlap)));
+    }
+
+    #[test]
+    fn two_accounts_cannot_share_a_sign_in_home() {
+        let dir = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
+        let home = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
+        let r = runner(dir.path());
+        r.prepare("alice", &setup(home.path())).unwrap();
+        r.prepare("alice", &setup(home.path())).unwrap();
+        assert!(matches!(r.prepare("bob", &setup(home.path())), Err(RunnerError::SignInShared)));
+        let inner = home.path().join("sub");
+        std::fs::create_dir_all(&inner).unwrap();
+        assert!(matches!(r.prepare("bob", &setup(&inner)), Err(RunnerError::SignInShared)));
+    }
+
+    #[tokio::test]
+    async fn reading_inside_the_agent_home_is_refused_not_asked() {
+        let asked: Slot = Arc::new(Mutex::new(Some(Arc::new(|_| Box::pin(async { Answer::Allow }) as ApprovalFuture))));
+        let approve = approver("/srv/work".into(), "/home/p".into(), asked);
+        let ask = PermissionAsk {
+            tool_name: Some("Read".into()),
+            tool_call_id: "t1".into(),
+            title: "Read".into(),
+            raw_input: serde_json::json!({"file_path": "/home/p/.codex/auth.json"}),
+            paths: vec!["/home/p/.codex/auth.json".into()],
+        };
+        assert_eq!(approve(ask).await, Answer::Deny);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn gateway_secret_is_kept_out_of_names_and_launch_settings() {
+        use std::os::unix::fs::PermissionsExt;
+        // Socket paths are capped near 108 bytes, so this one stays short.
+        let dir = tempfile::tempdir().unwrap();
+        let gw = GatewayHost::start(
+            "alice",
+            dir.path(),
+            Arc::new(NoTools),
+            Arc::new(|_, _| Box::pin(async { Answer::Deny })),
+            plain_facts(),
+        )
+        .unwrap();
+        let lease = std::fs::read_to_string(&gw.lease_file).unwrap();
+        assert_eq!(std::fs::metadata(&gw.lease_file).unwrap().permissions().mode() & 0o777, 0o600);
+        assert!(!gw.socket.to_string_lossy().contains(&lease[..12]));
+        let r = runner(dir.path());
+        let tools = ToolServer {
+            command: "/bin/true".into(),
+            args: vec![],
+            env: vec![
+                ("MOSS_TOOL_SOCKET".into(), gw.socket.to_string_lossy().into()),
+                ("MOSS_TOOL_LEASE_FILE".into(), gw.lease_file.to_string_lossy().into()),
+            ],
+        };
+        let home = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
+        let spec = r.launch_spec(&setup(home.path()), &r.folders("alice"), tools);
+        let launch = format!("{:?}", spec);
+        assert!(!launch.contains(lease.trim()), "the lease reached the agent's launch");
+    }
+
+    #[test]
+    fn device_rules_leave_out_shared_memory() {
+        assert!(!SYSTEM_WRITE.iter().any(|p| Path::new("/dev/shm/x").starts_with(p)));
     }
 
     #[test]

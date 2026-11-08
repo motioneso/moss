@@ -2,8 +2,11 @@
 //!
 //!   moss-runner <config.json>
 //!
-//! Config: `{"root": DIR, "gateway_bin": PATH, "confine_bin": PATH|null,
+//! Config: `{"root": DIR, "gateway_bin": PATH, "confine_bin": PATH|null, "account": "local",
 //!           "agent": {"kind": "claude", "program": PATH, "sign_in_home": DIR, "model": null}}`
+//!
+//! The agent's sign-in folder belongs to that one account, so chats for any other account are
+//! refused until each account brings its own sign-in.
 //!
 //! The socket (`<root>/runner.sock`) and the secret (`<root>/runner.secret`) are owner-only.
 //! Every connection opens with `{"op":"hello","secret":...}`; a wrong secret closes it.
@@ -34,7 +37,13 @@ struct Config {
     root: PathBuf,
     gateway_bin: PathBuf,
     confine_bin: Option<PathBuf>,
+    #[serde(default = "local")]
+    account: String,
     agent: AgentConfig,
+}
+
+fn local() -> String {
+    "local".into()
 }
 
 #[derive(Deserialize)]
@@ -72,7 +81,7 @@ impl ToolHost for BuiltinTools {
         }]
     }
 
-    fn call(&self, _: &str, _: Value) -> ToolFuture {
+    fn call(&self, _: &str, _: &str, _: Value) -> ToolFuture {
         Box::pin(async {
             let secs = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -118,11 +127,12 @@ async fn main() {
     eprintln!("moss-runner: listening on {}", socket.display());
 
     let secret = Arc::new(secret);
+    let owner = Arc::new(cfg.account);
     loop {
         let Ok((stream, _)) = listener.accept().await else { continue };
-        let (runner, setup, secret) = (runner.clone(), setup.clone(), secret.clone());
+        let (runner, setup, secret, owner) = (runner.clone(), setup.clone(), secret.clone(), owner.clone());
         tokio::spawn(async move {
-            let _ = serve(stream, runner, setup, secret).await;
+            let _ = serve(stream, runner, setup, owner, secret).await;
         });
     }
 }
@@ -131,6 +141,7 @@ async fn serve(
     stream: tokio::net::UnixStream,
     runner: Arc<Runner>,
     setup: Arc<AccountSetup>,
+    owner: Arc<String>,
     secret: Arc<String>,
 ) -> std::io::Result<()> {
     let (read, mut write) = stream.into_split();
@@ -157,6 +168,9 @@ async fn serve(
     let next_id = Arc::new(AtomicU64::new(1));
     while let Some(line) = lines.next_line().await? {
         match serde_json::from_str::<Op>(&line) {
+            Ok(Op::Chat { account, .. }) if account != *owner => {
+                let _ = out_tx.send(json!({"event": "error", "message": "This runner has no agent for that account."}));
+            }
             Ok(Op::Chat { account, text }) => {
                 let (runner, setup, out, pending, next_id) =
                     (runner.clone(), setup.clone(), out_tx.clone(), pending.clone(), next_id.clone());
@@ -176,7 +190,11 @@ async fn serve(
                     });
                     let reply = match runner.chat(&account, &setup, &text, &events, ask).await {
                         Ok(t) => json!({"event": "done", "text": t.text, "tools_used": t.tools_used}),
-                        Err(e) => json!({"event": "error", "message": e.to_string()}),
+                        // The detail can hold agent output, so it stays in the runner's log.
+                        Err(e) => {
+                            eprintln!("moss-runner: {account}: {}", moss_agents::redact::redact_line(&e.to_string()));
+                            json!({"event": "error", "message": "The agent stopped with an error. Details are in the Moss log."})
+                        }
                     };
                     let _ = out.send(reply);
                 });

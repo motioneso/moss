@@ -6,22 +6,28 @@ accounts on one install". Code: `rust-spike/agents/` and the `--runner` flag in 
 
 ## Summary
 
-- The kill gate passes on Linux. Rust drives Claude, Codex and OpenCode with no Node process
-  anywhere in the agent's process tree, and each agent called a Moss tool and returned its answer.
+- The first kill-gate check passes on Linux. Rust drives Claude, Codex and OpenCode with no Node
+  process anywhere in the agent's process tree, and each agent called a Moss tool and returned its
+  answer. The rest of the gate (live chat on macOS and Windows, confinement per OS) is open.
 - One runner process owns every account's agent. Each account gets its own agent process, its own
   folders and a private temporary folder, and runs under Landlock confinement.
-- Confinement blocks another account's files, the Moss data folder, database files and the Moss
-  process. It does not block the key store, which a confined agent can still reach over the
-  session bus. Closing that is the first item for part 2.
+- Confinement, measured on the runner's own launch rules, blocks another account's files and
+  tool-gateway secret, the Moss data folder, database files, the shared temporary and shared
+  memory folders, and the Moss process's environment. It does not block the key store over the
+  session bus, or reading other programs' command lines. Closing the key store gap is part 2's
+  first item.
+- Each agent's sign-in folder belongs to one account. The runner refuses a second account on the
+  same sign-in folder, and a sign-in folder that holds the Moss data folder. So until each account
+  has its own agent sign-in (part 2), a runner serves one account.
 - The permission and approval rules match the TypeScript chat on every case tried (225 + 127
   permission cases, 14,336 approval-route cases). The parity check caught one porting mistake that
   would have let unattended mode send something out; it is fixed.
 - The Phase 4 chat drawer now talks to the real runner. A live message reached a confined Claude,
   which called a Moss tool, and the answer came back to the drawer.
-- macOS and Windows confinement, the classifier, approval cards in the drawer and sign-in are not
-  built. They move to part 2 (below).
+- macOS and Windows confinement, the classifier, taint and YOLO facts, approval cards in the
+  drawer and sign-in are not built. They move to part 2 (below).
 
-## Kill gate: agents driven from Rust, no Node
+## Kill gate, first check: agents driven from Rust, no Node
 
 Each run used the person's own CLI sign-in and the cheapest model they have. Moss passed one tool
 (`secret_word`, returning a random word) and checked the reply held that word. A sampler read the
@@ -69,47 +75,76 @@ Each agent is a native binary the person installs; Moss ships none of them.
 - The environment is built from nothing: home, a fixed search path, language, a private
   temporary folder, and the agent's own config folder. No database address, password, auth secret,
   provider key or recovery key is passed.
-- The tool gateway gets only a per-session secret and the runner's socket. It holds no Moss data.
+- The tool gateway's secret is never on a command line, because any program of the same OS user
+  can read another's command line. It sits in an owner-only file in the account's own run folder,
+  and only that file's path is passed. Socket names carry no part of it.
 - Each account's folders are created owner-only (0700). The runner refuses a data folder inside a
-  system folder or the shared temporary folder, and refuses a sign-in home that contains the data
-  folder, because either would hand the agent another account's files.
-- The shared temporary folder is not writable by agents. An early test showed one account's agent
-  could read what another left there.
+  system folder, the shared temporary folder or `/dev` (checked after resolving links).
+- The agent's sign-in folder is writable by that agent, so the runner refuses one that holds the
+  data folder or sits in another account's tree, and refuses to give one sign-in folder to two
+  accounts. One consequence matters for part 2. A desktop install keeps its data folder in the
+  person's home, so the person's real home cannot be the sign-in folder there. Each account needs
+  its own sign-in folder under its account tree.
+- The agent's permission rules see its real home, as in the TypeScript chat. A request to read
+  anything there, such as the agent's own sign-in token, is refused, not offered as a card.
+- Only the device nodes agents need are writable. All of `/dev` would include `/dev/shm`, a
+  shared folder every account could pass files through.
 - With no approval waiting (between turns), any permission ask is refused.
+- When an agent fails, the app gets a fixed message. The agent's error output, with tokens
+  masked, stays in the runner's log.
+- Each Moss tool call carries the account whose gateway accepted it, so the module host can scope
+  the call.
 
 ## Confinement: what holds on one OS user (Linux)
 
-Measured with `rust-spike/agents/proof/containment.sh`. Alice's confined shell tries each item.
-The same probes run unconfined first as the control. Landlock ABI 4, kernel 6.8.
+Measured with `rust-spike/agents/proof/containment.sh`. Alice's confined shell tries each item
+under the exact rules the runner gives alice's agent (printed by the `launch-rules` example). The
+same probes run unconfined first as the control. Landlock ABI 4, kernel 6.8. A `sleep` process
+holding a planted secret in its environment stands in for the Moss process.
 
-| Attempt by alice's agent                       | Unconfined (control)            | Confined    |
-| ---------------------------------------------- | ------------------------------- | ----------- |
-| Read bob's work folder                         | reached                         | blocked     |
-| Read bob's agent home (sign-in)                | reached                         | blocked     |
-| Read the runner secret in the Moss data folder | reached                         | blocked     |
-| Read database files                            | reached                         | blocked     |
-| Read the Moss process's environment            | reached                         | blocked     |
-| Read the Moss process's memory                 | blocked (kernel ptrace setting) | blocked     |
-| Talk to the key store over the session bus     | reached                         | **reached** |
+| Attempt by alice's agent                        | Unconfined (control)            | Confined    |
+| ----------------------------------------------- | ------------------------------- | ----------- |
+| Read bob's work folder                          | reached                         | blocked     |
+| Read bob's agent home (sign-in)                 | reached                         | blocked     |
+| Read bob's tool-gateway secret file             | reached                         | blocked     |
+| Read the runner secret in the Moss data folder  | reached                         | blocked     |
+| Read database files                             | reached                         | blocked     |
+| Write the shared memory folder (`/dev/shm`)     | reached                         | blocked     |
+| Write the shared temporary folder               | reached                         | blocked     |
+| Read the Moss process's environment             | reached                         | blocked     |
+| Read the Moss process's memory                  | blocked (kernel ptrace setting) | blocked     |
+| Read another program's command line             | reached                         | **reached** |
+| Talk to the key store over the session bus      | reached                         | **reached** |
+| Write its own folder and `/dev/null` (expected) | reached                         | reached     |
 
 Two more checks went through the real agent and the plain shell:
 
 - Through Claude: alice's agent was asked to read bob's file. The approval was answered yes, the
   command ran, and the result was "Permission denied".
-- Plain commands: unconfined `cat` reads bob's file; confined `cat` is denied; alice can write her
-  own folder; writing the shared temporary folder is denied.
+- The runner refuses a chat for an account it has no agent for.
 
 Memory reads were already blocked by the kernel's ptrace setting on this machine (level 1), so
 that row does not prove Landlock. On a machine with that setting at 0, only Landlock's own ptrace
 rule would hold, and that is not measured.
 
+Command lines stay readable because Landlock does not cover the process list. Nothing secret is
+on an agent's command line now, but a socket path is. Knowing it is not enough, because the
+socket demands the secret alice cannot read.
+
 ### The key store gap
 
 Landlock does not control connecting to an existing socket, so a confined agent can open the
-session bus and ask the Secret Service for what Moss stored there. The fix belongs in part 2. The
-likely route is an unprivileged namespace launch (bubblewrap style) with no session bus inside, or
-a key store that is not the shared Secret Service. Until that is proven, the notice must say the
-key store is not confined.
+session bus and ask the Secret Service for what Moss stored there. The same is true of any other
+account's gateway socket, which is why each one demands its secret. The fix belongs in part 2.
+Options, in order:
+
+- An unprivileged namespace launch (bubblewrap style) with no session bus and a private process
+  list inside.
+- Landlock ABI 6 socket scoping, on kernels that have it (6.12 and later). The confinement code
+  targets ABI 3 today.
+- A key store that is not the shared Secret Service.
+
+Until one is proven, the notice must say the key store is not confined.
 
 ### macOS and Windows
 
@@ -125,9 +160,9 @@ Proposed text for Linux, using only the results above:
 > chats and connections private inside the app. But someone who can sign in to this computer may be
 > able to open other people's files. Only share this Moss with people you trust.
 >
-> On this computer, each person's AI agent is kept out of other people's files, Moss's own data
-> folder, the database files and the running Moss program. It can still reach this computer's
-> password store, so an agent could ask for saved passwords.
+> On this computer, each person's AI agent cannot open other people's Moss folders, Moss's own
+> data folder or the database files. It can still reach this computer's password store, so an
+> agent could ask for saved passwords. It can also see which programs are running.
 
 The screen that shows it, and its app-map entries, come with the account screens. They are not in
 this phase.
@@ -183,7 +218,8 @@ and Food are not touched.
 Kept in the task's scratch folder, not the repo, because the logs hold local paths:
 
 - Kill gate runs for each agent, with process trees and tool calls.
-- The runner with confined Claude calling a Moss tool.
+- The runner with confined Claude calling a Moss tool, run again after the review fixes (the
+  gateway secret now comes from a file, under the narrowed device rules).
 - The containment table above, control and confined.
 - The agent negative control (asked to read bob's file, got "Permission denied").
 - The drawer run. A message through `moss-shell serve --runner` asked for the `current_time`
@@ -193,9 +229,10 @@ Kept in the task's scratch folder, not the repo, because the logs hold local pat
 
 Builds and tests:
 
-- `cargo test` in `rust-spike/agents`: 16 pass. These cover account names, the clean launch
-  environment, own-folders-only, the refused data folders, the route rules, and the terminal
-  (echo, resize, clean environment).
+- `cargo test` in `rust-spike/agents`: 22 pass. These cover account names, the clean launch
+  environment, own-folders-only, the refused data folders, the sign-in folder checks, the gateway
+  secret staying out of names and launch settings, the agent-home refusal, redaction, the route
+  rules, and the terminal (echo, resize, clean environment).
 - `cargo build -p moss-shell`: builds clean.
 - Lint (`cargo clippy`) was not run, because it is not installed and the task does not allow
   installing it.
@@ -203,12 +240,15 @@ Builds and tests:
 ## Not proven
 
 - Chat on macOS and Windows, and any confinement there.
-- The key store is reachable from a confined agent on Linux.
+- The key store and other programs' command lines are reachable from a confined agent on Linux.
+- Several accounts on one runner. The runner serves one configured account until each account
+  has its own sign-in folder.
 - Memory reads with the kernel ptrace setting at 0.
 - Codex and OpenCode through the runner and the drawer. The kill gate drove them directly; only
   Claude went through the runner and the drawer.
 - Approval cards in the drawer. Every card is answered no and the reply says so.
-- The classifier.
+- The classifier, and the YOLO, outside-content and mark facts the approval route reads. The
+  route is ported, but the runner passes defaults, so no conversation is ever treated as tainted.
 - Sign-in, trusted origins and https for the drawer.
 - Agent sign-in through the terminal layer. The terminal works; no sign-in flow uses it yet.
 - The runner as a long-running service that restarts on failure.
@@ -220,9 +260,11 @@ In order:
 
 1. Close the key store gap on Linux and measure again with the control.
 2. Approval cards in the chat drawer, wired to the runner's approval events.
-3. Port the classifier and add it to the parity check.
+3. Port the classifier, wire YOLO, outside-content and mark facts, and add them to the parity
+   check.
 4. Run Codex and OpenCode through the runner and the drawer, with the same live checks.
-5. Agent sign-in per account through the terminal layer.
+5. A sign-in folder per account under its account tree, with agent sign-in through the terminal
+   layer. This is what lets one runner serve several accounts.
 6. Feed the runner the real tool list from the module host (JS-43).
 7. macOS confinement (sandbox profile) and Windows (AppContainer or restricted token), each with
    the control run, and the notice text per OS.

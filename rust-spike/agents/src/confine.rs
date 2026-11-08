@@ -31,7 +31,12 @@ pub const SYSTEM_READ: &[&str] = &[
 ];
 /// The shared temporary folder is left out on purpose: every account's agent could read what
 /// another left there. Each agent gets a private one through TMPDIR instead.
-pub const SYSTEM_WRITE: &[&str] = &["/dev"];
+/// Only the device nodes agents need. All of `/dev` would include `/dev/shm`, which every
+/// account could share files through.
+pub const SYSTEM_WRITE: &[&str] = &[
+    "/dev/null", "/dev/zero", "/dev/full", "/dev/random", "/dev/urandom", "/dev/tty", "/dev/ptmx",
+    "/dev/pts",
+];
 
 impl Confinement {
     /// Rewrites a launch so the launcher confines itself first, then runs the agent.
@@ -68,7 +73,7 @@ pub fn status() -> ConfinementStatus {
             Ok(abi) => ConfinementStatus {
                 os: "linux",
                 enforced: true,
-                detail: format!("Landlock ABI {abi}: each account's agent can reach only its own folders"),
+                detail: format!("Landlock ABI {abi}: file access limited to each account's own folders; the session bus and process list are not"),
             },
             Err(e) => ConfinementStatus {
                 os: "linux",
@@ -134,16 +139,19 @@ pub mod linux {
             .create()
             .map_err(|e| e.to_string())?;
         for p in read {
+            let access = if p.is_dir() { read_access } else { read_access & AccessFs::from_file(ABI_TARGET) };
             if let Ok(fd) = PathFd::new(p) {
                 ruleset = ruleset
-                    .add_rule(PathBeneath::new(fd, read_access))
+                    .add_rule(PathBeneath::new(fd, access))
                     .map_err(|e| e.to_string())?;
             }
         }
         for p in write {
+            // A rule on a file or device may carry only file rights.
+            let access = if p.is_dir() { all } else { all & AccessFs::from_file(ABI_TARGET) };
             if let Ok(fd) = PathFd::new(p) {
                 ruleset = ruleset
-                    .add_rule(PathBeneath::new(fd, all))
+                    .add_rule(PathBeneath::new(fd, access))
                     .map_err(|e| e.to_string())?;
             }
         }

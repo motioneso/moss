@@ -1,8 +1,9 @@
 //! The Moss tool server an agent loads (Model Context Protocol over stdio).
 //!
-//! It holds no tools, data or secrets of its own. It reads two variables from its launch
-//! environment, MOSS_TOOL_SOCKET and MOSS_TOOL_LEASE, connects back to the runner, and forwards
-//! each tool list and call. The runner decides whether a call runs.
+//! It holds no tools, data or secrets of its own. Its launch environment names the runner's
+//! socket (MOSS_TOOL_SOCKET) and an owner-only file holding the lease (MOSS_TOOL_LEASE_FILE).
+//! It connects back, proves the lease, and forwards each tool list and call. The runner decides
+//! whether a call runs.
 
 use std::io::{BufRead, BufReader, Write};
 
@@ -10,8 +11,10 @@ use serde_json::{json, Value};
 
 fn main() {
     let socket = std::env::var("MOSS_TOOL_SOCKET").unwrap_or_else(|_| die("MOSS_TOOL_SOCKET is not set"));
-    let lease = std::env::var("MOSS_TOOL_LEASE").unwrap_or_else(|_| die("MOSS_TOOL_LEASE is not set"));
-    let mut host = Host::connect(&socket, &lease);
+    let lease_file = std::env::var("MOSS_TOOL_LEASE_FILE").unwrap_or_else(|_| die("MOSS_TOOL_LEASE_FILE is not set"));
+    let lease = std::fs::read_to_string(&lease_file).unwrap_or_else(|e| die(&format!("cannot read the lease: {e}")));
+    let lease = lease.trim();
+    let mut host = Host::connect(&socket, lease);
 
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();

@@ -32,7 +32,8 @@ pub type ToolFuture = Pin<Box<dyn Future<Output = Result<String, String>> + Send
 /// Where tools come from. The app supplies these; the gateway only routes.
 pub trait ToolHost: Send + Sync + 'static {
     fn tools(&self) -> Vec<ToolDef>;
-    fn call(&self, name: &str, args: Value) -> ToolFuture;
+    /// `account` is the account whose gateway accepted the call, so the host can scope it.
+    fn call(&self, account: &str, name: &str, args: Value) -> ToolFuture;
 }
 
 pub type ConfirmFuture = Pin<Box<dyn Future<Output = Answer> + Send>>;
@@ -52,7 +53,9 @@ enum GatewayOp {
 
 pub struct GatewayHost {
     pub socket: PathBuf,
-    lease: String,
+    /// Owner-only file holding the lease. Only its path goes into the agent's launch, because
+    /// any process of the same OS user can read another's command line.
+    pub lease_file: PathBuf,
     task: tokio::task::JoinHandle<()>,
 }
 
@@ -60,40 +63,49 @@ impl Drop for GatewayHost {
     fn drop(&mut self) {
         self.task.abort();
         let _ = std::fs::remove_file(&self.socket);
+        let _ = std::fs::remove_file(&self.lease_file);
     }
 }
 
 impl GatewayHost {
-    /// Listens on a new owner-only socket in `dir`. The lease goes to the agent's tool server
-    /// only, through its launch environment.
+    /// Listens on a new owner-only socket in `dir` and writes the lease beside it. `dir` must be
+    /// the account's own folder, which confinement keeps other accounts out of.
     #[cfg(unix)]
     pub fn start(
+        account: &str,
         dir: &Path,
         host: Arc<dyn ToolHost>,
         confirm: Confirm,
         facts: CallFactsFn,
     ) -> std::io::Result<Self> {
-        use std::os::unix::fs::PermissionsExt;
+        use std::io::Write;
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
         let lease = crate::hello::random_secret();
-        let socket = dir.join(format!("gw-{}.sock", &lease[..12]));
+        let name = &crate::hello::random_secret()[..12];
+        let socket = dir.join(format!("gw-{name}.sock"));
+        let lease_file = dir.join(format!("gw-{name}.lease"));
+        let _ = std::fs::remove_file(&lease_file);
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&lease_file)?
+            .write_all(lease.as_bytes())?;
         let _ = std::fs::remove_file(&socket);
         let listener = tokio::net::UnixListener::bind(&socket)?;
         std::fs::set_permissions(&socket, std::fs::Permissions::from_mode(0o600))?;
         let expected = lease.clone();
+        let account = account.to_string();
         let task = tokio::spawn(async move {
             while let Ok((stream, _)) = listener.accept().await {
-                let (host, confirm, facts, expected) =
-                    (host.clone(), confirm.clone(), facts.clone(), expected.clone());
+                let (host, confirm, facts, expected, account) =
+                    (host.clone(), confirm.clone(), facts.clone(), expected.clone(), account.clone());
                 tokio::spawn(async move {
-                    let _ = serve_one(stream, &expected, host, confirm, facts).await;
+                    let _ = serve_one(stream, &expected, &account, host, confirm, facts).await;
                 });
             }
         });
-        Ok(Self { socket, lease, task })
-    }
-
-    pub fn lease(&self) -> &str {
-        &self.lease
+        Ok(Self { socket, lease_file, task })
     }
 }
 
@@ -101,6 +113,7 @@ impl GatewayHost {
 async fn serve_one(
     stream: tokio::net::UnixStream,
     expected: &str,
+    account: &str,
     host: Arc<dyn ToolHost>,
     confirm: Confirm,
     facts: CallFactsFn,
@@ -120,7 +133,7 @@ async fn serve_one(
         let reply = match serde_json::from_str::<GatewayOp>(&line) {
             Ok(GatewayOp::List) => json!({"tools": host.tools()}),
             Ok(GatewayOp::Call { name, arguments }) => {
-                call_tool(&*host, &confirm, &facts, &name, arguments).await
+                call_tool(&*host, &confirm, &facts, account, &name, arguments).await
             }
             _ => json!({"error": "bad request"}),
         };
@@ -136,6 +149,7 @@ pub async fn call_tool(
     host: &dyn ToolHost,
     confirm: &Confirm,
     facts: &CallFactsFn,
+    account: &str,
     name: &str,
     arguments: Value,
 ) -> Value {
@@ -150,7 +164,7 @@ pub async fn call_tool(
     if !allowed {
         return json!({"isError": true, "route": decision, "text": "The person did not approve this action."});
     }
-    match host.call(name, arguments).await {
+    match host.call(account, name, arguments).await {
         Ok(text) => json!({"isError": false, "route": decision, "text": text}),
         Err(text) => json!({"isError": true, "route": decision, "text": text}),
     }
