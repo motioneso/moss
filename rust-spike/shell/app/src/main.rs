@@ -1,7 +1,10 @@
 //! One program, two ways to run:
 //!
-//!   moss-shell serve [--host 127.0.0.1] [--port 5180] [--web <dir>]
-//!   moss-shell desktop [--port 0] [--web <dir>]
+//!   moss-shell serve [--host 127.0.0.1] [--port 5180] [--web <dir>] [--runner <dir>]
+//!   moss-shell desktop [--port 0] [--web <dir>] [--runner <dir>]
+//!
+//! `--runner` sends chat to the Moss runner whose data folder is `<dir>`; without it the
+//! chat gives sample replies.
 //!
 //! `serve` answers browsers on the LAN or this machine. `desktop` starts the same server on a
 //! private loopback port and opens it in a native window (tao + wry, the system webview).
@@ -20,6 +23,8 @@ use axum::{Json, Router};
 use moss_shell_contract::stub::StubShellData;
 use moss_shell_contract::{ChatMessage, ChatThread, SendMessage, ShellData, ShellView, TodayView};
 use tower_http::services::ServeDir;
+
+mod runner_data;
 
 type Data = Arc<dyn ShellData>;
 
@@ -44,7 +49,11 @@ fn router(data: Data, web: PathBuf) -> Router {
             "/api/chat/messages",
             post(
                 |State(d): State<Data>, Json(body): Json<SendMessage>| async move {
-                    Json::<ChatMessage>(d.send_message(&body.text))
+                    // A chat turn can take minutes, so it waits off the request threads.
+                    match tokio::task::spawn_blocking(move || d.send_message(&body.text)).await {
+                        Ok(m) => Json::<ChatMessage>(m).into_response(),
+                        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+                    }
                 },
             ),
         )
@@ -74,6 +83,7 @@ struct Args {
     host: String,
     port: u16,
     web: PathBuf,
+    runner: Option<PathBuf>,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -91,6 +101,7 @@ fn parse_args() -> Result<Args, String> {
         host: "127.0.0.1".into(),
         port: 0,
         web: exe_dir.join("web"),
+        runner: None,
     };
     while let Some(flag) = raw.next() {
         let value = raw.next().ok_or_else(|| format!("{flag} needs a value"))?;
@@ -98,6 +109,7 @@ fn parse_args() -> Result<Args, String> {
             "--host" => args.host = value,
             "--port" => args.port = value.parse().map_err(|_| format!("bad port {value}"))?,
             "--web" => args.web = PathBuf::from(value),
+            "--runner" => args.runner = Some(PathBuf::from(value)),
             _ => return Err(format!("unknown option {flag}")),
         }
     }
@@ -121,7 +133,10 @@ fn main() {
             std::process::exit(2);
         }
     };
-    let data: Data = Arc::new(StubShellData::default());
+    let data: Data = match &args.runner {
+        Some(root) => Arc::new(runner_data::RunnerShellData::new(root.clone())),
+        None => Arc::new(StubShellData::default()),
+    };
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
 
     if args.mode == "serve" {
