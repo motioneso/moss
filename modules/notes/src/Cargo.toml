@@ -8,7 +8,7 @@ description = "Guest-safe Notes module and domain operations"
 [workspace]
 
 [features]
-write-tools = []
+write-tools = ["serde_json/preserve_order"]
 
 [lib]
 path = "lib.rs"
@@ -16,7 +16,7 @@ crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", features = ["preserve_order"] }
+serde_json = "1"
 sha2 = "0.10"
 uuid = "1"
 moss-module-sdk = { path = "../../../rust-spike/module-sdk" }

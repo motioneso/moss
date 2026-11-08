@@ -120,6 +120,8 @@ Delete and overwrite must still require explicit approval even with a trusted
 write policy. Neither approval consumption nor that orchestration is implemented
 here. Source aliases, Windows paths, symlink selection, missing-file error parity,
 and invalid-input/source-error parity remain unproven or stricter than legacy.
+Concurrent-change refusals currently return a generic service-unavailable error
+instead of the legacy conflict and retry hint.
 
 ```sh
 pnpm exec tsx modules/notes/tools/write-tool-parity.ts

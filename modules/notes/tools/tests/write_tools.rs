@@ -13,7 +13,10 @@ use serde_json::{json, Value};
 use std::{
     collections::BTreeMap,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
 };
 use uuid::Uuid;
 use vault::AllowedRoots;
@@ -43,6 +46,7 @@ impl FolderProvider for Folders {
 struct Services {
     paths: BTreeMap<Uuid, PathBuf>,
     published: Mutex<Vec<(Uuid, Value)>>,
+    fail_publication: AtomicBool,
 }
 impl Ports for Services {
     fn invoke(&self, scope: &CallScope, port: &str, r: &Request) -> Result<Value> {
@@ -51,6 +55,9 @@ impl Ports for Services {
                 Ok(json!({"status":200,"body":self.paths[&scope.access().actor_user_id()]}))
             }
             ("jobs", "enqueue-options") => {
+                if self.fail_publication.load(Ordering::Relaxed) {
+                    bail!("Synthetic publication failure")
+                }
                 assert_eq!(r.resource, "notes.sync");
                 assert_eq!(r.parameters["params"], json!({}));
                 assert_eq!(r.parameters.as_object().unwrap().len(), 3);
@@ -125,6 +132,7 @@ impl Fixture {
             services: Arc::new(Services {
                 paths,
                 published: Mutex::new(vec![]),
+                fail_publication: AtomicBool::new(false),
             }),
         }
     }
@@ -219,7 +227,7 @@ fn compiled_guest_writes_edits_deletes_and_defers_metadata_only_sync() {
     assert_eq!(ids.len(), 4);
 }
 #[test]
-fn compiled_guest_queue_refusal_restores_create_overwrite_edit_and_delete() {
+fn compiled_guest_queue_refusal_before_finalization_restores_file_changes() {
     let f = Fixture::new();
     let path = f.services.paths[&f.a].join("keep.md");
     std::fs::write(&path, "private old").unwrap();
@@ -239,6 +247,24 @@ fn compiled_guest_queue_refusal_restores_create_overwrite_edit_and_delete() {
         assert_eq!(f.text(f.a, "keep.md").as_deref(), Some("private old"));
         assert_eq!(f.text(f.a, "new.md"), None);
     }
+    assert!(f.services.published.lock().unwrap().is_empty());
+}
+#[test]
+fn compiled_guest_publication_failure_after_finalization_leaves_file_saved() {
+    let f = Fixture::new();
+    f.services.fail_publication.store(true, Ordering::Relaxed);
+    assert!(f
+        .call(
+            f.a,
+            f.ports(None, false),
+            "notes.create",
+            json!({"path":"saved.md","content":"saved despite queue failure"}),
+        )
+        .is_err());
+    assert_eq!(
+        f.text(f.a, "saved.md").as_deref(),
+        Some("saved despite queue failure")
+    );
     assert!(f.services.published.lock().unwrap().is_empty());
 }
 #[test]

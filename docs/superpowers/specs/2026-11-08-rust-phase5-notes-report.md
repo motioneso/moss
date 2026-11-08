@@ -635,3 +635,15 @@ claimed by this part.
 The earlier filesystem race, crash, deadline, cross-platform and mixed-lock-version
 limits still apply. Deferred queue publication can fail after file finalization:
 a saved file then needs a later sync retry. No distributed atomicity is claimed.
+
+### Part five review follow-ups
+
+The first fresh review found no blocker or major and four minor points. JSON input
+order preservation is now scoped to the optional write-tools feature. A real-guest
+test distinguishes refusal before finalization (file changes are compensated)
+from publication failure after finalization (the call fails but the file stays
+saved). The account-guard removal control runs in a temporary source copy and
+never edits the worktree's host protection. Concurrent-change refusals remain
+generic service-unavailable errors instead of the legacy conflict/retry hint;
+that error parity remains unfinished with the other disclosed input/path cases.
+Final check receipts below supersede pending statements only when recorded.
