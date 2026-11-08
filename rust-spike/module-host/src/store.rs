@@ -22,6 +22,8 @@ use std::{
 pub struct State {
     pub revision: u64,
     pub installed: BTreeMap<String, Installed>,
+    #[serde(default)]
+    pub retained: BTreeMap<String, Installed>,
     pub registries: BTreeMap<String, SeenRegistry>,
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -67,6 +69,11 @@ pub struct Approval {
     pub new_permissions: Vec<Permission>,
     pub new_migrations: Vec<String>,
     pub urgent: bool,
+}
+#[derive(Debug, Default)]
+pub struct UpdateReport {
+    pub pending: Vec<(String, Approval)>,
+    pub failures: Vec<(String, String)>,
 }
 impl Approval {
     pub fn required(&self) -> bool {
@@ -215,6 +222,7 @@ impl Installer {
             .registries
             .get(&catalog.trust.identity.id)
             .context("Refresh this registry before installing")?;
+        catalog.assert_current(seen)?;
         let installed = state
             .installed
             .iter()
@@ -279,6 +287,7 @@ impl Installer {
             .registries
             .get(&catalog.trust.identity.id)
             .context("Trust and refresh the registry before importing a file")?;
+        catalog.assert_current(seen)?;
         ensure!(
             ![&digest, &publisher_key.to_string()].iter().any(|k| seen
                 .revocations
@@ -313,7 +322,11 @@ impl Installer {
         let mut state = self.catalog.load()?;
         let revision = state.revision;
         let id = &package.manifest.id;
-        let old = state.installed.get(id).cloned();
+        let old = state
+            .installed
+            .get(id)
+            .or_else(|| state.retained.get(id))
+            .cloned();
         let publisher = catalog.trust.publisher(key_id, id)?;
         if let Some(old) = &old {
             ensure!(
@@ -322,7 +335,8 @@ impl Installer {
             );
             ensure!(
                 old.publisher_public_key == publisher.key
-                    || publisher.replaces.contains(&old.publisher_public_key),
+                    || old.registry == catalog.trust.identity.id
+                        && publisher.replaces.contains(&old.publisher_public_key),
                 "Only the registry root may approve a publisher replacement"
             );
             let previous = self.read_package(&old.digest)?;
@@ -368,6 +382,7 @@ impl Installer {
                     "{}",
                 )?;
             }
+            state.retained.remove(id);
             state.installed.insert(
                 id.clone(),
                 Installed {
@@ -516,7 +531,9 @@ impl Installer {
         let module = state
             .installed
             .get(id)
-            .context("This module is not installed")?;
+            .or_else(|| state.retained.get(id))
+            .cloned()
+            .context("This module has no installed code or retained data")?;
         if let Some(typed_name) = delete_data {
             ensure!(
                 typed_name == module.manifest.name,
@@ -538,6 +555,11 @@ impl Installer {
         let outcome = (|| -> Result<()> {
             if delete_data.is_some() {
                 self.lifecycle.purge(id)?;
+                state.retained.remove(id);
+            } else {
+                let mut retained = module.clone();
+                retained.pin = None;
+                state.retained.insert(id.into(), retained);
             }
             state.installed.remove(id);
             state.revision += 1;
@@ -551,9 +573,14 @@ impl Installer {
             self.lifecycle.resume_jobs(id)?;
             return Err(error);
         }
-        let path = self.root.subdir("installed")?.subdir(id)?;
-        make_writable(path.path())?;
-        std::fs::remove_dir_all(path.path())?;
+        match self.root.subdir("installed")?.subdir(id) {
+            Ok(path) => {
+                make_writable(path.path())?;
+                std::fs::remove_dir_all(path.path())?;
+            }
+            Err(vault::VaultError::NotFound(_)) => (),
+            Err(error) => return Err(error.into()),
+        }
         Ok(())
     }
     /// Only listed modules are added or pinned. A missing name is never a removal request.
@@ -570,6 +597,16 @@ impl Installer {
                 .get(&item.registry)
                 .context("The module list names an unconfigured registry")?;
             let state = self.catalog.load()?;
+            if let Some(module) = state.installed.get(&item.id) {
+                match &item.version {
+                    None => continue,
+                    Some(version) if version == &module.manifest.version => {
+                        self.pin(access, &item.id, Some(version.clone()))?;
+                        continue;
+                    }
+                    _ => (),
+                }
+            }
             let installed = state
                 .installed
                 .iter()
@@ -581,7 +618,9 @@ impl Installer {
                 .context("Refresh the registry before importing the module list")?;
             let artifact = catalog.select(
                 &item.id,
-                item.version.as_ref(),
+                item.version
+                    .as_ref()
+                    .or_else(|| state.installed.get(&item.id).and_then(|m| m.pin.as_ref())),
                 &self.moss,
                 &installed,
                 seen,
@@ -600,7 +639,9 @@ impl Installer {
                 }
                 self.install(access, catalog, artifact, approved)?;
             }
-            self.pin(access, &item.id, item.version.clone())?;
+            if let Some(version) = &item.version {
+                self.pin(access, &item.id, Some(version.clone()))?;
+            }
         }
         Ok(())
     }
@@ -611,14 +652,15 @@ impl Installer {
         access: &AccessContext,
         catalog: &Catalog,
         quiet_time: bool,
-    ) -> Result<Vec<(String, Approval)>> {
+    ) -> Result<UpdateReport> {
         self.admin(access)?;
         let state = self.catalog.load()?;
-        let mut pending = Vec::new();
+        let mut report = UpdateReport::default();
         let seen = state
             .registries
             .get(&catalog.trust.identity.id)
             .context("Refresh the registry before checking updates")?;
+        catalog.assert_current(seen)?;
         let installed = state
             .installed
             .iter()
@@ -631,19 +673,28 @@ impl Installer {
             {
                 continue;
             }
-            let artifact = catalog.select(id, None, &self.moss, &installed, seen)?;
-            if artifact.version <= module.manifest.version {
-                continue;
-            }
-            let package = catalog.download(artifact, &self.moss)?;
-            let approval = self.approval(&package, artifact.urgent)?;
-            if approval.required() {
-                pending.push((id.clone(), approval));
-            } else if quiet_time || artifact.urgent {
-                self.install(access, catalog, artifact, false)?;
+            let result = (|| -> Result<Option<Approval>> {
+                let artifact = catalog.select(id, None, &self.moss, &installed, seen)?;
+                if artifact.version <= module.manifest.version {
+                    return Ok(None);
+                }
+                let package = catalog.download(artifact, &self.moss)?;
+                let approval = self.approval(&package, artifact.urgent)?;
+                if approval.required() {
+                    return Ok(Some(approval));
+                }
+                if quiet_time || artifact.urgent {
+                    self.install(access, catalog, artifact, false)?;
+                }
+                Ok(None)
+            })();
+            match result {
+                Ok(Some(approval)) => report.pending.push((id.clone(), approval)),
+                Ok(None) => (),
+                Err(error) => report.failures.push((id.clone(), error.to_string())),
             }
         }
-        Ok(pending)
+        Ok(report)
     }
     pub fn export_list(&self) -> Result<ModuleList> {
         Ok(ModuleList {

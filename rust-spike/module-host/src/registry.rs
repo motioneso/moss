@@ -262,6 +262,18 @@ pub struct Catalog {
     documents: BTreeMap<String, Vec<u8>>,
 }
 impl Catalog {
+    pub fn assert_current(&self, seen: &SeenRegistry) -> Result<()> {
+        ensure!(
+            seen.root_fingerprint.as_ref() == Some(&self.trust.identity.root_fingerprint)
+                && self.index.serial == seen.serial
+                && self
+                    .documents
+                    .get("index.json")
+                    .is_some_and(|bytes| trust::digest(bytes) == seen.index_digest),
+            "Refresh the registry before using this stale or untrusted catalog"
+        );
+        Ok(())
+    }
     /// The caller commits `seen` durably before using this catalog to install anything.
     pub fn fetch(
         source: Source,

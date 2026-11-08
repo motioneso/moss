@@ -42,19 +42,23 @@ sample is compiled to a WebAssembly component, signed, loaded from a signed fold
 installed to disk and executed by Wasmtime. Its port writes real account-scoped data.
 
 The file lifecycle test covers pin refusal, an approved unpin/update, retained account data,
-removal, reinstall and typed-name purge. Database tests run only through `scripts/run-gate.sh`
+removal, reinstall and typed-name purge. It also covers cross-registry replacement refusal
+before and after removal, stale catalog refusal, preserving an existing pin on list import,
+and continuing updates when another installed module disappears from the index.
+Database tests run only through `scripts/run-gate.sh`
 and the crate's `tools/gate.sh`, against the gate's disposable PostgreSQL server. They cover an
 admin-only configuration catalog, stale revision refusal, actor-scoped rows and a failed health
 hook after an actual schema migration, with the previous schema, rows and active version
 restored. The expanded test also covers a failed reinstall with retained tables and a successful
-purge/reinstall.
+purge/reinstall, including purging retained data without reinstalling code first.
 
 Removal controls change a disposable source copy and require the matching test to fail for:
 
-1. The package hash check.
-2. The file/socket/database import allowlist.
-3. The publisher-prefix check.
-4. The private-address classification.
+1. Root, index and publisher signature verification, using well-formed forged signatures.
+2. The package hash check.
+3. The file/socket/database import allowlist.
+4. The publisher-prefix check.
+5. The private-address classification.
 
 These controls prove those particular assertions detect their missing protections. They do not
 prove every property in the design. They are recorded before the passing protected test run;
@@ -64,21 +68,49 @@ in a test-first sequence.
 Reproduction commands and the sample source are documented in
 `rust-spike/module-host/README.md`. Checkpoint results:
 
-| Check                                                 | Result                                                                  |
-| ----------------------------------------------------- | ----------------------------------------------------------------------- |
-| Protected Rust tests after a clean crate build        | 17 passed; database tests intentionally ignored here                    |
-| Database tests through verify-gate                    | 2 passed; fresh server removed successfully                             |
-| Disposable removal controls                           | All four matching assertions failed when their protection was removed   |
-| Rust formatting and Clippy with warnings refused      | Passed                                                                  |
-| Repository lint, type checking and file-size checks   | Passed                                                                  |
-| Prettier on the changed Markdown and TypeScript files | Passed                                                                  |
-| Full repository format check                          | Still running when this checkpoint was committed; not claimed as a pass |
+| Check                                                 | Result                                                                |
+| ----------------------------------------------------- | --------------------------------------------------------------------- |
+| Protected Rust tests                                  | 20 passed; database tests intentionally ignored here                  |
+| Database tests through verify-gate                    | 2 passed; fresh server removed successfully                           |
+| Disposable removal controls                           | All five matching assertions failed when their protection was removed |
+| Rust formatting and Clippy with warnings refused      | Passed                                                                |
+| Repository lint, type checking and file-size checks   | Passed                                                                |
+| Prettier on the changed Markdown and TypeScript files | Passed                                                                |
+| Full repository format check                          | Stopped before completion; not claimed as a pass                      |
 
 A verification run exposed a shared Cargo output collision between a mutated control copy and a
 protected build. That protected result was discarded. The control runner now gives every copy a
 unique package identity while retaining its library import name. The passing protected run above
 followed a clean of this crate's artifacts; the final database gate ran after the controls ended.
 No production database or installed app was used.
+
+An earlier upgrade fixture returned an error during both installation and health checking, so
+its result did not prove health-specific rollback. That claim was withdrawn from the proof
+artifact. The corrected component succeeds for installation and fails only for health; a
+separate host test checks that distinction. The database gate was rerun with that component
+and checks the guest-error result, restored schema, rows and active version.
+
+## Independent review checkpoint
+
+Claude reviewed commit `6092ad216` read-only in round one. The incomplete scope remains a major
+finding and blocks acceptance. This follow-up addresses the reported cross-registry replacement,
+module-list pin loss, update starvation, network-held data lock, hidden permission growth and
+missing signature controls. Publisher provenance now survives retain-data removal; a foreign
+registry cannot authorize replacement of the original registry's publisher. Permission data
+includes operations and private-network access. Updates return per-module failures. The catalog
+must match the persisted signed index before install, import or update.
+
+The review suggested deleting snapshots immediately after purge. That suggestion conflicts with
+design section 3.9, which explicitly retains purge recovery snapshots for thirty days. The
+missing expiry and cleanup remain a valid major gap. Snapshot schemas revoke public access;
+their lack of RLS alone does not establish that application actors can read them.
+
+Remaining lower-severity review findings include stale version folders after failed upgrades,
+removal without dependent checks, colliding table prefixes, publisher-chosen migration order,
+restoration errors masking the original failure, lifted revocations leaving modules disabled,
+compilation while holding the cache lock, and the local privileged PostgreSQL connection's
+`NoTls` assumption. The import controls exercise installation-time validation, not every
+runtime escape attempt. None of these are claimed resolved by the passing checks.
 
 ## Work still required before Phase 4b is ready
 

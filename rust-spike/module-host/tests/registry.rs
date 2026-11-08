@@ -222,3 +222,58 @@ fn mirror_keeps_the_same_signed_bytes_and_works_offline() {
         artifact.digest
     );
 }
+
+#[test]
+fn forged_root_index_and_publisher_signatures_are_refused() {
+    for surface in ["root", "index", "publisher"] {
+        let folder = tempfile::tempdir().unwrap();
+        let keys = common::Keys::new();
+        keys.write(folder.path(), "1.0.0", 1, vec![]);
+        match surface {
+            "root" => {
+                let bytes = std::fs::read(folder.path().join("registry.json")).unwrap();
+                std::fs::write(
+                    folder.path().join("registry.json.sig"),
+                    common::Keys::sign(&keys.index, &bytes),
+                )
+                .unwrap();
+            }
+            "index" => {
+                let bytes = std::fs::read(folder.path().join("index.json")).unwrap();
+                std::fs::write(
+                    folder.path().join("index.json.sig"),
+                    common::Keys::sign(&keys.publisher, &bytes),
+                )
+                .unwrap();
+            }
+            _ => {
+                let mut index: moss_module_host::registry::Index = serde_json::from_slice(
+                    &std::fs::read(folder.path().join("index.json")).unwrap(),
+                )
+                .unwrap();
+                index.modules[0].signature =
+                    common::Keys::sign(&keys.root, index.modules[0].digest.as_bytes());
+                let bytes = serde_json::to_vec(&index).unwrap();
+                std::fs::write(folder.path().join("index.json"), &bytes).unwrap();
+                std::fs::write(
+                    folder.path().join("index.json.sig"),
+                    common::Keys::sign(&keys.index, &bytes),
+                )
+                .unwrap();
+            }
+        }
+        let result = Catalog::fetch(
+            Source::Folder(folder.path().into()),
+            &common::Keys::public(&keys.root),
+            &common::Keys::public(&keys.root),
+            &mut SeenRegistry::default(),
+        );
+        let error = result
+            .err()
+            .unwrap_or_else(|| panic!("Accepted a forged {surface} signature"));
+        assert!(
+            error.to_string().contains("signature does not match"),
+            "{surface}: {error:#}"
+        );
+    }
+}

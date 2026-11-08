@@ -19,14 +19,14 @@ impl LocalPorts {
 }
 impl Ports for LocalPorts {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
-        let _guard = self
-            .serial
-            .lock()
-            .map_err(|_| anyhow::anyhow!("The module data store is busy"))?;
         let module = self.root.create_subdir(&scope.module().id)?;
         let account = VaultContext::for_access(&module, scope.access())?;
         match port {
             "kv" => {
+                let _guard = self
+                    .serial
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("The module data store is busy"))?;
                 let mut values: BTreeMap<String, Value> = match account.read("kv.json") {
                     Ok(bytes) => serde_json::from_slice(&bytes)?,
                     Err(vault::VaultError::NotFound(_)) => BTreeMap::new(),

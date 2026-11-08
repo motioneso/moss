@@ -156,3 +156,55 @@ fn fuel_and_memory_limits_stop_the_sample() {
         )
         .is_err());
 }
+
+#[test]
+fn health_failure_fixture_succeeds_during_install() {
+    let host = Host::new(Limits::default()).unwrap();
+    let wasm = wat::parse_str(common::unhealthy_source()).unwrap();
+    let manifest = Arc::new(common::manifest("1.0.0"));
+    let access = AccessContext::new(uuid::Uuid::new_v4(), "health-only");
+    host.call(
+        &wasm,
+        manifest.clone(),
+        access.clone(),
+        Arc::new(moss_module_host::runtime::DenyPorts),
+        "install",
+        "{}",
+    )
+    .unwrap();
+    assert!(host
+        .call(
+            &wasm,
+            manifest,
+            access,
+            Arc::new(moss_module_host::runtime::DenyPorts),
+            "health",
+            "{}"
+        )
+        .is_err());
+}
+#[test]
+fn permission_growth_has_visible_operations_and_private_network_detail() {
+    let old = common::manifest("1.0.0");
+    let mut new = old.clone();
+    new.capabilities[0].operations.insert("delete".into());
+    let permissions = new.newly_requested(&old);
+    assert_eq!(permissions.len(), 1);
+    assert!(permissions[0].operations.contains("delete"));
+    assert!(permissions[0]
+        .details
+        .iter()
+        .any(|detail| detail.contains("delete")));
+    new.capabilities = vec![moss_module_host::manifest::Capability {
+        port: "fetch".into(),
+        operations: ["get".into()].into(),
+        resources: ["example.test".into()].into(),
+        allow_private: true,
+    }];
+    let permissions = new.newly_requested(&old);
+    assert!(permissions[0].allow_private);
+    assert!(permissions[0]
+        .details
+        .iter()
+        .any(|detail| detail.contains("private networks")));
+}

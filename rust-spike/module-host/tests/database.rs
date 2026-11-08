@@ -279,25 +279,24 @@ fn b_module_database_role_and_schema_rollback() {
         b"ALTER TABLE app.sample_records_entries ADD COLUMN extra text".to_vec(),
     );
     // A real component returns failure from its health hook after schema migration.
-    let broken = include_str!("../sample/module.wat")
-        .replace("moss:module/kv@1.0.0", "moss:module/db@1.0.0")
-        .replace(
-            "i32.const 32 i32.const 0 i32.store",
-            "i32.const 32 i32.const 1 i32.store",
-        );
+    let broken = common::unhealthy_source().replace("moss:module/kv@1.0.0", "moss:module/db@1.0.0");
     files.insert("code/module.wasm".into(), wat::parse_str(broken).unwrap());
     let bytes = moss_module_host::archive::pack(&files).unwrap();
     let digest = moss_module_host::trust::digest(&bytes);
-    assert!(installer
+    let health_error = installer
         .import_file(
             &access,
             &source,
             &bytes,
             &common::Keys::sign(&keys.publisher, digest.as_bytes()),
             "sample",
-            true
+            true,
         )
-        .is_err());
+        .unwrap_err();
+    assert_eq!(
+        health_error.to_string(),
+        "The module could not finish this request"
+    );
     let rows: serde_json::Value = serde_json::from_str(
         &installer
             .call("sample.records", access.clone(), "route", &get)
@@ -343,9 +342,20 @@ fn b_module_database_role_and_schema_rollback() {
     )
     .unwrap();
     assert_eq!(rows[0]["title"], "Private row");
+    installer.remove(&access, "sample.records", None).unwrap();
+    assert!(catalog
+        .load()
+        .unwrap()
+        .retained
+        .contains_key("sample.records"));
     installer
         .remove(&access, "sample.records", Some("Sample counter"))
         .unwrap();
+    assert!(!catalog
+        .load()
+        .unwrap()
+        .retained
+        .contains_key("sample.records"));
     installer
         .import_file(
             &access,

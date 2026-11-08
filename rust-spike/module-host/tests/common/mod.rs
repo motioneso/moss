@@ -137,3 +137,10 @@ impl Keys {
         artifact
     }
 }
+
+pub fn unhealthy_source() -> String {
+    include_str!("../../sample/module.wat").replace(
+        "i32.const 32 i32.const 0 i32.store",
+        "i32.const 32 local.get $kind i32.load8_u i32.const 104 i32.eq i32.store",
+    )
+}

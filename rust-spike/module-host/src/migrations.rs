@@ -191,7 +191,7 @@ impl Lifecycle for PostgresLifecycle {
             let mut client=self.privileged().await?;let tx=client.transaction().await?;
             let row=tx.query_one("SELECT state FROM moss_modules.catalog WHERE id=true",&[]).await?;
             let state:crate::store::State=serde_json::from_value(row.get(0))?;
-            let module=state.installed.get(id).context("This module is not installed")?;
+            let module=state.installed.get(id).or_else(|| state.retained.get(id)).context("This module has no retained data")?;
             if !module.manifest.database.owned_tables.is_empty() {
                 tx.batch_execute(&format!("DROP TABLE {}",module.manifest.database.owned_tables.join(","))).await?;
             }

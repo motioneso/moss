@@ -10,6 +10,7 @@ import uuid
 
 source = Path(__file__).resolve().parents[1]
 controls = [
+    ("root/index/publisher signature verification", "src/trust.rs", r'pub fn verify\(key: &str, bytes: &\[u8\], signature: &str\) -> Result<\(\)> \{.*?\n\}', 'pub fn verify(_key: &str, _bytes: &[u8], _signature: &str) -> Result<()> { Ok(()) }', "registry", "forged_root_index_and_publisher_signatures_are_refused"),
     ("package hash", "src/archive.rs", r'trust::digest\(bytes\) == expected', "true", "boundaries", "tampered_package_is_refused"),
     ("file/socket/database import allowlist", "src/runtime.rs", r'ensure!\(\s*port.is_some_and[^;]+;', 'let _ = port;', "boundaries", "no_file_socket_or_database_escape_imports"),
     ("publisher prefix", "src/trust.rs", r'ensure!\(allowed, "The publisher cannot sign this module name"\);', 'let _ = allowed;', "registry", "publisher_cannot_escape_prefix_even_with_valid_signature"),

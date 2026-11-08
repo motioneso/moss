@@ -308,18 +308,39 @@ impl Manifest {
                     port: cap.port.clone(),
                     group: group.into(),
                     headline: headline.into(),
-                    details: cap.resources.iter().cloned().collect(),
+                    details: cap
+                        .resources
+                        .iter()
+                        .cloned()
+                        .chain(std::iter::once(format!(
+                            "Operations: {}",
+                            cap.operations
+                                .iter()
+                                .cloned()
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )))
+                        .chain(
+                            cap.allow_private
+                                .then(|| "Can contact devices on private networks".to_string()),
+                        )
+                        .collect(),
+                    operations: cap.operations.clone(),
+                    allow_private: cap.allow_private,
                 }
             })
             .collect()
     }
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Permission {
     pub port: String,
     pub group: String,
     pub headline: String,
     pub details: Vec<String>,
+    pub operations: BTreeSet<String>,
+    pub allow_private: bool,
 }
 pub fn validate_host(host: &str) -> Result<()> {
     let parsed = url::Url::parse(&format!("https://{host}"))?;
