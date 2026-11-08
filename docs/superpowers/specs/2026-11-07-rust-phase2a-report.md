@@ -3,9 +3,10 @@
 - Task: JS-38, card 185. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
 - Plan: `docs/superpowers/specs/2026-11-06-rust-port-plan.md`, Phase 2 and section 3.
 - Phase 2 part 2 (queue, modules, routing): `docs/superpowers/specs/2026-11-07-rust-phase2b-report.md`.
-- Code: `rust-spike/safety-core/`, `rust-spike/vault/`, `rust-spike/parity/cases/20-safety.json` and
+- Code: `rust-spike/safety-core/`, `rust-spike/access-context/`, `rust-spike/vault/`, the safety
+  cases in `rust-spike/parity/cases/20-safety-1.json` and `20-safety-2.json`, and
   `rust-spike/tools/`. `rust-spike/README.md` says how to run them.
-- Run on 2026-11-07 at commit `00cbc3573` with cargo 1.95.0, Node 22.22.2 and Postgres 17.11
+- Run on 2026-11-07 at commit `a23f2f811` with cargo 1.95.0, Node 22.22.2 and Postgres 17.11
   (pgvector image), each database run inside its own throwaway gate.
 
 ## Summary
@@ -14,12 +15,13 @@ The Rust server now signs people in, keeps each person's data private from every
 admins included, and keeps secrets out of replies, logs and job payloads. It does this the same
 way the TypeScript server does, and Tasks runs on it.
 
-- Both servers pass the same eight privacy and secrecy cases. All 76 side-by-side cases match.
+- Both servers pass the same nine privacy and secrecy cases, and all 77 side-by-side cases match.
+  Two of the nine test only the database rules both servers share.
 - Each of the ten protections was removed in turn, and its check caught the removal every time.
 - That meets this part's share of the Phase 2 kill gate.
 - One database rule lets an admin's blanket update change an AI key row that admin cannot see.
-  Both servers behave the same, and the app never sends such an update. A new migration should
-  close it.
+  The rule is live in the TypeScript app's database, but the app never sends such an update. A
+  new migration should close it. An issue for it is drafted and not yet filed.
 - The Rust server has no rate limits yet. TypeScript allows 10 sign-in, sign-up and password
   requests a minute from one address.
 - Phase 2b built its own workspace in `rust-spike/platform/`, the folder this crate used. This
@@ -35,16 +37,17 @@ way the TypeScript server does, and Tasks runs on it.
 | Admin routes           | List, approve, reactivate, deactivate (ends sessions), end sessions, promote, demote. Reject and delete check every guard, then answer 501                     | `safety-core/src/admin.rs`             |
 | Connector accounts     | List and add. The secret is sealed before it is stored, and replies only say whether one exists                                                                | `safety-core/src/views.rs`             |
 | Secret cipher          | The TypeScript AES-256-GCM envelope and keys. The secret type cannot be printed                                                                                | `safety-core/src/secret.rs`            |
-| Log redaction          | One log writer. Every line passes the TypeScript sanitizer's secret-name rules, and the request log drops query strings                                        | `safety-core/src/redact.rs`, `http.rs` |
+| Log redaction          | One log writer, start-up errors included. Every line passes the TypeScript sanitizer's secret-name rules, and the request log drops query strings              | `safety-core/src/redact.rs`, `http.rs` |
 | Job payloads           | Ids, fixed choices, small numbers, flags and hashed keys only. There is no free-text field                                                                     | `safety-core/src/payload.rs`           |
 | Module SQL refusal     | Refuses module SQL that touches another module's tables or the shared migrations folder                                                                        | `safety-core/src/module_sql.rs`        |
-| Vault                  | File access confined to one folder. Refuses `..`, links and malformed names                                                                                    | `vault/src/lib.rs`                     |
+| Vault                  | Opens only the acting user's folder, from their access context. Refuses `..`, links and malformed names                                                        | `vault/src/lib.rs`                     |
 | Rules check            | Five rules the compiler cannot see: file access, file serving, secret reads, privileged database addresses and prints                                          | `tools/check-safety-rules.sh`          |
 | Removal run            | Removes each protection in a copy and checks that a test fails                                                                                                 | `tools/remove-protections.sh`          |
 | Side-by-side additions | Cookies by name, field comparisons, absent fields, SQL probes as any role and actor, a log scan for planted secrets, recorded observations                     | `parity/`                              |
 
 - Tasks now uses this crate for sign-in, data access, errors and its one job.
-- Sizes: `safety-core` is 4,121 lines including 45 unit tests. `vault` is 390 lines with 4 tests.
+- Sizes: `safety-core` is 4,087 lines including 44 unit tests. `vault` is 385 lines with 4 tests.
+  `access-context` is 37 lines with 1 test.
 - The job queue in `safety-core/src/queue.rs` is a stand-in for Tasks' one job. Phase 2b's
   `jobs` crate should replace it.
 
@@ -54,11 +57,12 @@ All logs and reports are kept outside the repo in the task's scratch folder.
 
 ### Unit tests
 
-167 tests pass on `00cbc3573` with no warnings.
+167 tests pass on `a23f2f811` with no warnings.
 
 | Crate                                      | Tests |
 | ------------------------------------------ | ----- |
-| `safety-core`                              | 45    |
+| `safety-core`                              | 44    |
+| `access-context`                           | 1     |
 | `vault`                                    | 4     |
 | `tasks`                                    | 14    |
 | `parity`                                   | 9     |
@@ -67,7 +71,7 @@ All logs and reports are kept outside the repo in the task's scratch folder.
 
 ### Side-by-side run
 
-Gate log for run 4, commit `00cbc3573`, clean tree, `### FINAL rc=0`:
+Gate log for run 5, commit `a23f2f811`, clean tree, `### FINAL rc=0`:
 
 ```text
 PASS safety: member isolation, another member's task reads as missing
@@ -75,27 +79,33 @@ PASS safety: admin cannot read a member's private data
 PASS safety: the app and worker roles cannot read sign-in secrets
 PASS safety: account lifecycle, pending to approved to deactivated and back
 PASS safety: account guardrails hold for admins
+PASS safety: the bootstrap owner cannot be deactivated, demoted or deleted
 PASS safety: connectors are private and never return the secret
 PASS safety: AI credentials stay with their owner
      recorded {"step":"admin edits AI keys with no filter (observed, not asserted)","side":"TypeScript","output":{"rows":[],"affected":[1]}}
      recorded {"step":"admin edits AI keys with no filter (observed, not asserted)","side":"Rust","output":{"rows":[],"affected":[1]}}
 PASS safety: passwords never come back or reach a log
 PASS server logs hold no MOSS-SENTINEL- value
-PARITY 76/76 cases match
+PARITY 77/77 cases match
 ```
 
-| Case                              | What both servers showed                                                                                                                                                              |
+| Case                              | What both sides showed                                                                                                                                                                |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Member isolation                  | B gets 404 on A's task and lists only B's own. SQL run as B counts none of A's rows. A's task is unchanged                                                                            |
 | Admin cannot read private data    | The admin gets 404 on A's task and empty lists. SQL run as the admin counts none of A's tasks, connectors or AI keys                                                                  |
-| Roles cannot read sign-in secrets | The app and worker roles are refused on the sign-in tables. The sign-in role may query them, so the refusal comes from the role                                                       |
+| Roles cannot read sign-in secrets | Database rules only, with no web request. The app and worker roles are refused on the sign-in tables. The sign-in role may query them, so the refusal comes from the role             |
 | Account lifecycle                 | A pending member is held and approval lets them in. Deactivation ends the session, and a new sign-in is held. Reactivation does not revive the ended session. The audit trail matches |
 | Admin guardrails                  | Members get 403 and strangers 401. An admin cannot delete or deactivate their own account, and the last admin cannot step down. The audit trail matches                               |
+| Bootstrap owner                   | An admin gets 409 trying to deactivate, demote or delete the bootstrap owner, and the account is unchanged                                                                            |
 | Connectors                        | Replies carry no secret, other members and the admin see nothing, and the stored secret is a sealed envelope                                                                          |
-| AI credentials                    | SQL run as B, as the admin and as a job for B counts none of A's keys. Edits by B and the admin change nothing. A sees the key                                                        |
+| AI credentials                    | Database rules only, with no web request. SQL run as B, as the admin and as a job for B counts none of A's keys. Edits by B and the admin change nothing. A sees the key              |
 | Passwords                         | A wrong password and an unknown email both get 401, and the stored value is a hash. The planted password never reaches either server's log                                            |
 
-Each server's log is scanned after the last case for any `MOSS-SENTINEL-` value. None was found.
+- The roles case and the AI case send no web request. They run SQL straight against each side's
+  database copy, so they test the database rules both servers share, not Rust code. Rust has no
+  AI routes yet.
+- Each server's log is scanned after the last case for any `MOSS-SENTINEL-` value. None was found.
+- All 546 lines of the Rust server's log in run 5 are JSON from the one log writer.
 
 ### The first run found real differences
 
@@ -195,14 +205,20 @@ ok: 5 every log line goes through the redacting writer
   (`packages/ai/sql/0091_chat_model_override.sql`) allow any admin.
 - Postgres adds the select rule to an update only when the statement reads a column.
 - So an admin's update with no `WHERE` and no `RETURNING` reaches rows the select rule hides from
-  that admin. The recorded step shows it on both servers: `"affected":[1]`, the member's own key.
-  The same admin's filtered update changed 0 rows.
-- The app never sends such an update. All five updates in `packages/ai/src/repository.ts` filter
-  by a column, so the select rule applies.
+  that admin. A recorded step in the AI case runs one as the admin, straight against each side's
+  database: `"affected":[1]`, the member's own key. The same admin's filtered update changed 0
+  rows.
+- The app never sends such an update. All seven updates on these tables in
+  `packages/ai/src/repository.ts` (lines 572, 593, 822, 1065, 1070, 1152 and 1201) filter by a
+  column, so the select rule applies. So do its two deletes (lines 765 and 783).
+- The delete rule on `app.ai_configured_models`
+  (`packages/ai/sql/0163_ai_cli_model_reconcile_delete.sql`) has the same shape: any admin, any
+  row but the default. No case tests it.
 - Changing a hidden row's `base_url` would send that key to another server. This is a database
   rule shared by both servers, not a Rust difference.
-- Fix: a new migration whose update rules add the select rule's owner-or-admin-created condition.
-  Never edit 0091.
+- Fix: a new migration whose update and delete rules add the select rule's owner-or-admin-created
+  condition. Never edit 0091 or 0163.
+- An issue is drafted but not yet filed, because filing one was outside this task's permissions.
 
 ## Differences kept on purpose or not yet ported
 
@@ -257,8 +273,11 @@ ok: 5 every log line goes through the redacting writer
    - Move Tasks' job onto 2b's `jobs` crate and drop `queue.rs`.
    - Let the module SQL refusal read table ownership from 2b's registry.
    - Use one Cargo workspace once the product binary starts.
-2. Add the rate limits before the Rust server listens beyond the machine it runs on.
-3. Open a task for the AI key update rule migration. It affects the TypeScript app today.
+2. Add the rate limits before the Rust server listens beyond the machine it runs on. At the same
+   time, end a refused request's transaction and return its connection to the pool. Today a 403
+   or 404 after the data context opens throws the connection away.
+3. File the drafted issue for the AI key rule migration, covering the update rules and the
+   configured-models delete rule. It affects the TypeScript app today.
 4. Give the trusted-origins list a way to be set in the app, then test sign-in from a phone.
 5. Port "remember me", the session IP address, session-ended notices and job clean-up when the
    screens that use them move to Rust.
