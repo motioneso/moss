@@ -308,3 +308,15 @@ fn authenticated_compile_cache_rebuilds_tampered_native_bytes() {
         "Unauthenticated native code must be rebuilt"
     );
 }
+
+#[test]
+fn nested_app_map_fields_are_checked_instead_of_silently_dropped() {
+    let mut m = common::manifest("1.0.0");
+    m.validate(&"0.1.0".parse().unwrap()).unwrap();
+    m.navigation =
+        vec![json!({"id":"counter","label":"Counter","path":"/counter","newPermission":true})];
+    assert!(m.validate(&"0.1.0".parse().unwrap()).is_err());
+    m.navigation.clear();
+    m.features[0]["errors"][0]["newLimit"] = json!(true);
+    assert!(m.validate(&"0.1.0".parse().unwrap()).is_err());
+}

@@ -20,7 +20,7 @@ pub fn manifest(version: &str) -> Manifest {
         "schemaVersion":2,"id":"sample.counter","name":"Sample counter","description":"Exercises the real module host","publisher":"Sample publisher","version":version,"requiresMoss":">=0.1.0, <1.0.0","abi":"moss:module@1",
         "capabilities":[{"port":"kv","operations":["get","set"],"resources":["counter"]}],
         "icons":["icons/counter.svg"],"accounts":{"supportsUserDisable":true,"defaultEnabled":true},
-        "features":[{"id":"sample.counter","description":"Saves a value for the signed-in account through the host's key-value port","errors":[{"code":"module-refused","message":"The host refused this module request","remediations":["Check the module permissions and registry trust"]}]}]
+        "features":[{"remediations":[{"id":"check-permissions","description":"Check the module permissions and registry trust","path":"/settings/modules"}],"id":"sample.counter","description":"Saves a value for the signed-in account through the host's key-value port","errors":[{"code":"module-refused","class":"permission","description":"The host refused this module request","remediationRef":"check-permissions"}]}]
     })).unwrap()
 }
 pub fn wasm() -> Vec<u8> {

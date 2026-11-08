@@ -34,3 +34,5 @@ mod compiled;
 pub mod registry_manager;
 
 mod backfills;
+
+pub mod metadata;

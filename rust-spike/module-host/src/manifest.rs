@@ -202,6 +202,7 @@ pub fn relative_path(path: &str) -> bool {
 }
 impl Manifest {
     pub fn validate(&self, moss: &Version) -> Result<()> {
+        crate::metadata::validate(self)?;
         ensure!(
             self.schema_version == 2,
             "This package uses an unsupported manifest version"
@@ -264,6 +265,12 @@ impl Manifest {
                 .iter()
                 .all(|p| p.starts_with("sql/") && p.ends_with(".sql")),
             "Migrations must live in the sql folder"
+        );
+        ensure!(
+            self.database.ledger != Ledger::CoreLegacy
+                || (!self.id.contains('.')
+                    && crate::legacy::has_ledger(&self.id, &Ledger::CoreLegacy)),
+            "Only compiled first-party modules can use the historical core ledger"
         );
         let mut last = 0_u64;
         for path in &self.database.migrations {
