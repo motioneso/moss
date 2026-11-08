@@ -6,8 +6,9 @@
 - Code: `rust-spike/safety-core/`, `rust-spike/access-context/`, `rust-spike/vault/`, the safety
   cases in `rust-spike/parity/cases/20-safety-1.json` and `20-safety-2.json`, and
   `rust-spike/tools/`. `rust-spike/README.md` says how to run them.
-- Run on 2026-11-07 at commit `a23f2f811` with cargo 1.95.0, Node 22.22.2 and Postgres 17.11
-  (pgvector image), each database run inside its own throwaway gate.
+- Run on 2026-11-07 at commit `f7a0055ad` with cargo 1.95.0, Node 22.22.2 and Postgres 17.11
+  (pgvector image), each database run inside its own throwaway gate. Later commits change only
+  this report.
 
 ## Summary
 
@@ -17,7 +18,7 @@ way the TypeScript server does, and Tasks runs on it.
 
 - Both servers pass the same nine privacy and secrecy cases, and all 77 side-by-side cases match.
   Two of the nine test only the database rules both servers share.
-- Each of the ten protections was removed in turn, and its check caught the removal every time.
+- Each of the 17 protections was removed in turn, and its check caught the removal every time.
 - That meets this part's share of the Phase 2 kill gate.
 - One database rule lets an admin's blanket update change an AI key row that admin cannot see.
   The rule is live in the TypeScript app's database, but the app never sends such an update. A
@@ -57,7 +58,7 @@ All logs and reports are kept outside the repo in the task's scratch folder.
 
 ### Unit tests
 
-167 tests pass on `a23f2f811` with no warnings.
+167 tests pass on `f7a0055ad` with no warnings.
 
 | Crate                                      | Tests |
 | ------------------------------------------ | ----- |
@@ -71,7 +72,7 @@ All logs and reports are kept outside the repo in the task's scratch folder.
 
 ### Side-by-side run
 
-Gate log for run 5, commit `a23f2f811`, clean tree, `### FINAL rc=0`:
+Gate log for run 6, commit `f7a0055ad`, clean tree, `### FINAL rc=0`:
 
 ```text
 PASS safety: member isolation, another member's task reads as missing
@@ -105,7 +106,7 @@ PARITY 77/77 cases match
   database copy, so they test the database rules both servers share, not Rust code. Rust has no
   AI routes yet.
 - Each server's log is scanned after the last case for any `MOSS-SENTINEL-` value. None was found.
-- All 546 lines of the Rust server's log in run 5 are JSON from the one log writer.
+- All 546 lines of the Rust server's log in run 6 are JSON from the one log writer.
 
 ### The first run found real differences
 
@@ -123,25 +124,35 @@ Run 1 (`1a260ce3f`) matched 71 of 76 cases. The rest were real differences or wr
 ### Removal run
 
 Each removal edits a fresh copy of the code at the commit, then runs one check that must fail.
-The run used commit `00cbc3573` on a clean tree and ended `### FINAL rc=0`. All ten were caught.
+The run used commit `f7a0055ad` on a clean tree and ended `### FINAL rc=0`. All 17 were caught.
 
-| Protection removed                                                                                            | What failed                                                                | Exit |
-| ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---- |
-| Module SQL refusal treats every table as the module's own                                                     | 2 module SQL unit tests                                                    | 101  |
-| The secret type made printable with `derive(Debug)`                                                           | The build, through a compile-time check                                    | 101  |
-| Log redaction passes lines and JSON through unchanged                                                         | 2 redaction unit tests                                                     | 101  |
-| The vault stops refusing `..`                                                                                 | The vault's climb-out test                                                 | 101  |
-| The origin check dropped from sign-up, sign-in and sign-out                                                   | The sign-in route test                                                     | 101  |
-| Code added that reads a file, serves a folder, reads a secret and the privileged database address, and prints | All five rules                                                             | 1    |
-| The start-up role guard switched off                                                                          | The guard script's own copy starts on a role that skips row-level security | 0    |
-| The connector list returns the sealed secret                                                                  | The connectors case                                                        | 1    |
-| Requests run on the privileged connection with the role guard off                                             | The admin case                                                             | 1    |
-| Sign-in prints the request body                                                                               | The log scan                                                               | 1    |
+| Protection removed                                                                                                              | What failed                                                                            | Exit |
+| ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ---- |
+| Module SQL refusal treats every table as the module's own                                                                       | 2 module SQL unit tests                                                                | 101  |
+| The secret type made printable with `derive(Debug)`                                                                             | The build, through a compile-time check                                                | 101  |
+| Log redaction passes lines and JSON through unchanged                                                                           | 2 redaction unit tests                                                                 | 101  |
+| The vault stops refusing `..`                                                                                                   | The vault's climb-out test                                                             | 101  |
+| The origin check dropped from sign-up, sign-in and sign-out                                                                     | The sign-in route test                                                                 | 101  |
+| Code added that reads a file, serves a folder and a single file, reads a secret and the privileged database address, and prints | All five rules                                                                         | 1    |
+| The start-up role guard switched off                                                                                            | The guard script's own copy starts on a role that skips row-level security             | 0    |
+| The connector list returns the sealed secret                                                                                    | The connectors case                                                                    | 1    |
+| Requests run on the privileged connection with the role guard off                                                               | The admin case                                                                         | 1    |
+| Sign-in prints the request body                                                                                                 | The log scan                                                                           | 1    |
+| The data context acts as member A for every request                                                                             | The member isolation case. B reads and edits A's task                                  | 1    |
+| The account check lets pending and deactivated members in                                                                       | The lifecycle case. Both get 200 where TypeScript holds them with 403                  | 1    |
+| Deactivation leaves the member's sessions open                                                                                  | The lifecycle case. The old session works again after reactivation                     | 1    |
+| Admin routes skip the admin check                                                                                               | The guardrails case. A member and a former admin list every user                       | 1    |
+| An admin may deactivate their own account                                                                                       | The guardrails case. The last-admin guard refuses with 409 where TypeScript gives 422  | 1    |
+| The last admin may step down                                                                                                    | The guardrails case. The last admin's demotion goes through                            | 1    |
+| The bootstrap owner's three guards removed                                                                                      | The bootstrap owner case. Deactivate and demote go through, and delete reaches the 501 | 1    |
 
 - The role guard script carries its own removal, so its pass (exit 0) is the caught result. In
   eight steps it shows the real build refusing each wrong role and the copy without the guard
   starting.
 - The planted password reached the Rust log three times, and the scan failed the run.
+- Without the self-deactivation guard, the last-admin guard still refused the admin, but with a
+  different answer, and the case caught that. With a second admin the self-deactivation would go
+  through. No case sets that up.
 
 Failing output, from the gate log and each removal's own log, with long lines cut:
 
@@ -149,7 +160,7 @@ Failing output, from the gate log and each removal's own log, with long lines cu
 module-sql-owner: caught (exit 101)
   ---- module_sql::tests::accepts_every_shipped_module_migration stdout ----
   ---- module_sql::tests::refuses_sql_that_reaches_past_the_module stdout ----
-  test result: FAILED. 7 passed; 2 failed; 0 ignored; 0 measured; 36 filtered out; finished in 0.03s
+  test result: FAILED. 7 passed; 2 failed; 0 ignored; 0 measured; 35 filtered out; finished in 0.03s
 secret-debug: caught (exit 101)
   error[E0283]: type annotations needed
     --> safety-core/src/secret.rs:63:22
@@ -158,13 +169,13 @@ secret-debug: caught (exit 101)
 redaction: caught (exit 101)
   ---- redact::tests::json_values_under_secret_names_never_survive stdout ----
   ---- redact::tests::free_text_credentials_never_survive stdout ----
-  test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 42 filtered out; finished in 0.00s
+  test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 41 filtered out; finished in 0.00s
 vault-dotdot: caught (exit 101)
   ---- tests::refuses_paths_that_climb_out stdout ----
   test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 origin-check: caught (exit 101)
   ---- origin::tests::the_sign_in_routes_run_both_checks stdout ----
-  test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 37 filtered out; finished in 0.00s
+  test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 36 filtered out; finished in 0.00s
 static-rules: caught (exit 1)
   BROKEN: 1 file access goes through the vault crate
   BROKEN: 2 only the start-up code serves files
@@ -187,6 +198,33 @@ admin-bypass: caught (exit 1)
 password-logged: caught (exit 1)
   FAIL server logs hold no MOSS-SENTINEL- value
        Rust server log: 3 lines hold MOSS-SENTINEL-
+wrong-actor: caught (exit 1)
+  FAIL safety: member isolation, another member's task reads as missing
+       step B reads A's task: /status: TypeScript 404 vs Rust 200
+       step B edits A's task: /status: TypeScript 404 vs Rust 200
+account-status: caught (exit 1)
+  FAIL safety: account lifecycle, pending to approved to deactivated and back
+       step pending member is held: /status: TypeScript 403 vs Rust 200
+       step deactivated member is held: /status: TypeScript 403 vs Rust 200
+session-revoke: caught (exit 1)
+  FAIL safety: account lifecycle, pending to approved to deactivated and back
+       step deactivation ended the session: /status: TypeScript 401 vs Rust 403
+       step the ended session stays ended: /status: TypeScript 401 vs Rust 200
+admin-check: caught (exit 1)
+  FAIL safety: account guardrails hold for admins
+       step member lists users: /status: TypeScript 403 vs Rust 200
+       step former admin lists users: /status: TypeScript 403 vs Rust 200
+self-deactivate: caught (exit 1)
+  FAIL safety: account guardrails hold for admins
+       step admin deactivates self: /status: TypeScript 422 vs Rust 409
+last-admin: caught (exit 1)
+  FAIL safety: account guardrails hold for admins
+       step last admin demotes self: /status: TypeScript 409 vs Rust 200
+bootstrap-owner: caught (exit 1)
+  FAIL safety: the bootstrap owner cannot be deactivated, demoted or deleted
+       step deactivate the owner: /status: TypeScript 409 vs Rust 200
+       step demote the owner: /status: TypeScript 409 vs Rust 200
+       step delete the owner: /status: TypeScript 409 vs Rust 501
 ```
 
 ### Rules check
