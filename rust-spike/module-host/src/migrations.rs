@@ -156,9 +156,9 @@ impl Lifecycle for PostgresLifecycle {
                 let path:String=row.get(0);let checksum:String=row.get(1);
                 ensure!(new.files.contains_key(&path)&&crate::legacy::checksum(new,&path)?==checksum,"An applied migration was changed or removed");
             }
-            let mut highest=0_u64;
+            let mut highest=(0_u64, "");
             for path in &new.manifest.database.migrations {
-                if crate::legacy::applied(&tx,new,path).await?.is_some(){highest=highest.max(crate::legacy::version(path)?.parse()?);}
+                if crate::legacy::applied(&tx,new,path).await?.is_some(){highest=highest.max(crate::legacy::order(path)?);}
             }
             for path in &new.manifest.database.migrations {
                 let checksum=crate::legacy::checksum(new,path)?;
@@ -167,7 +167,7 @@ impl Lifecycle for PostgresLifecycle {
                     tx.execute("INSERT INTO moss_modules.migrations(module_id,path,checksum) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",&[id,path,&checksum]).await?;
                     continue;
                 }
-                ensure!(crate::legacy::version(path)?.parse::<u64>()?>highest,"A new migration must follow every applied migration");
+                ensure!(crate::legacy::order(path)?>highest,"A new migration must follow every applied migration");
                 let legacy=crate::legacy::entry(id,path).is_some_and(|f| f.raw==crate::trust::digest(&new.files[path]));
                 let role=if legacy {"jarvis_migration_owner"}else{&owner};
                 tx.batch_execute(&format!("SET LOCAL ROLE {role}")).await?;

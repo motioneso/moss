@@ -273,9 +273,16 @@ impl Manifest {
                     && crate::legacy::has_ledger(&self.id, &Ledger::CoreLegacy)),
             "Only compiled first-party modules can use the historical core ledger"
         );
-        let mut last = 0_u64;
+        let mut last = (0_u64, "");
         for path in &self.database.migrations {
-            let number = crate::legacy::version(path)?.parse::<u64>()?;
+            let version = crate::legacy::version(path)?;
+            ensure!(
+                version.bytes().all(|b| b.is_ascii_digit())
+                    || crate::legacy::entry(&self.id, path)
+                        .is_some_and(|f| f.ledger == self.database.ledger),
+                "Only frozen migrations may retain a historical suffix"
+            );
+            let number = crate::legacy::order(path)?;
             ensure!(
                 number > last,
                 "Migrations must be unique and in forward numeric order"
@@ -314,8 +321,10 @@ impl Manifest {
                 share_key,
             } = access
             {
+                let legacy = self.database.ledger == Ledger::CoreLegacy
+                    && crate::legacy::sharing(&self.id, table, resource_type, share_key);
                 ensure!(
-                    identifier(resource_type)
+                    (identifier(resource_type) || legacy)
                         && !share_key.is_empty()
                         && share_key.len() <= 63
                         && share_key
@@ -324,7 +333,8 @@ impl Manifest {
                     "Invalid sharing declaration"
                 );
                 ensure!(
-                    resource_type == &self.id
+                    legacy
+                        || resource_type == &self.id
                         || resource_type.starts_with(&(self.id.clone() + ".")),
                     "New shared resource types must belong to this module"
                 );
