@@ -2,7 +2,8 @@
 
 The Rust checkpoint contains the People core, SDK-backed repository, canonical-note service,
 two job handlers, route envelopes and a packaged Leptos Settings pane. The installed-package
-gate exercises registry installation and dispatch. The authenticated Rust application still
+gate adds registry installation and dispatch assertions. Installation/reload passed, but
+the full replay and consumer checks remain unverified after the final folder-setting fix. The authenticated Rust application still
 needs to compose that package into its real Settings and chat flows.
 The [delivery report](../../docs/superpowers/specs/2026-11-08-rust-phase5-people-report.md)
 records each delivered slice and the exact remaining continuation work.
@@ -167,9 +168,11 @@ scripts/run-gate.sh wait --follow
 
 The gate pins both artifacts, signs a temporary registry, downloads and installs the actual
 People package with `PostgresLifecycle` and its unchanged legacy SQL, then reopens the
-installer. A separate installed consumer calls all four public lookup APIs. The provider
+installer. A separate installed consumer fixture is set up to call all four public lookup APIs;
+that portion has not completed successfully. The provider
 package and unavailable AI service are explicit fixtures; no real source delivery is claimed.
-The gate checks the Settings HTML asset, not a rendered or authenticated installed screen.
+The gate contains Settings HTML asset assertions, not a rendered or authenticated installed
+screen check. The final package replay still needs a green run.
 
 The legacy `/people/notes-directories` endpoint browses relative to the selected folder;
 the additive `/people/note-folders` endpoint remains the absolute-root chooser. Empty and null folder

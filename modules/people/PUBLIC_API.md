@@ -55,8 +55,9 @@ to the ordinary identity/link response.
 The current `repository` module is an internal persistence checkpoint. The compiled guest
 implements the `findPeopleByNames`, `resolve`, `getPerson` and
 `listEmailIdentityValues` API envelopes above, but
-the installed-package gate routes all four through an installed consumer fixture. Real
-application composition remains open. It also covers person projections and composite
+the installed-package gate has assertions for routing all four through an installed consumer
+fixture. Those assertions have not completed successfully; final installed replay and real
+application composition remain open. It also covers person projections and composite
 indexing state internally. Indexing-state
 rows currently retain database field names internally; the eventual service must preserve
 the legacy external response shape. Do not use this internal module as a consumer interface.
