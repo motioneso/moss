@@ -603,3 +603,70 @@ screens and settings, signed registry installation, speed-budget measurements,
 full differential green, and live Rust-shell HTTPS UI proof from a second
 physical device remain unfinished. A passing component test or HTTP fixture is
 not that UI/device evidence. The manifest and README continue to say so.
+
+## Tasks part 5 checkpoint (JS-59, Card 526)
+
+This is a **partial screen checkpoint**, saved under the brief's instruction to
+stop at a clean point rather than require another context relay. It does not
+complete Phase 5. The existing HTTP/tool/job gaps above remain acceptance work.
+No original migrations, shared host source, People internals, Workshop or Food
+code are changed.
+
+### Package screens and data preservation
+
+The actual package now includes a `/tasks` screen and navigation/app-map metadata.
+Shared Leptos kit components render the markup. External JavaScript uses the
+canonical public frame bridge, and the CSS adds responsive layout around shared
+controls and tokens. The controller covers priority/list views; list, status,
+text and tag filtering; creating and editing tasks; completion; list creation
+and renaming; subtasks; tag assignment/removal; comments and activity; and the
+saved default view. Suggestion buttons use existing status transitions, but
+suggestion feedback and policy parity remain unfinished.
+
+Editing a title preserves the original date-time, status and recurrence fields
+when their controls have not changed. The screen identifies its dates as UTC;
+this does not implement the missing public actor-timezone contract. The editor
+keeps drafts after a failed request and asks before discarding unsaved task
+changes. Assistant chat is an affordance through the bridge, not evidence of
+installed assistant integration. Settings, Focus, advanced search, list deletion,
+People links, drag ordering and the rest of legacy screen parity remain absent.
+
+Whole-number recurrence intervals now produce integer JSON tokens, matching
+JavaScript's serialized response. The exact regression failed before the change
+(`as_u64()` returned `None` for interval two), then passed with the complete
+native guest tests. The four controller-model checks cover unchanged timestamps,
+status and repeat rules, explicit clearing, filtering and quadrant boundaries.
+
+### Installed UI check and limits
+
+`modules/tasks/tools/ui-gate.sh` runs only through `scripts/run-gate.sh`. It builds
+the actual component, signs an ephemeral registry/index/package, and uses the
+real module host's selection, download and install APIs. Its HTTPS server reuses
+the real Rust network setup/sign-in/trusted-origin boundary. A small fixture
+frame hosts the installed screen; **this is not the Phase 4 application shell**.
+The fixture uses disposable data, a generated certificate and a claimed loopback
+port. It does not publish a registry or change machine certificate trust.
+
+Guest native tests, Wasm builds and host-tool checks use separate target folders.
+`build-component.sh` now accepts `TASKS_GUEST_TARGET_DIR` independently of the
+host's `CARGO_TARGET_DIR`, preventing target-feature leakage between them. The
+approved, already-provisioned toolchain and generator are reused from scratch;
+no global tool is installed. Initial gate launches stopped before tests because
+the selected toolchain lacked the Wasm target; corrected runs select the existing
+provisioned scratch toolchain.
+
+### Acceptance still outstanding
+
+The nine missing endpoints, nineteen remaining tools, both typed queues and
+schedule reconciliation are unchanged from part 4. They still need actor-scoped
+privacy removal controls and differential cases. Public host contracts for
+actor timezone and transactional list-deletion locking are still required;
+do not substitute guest SQL or a race-prone pre-check. Assistant policies,
+feedback, background authorizers, People/public API links, attribution inventory,
+large-account/message-size budgets and full legacy screen/settings parity remain.
+
+The authenticated Phase 4 shell integration and a real second physical device
+over LAN or tailnet HTTPS remain unproved. A loopback browser, phone-sized
+viewport, signed-package fixture or green unit test must not be presented as
+that evidence. Full differential green is still required before declaring the
+Tasks replacement complete.
