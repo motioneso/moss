@@ -9,7 +9,7 @@ use moss_module_host::{
     transactional_database::TransactionalDatabasePorts,
 };
 use moss_module_sdk::query::{Filter, Query};
-use safety_core::db::{Database, RuntimeRole};
+use safety_core::db::{DataContext, Database, RuntimeRole};
 use serde_json::{json, Value};
 use std::sync::Arc;
 use tokio_postgres::NoTls;
@@ -205,6 +205,42 @@ fn real_transactions_preserve_composite_keys_privacy_and_atomicity() {
     };
     assert_eq!(select_as(a).len(), 1);
     assert!(select_as(b).is_empty());
+    // A saturated pool must honor a module deadline without borrowing another actor's
+    // transaction. Cancellation must not return a partially initialized context to the pool.
+    rt.block_on(async {
+        let one = Database::connect(&std::env::var("JS43_APP_URL").unwrap(), 1, RuntimeRole::App)
+            .await
+            .unwrap();
+        let held = DataContext::open(&one, &AccessContext::new(a, "held"))
+            .await
+            .unwrap();
+        assert!(DataContext::open_bounded(
+            &one,
+            &AccessContext::new(b, "deadline"),
+            std::time::Duration::from_millis(20)
+        )
+        .await
+        .is_err());
+        held.commit().await.unwrap();
+        let next = DataContext::open_bounded(
+            &one,
+            &AccessContext::new(b, "next"),
+            std::time::Duration::from_secs(5),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            next.db()
+                .query_one("SELECT app.current_actor_user_id()", &[])
+                .await
+                .unwrap()
+                .get::<_, uuid::Uuid>(0),
+            b
+        );
+        next.commit_bounded(std::time::Duration::from_secs(5))
+            .await
+            .unwrap();
+    });
     assert!(select_as(admin).is_empty());
     for other in [b, admin] {
         run(

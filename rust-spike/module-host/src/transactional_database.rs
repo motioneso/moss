@@ -49,7 +49,11 @@ impl TransactionalDatabasePorts {
         }
         let context = self
             .runtime
-            .block_on(DataContext::open(&self.database, scope.access()))
+            .block_on(DataContext::open_bounded(
+                &self.database,
+                scope.access(),
+                scope.remaining(),
+            ))
             .map_err(|_| anyhow::anyhow!("Could not open the module data context"))?;
         let session = Arc::new(Mutex::new(Session {
             context,
@@ -141,9 +145,14 @@ impl Ports for TransactionalDatabasePorts {
             .lock()
             .map_err(|_| anyhow::anyhow!("Database invocation busy"))?;
         ensure!(!session.failed, "This database invocation already failed");
-        let result = self
-            .runtime
-            .block_on(self.query(&session.context, scope, request));
+        let result = self.runtime.block_on(async {
+            tokio::time::timeout(
+                scope.remaining(),
+                self.query(&session.context, scope, request),
+            )
+            .await
+            .context("Module database deadline exceeded")?
+        });
         session.failed |= result.is_err();
         result
     }
@@ -161,11 +170,18 @@ impl Ports for TransactionalDatabasePorts {
                     .map_err(|_| anyhow::anyhow!("Database invocation poisoned"))?;
                 if success && !session.failed {
                     self.runtime
-                        .block_on(session.context.commit())
+                        .block_on(session.context.commit_bounded(scope.remaining()))
                         .map_err(|_| anyhow::anyhow!("Could not commit the module data context"))?;
                 } else {
-                    self.runtime
-                        .block_on(session.context.db().batch_execute("ROLLBACK"))?;
+                    self.runtime.block_on(async {
+                        tokio::time::timeout(
+                            scope.remaining(),
+                            session.context.db().batch_execute("ROLLBACK"),
+                        )
+                        .await
+                        .context("Module rollback deadline exceeded")??;
+                        Ok::<_, anyhow::Error>(())
+                    })?;
                     ensure!(!success, "The module caught a failed database operation; its changes were rolled back");
                 }
             }
