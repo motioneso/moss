@@ -150,3 +150,98 @@ test("a newly loaded document cannot invoke routes on the old frame bridge", asy
   assert.equal(s.replies.length, 2);
   s.dispose();
 });
+
+test("fresh verified-screen token accepts queued initial bootstrap after load, never a replacement", async () => {
+  const { openModuleFrame } = await import("./host-bridge.mjs");
+  let receive;
+  const token = "0123456789abcdef0123456789abcdef";
+  const frame = new EventTarget();
+  frame.contentWindow = {};
+  frame.style = {};
+  let calls = 0;
+  const hostWindow = {
+    location: new URL("https://moss.example.test/calendar"),
+    crypto: { randomUUID: () => token },
+    addEventListener(_, fn) {
+      receive = fn;
+    },
+    removeEventListener() {}
+  };
+  const callbacks = {
+    hostWindow,
+    request: () => {
+      calls++;
+      return null;
+    },
+    theme: () => null,
+    navigate: () => null,
+    chat: () => null
+  };
+  assert.throws(() =>
+    openModuleFrame(
+      frame,
+      "calendar",
+      "https://evil.test/module-ui/calendar/x/ui/index.html",
+      callbacks
+    )
+  );
+  openModuleFrame(frame, "calendar", "/module-ui/calendar/digest/ui/index.html", callbacks);
+  assert.equal(new URL(frame.src).hash, "#moss-bootstrap=" + token);
+  frame.dispatchEvent(new Event("load"));
+  const port = { postMessage() {}, start() {}, close() {} };
+  const connect = (value, candidate = port) =>
+    receive({
+      source: frame.contentWindow,
+      origin: "null",
+      data: { channel: "moss.module.v1", type: "connect", bootstrapToken: value },
+      ports: [candidate]
+    });
+  connect(undefined);
+  connect("wrong");
+  assert.equal(port.onmessage, undefined);
+  connect(token);
+  assert.equal(typeof port.onmessage, "function");
+  const send = () =>
+    port.onmessage({
+      data: {
+        channel: "moss.module.v1",
+        id: "one",
+        type: "request",
+        method: "GET",
+        path: "/events"
+      },
+      ports: [{ postMessage() {}, close() {} }]
+    });
+  await send();
+  assert.equal(calls, 1);
+  const replacement = {
+    start() {
+      throw new Error("replacement bootstrap accepted");
+    },
+    close() {}
+  };
+  connect(token, replacement);
+  frame.dispatchEvent(new Event("load"));
+  await send();
+  assert.equal(calls, 1);
+  connect(token, replacement);
+  assert.equal(replacement.onmessage, undefined);
+});
+
+test("guest echoes only its initial document fragment token", () => {
+  let message, transport;
+  const client = moduleClient({
+    guestWindow: {
+      location: { hash: "#moss-bootstrap=0123456789abcdef0123456789abcdef" },
+      parent: {
+        postMessage(value, _, ports) {
+          message = value;
+          transport = ports[0];
+        }
+      }
+    }
+  });
+  assert.equal(message.bootstrapToken, "0123456789abcdef0123456789abcdef");
+  client.dispose();
+  transport.close();
+});

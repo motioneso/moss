@@ -16,8 +16,9 @@ loading, retry and retained-data messages. Its model uses the account's timezone
 exclusive all-day ends, midnight clipping and clock format. Event details disclose
 read-only Outlook events, unconfirmed events, RSVP state and Moss-held blocks.
 
-The screen refreshes through the host bridge every thirty seconds. A refresh retains
-its vertical scroll position. Display choices use account-scoped package KV;
+The screen refreshes through the host bridge every thirty seconds. Unchanged events
+do not remount the body or dialog. Viewport scroll and keyed keyboard focus are
+restored when changed events replace the body; the outer scroll container stays mounted. Display choices use account-scoped package KV;
 invalid fields cannot change automation settings. Automation settings remain read-only
 and say so visibly. The screen does not offer provider or execution controls.
 
@@ -35,6 +36,15 @@ The stylesheet builder reads the canonical startup reset as well as the existing
 canonical tokens, primitives and fonts. Module layout reads the authored Calendar
 CSS; generated assets stay outside the repository.
 
+Real browser tracing reproduced a startup race: the initial document's queued
+`postMessage` arrived after its frame load event, so the old bridge revoked it.
+The shared `openModuleFrame` helper now pins the installer's verified same-origin
+screen with a fresh document nonce. Only that nonce can open the initial document
+port, even if its message arrives after the first load. Missing/wrong nonces and
+replacement ports are rejected, and any later load revokes the connection. Legacy
+`connectModuleFrame` behavior stays fail-closed. The nonce never authenticates an
+account; authenticated requests still belong to the parent. It must never be reused.
+
 The opaque-frame CSP permits inline style attributes for event geometry while
 retaining its existing script policy and sandbox. A focused host test asserts that
 script sources do not gain inline script permission. This is a shared host change,
@@ -51,7 +61,13 @@ and overlap packing against the actual production TypeScript Calendar model over
 timezones, including DST, leap dates, all-day ranges, midnight ends and invalid dates.
 Native rendering tests check escaping, read-only details and retained-data retry.
 Installed-package tests exercise account-private view persistence and rejection of
-an injected automation-setting field without altering the saved view.
+an injected automation-setting field without altering the saved view. They also
+assert the production twenty-four-hour default when no locale is saved. All four
+read-only preference/reference resources reject generic KV set requests under a
+scope captured from an actual installed invocation. The same assertions fail when
+only those set calls bypass Calendar's wrapper for the real downstream KV service,
+then pass through the wrapper; exact rejection messages prevent unrelated failures
+from satisfying the assertions.
 
 The disposable browser fixture downloads and installs a genuinely signed local
 registry package, uses the real database and guest dispatch, serves verified package

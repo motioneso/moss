@@ -52,3 +52,11 @@ fn all_day_details_keep_calendar_dates_and_remove_the_exclusive_end() {
     assert!(!output.contains("Nov 7, 2026"));
     assert!(!output.contains("Nov 11, 2026"));
 }
+
+#[test]
+fn unsaved_locale_uses_the_production_twenty_four_hour_clock() {
+    assert!(!moss_calendar_ui::model::twelve(None));
+    assert!(!moss_calendar_ui::model::twelve(Some("24")));
+    assert!(moss_calendar_ui::model::twelve(Some("12")));
+    assert_eq!(moss_calendar_ui::model::time(13 * 60 + 30, false), "13:30");
+}

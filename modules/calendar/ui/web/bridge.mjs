@@ -14,6 +14,29 @@ globalThis.calendarBridge = {
   navigate(path) {
     return client.navigate(path);
   },
+  preserve() {
+    const active = document.activeElement;
+    const body = document.querySelector(".cal-body");
+    return { active, key: active?.dataset.calFocus, left: body?.scrollLeft, top: body?.scrollTop };
+  },
+  restore(saved) {
+    requestAnimationFrame(() => {
+      const body = document.querySelector(".cal-body");
+      if (body && saved.left !== undefined) {
+        body.scrollLeft = saved.left;
+        body.scrollTop = saved.top;
+      }
+      if (
+        saved.key &&
+        (document.activeElement === document.body || !saved.active?.isConnected) &&
+        !document.querySelector("dialog[open]")
+      ) {
+        [...document.querySelectorAll("[data-cal-focus]")]
+          .find((el) => el.dataset.calFocus === saved.key)
+          ?.focus({ preventScroll: true });
+      }
+    });
+  },
   watch(callback) {
     clearInterval(interval);
     interval = setInterval(callback, 30000);

@@ -5,11 +5,12 @@ import {
   buildWeekDays,
   dayKey,
   dtoToViewEvent,
+  fmtTime,
   groupEventsByDay,
   navigateCursor,
   packDay
 } from "../../../apps/web/src/calendar/calendar-model.js";
-import type { CalendarEventDto } from "@moss/shared";
+import { DEFAULT_LOCALE_SETTINGS, type CalendarEventDto } from "@moss/shared";
 
 const binary = process.env.CALENDAR_UI_ORACLE;
 if (!binary) throw new Error("Build Calendar UI model first");
@@ -67,6 +68,9 @@ function event(id: string, start: string, end: string, allDay = false): Calendar
 }
 const cases = [
   [event("all", "2026-11-08T00:00:00Z", "2026-11-11T00:00:00Z", true)],
+  [event("LA midnight", "2026-11-08T22:30:00-08:00", "2026-11-09T00:00:00-08:00")],
+  [event("Sydney midnight", "2026-11-08T22:30:00+11:00", "2026-11-09T00:00:00+11:00")],
+  [event("Kolkata midnight", "2026-11-08T22:30:00+05:30", "2026-11-09T00:00:00+05:30")],
   [event("midnight", "2026-11-08T22:30:00Z", "2026-11-09T00:00:00Z")],
   [event("multiple", "2026-11-08T22:30:00Z", "2026-11-11T03:30:00Z")],
   [event("invalid", "invalid", "invalid"), event("fallback", "2026-11-08T10:00:00Z", "invalid")],
@@ -110,6 +114,17 @@ for (const zone of [
         }))
       }));
     compare({ operation: "events", zone, events }, expected);
+  }
+}
+for (const format of [null, "12", "24"] as const) {
+  for (const minute of [0, 60, 720, 810, 1439, 1440, 1500]) {
+    compare(
+      { operation: "time", minute, format },
+      fmtTime(minute, {
+        ...DEFAULT_LOCALE_SETTINGS,
+        dateFormat: format ?? DEFAULT_LOCALE_SETTINGS.dateFormat
+      })
+    );
   }
 }
 console.log(

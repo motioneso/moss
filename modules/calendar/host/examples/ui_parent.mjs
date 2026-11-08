@@ -1,6 +1,6 @@
-import { connectModuleFrame } from "/host-bridge.mjs";
+import { openModuleFrame } from "/host-bridge.mjs";
 const frame = document.querySelector("#calendar");
-connectModuleFrame(frame, "calendar", {
+openModuleFrame(frame, "calendar", frame.dataset.src, {
   async request(method, path, body) {
     const response = await fetch(path, {
       method,
@@ -18,4 +18,3 @@ connectModuleFrame(frame, "calendar", {
     throw new Error("Chat is not composed in this frame check");
   }
 });
-frame.src = frame.dataset.src;

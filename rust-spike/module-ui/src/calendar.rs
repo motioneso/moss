@@ -9,6 +9,7 @@ pub fn EventChip(
     #[prop(optional)] block: bool,
     #[prop(optional)] tentative: bool,
     on_pick: Callback<()>,
+    #[prop(optional, into)] focus_key: String,
 ) -> impl IntoView {
     let variant = if block {
         "cal-ev--block cal-ev--ghost"
@@ -25,7 +26,7 @@ pub fn EventChip(
             "var(--steel)"
         }
     );
-    view! {<button type="button" class=format!("cal-ev {variant}") style=style on:click=move |_| on_pick.run(())>
+    view! {<button type="button" data-cal-focus=focus_key class=format!("cal-ev {variant}") style=style on:click=move |_| on_pick.run(())>
         <span class="cal-ev__bar"></span><span class="cal-ev__body"><span class="cal-ev__title"><span class="cal-ev__titletext">{title}</span></span><span class="cal-ev__meta">{time}</span></span>
     </button>}
 }
@@ -35,15 +36,20 @@ pub fn MonthChip(
     #[prop(into)] time: String,
     #[prop(optional)] block: bool,
     on_pick: Callback<()>,
+    #[prop(optional, into)] focus_key: String,
 ) -> impl IntoView {
-    view! {<button type="button" class=if block {"cal-mchip is-block"} else {"cal-mchip"}
+    view! {<button type="button" data-cal-focus=focus_key class=if block {"cal-mchip is-block"} else {"cal-mchip"}
         style=if block {"--ev:var(--accent-fg)"} else {"--ev:var(--steel)"} on:click=move |_| on_pick.run(())>
         <span class="cal-mchip__dot"></span><span class="cal-mchip__t">{time}</span><span class="cal-mchip__title">{title}</span>
     </button>}
 }
 #[component]
-pub fn AllDayChip(#[prop(into)] title: String, on_pick: Callback<()>) -> impl IntoView {
-    view! {<button type="button" class="cal-allchip" style="--ev:var(--steel)" on:click=move |_| on_pick.run(())><span class="cal-allchip__dot"></span>{title}</button>}
+pub fn AllDayChip(
+    #[prop(into)] title: String,
+    on_pick: Callback<()>,
+    #[prop(optional, into)] focus_key: String,
+) -> impl IntoView {
+    view! {<button type="button" data-cal-focus=focus_key class="cal-allchip" style="--ev:var(--steel)" on:click=move |_| on_pick.run(())><span class="cal-allchip__dot"></span>{title}</button>}
 }
 #[component]
 pub fn DayCell(
@@ -51,6 +57,7 @@ pub fn DayCell(
     #[prop(optional)] today: bool,
     #[prop(optional)] outside: bool,
     on_pick: Callback<()>,
+    #[prop(optional, into)] focus_key: String,
     children: Children,
 ) -> impl IntoView {
     let class = format!(
@@ -58,7 +65,7 @@ pub fn DayCell(
         if today { " is-today" } else { "" },
         if outside { " is-out" } else { "" }
     );
-    view! {<div class=class><button type="button" class="cal-mcell__date" on:click=move |_| on_pick.run(())><span class="cal-mcell__dnum">{label}</span></button><div class="cal-mcell__evs">{children()}</div></div>}
+    view! {<div class=class><button type="button" data-cal-focus=focus_key class="cal-mcell__date" on:click=move |_| on_pick.run(())><span class="cal-mcell__dnum">{label}</span></button><div class="cal-mcell__evs">{children()}</div></div>}
 }
 
 /// Uses the browser's modal focus containment, inert background, Escape dismissal and
@@ -77,7 +84,11 @@ pub fn PeekPanel(on_close: Callback<()>, children: Children) -> impl IntoView {
         on:click=move |event| {
             if event.target() == event.current_target() {
                 #[cfg(target_arch = "wasm32")]
-                if let Some(element)=dialog.get() {element.close();}
+                if let Some(element)=dialog.get() {
+                    let rect=element.get_bounding_client_rect();
+                    let (x,y)=(event.client_x() as f64,event.client_y() as f64);
+                    if x<rect.left() || x>rect.right() || y<rect.top() || y>rect.bottom() {element.close();}
+                }
             }
         }>
         <super::Button variant=super::ButtonVariant::Quiet on_click=Callback::new(move |_| {

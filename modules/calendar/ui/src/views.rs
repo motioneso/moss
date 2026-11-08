@@ -18,14 +18,14 @@ pub fn Month(
         let mut entries = events.get(&day).cloned().unwrap_or_default();
         entries.sort_by_key(|e| (!e.event.all_day,e.start_min));
         let extra = entries.len().saturating_sub(3);
-        view! {<DayCell label=day.day().to_string() today=day==today outside=day.month()!=cursor.month() on_pick=Callback::new(move |_| on_day.run(day))>
+        view! {<DayCell focus_key=day.to_string() label=day.day().to_string() today=day==today outside=day.month()!=cursor.month() on_pick=Callback::new(move |_| on_day.run(day))>
             {entries.into_iter().take(3).map(|segment| {
                 let e = segment.event;
                 let time = if e.all_day || !segment.first_day {String::new()} else {model::time(segment.start_min,twelve)};
                 let pick = e.clone();
-                view! {<MonthChip title=e.title time=time block=e.is_moss_block on_pick=Callback::new(move |_|on_event.run(pick.clone()))/>}
+                view! {<MonthChip focus_key=format!("{}:{}",day,e.id) title=e.title time=time block=e.is_moss_block on_pick=Callback::new(move |_|on_event.run(pick.clone()))/>}
             }).collect_view()}
-            {(extra > 0).then(||view!{<button type="button" class="cal-mmore" on:click=move |_|on_day.run(day)>{format!("{extra} more")}</button>})}
+            {(extra > 0).then(||view!{<button type="button" data-cal-focus=format!("{day}:more") class="cal-mmore" on:click=move |_|on_day.run(day)>{format!("{extra} more")}</button>})}
         </DayCell>}
     }).collect_view()}</div></div>}
 }
@@ -34,7 +34,7 @@ pub fn Month(
 pub fn TimeGrid(
     days: Vec<NaiveDate>,
     today: NaiveDate,
-    now_min: u32,
+    now_min: Signal<u32>,
     events: BTreeMap<NaiveDate, Vec<Segment>>,
     twelve: bool,
     on_event: Callback<Event>,
@@ -60,18 +60,16 @@ pub fn TimeGrid(
     #[cfg(target_arch = "wasm32")]
     Effect::new(move |_| {
         if let Some(el) = scroll.get() {
-            el.set_scroll_top(
-                scroll_position
-                    .get_untracked()
-                    .unwrap_or_else(|| (now_min as f64 * 58.0 / 60.0 - 180.0).max(0.0) as i32),
-            );
+            el.set_scroll_top(scroll_position.get_untracked().unwrap_or_else(|| {
+                (now_min.get_untracked() as f64 * 58.0 / 60.0 - 180.0).max(0.0) as i32
+            }));
         }
     });
     view! {<div class="cal-tg">
         <div class="cal-tg__head" style=template.clone()><div class="cal-tg__corner"></div>{headings.into_iter().map(|day|view!{
             <div class=if day==today {"cal-tg__dayhd is-today"} else {"cal-tg__dayhd"}><span class="cal-tg__dow">{day.format("%a").to_string()}</span><span class="cal-tg__dnum">{day.day()}</span></div>
         }).collect_view()}</div>
-        {any_all.then(||view!{<div class="cal-tg__allday" style=template.clone()><div class="cal-tg__allday-lbl">"all-day"</div>{days.iter().map(|day|view!{<div class="cal-tg__allday-cell">{all.get(day).cloned().unwrap_or_default().into_iter().filter(|s|s.event.all_day).map(|s|{let e=s.event;let pick=e.clone();view!{<AllDayChip title=e.title on_pick=Callback::new(move |_|on_event.run(pick.clone()))/>}}).collect_view()}</div>}).collect_view()}</div>})}
+        {any_all.then(||view!{<div class="cal-tg__allday" style=template.clone()><div class="cal-tg__allday-lbl">"all-day"</div>{days.iter().map(|day|view!{<div class="cal-tg__allday-cell">{all.get(day).cloned().unwrap_or_default().into_iter().filter(|s|s.event.all_day).map(|s|{let e=s.event;let pick=e.clone();view!{<AllDayChip focus_key=format!("{}:{}",day,e.id) title=e.title on_pick=Callback::new(move |_|on_event.run(pick.clone()))/>}}).collect_view()}</div>}).collect_view()}</div>})}
         <div class="cal-tg__scroll" node_ref=scroll on:scroll=move |_|{if let Some(el)=scroll.get(){scroll_position.set(Some(el.scroll_top()));}}><div class="cal-tg__body" style=format!("{template};height:1392px")>
             <div class="cal-tg__gutter">{(1..24).map(|h|view!{<span class="cal-tg__hr" style=format!("top:{}px",h*58)>{model::time(h*60,twelve)}</span>}).collect_view()}</div>
             {days.into_iter().map(|day|{
@@ -82,9 +80,9 @@ pub fn TimeGrid(
                         let geometry=format!("top:{}px;height:{}px;left:calc({}% + 2px);width:calc({width}% - 4px)",s.start_min as f64*58.0/60.0,((s.end_min as f64-s.start_min as f64)*58.0/60.0).max(28.0),s.column as f64*width);
                         let e=s.event;let pick=e.clone();
                         let tentative=matches!(e.status.as_deref(),Some("tentative"|"needsAction"));
-                        view!{<EventChip title=e.title time=model::time(s.start_min,twelve) geometry=geometry block=e.is_moss_block tentative=tentative on_pick=Callback::new(move |_|on_event.run(pick.clone()))/>}
+                        view!{<EventChip focus_key=format!("{}:{}",day,e.id) title=e.title time=model::time(s.start_min,twelve) geometry=geometry block=e.is_moss_block tentative=tentative on_pick=Callback::new(move |_|on_event.run(pick.clone()))/>}
                     }).collect_view()}
-                    {(day==today).then(||view!{<div class="cal-now" style=format!("top:{}px",now_min as f64*58.0/60.0) aria-hidden="true"><span class="cal-now__line"></span><span class="cal-now__dot"></span></div>})}
+                    {(day==today).then(||view!{<div class="cal-now" style=move||format!("top:{}px",now_min.get() as f64*58.0/60.0) aria-hidden="true"><span class="cal-now__line"></span><span class="cal-now__dot"></span></div>})}
                 </div>}
             }).collect_view()}
         </div></div>
@@ -141,9 +139,18 @@ pub fn EventDetails(
 }
 
 #[component]
-pub fn ReadFailure(retained: bool, on_retry: Callback<()>) -> impl IntoView {
+pub fn ReadFailure(
+    retained: bool,
+    on_retry: Callback<()>,
+    #[prop(optional)] settings_page: bool,
+) -> impl IntoView {
+    let name = if settings_page {
+        "settings"
+    } else {
+        "calendar"
+    };
     view! {<div role="alert">
-        {if retained {view!{<p class="jds-hint jds-hint--error">"Could not refresh your calendar. Previously loaded events are still shown."</p>}.into_any()} else {view!{<EmptyState title="Could not load your calendar" description="Try again to load your events."/>}.into_any()}}
+        {if retained {view!{<p class="jds-hint jds-hint--error">{if settings_page {"Could not refresh your settings. Previously loaded settings are still shown."} else {"Could not refresh your calendar. Previously loaded events are still shown."}}</p>}.into_any()} else {view!{<EmptyState title=format!("Could not load your {name}") description=format!("Try again to load your {name}.")/>}.into_any()}}
         <Button variant=ButtonVariant::Secondary on_click=Callback::new(move |_|on_retry.run(()))>"Try again"</Button>
     </div>}
 }

@@ -9,6 +9,10 @@ fn main() {
                 let date = v["cursor"].as_str().unwrap().parse().unwrap();
                 json!({"week":model::week(date,v["work"].as_bool().unwrap_or(false)),"month":model::month(date),"next":model::navigate(date,v["view"].as_str().unwrap(),1),"previous":model::navigate(date,v["view"].as_str().unwrap(),-1)})
             }
+            "time" => json!(model::time(
+                v["minute"].as_u64().unwrap() as u32,
+                model::twelve(v["format"].as_str())
+            )),
             "events" => {
                 let events: Vec<Event> = serde_json::from_value(v["events"].clone()).unwrap();
                 let groups =

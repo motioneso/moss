@@ -17,10 +17,14 @@ the selected output directory; generated assets stay out of commits. Serve that
 directory at `/module-shared/`. Module screens use the host's opaque iframe and
 `web/guest-bridge.mjs`, not direct authenticated HTTP. The signed-in parent installs
 `web/host-bridge.mjs` and supplies its authenticated request and shell callbacks.
-Attach the parent bridge before assigning the verified screen URL. The guest
+Use `openModuleFrame(frame, moduleId, verifiedScreen.src, callbacks)` to attach the
+parent bridge and assign the verified screen URL together. It pins the initial
+document with a fresh fragment nonce, allowing its queued connection message to
+arrive after the first load. Never reuse that nonce or pass an unverified URL. The guest
 constructs `moduleClient` during initial document startup, transferring a command
 port before the first load. Only that document port carries commands; later
-bootstrap messages are ignored even before navigation finishes. A missing initial
-bootstrap or any later load revokes the bridge. Never automatically reconnect it.
+bootstrap messages are ignored even before navigation finishes. The lower-level `connectModuleFrame` without a nonce requires a connection before
+the first load and fails closed otherwise; browser task ordering can violate that
+requirement, so use `openModuleFrame` for real screens. Any later load revokes the bridge. Never automatically reconnect it.
 Replies use transferred message ports so a navigated iframe cannot receive a
 previous document's private response. Dispose both ends when their views close.

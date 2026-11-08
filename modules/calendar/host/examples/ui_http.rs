@@ -109,7 +109,7 @@ fn respond(
             },
         )?;
         let page = format!(
-            r#"<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calendar package check</title><link rel="stylesheet" href="/module-shared/park-press.css"></head><body><p>Calendar signed-package check · synthetic account · not signed-in Moss</p><iframe title="Calendar" id="calendar" sandbox="{}" data-src="{}" style="width:100%;height:90vh;border:0"></iframe><script type="module" src="/parent.mjs"></script></body></html>"#,
+            r#"<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calendar package check</title><link rel="stylesheet" href="/module-shared/park-press.css"></head><body><p>Calendar signed-package check · synthetic account · not signed-in Moss</p><iframe title="Calendar" id="calendar" sandbox="{}" data-src="{}" style="width:100%;height:90vh;border:0"></iframe><script type="module" src="/parent.mjs"></script></body></html>"#,
             screen.sandbox, screen.src
         );
         return Ok((200, page.into_bytes(), "text/html".into(), vec![]));
@@ -165,7 +165,11 @@ fn respond(
             access.clone(),
             method,
             path,
-            std::str::from_utf8(&input[end..end + length])?,
+            if length == 0 {
+                "null"
+            } else {
+                std::str::from_utf8(&input[end..end + length])?
+            },
         )?)?;
         return Ok((
             value["status"].as_u64().unwrap_or(500) as u16,
