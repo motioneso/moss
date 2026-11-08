@@ -1297,6 +1297,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "chrono",
+ "moss-module-sdk",
  "moss-platform-adapters",
  "moss-platform-contracts",
  "moss-platform-jobs",
@@ -1319,6 +1320,14 @@ dependencies = [
  "wasmtime",
  "wat",
  "zstd",
+]
+
+[[package]]
+name = "moss-module-sdk"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

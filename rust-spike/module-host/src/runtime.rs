@@ -285,6 +285,9 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
                 manifest.database.owned_tables.contains(&request.resource),
                 "A module cannot query another module's table"
             );
+            if request.operation == "query" {
+                return crate::typed_query::validate(request.parameters.clone());
+            }
             ensure!(
                 matches!(
                     request.operation.as_str(),

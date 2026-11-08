@@ -40,3 +40,5 @@ pub mod metadata;
 mod tool_names;
 
 mod enqueue_options;
+
+pub mod typed_query;
