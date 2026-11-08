@@ -150,13 +150,7 @@
     },
     {
       "id": "tasks.package-filtered-list",
-      "description": "The tasks.list tool filters visible persisted tasks by list, tag, status, priority, strict date/completion boundaries and priority quadrant, preserving updated-time/identifier ordering and tag data. Explicit shares remain visible; private tasks remain hidden from other accounts including admins. Actor-local lazy recurrence and installed chat integration remain unfinished.",
-      "remediations": [
-        {
-          "id": "retry-task-filters",
-          "description": "Correct invalid filter types, status, priority, quadrant or date text and retry."
-        }
-      ]
+      "description": "The tasks.list tool filters visible persisted tasks by list, tag, status, priority, strict date/completion boundaries and priority quadrant, preserving updated-time/identifier ordering and tag data. Explicit shares remain visible; private tasks remain hidden from other accounts including admins. Actor-local lazy recurrence and installed chat integration remain unfinished. Correct invalid filter types or date text and retry."
     }
   ],
   "screens": {
@@ -275,7 +269,7 @@
       "risk": "read"
     },
     "tasks.listLists": {
-      "description": "List the account’s task lists.",
+      "description": "List the account\u2019s task lists.",
       "risk": "read"
     },
     "tasks.listTags": {
@@ -283,7 +277,7 @@
       "risk": "read"
     },
     "tasks.activity": {
-      "description": "Read a task’s activity.",
+      "description": "Read a task\u2019s activity.",
       "risk": "read"
     },
     "tasks.create": {
