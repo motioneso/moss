@@ -218,20 +218,10 @@ impl<'a, H: Host + ?Sized> NotesService<'a, H> {
             }
             Err(error) => return Err(error),
         };
-        // Legacy ignores summaries and unknown fields in note-backed edits. It
-        // locates the canonical note before using any unvalidated extra members.
-        let mut value = value.clone();
-        if let Some(object) = value.as_object_mut() {
-            object.retain(|key, _| {
-                matches!(
-                    key.as_str(),
-                    "displayName" | "status" | "aliases" | "emails" | "phones"
-                )
-            });
-        }
-        let patch = serde_json::from_value(value)?;
-        let content = note_edits::update_note(current.content.as_deref(), id, &patch)
-            .map_err(|e| Error::new(e.to_string()))?;
+        // Legacy locates the canonical note before using note-only members.
+        // Unlike POST's schema, PATCH leaves aliases/emails/phones unvalidated.
+        let content =
+            crate::note_values::update(current.content.as_deref().unwrap_or_default(), id, value)?;
         self.publish_update(&current, &content).map(Some)
     }
     fn update_available(&self, id: &str, patch: &UpdateNote) -> Result<Option<Value>> {

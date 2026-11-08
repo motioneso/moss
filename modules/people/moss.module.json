@@ -147,6 +147,10 @@
     {
       "id": "people.relative-folder-browse",
       "description": "Browse directories relative to the selected People folder through the legacy API. The Settings chooser still uses allowed absolute notes roots."
+    },
+    {
+      "id": "people.note-field-compatibility",
+      "description": "Canonical-note edits keep the legacy handling of aliases, emails and phones, including nulls, empty lists and mixed JSON list values. Unusable values fail without a successful save; missing notes retain projection-only fallback. Dollar replacement tokens remain literal to protect human text."
     }
   ],
   "screens": {

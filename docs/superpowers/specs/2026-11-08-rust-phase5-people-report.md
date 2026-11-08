@@ -4,16 +4,14 @@ Tasks JS-45 (part one), JS-50 (part two), JS-57 (part three), JS-58 (part four) 
 Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
 Release note Category: N/A.
 
-Status: **People part five: Settings checkpoint; full parity remains open.** The continuation
-brief permits a bounded checkpoint before a second compaction. This checkpoint supplies
-data/review route envelopes and canonical-note fallbacks on top of part three's workers;
-it does not complete the package or
-the requested UI/device proof. On 2026-11-08 the user authorized merging part two and
-continuing its unfinished work here. Part one
-merged separately; the latest checkpoints below consume the merged shared host and Notes
-adapter. People is not yet an installable Rust package or reachable through the Rust UI.
-The database checks below cover their stated boundaries. Full parity, installed chat,
-live UI and second-device verification remain open.
+Status: **People part eight: note-backed edit parity checkpoint; full parity remains open.**
+The continuation brief permits a bounded checkpoint before a second compaction. People
+now builds as a package and prior checkpoints proved signed installation and reload.
+This continuation adds configured-folder HTTP response, row and note-byte comparisons
+and retains the legacy handling of unvalidated note-only PATCH members. The latest
+verification receipts are below. The authenticated Rust shell still needs to compose
+People into its real Settings and chat flows. Full parity, installed chat, live UI and
+second-device verification remain open; library dispatch is not that proof.
 
 ## Scope and dependencies
 

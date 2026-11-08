@@ -4,6 +4,7 @@ pub mod jobs;
 pub mod matching;
 mod name_lookup;
 pub mod note_edits;
+mod note_values;
 pub mod notes_format;
 pub mod notes_service;
 pub mod repository;

@@ -3,7 +3,7 @@
 The Rust checkpoint contains the People core, SDK-backed repository, canonical-note service,
 two job handlers, route envelopes and a packaged Leptos Settings pane. The installed-package
 gate adds registry installation and dispatch assertions. Installation/reload passed, but
-the full replay and consumer checks remain unverified after the final folder-setting fix. The authenticated Rust application still
+the final replay receipts are recorded in the delivery report. The authenticated Rust application still
 needs to compose that package into its real Settings and chat flows.
 The [delivery report](../../docs/superpowers/specs/2026-11-08-rust-phase5-people-report.md)
 records each delivered slice and the exact remaining continuation work.
@@ -111,6 +111,8 @@ scripts/run-gate.sh wait --follow
 ```
 
 This covers the enumerated workflows, malformed bodies, coercion and query/error cases.
+Configured-folder PATCH cases also compare canonical note bytes: mixed note-only list
+values, null/empty handling, unusable values and other-user/admin edit attempts.
 Without `JS73_PEOPLE_PACKAGE` it exercises the compiled guest directly. Add that variable
 with the package path to replay through signed registry installation, reload and installed
 dispatch, and check the four public APIs through an installed consumer fixture. It does not

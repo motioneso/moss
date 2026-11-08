@@ -166,6 +166,16 @@ The availability decision uses the host's opt-in
 [`notes.status` contract](../../rust-spike/module-host/LINKED_NOTES_STATUS.md).
 Busy folders, invalid/oversized content and backend failures abort instead of falling back.
 
+For note-backed PATCH, the legacy schema validates only `displayName` and `status`.
+The port also retains legacy handling of the extra `aliases`, `emails` and `phones`
+members: null keeps the old list, empty lists clear it, and mixed JSON arrays use
+JavaScript string conversion. Null array elements render as `null` in frontmatter,
+but as empty items in managed email/phone summaries. Empty strings and objects with
+numeric `length: 0` also clear the list; unusable list values fail the request.
+These rules apply after canonical-note discovery; projection fallback ignores those
+members. Unknown fields and summaries remain ignored. Dollar replacement tokens
+remain literal, as the documented note-corruption safeguard requires.
+
 The differential gate compares legacy body-schema errors and coercion as well as selected
 query/error cases through installed dispatch when supplied a package. Positive limits
 above `u32::MAX` use an uncapped SDK scan if they fit PostgreSQL `int8`; repeated search
