@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 2,
+  "id": "tasks",
+  "name": "Tasks",
+  "description": "Tasks package data foundation; screens and guest binding are not yet available.",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": [
+        "app.tasks",
+        "app.task_lists",
+        "app.task_tags",
+        "app.task_tag_assignments",
+        "app.task_activity",
+        "app.task_preferences"
+      ]
+    },
+    {
+      "port": "context",
+      "operations": ["read"],
+      "resources": ["call"]
+    }
+  ],
+  "database": {
+    "ownedTables": [
+      "app.tasks",
+      "app.task_lists",
+      "app.task_tags",
+      "app.task_tag_assignments",
+      "app.task_activity",
+      "app.task_preferences"
+    ],
+    "migrations": [
+      "sql/0003_tasks_module.sql",
+      "sql/0006_tasks_drop_workspace_grants.sql",
+      "sql/0019_tasks_owner_or_share.sql",
+      "sql/0039_tasks_foundation.sql",
+      "sql/0062_task_tag_assignments_ownership.sql",
+      "sql/0063_tasks_fk_indexes.sql",
+      "sql/0075_tasks_worker_recurrence_grant.sql",
+      "sql/0140_task_status_suggested.sql",
+      "sql/0178_task_suggestion_metadata.sql"
+    ],
+    "ledger": "core-legacy"
+  },
+  "navigation": [],
+  "settings": [],
+  "features": [
+    {
+      "id": "tasks.package-data",
+      "description": "Native Tasks data foundation for existing tasks, lists, tags, activity and view preferences. The Rust package does not yet provide screens, chat tools or background jobs.",
+      "errors": [
+        {
+          "code": "task-not-accessible",
+          "class": "permission",
+          "description": "A task or list is absent or unavailable to this account."
+        },
+        {
+          "code": "tasks-host-error",
+          "class": "bug",
+          "description": "A data operation failed; internal details are withheld from the response."
+        }
+      ]
+    }
+  ],
+  "screens": {},
+  "icons": ["icons/tasks.svg"],
+  "accounts": {
+    "supportsUserDisable": false,
+    "defaultEnabled": true
+  }
+}
