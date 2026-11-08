@@ -112,6 +112,11 @@
           "id": "people-retry",
           "description": "Try again after checking the module and its host services are available.",
           "path": "/settings/modules"
+        },
+        {
+          "id": "people-correct-input",
+          "description": "Check the name, status or folder value, then try saving again.",
+          "path": "/settings/memory/people"
         }
       ],
       "errors": [
@@ -126,12 +131,22 @@
           "class": "transient",
           "description": "A People request failed. No successful save is shown.",
           "remediationRef": "people-retry"
+        },
+        {
+          "code": "people-invalid-input",
+          "class": "validation",
+          "description": "An invalid People request is rejected before a change is made.",
+          "remediationRef": "people-correct-input"
         }
       ]
     },
     {
       "id": "people.note-suggestions",
       "description": "Suggest note updates is on by default; the account switch preserves the existing sourceBehaviors preference."
+    },
+    {
+      "id": "people.relative-folder-browse",
+      "description": "Browse directories relative to the selected People folder through the legacy API. The Settings chooser still uses allowed absolute notes roots."
     }
   ],
   "screens": {
@@ -236,6 +251,11 @@
     {
       "method": "POST",
       "path": "/people/match-candidates/:id/suppress",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/people/notes-directories",
       "signIn": true
     }
   ]

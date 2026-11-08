@@ -9,6 +9,7 @@ pub mod notes_service;
 pub mod repository;
 pub mod repository_mutations;
 mod review;
+mod route_validation;
 mod routes;
 mod tools;
 

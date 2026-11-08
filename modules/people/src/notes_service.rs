@@ -163,13 +163,29 @@ impl<'a, H: Host + ?Sized> NotesService<'a, H> {
         self.publish_update(&current, &content)
     }
     fn prepare_update(&self, id: &str, patch: &UpdateNote) -> Result<(CurrentNote, String)> {
+        let current = self.current_for_update(id)?;
+        let content = note_edits::update_note(current.content.as_deref(), id, patch)
+            .map_err(|e| Error::new(e.to_string()))?;
+        Ok((current, content))
+    }
+    fn current_for_update(&self, id: &str) -> Result<CurrentNote> {
         let note = note_edits::find_canonical_note(&self.files()?, id)
             .map_err(|e| Error::new(e.to_string()))?;
         // Read again after discovery, and recheck its canonical ID before compare-write.
         let current = self.read(&note.path)?;
-        let content = note_edits::update_note(current.content.as_deref(), id, patch)
-            .map_err(|e| Error::new(e.to_string()))?;
-        Ok((current, content))
+        if current
+            .content
+            .as_deref()
+            .and_then(parse_people_note)
+            .and_then(|note| note.frontmatter.jarvis_person_id)
+            .as_deref()
+            != Some(id)
+        {
+            return Err(Error::new(
+                note_edits::EditError::CanonicalNoteNotFound.to_string(),
+            ));
+        }
+        Ok(current)
     }
     fn publish_update(&self, current: &CurrentNote, content: &str) -> Result<Value> {
         self.write(current, content)?;
@@ -187,6 +203,38 @@ impl<'a, H: Host + ?Sized> NotesService<'a, H> {
         if !self.folder_available()? {
             return Ok(None);
         }
+        self.update_available(id, patch)
+    }
+    pub fn update_value_for_route(&self, id: &str, value: &Value) -> Result<Option<Value>> {
+        if !self.folder_available()? {
+            return Ok(None);
+        }
+        let current = match self.current_for_update(id) {
+            Ok(current) => current,
+            Err(error)
+                if error.message == note_edits::EditError::CanonicalNoteNotFound.to_string() =>
+            {
+                return Ok(None)
+            }
+            Err(error) => return Err(error),
+        };
+        // Legacy ignores summaries and unknown fields in note-backed edits. It
+        // locates the canonical note before using any unvalidated extra members.
+        let mut value = value.clone();
+        if let Some(object) = value.as_object_mut() {
+            object.retain(|key, _| {
+                matches!(
+                    key.as_str(),
+                    "displayName" | "status" | "aliases" | "emails" | "phones"
+                )
+            });
+        }
+        let patch = serde_json::from_value(value)?;
+        let content = note_edits::update_note(current.content.as_deref(), id, &patch)
+            .map_err(|e| Error::new(e.to_string()))?;
+        self.publish_update(&current, &content).map(Some)
+    }
+    fn update_available(&self, id: &str, patch: &UpdateNote) -> Result<Option<Value>> {
         let (current, content) = match self.prepare_update(id, patch) {
             Ok(prepared) => prepared,
             Err(error)
