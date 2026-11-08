@@ -103,3 +103,10 @@ actor-timezone port. Lazy recurrence roll-forward needs that public host seam
 before it can preserve the actor's local day. Additional routes, queued work
 and public People calls also remain to be ported. See the
 Phase 5 Tasks report for the exact validation results and continuation boundary.
+
+Part 6 repairs initial screen loading through the keyed public frame bridge and
+adds the shared document typography. The bridge opens the installer-verified
+screen URL itself; callers must not assign a second URL after attaching it.
+See the final part 6 section of the Tasks report for current live verification
+and remaining parity work. The fixture remains separate from the application
+shell and physical-device acceptance.
