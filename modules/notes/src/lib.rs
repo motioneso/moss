@@ -4,6 +4,8 @@ pub mod export;
 pub mod guest;
 pub mod identity;
 pub mod routes;
+#[cfg(feature = "write-tools")]
+pub mod write_tools;
 
 #[cfg(target_arch = "wasm32")]
 mod component;

@@ -2,9 +2,9 @@
 
 The Rust checkpoint contains the People core, SDK-backed repository, canonical-note service,
 two job handlers, route envelopes and a packaged Leptos Settings pane. The installed-package
-gate passed signed installation/reload and the enumerated response, row, note-byte,
-consumer API and installed-asset checks in part eight. The authenticated Rust application still
-needs to compose that package into its real Settings and chat flows.
+gate now passes signed registry installation, reload, the enumerated route replay and all
+four public lookup APIs through an installed consumer fixture. The authenticated Rust
+application still needs to compose that package into its real Settings and chat flows.
 The [delivery report](../../docs/superpowers/specs/2026-11-08-rust-phase5-people-report.md)
 records each delivered slice and the exact remaining continuation work.
 
@@ -111,10 +111,8 @@ scripts/run-gate.sh wait --follow
 ```
 
 This covers the enumerated workflows, malformed bodies, coercion and query/error cases.
-Configured-folder PATCH cases also compare canonical note bytes: mixed note-only list
-values, null/empty handling and unusable values. Other-user/admin attempts check database
-visibility and unchanged note bytes; those actors have no folder configured, so this does
-not establish filesystem authorization for a shared folder.
+Other-user/admin note-edit attempts compare unchanged bytes, but those actors have no
+configured folder. They do not prove shared-folder filesystem authorization.
 Without `JS73_PEOPLE_PACKAGE` it exercises the compiled guest directly. Add that variable
 with the package path to replay through signed registry installation, reload and installed
 dispatch, and check the four public APIs through an installed consumer fixture. It does not
@@ -172,11 +170,12 @@ scripts/run-gate.sh wait --follow
 
 The gate pins both artifacts, signs a temporary registry, downloads and installs the actual
 People package with `PostgresLifecycle` and its unchanged legacy SQL, then reopens the
-installer. In part eight, all four public lookup APIs passed through a separate installed
-consumer fixture. The provider package and unavailable AI service are explicit fixtures;
-no real source delivery is claimed. The gate verified the installed Settings HTML and its
-boot, JavaScript and Wasm assets; it does not render an authenticated installed screen.
-Both the installed replay and nine-suite database gate passed; exact receipts are in the report.
+installer. In part seven, the full enumerated replay and all four public lookup APIs passed
+through an installed consumer fixture, with a positive owner lookup before unrelated-user
+and administrator denial checks. The provider package and unavailable AI service remain
+explicit fixtures; no real source delivery is claimed. Settings HTML, bootstrap, JavaScript,
+Wasm and bridge assets are retrieved through the installer. This is not a rendered or
+authenticated installed screen check.
 
 The legacy `/people/notes-directories` endpoint browses relative to the selected folder;
 the additive `/people/note-folders` endpoint remains the absolute-root chooser. Empty and null folder
@@ -187,6 +186,16 @@ SDK's `u32` page space scan without a limit if they fit PostgreSQL `int8`.
 
 Remaining acceptance: compose the real installed shell and chat; index-refresh/cooldown,
 ingest nudges, real source providers and command retention/quotas; broaden HTTP parity
-(including locale-sensitive directory ordering, parser-key rejection and further edge cases); and run the
+(including locale-sensitive directory ordering and unusual note-only values); and run the
 real UI on desktop and a second physical device over HTTPS with sign-in, origin and privacy
 checks. This is a checkpoint, not full People acceptance. Exact receipts are in the report.
+
+## Part seven canonical-edit checkpoint
+
+The configured-folder replay compares real legacy Fastify responses, all seven table
+snapshots and canonical note bytes against installed Rust dispatch. It covers rename,
+archive/reactivation, ignored summaries, contact-list clearing, mixed JSON entries and
+malformed edits. Note-backed PATCH preserves the legacy untyped contact-list behavior;
+the typed note-service API and public lookup contracts are unchanged. The baseline guest
+fails this replay; the corrected generated package passes. Broader inputs and live
+application/device acceptance remain open as listed above.

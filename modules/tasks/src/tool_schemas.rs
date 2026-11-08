@@ -6,6 +6,25 @@ pub fn input(tool: &str) -> Option<Schema> {
         "tasks.get" | "tasks.activity" => strings(&["taskId"]),
         "tasks.listTags" => strings(&["listId"]),
         "tasks.listLists" => strings(&[]),
+        "tasks.heartbeatWindow" => Schema::object(
+            &[],
+            vec![
+                (
+                    "horizonHours",
+                    Schema::Integer {
+                        minimum: Some(1),
+                        maximum: Some(48),
+                    },
+                ),
+                (
+                    "limit",
+                    Schema::Integer {
+                        minimum: Some(1),
+                        maximum: Some(20),
+                    },
+                ),
+            ],
+        ),
         "tasks.create" => schemas::create_task(),
         "tasks.update" => with_ids(schemas::update_task(), &["taskId"]),
         "tasks.updateStatus" => Schema::object(

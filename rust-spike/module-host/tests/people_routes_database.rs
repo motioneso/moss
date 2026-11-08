@@ -184,20 +184,22 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         reopened
     });
     let owner = Uuid::parse_str(oracle["actor"].as_str().unwrap()).unwrap();
-    let note_path = notes_root.join(oracle["configuredNotes"]["path"].as_str().unwrap());
-    for (index, case) in oracle["cases"].as_array().unwrap().iter().enumerate() {
-        if index == oracle["configuredNotes"]["start"].as_u64().unwrap() as usize {
-            std::fs::write(
-                &note_path,
-                oracle["configuredNotes"]["content"].as_str().unwrap(),
-            )
-            .unwrap();
-            rt.block_on(async {
-                bootstrap.execute(
-                    "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'people-notes-folder',$2)",
-                    &[&owner, &json!(notes_root)],
-                ).await.unwrap();
-            });
+    let mut configured = false;
+    for case in oracle["cases"].as_array().unwrap() {
+        if !configured && case["configured"] == true {
+            for (path, content) in oracle["folderSeed"].as_object().unwrap() {
+                std::fs::write(notes_root.join(path), content.as_str().unwrap()).unwrap();
+            }
+            rt.block_on(bootstrap.execute(
+                "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'people-notes-folder',$2) ON CONFLICT(owner_user_id,key) DO UPDATE SET value_json=EXCLUDED.value_json",
+                &[&owner, &json!(notes_root)],
+            )).unwrap();
+            configured = true;
+        }
+        if let Some(files) = case["seedFiles"].as_object() {
+            for (path, content) in files {
+                std::fs::write(notes_root.join(path), content.as_str().unwrap()).unwrap();
+            }
         }
         let method = case["method"].as_str().unwrap();
         let path = case["path"].as_str().unwrap();
@@ -229,8 +231,18 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         assert_eq!(
             actual.value(&reply),
             expected.value(&case["expected"]),
-            "Route response differs: {method} {path}"
+            "Route response differs: {method} {path}; body={}",
+            case["body"]
         );
+        if let Some(files) = case["files"].as_object() {
+            for (file, content) in files {
+                assert_eq!(
+                    std::fs::read_to_string(notes_root.join(file)).unwrap(),
+                    content.as_str().unwrap(),
+                    "Canonical file differs after {method} {path}: {file}"
+                );
+            }
+        }
         for table in TABLES {
             let rows: Vec<Value> = rt.block_on(async {
                 bootstrap
@@ -250,15 +262,7 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
                 "Rows differ after {method} {path}: {table}"
             );
         }
-        if let Some(content) = case["noteContent"].as_str() {
-            assert_eq!(
-                std::fs::read_to_string(&note_path).unwrap(),
-                content,
-                "Canonical note bytes differ after {method} {path}, case {index}"
-            );
-        }
     }
-    std::fs::remove_file(note_path).unwrap();
     rt.block_on(async {
         bootstrap
             .execute(
@@ -270,8 +274,8 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
     });
     if let Some(installer) = &installer {
         for (name, parameters) in [
-            ("findPeopleByNames", json!({"names":["Route split"]})),
-            ("resolve", json!({"query":"Route split"})),
+            ("findPeopleByNames", json!({"names":["Canonical renamed"]})),
+            ("resolve", json!({"query":"Canonical renamed"})),
             ("getPerson", json!({"personId":oracle["ids"]["primary"]})),
             ("listEmailIdentityValues", json!({})),
         ] {
@@ -286,6 +290,16 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
                     &json!({"name":name,"parameters":parameters}).to_string(),
                 )
                 .unwrap();
+            if name == "findPeopleByNames" {
+                assert!(
+                    !serde_json::from_str::<Value>(&direct)
+                        .unwrap()
+                        .as_array()
+                        .unwrap()
+                        .is_empty(),
+                    "Owner lookup must find the private fixture before testing isolation"
+                );
+            }
             let routed = installer.call("people.consumer",access,"route",&json!({"operation":"call","resource":"people","parameters":{"name":name,"parameters":parameters}}).to_string()).unwrap();
             assert_eq!(
                 serde_json::from_str::<Value>(&routed).unwrap(),
@@ -294,7 +308,7 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
             );
         }
         for key in ["other", "admin"] {
-            let reply = installer.call("people.consumer",AccessContext::new(Uuid::parse_str(oracle[key].as_str().unwrap()).unwrap(),"consumer-privacy"),"route",&json!({"operation":"call","resource":"people","parameters":{"name":"findPeopleByNames","parameters":{"names":["Route split"]}}}).to_string()).unwrap();
+            let reply = installer.call("people.consumer",AccessContext::new(Uuid::parse_str(oracle[key].as_str().unwrap()).unwrap(),"consumer-privacy"),"route",&json!({"operation":"call","resource":"people","parameters":{"name":"findPeopleByNames","parameters":{"names":["Canonical renamed"]}}}).to_string()).unwrap();
             assert_eq!(serde_json::from_str::<Value>(&reply).unwrap(), json!([]));
         }
         let screen = installer
@@ -323,13 +337,19 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
             .ui_asset("people", parts[3], "ui/boot.mjs", &policy)
             .unwrap();
         let boot = String::from_utf8(boot.body).unwrap();
-        assert!(boot.contains("./people.js") && boot.contains("./people_bg.wasm"));
-        for path in ["ui/people.js", "ui/people_bg.wasm"] {
+        assert!(boot.contains("./people.js"));
+        assert!(boot.contains("./people_bg.wasm"));
+        for file in [
+            "people.js",
+            "people_bg.wasm",
+            "bridge.mjs",
+            "guest-bridge.mjs",
+        ] {
             let asset = installer
-                .ui_asset("people", parts[3], path, &policy)
+                .ui_asset("people", parts[3], &format!("ui/{file}"), &policy)
                 .unwrap();
-            assert!(!asset.body.is_empty(), "Installed UI asset {path}");
-            if path.ends_with(".wasm") {
+            assert!(!asset.body.is_empty(), "Installed UI asset {file}");
+            if file.ends_with(".wasm") {
                 assert!(asset.body.starts_with(b"\0asm"));
             }
         }
@@ -369,6 +389,9 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
             request(owner, "GET", "/people/notes-settings", Value::Null),
             json!({"status":200,"body":{"folder":notes_root}})
         );
+        // The preceding replay leaves a canonical note. Remove it explicitly
+        // before asserting the separate projection-only fallback below.
+        std::fs::remove_file(notes_root.join("Route.md")).unwrap();
         let person_path = format!("/people/{}", oracle["ids"]["primary"].as_str().unwrap());
         assert_eq!(
             request(owner, "PATCH", &person_path, json!({"aliases":{}}))["status"],

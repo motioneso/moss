@@ -1,7 +1,8 @@
 # People public interface
 
-This is the compatibility contract for the Phase 5 port. The package handlers are still
-being implemented; this document does not claim that they are installed or available.
+This is the compatibility contract for the Phase 5 port. The package handlers are
+exercised through signed installation and an installed consumer fixture. Real authenticated
+application composition remains open; this is not a claim of live availability.
 
 People owns contact IDs and projections. Tasks, notes and calendar keep their existing
 contact IDs. They call the host's public API port rather than reading People tables or
@@ -54,10 +55,10 @@ to the ordinary identity/link response.
 
 The current `repository` module is an internal persistence checkpoint. The compiled guest
 implements the `findPeopleByNames`, `resolve`, `getPerson` and
-`listEmailIdentityValues` API envelopes above, but
-the installed-package gate has assertions for routing all four through an installed consumer
-fixture. Those assertions have not completed successfully; final installed replay and real
-application composition remain open. It also covers person projections and composite
+`listEmailIdentityValues` API envelopes above. The installed-package gate passes routing
+all four through an installed consumer fixture, including a positive owner lookup followed
+by unrelated-user and administrator denial checks. Real application composition remains
+open. It also covers person projections and composite
 indexing state internally. Indexing-state
 rows currently retain database field names internally; the eventual service must preserve
 the legacy external response shape. Do not use this internal module as a consumer interface.
@@ -180,6 +181,11 @@ HTTP body decoding is not yet fully equivalent: Fastify rejects JSON bodies cont
 `__proto__` or constructor/prototype keys before dispatch. The current Rust route-value
 boundary does not reproduce that parser rejection. This remains an acceptance gap,
 including when such an object appears inside a note-only list.
+
+This does not widen the typed note-service API. The oracle covers selected finite numeric
+values; extreme numeric inputs still need broader parity work. Empty list elements can
+produce unreadable frontmatter: legacy publication may precede the resulting projection
+error. Repair the note before retrying such an edit.
 
 The differential gate compares legacy body-schema errors and coercion as well as selected
 query/error cases through installed dispatch when supplied a package. Positive limits

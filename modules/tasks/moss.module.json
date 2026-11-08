@@ -44,8 +44,14 @@
         "tasks.renameList",
         "tasks.createTag",
         "tasks.renameTag",
-        "tasks.deleteTag"
+        "tasks.deleteTag",
+        "tasks.heartbeatWindow"
       ]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue"],
+      "resources": ["tasks-deferred-status"]
     }
   ],
   "database": {
@@ -84,7 +90,7 @@
   "features": [
     {
       "id": "tasks.package-data",
-      "description": "Tasks component with validated task, list, tag, activity, view preference and ordered breakdown routes. Sixteen tool handlers cover four reads and twelve task, list, tag, activity and breakdown actions. Full parity, assistant action policies and background jobs remain unfinished.",
+      "description": "Tasks component with validated task, list, tag, activity, view preference and ordered breakdown routes. Seventeen tool handlers cover five reads and twelve task, list, tag, activity and breakdown actions. Full parity, assistant action policies and background jobs remain unfinished.",
       "errors": [
         {
           "code": "tasks-invalid-input",
@@ -132,6 +138,14 @@
           "description": "A tool input has missing fields or incorrect types. Correct the action inputs and retry."
         }
       ]
+    },
+    {
+      "id": "tasks.package-queue",
+      "description": "Enqueue a status change for a visible task and apply it in the captured account context. The host supplies actor identity and metadata-only parameters. Queue retries and retention use host defaults; legacy queue options, optional request-key retention and recurrence jobs remain unfinished."
+    },
+    {
+      "id": "tasks.package-heartbeat",
+      "description": "Read up to twenty owned open tasks due within a bounded horizon, including overdue tasks, with material revisions and the next time boundary. Shared tasks are excluded and recurrence is never advanced. Background authorization and scheduler integration remain unfinished."
     }
   ],
   "screens": {
@@ -237,6 +251,11 @@
       "method": "POST",
       "path": "/tasks/:id/breakdown",
       "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/tasks/:id/deferred-status",
+      "signIn": true
     }
   ],
   "tools": {
@@ -303,6 +322,21 @@
     "tasks.deleteTag": {
       "description": "Delete an owned task tag.",
       "risk": "write"
+    },
+    "tasks.heartbeatWindow": {
+      "description": "Read a bounded owner-only overdue/due-soon window and revision without advancing recurrence. Background scheduler integration remains unfinished.",
+      "risk": "read"
+    }
+  },
+  "jobs": {
+    "tasks-deferred-status": {
+      "task-id": {
+        "kind": "id"
+      },
+      "requested-status": {
+        "kind": "choice",
+        "choices": ["todo", "suggested", "done", "archived"]
+      }
     }
   }
 }

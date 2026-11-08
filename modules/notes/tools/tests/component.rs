@@ -63,6 +63,21 @@ fn actual_guest_runs_without_wasi_and_archive_is_reproducible() {
     assert_eq!(package.manifest.database.owned_tables.len(), 6);
     assert!(!package.manifest.accounts.supports_user_disable);
     assert!(package.manifest.navigation.is_empty());
+    assert!(
+        package.manifest.tools.is_empty(),
+        "Unfinished chat tools must not be offered"
+    );
+    assert!(
+        package.manifest.jobs.is_empty(),
+        "Unfinished sync must not be scheduled"
+    );
+    assert!(package.manifest.capability("jobs").is_err());
+    assert!(!package
+        .manifest
+        .capability("vault")
+        .unwrap()
+        .operations
+        .contains("notes.compare-write"));
     for path in package.manifest.database.migrations {
         assert_eq!(
             package.files[&path],

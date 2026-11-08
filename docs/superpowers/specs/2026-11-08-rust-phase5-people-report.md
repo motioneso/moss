@@ -9,7 +9,8 @@ The continuation brief permits a bounded checkpoint before a second compaction. 
 now builds as a package and prior checkpoints proved signed installation and reload.
 This continuation adds configured-folder HTTP response, row and note-byte comparisons
 and retains the legacy handling of unvalidated note-only PATCH members. The part-eight
-installed replay and nine-suite gate passed; receipts and remaining work are at the end. The authenticated Rust shell still needs to compose
+pre-merge installed replay and nine-suite gate passed. Merged-code verification is pending;
+receipts and remaining work are at the end. The authenticated Rust shell still needs to compose
 People into its real Settings and chat flows. Full parity, installed chat, live UI and
 second-device verification remain open; library dispatch is not that proof.
 
@@ -798,115 +799,108 @@ Do not promote this checkpoint to complete People parity or device acceptance.
 
 ## People part six: installed-dispatch checkpoint (JS-73)
 
-Card 523. Base: merged main `33cf5da15`. This is a bounded, partially verified
-checkpoint. It does not complete the People port or qualify the authenticated Rust
-application. The next continuation must finish the package replay before claiming installed
-route, consumer or screen acceptance.
+The historical part-six changes, receipts and remaining-work list are preserved in
+[the part-six report](2026-11-08-rust-phase5-people-part6-report.md).
 
-### What changed
+## People part seven: canonical contact-edit parity checkpoint (JS-76)
 
-People validates the legacy POST/PATCH/folder-setting body schemas before handlers,
-including required fields, string/string-array coercion, union errors and root-array
-refusal. Unknown properties remain available. Rename defers note-only field parsing until
-folder availability and canonical-note discovery, preserving projection fallback when no
-note exists. Ignored summary fields do not break a note-backed edit.
+Card 523. Base: merged main `05ff17370`. This continuation is a bounded checkpoint,
+not full People acceptance. The authenticated application, real chat and second-device
+HTTPS check remain required before accepting the whole port.
 
-Repeated search values use JavaScript array joining; repeated equality filters use
-node-postgres array encoding. Positive limits beyond the SDK page space use an uncapped
-scan if the count fits PostgreSQL `int8`; larger or negative values fail. Host resource
-limits still apply. This does not establish unlimited-dataset parity.
+### Canonical note behavior
 
-The legacy relative `GET /people/notes-directories` is separate from the additive absolute
-root chooser. Empty and null folder HTTP saves retain the legacy 400 folder error and
-preserve the shared preference. Fastify coerces null to an empty string, which the legacy
-service rejects. The app map describes input recovery and choosing a valid folder; it no
-longer promises that an empty save clears the selection.
+The route replay now configures a real temporary People folder and drives the actual
+legacy Fastify handlers through `VaultContextRunner`. The generated guest replays the
+same requests through the shared note adapter. Each configured-folder case compares
+canonical file bytes, response envelopes and all seven table snapshots. Rename, archive,
+reactivation, ignored summary fields, list clearing and unusual contact values are included.
+Rejected edits also compare the unchanged file bytes.
 
-The route gate optionally accepts `JS73_PEOPLE_PACKAGE`, pins its bytes and component hash,
-signs a temporary folder registry, installs with `PostgresLifecycle` and `PostgresCatalog`,
-and reopens the installer. Actual signed installation, unchanged `core-legacy` migration
-identity and reload succeeded. The People guest now accepts the host's required `install`
-lifecycle hook after host migration; previously it rejected that hook.
+The legacy PATCH schema validates name/status but leaves contact lists untyped. Its
+formatter accepts empty strings and objects with numeric zero length as empty lists,
+and interpolates array entries into frontmatter. Rust now keeps those boundary semantics,
+including the different null rendering used in frontmatter and managed-summary joins.
+Invalid non-array values still fail; summaries and unknown fields remain ignored on
+note-backed edits. Canonical-note discovery still precedes interpreting those fields,
+so the existing projection fallback remains available when the note is missing.
+The typed note-service API and the four public consumer contracts remain unchanged.
 
-The new test is set up to replay legacy responses and all seven table snapshots through
-`Installer::dispatch_extended`, call all four public APIs from an installed consumer and
-retrieve the installed Settings HTML. These assertions have **not completed successfully**.
-The last replay stopped at a folder-setting mismatch, before the consumer and folder
-assertions. Retrieving an asset would not prove a working browser screen. The provider
-dependency and unavailable AI service are explicit fixtures, not real provider delivery.
-The four public API versions, SQL migrations and existing job kinds remain unchanged.
+The module app map describes canonical edits and list clearing. The installed consumer
+fixture now requires an owner lookup to find the active private contact before checking
+that unrelated users and administrators cannot find it.
 
-No tool was installed globally. The approved pinned `wit-bindgen` (`=0.57.1`) and existing
-scratch Cargo/Rustup caches built the generated guest. UI output and test packages stay
-in scratch. The UI lockfile records an already declared shared dependency.
+### Build and proof boundaries
 
-### Verification receipts and limits
+Every build and gate in this continuation uses a target directory owned by this task.
+An existing host cache was copied into that directory; subsequent work does not depend
+on the original remaining available. The pinned, previously approved `wit-bindgen`
+`=0.57.1` remains a declared guest dependency. No tool or target was installed globally.
+JavaScript dependencies were restored from the repository's frozen lockfile and offline
+store without install scripts. No new third-party dependency was added.
 
-- The exact pre-change source was archived from the base and compiled separately. The
-  expanded real Fastify/database oracle failed against it: scalar `POST /people` returned
-  500 instead of Fastify's 400 `body must be object` (gate exit 101).
-- Review one found a test borrow error and root-array acceptance that could clear the
-  saved folder. Both were fixed. The same native root-array assertion was observed
-  failing before the fix and passing afterward; real registered Fastify routes reject
-  those root arrays with 400.
-- A trusted installed replay exposed the missing `install` hook (exit 101). After the
-  fix, package installation with legacy SQL and reload succeeded. That replay then found
-  a null/empty-folder mismatch: Rust returned 200 and cleared the value where legacy
-  returned 400. A native empty-save regression was observed failing, then passed after
-  the final fix. The final installed replay still needs rerunning.
-- Final source checks: all **twelve native tests** and strict People Clippy passed, along
-  with scoped Rust formatting. Root `pnpm lint`, `pnpm format:check`, `pnpm typecheck` and
-  `pnpm check:file-size` passed; the later changes are Rust and documentation, with scoped
-  formatting and file-size checks repeated for the checkpoint.
-- The last installed run (`122143-76Fnix`) tested clean `f607976af`, fingerprint
-  `107d5bd86144987204918adc9cd4ca2078d9caf08c7af94567ccd642cf9adc82`, and ended 101
-  at the folder mismatch. It is failing evidence, not a green installed-parity receipt.
-- The separate nine-suite run (`122051-mQhJ57`, same commit/fingerprint) ended 101 when
-  the notes test executable disappeared from the reused scratch cache. Its completed
-  preference/privacy, ABI, API and worker checks do not establish a complete matrix pass.
-  The cache directory itself was subsequently gone. Use a task-owned cache next time.
-- Both runs used Node `22.22.2`, pnpm `10.6.2`, Rust `1.95.0` and disposable PostgreSQL
-  `17.11`. They used the earlier component/package hashes below. These artifacts precede
-  the final empty-folder fix and must not be used as final successful-build evidence:
+The installed replay passed after correcting old test expectations: HTML loads `boot.mjs`,
+which loads the compiled screen; the installer requires its `ui/` prefix. The Settings
+suite also still expected null saves to clear a folder, despite part six's intentional
+legacy-compatible rejection. Its assertions now require a 400 response and an unchanged
+chosen folder for both owner and unrelated-account attempts. No host product code changed.
 
-```text
-component 9ae0cd7eb77a0f9cf7ef3be88f398dc33825fd34c13e6722646d266634ea30a6
-package   8671e4507375cd9ad3ac12f096cb20f838bd670caf74f491edaf8f584f3188f6
-```
+### Part seven verification receipts
 
-The final corrected guest core compiled for `wasm32-wasip2`; wrapping/package verification
-was not completed after the cache loss. A task-owned cache was seeded from existing build
-artifacts, but rebuilding it exceeded this bounded continuation. The build was stopped.
-The proof recipe records actual red/green native checks and the unsuccessful gate limits.
-Independent review results are attached to the task. No live application proof is supplied.
+- Failing first: the generated baseline guest built before the contact-edit change returned
+  500 where the real legacy handler returned 200 for a configured-folder PATCH. The gate
+  ended with `rc=101`; this is the same replay's first contact-clearing regression.
+- The corrected installed-package route gate ended with `rc=0`. It downloads a signed
+  temporary registry package, installs unchanged legacy SQL, reopens the installer, compares
+  the enumerated responses/seven-table snapshots/canonical files, routes all four consumer
+  APIs, retrieves Settings and bootstrap assets, and verifies folder-save/fallback behavior.
+- The complete nine-suite People gate ended with `rc=0`: linked-note preferences, guest
+  ABI, guest database differential, jobs, notes, persistence, seven-table privacy, Settings
+  and all seven tool execution handlers. Privacy assertions failed with RLS removed and
+  passed with it restored for both app and worker roles, including administrator actors.
+  This qualifies those database/adapter seams, not the real UI or chat approval policy.
+- Native People tests: 14 passed. Strict People Clippy passed. Repository lint, typecheck
+  and Prettier checks passed; changed Rust files pass scoped rustfmt. Whole host-crate fmt
+  still reports pre-existing formatting in `rust-spike/parity/src/dbs.rs`.
+- Rust app-map generation and the repository file-size check passed. The UI and generated
+  guest built from declared locked dependencies. No browser or real listener was started.
 
-### Exact remaining work after part six
+Artifact identity (SHA-256):
 
-1. Rebuild the final component and package using an isolated task-owned host target. Run
-   both the complete People gate and `modules/people/tools/routes-gate.sh` through
-   `scripts/run-gate.sh`, with the final component and `JS73_PEOPLE_PACKAGE`. Obtain green
-   receipts for installed response/table comparisons, all four consumer APIs, asset and
-   folder operations. Neither prior failed run can substitute for this.
-2. Compose the authenticated Rust shell with the installed frame, shared preferences and
-   linked-note adapters. Exercise actual Settings reads/writes and real chat approvals,
-   blocked app actions and policy behavior. Library dispatch is not a network listener.
-3. Finish index-refresh/cooldown, ingest nudges, real source-provider dependencies and
-   sustained command quotas/retention. The registry test's provider is a fixture.
-4. Broaden HTTP parity: configured-folder legacy filesystem comparisons, locale-sensitive
-   mixed-case/Unicode directory ordering, unusual note-only values, backend errors and
-   numeric edge cases beyond the oracle vectors. Directory sorting is currently Rust
-   lexical ordering rather than JavaScript `localeCompare`. Directory-account fixture
-   refusals do not establish a failing-first filesystem privacy property.
-5. Run the installed Rust UI at desktop and phone widths, then sign in from a second
-   physical device over HTTPS, including trusted-origin and cross-account privacy checks.
-   No browser, LAN/tailnet or physical-device proof exists in this checkpoint.
+- Baseline guest: `7c65c0868e73d30c2da856c8e0c442a1d1aaebfe7febd086f0cac7a8580adcc0`.
+- Corrected generated guest: `943a2749d2a653620ccbb30a2f9e55be840f38b7a24c0d69e5ac509be3cae472`.
+- Tested package: `7cc16b7c623548cfe707df1e086a4b60f146b260535fd47bd354c0391ed1b77d` (403534 bytes).
 
-Keep full People parity and live-device acceptance open. Prioritize working installed
-screens and chat after the final package replay is green.
+The gate receipts identify product commit `ad2df419d` plus dirty test/report inputs. The
+installed replay input fingerprint begins `637dff417917`; the nine-suite gate fingerprint
+begins `354c754630f6`. The latter includes both corrected Settings assertions. Subsequent
+documentation-only edits are recorded in the final checkpoint commit. These are scoped
+People integration receipts, not the full repository foundation gate or CI/e2e results.
+
+### Remaining acceptance work
+
+The following remain open regardless of this checkpoint's integration results:
+
+1. Compose the installed module frame and adapters into the authenticated Rust Settings
+   shell, then exercise actual reads/writes, real chat approvals, blocked app actions and
+   policy behavior through that listener.
+2. Finish index-refresh/cooldown, ingest nudges, actual source-provider composition, and
+   command retention/quotas. The registry suite's provider remains an explicit fixture.
+3. Broaden the HTTP oracle beyond its enumerated cases, including locale-sensitive
+   directory ordering, backend errors, larger datasets and remaining numeric edge cases.
+4. Run the installed screen at desktop and phone widths and sign in from a second physical
+   device over HTTPS with trusted-origin and cross-account privacy checks. Library dispatch,
+   a retrieved HTML asset and a phone viewport cannot substitute for that proof.
+
+The completed checks above qualify only the named integration seams. Do not label this
+checkpoint as the complete HTTP parity harness or live-device acceptance.
 
 ## People part eight: note-backed edit checkpoint (JS-79)
 
-Card 523. Base `2ab3f5cd2`. This section supersedes the earlier continuation list;
+Card 523. Original base `2ab3f5cd2`; current reconciliation includes main `6450d6ae4`.
+The earlier receipts below describe the pre-merge branch, not the combined result.
+Both replay workflows and their direct regressions are retained. New merged-code receipts
+are pending and will be attached to the task proof. This section supersedes the earlier continuation list;
 it does not complete People or the authenticated Rust application.
 
 ### Changes and review

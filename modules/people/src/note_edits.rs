@@ -118,6 +118,15 @@ pub fn update_note(
     person_id: &str,
     patch: &UpdateNote,
 ) -> Result<String, EditError> {
+    update_note_with_summary(current, person_id, patch, None)
+}
+
+pub(crate) fn update_note_with_summary(
+    current: Option<&str>,
+    person_id: &str,
+    patch: &UpdateNote,
+    summary: Option<&str>,
+) -> Result<String, EditError> {
     let mut note = current
         .and_then(parse_people_note)
         .filter(|note| note.frontmatter.jarvis_person_id.as_deref() == Some(person_id))
@@ -138,7 +147,7 @@ pub fn update_note(
     if let Some(value) = &patch.status {
         fm.status = value.clone();
     }
-    note.body = replace_moss_managed_section(&note.body, &managed_summary(fm));
+    note.body = replace_moss_managed_section(&note.body, summary.unwrap_or(&managed_summary(fm)));
     Ok(format_people_note(&note))
 }
 

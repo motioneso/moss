@@ -17,10 +17,14 @@ printf -v notes_flags '%s\x1f' \
   --remap-path-prefix "$notes_sysroot=/moss/rust" \
   --remap-path-prefix "$notes_target=/moss/target"
 notes_flags=${notes_flags%$'\x1f'}
+notes_features=()
+if [[ "${NOTES_TOOL_CHECKPOINT:-}" == 1 ]]; then
+  notes_features=(--features write-tools)
+fi
 CARGO_HOME="$notes_cargo" RUSTUP_HOME="$notes_rustup" \
 CARGO_ENCODED_RUSTFLAGS="$notes_flags" CARGO_TARGET_DIR="$notes_target" \
   cargo +1.95.0 rustc --locked --offline \
-  --manifest-path modules/notes/src/Cargo.toml --lib --target wasm32-wasip2 --release -- \
+  --manifest-path modules/notes/src/Cargo.toml "${notes_features[@]}" --lib --target wasm32-wasip2 --release -- \
   -C link-arg=--skip-wit-component -C link-arg=--import-memory \
   -C link-arg=--initial-memory=2097152 -C link-arg=--max-memory=67108864
 mkdir -p -- "$(dirname "$notes_output")"

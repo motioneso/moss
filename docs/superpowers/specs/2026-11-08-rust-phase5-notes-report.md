@@ -562,3 +562,121 @@ up before reaching its final database receipt assertion. The watcher now waits
 through an empty create notification. The screenshots and live HTTP responses
 are evidence for the browser actions; a successful final UI-gate receipt is not
 claimed, and the watcher correction has not had a repeat interactive run.
+
+## Part five checkpoint — write-tool execution and approval parity
+
+This continuation starts from merged Notes part four, `d5dda108d` (#4062).
+The brief permits a bounded checkpoint when the remaining scope would require
+repeated context handoffs. This part advances the three write handlers rather than
+claiming complete Notes parity. The Rust core currently has embedding and queue
+ports but no memory ingestion/search service. Porting that service, all Notes
+publication behavior and physical-device acceptance exceeds this checkpoint.
+
+### Implementation and boundaries
+
+The separate `write-tools` feature implements create, edit and delete through SDK
+ports only. It retains non-overwrite conflict refusal, JavaScript dollar-token
+replacement, normalized relative paths, absolute paths under the selected root,
+exact expected-content/destination checks, and the legacy queued-success shape.
+Its sync request has empty parameters, a host-supplied fresh identifier and time;
+source paths and note text do not enter that request. The future worker must
+resolve the authenticated account's chosen folder itself.
+
+The feature is disabled in the ordinary package. Its additional context/job
+imports and linked-file mutation permissions are present only in the tool-check
+manifest. The shipped manifest offers no chat tools, sync job or additional queue
+permission. Its description records that distinction. Existing SQL, routes,
+settings screen and navigation remain unchanged. No People internals are used.
+
+Read-only approval preparation retains the actual legacy card fields, their input
+order, permanent-delete warning, overwrite title and version digest for ordinary
+canonical POSIX folder preferences. It is a native helper, not a newly published
+host handler. It neither grants nor consumes approval. A future host join must
+freeze and recheck the version and enforce delete/overwrite confirmation before
+any write; current default package users cannot invoke these mutations.
+
+The actual legacy TypeScript execute functions produce 55 differential cases;
+the actual approval hooks and field presenters produce 41 cases. Filesystem,
+DataContext, enqueue and approval-target resolution are named stand-ins in that
+oracle. The first native comparison failed when the Rust handlers were absent;
+all comparisons passed after implementation. Earlier 118 domain and 182 edit
+vectors remain in the native suite. These claims are limited to the covered inputs.
+Missing files, source failures, malformed inputs, symlinks, source aliases and
+non-POSIX behavior do not yet have full legacy error/path parity.
+
+The generated component builds with the already approved pinned `wit-bindgen`
+0.57.1 macro dependency in scratch Cargo/Rust toolchain folders. No standalone CLI,
+global tool, unlisted package or real application was installed. The first scratch
+toolchain lacked the Wasm target; the prepared scratch toolchain used by earlier
+People work supplies it. A small parameter deserializer retains submitted approval field order without
+randomized JSON maps. Native approval fixtures retain raw request JSON so the
+tests do not silently sort the submitted fields.
+
+Final real-component, privacy-control, disposable database, SQL-harness and root-check
+receipts are recorded in the proof artifact and checkpoint PR #4067. Reproduction
+is in `modules/notes/README.md`. This report does not independently certify a
+pending command. No complete Notes UI or physical-device proof is claimed by this part.
+
+### Remaining work after part five
+
+1. Add the core memory ingestion/search join and port `notes.search`, then finish
+   `notes.sync`: manual and fifteen-minute schedules, continuation, hundred-chunk
+   budget, unchanged-file detection, unlink no-op and safe saved error messages.
+2. Join the write handlers and approval helper into installed chat, rechecking
+   approval versions and requiring delete/overwrite confirmation. Enable the
+   feature and manifest tools only with a real sync worker and installed tests.
+3. Complete managed publication/fencing, proposals/receipts, reconciliation,
+   exact-block cleanup, private note exports and daily chat archives.
+4. Resolve managed export snapshot/paging and join account export. Complete path,
+   missing-file and error parity and all-handler/job differential cases.
+5. Join Connections into the assembled Phase 4 shell; prove the complete signed-in
+   Notes UI and chat, including from a separate physical device over HTTPS and
+   trusted origins. A same-host browser or phone viewport does not prove that.
+
+The earlier filesystem race, crash, deadline, cross-platform and mixed-lock-version
+limits still apply. Deferred queue publication can fail after file finalization:
+a saved file then needs a later sync retry. No distributed atomicity is claimed.
+
+### Part five review follow-ups
+
+The first fresh review found no blocker or major and four minor points. JSON input
+order preservation is now scoped to the optional write-tools feature. A real-guest
+test distinguishes refusal before finalization (file changes are compensated)
+from publication failure after finalization (the call fails but the file stays
+saved). The account-guard removal control runs in a temporary source copy and
+never edits the worktree's host protection. Concurrent-change refusals remain
+generic service-unavailable errors instead of the legacy conflict/retry hint;
+that error parity remains unfinished with the other disclosed input/path cases.
+The first root lint run found one prefer-const error in the new oracle script;
+it was corrected. The final native default/feature suites, strict all-feature
+Clippy, scoped TypeScript/ESLint/format checks and oracle refresh passed. The
+refreshed corpus has no changes. The ordinary and tool-check Wasm builds also
+succeeded. Later gate and root-check receipts belong to the proof artifact and
+[checkpoint PR #4067](https://github.com/motioneso/moss/pull/4067), which record
+failures and limits as well as successful checks. Full Notes acceptance is still
+unfinished; this PR is a continuation checkpoint only.
+
+### Compiled-runtime correction
+
+After the two native/code review rounds, the compiled component check caught an
+actual runtime failure: ordered JSON maps requested WASI entropy, and the host
+correctly trapped that denied import. The stale ordinary component and the
+optional tool component both reproduced the trap. Rebuilding the ordinary guest
+with its default features restored the existing route; the tool build needed
+`preserve_order` removed entirely. A small ordered-parameter deserializer now
+retains the legacy approval card order using deterministic JSON maps. The
+existing real-component write check is the failing-before/fixed-after regression;
+its current receipt and the privacy gates are in the proof artifact. No host
+permissions were relaxed. The native comparison corpus still passes unchanged.
+The correction is after the two allowed review rounds and needs a fresh final
+review before Ready; the task tracker records whether that round was granted.
+
+The second review's below-bar findings remain recorded: general source/conflict
+error parity, stronger native assertions for queue metadata, a fresh sync request
+for each repeated tool invocation, and the gate's newly required tool-component
+input. An ordinary unlinked folder already returns a null preference and maps to
+409; other source failures remain generic. Queue retry deduplication and actual
+ingestion are not claimed. The gate input is intentional and documented in the
+README. None of those findings is treated as full Notes acceptance. After the
+runtime correction, all nine compiled component/screen/write-tool checks and the
+native approval comparison pass, as does strict native Clippy.

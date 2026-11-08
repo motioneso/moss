@@ -7,6 +7,9 @@ description = "Guest-safe Notes module and domain operations"
 
 [workspace]
 
+[features]
+write-tools = []
+
 [lib]
 path = "lib.rs"
 crate-type = ["rlib", "cdylib"]
@@ -17,6 +20,9 @@ serde_json = "1"
 sha2 = "0.10"
 uuid = "1"
 moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
+
+[dev-dependencies]
+serde_json = { version = "1", features = ["raw_value"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wit-bindgen = { version = "=0.57.1", default-features = false, features = ["macros", "realloc"] }
@@ -30,3 +36,8 @@ strip = true
 [[test]]
 name = "export"
 path = "tests/export.rs"
+
+[[test]]
+name = "write_tools"
+path = "tests/write_tools.rs"
+required-features = ["write-tools"]

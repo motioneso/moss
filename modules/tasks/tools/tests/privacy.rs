@@ -23,6 +23,10 @@ use uuid::Uuid;
 mod actions;
 #[path = "privacy/owner_lookup.rs"]
 mod owner_lookup;
+#[path = "privacy/heartbeat.rs"]
+mod heartbeat;
+#[path = "privacy/jobs.rs"]
+mod jobs;
 
 struct NativeHost<'a> {
     scope: &'a CallScope,

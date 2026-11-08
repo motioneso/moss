@@ -218,10 +218,8 @@ impl<'a, H: Host + ?Sized> NotesService<'a, H> {
             }
             Err(error) => return Err(error),
         };
-        // Legacy locates the canonical note before using note-only members.
-        // Unlike POST's schema, PATCH leaves aliases/emails/phones unvalidated.
-        let content =
-            crate::note_values::update(current.content.as_deref().unwrap_or_default(), id, value)?;
+        // Canonical discovery precedes interpreting unvalidated PATCH list members.
+        let content = crate::note_patch::update(current.content.as_deref(), id, value)?;
         self.publish_update(&current, &content).map(Some)
     }
     fn update_available(&self, id: &str, patch: &UpdateNote) -> Result<Option<Value>> {

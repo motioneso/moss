@@ -1,5 +1,7 @@
 //! Tasks package data core. All effects cross the guest-safe SDK Host interface.
 mod breakdown;
+mod heartbeat;
+mod jobs;
 pub mod dates;
 mod mutations;
 pub mod parse;
@@ -38,6 +40,7 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
                 .map_err(|_| moss_module_sdk::Error::new("Tasks tool failed"))?;
             Ok(serde_json::to_string(&result)?)
         }
+        "job" => jobs::handle(host, payload),
         _ => Err(moss_module_sdk::Error::new("Unsupported Tasks invocation")),
     }
 }
