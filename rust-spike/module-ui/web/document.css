@@ -1,0 +1,38 @@
+/* Document foundations for isolated module frames, following the authored web
+ * base in apps/web/src/styles.css. Frames cannot inherit their parent's type. */
+:root {
+  color: var(--text);
+  background: var(--bg);
+  font-family: var(--font-sans);
+  font-synthesis: none;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "cv01";
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: min(320px, 100%);
+  margin: 0;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}

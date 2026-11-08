@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Repair initial screen loading when the frame loads before its bridge connects.
+- Apply the shared document typography inside the isolated package screen.
 - Run Tasks Rust code as a Wasm component using the approved generated ABI binding.
 - Add basic task, list, tag, activity and view preference routes over the shared host.
 - Add task completion cascades, list moves and next-occurrence generation.

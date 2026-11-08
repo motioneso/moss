@@ -2,7 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { connectModuleFrame } from "./host-bridge.mjs";
 import { moduleClient } from "./guest-bridge.mjs";
-function setup({ loadsBeforeConnect = 0, request = () => ({ saved: true }) } = {}) {
+function setup({
+  loadsBeforeConnect = 0,
+  request = () => ({ saved: true }),
+  keyed = true,
+  connect = true
+} = {}) {
   let listener;
   const replies = [];
   const calls = [];
@@ -17,6 +22,7 @@ function setup({ loadsBeforeConnect = 0, request = () => ({ saved: true }) } = {
   };
   const dispose = connectModuleFrame(frame, "sample.counter", {
     hostWindow,
+    ...(keyed ? { screenUrl: "/module-ui/sample.counter/digest/ui/index.html" } : {}),
     request: (...args) => {
       calls.push(args);
       return request(...args);
@@ -26,18 +32,22 @@ function setup({ loadsBeforeConnect = 0, request = () => ({ saved: true }) } = {
     chat: () => null
   });
   const commandPort = { postMessage() {}, start() {}, close() {} };
-  const bootstrap = (origin = "null", from = source, port = commandPort) =>
+  const documentKey = new URLSearchParams(
+    new URL(frame.src ?? "/", "https://moss.invalid").hash.slice(1)
+  ).get("moss-frame");
+  const bootstrap = (origin = "null", from = source, port = commandPort, key = documentKey) =>
     listener({
       source: from,
       origin,
-      data: { channel: "moss.module.v1", type: "connect" },
+      data: { channel: "moss.module.v1", type: "connect", documentKey: key },
       ports: [port]
     });
   bootstrap("https://moss.example.test");
   bootstrap("null", {});
+  if (keyed) bootstrap("null", source, commandPort, "different-document");
   assert.equal(commandPort.onmessage, undefined);
   for (let i = 0; i < loadsBeforeConnect; i++) frame.dispatchEvent(new Event("load"));
-  bootstrap();
+  if (connect) bootstrap();
   if (loadsBeforeConnect === 0) frame.dispatchEvent(new Event("load"));
   const send = (message) =>
     commandPort.onmessage?.({
@@ -61,6 +71,23 @@ test("navigation before any connect message revokes a still-unconnected bridge",
   await s.send({ type: "request", method: "GET", path: "/entries" });
   assert.equal(s.calls.length, 0);
   assert.equal(s.replies.length, 0);
+  s.dispose();
+});
+test("a late connect from a different document cannot claim the waiting bridge", async () => {
+  const s = setup({ loadsBeforeConnect: 1, connect: false });
+  for (const key of [undefined, null, "different-document"])
+    s.bootstrap("null", s.frame.contentWindow, undefined, key === undefined ? "" : key);
+  await s.send({ type: "request", method: "GET", path: "/entries" });
+  assert.equal(s.calls.length, 0);
+  s.bootstrap();
+  await s.send({ type: "request", method: "GET", path: "/entries" });
+  assert.equal(s.calls.length, 1);
+  s.dispose();
+});
+test("unkeyed legacy callers still refuse a connection after initial load", async () => {
+  const s = setup({ loadsBeforeConnect: 1, keyed: false });
+  await s.send({ type: "request", method: "GET", path: "/entries" });
+  assert.equal(s.calls.length, 0);
   s.dispose();
 });
 test("navigation discards a response still waiting on the host", async () => {
@@ -106,10 +133,12 @@ test("guest receives replies only on its document-bound port and disposes pendin
     });
   const client = moduleClient({
     guestWindow: {
+      location: { hash: "#moss-frame=fixture-document-key" },
       parent: {
         postMessage(message, target, ports) {
           assert.equal(target, "*");
           assert.equal(message.type, "connect");
+          assert.equal(message.documentKey, "fixture-document-key");
           transport = ports[0];
           transport.onmessage = ({ data, ports: replies }) =>
             receive({ message: data, port: replies[0] });

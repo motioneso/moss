@@ -1,13 +1,21 @@
-/** Attach before assigning the verified frame URL. Commands use the initial
+/** Supply the verified screenUrl to bind and open the initial document. Commands use its
  * document's transferred port; later frame loads revoke the connection.
  * `request` runs the signed-in own-module route;
- * theme/navigation/chat callbacks belong to the host. No credentials cross this channel. */
+ * theme/navigation/chat callbacks belong to the host. Account session credentials stay there. */
 export function connectModuleFrame(
   frame,
   moduleId,
-  { request, theme, navigate, chat, hostWindow = globalThis.window }
+  { request, theme, navigate, chat, screenUrl, hostWindow = globalThis.window }
 ) {
   if (!/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*$/.test(moduleId)) throw new Error("Invalid module");
+  if (
+    screenUrl !== undefined &&
+    (typeof screenUrl !== "string" ||
+      !screenUrl.startsWith(`/module-ui/${moduleId}/`) ||
+      /[\\?#\s]/.test(screenUrl))
+  )
+    throw new Error("Invalid screen URL");
+  const documentKey = screenUrl === undefined ? null : globalThis.crypto.randomUUID();
   let live = true;
   let commandPort;
   let loaded = false;
@@ -100,7 +108,8 @@ export function connectModuleFrame(
       event.source !== frame.contentWindow ||
       event.origin !== "null" ||
       event.data?.channel !== "moss.module.v1" ||
-      event.data?.type !== "connect"
+      event.data?.type !== "connect" ||
+      (documentKey !== null && event.data?.documentKey !== documentKey)
     )
       return;
     const port = event.ports?.[0];
@@ -114,7 +123,8 @@ export function connectModuleFrame(
     // postMessage queues a task: the initial document's load may be delivered
     // before its connect message. Either initial ordering is valid; a subsequent
     // load always revokes the one-shot bridge, even if it never connected.
-    if (loaded) dispose();
+    // Legacy callers without a keyed URL retain the original fail-closed timing.
+    if (loaded || (!commandPort && documentKey === null)) dispose();
     loaded = true;
   };
   hostWindow.addEventListener("message", connect);
@@ -126,5 +136,6 @@ export function connectModuleFrame(
     frame.removeEventListener("load", onLoad);
   };
   frame.addEventListener("load", onLoad);
+  if (documentKey !== null) frame.src = `${screenUrl}#moss-frame=${documentKey}`;
   return dispose;
 }

@@ -2,6 +2,7 @@
 import { connectModuleFrame } from "/host-bridge.mjs";
 const frame = document.getElementById("module");
 connectModuleFrame(frame, "tasks", {
+  screenUrl: frame.dataset.src,
   request: async (method, path, body) => {
     const response = await fetch(path, {
       method,
@@ -20,4 +21,3 @@ connectModuleFrame(frame, "tasks", {
       "Chat is not connected in this package check.";
   }
 });
-frame.src = frame.dataset.src;

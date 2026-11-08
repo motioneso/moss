@@ -22,6 +22,7 @@ def build(out: Path) -> None:
     seen: set[Path] = set()
     css = "\n".join(flatten(p, seen) for p in [
         ROOT / "apps/web/src/styles/tokens.css",
+        ROOT / "rust-spike/module-ui/web/document.css",
         ROOT / "packages/ui/src/styles.css",
     ])
     css = css.replace('url("/fonts/', 'url("/module-shared/fonts/')
