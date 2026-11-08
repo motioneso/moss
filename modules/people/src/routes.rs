@@ -24,7 +24,10 @@ struct Split {
 }
 
 pub fn handle(host: &impl Host, payload: &str) -> Result<String> {
-    let request: RouteRequest = serde_json::from_str(payload)?;
+    let mut request: RouteRequest = serde_json::from_str(payload)?;
+    if let Some(response) = crate::route_validation::validate(&mut request) {
+        return Ok(serde_json::to_string(&response)?);
+    }
     // The same safe 5xx body as the current central HTTP error handler. A failed
     // response makes the shared host roll back/compensate the invocation.
     let response = execute(host, &request)
@@ -49,7 +52,9 @@ fn execute(host: &impl Host, request: &RouteRequest) -> Result<Response> {
     let limit = || parse_limit(request.query.get("limit"));
     let value = match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/people") => {
-            json!({"people":repo.list_people(query("status"),query("search"),limit()?)?})
+            let status = filter_query(request.query.get("status"));
+            let search = request.query.get("search").map(query_text);
+            json!({"people":repo.list_people(status.as_deref(),search.as_deref(),limit()?)?})
         }
         ("GET", "/people/resolve") => {
             json!({"person":repo.resolve(query("q").ok_or_else(||Error::new("Missing query"))?)?})
@@ -57,7 +62,9 @@ fn execute(host: &impl Host, request: &RouteRequest) -> Result<Response> {
         ("GET", "/people/match-candidates") => json!({"candidates":repo.candidates(None)?}),
         ("GET", "/people/:id") => json!({"person":repo.detail(id()?)?}),
         ("GET", "/people/:id/links") => {
-            json!({"links":repo.links(id()?,query("sourceKind"),query("linkKind"),limit()?)?})
+            let source = filter_query(request.query.get("sourceKind"));
+            let kind = filter_query(request.query.get("linkKind"));
+            json!({"links":repo.links(id()?,source.as_deref(),kind.as_deref(),limit()?)?})
         }
         ("POST", "/people/match-candidates/:id/accept") => {
             repo.accept_candidate(id()?)?;
@@ -91,13 +98,10 @@ fn execute(host: &impl Host, request: &RouteRequest) -> Result<Response> {
                 ))
             }
         },
-        ("PATCH", "/people/:id") => {
-            let patch: UpdateNote = serde_json::from_value(request.body.clone())?;
-            match notes.update_for_route(id()?, &patch)? {
-                Some(result) => result,
-                None => json!({"person":repo.update_projection(id()?, &request.body)?}),
-            }
-        }
+        ("PATCH", "/people/:id") => match notes.update_value_for_route(id()?, &request.body)? {
+            Some(result) => result,
+            None => json!({"person":repo.update_projection(id()?, &request.body)?}),
+        },
         ("POST", "/people/:id/archive") => {
             let patch = UpdateNote {
                 status: Some(NoteStatus::Archived),
@@ -142,11 +146,43 @@ fn parse_limit(value: Option<&Value>) -> Result<Option<u32>> {
     if digits.is_empty() {
         return Ok(None);
     }
-    let count: u32 = digits
+    let count: f64 = digits
         .parse()
         .map_err(|_| Error::new("Invalid People limit"))?;
-    if negative && count != 0 {
+    // PostgreSQL LIMIT accepts int8, while the SDK pages with u32. Limits above
+    // that page space act as an uncapped scan; values outside int8 still error.
+    if !count.is_finite() || count >= 9_223_372_036_854_775_808.0 || (negative && count != 0.0) {
         return Err(Error::new("Invalid People limit"));
     }
-    Ok((count != 0).then_some(count))
+    if count > f64::from(u32::MAX) {
+        return Ok(None);
+    }
+    Ok((count != 0.0).then_some(count as u32))
+}
+
+// Fastify's repeated search values reach the template string as JS arrays.
+fn query_text(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.clone(),
+        Value::Array(items) => items.iter().map(query_text).collect::<Vec<_>>().join(","),
+        _ => String::new(),
+    }
+}
+// Repeated equality filters are passed unchanged to node-postgres, which
+// encodes arrays as PostgreSQL array literals even against text columns.
+fn filter_query(value: Option<&Value>) -> Option<String> {
+    value.map(|value| match value {
+        Value::Array(items) => format!(
+            "{{{}}}",
+            items
+                .iter()
+                .map(|v| format!(
+                    "\"{}\"",
+                    query_text(v).replace('\\', "\\\\").replace('"', "\\\"")
+                ))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+        _ => query_text(value),
+    })
 }

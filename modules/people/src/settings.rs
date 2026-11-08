@@ -16,6 +16,14 @@ pub fn route(host: &impl Host, request: &RouteRequest) -> Result<Option<Response
                     json!({"error":"Invalid folder setting"}),
                 )));
             };
+            // Fastify coerces null to an empty string before the legacy handler;
+            // normalizeFolder rejects that path instead of clearing the preference.
+            if folder.as_str() == Some("") {
+                return Ok(Some(Response::new(
+                    400,
+                    json!({"error":"People notes folder is unavailable"}),
+                )));
+            }
             (
                 "preference.write",
                 "people-folder",
@@ -30,6 +38,7 @@ pub fn route(host: &impl Host, request: &RouteRequest) -> Result<Option<Response
                 .unwrap_or("");
             ("preference.folders", "people-folder", json!({"path":path}))
         }
+        ("GET", "/people/notes-directories") => return directories(host, request).map(Some),
         ("GET", "/people/note-suggestions") => ("preference.read", "people-suggestions", json!({})),
         ("PUT", "/people/note-suggestions") => {
             let Some(enabled) = request.body.get("enabled").and_then(|v| v.as_bool()) else {
@@ -56,4 +65,47 @@ pub fn route(host: &impl Host, request: &RouteRequest) -> Result<Option<Response
         )));
     }
     Ok(Some(Response::new(200, result?)))
+}
+
+// Legacy browsing is relative to the selected People folder. The additive
+// note-folders picker instead browses the account's allowed absolute roots.
+fn directories(host: &impl Host, request: &RouteRequest) -> Result<Response> {
+    let path = match request.query.get("path") {
+        None => "",
+        Some(serde_json::Value::String(path)) => path.trim_matches(crate::js_space),
+        _ => return Err(moss_module_sdk::Error::new("Invalid directory query")),
+    };
+    let unavailable = || Response::new(400, json!({"error":"People notes folder is unavailable"}));
+    if !host.call("vault", "notes.status", "people-notes", json!({}))?["available"]
+        .as_bool()
+        .unwrap_or(false)
+    {
+        return Ok(unavailable());
+    }
+    if path.starts_with(['/', '\\']) || path.split(['/', '\\']).any(|s| s == "..") {
+        return Ok(unavailable());
+    }
+    let relative = path
+        .split('/')
+        .filter(|s| !s.is_empty() && *s != ".")
+        .collect::<Vec<_>>()
+        .join("/");
+    let Ok(value) = host.call(
+        "vault",
+        "notes.list",
+        "people-notes",
+        json!({"path":relative}),
+    ) else {
+        return Ok(unavailable());
+    };
+    let mut directories: Vec<_> = value["entries"].as_array().into_iter().flatten()
+        .filter(|e| e["kind"] == "directory")
+        .filter_map(|entry| entry["name"].as_str())
+        .map(|name| json!({"name":name,"path":if relative.is_empty(){name.to_owned()}else{format!("{relative}/{name}")}}))
+        .collect();
+    directories.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
+    Ok(Response::new(
+        200,
+        json!({"path":if path.is_empty(){None}else{Some(path)},"directories":directories}),
+    ))
 }

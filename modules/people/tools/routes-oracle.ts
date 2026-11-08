@@ -103,9 +103,9 @@ export async function routesOracle() {
       rows: Record<string, unknown>;
     }[] = [];
     const run = async (
-      method: "GET" | "POST" | "PATCH",
+      method: "GET" | "POST" | "PATCH" | "PUT",
       path: string,
-      body?: Record<string, unknown>,
+      body?: unknown,
       actorIndex = 0
     ) => {
       const app = apps[actorIndex];
@@ -113,7 +113,9 @@ export async function routesOracle() {
       const response = await app.inject({
         method,
         url: `/api${path}`,
-        ...(body ? { payload: body } : {})
+        ...(body !== undefined
+          ? { payload: JSON.stringify(body), headers: { "content-type": "application/json" } }
+          : {})
       });
       const rows: Record<string, unknown> = {};
       for (const table of peopleTables) {
@@ -128,12 +130,72 @@ export async function routesOracle() {
         actor: actors[actorIndex]!,
         method,
         path,
-        ...(body ? { body } : {}),
+        ...(body !== undefined ? { body } : {}),
         expected: { status: response.statusCode, body: response.json() },
         rows
       });
     };
     await run("GET", "/people");
+    // These are real Fastify/Ajv responses, including coercion and error order.
+    for (const method of ["POST", "PATCH", "PUT"] as const) {
+      const path =
+        method === "POST"
+          ? "/people"
+          : method === "PUT"
+            ? "/people/notes-settings"
+            : `/people/${ids.primary}`;
+      for (const body of [42, true, "text", [{ displayName: "Root array", folder: null }]])
+        await run(method, path, body);
+    }
+    for (const body of [
+      null,
+      [],
+      {},
+      { displayName: {} },
+      { displayName: "A", aliases: {} },
+      { displayName: "A", emails: [null, {}] },
+      { displayName: ["A", "B"] }
+    ]) {
+      await run("POST", "/people", body);
+    }
+    for (const body of [
+      null,
+      [],
+      { displayName: {} },
+      { status: "unknown" },
+      { status: null },
+      { aliases: {} },
+      ...[23, 23.5, -0, 1e20, 1e21, 1e-6, 1e-7, Number("9007199254740993")].map((displayName) => ({
+        displayName
+      })),
+      { displayName: null },
+      { displayName: false },
+      { status: ["active"] },
+      { status: ["bad"] },
+      { displayName: ["Coerced"] },
+      { relationshipSummary: "Legacy summary", aliases: ["Unprojected alias"] }
+    ]) {
+      await run("PATCH", `/people/${ids.primary}`, body);
+    }
+    for (const body of [{}, { secondaryPersonId: {} }, { secondaryPersonId: [] }]) {
+      await run("POST", `/people/${ids.primary}/merge`, body);
+    }
+    for (const body of [{}, { identityId: {} }, { identityId: ids.identity, targetPersonId: {} }]) {
+      await run("POST", `/people/${ids.primary}/split-identity`, body);
+    }
+    await run("GET", "/people/notes-settings");
+    for (const body of [{}, { folder: {} }, { folder: [] }, { folder: null }, { folder: "" }]) {
+      await run("PUT", "/people/notes-settings", body);
+    }
+    await run("GET", "/people/notes-directories");
+    await run("GET", "/people/notes-directories?path=child");
+    await run("GET", "/people/notes-directories?path=a&path=b");
+    await run("GET", "/people?status=active&status=archived");
+    await run("GET", "/people?search=Route&search=Other");
+    await run("GET", "/people/resolve?q=Route&q=Other");
+    await run("GET", "/people/resolve");
+    await run("GET", "/people?limit=4294967296");
+    await run("GET", "/people?limit=9007199254740992");
     await run("GET", "/people?search=Route%20A&status=active&limit=1");
     for (const limit of ["0", "garbage", "%2B1tail", "-1", "1&limit=2"]) {
       await run("GET", `/people?limit=${limit}`);

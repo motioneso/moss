@@ -15,7 +15,7 @@ capability. The request uses the SDK's existing `{name, parameters}` envelope:
 Client(host).api("people", "findPeopleByNames", json!({"names": ["Alice", "Al"]}))
 ```
 
-The package will declare these names in `provides`, each at version `0.1.0`:
+The package declares these names in `provides`, each at version `0.1.0`:
 
 | Name                      | Parameters           | Result                                             |
 | ------------------------- | -------------------- | -------------------------------------------------- |
@@ -55,7 +55,9 @@ to the ordinary identity/link response.
 The current `repository` module is an internal persistence checkpoint. The compiled guest
 implements the `findPeopleByNames`, `resolve`, `getPerson` and
 `listEmailIdentityValues` API envelopes above, but
-no installed package registers them yet. It also covers person projections and composite
+the installed-package gate has assertions for routing all four through an installed consumer
+fixture. Those assertions have not completed successfully; final installed replay and real
+application composition remain open. It also covers person projections and composite
 indexing state internally. Indexing-state
 rows currently retain database field names internally; the eventual service must preserve
 the legacy external response shape. Do not use this internal module as a consumer interface.
@@ -126,14 +128,16 @@ Publication happens after commit, with deterministic child command IDs for retri
 an at-least-once seam, not an atomic database/queue outbox. A publication failure returns an
 error for queue retry; another indexing pass can append another legacy event.
 
-The installed package must still declare both queue schemas, retries and capability grants.
-This checkpoint does not connect ingest nudges, installed HTTP, chat or Settings.
+The package declares both command-reference queue schemas and capability grants. Installed
+scheduler retries and real provider composition still require qualification. This checkpoint
+does not connect ingest nudges, network HTTP, or the real chat and Settings application.
 
 ## Internal route-envelope checkpoint
 
 The guest accepts the shared SDK's `RouteRequest` for the paths below. `path` is the
 matched template; IDs come from `params`, decoded query values from `query`, and JSON
-input from `body`. These are not installed endpoints or new consumer API names.
+input from `body`. The installed gate replays these envelopes through namespaced dispatch;
+they are not new consumer API names. Network HTTP composition remains open.
 
 | Method | Template                                | Result body                                                |
 | ------ | --------------------------------------- | ---------------------------------------------------------- |
@@ -162,28 +166,38 @@ The availability decision uses the host's opt-in
 [`notes.status` contract](../../rust-spike/module-host/LINKED_NOTES_STATUS.md).
 Busy folders, invalid/oversized content and backend failures abort instead of falling back.
 
-The differential gate covers selected query/error cases and valid JSON bodies. Fastify's
-schema validation/coercion is not implemented here: malformed bodies can currently return
-500 where the legacy HTTP layer returns 400. Settings/directory/index-refresh routes,
-ingest nudges, package route registration and real HTTP compatibility remain unfinished.
-Limits above `u32::MAX` currently fail rather than accepting the legacy larger count.
-Repeated `status`/`search` query values are not yet passed through like legacy arrays.
+The differential gate compares legacy body-schema errors and coercion as well as selected
+query/error cases through installed dispatch when supplied a package. Positive limits
+above `u32::MAX` use an uncapped SDK scan if they fit PostgreSQL `int8`; repeated search
+values use JavaScript comma joining and repeated equality filters use node-postgres array
+text. This covers the enumerated oracle cases, not all HTTP inputs. Index-refresh, ingest
+nudges and real network HTTP compatibility remain unfinished.
 
 ## Part five Settings bridge
 
 The package manifest declares the four public lookup APIs at version `0.1.0`, unchanged
-from the contract above. Installed consumer routing remains to be qualified.
+from the contract above. The installed-consumer gate qualifies these calls with synthetic
+accounts; actual Tasks, Notes and Calendar composition remains to be qualified.
 
 The module frame uses the existing People data/note routes and these setting routes:
 
-| Method   | Path                            | Body/result                     |
-| -------- | ------------------------------- | ------------------------------- | ------ |
-| GET, PUT | `/people/notes-settings`        | `{folder: string                | null}` |
-| GET, PUT | `/people/note-suggestions`      | `{enabled: boolean}`            |
-| GET      | `/people/note-folders?path=...` | `{directories: [{name, path}]}` |
+| Method   | Path                                 | Body/result                                           |
+| -------- | ------------------------------------ | ----------------------------------------------------- |
+| GET, PUT | `/people/notes-settings`             | `{folder: string \| null}`                            |
+| GET, PUT | `/people/note-suggestions`           | `{enabled: boolean}`                                  |
+| GET      | `/people/note-folders?path=...`      | `{directories: [{name, path}]}`                       |
+| GET      | `/people/notes-directories?path=...` | `{path: string \| null, directories: [{name, path}]}` |
 
 `note-folders` is an additive module-local adapter for the shared chooser: an empty path
 lists only trusted account roots; a selected absolute path lists its subfolders through
 `VaultContext`. It is not the legacy relative `notes-directories` endpoint. Suggestions use
 the existing shared preference member, not module KV storage. The trusted settings adapter
 commits its single-operation writes immediately; later guest failure cannot undo that save.
+
+`notes-directories` retains the legacy relative-folder contract: an absent/blank path lists
+the selected People root and returns `path: null`; child paths and returned directory paths
+are relative to that root. Repeated path values fail with the ordinary safe 500 response.
+Unavailable folders and rejected paths return the safe 400 folder error. Locale-sensitive
+ordering and unusual filesystem/backend failures remain outside the current parity cases.
+Fastify coerces a null folder to an empty string; empty and null saves retain the legacy
+400 folder error and preserve the preference. Neither endpoint accepts a caller-selected actor.
