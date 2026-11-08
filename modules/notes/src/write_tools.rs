@@ -1,7 +1,10 @@
 //! Write-tool execution checkpoint. The shipped manifest does not offer these tools yet:
 //! the core memory/sync worker and approval orchestration must be joined first.
 use moss_module_sdk::{Error, Host, Result};
-use serde::Deserialize;
+use serde::{
+    de::{MapAccess, Visitor},
+    Deserialize, Deserializer,
+};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
@@ -9,7 +12,41 @@ use sha2::{Digest, Sha256};
 #[serde(deny_unknown_fields)]
 struct Request {
     tool: String,
-    parameters: Value,
+    parameters: Parameters,
+}
+// Retain submitted field order without randomized maps, which need WASI entropy.
+struct Parameters {
+    values: Value,
+    order: Vec<String>,
+}
+impl<'de> Deserialize<'de> for Parameters {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> core::result::Result<Self, D::Error> {
+        struct Fields;
+        impl<'de> Visitor<'de> for Fields {
+            type Value = Parameters;
+            fn expecting(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                formatter.write_str("Notes parameters object")
+            }
+            fn visit_map<M: MapAccess<'de>>(
+                self,
+                mut fields: M,
+            ) -> core::result::Result<Parameters, M::Error> {
+                let mut values = serde_json::Map::new();
+                let mut order = Vec::new();
+                while let Some((key, value)) = fields.next_entry::<String, Value>()? {
+                    if !values.contains_key(&key) {
+                        order.push(key.clone());
+                    }
+                    values.insert(key, value);
+                }
+                Ok(Parameters {
+                    values: Value::Object(values),
+                    order,
+                })
+            }
+        }
+        deserializer.deserialize_map(Fields)
+    }
 }
 struct Input<'a> {
     tool: &'a str,
@@ -23,7 +60,7 @@ impl<'a> Input<'a> {
             "notes.delete" => &["path"],
             _ => return Err(failure(400, "Unknown Notes write tool")),
         };
-        let raw = &request.parameters;
+        let raw = &request.parameters.values;
         if !raw
             .as_object()
             .is_some_and(|p| p.keys().all(|k| keys.contains(&k.as_str())))
@@ -198,7 +235,8 @@ pub fn presentation(host: &impl Host, payload: &str) -> Result<String> {
         fields.push(json!({"label":"Folder","value":folder}));
     }
     // The legacy card preserves submitted field order, including an optional flag.
-    for (key, value) in input.raw.as_object().unwrap() {
+    for key in &request.parameters.order {
+        let value = &input.raw[key];
         let label = match key.as_str() {
             "content" => "Content",
             "oldText" => "Replace",

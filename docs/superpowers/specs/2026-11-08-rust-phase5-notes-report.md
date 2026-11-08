@@ -608,8 +608,9 @@ The generated component builds with the already approved pinned `wit-bindgen`
 0.57.1 macro dependency in scratch Cargo/Rust toolchain folders. No standalone CLI,
 global tool, unlisted package or real application was installed. The first scratch
 toolchain lacked the Wasm target; the prepared scratch toolchain used by earlier
-People work supplies it. The declared `serde_json` dependency enables its existing
-`preserve_order` feature so approval fields retain submitted order.
+People work supplies it. A small parameter deserializer retains submitted approval field order without
+randomized JSON maps. Native approval fixtures retain raw request JSON so the
+tests do not silently sort the submitted fields.
 
 Final real-component, privacy-control, disposable database, SQL-harness and root-check
 receipts are recorded in the proof artifact and checkpoint PR #4067. Reproduction
@@ -654,3 +655,28 @@ succeeded. Later gate and root-check receipts belong to the proof artifact and
 [checkpoint PR #4067](https://github.com/motioneso/moss/pull/4067), which record
 failures and limits as well as successful checks. Full Notes acceptance is still
 unfinished; this PR is a continuation checkpoint only.
+
+### Compiled-runtime correction
+
+After the two native/code review rounds, the compiled component check caught an
+actual runtime failure: ordered JSON maps requested WASI entropy, and the host
+correctly trapped that denied import. The stale ordinary component and the
+optional tool component both reproduced the trap. Rebuilding the ordinary guest
+with its default features restored the existing route; the tool build needed
+`preserve_order` removed entirely. A small ordered-parameter deserializer now
+retains the legacy approval card order using deterministic JSON maps. The
+existing real-component write check is the failing-before/fixed-after regression;
+its current receipt and the privacy gates are in the proof artifact. No host
+permissions were relaxed. The native comparison corpus still passes unchanged.
+The correction is after the two allowed review rounds and needs a fresh final
+review before Ready; the task tracker records whether that round was granted.
+
+The second review's below-bar findings remain recorded: general source/conflict
+error parity, stronger native assertions for queue metadata, a fresh sync request
+for each repeated tool invocation, and the gate's newly required tool-component
+input. An ordinary unlinked folder already returns a null preference and maps to
+409; other source failures remain generic. Queue retry deduplication and actual
+ingestion are not claimed. The gate input is intentional and documented in the
+README. None of those findings is treated as full Notes acceptance. After the
+runtime correction, all nine compiled component/screen/write-tool checks and the
+native approval comparison pass, as does strict native Clippy.

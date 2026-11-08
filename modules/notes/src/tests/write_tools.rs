@@ -101,21 +101,26 @@ fn tools_reject_forged_context_and_unknown_fields_before_host_access() {
 
 #[test]
 fn approval_details_match_actual_legacy_hooks_without_writing_or_enqueueing() {
+    #[derive(serde::Deserialize)]
+    struct Case {
+        files: BTreeMap<String, String>,
+        request: Box<serde_json::value::RawValue>,
+        expected: Value,
+    }
     for line in include_str!("approval-vectors.jsonl").lines() {
-        let case: Value = serde_json::from_str(line).unwrap();
+        let case: Case = serde_json::from_str(line).unwrap();
         let ports = Ports {
-            files: RefCell::new(serde_json::from_value(case["files"].clone()).unwrap()),
+            files: RefCell::new(case.files.clone()),
             syncs: RefCell::new(0),
         };
-        let out =
-            moss_notes::write_tools::presentation(&ports, &case["request"].to_string()).unwrap();
+        let out = moss_notes::write_tools::presentation(&ports, case.request.get()).unwrap();
         assert_eq!(
             serde_json::from_str::<Value>(&out).unwrap(),
-            case["expected"],
+            case.expected,
             "{}",
-            case["request"]
+            case.request
         );
-        assert_eq!(json!(*ports.files.borrow()), case["files"]);
+        assert_eq!(*ports.files.borrow(), case.files);
         assert_eq!(*ports.syncs.borrow(), 0);
     }
 }
