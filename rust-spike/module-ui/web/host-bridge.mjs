@@ -12,10 +12,16 @@ export function connectModuleFrame(
     screenUrl !== undefined &&
     (typeof screenUrl !== "string" ||
       !screenUrl.startsWith(`/module-ui/${moduleId}/`) ||
-      /[\\?#\s]/.test(screenUrl))
+      /[\\?#\s]/.test(screenUrl) ||
+      new URL(screenUrl, "https://moss.invalid").pathname !== screenUrl)
   )
     throw new Error("Invalid screen URL");
-  const documentKey = screenUrl === undefined ? null : globalThis.crypto.randomUUID();
+  const documentKey =
+    screenUrl === undefined
+      ? null
+      : Array.from(globalThis.crypto.getRandomValues(new Uint8Array(32)), (byte) =>
+          byte.toString(16).padStart(2, "0")
+        ).join("");
   let live = true;
   let commandPort;
   let loaded = false;

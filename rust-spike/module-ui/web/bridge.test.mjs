@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test, mock } from "node:test";
 import assert from "node:assert/strict";
 import { connectModuleFrame } from "./host-bridge.mjs";
 import { moduleClient } from "./guest-bridge.mjs";
@@ -210,4 +210,31 @@ test("a newly loaded document cannot invoke routes on the old frame bridge", asy
   assert.equal(s.calls.length, 2);
   assert.equal(s.replies.length, 2);
   s.dispose();
+});
+
+test("keyed screens work without the secure-context-only UUID API", async () => {
+  const uuid = mock.method(globalThis.crypto, "randomUUID", () => {
+    throw new Error("UUID API unavailable outside a secure context");
+  });
+  try {
+    const s = setup();
+    await s.send({ type: "request", method: "GET", path: "/entries" });
+    assert.equal(s.calls.length, 1);
+    s.dispose();
+  } finally {
+    uuid.mock.restore();
+  }
+});
+
+test("screen URLs must remain inside their verified module path after normalization", () => {
+  for (const screenUrl of [
+    "/module-ui/sample.counter/../other/ui/index.html",
+    "/module-ui/sample.counter/%2e%2e/other/ui/index.html",
+    "/module-ui/sample.counter/digest/ui/index.html?redirect=other",
+    "https://other.example/module-ui/sample.counter/digest/ui/index.html"
+  ])
+    assert.throws(
+      () => connectModuleFrame(new EventTarget(), "sample.counter", { screenUrl }),
+      /Invalid screen URL/
+    );
 });

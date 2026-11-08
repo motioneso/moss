@@ -738,7 +738,7 @@ shared frame example use the keyed path. A later frame load revokes the bridge;
 responses still waiting on the host are discarded after revocation. No account
 session credential is passed into the package.
 
-Ten bridge checks cover both initial orders, wrong origin/source/key, later
+Twelve bridge checks cover both initial orders, wrong origin/source/key, later
 connections, navigation before connection, late replies, path restrictions,
 bounded resize, disposal and timeout. Removing the document-key check, the
 frame-source check or navigation revocation in separate disposable copies makes
@@ -753,7 +753,8 @@ loading and typography repair without claiming full parity.
 
 ### Verification and remaining acceptance
 
-Live interaction and differential receipts are recorded below as they complete.
+Live interaction and differential results are recorded in this section.
+The task proof contains the command receipts and screenshots.
 The disposable privacy/data gate passes: six compiled/native privacy checks
 and twenty-nine legacy integration checks, including failing-first controls. The UI fixture installs a real signed package and routes
 real account data through the Rust host, but it remains a small fixture frame;
@@ -789,7 +790,7 @@ work runs only through `scripts/run-gate.sh` on disposable servers.
 
 ### Checkpoint verification record
 
-- `node --test rust-spike/module-ui/web/bridge.test.mjs modules/tasks/ui/model.test.mjs`: fifteen passing checks; original initial-load regression failed first.
+- `node --test rust-spike/module-ui/web/bridge.test.mjs modules/tasks/ui/model.test.mjs`: seventeen passing checks; original initial-load regression failed first.
 - Scoped ESLint and Prettier checks pass. `pnpm verify:static` passes (lint, formatting, repository invariants, type checks and app map build).
 - Native guest: thirteen checks pass across unit, public schema and repository contract suites.
 - Shared frame example: `cargo +1.95.0 check --locked --offline --manifest-path rust-spike/module-host/Cargo.toml --example frame_check` passes.
@@ -798,8 +799,17 @@ work runs only through `scripts/run-gate.sh` on disposable servers.
 - Signed-install UI gate: certificate-verifying HTTPS, sign-in redirection, unknown Host/Origin refusal, signed registry selection/download/install and browser persistence pass. The frame makes real `/api/m/tasks/...` calls through the installed router. Chrome uses a temporary self-signed-certificate exception; the separate Node network assertions verify the generated certificate.
 - Clippy was unavailable in the existing scratch toolchain. No Rust domain logic or migration changes were made here. No claim of complete browser, accessibility, performance, real-shell or remote-device acceptance is made.
 
-The final commit is rechecked with the same gate commands before Ready; exact
-commit/fingerprint receipts and failures are attached to the task proof. A future
+Exact commit/fingerprint receipts and failures are attached to the task proof;
+these distinguish each tested build rather than treating earlier runs as final. A future
 continuation should start with the remaining parity routes/jobs and real-shell
 join. The temporary fixture is loopback-only and was stopped after this check;
 it is not a deployed application or a second physical device.
+
+The first independent review found that `randomUUID` would fail in a plain HTTP
+LAN caller of the shared bridge. The key now uses `getRandomValues`, available
+without a secure context; application access still requires HTTPS. Screen URLs
+are also checked after URL normalization to reject dot-segment escapes. Both
+regressions fail first and then pass after repair. The review's remaining minor
+notes are limited automated form coverage and untested initial blank-frame load
+behavior in other browsers. Actual Save and Enter-key list creation were checked
+in the signed installed Chrome fixture; other-browser timing remains unproven.
