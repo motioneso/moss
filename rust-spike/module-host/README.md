@@ -17,7 +17,10 @@ and calls `dispatch` for declared `/api/m/<module>/...` routes. Workers call `In
 Both interfaces are synchronous: call them on a bounded blocking executor, never directly from
 an async request task. The application supplies its trusted keys, secret cipher, AI router and
 optional compiled-cache key. The queue and module-host schema constants must be applied by the
-application's migration bootstrap first.
+application's migration bootstrap first. `Configuration::migrations` is the trusted bootstrap
+connection: it must be able to administer module roles and read the forced-RLS catalog (the
+current local bootstrap uses a superuser connection). Never use it as an account or worker
+pool. This adapter does not check that bootstrap privilege at startup.
 
 The bridges directory contains Cargo manifests pointing at unchanged Phase 2b source files.
 It avoids changing those crates' workspace declarations or copying their implementation.
@@ -33,6 +36,14 @@ Folder sources support offline mirrors; HTTPS sources accept an explicit public 
 source only. `preview_list` returns one consent per package, bound to both package digest and
 previous installation. `apply_list` accepts those exact consents. A failed install retains the
 old version and pin. Snapshot APIs list, expire and explicitly restore retained recovery points.
+
+## Attachment permissions
+
+A signed package declares `{"port":"attachments","operations":["read"],"resources":["handed"]}`
+to read future uploads. `handed` is a stable attachment scope, not a wildcard on other ports.
+The request resource is the upload UUID returned by the host's `hand_attachment`. Each read
+still requires an attachment handed to that module by the signed-in account. A package may
+also declare exact attachment UUIDs. Permission data describes that account-and-module scope.
 
 ## Verify
 

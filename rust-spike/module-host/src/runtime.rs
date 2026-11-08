@@ -270,11 +270,16 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
         "This operation was not approved"
     );
     ensure!(
-        cap.resources.contains(&request.resource),
+        cap.resources.contains(&request.resource)
+            || (port == "attachments" && cap.resources.contains("handed")),
         "This resource was not approved"
     );
     reject_context(&request.parameters)?;
     match port {
+        "attachments" => ensure!(
+            request.operation == "read" && uuid::Uuid::parse_str(&request.resource).is_ok(),
+            "Only handed attachment IDs can be read"
+        ),
         "db" => {
             ensure!(
                 manifest.database.owned_tables.contains(&request.resource),

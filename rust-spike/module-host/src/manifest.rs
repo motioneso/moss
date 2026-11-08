@@ -411,6 +411,9 @@ impl Manifest {
     }
     fn permission_metadata(&self, port: &str) -> Vec<String> {
         match port {
+            "attachments" => {
+                vec!["Only attachments you hand to this module in your account".into()]
+            }
             "credentials" => self
                 .credentials
                 .iter()

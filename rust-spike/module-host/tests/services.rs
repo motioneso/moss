@@ -43,50 +43,150 @@ fn call(
     Ok(serde_json::from_str(&out)?)
 }
 #[test]
-fn handed_attachments_are_account_and_module_scoped_through_wasm() {
+fn installed_signed_packages_read_only_attachments_handed_to_their_account_and_module() {
+    use moss_module_host::{
+        lifecycle::FileLifecycle, registry::Source, sql::LegacyInventory, store::Installer,
+    };
     let data = tempfile::tempdir().unwrap();
-    let cipher = Arc::new(SecretCipher::connectors(&Default::default()).unwrap());
+    let registry = tempfile::tempdir().unwrap();
+    let keys = common::Keys::new();
+    keys.write(registry.path(), "1.0.0", 1, vec![]);
+    let a = uuid::Uuid::new_v4();
+    let access = AccessContext::new(a, "attachment-install");
     let services = Arc::new(
         ServicePorts::new(
             data.path(),
-            cipher,
+            Arc::new(SecretCipher::connectors(&Default::default()).unwrap()),
             Arc::new(NoAi),
             Arc::new(LocalPorts::new(data.path()).unwrap()),
         )
         .unwrap(),
     );
-    let a = uuid::Uuid::new_v4();
-    let b = uuid::Uuid::new_v4();
+    let installer = Installer::new(
+        data.path(),
+        Arc::new(ServiceCatalog::default()),
+        Arc::new(FileLifecycle::new(data.path(), [a].into()).unwrap()),
+        Host::new(Limits::default()).unwrap(),
+        services.clone(),
+        "0.1.0".parse().unwrap(),
+        LegacyInventory::default(),
+    )
+    .unwrap();
+    let root = common::Keys::public(&keys.root);
+    let catalog = installer
+        .refresh(
+            &access,
+            Source::Folder(registry.path().into()),
+            &root,
+            &root,
+            "sample-registry",
+        )
+        .unwrap();
+    // Manifests are frozen, signed and installed before any upload UUID exists.
+    for (id, handed) in [
+        ("sample.counter", true),
+        ("sample.other", true),
+        ("sample.unapproved", false),
+    ] {
+        let mut manifest = common::manifest("1.0.0");
+        manifest.id = id.into();
+        manifest.capabilities.push(Capability {
+            port: "attachments".into(),
+            operations: ["read".into()].into(),
+            resources: if handed {
+                ["handed".into()].into()
+            } else {
+                Default::default()
+            },
+            allow_private: false,
+        });
+        let mut files = common::files(&manifest);
+        files.insert(
+            "code/module.wasm".into(),
+            wat::parse_str(
+                include_str!("../sample/module.wat")
+                    .replace("moss:module/kv@", "moss:module/attachments@"),
+            )
+            .unwrap(),
+        );
+        let bytes = moss_module_host::archive::pack(&files).unwrap();
+        let digest = moss_module_host::trust::digest(&bytes);
+        installer
+            .import_file(
+                &access,
+                &catalog,
+                &bytes,
+                &common::Keys::sign(&keys.publisher, digest.as_bytes()),
+                "sample",
+                true,
+            )
+            .unwrap();
+    }
     let id = services
         .hand_attachment(
-            &AccessContext::new(a, "upload"),
+            &access,
             "sample.counter",
             b"actual upload bytes",
             "text/plain",
         )
         .unwrap();
-    services
-        .set_credential(
-            &AccessContext::new(a, "configure"),
+    let request = |resource: &str| {
+        json!({"operation":"read","resource":resource,"parameters":{}}).to_string()
+    };
+    let out = installer
+        .call("sample.counter", access.clone(), "route", &request(&id))
+        .unwrap();
+    let out: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(
+        out,
+        json!({"mediaType":"text/plain","base64":"YWN0dWFsIHVwbG9hZCBieXRlcw=="})
+    );
+    assert!(installer
+        .call(
             "sample.counter",
-            "api",
-            &SecretFields::new().with("value", Secret::new("test-only-sentinel")),
+            AccessContext::new(uuid::Uuid::new_v4(), "other-account"),
+            "route",
+            &request(&id)
+        )
+        .is_err());
+    assert!(installer
+        .call("sample.other", access.clone(), "route", &request(&id))
+        .is_err());
+    let unapproved = services
+        .hand_attachment(
+            &access,
+            "sample.unapproved",
+            b"needs permission",
+            "text/plain",
         )
         .unwrap();
-    let mut m = common::manifest("1.0.0");
-    m.capabilities.push(Capability {
-        port: "attachments".into(),
-        operations: ["read".into()].into(),
-        resources: [id.clone()].into(),
-        allow_private: false,
-    });
-    let host = Host::new(Limits::default()).unwrap();
-    let r = json!({"operation":"read","resource":id,"parameters":{}});
-    let out = call(&host, services.clone(), &m, a, "attachments", r.clone()).unwrap();
-    assert_eq!(out["mediaType"], "text/plain");
-    assert!(call(&host, services.clone(), &m, b, "attachments", r.clone()).is_err());
-    m.id = "other.counter".into();
-    assert!(call(&host, services, &m, a, "attachments", r).is_err());
+    assert!(installer
+        .call(
+            "sample.unapproved",
+            access.clone(),
+            "route",
+            &request(&unapproved)
+        )
+        .is_err());
+    let other = services
+        .hand_attachment(&access, "sample.other", b"another module", "text/plain")
+        .unwrap();
+    for resource in [
+        other,
+        uuid::Uuid::new_v4().to_string(),
+        "handed".into(),
+        "../host/credential-api".into(),
+    ] {
+        assert!(installer
+            .call(
+                "sample.counter",
+                access.clone(),
+                "route",
+                &request(&resource)
+            )
+            .is_err());
+    }
+    println!("PASS signed packages installed before uploads: handed attachment read succeeds; other accounts, modules, unhanded IDs and paths are refused");
 }
 #[test]
 fn install_wide_storage_is_explicit_and_tools_cannot_lower_declared_risk() {

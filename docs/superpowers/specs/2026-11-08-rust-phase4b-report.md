@@ -59,6 +59,9 @@ The expanded tests caught and fixed these faults:
   same two-account update/delete regression failed before the fix and now passes. The host
   temporarily relaxes FORCE for the table's restricted owner inside the migration transaction,
   restores it before commit, and keeps runtime row policies enabled.
+- A signed package could not predict future attachment UUIDs. The installed-package regression
+  failed before the fix; the stable `attachments` resource `handed` now permits future uploads.
+  The same real guest refuses other accounts, other modules, unhanded IDs and undeclared scope.
 - Removal could return before recovering an interrupted install. Its regression failed with
   the recovery journal still present; removal now recovers before reading the catalog.
 
@@ -74,10 +77,11 @@ trust rejects its test certificate; private-network access must be allowed; addi
 source's public CA permits signed metadata and package retrieval. No system CA or global tool
 installation is changed.
 
-Ten disposable removal controls require an assertion failure after removing signature checks,
+Twelve disposable removal controls require an assertion failure after removing signature checks,
 the package hash, the import allowlist, publisher-prefix checks, private-address classification,
-compiled-cache authentication, credential response redaction, one-use tool approval, publisher provenance or actor/role selection. The
-normal protected tests then pass. The import control checks refusal before guest execution;
+compiled-cache authentication, credential response redaction, one-use tool approval, publisher
+provenance, actor/role selection, handed attachment ownership or attachment resource permission.
+The normal protected tests then pass. The import control checks refusal before guest execution;
 it is not a proof against every possible runtime attack.
 
 The service integration tests execute real Wasm and installed-module dispatch. Credential and
@@ -116,7 +120,8 @@ incomplete. The continuation implements the service, queue, SQL, recovery, appro
 work that those checkpoints lacked. The third review of `46f981865` identified the schedule-only
 and data-migration failures above. They were reproduced and fixed in `f44c30a85` and `94d0dcfb1`;
 the minor removal-recovery finding was reproduced and fixed in `5169e8d96`. A further review of
-the corrected final commit is required before acceptance.
+the corrected commit `415ea990b` found the attachment permission fault above. Its failing-first
+fix is implemented. The final independent verdict is recorded in the proof artifact.
 
 Two suggestions below the must-fix threshold remain explicit: calls still reverify package
 files to detect disk changes, with a cost that grows with package size; exhaustive partial-restore
@@ -126,3 +131,10 @@ The earlier suggestion to delete purge snapshots immediately was rejected: desig
 requires thirty-day recovery retention. Expiry and cleanup are now implemented. The PostgreSQL
 transport assumption and import-proof limits remain explicit above. No push, merge or app
 installation has been performed by this task agent.
+
+The fourth review also noted minor follow-ups: purge retains account enable preferences and job
+history, and the migration connection must be a trusted bootstrap connection able to read the
+forced-RLS catalog. The existing API separates that connection from account runtime pools;
+credential validation and preference reset on purge are not claimed. The review's suggested
+app-map path collision was unconfirmed: this library validates package metadata and does not
+merge it into a running UI. Namespace collision handling remains a server/UI join requirement.

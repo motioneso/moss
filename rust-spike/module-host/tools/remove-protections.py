@@ -22,6 +22,9 @@ controls = [
     ("publisher registry provenance", "src/store.rs", r'for \(registry, seen\) in &state\.registries \{.*?\n        \}\n        if let Some\(old\)', 'if let Some(old)', "lifecycle", "sample_install_pin_upgrade_remove_and_reinstall_preserves_account_data"),
     ("host-owned actor and role", "src/runtime.rs", r'reject_context\(&request.parameters\)\?;', 'let _ = &request.parameters;', "boundaries", "guest_cannot_select_another_actor_or_resource"),
 
+    ("handed attachment ownership", "src/services.rs", r'ensure!\(\s*!attachment.is_null\(\),\s*"This account did not hand this attachment to this module"\s*\);', 'let _ = &attachment;', "services", "installed_signed_packages_read_only_attachments_handed_to_their_account_and_module"),
+    ("attachment resource permission", "src/runtime.rs", r'ensure!\(\s*cap.resources.contains\(&request.resource\).*?"This resource was not approved"\s*\);', 'let _ = &cap.resources;', "services", "installed_signed_packages_read_only_attachments_handed_to_their_account_and_module"),
+
 ]
 environment = dict(os.environ, CARGO_TARGET_DIR=os.environ.get("CARGO_TARGET_DIR", str(Path(tempfile.gettempdir()) / "moss-module-host-target")))
 for name, file, pattern, replacement, suite, test in controls:
