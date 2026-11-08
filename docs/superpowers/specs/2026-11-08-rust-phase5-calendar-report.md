@@ -52,11 +52,12 @@ checks are included in the scoped CI job; database proofs run only through verif
 
 ## Verification
 
-This is an implementation checkpoint, not a Ready submission. The scoped disposable
-verify-gate completed with exit zero on the implementation's dirty tree at base commit
+The scoped disposable verify-gate first completed with exit zero on the implementation's
+dirty tree at base commit
 `79c81b2fc`. Its input fingerprint was `2034974a2305`. This receipt does not cover the
 subsequent Clippy-only boolean-expression change or this report, and it is not a receipt for
-the checkpoint commit. A final committed-code gate is still required.
+the final commit. The task Proof artifact records the final committed-code gate and review;
+that evidence is kept outside the source tree to avoid changing the commit under test.
 
 Observed checks from this work:
 
@@ -204,27 +205,15 @@ Each slice needs its own bounded build brief and independent review. This slice 
 disposable database tests; it started no app server or live browser session. No new tools
 were installed and no build agents or merges were started. Workshop and Food remain excluded.
 
-## Checkpoint and remaining work
+## Completion boundary and remaining slices
 
-The brief requires a clean committed checkpoint when work would exceed one compaction.
-This checkpoint preserves the slice-one implementation and observed checks. It has not had
-its independent review, and no final Proof artifact or Ready submission has been published.
-Do not present it as full Calendar parity or a live-verified feature.
-
-To finish JS-48:
-
-1. Inspect the complete checkpoint diff, run the final committed-code scoped gate and repeat
-   formatting/type checks when relevant inputs changed. The gate command above builds the
-   actual guest and exercises package installation and privacy controls.
-2. Have fresh Claude eyes review the reduced brief and diff against main using the Herdr
-   reviewer template. Zero of the allowed two review rounds have been used. Fix major or
-   blocker findings and record each review on the commit it reviewed.
-3. Publish the required recipe Proof artifact with real gate output, each proof captioned,
-   and a Not proven list covering full parity, UI, second-device access and execution.
-4. Push this task branch and open one PR with Part of #4027 and Release note Category: N/A.
-   Comment on Card 525 with the final commit and checks, move it to Ready to Playtest, then
-   run Herdr ready with the proof artifact. Do not merge or mark Done.
+This report covers only the approved package/data/privacy/host-wrapper slice. The task's
+Proof artifact and PR carry the final check receipts, independent review and explicit
+Not proven list. Final acceptance uses the exact reviewed commit; this report does not
+claim UI, second-device, execution or full Calendar parity.
 
 Slices two and three retain the outstanding tools/jobs/execution and screens/live-device/
-full-parity work described above. The manual component build target and missing concrete
-public-reference adapters must remain explicit integration limitations.
+full-parity work described above. In particular, later builders must provide concrete
+actor-scoped public-reference adapters, preserve the old HTTP context/envelopes and use the
+shared authenticated host/shell integration. The manual component build target remains an
+explicit build difference to resolve or standardize across the assembled package.
