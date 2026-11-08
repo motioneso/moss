@@ -219,7 +219,7 @@
     },
     {
       "id": "calendar.briefing-settings",
-      "description": "Edit and reload account lookahead, prep-task and time-block choices. Settings and the time-block writeback policy save together; failed saves retain confirmed values. No provider action runs from this screen.",
+      "description": "Edit and reload account lookahead, prep-task and time-block choices. Settings and the time-block writeback policy save together; failed saves retain confirmed values. Auto grants standing permission also honored by the existing app. This Rust screen does not execute provider actions.",
       "errors": [
         {
           "code": "calendar-settings-save-failed",
@@ -256,7 +256,7 @@
       "id": "calendar.automation",
       "label": "Calendar",
       "path": "/settings/calendar",
-      "description": "Saved account lookahead, prep-task and time-block choices. Time-block mode also saves the matching writeback permission. Automatic actions and source-behavior controls remain unavailable.",
+      "description": "Saved account lookahead, prep-task and time-block choices. Time-block mode also saves the matching writeback permission. Auto grants standing permission also honored by the existing app; Rust action execution and source-behavior controls remain open.",
       "scope": "user"
     }
   ]

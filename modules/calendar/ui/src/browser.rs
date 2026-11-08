@@ -159,6 +159,8 @@ impl State {
                     }
                     if let Some(briefing) = briefing {
                         self.briefing.set(briefing);
+                        self.briefing_saved.set(false);
+                        self.briefing_failed.set(false);
                     }
                     self.failed.set(false);
                 }
@@ -321,13 +323,13 @@ fn Settings(state: State) -> impl IntoView {
                 <h2>"Follow-through"</h2>
                 <ModeSetting state=state field="prepTaskMode" label="Prep tasks"/>
                 <ModeSetting state=state field="timeBlockMode" label="Time blocks"/>
-                <p class="jds-hint">"These choices are saved for your account. Automatic actions are not available in this version."</p>
+                <p class="jds-hint">"Auto gives Moss permission to act without asking, including in the existing app. This version saves your choices but does not run automatic actions."</p>
             </section>
             <p class="jds-hint">{move||format!("Timezone: {}",state.zone().name())}</p>
         })}
         {move||state.briefing_saving.get().then(||view!{<p role="status">"Saving settings…"</p>})}
         {move||state.briefing_saved.get().then(||view!{<p role="status">"Settings saved."</p>})}
-        {move||state.briefing_failed.get().then(||view!{<p class="jds-hint jds-hint--error" role="alert">"Could not save calendar briefing settings. Your last confirmed settings are shown. Try again."</p>})}
+        {move||state.briefing_failed.get().then(||view!{<p class="jds-hint jds-hint--error" role="alert">"Could not save calendar briefing settings. Your last confirmed settings are shown. Check the connection and try again."</p>})}
         <Button variant=ButtonVariant::Secondary on_click=Callback::new(move |_|{let _=navigate("/calendar");})>"Open Calendar"</Button>
     </main>}
 }

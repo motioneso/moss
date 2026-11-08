@@ -35,7 +35,12 @@ pub fn patch(body: &Value) -> Result<Vec<(&'static str, Value)>> {
             "blockTime" if value.is_boolean() => "calendar.signal_block_time",
             _ => return Err(invalid()),
         };
-        writes.push((stored, value.clone()));
+        let value = if key == "lookaheadDays" {
+            json!(value.as_f64().unwrap() as u8)
+        } else {
+            value.clone()
+        };
+        writes.push((stored, value));
     }
     Ok(writes)
 }

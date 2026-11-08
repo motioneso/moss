@@ -189,9 +189,13 @@ pub fn pack(events: &[Segment]) -> Vec<Segment> {
 pub fn time(minutes: u32, twelve: bool) -> String {
     let hour = minutes / 60 % 24;
     if twelve {
-        let shown = if hour % 12 == 0 { 12 } else { hour % 12 };
+        let shown = if hour.is_multiple_of(12) {
+            12
+        } else {
+            hour % 12
+        };
         let suffix = if hour < 12 { "AM" } else { "PM" };
-        if minutes % 60 == 0 {
+        if minutes.is_multiple_of(60) {
             format!("{shown} {suffix}")
         } else {
             format!("{shown}:{:02} {suffix}", minutes % 60)

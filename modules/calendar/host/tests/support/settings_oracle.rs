@@ -46,7 +46,7 @@ pub fn verify(app: &Application, f: &Fixture, captured: &Captured) {
         {"suggestTasks":false,"suggestTimeBlocks":false}, {"createTasks":true,"blockTime":true},
         {"prepTaskMode":"off","timeBlockMode":"off"}, {"prepTaskMode":"suggest","timeBlockMode":"suggest"},
         {"prepTaskMode":"auto","timeBlockMode":"auto"}, {"createTasks":false,"blockTime":false},
-        {"lookaheadDays":0,"prepTaskMode":"off","timeBlockMode":"suggest"}]);
+        {"lookaheadDays":2.0,"prepTaskMode":"off","timeBlockMode":"suggest"}]);
     for actor in [f.a, f.b, f.admin] {
         reset(f, actor);
         let mut child = Command::new("pnpm")
@@ -158,10 +158,9 @@ pub fn verify(app: &Application, f: &Fixture, captured: &Captured) {
 }
 
 fn concurrent_saves(app: &Application, f: &Fixture, captured: &Captured) {
-    let _ = call(app, f, f.a, "GET", Value::Null);
-    let first = captured.scope.lock().unwrap().clone().unwrap();
-    let _ = call(app, f, f.a, "GET", Value::Null);
-    let second = captured.scope.lock().unwrap().clone().unwrap();
+    let scopes = crate::settings_scope::Scopes::new(f, std::time::Duration::from_secs(30));
+    let first = scopes.next(f);
+    let second = scopes.next(f);
     let guarded = captured.guarded.lock().unwrap().clone().unwrap();
     let request = Request {
         operation: "set".into(),
@@ -182,9 +181,12 @@ fn concurrent_saves(app: &Application, f: &Fixture, captured: &Captured) {
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
+        // Release before assertions so a failed observation cannot strand the waiter.
+        let finished = guarded.finish_call(&first, true);
+        let waited = waiting.join().unwrap();
         assert!(observed, "Second save never reached the account lock");
-        guarded.finish_call(&first, true).unwrap();
-        waiting.join().unwrap().unwrap();
+        finished.unwrap();
+        waited.unwrap();
         guarded.finish_call(&second, true).unwrap();
     });
     assert_eq!(

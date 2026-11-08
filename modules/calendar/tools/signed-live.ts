@@ -139,7 +139,9 @@ async function request(
         );
       }
     );
-    req.setTimeout(30000, () => req.destroy(new Error("HTTPS deadline")));
+    // Unoptimized Rust scrypt can exceed 30s on a loaded development machine.
+    const deadline = path === "/api/auth/sign-in/email" ? 120000 : 30000;
+    req.setTimeout(deadline, () => req.destroy(new Error(`HTTPS deadline at ${path}`)));
     req.on("error", fail);
     req.end(body);
   });

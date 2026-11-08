@@ -20,7 +20,7 @@ fn month_escapes_private_event_text() {
         unconfirmed: true,
     };
     let day = "2026-11-08".parse().unwrap();
-    let output=view!{<Month cursor=day today=day events=group(&[event.clone()],chrono_tz::UTC) twelve=true on_day=Callback::new(|_|{}) on_event=Callback::new(|_|{})/>}.to_html();
+    let output=view!{<Month cursor=day today=day events=group(std::slice::from_ref(&event),chrono_tz::UTC) twelve=true on_day=Callback::new(|_|{}) on_event=Callback::new(|_|{})/>}.to_html();
     assert!(output.contains("&lt;script&gt;private&lt;/script&gt;"));
     assert!(!output.contains("<script>private"));
     assert!(output.contains("cal-mchip"));

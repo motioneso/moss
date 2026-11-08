@@ -176,15 +176,17 @@ only after a successful guest call; errors roll them back. Preference revisions 
 the original repositories. There is no general key or owner override.
 
 The screen saves each choice, reloads confirmed values, retains them after a failed
-save and allows another attempt. Automatic actions and the briefing source-behavior
-switch are still unavailable; this checkpoint stores the choices without executing
-providers, tasks or jobs. The old application screen remains active.
+save and allows another attempt. Auto grants standing permission to create tasks or calendar blocks without asking.
+The existing app shares these preferences and may act on that permission. This Rust
+version saves the choices without running providers, tasks or jobs; the briefing
+source-behavior switch and old-screen replacement remain open.
 
 The disposable gate compares valid write sequences against the production TypeScript
 handler with its real policy adapter, including stored values and revisions for owner,
 foreign user and administrator. Preferences add their own read/write RLS fault witness
-and failed-guest rollback check. Invalid input is rejected, but exhaustive Fastify
-coercion and error-message equivalence is not claimed. Signed-live additionally saves
+and failed-guest rollback check. Rust rejects unknown fields and requires typed values. The original Fastify route
+strips extra fields and can coerce string or null lookahead values; that malformed-input
+behavior and exhaustive error-message equivalence remain different. Signed-live additionally saves
 through the real UI, reloads, checks persisted policy, disconnects the browser for a
 failed save and retries. A phone-width screenshot and same-host LAN check still do
 not prove physical second-device access or production certificate trust.

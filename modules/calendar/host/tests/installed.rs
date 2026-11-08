@@ -6,6 +6,8 @@ mod read_oracle;
 mod registry;
 #[path = "support/settings_oracle.rs"]
 mod settings_oracle;
+#[path = "support/settings_scope.rs"]
+mod settings_scope;
 mod support;
 use moss_module_host::{
     application::{Application, Configuration},

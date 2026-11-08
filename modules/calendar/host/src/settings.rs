@@ -19,8 +19,11 @@ impl CalendarPorts {
             "Only one settings patch per call"
         );
         let (cx, values) = self.runtime.block_on(async {
+            tokio::time::timeout(scope.remaining(), async {
             let cx = DataContext::open_bounded(&self.database, scope.access(), scope.remaining())
                 .await.map_err(|_| anyhow::anyhow!("Calendar settings unavailable"))?;
+            let timeout = scope.remaining().as_millis().clamp(1, 30_000).to_string();
+            cx.db().query_one("SELECT set_config('statement_timeout',$1,true)", &[&timeout]).await?;
             cx.db().execute("SELECT pg_advisory_xact_lock(hashtextextended(app.current_actor_user_id()::text || ':calendar.briefing-settings',0))", &[]).await?;
             for (key, value) in writes {
                 cx.db().execute(
@@ -40,6 +43,7 @@ impl CalendarPorts {
             let mut values = Map::new();
             for row in rows { values.insert(row.get(0), row.get(1)); }
             Ok::<_,anyhow::Error>((cx, Value::Object(values)))
+            }).await.map_err(|_| anyhow::anyhow!("Calendar settings deadline expired"))?
         })?;
         // Do not hold the pending map while waiting on the account lock: another
         // request must be able to finish and release its transaction first.

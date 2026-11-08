@@ -107,6 +107,7 @@ impl Ports for CalendarPorts {
             "Calendar preferences are read-only and take no parameters"
         );
         self.runtime.block_on(async {
+            tokio::time::timeout(scope.remaining(), async {
             let cx = DataContext::open_bounded(&self.database, scope.access(), scope.remaining())
                 .await
                 .map_err(|_| anyhow::anyhow!("Calendar preferences unavailable"))?;
@@ -123,7 +124,7 @@ impl Ports for CalendarPorts {
             for row in rows {
                 values.insert(row.get(0), row.get(1));
             }
-            cx.commit()
+            cx.commit_bounded(scope.remaining())
                 .await
                 .map_err(|_| anyhow::anyhow!("Calendar preferences unavailable"))?;
             if chat {
@@ -131,6 +132,7 @@ impl Ports for CalendarPorts {
             } else {
                 Ok(Value::Object(values))
             }
+            }).await.map_err(|_| anyhow::anyhow!("Calendar preferences deadline expired"))?
         })
     }
     fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
@@ -147,7 +149,7 @@ impl Ports for CalendarPorts {
                     "Calendar settings deadline expired"
                 );
                 self.runtime
-                    .block_on(cx.commit())
+                    .block_on(cx.commit_bounded(scope.remaining()))
                     .map_err(|_| anyhow::anyhow!("Calendar settings unavailable"))?;
             }
             // Drop without commit rolls the actor-scoped write back on failed guest calls.

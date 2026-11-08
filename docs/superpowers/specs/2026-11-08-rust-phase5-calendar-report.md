@@ -400,8 +400,9 @@ preferences, retain confirmed values after failure and allow retry. Time-block m
 also saves the existing writeback tier in the same transaction. The host validates
 all fields independently of the guest and commits only after successful completion.
 Concurrent account saves can wait for each other without blocking call finalization.
-The screen explicitly says automatic actions are unavailable; saving these choices
-does not run a provider or job. The briefing source-behavior switch is still open.
+The screen discloses that Auto grants standing permission honored by the existing
+app, which shares these preferences and may act on them. This Rust version does not
+run a provider or job. The briefing source-behavior switch is still open.
 
 The new PATCH regression failed first with 404 before the route was implemented.
 The disposable oracle adds 33 valid write-response comparisons across owner, foreign
@@ -416,3 +417,27 @@ No global installation, new package dependency or wit-bindgen installation was n
 Builds and proof files live outside the worktree. Final tested-commit receipts and
 independent review disposition are in the task Proof artifact, not inferred from an
 earlier checkpoint. This remains a checkpoint, not full Calendar acceptance.
+
+### Review fixes and proof limits
+
+The settings transaction now has a call-wide timeout, a PostgreSQL statement timeout
+and a bounded commit. A lock-contention regression verifies expiration while the
+account lock is still held, with no saved preferences or permission. Concurrent-save
+fault tests use fresh host-minted scopes with an explicit test budget and always
+release the first transaction before asserting. Integer-valued lookahead inputs are
+stored as integers, and successful refreshes clear old save messages. Existing UI
+clippy warnings in time formatting are resolved without changing its output.
+
+Rust deliberately rejects unknown fields and untyped values. Fastify strips extra
+fields and can coerce string or null lookahead values; exhaustive malformed-input
+parity is still open. The preferences RLS fault witness tests actual SQL reads and
+writes, while installed PATCH comparisons check owner-preservation and rejection
+without removing that host validation. The browser failure probe disconnects before
+the request: database commit failure and a lost response after a committed save are
+not proven. A later refresh reconciles an uncertain save with stored preferences.
+
+The first live run reached the disposable HTTPS listener but exceeded its auth
+request deadline. The runner now allows extra time for unoptimized Rust password
+verification on loaded development machines. This changes only the proof runner,
+not production password settings or network deadlines. Final receipts, screenshots,
+review disposition and remaining limits are attached to the task Proof artifact.
