@@ -51,3 +51,11 @@ fn host_failure_response_does_not_include_internal_detail() {
     assert_eq!(reply.body, json!({"error":"Internal server error"}));
     let _: Value = reply.body;
 }
+#[test]
+fn recurrence_interval_serializes_like_javascript_json() {
+    let recurrence = moss_tasks_module::recurrence::parse(&serde_json::json!({
+        "freq":"weekly", "interval":2, "occurrence_date":"2026-11-08"
+    }))
+    .unwrap();
+    assert_eq!(recurrence.dto()["interval"].as_u64(), Some(2));
+}

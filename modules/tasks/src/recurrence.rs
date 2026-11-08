@@ -11,7 +11,14 @@ pub struct Recurrence {
 }
 impl Recurrence {
     pub fn dto(&self) -> Value {
-        json!({"freq":self.freq,"interval":self.interval,"occurrence_date":self.occurrence_date})
+        let interval = if self.interval.fract() == 0.0
+            && (0.0..=9_007_199_254_740_991.0).contains(&self.interval)
+        {
+            json!(self.interval as u64)
+        } else {
+            json!(self.interval)
+        };
+        json!({"freq":self.freq,"interval":interval,"occurrence_date":self.occurrence_date})
     }
     pub fn next(&self) -> Option<String> {
         let day = date(&self.occurrence_date)?;
