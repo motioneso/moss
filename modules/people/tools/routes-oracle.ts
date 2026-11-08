@@ -1,6 +1,6 @@
 // Legacy HTTP handlers, real account transactions and disposable database rows.
 import { randomUUID } from "node:crypto";
-import Fastify, { type HTTPMethods } from "fastify";
+import Fastify from "fastify";
 import pg from "pg";
 import { createDatabase, DataContextRunner, getMossDatabaseUrls } from "@moss/db";
 import { registerPeopleRoutes } from "../../../packages/people/src/routes.js";
@@ -103,7 +103,7 @@ export async function routesOracle() {
       rows: Record<string, unknown>;
     }[] = [];
     const run = async (
-      method: HTTPMethods,
+      method: "GET" | "POST" | "PATCH",
       path: string,
       body?: Record<string, unknown>,
       actorIndex = 0

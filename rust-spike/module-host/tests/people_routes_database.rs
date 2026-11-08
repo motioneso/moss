@@ -48,6 +48,7 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         {"port":"context","operations":["read","uuid"],"resources":["call","new"]},
         {"port":"vault","operations":["notes.read","notes.list","notes.compare-write"],"resources":["people-notes"]}
     ])).unwrap();
+    common::people_job_imports(&mut manifest);
     let routes = [
         ("GET", "/people"),
         ("GET", "/people/resolve"),
