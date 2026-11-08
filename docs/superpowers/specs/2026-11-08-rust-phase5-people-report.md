@@ -4,7 +4,9 @@ Tasks JS-45 (part one) and JS-50 (part two), Card 523.
 Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
 Release note Category: N/A.
 
-Status: **People part two in progress: internal compiled-guest checkpoints.** Part one
+Status: **People part two: partial merge checkpoint.** On 2026-11-08 the user authorized
+merging this bounded checkpoint and continuing the unfinished work in People part three.
+This supersedes the earlier hold on JS-50 readiness; full People parity remains open. Part one
 merged separately; the latest checkpoints below consume the merged shared host and Notes
 adapter. People is not yet an installable Rust package or reachable through the Rust UI.
 The database checks below cover their stated boundaries. Full parity, installed chat,
@@ -428,10 +430,11 @@ The merged adapter's own failing-first preference tests are included in the Peop
 Partial route entry points exercise this service; they are not installed HTTP dispatch.
 The old rename/archive fallback to projection-only changes when canonical notes are
 missing/unavailable, safe HTTP status/error mapping and actual ingest nudges still need
-implementation. The adapter's read-only-folder limitation, external-editor races and lack of
-crash reconciliation remain as documented in `modules/notes/HOST_ADAPTER.md`. Package,
+implementation. The adapter's limitations at that checkpoint are documented in
+`modules/notes/HOST_ADAPTER.md`; the later dependency refresh below consumes its Unix
+read-only-folder fix. External-editor races and crash reconciliation remain open. Package,
 Settings, tools/jobs, app-map surfaces, full HTTP parity and actual UI/device proof remain
-open. **Do not mark JS-50 Ready on this checkpoint.**
+open. This checkpoint alone does not establish full People parity.
 
 ### Generated guest and tool-execution checkpoint
 
@@ -498,15 +501,16 @@ It began on `5ba163741` with the clock/fixture changes present; those source cha
 then committed as `55c6503e8`. Its pinned generated component digest is
 `sha256:b9e8557b3e782fae4d7d2828432f5edc3c4a0196a00ebfcb9b823449adab94ff`.
 These are guest/host integration receipts, not an installed package, HTTP parity, CI,
-chat approval-policy or UI/device proof. Independent final review remains pending; one
-of the task's two permitted rounds has been used on the earlier persistence checkpoint.
+chat approval-policy or UI/device proof. One review round covered the earlier persistence
+checkpoint; the remaining round must review the final partial checkpoint before Ready.
+Its outcome belongs in the task's review record and proof.
 
 Repository-wide lint passed at this checkpoint. Scoped lint and formatting for the changed
 TypeScript oracles, report formatting, both pinned Rust formatting checks and
-`git diff --check` passed. The repository-wide formatting check is still running; the
-same background runner will then run file-size and type checks. Their results must be
-collected before final acceptance: this checkpoint does not claim a complete project-check
-pass. The task remains in Doing, without an acceptance request.
+`git diff --check` passed. Repository-wide formatting and file-size checks subsequently
+passed. Type checking must also pass before this partial checkpoint requests acceptance.
+The final check results, including checks after the dependency refresh, belong in the
+acceptance proof rather than being inferred from the earlier gate receipt.
 
 No installed screen, setting or package ships in this checkpoint, so the existing app map
 must not advertise a Rust People surface. Add the package's truthful navigation, settings,
@@ -518,7 +522,16 @@ connect shared account preferences and ingest nudges; build and install the real
 and shared-frame Settings pane; extend HTTP parity; and prove signed-in UI/chat plus a second
 device over the approved HTTPS path. The assembled shell at this checkpoint still uses its
 stub contract; a module frame fixture is not a substitute for that final application check.
-Do not mark JS-50 Ready until all seven steps are demonstrated.
+All seven steps must be demonstrated before closing full People parity. The user's later
+authorization permits JS-50 to request acceptance for this partial checkpoint only.
+
+Before that request, the consumed Notes dependency was refreshed to match the already
+merged Notes part-two files on main. This includes per-invocation adapter locks, Unix
+read-only-folder support and their tests; People does not maintain a duplicate adapter.
+The equivalent legacy runtime-role selection also matches main, avoiding a merge conflict
+with the shared-host change. A fresh gate against the final checkpoint and the final review
+are recorded in the acceptance proof. No installed UI or device proof is supplied by this
+internal checkpoint; those checks remain explicitly assigned to People part three.
 
 The next implementation step is the two job kinds. The merged host deliberately permits
 only UUID IDs, flags, counts and fixed choices as queue parameters; its underlying contract
