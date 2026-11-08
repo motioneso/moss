@@ -147,7 +147,7 @@ fn compiled_people_coordinates_canonical_notes_and_projection() {
     manifest.capabilities=serde_json::from_value(json!([
         {"port":"db","operations":["query"],"resources":TABLES},
         {"port":"context","operations":["read","uuid"],"resources":["call","new"]},
-        {"port":"vault","operations":["notes.read","notes.list","notes.compare-write"],"resources":["people-notes"]}
+        {"port":"vault","operations":["notes.status","notes.read","notes.list","notes.compare-write"],"resources":["people-notes"]}
     ])).unwrap();
     common::people_job_imports(&mut manifest);
     let manifest: Arc<Manifest> = Arc::new(manifest);
@@ -163,7 +163,12 @@ fn compiled_people_coordinates_canonical_notes_and_projection() {
                 &json!({"method":method,"path":path,"body":body,"params":params}).to_string(),
             )?;
             let reply: Value = serde_json::from_str(&reply)?;
-            assert_eq!(reply["status"], 200);
+            if reply["status"] != 200 {
+                if reply["status"] == 500 {
+                    assert_eq!(reply["body"], json!({"error":"Internal Server Error"}));
+                }
+                anyhow::bail!("People route refused with status {}", reply["status"]);
+            }
             Ok(reply["body"].clone())
         };
     // An empty existing file is a collision, not an available destination.
@@ -207,6 +212,37 @@ fn compiled_people_coordinates_canonical_notes_and_projection() {
         "archived"
     );
     let archived = std::fs::read_to_string(folder.join(path)).unwrap();
+    // A readable folder containing an oversized note is not an unavailable
+    // folder. Refuse the edit rather than silently changing only its projection.
+    let oversized = "x".repeat(256 * 1024 + 1);
+    std::fs::write(folder.join("oversized.md"), &oversized).unwrap();
+    assert!(
+        run(
+            actor,
+            "PATCH",
+            "/people/:id",
+            json!({"displayName":"Must not fall back"}),
+            json!({"id":id})
+        )
+        .is_err(),
+        "An unreadable note must not trigger a successful projection fallback"
+    );
+    let unchanged: String = rt.block_on(async {
+        bootstrap
+            .query_one(
+                "SELECT display_name FROM app.person_context_people WHERE id=$1",
+                &[&Uuid::parse_str(id).unwrap()],
+            )
+            .await
+            .unwrap()
+            .get(0)
+    });
+    assert_eq!(unchanged, "Renamed Person");
+    assert_eq!(
+        std::fs::read_to_string(folder.join(path)).unwrap(),
+        archived
+    );
+    std::fs::remove_file(folder.join("oversized.md")).unwrap();
     for mode in [1, 2, 3, 4] {
         std::fs::write(folder.join(path), &archived).unwrap();
         faults.reads.store(0, Ordering::SeqCst);
@@ -335,6 +371,31 @@ fn compiled_people_coordinates_canonical_notes_and_projection() {
         run(actor, "POST", "/people/notes/refresh", json!({}), json!({})).unwrap()["candidates"],
         2
     );
+    // With a valid selected folder but no canonical note, edits retain the
+    // legacy projection-only fallback without creating a replacement file.
+    let fallback = run(
+        actor,
+        "PATCH",
+        "/people/:id",
+        json!({"displayName":"Projection only"}),
+        json!({"id":id}),
+    )
+    .unwrap();
+    assert_eq!(fallback["person"]["displayName"], "Projection only");
+    assert_eq!(fallback["person"]["confidence"], "1.00");
+    assert!(fallback.get("notePath").is_none());
+    assert_eq!(
+        run(
+            actor,
+            "POST",
+            "/people/:id/archive",
+            json!({}),
+            json!({"id":id})
+        )
+        .unwrap(),
+        json!({"archived":true})
+    );
+    assert!(!folder.join(path).exists());
     let oracle: Value = serde_json::from_slice(
         &std::fs::read(std::env::var("JS50_PEOPLE_ORACLE").unwrap()).unwrap(),
     )
@@ -358,7 +419,7 @@ fn compiled_people_coordinates_canonical_notes_and_projection() {
     )
     .unwrap();
     let changed = std::fs::read_to_string(folder.join(oracle_path)).unwrap();
-    let archived = run(
+    let mut archived = run(
         actor,
         "POST",
         "/people/:id/archive",
@@ -366,6 +427,9 @@ fn compiled_people_coordinates_canonical_notes_and_projection() {
         json!({"id":oracle_id}),
     )
     .unwrap();
+    // The HTTP archive response also reports archived:true; this oracle compares
+    // the underlying legacy note service's person/notePath result separately.
+    archived.as_object_mut().unwrap().remove("archived");
     let final_text = std::fs::read_to_string(folder.join(oracle_path)).unwrap();
     let known = std::collections::HashSet::new();
     let expected_start = oracle["notes"]["startedAt"]

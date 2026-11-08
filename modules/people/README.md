@@ -12,7 +12,7 @@ invocation transaction; the repository has no database connection or filesystem 
 Ben approved the optional pinned `wit-bindgen` dependency on 2026-11-08. Its generated
 binding and the host wrapper build a `wasm32-wasip2` People component. The handwritten SDK
 canonical ABI remains available for comparison. Both paths use the same People handlers,
-including read APIs, partial note routes, seven tool execution handlers and both job kinds. Older handwritten
+including read APIs, data/note route envelopes, seven tool execution handlers and both job kinds. Older handwritten
 fixtures still exercise a native test driver; those are separate persistence evidence.
 
 From `~/Jarv1s`:
@@ -84,12 +84,28 @@ Trusted composition maps the `people-notes` resource to `people-notes-folder` in
 uses its bounded list/read/compare-write contract, rechecks canonical IDs and projects aliases
 and emails through the same invocation's database transaction. Call failure compensates file
 writes only while the published bytes still match. External edits survive compensation;
-process death is not recovered. The host adapter's documented filesystem races and
-read-only-folder gap still apply (see [the adapter contract](../notes/HOST_ADAPTER.md)).
+process death is not recovered. The host adapter's remaining filesystem-race limitations
+are documented in [the adapter contract](../notes/HOST_ADAPTER.md).
 
-This checkpoint wires create/update/archive/refresh into compiled route handlers only.
-It has no installed HTTP routing or UI. The existing projection fallback for rename/archive
-when canonical notes are missing/unavailable, safe HTTP errors and ingest nudges are still
-continuation work. Scans fail explicitly above two thousand entries or four MiB of text;
+This checkpoint adds list/resolve/detail/links, match review, merge/split and
+create/update/archive/refresh route envelopes. Rename/archive retain the projection fallback
+when canonical notes are missing/unavailable; failures after publication still abort and
+compensate. Internal errors return the fixed HTTP error body rather than host details.
+It has no installed HTTP routing or UI. Folder settings, directory browsing, index-refresh
+routes, ingest nudges and Fastify-compatible body validation remain continuation work.
+Scans fail explicitly above two thousand entries or four MiB of text;
 individual files retain the adapter's size bound. This bounded scan is not unlimited-folder
 parity. No People screen or Settings choice is declared as available yet.
+
+The additional route-envelope differential gate uses the real legacy Fastify handlers,
+disposable PostgreSQL and the compiled guest with the shared route resolver. It compares
+each reply and all seven table snapshots, including other-user and administrator attempts:
+
+```sh
+JS50_PEOPLE_COMPONENT=/tmp/moss-people-generated.wasm CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/moss-module-host-target scripts/run-gate.sh start --gate modules/people/tools/routes-gate.sh
+scripts/run-gate.sh wait --follow
+```
+
+This covers the enumerated valid-body workflows and selected query/error cases. It does
+not exercise an HTTP listener, installed package, browser, malformed-body compatibility,
+chat approvals or a second device. Those remain required for full People acceptance.

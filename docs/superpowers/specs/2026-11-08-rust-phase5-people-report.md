@@ -1,12 +1,13 @@
 # Rust Phase 5: People & Context
 
-Tasks JS-45 (part one), JS-50 (part two) and JS-57 (part three), Card 523.
+Tasks JS-45 (part one), JS-50 (part two), JS-57 (part three) and JS-58 (part four), Card 523.
 Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
 Release note Category: N/A.
 
-Status: **People part three: worker checkpoint; full parity remains open.** The continuation
+Status: **People part four: route-envelope checkpoint; full parity remains open.** The continuation
 brief permits a bounded checkpoint before a second compaction. This checkpoint supplies
-durable command storage and the two worker handlers; it does not complete the package or
+data/review route envelopes and canonical-note fallbacks on top of part three's workers;
+it does not complete the package or
 the requested UI/device proof. On 2026-11-08 the user authorized merging part two and
 continuing its unfinished work here. Part one
 merged separately; the latest checkpoints below consume the merged shared host and Notes
@@ -615,7 +616,7 @@ remains at version `0.57.1`; this work reused task-local guest Cargo/Rustup cach
 the generated component in scratch space. Declared JavaScript dependencies were restored
 from the lockfile using the existing offline package cache. No new dependency was added.
 
-### Exact remaining work
+### Remaining work at the part-three checkpoint
 
 1. Complete the HTTP route set, response/status/error compatibility and projection fallbacks
    for missing or unavailable canonical notes. The existing compiled note routes remain
@@ -645,3 +646,73 @@ Native People tests, strict People Clippy and the two generic host command/defer
 suites also passed. The final full People gate, repository static checks and independent
 review receipts belong in the checkpoint acceptance proof; the selected worker run does
 not substitute for those results.
+
+## People part four: bounded route-envelope checkpoint
+
+JS-58 consumes the merged part-three checkpoint, `f14d71e57`. Finishing the package,
+Settings integration and real-device qualification would exceed the continuation's allowed
+context budget. This is the explicitly permitted partial checkpoint, not full People
+acceptance. No installed screen, setting or navigation path is added; the existing app map
+must not advertise a Rust People surface yet. The four consumer APIs, seven tool names,
+legacy SQL and job kinds remain unchanged.
+
+The compiled guest now handles list/search/filter/limit, resolve, match candidates,
+detail/links, accept/reject/suppress, merge/split and canonical-note create/rename/archive/
+refresh through the shared route envelope. Unknown paths return 404. Internal failures
+return the same fixed 500 body as the legacy central error handler, while refresh with an
+unavailable folder returns its safe 400 response. Archive includes the legacy `archived`
+flag, including when the note-backed result also contains a person and note path.
+
+Rename/archive fall back to projection-only edits when the chosen folder is unavailable
+or no canonical note can be found before publication. That update retains existing
+confidence, summaries and archive metadata unless explicitly patched. Publication,
+projection and finalization failures still abort the call and use the host's compensation;
+they do not become projection-only success. The note integration test covers a valid folder
+with a deleted canonical note, in addition to the unavailable-folder route oracle and
+existing conflict/publication/projection failure cases.
+
+`modules/people/tools/routes-gate.sh` runs the actual legacy Fastify handlers with the real
+central error handler and disposable database. It records each response and all seven
+People tables, resets the original synthetic rows, and replays the sequence through the
+compiled guest, shared route resolver and invocation transaction adapter. The shared
+parity normalizer compares responses and persisted rows. Cases include numeric-prefix,
+zero, invalid, negative and repeated limits; matching and nonmatching lookup; mutations;
+missing folder; and another account's and administrator's read/mutation attempts.
+The route replay resolves real shared preferences with no selected folder; the separate linked-notes test
+exercises real selected-folder I/O and compensation. No network response is replaced or
+browser proof claimed.
+
+Independent review found that mapping every file-port failure to folder unavailability
+could silently accept a projection-only edit when a note was oversized or the folder busy.
+The correction adds the optional generic `notes.status` operation, documented in
+`rust-spike/module-host/LINKED_NOTES_STATUS.md`. Only a typed, confirmed folder-unavailability
+result permits that fallback. Subsequent scan/read failures abort. A real oversized-note
+regression and native availability/lock/provider-failure cases cover this distinction.
+
+### Exact remaining work after part four
+
+1. Finish folder-settings, directory-browsing and index-refresh routes. Implement and compare
+   Fastify-compatible request schema validation/coercion: malformed bodies currently can
+   return 500 where legacy HTTP returns 400. Broaden query and route-error coverage beyond
+   the enumerated cases, then run it through installed HTTP dispatch. Known query gaps are
+   limits above `u32::MAX` and repeated status/search values; the latter are currently
+   dropped rather than passed through like legacy arrays.
+2. Connect the shared account folder/suggestion preferences, ingest nudges and actual source
+   providers to the existing job APIs. Declare versioned provider dependencies and queue
+   schemas in the package. Qualify command retention/quotas for sustained indexing.
+3. Build, sign, install and reload the downloadable package, including unchanged SQL ownership
+   and legacy-ledger identity. No distributable People package is supplied by this checkpoint.
+4. Port Settings → Memory & context → People with the shared frame, folder picker, refresh,
+   add/rename/archive, match review and default-on Suggest note updates. Add truthful manifest
+   navigation, settings, features, errors and recovery metadata with those working surfaces.
+5. Prove installed Settings and chat approval/app-action behavior. Existing guest tool execution
+   tests alone do not establish installed chat policy or UI reachability.
+6. Exercise People through the real assembled Rust UI, then from a second physical device over
+   HTTPS, including sign-in, trusted origins and private-data rules. No UI, phone, LAN/tailnet
+   or second-device proof is supplied here. Keep full People parity open until those checks pass.
+
+### Part-four verification
+
+Final run receipts and independent review are recorded in the checkpoint proof artifact.
+The route gate is a guest/host comparison against legacy HTTP handlers; it is not a real
+HTTP-listener, signed-package, installed-chat, UI or device acceptance result.

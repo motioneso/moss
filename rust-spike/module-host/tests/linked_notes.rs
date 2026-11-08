@@ -37,10 +37,71 @@ impl FolderProvider for Folders {
 fn manifest() -> Arc<Manifest> {
     let mut m = common::manifest("1.0.0");
     m.capabilities = serde_json::from_value(json!([{
-        "port":"vault", "operations":["notes.read","notes.list","notes.compare-write","notes.remove"],
+        "port":"vault", "operations":["notes.status","notes.read","notes.list","notes.compare-write","notes.remove"],
         "resources":["linked-notes"]
     }])).unwrap();
     Arc::new(m)
+}
+#[test]
+fn folder_status_only_classifies_confirmed_unavailability() {
+    let f = Fixture::new();
+    let status = || {
+        f.call(
+            f.a,
+            f.ports(None, Arc::new(DenyPorts)),
+            "ok",
+            "notes.status",
+            json!({}),
+        )
+    };
+    assert_eq!(status().unwrap(), json!({"available":true}));
+    assert!(f
+        .call(
+            f.a,
+            f.ports(Some(f.b), Arc::new(DenyPorts)),
+            "ok",
+            "notes.status",
+            json!({})
+        )
+        .is_err());
+    // Busy folders still resolve. The subsequent read must refuse, not authorize
+    // a database-only fallback as though no folder had been chosen.
+    let guard = f.vault(f.a).try_lock_folder().unwrap();
+    assert_eq!(status().unwrap(), json!({"available":true}));
+    assert!(f
+        .call(
+            f.a,
+            f.ports(None, Arc::new(DenyPorts)),
+            "ok",
+            "notes.read",
+            json!({"path":"private.md"})
+        )
+        .is_err());
+    drop(guard);
+    std::fs::remove_dir_all(&f.paths[&f.a]).unwrap();
+    assert_eq!(status().unwrap(), json!({"available":false}));
+}
+
+#[test]
+fn folder_status_propagates_provider_failures() {
+    struct Unhealthy;
+    impl FolderProvider for Unhealthy {
+        fn resolve(
+            &self,
+            _: &AccessContext,
+            _: &str,
+            _: &str,
+            _: std::time::Duration,
+        ) -> Result<LinkedFolder> {
+            anyhow::bail!("Synthetic preference database failure");
+        }
+    }
+    let f = Fixture::new();
+    let ports = Arc::new(LinkedNotesPorts::new(
+        Arc::new(Unhealthy),
+        Arc::new(DenyPorts),
+    ));
+    assert!(f.call(f.a, ports, "ok", "notes.status", json!({})).is_err());
 }
 fn wasm(mode: &str) -> Vec<u8> {
     let mut source = include_str!("../sample/module.wat")
