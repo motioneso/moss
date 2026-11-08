@@ -341,7 +341,8 @@ impl Manifest {
                     route.method.as_str(),
                     "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
                 ) && route.path.starts_with('/')
-                    && relative_path(&format!("route{}", route.path))
+                    && (relative_path(&format!("route{}", route.path))
+                        || crate::dispatch::template_path(&route.path))
                     && route.sign_in,
                 "Module routes must be signed in and use safe paths"
             );
