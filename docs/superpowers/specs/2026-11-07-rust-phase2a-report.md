@@ -22,7 +22,7 @@ way the TypeScript server does, and Tasks runs on it.
 - That meets this part's share of the Phase 2 kill gate.
 - One database rule lets an admin's blanket update change an AI key row that admin cannot see.
   The rule is live in the TypeScript app's database, but the app never sends such an update. A
-  new migration should close it. An issue for it is drafted and not yet filed.
+  new migration should close it. Vikunja card #189 in the Moss project tracks it.
 - The Rust server has no rate limits yet. TypeScript allows 10 sign-in, sign-up and password
   requests a minute from one address.
 - Phase 2b built its own workspace in `rust-spike/platform/`, the folder this crate used. This
@@ -268,7 +268,8 @@ ok: 5 every log line goes through the redacting writer
   rule shared by both servers, not a Rust difference.
 - Fix: a new migration whose update and delete rules add the select rule's owner-or-admin-created
   condition. Never edit 0091 or 0163.
-- An issue is drafted but not yet filed, because filing one was outside this task's permissions.
+- Ben asked for a Vikunja card instead of a GitHub issue for now. Card #189 in the Moss project
+  tracks it.
 
 ## Differences kept on purpose or not yet ported
 
@@ -326,7 +327,7 @@ ok: 5 every log line goes through the redacting writer
 2. Add the rate limits before the Rust server listens beyond the machine it runs on. At the same
    time, end a refused request's transaction and return its connection to the pool. Today a 403
    or 404 after the data context opens throws the connection away.
-3. File the drafted issue for the AI key rule migration, covering the update rules and the
+3. Build the AI key rule migration from Vikunja card #189, covering the update rules and the
    configured-models delete rule. It affects the TypeScript app today.
 4. Give the trusted-origins list a way to be set in the app, then test sign-in from a phone.
 5. Port "remember me", the session IP address, session-ended notices and job clean-up when the
