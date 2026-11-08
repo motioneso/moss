@@ -101,3 +101,38 @@ hour. This uses a real signed registry installation, database, component and ifr
 but does not provide sign-in, production shell composition, provider execution or
 second-device HTTPS proof. It binds only to loopback intentionally. Do not use it as a
 production server or represent it as final Calendar acceptance.
+
+## Signed-in HTTPS Calendar composition (part 4)
+
+The host crate's optional `web` feature provides `web::router(app, network, origins, shared)`.
+It consumes the already installed `Application`, the existing `moss_network::web::Network`,
+that network's exact configured HTTPS origins, and the generated shared-asset directory.
+The caller still owns database bootstrap, signed registry installation, TLS and shutdown.
+Calendar's pages are `/calendar` and `/settings/calendar`; data requests go through
+`/api/m/calendar/`. This is a Calendar-only composition, not the full Today/chat shell.
+
+The parent uses the actual signed-in actor and the opaque module bridge. Verified package
+assets and generated shared CSS/fonts are static code and are served without account cookies,
+with host/sharing checks and the package's sandbox/CORS policy. Only this static route accepts
+an opaque `null` origin. The existing network boundary still guards private pages and API calls.
+Use the configured origins passed to `Network`, never request-supplied origins. Keep the
+shared-asset directory dedicated to generated public CSS/fonts and theme files.
+
+For a disposable real-sign-in browser run, build the package with `check.sh`, generate shared
+assets with both `rust-spike/module-ui/build-assets.py` and
+`rust-spike/shell/assets/build-assets.py` into the same scratch folder, then run:
+
+```sh
+CALENDAR_SHARED_DIR=/tmp/calendar-shared CALENDAR_HTTPS_PROOF_DIR=/tmp/calendar-https \
+  scripts/run-gate.sh start --gate ./modules/calendar/tools/signed-live.sh
+scripts/run-gate.sh wait --follow
+```
+
+Set the same `CARGO_TARGET_DIR`, `CALENDAR_UI_DIR` and `CALENDAR_CORE_WASM` paths used by the
+build. The runner claims/releases its port, generates temporary fixture credentials and TLS
+files, checks HTTPS and account isolation, and exercises the real package in this task's
+Herdr browser. It removes credentials and the TLS private key at shutdown. Local browser
+certificate-error tolerance is only for this generated disposable certificate; HTTPS clients
+also verify the certificate explicitly. A LAN-address request made on this same computer and
+a phone-width viewport are **not** a physical second-device result. Full parity, writable
+automation settings, providers/jobs, production trust and full-shell/chat composition remain open.
