@@ -1,4 +1,5 @@
 mod common;
+mod database_regressions;
 use access_context::AccessContext;
 use moss_module_host::{
     local::LocalPorts,
@@ -744,6 +745,9 @@ fn c_real_queue_pauses_rebinds_upgrades_and_runs_with_actor() {
         .unwrap();
     installer.remove(&access, "sample.jobs", None).unwrap();
     assert!(!installer.run_job(&worker).unwrap());
+    database_regressions::schedule_only_jobs_survive_execution_and_upgrade(
+        &installer, &access, &m, &files, &install, &worker,
+    );
     println!("PASS real Phase 2b queue: account-bound enqueue and cancellation, pause blocks claims, compatible upgrade rebinds payload, Wasm worker executes, removal stops work");
 }
 

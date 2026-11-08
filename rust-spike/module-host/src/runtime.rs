@@ -374,33 +374,7 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
             } else {
                 &request.parameters
             };
-            let schema = manifest
-                .jobs
-                .get(&request.resource)
-                .context("The module does not own this queue")?;
-            let params = parameters
-                .as_object()
-                .context("Job parameters must be an object")?;
-            ensure!(
-                schema.len() == params.len(),
-                "The job parameters do not match their schema"
-            );
-            for (name, kind) in schema {
-                use crate::manifest::ParameterKind;
-                let value = params.get(name).context("A job parameter is missing")?;
-                ensure!(
-                    match kind {
-                        ParameterKind::Id => value
-                            .as_str()
-                            .is_some_and(|s| uuid::Uuid::parse_str(s).is_ok()),
-                        ParameterKind::Flag => value.is_boolean(),
-                        ParameterKind::Count => value.as_u64().is_some_and(|v| v <= 1_000_000),
-                        ParameterKind::Choice(choices) =>
-                            value.as_str().is_some_and(|v| choices.contains(v)),
-                    },
-                    "A job parameter is not metadata of the declared kind"
-                );
-            }
+            validate_job_parameters(manifest, &request.resource, parameters)?;
         }
         "api" => ensure!(
             manifest.requires.contains_key(&request.resource),
@@ -452,6 +426,51 @@ fn reject_context(value: &Value) -> Result<()> {
             }
         }
         _ => (),
+    }
+    Ok(())
+}
+
+/// Existing work may come from enqueue or a schedule; this never authorizes a new enqueue.
+pub(crate) fn authorize_job(manifest: &Manifest, resource: &str, parameters: &Value) -> Result<()> {
+    let capability = manifest.capability("jobs")?;
+    ensure!(
+        capability.operations.contains("enqueue") || capability.operations.contains("schedule"),
+        "Creating work on this queue was not approved"
+    );
+    ensure!(
+        capability.resources.contains(resource),
+        "This resource was not approved"
+    );
+    reject_context(parameters)?;
+    validate_job_parameters(manifest, resource, parameters)
+}
+fn validate_job_parameters(manifest: &Manifest, resource: &str, parameters: &Value) -> Result<()> {
+    let schema = manifest
+        .jobs
+        .get(resource)
+        .context("The module does not own this queue")?;
+    let params = parameters
+        .as_object()
+        .context("Job parameters must be an object")?;
+    ensure!(
+        schema.len() == params.len(),
+        "The job parameters do not match their schema"
+    );
+    for (name, kind) in schema {
+        use crate::manifest::ParameterKind;
+        let value = params.get(name).context("A job parameter is missing")?;
+        ensure!(
+            match kind {
+                ParameterKind::Id => value
+                    .as_str()
+                    .is_some_and(|s| uuid::Uuid::parse_str(s).is_ok()),
+                ParameterKind::Flag => value.is_boolean(),
+                ParameterKind::Count => value.as_u64().is_some_and(|v| v <= 1_000_000),
+                ParameterKind::Choice(choices) =>
+                    value.as_str().is_some_and(|v| choices.contains(v)),
+            },
+            "A job parameter is not metadata of the declared kind"
+        );
     }
     Ok(())
 }

@@ -178,15 +178,7 @@ impl Installer {
                 .job_kind()
                 .strip_prefix(&format!("{}.", module_key(&module.manifest.id)))
                 .context("Unknown module queue")?;
-            crate::runtime::authorize(
-                &module.manifest,
-                "jobs",
-                &Request {
-                    operation: "enqueue".into(),
-                    resource: local.into(),
-                    parameters: params.clone(),
-                },
-            )?;
+            crate::runtime::authorize_job(&module.manifest, local, &params)?;
             self.call_unfenced(
                 &module.manifest.id,
                 access_context::AccessContext::new(
@@ -232,16 +224,7 @@ pub(crate) async fn reconcile(
                     .as_str()
                     .and_then(|s| s.strip_prefix(&format!("{key}.")))
                     .unwrap_or("");
-                crate::runtime::authorize(
-                    &m.manifest,
-                    "jobs",
-                    &Request {
-                        operation: "enqueue".into(),
-                        resource: local.into(),
-                        parameters: payload["params"].clone(),
-                    },
-                )
-                .is_ok()
+                crate::runtime::authorize_job(&m.manifest, local, &payload["params"]).is_ok()
             });
             if valid {
                 payload["manifestHash"] =
