@@ -48,7 +48,7 @@ databases in a scratch folder and never touches the dev or prod database.
 | `access-context/`                         | Phase 2a: who is acting, shared by the safety core and the vault           |
 | `safety-core/`                            | Phase 2a: sign-in, admin routes, data context, secrets, redaction          |
 | `vault/`                                  | Phase 2a: file access that cannot leave its folder                         |
-| `parity/cases/20-safety.json`             | Phase 2a: the safety cases, run against both servers                       |
+| `parity/cases/20-safety-*.json`           | Phase 2a: the safety cases, run against both servers                       |
 | `tools/check-safety-rules.sh`             | Phase 2a: fails on file access, secret use or prints out of place          |
 | `tools/remove-protections.sh`             | Phase 2a: removes each protection in a copy and checks a test fails        |
 
@@ -189,9 +189,9 @@ login keychain unlocked, so run it in Terminal on the Mac, not over SSH.
 
 ## Running Phase 2a
 
-The safety cases in `parity/cases/20-safety.json` run as part of the side-by-side run above. Both
-servers run in test mode there, which turns off the sign-in origin check, so that check is covered
-by unit tests instead.
+The safety cases in `parity/cases/20-safety-1.json` and `20-safety-2.json` run as part of the
+side-by-side run above. Both servers run in test mode there, which turns off the sign-in origin
+check, so that check is covered by unit tests instead.
 
 The safety-core, vault and access-context unit tests need no database. From this folder:
 

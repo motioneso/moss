@@ -38,6 +38,9 @@ fi
 (cd "$src/rust-spike" && CARGO_TARGET_DIR="$work/target" cargo build --release --quiet -p tasks)
 cp "$work/target/release/tasks" "$work/tasks-no-guard"
 
+# The copied source is only needed for the build. Left in the tree, it trips repo-wide checks.
+rm -rf "$src"
+
 copy=moss_roleguard
 port=$(devports claim js-36-roleguard)
 cleanup() {
