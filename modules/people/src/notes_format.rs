@@ -48,7 +48,7 @@ fn parse_frontmatter(block: &str) -> Option<Frontmatter> {
         let item = line.trim_start_matches(js_space).strip_prefix('-');
         if let (Some(item), Some(current)) = (item, current_array.as_ref()) {
             // The JS pattern's (.+) requires at least one character after the hyphen.
-            if !item.is_empty() {
+            if !item.is_empty() && js_dot_text(item.trim_start_matches(js_space)) {
                 if let Some(Field::Array(items)) = fields.get_mut(current) {
                     items.push(item.trim_matches(js_space).into());
                     continue;
@@ -58,6 +58,11 @@ fn parse_frontmatter(block: &str) -> Option<Frontmatter> {
         let captures = key.captures(line)?;
         let name = captures.get(1)?.as_str().to_string();
         let value = captures.get(2)?.as_str().trim_matches(js_space);
+        // JS /^key:\s*(.*)$/ permits leading whitespace (including line
+        // separators), but its dot cannot consume an embedded line terminator.
+        if !js_dot_text(value) {
+            return None;
+        }
         current_array = None;
         if matches!(name.as_str(), "aliases" | "emails" | "phones") {
             fields.insert(name.clone(), Field::Array(vec![]));
@@ -93,6 +98,10 @@ fn parse_frontmatter(block: &str) -> Option<Frontmatter> {
         phones: array("phones"),
         status,
     })
+}
+
+fn js_dot_text(value: &str) -> bool {
+    !value.contains(['\r', '\n', '\u{2028}', '\u{2029}'])
 }
 
 pub fn parse_people_note(content: &str) -> Option<PeopleNote> {

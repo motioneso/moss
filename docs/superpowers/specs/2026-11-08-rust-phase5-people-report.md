@@ -216,3 +216,31 @@ pure fixtures nor the queue test is proof of People persistence or the installed
    project checks, obtain independent review, publish proof and request acceptance for part two.
 
 The next task must not close full People parity until steps one through seven are proven.
+
+## People part two progress (JS-50)
+
+The continuation starts from merged shared-host checkpoint `1ff33decd` (PR 4044).
+Its report is `2026-11-08-rust-phase5-tasks-report.md`; there is no separate Phase 4c
+report at this baseline. The generic Notes adapter has not merged at this baseline.
+People will consume it rather than duplicate its filesystem implementation. People
+preferences remain in `app.preferences`.
+
+The frontmatter gap above now has eighteen additional differential fixtures for
+embedded, leading and trailing carriage returns and Unicode line/paragraph separators.
+The new fixture first failed on an embedded carriage return; the narrowed Rust parser
+then passed all one hundred and ten pure differential cases. A separate regression
+keeps dollar replacement tokens literal and proves that repeating a managed-note
+update does not duplicate human text. This is a deliberate correction to the legacy
+JavaScript replacement behavior, not a claim of byte parity for that corrupting case.
+
+### Decision for Ben: generated guest bindings
+
+Do not add new third-party packages without Ben's approval. No generator was installed
+for this continuation. `wit-bindgen`'s Rust generator would generate canonical ABI
+imports/exports, string/result ownership and component type metadata from the host WIT,
+and implement the shared SDK's `Host::call` edge for a compiled Rust guest. The existing
+handwritten WAT component path remains available for host verification. A Wasm trampoline
+calling a native test driver is not proof of a compiled People guest, package installation
+or the real application. Installing a generator would not itself prove any of those.
+
+Full People parity remains open until all seven continuation steps are demonstrated.

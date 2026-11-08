@@ -3,8 +3,12 @@ use serde_json::{json, Value};
 
 #[test]
 fn existing_typescript_core_vectors() {
-    let vectors: Vec<Value> =
+    let mut vectors: Vec<Value> =
         serde_json::from_str(include_str!("fixtures/core-parity.json")).unwrap();
+    vectors.extend(
+        serde_json::from_str::<Vec<Value>>(include_str!("fixtures/note-lines-parity.json"))
+            .unwrap(),
+    );
     for (index, case) in vectors.iter().enumerate() {
         let text = |name: &str| case[name].as_str().unwrap();
         let actual = match text("op") {
