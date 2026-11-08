@@ -508,9 +508,17 @@ fn b_module_database_role_and_schema_rollback() {
         .unwrap();
     assert_eq!(
         installer
-            .call("sample.records", access, "route", &get)
+            .call("sample.records", access.clone(), "route", &get)
             .unwrap(),
         "[]"
+    );
+    database_regressions::upgrade_changes_existing_rows_and_restores_privacy(
+        &installer,
+        &access,
+        &AccessContext::new(member, "migration-member"),
+        &source,
+        &keys,
+        &original_bytes,
     );
     println!("PASS module SQL: restricted owner, generated forced RLS, actor-scoped typed queries, failed health hook restores old schema and rows");
 }

@@ -140,6 +140,17 @@ impl Lifecycle for PostgresLifecycle {
             let mut client=self.privileged().await?;let tx=client.transaction().await?;
             let id=&new.manifest.id;let owner=owner_role(id);
             provision_roles(&tx, id).await?;
+            // Only the restricted owner needs all of its own rows during a data migration.
+            // Keep ordinary RLS enabled, and restore FORCE before this transaction commits.
+            let mut forced_tables = Vec::new();
+            for table in &new.manifest.database.owned_tables {
+                if let Some(row) = tx.query_opt("SELECT pg_get_userbyid(relowner),relforcerowsecurity FROM pg_class WHERE oid=to_regclass($1)", &[table]).await? {
+                    if row.get::<_,String>(0)==owner && row.get::<_,bool>(1) {
+                        tx.batch_execute(&format!("ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY")).await?;
+                        forced_tables.push(table);
+                    }
+                }
+            }
             // This mirror ties retained-data snapshots to both historical ledgers as well.
             for row in tx.query("SELECT path,checksum FROM moss_modules.migrations WHERE module_id=$1",&[id]).await? {
                 let path:String=row.get(0);let checksum:String=row.get(1);
@@ -164,6 +175,9 @@ impl Lifecycle for PostgresLifecycle {
                 crate::legacy::backfill(&tx,new,path).await?;
                 tx.batch_execute("RESET ROLE").await?;
                 crate::legacy::record(&tx,new,path,&checksum).await?;
+            }
+            for table in forced_tables {
+                tx.batch_execute(&format!("ALTER TABLE {table} FORCE ROW LEVEL SECURITY")).await?;
             }
             for table in &new.manifest.database.owned_tables {
                 let actual_owner:String=tx.query_one("SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid=$1::text::regclass", &[table]).await?.get(0);
