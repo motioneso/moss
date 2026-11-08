@@ -1,4 +1,6 @@
 mod common;
+#[path = "transactional_queries/assembly.rs"]
+mod extended_assembly;
 use access_context::AccessContext;
 use moss_module_host::{
     database::runtime_role,
@@ -107,12 +109,25 @@ fn real_transactions_preserve_composite_keys_privacy_and_atomicity() {
         Arc::new(TransactionalDatabasePorts::new(database, Arc::new(DenyPorts)).unwrap());
     struct Trace(Arc<dyn Ports>);
     impl Ports for Trace {
-        fn invoke(&self, scope: &moss_module_host::runtime::CallScope, port: &str, request: &moss_module_host::runtime::Request) -> anyhow::Result<Value> {
-            let result=self.0.invoke(scope,port,request);
-            if let Err(error)=&result { eprintln!("synthetic transaction fixture: {error:?}"); }
+        fn invoke(
+            &self,
+            scope: &moss_module_host::runtime::CallScope,
+            port: &str,
+            request: &moss_module_host::runtime::Request,
+        ) -> anyhow::Result<Value> {
+            let result = self.0.invoke(scope, port, request);
+            if let Err(error) = &result {
+                eprintln!("synthetic transaction fixture: {error:?}");
+            }
             result
         }
-        fn finish_call(&self, scope: &moss_module_host::runtime::CallScope, success: bool) -> anyhow::Result<()> {self.0.finish_call(scope,success)}
+        fn finish_call(
+            &self,
+            scope: &moss_module_host::runtime::CallScope,
+            success: bool,
+        ) -> anyhow::Result<()> {
+            self.0.finish_call(scope, success)
+        }
     }
     let ports: Arc<dyn Ports> = Arc::new(Trace(ports));
     let host = Host::new(Limits::default()).unwrap();

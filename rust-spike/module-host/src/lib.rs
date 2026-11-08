@@ -49,4 +49,5 @@ pub mod dispatch;
 
 pub mod context;
 
+mod application_extended;
 pub mod frame;
