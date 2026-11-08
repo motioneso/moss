@@ -14,7 +14,8 @@ try {
   const theme = await client.theme();
   if (theme && typeof theme === "object") {
     for (const key of ["theme", "colorMode"]) {
-      if (typeof theme[key] === "string") document.documentElement.dataset[key] = theme[key];
+      if (typeof theme[key] === "string")
+        globalThis.document.documentElement.dataset[key] = theme[key];
     }
   }
 } catch {
@@ -22,10 +23,10 @@ try {
 }
 const { default: init } = await import("./people.js");
 await init();
-const observer = new ResizeObserver(() => {
-  void client.resize(document.documentElement.scrollHeight).catch(() => {});
+const observer = new globalThis.ResizeObserver(() => {
+  void client.resize(globalThis.document.documentElement.scrollHeight).catch(() => {});
 });
-observer.observe(document.body);
+observer.observe(globalThis.document.body);
 addEventListener(
   "pagehide",
   () => {
