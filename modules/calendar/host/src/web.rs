@@ -153,7 +153,10 @@ fn check_static(
     }
     let mut checked = headers.clone();
     let mut origins = headers.get_all(header::ORIGIN).iter();
-    if origins.next().is_some_and(|v| v == "null") && origins.next().is_none() {
+    let first = origins.next();
+    // Opaque-frame scripts send Origin: null; no-CORS stylesheet requests omit it.
+    // Both fetch only public static code here. Keep explicit foreign origins rejected.
+    if first.is_none() || (first.is_some_and(|v| v == "null") && origins.next().is_none()) {
         checked.remove(header::ORIGIN);
         checked.remove("sec-fetch-site");
     }
@@ -296,6 +299,31 @@ mod tests {
         .map(|(k, v)| (k.parse::<header::HeaderName>().unwrap(), v.parse().unwrap()))
         .collect();
         assert_eq!(check_static(&policy, &h, &Method::GET, peer), Ok(()));
+        // Browsers omit Origin on no-CORS stylesheet requests from opaque frames.
+        let mut stylesheet = h.clone();
+        stylesheet.remove(header::ORIGIN);
+        assert_eq!(
+            check_static(&policy, &stylesheet, &Method::GET, peer),
+            Ok(())
+        );
+        assert_eq!(
+            check_static(&policy, &stylesheet, &Method::POST, peer),
+            Err(405)
+        );
+        assert_eq!(
+            check_static(
+                &policy,
+                &stylesheet,
+                &Method::GET,
+                "192.0.2.1:1234".parse().unwrap()
+            ),
+            Err(403)
+        );
+        stylesheet.insert(header::HOST, "evil.example".parse().unwrap());
+        assert_eq!(
+            check_static(&policy, &stylesheet, &Method::GET, peer),
+            Err(421)
+        );
         assert_eq!(check_static(&policy, &h, &Method::POST, peer), Err(405));
         assert_eq!(
             check_static(&policy, &h, &Method::GET, "192.0.2.1:1234".parse().unwrap()),

@@ -193,7 +193,7 @@
     },
     {
       "id": "calendar.screens",
-      "description": "Packaged Rust Day, Week and Month screens, event details and saved view choice; failed refreshes retain loaded events. The Calendar web router connects the installed frame behind Rust sign-in and HTTPS, with account-scoped API dispatch and sign-out. External-calendar status, settings edits, provider writes, full shell assembly and second-device acceptance remain open.",
+      "description": "Packaged Rust Day, Week and Month screens, event details and saved view choice; failed refreshes retain loaded events. The Calendar web router connects the styled installed frame behind Rust sign-in and HTTPS, with account-scoped API dispatch and sign-out. Its public static route accepts opaque-frame stylesheet requests without an Origin header while retaining host, sharing and method checks. External-calendar status, settings edits, provider writes, full shell assembly and second-device acceptance remain open.",
       "errors": [
         {
           "code": "calendar-page-unavailable",

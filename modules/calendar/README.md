@@ -136,3 +136,8 @@ certificate-error tolerance is only for this generated disposable certificate; H
 also verify the certificate explicitly. A LAN-address request made on this same computer and
 a phone-width viewport are **not** a physical second-device result. Full parity, writable
 automation settings, providers/jobs, production trust and full-shell/chat composition remain open.
+
+On hosts where Chrome cannot use its sandbox, pass `AGENT_BROWSER_ARGS=--no-sandbox`
+to the runner so every task-browser command uses the same launch setting. Run the live
+check after the full gate on a loaded machine. Its browser assertions include authored
+grid styling, shared font tokens and loaded events before the offline/retry probe.

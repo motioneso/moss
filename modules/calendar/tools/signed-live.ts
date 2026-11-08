@@ -276,13 +276,25 @@ try {
   assert(context, "Task browser context is required");
   const tab = context.pages().find((p) => p.url().startsWith(local));
   assert(tab);
+  await tab.setViewportSize({ width: 1280, height: 860 });
   await tab.getByLabel("Email").fill(data.email);
   await tab.getByLabel("Password").fill(password);
   await tab.getByRole("button", { name: "Sign in", exact: true }).click();
-  await tab.waitForURL(`${local}/calendar`);
+  await tab.waitForURL(`${local}/calendar`, { timeout: 120000 });
   const frame = tab.frameLocator("#calendar");
   await frame.getByRole("button", { name: "Month", exact: true }).waitFor();
   await frame.getByRole("button", { name: "Month", exact: true }).click();
+  assert.equal(
+    await frame.locator(".cal-month__grid").evaluate((el) => getComputedStyle(el).display),
+    "grid",
+    "The installed Calendar stylesheet must load in the opaque frame"
+  );
+  assert(
+    await frame
+      .locator("html")
+      .evaluate((el) => getComputedStyle(el).getPropertyValue("--font-sans").trim()),
+    "The shared Park Press stylesheet must load in the opaque frame"
+  );
   await frame
     .getByRole("button", { name: /Calendar package check/ })
     .first()
@@ -295,6 +307,10 @@ try {
   await tab.getByRole("link", { name: "Calendar settings", exact: true }).click();
   await frame.getByText("These settings are read only.").waitFor();
   await tab.getByRole("link", { name: "Calendar", exact: true }).click();
+  await frame
+    .getByRole("button", { name: /Calendar package check/ })
+    .first()
+    .waitFor();
   await context.setOffline(true);
   await delay(31000);
   await frame.getByRole("alert").filter({ hasText: "Previously loaded events" }).waitFor();

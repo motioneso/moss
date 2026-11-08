@@ -3,7 +3,7 @@
 Task JS-48, Card 525. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
 Release note Category: N/A.
 
-**Scope: approved slice one only.** The coordinator approved JS-48 keeping the package,
+**Historical JS-48 scope: approved slice one only.** The coordinator approved JS-48 keeping the package,
 data, privacy proofs and host wrapper. Separate tasks own tools/jobs/execution and
 screens/live proof/full parity. This report does **not** claim the full Calendar port,
 HTTP parity, UI verification or second-device verification.
@@ -278,3 +278,14 @@ inspect arbitrary directory contents for private material. Static requests retai
 and sharing checks but do not use the private-request audit path. Full shell composition, theme
 selection and original HTTP error parity remain follow-up work. The browser runner checks
 server-side revocation of its old session after sign-out as well as a separate session staying valid.
+
+Live screenshot inspection found that opaque-frame no-CORS stylesheet requests omit `Origin`
+but carry cross-site fetch metadata. The initial static guard rejected them, leaving the
+working controls unstyled. The same regression assertion failed with 403 before the fix.
+The public static route now handles absent origins alongside opaque `null` origins; explicit
+foreign origins, unconfigured hosts, disabled sharing and non-read methods remain checked.
+The browser runner verifies both the Calendar grid layout and shared font tokens. It also
+waits for real events after returning from settings before simulating a failed refresh, and
+allows the debug sign-in redirect longer on loaded machines. Final receipts and review
+disposition remain in the task proof; these fixes require a review round beyond the two
+already recorded for the earlier commit.
