@@ -127,7 +127,8 @@ Run 1 (`1a260ce3f`) matched 71 of 76 cases. The rest were real differences or wr
 ### Removal run
 
 Each removal edits a fresh copy of the code at the commit, then runs one check that must fail.
-The run used commit `f7a0055ad` on a clean tree and ended `### FINAL rc=0`. All 17 were caught.
+The run used commit `c2bcfeb89` on a clean tree and ended `### FINAL rc=0`. That commit changes
+only this report, so its code is the code of `a72979cad`. All 18 were caught.
 
 | Protection removed                                                                                                              | What failed                                                                            | Exit |
 | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ---- |
@@ -146,7 +147,7 @@ The run used commit `f7a0055ad` on a clean tree and ended `### FINAL rc=0`. All 
 | The account check lets pending and deactivated members in                                                                       | The lifecycle case. Both get 200 where TypeScript holds them with 403                  | 1    |
 | Deactivation leaves the member's sessions open                                                                                  | The lifecycle case. The old session works again after reactivation                     | 1    |
 | Admin routes skip the admin check                                                                                               | The guardrails case. A member and a former admin list every user                       | 1    |
-| An admin may deactivate their own account                                                                                       | The guardrails case. The last-admin guard refuses with 409 where TypeScript gives 422  | 1    |
+| An admin may deactivate their own account                                                                                       | The guardrails case. With a second admin, the admin's own deactivation goes through    | 1    |
 | The last admin may step down                                                                                                    | The guardrails case. The last admin's demotion goes through                            | 1    |
 | The bootstrap owner's three guards removed                                                                                      | The bootstrap owner case. Deactivate and demote go through, and delete reaches the 501 | 1    |
 
@@ -154,9 +155,9 @@ The run used commit `f7a0055ad` on a clean tree and ended `### FINAL rc=0`. All 
   eight steps it shows the real build refusing each wrong role and the copy without the guard
   starting.
 - The planted password reached the Rust log three times, and the scan failed the run.
-- Without the self-deactivation guard, the last-admin guard still refused the admin, but with a
-  different answer, and the case caught that. With a second admin the self-deactivation would go
-  through. No case sets that up.
+- Without the self-deactivation guard, the last-admin guard still refuses a lone admin, with 409
+  where TypeScript gives 422. Once a second admin exists, no other guard stands in the way, and the
+  admin's own deactivation goes through with 200. The case catches both.
 
 Failing output, from the gate log and each removal's own log, with long lines cut:
 
@@ -226,6 +227,8 @@ admin-check: caught (exit 1)
 self-deactivate: caught (exit 1)
   FAIL safety: account guardrails hold for admins
        step admin deactivates self: /status: TypeScript 422 vs Rust 409
+       step admin deactivates self while B is also an admin: /status: TypeScript 422 vs Rust 200
+       step admin demotes self: /status: TypeScript 200 vs Rust 403
 last-admin: caught (exit 1)
   FAIL safety: account guardrails hold for admins
        step last admin demotes self: /status: TypeScript 409 vs Rust 200
