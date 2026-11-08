@@ -1,0 +1,26 @@
+/* Document defaults for opaque module frames, using the authored app tokens. */
+html {
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  color: var(--text);
+  background: var(--bg);
+  line-height: var(--leading-normal);
+}
+body {
+  margin: 0;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  line-height: var(--leading-tight);
+}
+h2 {
+  font-size: var(--text-2xl);
+}
+h3 {
+  font-size: var(--text-lg);
+}
+input {
+  font: inherit;
+}

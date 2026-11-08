@@ -172,6 +172,10 @@ test("guest receives replies only on its document-bound port and disposes pendin
 test("guest times out a parent which never replies", async () => {
   let port;
   let transport;
+  let received;
+  const arrived = new Promise((resolve) => {
+    received = resolve;
+  });
   const client = moduleClient({
     guestWindow: {
       parent: {
@@ -179,13 +183,16 @@ test("guest times out a parent which never replies", async () => {
           transport = ports[0];
           transport.onmessage = (event) => {
             port = event.ports[0];
+            received();
           };
         }
       }
     },
     timeoutMs: 5
   });
-  await assert.rejects(client.theme(), /Moss did not reply/);
+  const rejected = assert.rejects(client.theme(), /Moss did not reply/);
+  await arrived;
+  await rejected;
   client.dispose();
   port.close();
   transport.close();
@@ -237,4 +244,106 @@ test("screen URLs must remain inside their verified module path after normalizat
       () => connectModuleFrame(new EventTarget(), "sample.counter", { screenUrl }),
       /Invalid screen URL/
     );
+});
+
+test("fresh verified-screen token accepts queued initial bootstrap after load, never a replacement", async () => {
+  const { openModuleFrame } = await import("./host-bridge.mjs");
+  let receive;
+  const token = "0123456789abcdef0123456789abcdef";
+  const frame = new EventTarget();
+  frame.contentWindow = {};
+  frame.style = {};
+  let calls = 0;
+  const hostWindow = {
+    location: new URL("https://moss.example.test/calendar"),
+    crypto: {
+      // Non-secure LAN origins expose getRandomValues, but not randomUUID.
+      getRandomValues(bytes) {
+        for (let i = 0; i < bytes.length; i++)
+          bytes[i] = parseInt(token.slice(i * 2, i * 2 + 2), 16);
+        return bytes;
+      }
+    },
+    addEventListener(_, fn) {
+      receive = fn;
+    },
+    removeEventListener() {}
+  };
+  const callbacks = {
+    hostWindow,
+    request: () => {
+      calls++;
+      return null;
+    },
+    theme: () => null,
+    navigate: () => null,
+    chat: () => null
+  };
+  assert.throws(() =>
+    openModuleFrame(
+      frame,
+      "calendar",
+      "https://evil.test/module-ui/calendar/x/ui/index.html",
+      callbacks
+    )
+  );
+  openModuleFrame(frame, "calendar", "/module-ui/calendar/digest/ui/index.html", callbacks);
+  assert.equal(new URL(frame.src).hash, "#moss-bootstrap=" + token);
+  frame.dispatchEvent(new Event("load"));
+  const port = { postMessage() {}, start() {}, close() {} };
+  const connect = (value, candidate = port) =>
+    receive({
+      source: frame.contentWindow,
+      origin: "null",
+      data: { channel: "moss.module.v1", type: "connect", bootstrapToken: value },
+      ports: [candidate]
+    });
+  connect(undefined);
+  connect("wrong");
+  assert.equal(port.onmessage, undefined);
+  connect(token);
+  assert.equal(typeof port.onmessage, "function");
+  const send = () =>
+    port.onmessage({
+      data: {
+        channel: "moss.module.v1",
+        id: "one",
+        type: "request",
+        method: "GET",
+        path: "/events"
+      },
+      ports: [{ postMessage() {}, close() {} }]
+    });
+  await send();
+  assert.equal(calls, 1);
+  const replacement = {
+    start() {
+      throw new Error("replacement bootstrap accepted");
+    },
+    close() {}
+  };
+  connect(token, replacement);
+  frame.dispatchEvent(new Event("load"));
+  await send();
+  assert.equal(calls, 1);
+  connect(token, replacement);
+  assert.equal(replacement.onmessage, undefined);
+});
+
+test("guest echoes only its initial document fragment token", () => {
+  let message, transport;
+  const client = moduleClient({
+    guestWindow: {
+      location: { hash: "#moss-bootstrap=0123456789abcdef0123456789abcdef" },
+      parent: {
+        postMessage(value, _, ports) {
+          message = value;
+          transport = ports[0];
+        }
+      }
+    }
+  });
+  assert.equal(message.bootstrapToken, "0123456789abcdef0123456789abcdef");
+  client.dispose();
+  transport.close();
 });

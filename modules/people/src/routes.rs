@@ -1,5 +1,5 @@
 //! Legacy People data routes through the shared authenticated route envelope.
-//! Folder settings, ingest publication and installed HTTP composition are separate joins.
+//! Ingest publication and installed HTTP composition remain separate joins.
 use crate::{
     note_edits::{CreateNote, UpdateNote},
     notes_format::NoteStatus,
@@ -33,6 +33,9 @@ pub fn handle(host: &impl Host, payload: &str) -> Result<String> {
 }
 
 fn execute(host: &impl Host, request: &RouteRequest) -> Result<Response> {
+    if let Some(response) = crate::settings::route(host, request)? {
+        return Ok(response);
+    }
     let repo = Repository::new(host);
     let notes = NotesService::new(host);
     let id = || {

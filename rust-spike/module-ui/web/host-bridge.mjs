@@ -5,7 +5,15 @@
 export function connectModuleFrame(
   frame,
   moduleId,
-  { request, theme, navigate, chat, screenUrl, hostWindow = globalThis.window }
+  {
+    request,
+    theme,
+    navigate,
+    chat,
+    screenUrl,
+    hostWindow = globalThis.window,
+    bootstrapToken = null
+  }
 ) {
   if (!/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*$/.test(moduleId)) throw new Error("Invalid module");
   if (
@@ -16,6 +24,10 @@ export function connectModuleFrame(
       new URL(screenUrl, "https://moss.invalid").pathname !== screenUrl)
   )
     throw new Error("Invalid screen URL");
+  if (bootstrapToken !== null && !/^[a-f0-9]{32}$/.test(bootstrapToken))
+    throw new Error("Invalid bootstrap token");
+  if (screenUrl !== undefined && bootstrapToken !== null)
+    throw new Error("Choose one verified screen opener");
   const documentKey =
     screenUrl === undefined
       ? null
@@ -115,7 +127,8 @@ export function connectModuleFrame(
       event.origin !== "null" ||
       event.data?.channel !== "moss.module.v1" ||
       event.data?.type !== "connect" ||
-      (documentKey !== null && event.data?.documentKey !== documentKey)
+      (documentKey !== null && event.data?.documentKey !== documentKey) ||
+      (bootstrapToken !== null && event.data?.bootstrapToken !== bootstrapToken)
     )
       return;
     const port = event.ports?.[0];
@@ -130,7 +143,7 @@ export function connectModuleFrame(
     // before its connect message. Either initial ordering is valid; a subsequent
     // load always revokes the one-shot bridge, even if it never connected.
     // Legacy callers without a keyed URL retain the original fail-closed timing.
-    if (loaded || (!commandPort && documentKey === null)) dispose();
+    if (loaded || (!commandPort && documentKey === null && bootstrapToken === null)) dispose();
     loaded = true;
   };
   hostWindow.addEventListener("message", connect);
@@ -143,5 +156,27 @@ export function connectModuleFrame(
   };
   frame.addEventListener("load", onLoad);
   if (documentKey !== null) frame.src = `${screenUrl}#moss-frame=${documentKey}`;
+  return dispose;
+}
+
+/** Open only the installer's verified same-origin screen. A fresh fragment token pins
+ * the initial document even when its queued postMessage arrives after the first load.
+ * No token is sent to a replacement document; every later load still revokes the bridge.
+ * Signed initial package code is trusted to hold its token, like its private reply ports.
+ */
+export function openModuleFrame(frame, moduleId, verifiedSrc, callbacks) {
+  const hostWindow = callbacks.hostWindow ?? globalThis.window;
+  const url = new URL(verifiedSrc, hostWindow.location.href);
+  if (
+    url.origin !== hostWindow.location.origin ||
+    !url.pathname.startsWith(`/module-ui/${moduleId}/`)
+  )
+    throw new Error("Use the verified module screen URL");
+  const bootstrapToken = Array.from(hostWindow.crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
+  url.hash = new URLSearchParams({ "moss-bootstrap": bootstrapToken }).toString();
+  const dispose = connectModuleFrame(frame, moduleId, { ...callbacks, bootstrapToken });
+  frame.src = url.href;
   return dispose;
 }

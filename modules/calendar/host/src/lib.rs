@@ -113,7 +113,7 @@ impl Ports for CalendarPorts {
                 .await
                 .map_err(|_| anyhow::anyhow!("Calendar preferences unavailable"))?;
             if chat {
-                Ok(serde_json::json!({"timezone":values.get("locale").map(|v|v["timezone"].clone())}))
+                Ok(serde_json::json!({"timezone":values.get("locale").map(|v|v["timezone"].clone()),"dateFormat":values.get("locale").map(|v|v["dateFormat"].clone())}))
             } else {
                 Ok(Value::Object(values))
             }

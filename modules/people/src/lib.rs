@@ -36,3 +36,5 @@ pub(crate) fn js_space(c: char) -> bool {
         | '\u{2000}'..='\u{200a}' | '\u{2028}' | '\u{2029}' | '\u{202f}'
         | '\u{205f}' | '\u{3000}' | '\u{feff}')
 }
+
+pub mod settings;

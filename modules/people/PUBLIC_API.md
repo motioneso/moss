@@ -168,3 +168,22 @@ schema validation/coercion is not implemented here: malformed bodies can current
 ingest nudges, package route registration and real HTTP compatibility remain unfinished.
 Limits above `u32::MAX` currently fail rather than accepting the legacy larger count.
 Repeated `status`/`search` query values are not yet passed through like legacy arrays.
+
+## Part five Settings bridge
+
+The package manifest declares the four public lookup APIs at version `0.1.0`, unchanged
+from the contract above. Installed consumer routing remains to be qualified.
+
+The module frame uses the existing People data/note routes and these setting routes:
+
+| Method   | Path                            | Body/result                     |
+| -------- | ------------------------------- | ------------------------------- | ------ |
+| GET, PUT | `/people/notes-settings`        | `{folder: string                | null}` |
+| GET, PUT | `/people/note-suggestions`      | `{enabled: boolean}`            |
+| GET      | `/people/note-folders?path=...` | `{directories: [{name, path}]}` |
+
+`note-folders` is an additive module-local adapter for the shared chooser: an empty path
+lists only trusted account roots; a selected absolute path lists its subfolders through
+`VaultContext`. It is not the legacy relative `notes-directories` endpoint. Suggestions use
+the existing shared preference member, not module KV storage. The trusted settings adapter
+commits its single-operation writes immediately; later guest failure cannot undo that save.

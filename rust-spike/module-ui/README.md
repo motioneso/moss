@@ -12,7 +12,7 @@ python3 rust-spike/module-ui/build-assets.py /tmp/moss-module-shared
 node --test rust-spike/module-ui/web/bridge.test.mjs
 ```
 
-The build script expands canonical CSS imports and copies canonical fonts into
+The build script includes the canonical startup reset, expands canonical CSS imports and copies canonical fonts into
 the selected output directory. Shared document foundations apply the authored
 sans body type, display headings and sizing inside isolated frames, which cannot
 inherit parent styles. Generated assets stay out of commits. Serve that
@@ -31,3 +31,12 @@ ignored even before navigation finishes. Any subsequent load revokes the bridge,
 including a bridge that has not yet connected. Never automatically reconnect it.
 Replies use transferred message ports so a navigated iframe cannot receive a
 previous document's private response. Dispose both ends when their views close.
+
+The public `openModuleFrame(frame, moduleId, verifiedScreen.src, callbacks)` helper
+also remains supported. It attaches the bridge and opens the verified URL with a
+fresh `moss-bootstrap` fragment token. The guest echoes that token instead of the
+`moss-frame` document key used by `connectModuleFrame` with `screenUrl`. Both
+openers preserve the same source/origin checks, document-bound command ports and
+navigation revocation; choose one opener per frame. The lower-level unkeyed
+connection still requires its connection before the first load. Never reuse a
+fragment key or token or pass an unverified screen URL.

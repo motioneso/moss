@@ -813,3 +813,16 @@ regressions fail first and then pass after repair. The review's remaining minor
 notes are limited automated form coverage and untested initial blank-frame load
 behavior in other browsers. Actual Save and Enter-key list creation were checked
 in the signed installed Chrome fixture; other-browser timing remains unproven.
+
+### Main-branch reconciliation
+
+The current main branch independently added the public `openModuleFrame` helper
+and its `moss-bootstrap` fragment protocol for Calendar. The conflict resolution
+keeps that interface and its tests alongside Tasks' `screenUrl`/`moss-frame`
+contract; existing Calendar and People callers remain supported. The shared guest
+echoes whichever initial fragment it receives. Both paths keep source/origin
+checks, private command ports and load revocation. The asset build keeps main's
+startup reset and base styles plus Tasks' document foundations. No generated
+inventory entries were discarded. The combined bridge/controller suite has
+nineteen checks; the timeout check now waits for message delivery before closing
+its received port so machine load cannot cause a cleanup-only failure.

@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 
 #[cfg(target_arch = "wasm32")]
 mod abi;
+mod display;
 mod draft_tool;
 pub mod events;
 pub mod heartbeat;
@@ -115,6 +116,8 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
             plans::save(host, input)
         }
         ("GET", "/briefing-settings") => settings::read(host),
+        ("GET", "/display-settings") => display::read(host),
+        ("PATCH", "/display-settings") => display::save(host, request.body),
         _ => Err(Error::new(404, "Calendar data operation not found")),
     }
 }

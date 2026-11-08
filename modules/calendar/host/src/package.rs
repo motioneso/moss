@@ -129,6 +129,25 @@ pub fn files(root: &Path, core: &[u8]) -> Result<BTreeMap<String, Vec<u8>>> {
             include_bytes!("../../CHANGELOG.md").to_vec(),
         ),
     ]);
+    let ui = std::env::var_os("CALENDAR_UI_DIR")
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| {
+            anyhow::anyhow!("Build Calendar UI and set CALENDAR_UI_DIR before packaging")
+        })?;
+    for name in [
+        "index.html",
+        "settings.html",
+        "boot.mjs",
+        "bridge.mjs",
+        "guest-bridge.mjs",
+        "calendar.js",
+        "calendar_bg.wasm",
+        "calendar.css",
+    ] {
+        let bytes = std::fs::read(ui.join(name))?;
+        anyhow::ensure!(!bytes.is_empty(), "Empty Calendar UI asset");
+        files.insert(format!("ui/{name}"), bytes);
+    }
     for path in &manifest.database.migrations {
         let bytes = std::fs::read(root.join("packages/calendar").join(path))?;
         anyhow::ensure!(
