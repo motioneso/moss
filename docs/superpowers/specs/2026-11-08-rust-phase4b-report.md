@@ -159,3 +159,10 @@ response redaction may remove legitimate fields such as pagination tokens. The r
 intentionally conservative until provider response contracts are defined. A root transition
 interrupted between catalog commit and metadata-file write can require a registry refresh;
 this is not an atomic cache update. None of those cases is claimed as covered by the proof.
+
+The correction verification found no remaining blocker or major. Its minor follow-ups are:
+wire the explicit stalled-network tests into automation (ordinary tests and the database gate
+skip them); improve the retry message when unrelated catalog changes invalidate a refresh;
+avoid the update path's second package download. The new `api` handler is a provider contract
+and is documented in the module README and WIT; existing provider packages must implement it.
+There is no released older provider ABI to migrate in this phase.
