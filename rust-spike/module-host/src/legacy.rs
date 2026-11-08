@@ -105,3 +105,19 @@ pub async fn record(
     tx.execute("INSERT INTO moss_modules.migrations(module_id,path,checksum) VALUES($1,$2,$3) ON CONFLICT(module_id,path) DO NOTHING",&[&p.manifest.id,&path,&checksum]).await?;
     Ok(())
 }
+
+/// Only exact release-inventory SQL can invoke a compiled backfill.
+pub async fn backfill(tx: &tokio_postgres::Transaction<'_>, p: &Package, path: &str) -> Result<()> {
+    let sql = std::str::from_utf8(&p.files[path])?;
+    if !sql
+        .lines()
+        .any(|line| line.starts_with("-- moss:backfill "))
+    {
+        return Ok(());
+    }
+    ensure!(
+        entry(&p.manifest.id, path).is_some_and(|f| f.raw == crate::trust::digest(&p.files[path])),
+        "Downloaded backfill code is not executable"
+    );
+    crate::backfills::run(tx, path).await
+}

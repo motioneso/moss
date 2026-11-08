@@ -32,3 +32,5 @@ pub mod application;
 mod compiled;
 
 pub mod registry_manager;
+
+mod backfills;

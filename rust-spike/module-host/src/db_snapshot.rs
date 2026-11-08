@@ -116,6 +116,12 @@ impl PostgresLifecycle {
             for table in tables.keys(){tx.execute("INSERT INTO moss_modules.owned_tables(module_id,name) VALUES($1,$2)",&[&id,table]).await?;}
             tx.execute("DELETE FROM moss_modules.migrations WHERE module_id=$1",&[&id]).await?;
             for row in data["ledger"].as_array().context("Missing ledger")? {tx.execute("INSERT INTO moss_modules.migrations(module_id,path,checksum) VALUES($1,$2,$3)",&[&id,&row["path"].as_str().context("Missing path")?,&row["checksum"].as_str().context("Missing checksum")?]).await?;}
+            for row in data["core"].as_array().context("Missing core ledger")? {
+                let version=row["version"].as_str().context("Missing version")?;let name=row["name"].as_str().context("Missing name")?;let checksum=row["checksum"].as_str().context("Missing checksum")?;
+                if let Some(existing)=tx.query_opt("SELECT name,checksum FROM app.schema_migrations WHERE version=$1",&[&version]).await? {
+                    ensure!(existing.get::<_,String>(0)==name&&existing.get::<_,String>(1)==checksum,"A different migration owns this core version");
+                } else {tx.execute("INSERT INTO app.schema_migrations(version,name,checksum) VALUES($1,$2,$3)",&[&version,&name,&checksum]).await?;}
+            }
             tx.execute("DELETE FROM app.module_schema_migrations WHERE module_id=$1",&[&id]).await?;
             for row in data["module"].as_array().context("Missing module ledger")? {tx.execute("INSERT INTO app.module_schema_migrations(module_id,version,name,checksum) VALUES($1,$2,$3,$4)",&[&id,&row["version"].as_str().context("Missing version")?,&row["name"].as_str().context("Missing name")?,&row["checksum"].as_str().context("Missing checksum")?]).await?;}
             let key=crate::jobs::module_key(id);
