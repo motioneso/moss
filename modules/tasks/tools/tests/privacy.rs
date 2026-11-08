@@ -21,6 +21,8 @@ use uuid::Uuid;
 
 #[path = "privacy/actions.rs"]
 mod actions;
+#[path = "privacy/owner_lookup.rs"]
+mod owner_lookup;
 
 struct NativeHost<'a> {
     scope: &'a CallScope,

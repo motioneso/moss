@@ -114,9 +114,12 @@ try {
   const receipt = await new Promise<string>((done, fail) => {
     const finish = () => {
       if (!existsSync(join(out, "finished"))) return;
+      const receipt = readFileSync(join(out, "finished"), "utf8");
+      // File creation can notify before the writer supplies its contents.
+      if (!receipt.trim()) return;
       watcher.close();
       clearTimeout(timer);
-      done(readFileSync(join(out, "finished"), "utf8"));
+      done(receipt);
     };
     const watcher = watch(out, finish);
     const timer = setTimeout(

@@ -75,7 +75,12 @@ The script builds both servers, claims and releases ports, and writes
 cases and TypeScript server unchanged. Expected failures from unported routes,
 tools and jobs are reported as failures; this script is not an installed package
 or live UI proof. The endpoint harness does not compare tools; the database gate
-separately compares the twelve mutation handlers with the TypeScript executors.
+separately compares the twelve mutation handlers with the TypeScript executors,
+including set-value fields, cascades, recurrence and selected rejected operations.
+It also checks persisted task effects and tags dropped by list moves; it does not
+claim exhaustive input/error-message parity. Empty titles remain rejected by the
+unchanged database constraint. A shared-parent removal control strips the real
+`Owned` query predicate and counts attempted inserts before and after restoration.
 
 The package screen is rendered with the shared Leptos kit; its controller uses
 the public parent bridge. The interactive check below creates a disposable signed

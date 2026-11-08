@@ -37,14 +37,15 @@ fn compiled_actions_match_legacy_shapes_and_preserve_text() {
     assert_eq!(task["data"]["summary"], "Created task:   Exact title  ");
     assert_eq!(task["data"]["task"]["description"], "  Exact body  ");
     let id = task["data"]["task"]["id"].as_str().unwrap();
+    assert!(f.tool(f.owner, "tasks.update", json!({"taskId":id,"title":""})).is_err());
     let updated = f
         .tool(
             f.owner,
             "tasks.update",
-            json!({"taskId":id,"title":"","description":""}),
+            json!({"taskId":id,"title":"  Updated  ","description":""}),
         )
         .unwrap();
-    assert_eq!(updated["data"]["task"]["title"], "");
+    assert_eq!(updated["data"]["task"]["title"], "  Updated  ");
     assert_eq!(updated["data"]["task"]["description"], "");
     let note = f
         .tool(
@@ -53,7 +54,7 @@ fn compiled_actions_match_legacy_shapes_and_preserve_text() {
             json!({"taskId":id,"body":"  Keep note  "}),
         )
         .unwrap();
-    assert_eq!(note["data"]["summary"], "Added note/activity to .");
+    assert_eq!(note["data"]["summary"], "Added note/activity to   Updated  .");
     assert_eq!(note["data"]["activity"]["body"], "  Keep note  ");
     let assigned = f
         .tool(f.owner, "tasks.assignTag", json!({"taskId":id,"tagId":tag}))
@@ -70,9 +71,9 @@ fn compiled_actions_match_legacy_shapes_and_preserve_text() {
     assert_eq!(unassigned["data"]["summary"], "Removed tag New tag.");
     assert_eq!(unassigned["data"]["task"]["tags"], json!([]));
     for (status, summary) in [
-        ("done", "Completed task: "),
-        ("archived", "Archived task: "),
-        ("todo", "Reopened task: "),
+        ("done", "Completed task:   Updated  "),
+        ("archived", "Archived task:   Updated  "),
+        ("todo", "Reopened task:   Updated  "),
     ] {
         let result = f
             .tool(
@@ -129,7 +130,7 @@ fn compiled_actions_match_legacy_shapes_and_preserve_text() {
 
 #[test]
 #[ignore = "Database work only through the Tasks verify-gate"]
-fn compiled_breakdown_route_normalizes_steps_and_rolls_back_invalid_hierarchy() {
+fn compiled_breakdown_route_normalizes_steps_and_rejects_invalid_hierarchy() {
     let f = Fixture::open_with(true);
     let parent = f.route(f.owner, "POST", "/tasks", json!({"title":"Parent"}));
     let parent = parent["body"]["task"]["id"].as_str().unwrap();
@@ -139,14 +140,10 @@ fn compiled_breakdown_route_normalizes_steps_and_rolls_back_invalid_hierarchy() 
     assert_eq!(broken["body"]["tasks"][0]["title"], "First");
     assert_eq!(broken["body"]["tasks"][1]["title"], "2");
     let child = broken["body"]["tasks"][0]["id"].as_str().unwrap();
-    assert!(f
-        .try_route(
-            f.owner,
-            "POST",
-            &format!("/tasks/{child}/breakdown"),
-            json!({"steps":["Grandchild"]})
-        )
-        .is_err());
+    assert_eq!(
+        f.route(f.owner, "POST", &format!("/tasks/{child}/breakdown"), json!({"steps":["Grandchild"]}))["status"],
+        500
+    );
     let subtasks = f.route(
         f.owner,
         "GET",
@@ -195,15 +192,42 @@ fn compiled_action_privacy_assertions_fail_without_rls_then_pass_with_it() {
         assert_hidden(actor);
     }
     f.sql("ALTER TABLE app.tasks DISABLE ROW LEVEL SECURITY");
-    let failed =
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| assert_hidden(f.other))).is_err();
+    // Execute every control independently. A tool error is a test failure, never
+    // accepted as the intended privacy mismatch.
+    for (tool, input) in [
+        ("tasks.update", json!({"taskId":id,"title":"Forbidden"})),
+        ("tasks.updateStatus", json!({"taskId":id,"status":"done"})),
+        ("tasks.addActivity", json!({"taskId":id,"body":"Forbidden note"})),
+    ] {
+        let exposed = f.tool(f.other, tool, input)
+            .expect("removal control must execute successfully");
+        assert_ne!(exposed, json!({"data":{"error":"Task not found"}}));
+        assert!(exposed["data"]["error"].is_null());
+        println!("PASS {tool}: the hidden-task assertion mismatches with RLS removed");
+    }
     f.sql("ALTER TABLE app.tasks ENABLE ROW LEVEL SECURITY; ALTER TABLE app.tasks FORCE ROW LEVEL SECURITY");
-    assert!(
-        failed,
-        "the identical compiled action assertion must fail with RLS removed"
-    );
     for actor in [f.other, f.admin] {
         assert_hidden(actor);
     }
-    println!("PASS compiled Tasks actions: cross-account mutation assertion fails with RLS removed and passes with RLS restored");
+    let list = task["body"]["task"]["listId"].as_str().unwrap();
+    let tag = f.tool(f.owner, "tasks.createTag", json!({"listId":list,"name":"Private tag"})).unwrap();
+    let tag = tag["data"]["tag"]["id"].as_str().unwrap();
+    for actor in [f.other, f.admin] {
+        for (tool, input) in [
+            ("tasks.create", json!({"title":"Forbidden","listId":list})),
+            ("tasks.breakDown", json!({"taskId":id,"steps":["Forbidden"]})),
+            ("tasks.assignTag", json!({"taskId":id,"tagId":tag})),
+            ("tasks.unassignTag", json!({"taskId":id,"tagId":tag})),
+            ("tasks.renameList", json!({"listId":list,"name":"Forbidden"})),
+            ("tasks.createTag", json!({"listId":list,"name":"Forbidden"})),
+            ("tasks.renameTag", json!({"listId":list,"tagId":tag,"name":"Forbidden"})),
+            ("tasks.deleteTag", json!({"listId":list,"tagId":tag})),
+        ] {
+            assert!(f.tool(actor, tool, input).is_err(), "{tool} must refuse a foreign target");
+        }
+        let own = f.tool(actor, "tasks.createList", json!({"name":"Personal"})).unwrap();
+        assert_ne!(own["data"]["list"]["id"], list);
+        assert_eq!(own["data"]["list"]["ownerUserId"], actor.to_string());
+    }
+    println!("PASS compiled Tasks actions: separate update, status and activity controls fail without RLS and pass after restoration; foreign list/tag/task targets refused for other account and admin");
 }

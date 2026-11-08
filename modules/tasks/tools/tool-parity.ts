@@ -54,7 +54,15 @@ function canonical(value: unknown, side: string, key = ""): unknown {
     return Object.fromEntries(Object.entries(value!).map(([k, v]) => [k, canonical(v, side, k)]));
   if (
     typeof value === "string" &&
-    ["id", "ownerUserId", "listId", "parentTaskId", "taskId", "actorUserId"].includes(key)
+    [
+      "id",
+      "ownerUserId",
+      "listId",
+      "parentTaskId",
+      "taskId",
+      "actorUserId",
+      "recurrenceSeriesId"
+    ].includes(key)
   ) {
     const map = ids[side]!;
     if (!map.has(value)) map.set(value, `id-${map.size}`);
@@ -68,25 +76,39 @@ let count = 0;
 async function compare(
   name: string,
   tool: string,
-  input: (side: string) => Record<string, unknown>
+  input: (side: string) => Record<string, unknown>,
+  rejects = false
 ) {
   const tsInput = input("ts");
   const rsInput = input("rs");
-  const expected = await runner.withDataContext(
-    { actorUserId: actors.ts, requestId: "tool-differential" },
-    (db) =>
+  let rejected = false;
+  const expected = await runner
+    .withDataContext({ actorUserId: actors.ts, requestId: "tool-differential" }, (db) =>
       handlers[tool]!(db, tsInput, {
         actorUserId: actors.ts,
         requestId: "tool-differential",
         chatSessionId: "test"
       })
-  );
+    )
+    .catch((error: unknown) => {
+      if (!rejects) throw error;
+      rejected = true;
+      return undefined;
+    });
   child.stdin.write(
     `${JSON.stringify({ actor: actors.rs, request: { tool, parameters: rsInput } })}\n`
   );
   const line = await iterator.next();
   assert(!line.done, "Component tool adapter stopped early");
   const actual = JSON.parse(line.value) as { ok?: unknown; error?: boolean };
+  if (rejects) {
+    assert(rejected, `${name}: TypeScript must reject`);
+    assert.equal(actual.error, true, `${name}: component must reject`);
+    count++;
+    console.log(`PASS compiled tool differential: ${name} (both reject)`);
+    return;
+  }
+  assert(expected);
   assert(!actual.error, `${name}: component failed`);
   assert.deepEqual(canonical(actual.ok, "rs"), canonical(expected, "ts"), name);
   results["ts"]![name] = expected.data as Record<string, unknown>;
@@ -125,10 +147,30 @@ try {
     description: "  Body  ",
     priority: 3
   }));
+  await compare(
+    "empty title rejected by database",
+    "tasks.update",
+    (s) => ({ taskId: id(s, "create", "task"), title: "" }),
+    true
+  );
   await compare("update", "tasks.update", (s) => ({
     taskId: id(s, "create", "task"),
-    title: "",
+    title: "  Updated  ",
     description: ""
+  }));
+  await compare("set dates and effort", "tasks.update", (s) => ({
+    taskId: id(s, "create", "task"),
+    dueAt: "2026-11-10T12:30:00.000Z",
+    doAt: "2026-11-09T09:00:00.000Z",
+    effort: "medium"
+  }));
+  await compare("parent", "tasks.create", (s) => ({
+    title: "Parent",
+    listId: id(s, "list", "list")
+  }));
+  await compare("set parent", "tasks.update", (s) => ({
+    taskId: id(s, "create", "task"),
+    parentTaskId: id(s, "parent", "task")
   }));
   await compare("clear nullable fields", "tasks.update", (s) => ({
     taskId: id(s, "create", "task"),
@@ -170,10 +212,106 @@ try {
     taskId: id(s, "create", "task"),
     steps: []
   }));
+  await compare("other list", "tasks.createList", () => ({ name: "Other" }));
+  await compare("assign before move", "tasks.assignTag", (s) => ({
+    taskId: id(s, "create", "task"),
+    tagId: id(s, "tag", "tag")
+  }));
+  await compare("assign child before move", "tasks.assignTag", (s) => ({
+    taskId: (results[s]!["breakdown"]!["tasks"] as { id: string }[])[0]!.id,
+    tagId: id(s, "tag", "tag")
+  }));
+  await compare("move parent with children", "tasks.update", (s) => ({
+    taskId: id(s, "create", "task"),
+    listId: id(s, "other list", "list")
+  }));
+  for (const side of ["ts", "rs"] as const) {
+    const links = await bootstrap.query(
+      "SELECT count(*)::int AS n FROM app.task_tag_assignments a JOIN app.tasks t ON t.id=a.task_id WHERE t.owner_user_id=$1",
+      [actors[side]]
+    );
+    assert.equal(links.rows[0].n, 0, `${side}: list move drops parent and child tags`);
+  }
+  await compare("complete parent with children", "tasks.updateStatus", (s) => ({
+    taskId: id(s, "create", "task"),
+    status: "done"
+  }));
+  await compare("recurring", "tasks.create", (s) => ({
+    title: "Recurring",
+    listId: id(s, "list", "list"),
+    dueAt: "2026-11-10T12:30:00.000Z",
+    doAt: "2026-11-09T09:00:00.000Z",
+    effort: "quick",
+    recurrence: { freq: "daily", interval: 1, occurrence_date: "2026-11-10" }
+  }));
+  await compare("set recurrence", "tasks.update", (s) => ({
+    taskId: id(s, "recurring", "task"),
+    recurrence: { freq: "weekly", interval: 2, occurrence_date: "2026-11-10" }
+  }));
+  await compare("complete recurring", "tasks.updateStatus", (s) => ({
+    taskId: id(s, "recurring", "task"),
+    status: "done"
+  }));
+  const missing = randomUUID();
+  for (const tool of ["tasks.update", "tasks.updateStatus", "tasks.addActivity"])
+    await compare(`missing ${tool}`, tool, () => ({
+      taskId: missing,
+      title: "Missing",
+      status: "done",
+      body: "Missing"
+    }));
+  await compare(
+    "missing parent",
+    "tasks.create",
+    (s) => ({ title: "Refused", listId: id(s, "list", "list"), parentTaskId: missing }),
+    true
+  );
+  await compare(
+    "foreign list",
+    "tasks.create",
+    (s) => ({ title: "Refused", listId: id(s === "ts" ? "rs" : "ts", "list", "list") }),
+    true
+  );
+  await compare(
+    "hidden parent",
+    "tasks.create",
+    (s) => ({
+      title: "Refused",
+      listId: id(s, "list", "list"),
+      parentTaskId: id(s === "ts" ? "rs" : "ts", "parent", "task")
+    }),
+    true
+  );
+  await compare(
+    "foreign tag",
+    "tasks.assignTag",
+    (s) => ({ taskId: id(s, "parent", "task"), tagId: id(s === "ts" ? "rs" : "ts", "tag", "tag") }),
+    true
+  );
   await compare("delete tag", "tasks.deleteTag", (s) => ({
     listId: id(s, "list", "list"),
     tagId: id(s, "tag", "tag")
   }));
+  // Compare persisted rows too: cascades, dropped tags and generated occurrences
+  // are not all returned by a mutation. Only IDs and wall-clock stamps normalize.
+  const snapshots: Record<string, unknown> = {};
+  for (const side of ["ts", "rs"] as const) {
+    const rows = await bootstrap.query(
+      `SELECT jsonb_build_object(
+      'id',id,'ownerUserId',owner_user_id,'listId',list_id,'parentTaskId',parent_task_id,
+      'title',title,'description',description,'status',status,'priority',priority,
+      'dueAt',due_at,'doAt',do_at,'effort',effort,'source',source,'recurrence',recurrence,
+      'recurrenceSeriesId',recurrence_series_id,'completedAt',completed_at) AS task
+      FROM app.tasks WHERE owner_user_id=$1 ORDER BY title,source,due_at NULLS FIRST`,
+      [actors[side]]
+    );
+    snapshots[side] = canonical(
+      rows.rows.map((row: { task: unknown }) => row.task),
+      side
+    );
+  }
+  assert.deepEqual(snapshots.rs, snapshots.ts, "persisted task cascades and recurrence");
+  console.log("PASS compiled tool differential: persisted task effects");
   console.log(
     `PASS ${count} compiled tool differential cases against current TypeScript executors`
   );
