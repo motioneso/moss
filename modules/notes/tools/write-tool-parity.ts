@@ -237,7 +237,6 @@ for (const entry of approvalCases) {
     ].join("\n"),
     { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }
   ).outputText;
-  let relative: (path: unknown) => string;
   const api = runInNewContext(script, {
     HttpError,
     isAbsolute,
@@ -256,7 +255,7 @@ for (const entry of approvalCases) {
     execute: (db: object, input: object) => Promise<unknown>;
     relative: (path: unknown) => string;
   };
-  relative = api.relative;
+  const relative = api.relative;
   approvalVectors.push({
     files: entry.files,
     request: { tool: `notes.${entry.tool}`, parameters: entry.parameters },
