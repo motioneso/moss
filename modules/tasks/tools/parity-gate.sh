@@ -20,10 +20,16 @@ cleanup() {
 trap cleanup EXIT
 tasks_rs_port="$(devports claim js-56-component-parity-rs)"
 tasks_target="${CARGO_TARGET_DIR:-$PWD/modules/tasks/tools/target}"
+# Keep every historical case unchanged and add this package's new route cases.
+if [[ -z "${TASKS_PARITY_CASES:-}" ]]; then
+  mkdir -p "$tasks_parity_out/cases"
+  cp "$tasks_root"/rust-spike/parity/cases/*.json "$tasks_parity_out/cases/"
+  cp "$tasks_root"/modules/tasks/tests/parity/*.json "$tasks_parity_out/cases/"
+fi
 printf 'Component differential evidence: %s\n' "$tasks_parity_out"
 "$tasks_target/debug/tasks-component-parity" \
   --repo "$tasks_root" \
-  --cases "${TASKS_PARITY_CASES:-$tasks_root/rust-spike/parity/cases}" \
+  --cases "${TASKS_PARITY_CASES:-$tasks_parity_out/cases}" \
   --report "$tasks_parity_out/report.json" \
   --logs "$tasks_parity_out" \
   --rs-bin "$tasks_target/debug/tasks-component-server" \

@@ -19,6 +19,9 @@ use std::sync::Arc;
 use tokio_postgres::{Client as PgClient, NoTls};
 use uuid::Uuid;
 
+#[path = "privacy/actions.rs"]
+mod actions;
+
 struct NativeHost<'a> {
     scope: &'a CallScope,
     ports: &'a dyn Ports,

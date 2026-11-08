@@ -832,3 +832,61 @@ The first post-merge gates stopped at the locked dependency check: main added
 that existing dependency edge. An offline refresh changes only that one entry;
 no dependency version or new tool installation is introduced. The gates are
 rerun on the resulting clean commit.
+
+## Tasks part 7 checkpoint (JS-74, Card 526)
+
+This continuation adds twelve assistant mutation handlers and the ordered
+breakdown route inside `modules/tasks/`. It is a bounded checkpoint under the
+brief's context rule, not completion of Phase 5 or a replacement for the current
+Tasks app. Workshop and Food remain excluded.
+
+### Actions and ordered breakdown
+
+Sixteen tools are now declared: the existing four read handlers plus create,
+update, update status, break down, add activity, assign/unassign tag, create/rename
+list, create/rename tag and delete tag. They call the existing account-scoped
+query primitives. Tool text stays exactly as supplied, including whitespace and
+empty strings; nullable tool fields retain null rather than HTTP form coercion.
+Completion reuses the existing cascade and next-occurrence code. The host keeps
+its one-use account approval guard. Automatic-action policies, approval
+presentations, background authorization and installed chat integration remain
+unfinished; tool handlers alone do not prove those joins.
+
+`POST /tasks/:id/breakdown` validates and trims ordered steps, creates children in
+the parent's list and records the existing `broken_down` activity. The existing
+database trigger rejects grandchildren. All calls share the invocation's host
+transaction so a failed insert or activity rolls back the breakdown. Empty
+breakdowns retain the legacy no-op behavior, including for an absent parent.
+
+The package app map and changelog describe these actions and their limits.
+No existing migration or shared host source is changed. The pinned approved
+wit-bindgen graph and provisioned Rust/Wasm toolchain are reused in scratch;
+nothing is installed globally. The offline host-tools lockfile refresh produces
+no diff on this main revision.
+
+### Validation and limits
+
+The new checks execute the compiled component, compare mutation results against
+current TypeScript executors and extend the endpoint harness with breakdown
+cases while retaining every historical case unchanged. Development and final
+receipts, privacy removal controls and independent review are recorded in the
+task proof artifact. Results are filled in after the runs finish.
+
+### Remaining work after part 7
+
+- Eight endpoints remain: search interpretation, deferred status, list deletion,
+  focus, at-risk, overdue, and GET/PATCH assistant-action preferences.
+- Seven tools remain: summary, list, heartbeat window, focus, at-risk, overdue
+  and deleteList. Both job kinds, recurrence scheduling/lazy roll-forward,
+  actor timezone, People public APIs, feedback and action-policy orchestration
+  remain as listed above.
+- Full screen/settings parity, the authenticated application shell, large-account
+  budgets and a real second device over HTTPS remain unproved. The signed-install
+  fixture is a separate loopback frame and must not be called the application
+  shell or a remote-device check.
+- Correction to the part 4 list: current TypeScript `GET /api/tasks` only applies
+  `tagId` and `quadrant`. The additional list/status/priority/date filters are a
+  repository and tool contract, not current HTTP behavior. This checkpoint
+  preserves that distinction.
+
+Part of https://github.com/motioneso/moss/issues/4027. Release note Category: N/A.

@@ -102,6 +102,13 @@ pub fn deferred_status() -> Schema {
     )
 }
 
+pub fn breakdown() -> Schema {
+    Schema::object(
+        &["steps"],
+        vec![("steps", Schema::Array(Box::new(Schema::string())))],
+    )
+}
+
 /// Create list, rename list, create tag and rename tag share this body.
 pub fn name_only() -> Schema {
     Schema::object(&["name"], vec![("name", Schema::string())])

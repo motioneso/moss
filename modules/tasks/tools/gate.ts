@@ -28,6 +28,11 @@ const run = spawnSync(
   }
 );
 if (run.status !== 0) process.exit(run.status ?? 1);
+const tools = spawnSync("pnpm", ["exec", "tsx", "modules/tasks/tools/tool-parity.ts"], {
+  stdio: "inherit",
+  env: process.env
+});
+if (tools.status !== 0) process.exit(tools.status ?? 1);
 const appMap = spawnSync("pnpm", ["build:app-map"], {
   stdio: "inherit",
   env: process.env

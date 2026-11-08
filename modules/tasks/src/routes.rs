@@ -100,6 +100,26 @@ fn dispatch<H: Host + ?Sized>(repo: &Repository<'_, H>, r: &RouteRequest) -> Res
         ("GET", "/tasks/:id/subtasks") => {
             json!({"tasks":tasks_json(repo,repo.subtasks(param(r,"id")?)?)?})
         }
+        ("POST", "/tasks/:id/breakdown") => {
+            let steps = r.body["steps"].as_array().expect("validated steps");
+            let steps = steps
+                .iter()
+                .enumerate()
+                .map(|(index, value)| {
+                    let text = parse::js_trim(value.as_str().expect("validated step"));
+                    if text.is_empty() {
+                        Err(Error::http(
+                            400,
+                            format!("steps[{index}] must be a non-empty string"),
+                        ))
+                    } else {
+                        Ok(text.to_owned())
+                    }
+                })
+                .collect::<Result<Vec<_>>>()?;
+            status = 201;
+            json!({"tasks":tasks_json(repo,repo.break_down(param(r,"id")?, &steps)?)?})
+        }
         ("GET", "/tasks/preferences") => json!({"preferences":repo.preferences()?.dto()}),
         ("PATCH", "/tasks/preferences") => {
             let body = parse::require_object(&r.body)?;

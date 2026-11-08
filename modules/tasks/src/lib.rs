@@ -1,5 +1,7 @@
 //! Tasks package data core. All effects cross the guest-safe SDK Host interface.
+mod breakdown;
 pub mod dates;
+mod mutations;
 pub mod parse;
 pub mod recurrence;
 pub mod repository;
@@ -7,6 +9,8 @@ pub mod routes;
 pub mod rows;
 pub mod task_fields;
 pub mod tasks;
+mod tool_fields;
+mod tool_schemas;
 pub mod tools;
 pub mod validation;
 

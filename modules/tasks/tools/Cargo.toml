@@ -55,3 +55,7 @@ test = false
 [[bin]]
 name = "tasks-ui-check"
 path = "src/ui_server.rs"
+
+[[bin]]
+name = "tasks-tool-parity"
+path = "src/tool_parity.rs"
