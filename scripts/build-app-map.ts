@@ -9,6 +9,7 @@ import {
   CORE_APP_REMEDIATIONS,
   CORE_APP_SCREENS,
   CORE_APP_SETTINGS,
+  RUST_APP_SCREENS,
   type CoreAppErrorDeclaration,
   type CoreAppRemediationDeclaration,
   type CoreAppSurfaceDeclaration
@@ -110,7 +111,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   writeAppMap(resolve(root, runtime === "rust" ? "dist/rust-app-map.json" : "dist/app-map.json"), {
     runtime,
     manifests: runtime === "rust" ? [] : getBuiltInModuleManifests(),
-    coreScreens: CORE_APP_SCREENS,
+    coreScreens: runtime === "rust" ? RUST_APP_SCREENS : CORE_APP_SCREENS,
     coreSettings: CORE_APP_SETTINGS,
     coreErrors: CORE_APP_ERRORS,
     coreRemediations: CORE_APP_REMEDIATIONS,

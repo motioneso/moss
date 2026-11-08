@@ -56,7 +56,9 @@ export interface AppMapArtifact {
   readonly narrative: { readonly authoritative: false; readonly markdown: string };
 }
 
-export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
+// Served by the Rust HTTPS listener, not the React web router. Keep these outside
+// CORE_APP_SCREENS so web route metadata never advertises a Rust-only page.
+export const RUST_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "rust-sign-in",
     runtime: "rust",
@@ -65,7 +67,10 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
       "The Rust app requires sign-in before private pages or API calls. Create the first administrator at /setup using a loopback address on the computer running Moss; setup closes after the owner exists. Passwords use the existing hash format. Browser sessions use Secure HttpOnly cookies and sign-in replies contain only public user fields. Sign-in is limited after repeated attempts; wait a minute before retrying. Further registration awaits the Rust People screens.",
     path: "/sign-in",
     scope: "user"
-  },
+  }
+];
+
+export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "today",
     label: "Today",

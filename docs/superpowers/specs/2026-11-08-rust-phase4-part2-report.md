@@ -117,7 +117,16 @@ experience still need their own qualification. The desktop webview requires OS c
 trust and was not exercised here. Accounts sharing one OS user do not isolate that user's files;
 the sharing screen states that limitation.
 
-At the last fetch, `origin/main` is `7da1c03e3`; the Phase 4b report is absent there. The network
-wrapper accepts a private axum router so the package host can sit behind the same boundary when
-that phase lands. This task neither substitutes built-in modules for packages nor changes the
-download registry design. Phase 4b integration is not claimed as tested.
+Phase 4b merged at `80aa42123`; its report has been read and the merge-tree check finds no
+conflicts. The network wrapper accepts a private axum router so the package host can sit behind
+the same boundary during application integration. This task neither substitutes built-in modules
+for packages nor changes the download registry design. Phase 4b integration is not claimed as tested.
+
+## CI correction
+
+The web-route metadata test exposed one remaining mixed-runtime declaration: `rust-sign-in`
+was in `CORE_APP_SCREENS`, which the web router expects to describe its own routes. The exact
+scoped test failed with that screen as its only missing route. It now lives in
+`RUST_APP_SCREENS`, consumed by the Rust map build; a source comment explains why it has no
+React route. The web-route assertion stays unchanged, while mixed-input map tests still verify
+that TypeScript output filters Rust declarations and Rust output retains the real sign-in route.

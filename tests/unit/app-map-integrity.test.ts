@@ -7,7 +7,8 @@ import {
   CORE_APP_ERRORS,
   CORE_APP_REMEDIATIONS,
   CORE_APP_SCREENS,
-  CORE_APP_SETTINGS
+  CORE_APP_SETTINGS,
+  RUST_APP_SCREENS
 } from "@moss/shared";
 import { buildAppMap } from "../../scripts/build-app-map.js";
 
@@ -33,7 +34,7 @@ describe("app-map integrity and truthfulness", () => {
     const rustMap = buildAppMap({
       runtime: "rust",
       manifests: [],
-      coreScreens: CORE_APP_SCREENS,
+      coreScreens: [...CORE_APP_SCREENS, ...RUST_APP_SCREENS],
       coreSettings: CORE_APP_SETTINGS,
       coreErrors: CORE_APP_ERRORS,
       coreRemediations: CORE_APP_REMEDIATIONS,
@@ -52,7 +53,7 @@ describe("app-map integrity and truthfulness", () => {
   it("keeps Rust-only declarations out of the production TypeScript app map", () => {
     const production = buildAppMap({
       manifests: [],
-      coreScreens: CORE_APP_SCREENS,
+      coreScreens: [...CORE_APP_SCREENS, ...RUST_APP_SCREENS],
       coreSettings: CORE_APP_SETTINGS,
       coreErrors: CORE_APP_ERRORS,
       coreRemediations: CORE_APP_REMEDIATIONS,
@@ -305,7 +306,7 @@ describe("app-map integrity and truthfulness", () => {
 
   it("keeps each core description short enough to summarise", () => {
     // Long topics are split into several entries that share a path rather than one wall of text.
-    for (const surface of [...CORE_APP_SCREENS, ...CORE_APP_SETTINGS]) {
+    for (const surface of [...CORE_APP_SCREENS, ...RUST_APP_SCREENS, ...CORE_APP_SETTINGS]) {
       expect(
         surface.description.length,
         `Core entry "${surface.id}" is too long; split it into topic entries`
