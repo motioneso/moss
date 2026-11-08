@@ -17,6 +17,8 @@ fn package_owns_every_existing_tasks_table() {
         );
     }
     assert_eq!(m.database.owned_tables.len(), 6);
+    assert_eq!(m.tools.len(), 4);
+    assert!(m.tools.values().all(|tool| tool.risk == "read"));
     assert!(
         m.navigation.is_empty() && m.settings.is_empty() && m.screens.is_empty(),
         "Do not advertise unfinished screens"

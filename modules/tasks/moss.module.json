@@ -56,6 +56,11 @@
       "description": "Tasks component routes with legacy request validation for task creation and updates, completion cascades, next recurrence, lists, tags, activity and view preferences. Four read tools fetch task details, lists, tags and activity. Full route parity, screens, remaining chat tools and background jobs are unfinished.",
       "errors": [
         {
+          "code": "tasks-invalid-input",
+          "class": "validation",
+          "description": "A request has missing or invalid fields. Correct the field named in the validation message and retry."
+        },
+        {
           "code": "task-not-accessible",
           "class": "permission",
           "description": "A task or list is absent or unavailable to this account."

@@ -23,6 +23,17 @@ fn rust_component_runs_without_native_adapter_or_wasi() {
     assert_eq!(invoke("health", "").unwrap(), "{}");
     assert_eq!(invoke("install", "").unwrap(), "{}");
     assert!(invoke("unknown", "{}").is_err());
+    let invalid = serde_json::json!({
+        "method":"POST","path":"/tasks","params":{},"query":{},
+        "body":{"title":"x","status":"invalid"}
+    });
+    let rejected: serde_json::Value =
+        serde_json::from_str(&invoke("route", &invalid.to_string()).unwrap()).unwrap();
+    assert_eq!(rejected["status"], 400);
+    assert_eq!(
+        rejected["body"]["error"],
+        "body/status must be equal to one of the allowed values"
+    );
 }
 
 #[test]
