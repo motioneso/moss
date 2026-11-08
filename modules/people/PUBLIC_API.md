@@ -45,8 +45,18 @@ than silently applying the active-only rule from `findPeopleByNames`.
 `relationshipSummary`, `contextSummary`, `status`, `confidence`, `memoryEntityId`,
 `mergedIntoPersonId`, `archivedAt`, `mergedAt`, `createdAt`, `updatedAt`.
 `PersonDetail` adds `identities` and the twenty most recent `recentLinks`. Dates are ISO
-timestamps, optional values are null, and confidence is numeric. Internal normalized identity
-values and raw source references are not added to the ordinary identity/link response.
+timestamps and optional values are null. The current wire value of confidence is a
+decimal string (for example `"0.75"`): node-postgres returns `NUMERIC(4,2)` as text,
+and the legacy TypeScript type assertion does not convert it. The native persistence
+differential check verifies that behavior; changing it to a JSON number would change
+the interface. Internal normalized identity values and raw source references are not added
+to the ordinary identity/link response.
+
+The current native `repository` module is an internal persistence checkpoint, not the
+registered public API above. It covers reads, identity-first resolution, person projections
+and composite indexing state. No installed handlers expose these methods yet. Indexing-state
+rows currently retain database field names internally; the eventual service must preserve
+the legacy external response shape. Do not use this internal module as a consumer interface.
 
 `listEmailIdentityValues` retains the current helper's behavior: all email-address identities
 for the account, without adding a new active-only filter. It is for owner-scoped source

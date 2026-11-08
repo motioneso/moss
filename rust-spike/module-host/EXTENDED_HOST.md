@@ -43,6 +43,11 @@ Update/delete return all affected rows and have no row-count cap. SQL errors poi
 guest catches them. Legacy database operations retain their existing transaction
 behavior; do not mix them into an atomic typed-query operation.
 
+The additive `lower-eq` comparison applies PostgreSQL `lower(column::text)` and compares it
+with the bound text parameter exactly. The caller normalizes the parameter; `%` and `_`
+are literal characters rather than patterns. Ordering accepts `nullsFirst`, defaulting to
+false to preserve existing queries. People opts into true for legacy descending link dates.
+
 The opt-in wrapper uses additive `DataContext::open_bounded` and `commit_bounded`
 helpers. Pool acquisition, context initialization, queries and completion share
 the invocation's remaining deadline. The connection-discard guard is established

@@ -41,6 +41,8 @@ pub struct Order {
     pub column: String,
     #[serde(default)]
     pub descending: bool,
+    #[serde(default)]
+    pub nulls_first: bool,
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "kebab-case", deny_unknown_fields)]
@@ -80,6 +82,9 @@ pub enum Compare {
     Ge,
     Like,
     ILike,
+    /// PostgreSQL lower(column::text) equals the supplied text, without pattern matching.
+    /// The caller normalizes the parameter; this does not lowercase it again.
+    LowerEq,
 }
 impl Filter {
     pub fn eq(column: &str, value: impl Into<Value>) -> Self {

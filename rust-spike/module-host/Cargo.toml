@@ -38,6 +38,7 @@ async-trait = "0.1"
 
 [dev-dependencies]
 tempfile = "3"
+moss-people = { path = "../../modules/people/src" }
 
 [profile.dev]
 debug = 0

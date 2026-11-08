@@ -44,9 +44,10 @@ pub fn compile(table: &str, query: &Query) -> Result<Statement> {
         .iter()
         .map(|o| {
             Ok(format!(
-                "row.{} {} NULLS LAST",
+                "row.{} {} NULLS {}",
                 column(&o.column)?,
-                if o.descending { "DESC" } else { "ASC" }
+                if o.descending { "DESC" } else { "ASC" },
+                if o.nulls_first { "FIRST" } else { "LAST" }
             ))
         })
         .collect::<Result<Vec<_>>>()?
@@ -170,6 +171,10 @@ impl Builder<'_> {
                 ensure!(!value.is_null(), "Use the typed null filter");
                 let c = column(name)?;
                 let n = self.parameter(json!({name:value}));
+                if matches!(op, Compare::LowerEq) {
+                    ensure!(value.is_string(), "Lowercase equality needs text");
+                    return Ok(format!("lower(row.{c}::text) = (${n}::jsonb ->> '{name}')"));
+                }
                 let op = match op {
                     Compare::Eq => "=",
                     Compare::Ne => "<>",
@@ -179,6 +184,7 @@ impl Builder<'_> {
                     Compare::Ge => ">=",
                     Compare::Like => "LIKE",
                     Compare::ILike => "ILIKE",
+                    Compare::LowerEq => unreachable!(),
                 };
                 format!(
                     "row.{c} {op} (SELECT {c} FROM jsonb_populate_record(NULL::{},${n}))",

@@ -2,6 +2,7 @@
 pub mod matching;
 pub mod note_edits;
 pub mod notes_format;
+pub mod repository;
 
 /// ECMAScript WhiteSpace + LineTerminator, as used by the existing note format and matching.
 pub(crate) fn js_space(c: char) -> bool {

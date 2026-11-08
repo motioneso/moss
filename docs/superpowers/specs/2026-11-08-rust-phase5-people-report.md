@@ -244,3 +244,79 @@ calling a native test driver is not proof of a compiled People guest, package in
 or the real application. Installing a generator would not itself prove any of those.
 
 Full People parity remains open until all seven continuation steps are demonstrated.
+
+### Native persistence and privacy checkpoint
+
+This checkpoint adds a partial People repository through the merged SDK's typed-query and
+context ports. It includes person list/read/detail, identity-first exact resolution,
+identity/link reads, email identities, projection writes, find-or-create, note-identity
+removal and the unchanged composite indexing-state key. Every read and update includes
+owner filtering; the host supplies insert ownership and finalizes the invocation transaction.
+The legacy SQL bytes, seven-table inventory and `core-legacy` ledger identity remain unchanged.
+
+Two additive query options preserve legacy behavior: exact lower-case text equality without
+SQL wildcard expansion, and explicit null-first ordering. Existing query defaults remain
+null-last. Native lists page beyond the host's thousand-row select cap. Empty optional filters
+and a zero limit retain the old repository's behavior. The differential oracle found that
+confidence is a decimal string on the old wire path; the Rust response and public contract
+now preserve that actual value. Timestamp responses preserve JavaScript millisecond UTC form.
+
+The isolated database check runs the actual TypeScript repository/service and native Rust
+repository against the same synthetic committed rows. It compares read responses exactly,
+then compares projection responses and persisted rows using the existing parity harness's
+ID/time normalization. It also exercises repeated composite-state updates, forged person IDs,
+rollback after a projection and a list of more than a thousand rows. The handwritten Wasm
+trampoline invokes a native driver through the real shared ports and call scope. This is
+native persistence evidence, **not** the complete HTTP parity harness or a compiled guest.
+
+The separate privacy matrix runs the unchanged tables under both runtime app and worker roles.
+For another user and an instance administrator it runs the same read/insert/update/delete
+checks with RLS temporarily removed in the disposable gate database, observes violations,
+restores forced RLS and requires no violations. Owner controls prove allowed operations and
+reject owner reassignment. Events preserve their existing append-only grants: removing RLS
+exposes reads/inserts, while update/delete remain denied by grants. Test mutations roll back;
+synthetic users are removed. No installed application's database is used.
+
+No app-map surface changes in this checkpoint: the installed product gains no screen,
+setting, tool or package yet. Step five must add the Rust package's truthful metadata with
+its actual Settings pane. Existing People declarations are not evidence of a Rust surface.
+
+### Remaining work by continuation step
+
+1. The native repository consumes the shared query/context contracts. The production guest
+   `Host::call` ABI seam remains handwritten/unfinished. Consume JS-47's generic linked-notes
+   adapter after merge; do not duplicate it. No generator package is authorized.
+2. Complete identity/link mutations, match review, merge/split and `findPeopleByNames` through
+   declared public APIs. Current projection writes read before insert/update, so concurrent
+   upsert parity remains unproven. Multi-page reads use the host's read-committed transaction;
+   a stable snapshot under concurrent changes remains unproven. Register responses/errors
+   through actual handlers and complete indexing response mapping.
+3. Integrate canonical note mutations with fresh reads, bounded host roots, canonical-ID
+   rechecks, compare-write/delete, conflict-safe compensation and ingest nudges. Existing
+   pure decision tests do not prove the linked-notes integration.
+4. Connect all seven tools and both job kinds to real host dispatch. Verify approval blocks,
+   metadata-only payloads, retries, source versions, cooldown, repeated indexing and delay.
+5. Build/install the real component package and shared-frame Settings pane; retain preferences
+   in `app.preferences`. Update app-map navigation, settings, features and recovery metadata.
+6. Extend the HTTP parity harness across all remaining behavior. The new native differential
+   and failing-first database matrix cover only the bounded checkpoint described above.
+7. Run the authenticated Rust app, exercise real People Settings and chat, then prove the
+   HTTPS/trusted-origin path from a second device. No UI screenshot or device proof exists
+   for this checkpoint. Do not request full People acceptance on its strength.
+
+The full continuation is too large for the requested bounded session. Preserve this tested
+checkpoint and continue from the list above; it is not a completed People part two delivery.
+
+### Checkpoint verification
+
+Observed locally on this work: the People native tests (including all one hundred and ten
+TypeScript differential vectors), SDK contract tests, strict People/host clippy, Rust
+formatting, root lint, Prettier, file-size check and complete project typecheck passed.
+The narrowed database gate passed with its protection-removal controls and restored-policy
+checks, and removed its disposable database container with exit code zero. These checks do
+not replace CI or any of the missing assembled-application proof.
+
+Reproduce database verification with `scripts/run-gate.sh start --gate
+rust-spike/module-host/tools/people-gate.sh`, followed by `scripts/run-gate.sh wait --follow`.
+Set `CARGO_TARGET_DIR` outside the checkout and use the pinned Rust toolchain. The recipe
+proof records actual command output and the unproven areas; its files stay outside commits.
