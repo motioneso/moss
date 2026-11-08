@@ -40,6 +40,8 @@ pub mod metadata;
 
 mod tool_names;
 
+pub mod after_commit_jobs;
+mod command_records;
 mod enqueue_options;
 
 pub mod typed_query;

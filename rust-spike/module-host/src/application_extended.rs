@@ -48,7 +48,10 @@ impl Application {
             config.intelligence,
             jobs,
         )?);
-        let context = Arc::new(ContextPorts::new(adapter(services.clone())?));
+        let deferred = Arc::new(crate::after_commit_jobs::AfterCommitJobs::new(adapter(
+            services.clone(),
+        )?));
+        let context = Arc::new(ContextPorts::new(deferred));
         let ports = Arc::new(TransactionalDatabasePorts::new(database.clone(), context)?);
         let lifecycle = Arc::new(PostgresLifecycle::new(
             config.migrations,

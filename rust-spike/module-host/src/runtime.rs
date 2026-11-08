@@ -404,11 +404,14 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
             ensure!(
                 matches!(
                     request.operation.as_str(),
-                    "enqueue" | "enqueue-options" | "schedule"
+                    "enqueue" | "enqueue-options" | "enqueue-after-commit" | "schedule"
                 ),
                 "Unknown job operation"
             );
-            if request.operation == "enqueue-options" {
+            if matches!(
+                request.operation.as_str(),
+                "enqueue-options" | "enqueue-after-commit"
+            ) {
                 let options = crate::enqueue_options::parse(&request.parameters)?;
                 return validate_job_parameters(manifest, &request.resource, &options.params);
             }
