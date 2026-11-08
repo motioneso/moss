@@ -21,6 +21,7 @@ const suites = [
   "people_persistence",
   "people_guest_database",
   "people_tools_database",
+  "people_jobs_database",
   "people_notes_database",
   "linked_notes_database",
   "people_guest"

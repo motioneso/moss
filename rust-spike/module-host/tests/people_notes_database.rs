@@ -149,6 +149,7 @@ fn compiled_people_coordinates_canonical_notes_and_projection() {
         {"port":"context","operations":["read","uuid"],"resources":["call","new"]},
         {"port":"vault","operations":["notes.read","notes.list","notes.compare-write"],"resources":["people-notes"]}
     ])).unwrap();
+    common::people_job_imports(&mut manifest);
     let manifest: Arc<Manifest> = Arc::new(manifest);
     let host = Host::new(Limits::default()).unwrap();
     let run =

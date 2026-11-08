@@ -1,12 +1,14 @@
 # Rust Phase 5: People & Context
 
-Tasks JS-45 (part one) and JS-50 (part two), Card 523.
+Tasks JS-45 (part one), JS-50 (part two) and JS-57 (part three), Card 523.
 Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
 Release note Category: N/A.
 
-Status: **People part two: partial merge checkpoint.** On 2026-11-08 the user authorized
-merging this bounded checkpoint and continuing the unfinished work in People part three.
-This supersedes the earlier hold on JS-50 readiness; full People parity remains open. Part one
+Status: **People part three: worker checkpoint; full parity remains open.** The continuation
+brief permits a bounded checkpoint before a second compaction. This checkpoint supplies
+durable command storage and the two worker handlers; it does not complete the package or
+the requested UI/device proof. On 2026-11-08 the user authorized merging part two and
+continuing its unfinished work here. Part one
 merged separately; the latest checkpoints below consume the merged shared host and Notes
 adapter. People is not yet an installable Rust package or reachable through the Rust UI.
 The database checks below cover their stated boundaries. Full parity, installed chat,
@@ -553,3 +555,93 @@ queue deduplication key must not suppress later indexing of the same source.
 The existing account key-value port locks individual get/set operations but has no atomic
 read-modify-write operation. A command collection cannot safely be implemented as concurrent
 get/replace calls on one map; its storage seam must preserve simultaneous enqueues.
+
+## People part three: bounded worker checkpoint
+
+JS-57 started from merged People part two, `b854bbd05`. Completing the remaining package,
+application wiring and device qualification would require more than the continuation's
+allowed context budget, so this is the expressly permitted checkpoint PR. It is not full
+People acceptance. No screen or installed setting is added, and the app map must not claim
+an available Rust People surface before the package and Settings pane actually work.
+
+The generated guest now executes `person-index` and `sync-person-memory`. It retains the
+old worker's signal grouping, projection/identity/link/source/event writes, composite
+indexing state, missing-provider no-op and no-write memory stub. A new internal enqueue
+interface stores the original source hash, optional source version and reason unchanged
+behind an immutable account command UUID. The queue receives only that reference. Each
+new logical cycle has a fresh UUID; retries keep their original command and availability
+rather than permanently deduplicating a source. Indexing still waits fifteen minutes and
+batches still take only their first fifty entries. The four consumer lookup APIs and seven
+tool names are unchanged.
+
+The generic host additions are documented in
+`rust-spike/module-host/COMMAND_RECORDS.md`. Immutable records use separate UUID files
+through `VaultContext`, under account/module storage and a hashed collection name.
+LocalPorts' existing process and disk locks span read/create, including independent port
+instances. This avoids the concurrent get/replace lost-update problem of a shared map.
+Records are limited to sixty-four KiB each and retained until module data purge; aggregate
+quotas and completion cleanup are not implemented. They are internal work data, not
+canonical notes or account preferences.
+
+The opt-in `AfterCommitJobs` adapter buffers owned-queue publication until the outer
+transaction adapter finishes successfully. A trap discards the buffer. The extended host
+assembly installs it automatically and checks both deferred and downstream enqueue
+capabilities before commit. Provider calls happen before the first People database query.
+Memory follow-ups use deterministic child commands and publish after commit. Database
+commit and queue publication are not atomic: a publication failure returns an error for
+retry, and a process interruption requires queue lease recovery. Re-indexing after such a
+retry can append another event, as in the existing at-least-once worker.
+
+The worker oracle invokes the real TypeScript `registerPersonIndexWorker` against disposable
+PostgreSQL. Queue delivery and the optional source provider are fixtures. Rust replays the
+same sequence through the real generated component, account records, durable queue and
+worker-role transaction adapter. It compares all seven table snapshots with the shared
+parity normalizer, provider inputs and memory follow-up intent. Cases cover a missing
+provider, grouped signals, opaque Unicode hashes/versions, a later version of the same
+source and an empty batch. An injected failure after an actual event insert checks database
+rollback and absence of memory publication; the queue then fails, reclaims and retries the
+same durable job. A separate connection verifies committed indexing state before memory
+publication. Other-user and administrator command lookup/execution are refused.
+
+The enqueue test was first observed failing with the old compiled guest. The native enqueue
+checks likewise failed before implementation. The new immutable-record privacy check was
+also observed failing with the account scope deliberately replaced by install-wide scope;
+restoring account scope passed. These controls are test-only changes and are not shipped.
+The first new worker run exposed an invalid test assumption that the Rust queue has a
+creation-time column; the corrected assertion checks its real scheduled timestamp instead.
+
+No new global tool was installed. The already approved, pinned `wit-bindgen` dependency
+remains at version `0.57.1`; this work reused task-local guest Cargo/Rustup caches and rebuilt
+the generated component in scratch space. Declared JavaScript dependencies were restored
+from the lockfile using the existing offline package cache. No new dependency was added.
+
+### Exact remaining work
+
+1. Complete the HTTP route set, response/status/error compatibility and projection fallbacks
+   for missing or unavailable canonical notes. The existing compiled note routes remain
+   partial and are not installed HTTP endpoints.
+2. Connect the shared account folder/suggestion preferences, ingest nudges and real provider
+   composition to the new job APIs. Declare versioned dependencies and queue schemas in
+   the actual package. The provider fixture is not installed provider execution proof.
+3. Build, sign, install and reload the downloadable package, including its SQL ownership and
+   immutable legacy ledger identity. Qualify command retention/quotas for sustained indexing.
+4. Port the existing Settings → Memory & context → People pane with the shared frame,
+   folder picker, refresh, add/rename/archive and match review. Add truthful package app-map
+   navigation, settings, errors and recovery declarations at that point.
+5. Extend parity to real HTTP dispatch, complete route errors/fallbacks, installed settings
+   and chat approvals/app-action blocks. Guest/tool tests alone do not prove those paths.
+6. Run the installed People UI and chat through the assembled Rust application, then check
+   a second physical device over HTTPS with sign-in, trusted origins and private-data rules.
+   No real UI, LAN/tailnet or second-device proof is supplied by this checkpoint.
+
+### Part-three verification receipts
+
+The old compiled component first failed the new worker gate at `enqueueIndex` in run
+`20261108-081646-EgGlaB`. After the queue-timing assertion correction, the new generated
+component passed `people_jobs_database` in run `20261108-082310-24umTO` with exit code zero;
+the disposable container was removed. Its component digest is
+`sha256:a414e33cc1e7c33e323e69093f64ec3023514d9dc9059f357dc95133ed3891b1`.
+Native People tests, strict People Clippy and the two generic host command/deferred-job
+suites also passed. The final full People gate, repository static checks and independent
+review receipts belong in the checkpoint acceptance proof; the selected worker run does
+not substitute for those results.

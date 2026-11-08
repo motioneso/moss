@@ -1,10 +1,10 @@
 # People & Context
 
 The Rust checkpoint contains the pure People core, canonical-note decisions, TypeScript
-differential fixtures an SDK-backed repository and canonical-note service. It is not yet an
+differential fixtures, an SDK-backed repository, canonical-note service and two job handlers. It is not yet an
 installable package or a working Rust People screen.
 The [delivery report](../../docs/superpowers/specs/2026-11-08-rust-phase5-people-report.md)
-records the approved slice and exact continuation plan for part two.
+records each delivered slice and the exact remaining continuation work.
 
 The crate lives in `src/`, as required by section 7 of the module package spec. Its repository
 consumes the merged shared SDK's query and context ports. The host supplies the actor and
@@ -12,7 +12,7 @@ invocation transaction; the repository has no database connection or filesystem 
 Ben approved the optional pinned `wit-bindgen` dependency on 2026-11-08. Its generated
 binding and the host wrapper build a `wasm32-wasip2` People component. The handwritten SDK
 canonical ABI remains available for comparison. Both paths use the same People handlers,
-including read APIs, partial note routes and seven tool execution handlers. Older handwritten
+including read APIs, partial note routes, seven tool execution handlers and both job kinds. Older handwritten
 fixtures still exercise a native test driver; those are separate persistence evidence.
 
 From `~/Jarv1s`:
@@ -64,11 +64,19 @@ scripts/run-gate.sh wait --follow
 ```
 
 The TypeScript oracles check native mutation responses and persisted rows, compiled read
-responses, seven tool execution functions, and canonical-note service responses and bytes
+responses, seven tool execution functions, worker rows and canonical-note service responses and bytes
 against the existing implementation. Set `JS50_PEOPLE_SUITE` to one of the suite names in
 `people-gate.ts` to isolate a failure; leaving it unset runs the whole People gate.
 Generated IDs and timestamps use the parity harness's normalization. This is not the full HTTP parity suite. Complete route/error/fallback compatibility, ingest scheduling, package installation and authenticated UI/chat/device checks remain
 in the report's continuation plan. Preferences still belong to `app.preferences`.
+
+The worker suite uses the real generated guest, queue, immutable command records and
+worker-role transaction adapter. The actual TypeScript index worker is its differential
+oracle; optional signal-provider delivery is a fixture. Source hashes and versions remain
+in account records, while queue parameters carry only command UUIDs. See
+[the job contract](PUBLIC_API.md#internal-job-dispatch-checkpoint) for retries, provider
+composition, retention limits and publication after commit. No installed job scheduler or
+live provider path is claimed by that suite.
 
 The merged Notes foundation supplies `LinkedNotesPorts`; People does not implement file I/O.
 Trusted composition maps the `people-notes` resource to `people-notes-folder` in

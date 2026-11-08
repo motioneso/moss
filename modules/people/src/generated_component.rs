@@ -10,6 +10,9 @@ wit_bindgen::generate!({
             import moss:module/db@1.0.0;
             import moss:module/context@1.0.0;
             import moss:module/vault@1.0.0;
+            import moss:module/kv@1.0.0;
+            import moss:module/jobs@1.0.0;
+            import moss:module/api@1.0.0;
             export handle: func(kind: string, payload: string) -> result<string, string>;
         }",
     world: "people",
@@ -32,6 +35,9 @@ impl Host for Ports {
             "db" => moss::module::db::call(&request),
             "context" => moss::module::context::call(&request),
             "vault" => moss::module::vault::call(&request),
+            "kv" => moss::module::kv::call(&request),
+            "jobs" => moss::module::jobs::call(&request),
+            "api" => moss::module::api::call(&request),
             _ => return Err(Error::new("The People component does not import this port")),
         }
         .map_err(Error::new)?;

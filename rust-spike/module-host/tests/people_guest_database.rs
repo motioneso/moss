@@ -67,6 +67,7 @@ fn compiled_people_read_apis_match_typescript_on_real_database() {
             allow_private: false,
         },
     ];
+    common::people_job_imports(&mut manifest);
     let manifest = Arc::new(manifest);
     let host = Host::new(Limits::default()).unwrap();
     let run = |actor, payload: &Value| {

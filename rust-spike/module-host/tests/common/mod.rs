@@ -26,6 +26,27 @@ pub fn manifest(version: &str) -> Manifest {
 pub fn wasm() -> Vec<u8> {
     wat::parse_str(include_str!("../../sample/module.wat")).unwrap()
 }
+/// Read-only People fixtures declare the component's additional imports without
+/// granting resources or connecting services they do not exercise.
+pub fn people_job_imports(manifest: &mut Manifest) {
+    for (port, operation) in [
+        ("kv", "records.get"),
+        ("jobs", "enqueue-options"),
+        ("api", "call"),
+    ] {
+        manifest
+            .capabilities
+            .push(crate_capability(port, operation));
+    }
+}
+fn crate_capability(port: &str, operation: &str) -> moss_module_host::manifest::Capability {
+    moss_module_host::manifest::Capability {
+        port: port.into(),
+        operations: [operation.into()].into(),
+        resources: Default::default(),
+        allow_private: false,
+    }
+}
 pub fn files(manifest: &Manifest) -> BTreeMap<String, Vec<u8>> {
     BTreeMap::from([
         ("moss.module.json".into(),serde_json::to_vec(manifest).unwrap()),
