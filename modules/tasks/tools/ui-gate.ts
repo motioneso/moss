@@ -61,7 +61,7 @@ try {
   const log = openSync(join(out, "server.log"), "w", 0o600);
   child = spawn(binary, [], {
     stdio: ["ignore", log, log],
-    env: { ...process.env, TASKS_UI_BOOTSTRAP_URL: urls.bootstrap }
+    env: { ...process.env, TASKS_UI_BOOTSTRAP_URL: urls.bootstrap, TASKS_UI_PRODUCER_URL: urls.app }
   });
   const running = new Promise<number | null>((done, fail) => {
     child!.once("exit", done);
@@ -72,10 +72,14 @@ try {
   const ca = readFileSync(join(out, "tls/certificate.pem"));
   function status(headers: Record<string, string>) {
     return new Promise<number>((done, fail) => {
-      const request = https.get(`${base}/tasks`, { ca, headers }, (response) => {
-        response.resume();
-        done(response.statusCode ?? 0);
-      });
+      const request = https.get(
+        `${base}/tasks`,
+        { ca, servername: "localhost", headers },
+        (response) => {
+          response.resume();
+          done(response.statusCode ?? 0);
+        }
+      );
       request.setTimeout(10000, () => request.destroy(new Error("HTTPS check deadline")));
       request.on("error", fail);
     });

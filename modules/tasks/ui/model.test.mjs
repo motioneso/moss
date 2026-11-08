@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { taskFields, visibleTasks, quadrant } from "./model.mjs";
+import { taskFields, visibleTasks, quadrant, viewMode } from "./model.mjs";
 
 test("editing a title preserves saved instants, suggested state and exceptional recurrence", () => {
   const previous = {
@@ -72,4 +72,12 @@ test("priority three stays outside important quadrants and urgency includes its 
   const now = Date.parse("2026-11-08T00:00:00Z");
   assert.equal(quadrant({ priority: 3, dueAt: "2026-11-10T00:00:00Z" }, now), "delegate");
   assert.equal(quadrant({ priority: 4, dueAt: "2026-11-10T00:00:00.001Z" }, now), "schedule");
+});
+
+// The stored API contract names list mode priority and grid mode matrix.
+test("saved view values preserve both supported modes and recover unknown values", () => {
+  assert.equal(viewMode("matrix"), "matrix");
+  assert.equal(viewMode("priority"), "priority");
+  assert.equal(viewMode("list"), "priority");
+  assert.equal(viewMode(undefined), "priority");
 });

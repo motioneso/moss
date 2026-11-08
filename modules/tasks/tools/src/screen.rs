@@ -31,7 +31,7 @@ pub fn render() -> String {
                         <select id="status-filter" class="jds-input">
                             <option value="todo">"To do"</option><option value="all">"All"</option>
                             <option value="done">"Done"</option>
-                            <option value="suggested" disabled>"Suggested"</option><option value="archived">"Archived"</option>
+                            <option value="suggested">"Suggested"</option><option value="archived">"Archived"</option>
                         </select>
                     </Field>
                     <Field><FormLabel control_id="tag-filter">"Tag"</FormLabel>
@@ -41,7 +41,7 @@ pub fn render() -> String {
                         <input id="search" class="jds-input" type="search" placeholder="Search tasks"/>
                     </Field>
                     <Field><FormLabel control_id="view">"View"</FormLabel>
-                        <select id="view" class="jds-input"><option value="priority">"Priority"</option><option value="list">"List"</option></select>
+                        <select id="view" class="jds-input"><option value="priority">"List"</option><option value="matrix">"Grid"</option></select>
                     </Field>
                     {action("new", "New task")}
                     {action("manage-lists", "Manage lists")}

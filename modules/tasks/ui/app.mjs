@@ -1,6 +1,6 @@
 /* global document, window, Option */
 import { moduleClient } from "./guest-bridge.mjs";
-import { taskFields, visibleTasks, quadrant, quadrants } from "./model.mjs";
+import { taskFields, visibleTasks, quadrant, quadrants, viewMode } from "./model.mjs";
 
 const client = moduleClient();
 const $ = (id) => document.getElementById(id);
@@ -98,7 +98,7 @@ async function load() {
       tags.map((name) => ({ id: name, name })),
       "All tags"
     );
-    $("view").value = preferences.preferences.defaultView;
+    $("view").value = viewMode(preferences.preferences.defaultView);
     show("overview", $("editor").hidden && $("lists-editor").hidden);
     render();
     $("notice").textContent = "Tasks are up to date.";
@@ -159,17 +159,15 @@ function render() {
   });
   const result = $("task-results");
   result.replaceChildren();
-  result.className = $("view").value === "priority" ? "tasks-matrix" : "";
+  result.className = $("view").value === "matrix" ? "tasks-matrix" : "";
   show("empty", tasks.length === 0);
   const groups =
-    $("view").value === "priority"
-      ? quadrants
-      : state.lists.map((list) => [list.id, list.name, ""]);
+    $("view").value === "matrix" ? quadrants : state.lists.map((list) => [list.id, list.name, ""]);
   for (const [key, title, subtitle] of groups) {
     const grouped = tasks.filter((task) =>
-      $("view").value === "priority" ? quadrant(task) === key : task.listId === key
+      $("view").value === "matrix" ? quadrant(task) === key : task.listId === key
     );
-    if (!grouped.length && $("view").value === "list") continue;
+    if (!grouped.length && $("view").value === "priority") continue;
     const section = text("section", "", "tasks-section");
     const heading = text("h2", `${title} (${grouped.length})`);
     section.append(heading);
@@ -235,9 +233,9 @@ async function editTask(id) {
   show("edit-error", false);
   show("task-extras", false);
   for (const name of ["subtask-title", "tag-name", "comment"]) $(name).value = "";
-  if (task) await extras();
   markSaved();
   state.focusAfter = $("title");
+  if (task) await extras();
 }
 function closeEditor() {
   state.editing = null;

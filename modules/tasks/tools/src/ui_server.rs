@@ -22,6 +22,13 @@ use safety_core::{error::json_reply, http::Platform, secret::Secret};
 use serde_json::Value;
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
+fn fixture_step<T>(name: &'static str, result: Result<T>) -> Result<T> {
+    result.map_err(|_| {
+        eprintln!("Tasks fixture failed at stage: {name}");
+        anyhow::anyhow!("Fixture stage failed")
+    })
+}
+
 struct NoAi;
 impl moss_module_host::ai::Intelligence for NoAi {
     fn generate(&self, _: &CallScope, _: &Request) -> Result<Value> {
@@ -63,45 +70,60 @@ impl Server {
                     ("JARVIS_CONNECTOR_SECRET_KEY".into(), key.connector_key),
                 ]))
                 .map_err(|_| anyhow::anyhow!("Invalid fixture connector key"))?;
-            let application = Application::open_extended(
-                &self.root.join("data"),
-                self.platform.app.clone(),
-                access.clone(),
-                Configuration {
-                    migrations: Secret::new(std::env::var("TASKS_UI_BOOTSTRAP_URL")?),
-                    producer: Secret::new(std::env::var("TASKS_UI_BOOTSTRAP_URL")?),
-                    cipher: Arc::new(cipher),
-                    intelligence: Arc::new(NoAi),
-                    version: "0.1.0".parse()?,
-                    compiled_cache: None,
-                },
+            let application = fixture_step(
+                "open host",
+                Application::open_extended(
+                    &self.root.join("data"),
+                    self.platform.app.clone(),
+                    access.clone(),
+                    Configuration {
+                        migrations: Secret::new(std::env::var("TASKS_UI_BOOTSTRAP_URL")?),
+                        producer: Secret::new(std::env::var("TASKS_UI_PRODUCER_URL")?),
+                        cipher: Arc::new(cipher),
+                        intelligence: Arc::new(NoAi),
+                        version: "0.1.0".parse()?,
+                        compiled_cache: None,
+                    },
+                ),
             )?;
             let registry = self.root.join("registry");
             let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
-            let files = moss_tasks_checks::package_files(
-                &repo,
-                std::fs::read(std::env::var("TASKS_COMPONENT")?)?,
+            let files = fixture_step(
+                "package files",
+                moss_tasks_checks::package_files(
+                    &repo,
+                    std::fs::read(std::env::var("TASKS_COMPONENT")?)?,
+                ),
             )?;
-            let bytes = moss_module_host::archive::pack(&files)?;
+            let bytes = fixture_step("pack archive", moss_module_host::archive::pack(&files))?;
             let manifest = moss_tasks_checks::manifest()?;
             let (root_key, first_party) = ui_registry::write(&registry, &bytes, &manifest)?;
-            let catalog = application.installer.refresh(
-                &access,
-                Source::Folder(registry),
-                &root_key,
-                &first_party,
-                "ui-check",
+            let catalog = fixture_step(
+                "refresh registry",
+                application.installer.refresh(
+                    &access,
+                    Source::Folder(registry),
+                    &root_key,
+                    &first_party,
+                    "tasks-ui-check",
+                ),
             )?;
-            let artifact = catalog.select(
-                "tasks",
-                None,
-                &"0.1.0".parse()?,
-                &Default::default(),
-                &Default::default(),
+            let artifact = fixture_step(
+                "select package",
+                catalog.select(
+                    "tasks",
+                    None,
+                    &"0.1.0".parse()?,
+                    &Default::default(),
+                    &Default::default(),
+                ),
             )?;
-            application
-                .installer
-                .install(&access, &catalog, artifact, true)?;
+            fixture_step(
+                "install package",
+                application
+                    .installer
+                    .install(&access, &catalog, artifact, true),
+            )?;
             println!("PASS signed Tasks registry selection, download and installation through the real module host");
             *app = Some(application);
         }

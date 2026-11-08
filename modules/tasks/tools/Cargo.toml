@@ -18,7 +18,6 @@ moss-network = { path = "../../../rust-spike/network" }
 moss-platform-jobs = { path = "../../../rust-spike/module-host/bridges/jobs" }
 ring = "0.17"
 base64 = "0.22"
-tempfile = "3"
 moss-module-host = { path = "../../../rust-spike/module-host" }
 access-context = { path = "../../../rust-spike/access-context" }
 safety-core = { path = "../../../rust-spike/safety-core" }

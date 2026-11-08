@@ -634,8 +634,10 @@ People links, drag ordering and the rest of legacy screen parity remain absent.
 Whole-number recurrence intervals now produce integer JSON tokens, matching
 JavaScript's serialized response. The exact regression failed before the change
 (`as_u64()` returned `None` for interval two), then passed with the complete
-native guest tests. The four controller-model checks cover unchanged timestamps,
-status and repeat rules, explicit clearing, filtering and quadrant boundaries.
+native guest tests. The five controller-model checks cover unchanged timestamps,
+status and repeat rules, explicit clearing, filtering, quadrant boundaries and
+the existing persisted view contract (`priority` for List, `matrix` for Grid).
+The saved-view regression failed before the review repair and passes afterwards.
 
 ### Installed UI check and limits
 
@@ -670,3 +672,46 @@ over LAN or tailnet HTTPS remain unproved. A loopback browser, phone-sized
 viewport, signed-package fixture or green unit test must not be presented as
 that evidence. Full differential green is still required before declaring the
 Tasks replacement complete.
+
+### Part 5 validation and review
+
+The disposable database gate completed with exit zero: two compiled component
+checks, two metadata checks, one tool-service boundary check, six privacy/data
+checks and twenty-nine legacy Tasks integration checks. The privacy checks
+observed the identical cross-account read/write assertions fail with RLS removed
+and pass after restoration; the compiled read-tool check does the same. These
+are pre-final-commit development receipts, not reused final-commit verification.
+
+The new differential attempts did **not** reach any cases. The unchanged
+TypeScript server missed the harness's ninety-second startup deadline twice
+on this heavily loaded machine. No new parity score is claimed; the earlier
+part 4 score above remains historical and full differential green is outstanding.
+
+Fresh Claude review found a major view-preference mismatch and minor issues
+with the Suggested filter, draft baseline after an extras failure and an unused
+direct dependency. All were repaired: the view values match the legacy API,
+the Suggested filter is enabled, the draft baseline is established before
+loading extras, and the unused dependency is removed. The live fixture also
+exposed a registry-identity mismatch; it now supplies the actual signed identity
+and logs only static failure-stage labels for troubleshooting.
+
+The live disposable fixture reached owner signup through the real HTTPS UI and
+successfully selected, downloaded and installed the signed Tasks package. Its
+certificate-verifying network checks passed for anonymous sign-in redirection,
+unknown Host rejection and unknown Origin rejection. Browser navigation used
+its explicit self-signed-certificate exception; this is separate from the
+certificate-verifying Node check.
+
+**The live Tasks UI did not pass.** It rendered the package's load-error state
+and made no account-data API calls. A bounded browser diagnostic recorded the
+frame `load` event before the opaque frame's `connect` message. The canonical
+`rust-spike/module-ui/web/host-bridge.mjs` initial-load handler disposes its
+listener when no command port has arrived yet. The unchanged package uses
+that public bridge; this checkpoint does not patch or bypass the shared host.
+The UI gate deliberately finishes unsuccessfully rather than record invented
+interaction or persistence proof. Resolve this public bridge lifecycle join
+and repeat task/list/tag/comment/view/draft checks through the installed UI.
+
+The screen controller is implemented but remains **unverified on the live path**.
+No successful task creation through the browser, real-shell integration,
+physical second-device access or complete phase parity is claimed.

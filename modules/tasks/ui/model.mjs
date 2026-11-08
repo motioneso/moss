@@ -51,3 +51,6 @@ export const quadrants = [
   ["delegate", "Delegate", "Urgent, less important"],
   ["eliminate", "Eliminate", "Less urgent, less important"]
 ];
+
+// Match the existing persisted preference contract.
+export const viewMode = (value) => (value === "matrix" ? "matrix" : "priority");
