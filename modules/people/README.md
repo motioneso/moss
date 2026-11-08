@@ -2,8 +2,8 @@
 
 The Rust checkpoint contains the People core, SDK-backed repository, canonical-note service,
 two job handlers, route envelopes and a packaged Leptos Settings pane. The installed-package
-gate adds registry installation and dispatch assertions. Installation/reload passed, but
-the part-eight package replay is pending. The authenticated Rust application still
+gate passed signed installation/reload and the enumerated response, row, note-byte,
+consumer API and installed-asset checks in part eight. The authenticated Rust application still
 needs to compose that package into its real Settings and chat flows.
 The [delivery report](../../docs/superpowers/specs/2026-11-08-rust-phase5-people-report.md)
 records each delivered slice and the exact remaining continuation work.
@@ -172,11 +172,11 @@ scripts/run-gate.sh wait --follow
 
 The gate pins both artifacts, signs a temporary registry, downloads and installs the actual
 People package with `PostgresLifecycle` and its unchanged legacy SQL, then reopens the
-installer. A separate installed consumer fixture is set up to call all four public lookup APIs;
-that portion has not completed successfully. The provider
-package and unavailable AI service are explicit fixtures; no real source delivery is claimed.
-The gate contains Settings HTML asset assertions, not a rendered or authenticated installed
-screen check. The final package replay still needs a green run.
+installer. In part eight, all four public lookup APIs passed through a separate installed
+consumer fixture. The provider package and unavailable AI service are explicit fixtures;
+no real source delivery is claimed. The gate verified the installed Settings HTML and its
+boot, JavaScript and Wasm assets; it does not render an authenticated installed screen.
+Both the installed replay and nine-suite database gate passed; exact receipts are in the report.
 
 The legacy `/people/notes-directories` endpoint browses relative to the selected folder;
 the additive `/people/note-folders` endpoint remains the absolute-root chooser. Empty and null folder
@@ -187,6 +187,6 @@ SDK's `u32` page space scan without a limit if they fit PostgreSQL `int8`.
 
 Remaining acceptance: compose the real installed shell and chat; index-refresh/cooldown,
 ingest nudges, real source providers and command retention/quotas; broaden HTTP parity
-(including locale-sensitive directory ordering and unusual note-only values); and run the
+(including locale-sensitive directory ordering, parser-key rejection and further edge cases); and run the
 real UI on desktop and a second physical device over HTTPS with sign-in, origin and privacy
 checks. This is a checkpoint, not full People acceptance. Exact receipts are in the report.

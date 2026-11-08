@@ -8,8 +8,8 @@ Status: **People part eight: note-backed edit parity checkpoint; full parity rem
 The continuation brief permits a bounded checkpoint before a second compaction. People
 now builds as a package and prior checkpoints proved signed installation and reload.
 This continuation adds configured-folder HTTP response, row and note-byte comparisons
-and retains the legacy handling of unvalidated note-only PATCH members. Part-eight
-package and database replay verification is pending. The authenticated Rust shell still needs to compose
+and retains the legacy handling of unvalidated note-only PATCH members. The part-eight
+installed replay and nine-suite gate passed; receipts and remaining work are at the end. The authenticated Rust shell still needs to compose
 People into its real Settings and chat flows. Full parity, installed chat, live UI and
 second-device verification remain open; library dispatch is not that proof.
 
@@ -903,3 +903,75 @@ Independent review results are attached to the task. No live application proof i
 
 Keep full People parity and live-device acceptance open. Prioritize working installed
 screens and chat after the final package replay is green.
+
+## People part eight: note-backed edit checkpoint (JS-79)
+
+Card 523. Base `2ab3f5cd2`. This section supersedes the earlier continuation list;
+it does not complete People or the authenticated Rust application.
+
+### Changes and review
+
+The real Fastify oracle now configures a temporary canonical-note folder and adds
+fourteen PATCH cases. The Rust replay compares each response, all seven table snapshots
+and exact note bytes. Cases include mixed aliases/emails/phones, null and empty values,
+unusable objects, status changes and other-user/admin attempts. The latter actors have
+no configured folder: unchanged note bytes are not proof of shared-folder authorization.
+
+Note-only PATCH members now retain JavaScript list/interpolation behavior after canonical
+note discovery. Projection fallback, public API versions, job kinds and legacy SQL remain
+unchanged. Literal dollar tokens retain the already documented corruption safeguard.
+The module app map and public contract describe this behavior and recovery.
+
+Review one found a major premature receipts claim; this section replaces that claim with
+actual results. Its minor findings prompted quick native tests, matching preference cleanup,
+shared canonical-note error text and narrower privacy wording. Fastify's rejection of
+`__proto__` and constructor/prototype JSON keys remains a documented parser-boundary gap.
+The installed asset test now follows the actual HTML boot module to its JS and Wasm assets.
+The Settings database fixture now expects refused null saves, matching the legacy oracle
+and part seven, and verifies the owner's folder survives.
+
+### Verification receipts
+
+- Before: frozen pre-fix component `574a7c94934f3301a762c159c8c496de2d0a6858de6dbbe5f234f90ad8b89b00`
+  returned 500 for a configured-note PATCH where real Fastify returned 200. Verify-gate
+  `142557-3p8cSA` ended 101; its wait returned 1.
+- Installed replay `144401-MWbKq3` ended 0, wait 0: 112 responses and all seven table
+  snapshots matched, including fourteen note-backed cases with exact bytes. Signed
+  installation/reload, all four consumer APIs, installed HTML/boot/JS/Wasm assets and
+  folder operations passed. It tested `b0c2c9c98` plus only the scoped Rust-format change,
+  input fingerprint `17e83bf817a246fb4d338c976fb342a1e6c5fa4da087003e4749f39591e90a5b`.
+- Nine-suite run `144509-CCqfQs` ended 0, wait 0: ten integration assertions passed across
+  all nine suites, including protection-removed failures and restored privacy for both
+  runtime roles. It tested clean `67157929b`, fingerprint
+  `1e2aaee111d52039dd45f0c8cd7490c743db2645ad5ab6153c047d76790585dc`.
+- Earlier runs `144111-uYvxG3` and `144118-2NjOW8` ended 101 at the stale asset and null-save
+  assertions described above. They are not green receipts. Final-commit rerun receipts
+  and the final independent review are attached to the task proof.
+- All fourteen native tests, strict People Clippy, scoped Rust formatting, root lint,
+  type checking, formatting and file-size checks passed. Gates used Node 22.22.2, pnpm
+  10.6.2, Rust 1.95.0 and disposable PostgreSQL 17.11 through `scripts/run-gate.sh`.
+- Component/package builds used task-owned scratch targets. No global tool was installed;
+  approved pinned `wit-bindgen =0.57.1` used existing scratch Cargo/Rustup caches.
+
+```text
+component 5fbe294845f2bc6ecce26c0a088617f584ca4a0f546e5242d41c65f18c8fb900
+package   e30709c29e7ce0a8cc1bb7411a50307a7e1defdcd31cf587aa93c248549addd7
+```
+
+### Remaining acceptance work
+
+1. Compose the authenticated Rust shell with the installed module frame, preference and
+   linked-note adapters. Exercise real Settings writes, chat approvals, blocked app actions
+   and source providers. Registry/provider fixtures and library dispatch do not establish this.
+2. Finish index-refresh/cooldown and singleton scheduling, ingest nudges, real source-provider
+   dependencies and sustained command quotas/retention.
+3. Complete broader HTTP/parity-harness acceptance: locale-sensitive directory ordering,
+   configured-folder filesystem authorization controls, parser rejection noted above, backend
+   failures and remaining numeric/file edge cases. The enumerated replays are not full parity.
+4. Run the actual installed UI at desktop and phone widths, then sign in from a second physical
+   device over HTTPS with trusted-origin, LAN/tailnet and cross-account privacy checks.
+   No browser, network-listener or physical-device proof was produced in this checkpoint.
+
+The next continuation should prioritize working installed screens/chat after the replay
+receipts, then close the remaining behavior and live-device gaps. Do not accept full People
+parity from this checkpoint.
