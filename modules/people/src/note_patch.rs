@@ -88,6 +88,10 @@ pub(crate) fn update(current: Option<&str>, id: &str, value: &Value) -> Result<S
 #[cfg(test)]
 mod tests {
     use super::update;
+    use crate::{
+        note_edits::{create_note, CreateNote},
+        notes_format::{parse_people_note, NoteStatus},
+    };
     use serde_json::json;
 
     const NOTE: &str = "---\njarvisPersonId: person\ndisplayName: Alice\naliases:\n  - Al\nemails:\n  - old@example.test\nphones: []\nstatus: active\n---\nHuman text stays.\n";
@@ -131,5 +135,51 @@ mod tests {
             assert!(update(Some(NOTE), "person", &value).is_err());
         }
         assert!(update(Some(NOTE), "another-person", &json!({})).is_err());
+    }
+    fn original() -> String {
+        create_note(
+            "person-id",
+            &CreateNote {
+                display_name: "Alice".into(),
+                aliases: vec!["Al".into()],
+                emails: vec!["alice@example.test".into()],
+                phones: vec!["123".into()],
+            },
+        )
+    }
+
+    #[test]
+    fn null_aliases_keep_the_existing_list_and_status_can_change() {
+        let content = update(Some(&original()), "person-id", &json!({"aliases":null})).unwrap();
+        assert_eq!(content, original());
+        let content = update(Some(&content), "person-id", &json!({"status":"archived"})).unwrap();
+        assert_eq!(
+            parse_people_note(&content).unwrap().frontmatter.status,
+            NoteStatus::Archived
+        );
+    }
+
+    #[test]
+    fn mixed_phones_keep_frontmatter_and_summary_null_rules_distinct() {
+        let content = update(
+            Some(&original()),
+            "person-id",
+            &json!({"phones":[23,false,null,["Nested",null],{}]}),
+        )
+        .unwrap();
+        let note = parse_people_note(&content).unwrap();
+        assert_eq!(
+            note.frontmatter.phones,
+            ["23", "false", "null", "Nested,", "[object Object]"]
+        );
+        assert!(note
+            .body
+            .contains("Phones: 23, false, , Nested,, [object Object]"));
+        for patch in [
+            json!({"aliases":{ "length":1 }}),
+            json!({"emails":[{"toString":0}]}),
+        ] {
+            assert!(update(Some(&original()), "person-id", &patch).is_err());
+        }
     }
 }

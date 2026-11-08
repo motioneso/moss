@@ -218,6 +218,7 @@ impl<'a, H: Host + ?Sized> NotesService<'a, H> {
             }
             Err(error) => return Err(error),
         };
+        // Canonical discovery precedes interpreting unvalidated PATCH list members.
         let content = crate::note_patch::update(current.content.as_deref(), id, value)?;
         self.publish_update(&current, &content).map(Some)
     }

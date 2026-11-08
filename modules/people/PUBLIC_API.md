@@ -167,14 +167,25 @@ The availability decision uses the host's opt-in
 [`notes.status` contract](../../rust-spike/module-host/LINKED_NOTES_STATUS.md).
 Busy folders, invalid/oversized content and backend failures abort instead of falling back.
 
-Note-backed PATCH keeps the legacy HTTP boundary: summary/unknown fields are ignored;
-null contact lists retain current values; empty strings and objects with numeric zero
-`length` clear a list. Array elements use JavaScript interpolation in frontmatter and
-JavaScript joining in summary lines (null renders differently in those two places). Other
-non-array values fail. Canonical discovery happens before interpreting these note-only
-fields, preserving projection fallback when the canonical note is absent. This does not
-widen the typed note-service API. The oracle covers selected finite numeric values; host
-JSON parsing and extreme numeric inputs still need broader parity work.
+For note-backed PATCH, the legacy schema validates only `displayName` and `status`.
+The port also retains legacy handling of the extra `aliases`, `emails` and `phones`
+members: null keeps the old list, empty lists clear it, and mixed JSON arrays use
+JavaScript string conversion. Null array elements render as `null` in frontmatter,
+but as empty items in managed email/phone summaries. Empty strings and objects with
+numeric `length: 0` also clear the list; unusable list values fail the request.
+These rules apply after canonical-note discovery; projection fallback ignores those
+members. Unknown fields and summaries remain ignored. Dollar replacement tokens
+remain literal, as the documented note-corruption safeguard requires.
+
+HTTP body decoding is not yet fully equivalent: Fastify rejects JSON bodies containing
+`__proto__` or constructor/prototype keys before dispatch. The current Rust route-value
+boundary does not reproduce that parser rejection. This remains an acceptance gap,
+including when such an object appears inside a note-only list.
+
+This does not widen the typed note-service API. The oracle covers selected finite numeric
+values; extreme numeric inputs still need broader parity work. Empty list elements can
+produce unreadable frontmatter: legacy publication may precede the resulting projection
+error. Repair the note before retrying such an edit.
 
 The differential gate compares legacy body-schema errors and coercion as well as selected
 query/error cases through installed dispatch when supplied a package. Positive limits

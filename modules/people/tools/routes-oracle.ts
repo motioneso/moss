@@ -9,6 +9,7 @@ import pg from "pg";
 import { createDatabase, DataContextRunner, getMossDatabaseUrls } from "@moss/db";
 import { registerPeopleRoutes } from "../../../packages/people/src/routes.js";
 import { setMossErrorHandler } from "../../../apps/api/src/error-handling.js";
+import { formatPeopleNote } from "../../../packages/people/src/notes-format.js";
 
 export const peopleTables = [
   "app.person_context_people",
@@ -116,6 +117,7 @@ export async function routesOracle() {
       body?: unknown;
       configured?: boolean;
       files?: Record<string, string>;
+      seedFiles?: Record<string, string>;
       expected: unknown;
       rows: Record<string, unknown>;
     }[] = [];
@@ -307,6 +309,44 @@ Human text stays.
     });
     await run("POST", `/people/${ids.primary}/archive`);
     await run("PATCH", `/people/${ids.primary}`, { status: "active" });
+    // Retain the part-eight fixture with an existing managed section and human text.
+    // Per-case seeds let both independently built workflows replay in sequence.
+    const noteContent = formatPeopleNote({
+      frontmatter: {
+        jarvisPersonId: ids.primary!,
+        displayName: "Route Alpha",
+        aliases: ["Original"],
+        emails: ["route@example.test"],
+        phones: ["123"],
+        status: "active"
+      },
+      body: "# Route Alpha\n\nHuman 🪴 text.\n<!-- jarvis:people:start -->\nOld summary\n<!-- jarvis:people:end -->\nHuman suffix.\n"
+    });
+    await writeFile(join(selected, "Route.md"), noteContent);
+    const additionalStart = cases.length;
+    for (const body of [
+      { displayName: "Note-backed edit" },
+      { aliases: [23, true, null, ["Nested", null], {}] },
+      { aliases: "" },
+      { emails: [23, false, null, ["Nested", null], {}] },
+      { phones: [23, false, null, ["Nested", null], {}] },
+      { phones: { length: 0 } },
+      { aliases: { length: 1 } },
+      { aliases: [{ toString: "not callable" }] },
+      { aliases: null },
+      { status: "archived" },
+      { displayName: "Restored", aliases: null, emails: null, phones: null },
+      { displayName: "Final note-backed edit" }
+    ])
+      await run("PATCH", `/people/${ids.primary}`, body);
+    for (const index of [1, 2])
+      await run("PATCH", `/people/${ids.primary}`, { displayName: "Must stay private" }, index);
+    cases[additionalStart]!.seedFiles = { "Route.md": noteContent };
+    // Keep the positive installed-consumer fixture from part seven meaningful.
+    await run("PATCH", `/people/${ids.primary}`, {
+      displayName: "Canonical renamed",
+      status: "active"
+    });
     await bootstrap.query(
       "DELETE FROM app.preferences WHERE owner_user_id=$1 AND key='people-notes-folder'",
       [actor]

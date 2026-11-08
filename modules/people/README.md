@@ -111,6 +111,8 @@ scripts/run-gate.sh wait --follow
 ```
 
 This covers the enumerated workflows, malformed bodies, coercion and query/error cases.
+Other-user/admin note-edit attempts compare unchanged bytes, but those actors have no
+configured folder. They do not prove shared-folder filesystem authorization.
 Without `JS73_PEOPLE_PACKAGE` it exercises the compiled guest directly. Add that variable
 with the package path to replay through signed registry installation, reload and installed
 dispatch, and check the four public APIs through an installed consumer fixture. It does not
