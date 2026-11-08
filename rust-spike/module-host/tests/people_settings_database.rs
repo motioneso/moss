@@ -34,7 +34,6 @@ fn people_settings_preserve_shared_preferences_and_owner_privacy() {
         for (id,email,is_admin) in [(actor,"settings-owner@example.test",false),(other,"settings-other@example.test",false),(admin,"settings-admin@example.test",true)] {
             db.execute("INSERT INTO app.users(id,email,name,is_instance_admin) VALUES($1,$2,'Settings test',$3)",&[&id,&email,&is_admin]).await.unwrap();
         }
-        db.execute("INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'people-notes-folder',$2),($1,'sourceBehaviors',$3)",&[&actor,&json!(folder),&json!({"unrelated.behavior":false})]).await.unwrap();
         db
     });
     let component = std::fs::read(std::env::var("JS50_PEOPLE_COMPONENT").unwrap()).unwrap();
@@ -50,6 +49,13 @@ fn people_settings_preserve_shared_preferences_and_owner_privacy() {
         ("JS43_APP_URL", RuntimeRole::App),
         ("JS43_WORKER_URL", RuntimeRole::Worker),
     ] {
+        // Each role gets the same isolated starting state. In particular, the
+        // other account's null folder must not turn the RLS-off control into a
+        // multiple-row backend failure instead of the intended observed leak.
+        rt.block_on(async {
+            bootstrap.execute("DELETE FROM app.preferences WHERE owner_user_id=ANY($1::uuid[])", &[&vec![actor, other, admin]]).await.unwrap();
+            bootstrap.execute("INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'people-notes-folder',$2),($1,'sourceBehaviors',$3)",&[&actor,&json!(folder),&json!({"unrelated.behavior":false})]).await.unwrap();
+        });
         let database = rt
             .block_on(Database::connect(&std::env::var(env).unwrap(), 4, role))
             .unwrap();

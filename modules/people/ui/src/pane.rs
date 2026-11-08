@@ -124,6 +124,9 @@ impl State {
                 Err(()) => {
                     self.failed.set(true);
                     self.notice.set("Could not finish this change. Try again. If your People folder is unavailable, choose another folder or clear it.".into());
+                    if path == "/people/note-suggestions" {
+                        self.load("suggestions");
+                    }
                 }
             }
             self.busy.set(false);

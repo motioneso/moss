@@ -72,7 +72,7 @@ impl AccountPreferencesPorts {
             } else {
                 let folder = VaultContext::at_allowed_root(access, &PathBuf::from(path), &allowed)?;
                 folder
-                    .list_limited(".", 2000)?
+                    .list_limited("", 2000)?
                     .into_iter()
                     .filter(|e| e.kind == EntryKind::Dir)
                     .map(|e| json!({"path":PathBuf::from(path).join(&e.name),"name":e.name}))

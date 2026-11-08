@@ -1,6 +1,6 @@
 # Rust Phase 5: People & Context
 
-Tasks JS-45 (part one), JS-50 (part two), JS-57 (part three) JS-58 (part four) and JS-69 (part five), Card 523.
+Tasks JS-45 (part one), JS-50 (part two), JS-57 (part three), JS-58 (part four) and JS-69 (part five), Card 523.
 Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
 Release note Category: N/A.
 
@@ -729,7 +729,7 @@ kit and document-bound parent bridge. It includes a folder chooser, clear/refres
 counts and guidance, match review, add, rename and archive, independent read errors and
 retry, and the default-on Suggest note updates switch. Merge/split candidates offer chat
 review rather than an Accept action. Loading data is never presented as an empty result.
-Phone layout uses wrapping actions and flexible input columns; live phone checks remain open.
+Phone layout uses wrapping actions and flexible input columns; installed phone checks remain open.
 The shared module stylesheet adds token-based document defaults so an opaque frame has
 Moss typography and colours rather than browser defaults.
 
@@ -751,6 +751,33 @@ No tool approval/app-action policy is asserted by this manifest checkpoint.
 No tool or target was installed globally. The already approved pinned `wit-bindgen` remains
 in the guest crate; this work uses existing scratch guest caches and task-local build output.
 The UI adds only dependencies already declared elsewhere in this project.
+
+### Checkpoint verification and limits
+
+The compiled browser screen was opened at desktop width and a 390-pixel phone viewport.
+Its unmodified bridge had no authenticated parent in this isolated preview: reads timed out
+into separate retry states, note writes stayed disabled, the folder picker opened and
+returned, and the phone document had no horizontal overflow. This is real browser rendering
+proof of loading/error layout only, not a successful installed Settings workflow or another
+device. The check caught a missing Wasm asset URL in startup; the loader now supplies that
+URL explicitly and theme retrieval no longer delays the first render.
+
+Independent review found a bridge response mismatch: the shared bridge returns the body
+directly, whereas the initial screen expected an HTTP envelope. A regression test using the
+real guest and host bridge failed with the old screen adapter and passed after correction;
+it also checks rejected writes. The route gate runs this test. All three minor review
+findings were addressed: browser-global qualification, shrinkable frame sizing, and
+reloading the switch after a failed save. The database folder-browse assertion also caught
+an invalid dot path; listing now uses the vault's empty relative root.
+
+The UI's server-render and legacy numeric-confidence tests passed, as did the shared bridge
+tests, root lint/type checking, strict host/UI Clippy, and unsigned package construction.
+The Settings database test resets its fixtures for each runtime role and deliberately
+removes/restores preference RLS around the same privacy assertion. The task proof recipe
+records the final isolated People and route gate outcomes and exact tested component hash;
+these suites cover integration seams, not complete installed HTTP parity. Broad host
+`cargo fmt --check` also reports pre-existing formatting in the parity harness; the changed
+Rust files pass a scoped check without rewriting that unrelated file.
 
 ### Remaining work after part five
 
