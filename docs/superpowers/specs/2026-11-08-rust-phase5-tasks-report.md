@@ -763,7 +763,15 @@ viewport does not prove a second physical device.
 A second live failure was reproduced after loading: native form submission is
 blocked by the package sandbox before the `submit` event. Save buttons now handle
 activation directly, validate the form, and call the existing public bridge.
-The sandbox and CSP stay unchanged. Browser revalidation follows below.
+The sandbox and CSP stay unchanged. The installed browser check now confirms
+list creation and renaming, task creation and editing, subtasks, tag assignment,
+comments, completion and the Done filter. Draft protection offers Keep editing
+and Discard changes. The saved Grid preference survives a full reload, as do the
+edited task, tag, subtask and comment. Both desktop and narrow layouts were
+inspected; screenshots are in the task proof artifact. The persistence gate
+confirms exactly one browser-created proof task in the real Tasks table.
+Native keyboard selection was used for the Done filter: the task browser
+CLI's select helper updates the value without the `input` event this control uses.
 
 The nine missing HTTP endpoints, nineteen tools, both queues and schedule
 reconciliation listed in part 4 remain unfinished. Public actor-timezone and
@@ -778,3 +786,20 @@ approved scratch Rust/Wasm toolchain and pinned `wit-bindgen` dependency graph.
 Host, native guest and Wasm output folders are separate. JavaScript dependencies
 were restored from the repository's frozen lockfile in this worktree. Database
 work runs only through `scripts/run-gate.sh` on disposable servers.
+
+### Checkpoint verification record
+
+- `node --test rust-spike/module-ui/web/bridge.test.mjs modules/tasks/ui/model.test.mjs`: fifteen passing checks; original initial-load regression failed first.
+- Scoped ESLint and Prettier checks pass. `pnpm verify:static` passes (lint, formatting, repository invariants, type checks and app map build).
+- Native guest: thirteen checks pass across unit, public schema and repository contract suites.
+- Shared frame example: `cargo +1.95.0 check --locked --offline --manifest-path rust-spike/module-host/Cargo.toml --example frame_check` passes.
+- Disposable data gate: two component checks, two metadata checks, one tool-service check, six privacy/data checks and twenty-nine legacy integration checks pass. Cross-account read and write assertions fail with RLS removed and pass with it restored.
+- Full differential gate: **62 of 77 match, 15 fail**. The failures cover deferred status work; focus, at-risk and timezone-based overdue routes; and list deletion/moves. This is current evidence, not reuse of the earlier checkpoint's result.
+- Signed-install UI gate: certificate-verifying HTTPS, sign-in redirection, unknown Host/Origin refusal, signed registry selection/download/install and browser persistence pass. The frame makes real `/api/m/tasks/...` calls through the installed router. Chrome uses a temporary self-signed-certificate exception; the separate Node network assertions verify the generated certificate.
+- Clippy was unavailable in the existing scratch toolchain. No Rust domain logic or migration changes were made here. No claim of complete browser, accessibility, performance, real-shell or remote-device acceptance is made.
+
+The final commit is rechecked with the same gate commands before Ready; exact
+commit/fingerprint receipts and failures are attached to the task proof. A future
+continuation should start with the remaining parity routes/jobs and real-shell
+join. The temporary fixture is loopback-only and was stopped after this check;
+it is not a deployed application or a second physical device.

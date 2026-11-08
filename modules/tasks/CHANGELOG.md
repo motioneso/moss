@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Repair initial screen loading when the frame loads before its bridge connects.
+- Save task, list, tag, subtask and comment forms through the sandbox bridge.
 - Apply the shared document typography inside the isolated package screen.
 - Run Tasks Rust code as a Wasm component using the approved generated ABI binding.
 - Add basic task, list, tag, activity and view preference routes over the shared host.
