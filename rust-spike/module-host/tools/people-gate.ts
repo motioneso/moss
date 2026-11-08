@@ -18,6 +18,7 @@ console.log(
 );
 const suites = [
   "people_privacy",
+  "people_settings_database",
   "people_persistence",
   "people_guest_database",
   "people_tools_database",

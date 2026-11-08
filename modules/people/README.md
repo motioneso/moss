@@ -109,3 +109,44 @@ scripts/run-gate.sh wait --follow
 This covers the enumerated valid-body workflows and selected query/error cases. It does
 not exercise an HTTP listener, installed package, browser, malformed-body compatibility,
 chat approvals or a second device. Those remain required for full People acceptance.
+
+## Part five Settings checkpoint
+
+`ui/` now contains the Leptos Settings pane, using the shared module kit and the
+opaque-frame bridge. Its build uses the already declared Leptos/wasm-bindgen dependencies:
+
+```sh
+RUSTUP_HOME=/path/to/task-local/rustup CARGO_TARGET_DIR=/tmp/moss-people-ui modules/people/ui/build.sh /tmp/moss-people-ui-dist
+cargo +1.95.0 test --locked --manifest-path modules/people/ui/Cargo.toml --no-default-features --features ssr
+```
+
+The parent bridge's authenticated `request` callback must return the decoded response body
+directly and throw on failed requests. Unwrap the guest route's `{status, body}` envelope
+before returning from that callback. The screen never fetches account data directly. Supply shared assets from
+`rust-spike/module-ui/build-assets.py` at `/module-shared/` and attach the parent bridge
+before assigning the verified iframe URL. The parent supplies `theme` and `colorMode` strings.
+
+Trusted assembly connects `AccountPreferencesPorts` with these bindings (guests cannot
+choose a key, account or allowed roots):
+
+- `people` / `people-folder`: `Binding::Folder`, key `people-notes-folder`, trusted roots by account.
+- `people` / `people-suggestions`: `Binding::BooleanOverride`, key `sourceBehaviors`,
+  entry `people.notes.suggest-updates`, default `true`.
+
+These settings write `app.preferences`, preserving the preference revision and unrelated
+source-behavior overrides. Like the existing KV port, they commit independently of the
+module invocation. A failed later guest call does not roll back an already saved preference.
+Keep these settings routes single-operation calls. The linked-notes adapter still uses the
+same `people-notes-folder` and `notes-source-path` binding documented above.
+
+The manifest now declares the supplied screen, settings, recovery guidance and API versions.
+The build utility assembles an unsigned package and checks the unchanged SQL inventory:
+
+```sh
+cargo +1.95.0 run --locked --manifest-path rust-spike/module-host/Cargo.toml --example pack_people -- /tmp/moss-people-generated.wasm /tmp/moss-people-ui-dist /tmp/people.mossmod
+```
+
+This build does not publish or install a registry package. The authenticated shell still
+needs to compose the installer/frame, these host adapters and provider dependencies. A build,
+render test or standalone screen preview is not proof of installed Settings, chat or a
+second physical device. See the report for the remaining acceptance work.
