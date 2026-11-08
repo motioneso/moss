@@ -28,3 +28,7 @@ strip = true
 [[test]]
 name = "rows"
 path = "../tests/rows.rs"
+
+[[test]]
+name = "contracts"
+path = "../tests/contracts.rs"
