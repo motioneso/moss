@@ -15,6 +15,11 @@ on:
 permissions:
   contents: read
 
+# Skip onnxruntime's optional CUDA download from GitHub releases on every install.
+# Embeddings run on CPU, and a slow GitHub release mirror failed CI (2026-11-08).
+env:
+  ONNXRUNTIME_NODE_INSTALL_CUDA: skip
+
 jobs:
   # Classifies a PR as docs-only so the heavy jobs can be skipped. Measured 2026-07-27:
   # a docs-only PR paid ~35 min of CI (verify 21m + the sequential publish build 13.5m)
