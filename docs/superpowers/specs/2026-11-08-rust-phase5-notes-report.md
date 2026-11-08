@@ -512,3 +512,53 @@ fixture limit and incomplete invalid-input/path parity remain disclosed below.
    HTTPS with trusted origins. Same-host HTTPS and a narrow browser viewport do
    not prove that requirement. Cross-platform and hostile filesystem race/crash
    guarantees remain unproven.
+
+### Part four validation record
+
+The screen code checkpoint is `236a9cd0d`. The disposable Notes gate completed
+with `rc=0`: linked-folder checks, all six Notes tables under app and worker
+roles, compiled guest export differential, signed registry installation and
+42 comparisons against actual legacy Settings handlers through installed routes.
+Removing Notes-table RLS made export privacy assertions fail; restoring it passed.
+Removing preferences RLS made the other-account source assertion fail; restoring
+it passed. Unrelated owners and admins could not read or link the owner's source,
+and unlinking retained files. The receipt identifies `3678e0989`, five dirty
+files and fingerprint `77b0e01696ca`; it is evidence for that run, not an exact
+final-commit gate receipt. Later fixes were to screen/bridge behavior and metadata.
+
+A prior SQL-only two-server comparison passed seven cases. The final rerun ended
+`rc=2` because the TypeScript reference server did not answer within ninety
+seconds under shared-host load. No final SQL comparison result is claimed.
+
+The real browser exercised the signed package on the disposable Rust HTTPS host:
+sign-in, Connections load, browse to Journal, link with Enter, reload retaining
+the saved Journal link, change to the allowed root with the Link folder button,
+cancel unlink while retaining the link, then confirm unlink. A real rejected
+typed path returned 400 and kept the chooser and input with a path-specific
+message. Desktop/light and 390-pixel/dark screenshots were captured. The fixture
+also verified its TLS certificate, unsigned redirect, unknown-host rejection and
+untrusted-origin rejection. This is same-host proof, not LAN/tailnet access or
+a physical second device. The fixture's first-account-only folder setup cannot
+prove multi-account browser behavior; the installed-route privacy gate is separate.
+
+Native screen tests and strict tools Clippy passed after the final code changes.
+Scoped UI ESLint, file-size, design-token and UI-class checks passed. Root lint
+passed before the final small screen fixes, which passed scoped ESLint. Whole-repo
+format and typecheck commands were started but had no completion receipt when
+this report was written; they are not claimed green. No CI or complete
+`verify:foundation` acceptance result is claimed. The final proof artifact and PR
+record any later command receipts separately.
+
+Review round one found the typed-path usability error described above (major),
+plus the unlink receipt weakness, invalid-input/path parity differences and
+first-account fixture limits (minor). The major and receipt weakness were fixed;
+the latter two remain documented limits. The initial board review line was
+incorrectly recorded as having no major findings; the final round must supersede
+that line with the actual verdict. Full Notes parity remains unfinished.
+
+The interactive fixture ended `rc=1` after the browser flow: its filesystem watcher
+read the newly created finish file before the producer wrote `checked`. It cleaned
+up before reaching its final database receipt assertion. The watcher now waits
+through an empty create notification. The screenshots and live HTTP responses
+are evidence for the browser actions; a successful final UI-gate receipt is not
+claimed, and the watcher correction has not had a repeat interactive run.

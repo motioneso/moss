@@ -120,9 +120,12 @@ try {
   const receipt = await new Promise<string>((done, fail) => {
     const finish = () => {
       if (!existsSync(join(out, "finished"))) return;
+      const value = readFileSync(join(out, "finished"), "utf8");
+      // A create notification can arrive before the producer writes its content.
+      if (value.trim() === "") return;
       watcher.close();
       clearTimeout(timer);
-      done(readFileSync(join(out, "finished"), "utf8"));
+      done(value);
     };
     const watcher = watch(out, finish);
     const timer = setTimeout(
