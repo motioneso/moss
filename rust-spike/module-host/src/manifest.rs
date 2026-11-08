@@ -354,7 +354,7 @@ impl Manifest {
         }
         for (name, tool) in &self.tools {
             ensure!(
-                identifier(name)
+                crate::tool_names::valid(name)
                     && matches!(
                         tool.risk.as_str(),
                         "read" | "write" | "outbound" | "destructive"
