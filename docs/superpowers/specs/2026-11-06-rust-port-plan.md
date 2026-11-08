@@ -122,13 +122,15 @@ Phase 0 measures what that harness costs and how many existing cases convert.
 ### 2.4 What the rewrite does to modules
 
 - **In-repo modules** (calendar, email, tasks, notes, meetings, sports and the rest) become Rust
-  crates compiled into the program. They keep their SQL folders and their manifests' meaning.
+  module packages, bundled with the installer and updated through the download registry
+  (amended 2026-11-07, JS-41 spec section 7). They keep their SQL files and their manifests'
+  meaning.
 - **Installed modules** (`external-modules/finance`, `meals`, archived `job-search`) run today as
   separate Node processes started by `packages/module-registry/src/external/worker-runtime.ts:284`,
   with web code bound to the host's React (`docs/module-developer-guide.md` §13.4). Both halves
   stop working. They must be rebuilt in the new module format (3.4).
-- **Workshop** builds TypeScript modules today. It must produce the new format before it is useful
-  again.
+- **Workshop** builds TypeScript modules today. It is not ported; Workshop and Food are redone
+  later (Ben, 2026-11-07).
 - **Third-party authors.** No outside modules are known to exist. If any do, they break without
   a compatibility path.
 
@@ -476,9 +478,10 @@ its own.
 | 2     | Core platform                        | L    | 0          |
 | 3     | Chat and agents                      | L    | 2          |
 | 4     | UI shell and design system           | L    | 2          |
-| 5     | In-repo modules and connectors       | XL   | 2, 3, 4    |
-| 6     | New module format and Workshop       | L    | 2, 4       |
-| 7     | Installers, signing, updates, backup | L    | 1, 2       |
+| 4b    | Module host and package format       | L    | 2, 4       |
+| 5     | In-repo modules and connectors       | XL   | 2, 3, 4b   |
+| 6     | Registry screens, review, finance    | L    | 4b, 5      |
+| 7     | Installers, signing, updates, backup | L    | 1, 2, M7   |
 | 8     | Cutover of existing installs         | M    | 5, 6, 7    |
 | 9     | Retire the TypeScript code           | S    | 8          |
 
@@ -556,6 +559,11 @@ the gate.
 **Kill gate.** Today and the chat drawer pass Ben's look check on a phone and a desktop, using the
 carried-over CSS. If the CSS cannot be reused cleanly, re-size Phase 5 before it starts.
 
+> **Amended 2026-11-07 (JS-41).** Modules ship as signed packages from a download registry.
+> A new Phase 4b (module host and package format) runs before Phase 5, and every Phase 5 module
+> follows the package rule. Workshop and Food are not ported. See
+> `docs/superpowers/specs/2026-11-07-rust-module-packages-and-registry-design.md` sections 7 and 9.
+
 ### Phase 5: in-repo modules and connectors (XL)
 
 - Port modules in dependency order: people, tasks, notes, calendar, email and connectors, memory
@@ -565,10 +573,13 @@ carried-over CSS. If the CSS cannot be reused cleanly, re-size Phase 5 before it
 **Kill gate.** At the halfway point, compare the real rate with the Phase 0 estimate. If it is
 worse by half or more, stop and re-plan with Ben before porting further.
 
-### Phase 6: new module format and Workshop (L)
+### Phase 6: registry screens, review, finance and meals (L)
 
-- WebAssembly host with the 3.4 ports, sandboxed module screens, install and upgrade flow.
-- Rebuild finance and meals in the new format. Workshop produces the new format.
+Amended 2026-11-07 (JS-41). The WebAssembly host, module screens and install flow moved to Phase
+4b. Workshop is not ported.
+
+- Registry screens, review, revocation and local packages (JS-41 spec slices M9 to M11).
+- Port finance and meals as packages, as they are (slice M12).
 
 **Kill gate.** Finance runs in the new format and passes its own tests. If the port interface cannot
 express what finance needs, redesign it before rebuilding meals.
