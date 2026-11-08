@@ -125,7 +125,8 @@ pub fn collect(host: &impl Host) -> Result<Value> {
             if count < PAGE as usize {
                 break;
             }
-            // The host enforces this ceiling too. Never return a silently partial export.
+            // Refuse the host paging ceiling instead of returning a truncated response.
+            // Ordinary isolation still permits concurrent changes between queries.
             query.offset = query
                 .offset
                 .checked_add(PAGE)

@@ -28,7 +28,15 @@ async fn snapshot(db: &tokio_postgres::Client) -> BTreeMap<String, Value> {
         rows.insert(table.clone(), result.get(0));
     }
     let ledger = db.query_one("SELECT jsonb_agg(to_jsonb(t) ORDER BY version) FROM app.schema_migrations t WHERE version IN ('0336','0337','0340')", &[]).await.unwrap();
-    rows.insert("ledger".into(), ledger.get(0));
+    let ledger: Value = ledger.get(0);
+    assert_eq!(
+        ledger
+            .as_array()
+            .expect("Legacy ledger rows must exist")
+            .len(),
+        3
+    );
+    rows.insert("ledger".into(), ledger);
     rows
 }
 

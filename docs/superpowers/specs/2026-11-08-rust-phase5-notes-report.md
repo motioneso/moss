@@ -7,9 +7,9 @@ The coordinator approved splitting JS-47: this slice supplies the generic linked
 and Notes domain parity. The coordinator will create part two for the complete Notes module.
 This report does not claim that Notes is available in the Rust app yet.
 
-The part-one results below are historical. The part-two checkpoint later in this
-report records the continuation's narrower changes and current evidence. The full
-seven-step continuation remains unfinished.
+The part-one and part-two results below are historical. The part-three checkpoint
+adds the real guest, package builder and managed-source export. Full Notes parity,
+Settings, tools, sync and live UI/device acceptance remain unfinished.
 
 ## Part one scope and evidence — historical
 
@@ -277,7 +277,7 @@ Filesystem deadlines, hostile open/rename races, crash recovery, non-Linux behav
 and mixed-version lock interoperability remain unproven. The older non-transactional
 database port is outside this checkpoint's worker-role correction and verification.
 
-## Notes part three — exact remaining work
+## Notes part three — original continuation plan
 
 1. Build the actual Notes guest using `moss-module-sdk`, native tests and a shipped Wasm component.
    Add `moss.module.json`, icons, changelog and the package build. Copy existing SQL into the
@@ -316,3 +316,109 @@ database port is outside this checkpoint's worker-role correction and verificati
   search. The six SQL cases and forwarding-fixture privacy checks are already verified.
 - Notes on the running Rust UI, phone/laptop access, or second-device sign-in.
 - Cross-platform filesystem behavior, hostile filesystem races or power-loss recovery.
+
+## Part three checkpoint — guest, package and managed-source export
+
+Started from merged main `b854bbd05`, including Notes part two (#4050). This
+checkpoint implements the first package/guest slice and the managed-source portion
+of account export. The remaining steps exceed this task's context bound, so work
+stops at a committed, reviewed checkpoint as the brief permits. It is not full
+Notes acceptance and must not replace a working legacy Notes installation.
+
+### Implementation
+
+- `modules/notes/src/component.rs` generates the real component ABI with
+  `wit-bindgen = 0.57.1`, pinned in the Notes lockfile. The approved generator runs
+  as a project macro dependency in a scratch Cargo home. No standalone CLI or
+  global package was installed. An already prepared scratch Rust 1.95.0 toolchain
+  supplied `wasm32-wasip2`; build targets and artifacts stay outside the checkout.
+- The guest imports only the SDK database port. Its public
+  `collectManagedNotesExportSection` API matches the existing TypeScript collector's
+  six arrays, field names and ordering. It accepts no actor or account parameter.
+  Unknown request fields, API names and invocation kinds fail closed. `health` and
+  `install` need no data access; unavailable behavior is not registered.
+- Typed database queries page in batches of one hundred. Missing fields, host
+  limits and query errors fail the whole response rather than return a partial
+  section. This is not a point-in-time snapshot during concurrent changes: the
+  existing host transaction uses ordinary isolation. Very large exports can exceed
+  paging, fuel, deadline or message limits; streaming is unfinished.
+- The manifest uses the original `core-legacy` ledger and all six existing tables.
+  The deterministic unsigned builder checks the complete original migration
+  inventory and frozen raw hashes, then copies SQL bytes from `packages/notes/sql/`.
+  Existing SQL is unchanged. Synthetic registry signing keys are generated only in
+  tests; no publisher signature or registry release is claimed.
+- Notes remains a required module, enabled by default. The manifest declares only
+  the implemented export feature, errors and remediation. No standalone Notes
+  screen, navigation entry or unfinished Settings control is advertised. This
+  slice does not read People internals or any other module's private tables.
+
+### Evidence
+
+Six native Notes tests pass: three existing tests cover the three hundred legacy
+domain/edit vectors, and three new tests cover export projection/paging, strict
+request refusal and failures. Both strict Clippy runs pass. The real component
+executes under Wasmtime without WASI, and archive checks retain original SQL bytes
+and refuse changed migrations.
+
+The initial disposable Notes gate passed (exit zero, dirty-tree input fingerprint
+`3c199acd2791`). It includes the earlier preference/table privacy checks, the
+production guest's six differential comparisons, thirty-six deliberately failing
+export assertions across six disabled RLS tables, restored comparisons, and a
+signed folder-registry install through the real PostgreSQL lifecycle. Required-
+module disable and forged-actor requests are refused. All six tables' original
+rows and migration ledger snapshots are retained. This initial run used the
+pre-remapping component; it does not substitute for final corrected-artifact checks.
+
+See `modules/notes/README.md` for reproduction, including the component build,
+archive builder, independent-directory rebuild check and disposable database gates.
+The earlier reproduction commands for `tools/gate.sh` now also require
+`NOTES_COMPONENT` pointing to the built guest. Final command receipts and their
+exit codes accompany the task's proof recipe; they identify the tested revision.
+
+### Independent review and correction
+
+The first read-only Claude review covered `300579737`. It found one major issue:
+embedded dependency paths varied with the builder's Cargo directory. A new path-
+hygiene regression fails against that original component. The build now remaps
+workspace, Cargo, sysroot and target paths for all dependencies, not just the final
+crate. `tools/check-reproducible.sh` rebuilds offline from two independent source,
+Cargo and target directories with the same pinned toolchain, then compares both
+components and archives. No cross-toolchain or cross-platform reproducibility is
+claimed.
+
+Three minor notes were also addressed or retained explicitly. The paging comment
+now describes refusal of the host ceiling without promising a concurrent snapshot;
+consistent snapshot/keyset behavior remains work before the export screen joins.
+The differential fixture now inserts three out-of-order rows into every multi-row
+section and crosses the source page boundary. Actors has at most one row per owner.
+The retention test now requires all three migration ledger rows to exist, so a
+missing ledger cannot pass as two null snapshots. Review did not run independent
+builds or database checks.
+
+### Exact work left after this checkpoint
+
+1. Resolve consistent export snapshot/paging behavior, then connect Notes' managed-
+   source export into the real account-export orchestrator and screen. The component
+   API alone does not provide a downloadable user export.
+2. Port Settings → Connections browse/link/unlink, last-sync and manual-sync
+   contracts, using the published UI kit and module frame. No standalone Notes page.
+3. Port the four chat tools and their prerequisites, response shapes, sync triggers
+   and explicit approval for delete/overwrite. The existing edit vectors verify the
+   helper, not complete tool execution or approval presentation.
+4. Port `notes.sync`, its fifteen-minute schedule, continuation metadata,
+   hundred-chunk budget, unchanged-file detection, unlink no-op and safe error
+   messages. Add a public host memory port; never query memory's private tables.
+5. Port managed-source admission/fencing, destination claims, publication,
+   proposals/receipts, reconciliation and exact-block cleanup. Add private note
+   exports and daily chat archives. Keep People links on declared public APIs.
+6. Add real Notes HTTP/handler/job parity cases and corresponding privacy controls.
+   The six SQL cases and export differential do not establish full HTTP parity.
+7. Exercise the authenticated Rust Notes controls and chat through the real UI,
+   then a separate physical device over HTTPS with trusted origins. No Notes UI or
+   second-device proof is supplied by this checkpoint.
+
+All prior linked-file limitations remain: ordinary filesystem editors do not join
+folder locking; file/database work compensates rather than commits atomically;
+crash/power-loss recovery, hostile open/rename races, filesystem deadlines,
+non-Linux behavior and mixed-version locking remain unproven. No new guarantee
+is made about the older non-transactional database adapter.

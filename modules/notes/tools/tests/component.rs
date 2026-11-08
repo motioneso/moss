@@ -80,3 +80,14 @@ fn builder_refuses_changed_legacy_sql() {
         .to_string()
         .contains("Notes migration bytes changed"));
 }
+
+#[test]
+fn guest_excludes_machine_build_paths() {
+    let wasm = std::fs::read(std::env::var_os("NOTES_COMPONENT").unwrap()).unwrap();
+    for prefix in [b"/home/".as_slice(), b"/tmp/".as_slice()] {
+        assert!(
+            !wasm.windows(prefix.len()).any(|bytes| bytes == prefix),
+            "Notes guest contains a machine-specific build path"
+        );
+    }
+}

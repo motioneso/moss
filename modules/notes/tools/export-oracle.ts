@@ -49,6 +49,27 @@ export async function exportOracle(): Promise<{ path: string; cleanup(): Promise
           .replaceAll("b".repeat(64), "d".repeat(64))
       );
     }
+    // Insert non-key order in every multi-row section. Actors has one row per owner.
+    for (const variant of [3, 2]) {
+      for (const sql of cases[0]!.seed) {
+        if (sql.includes("app.notes_managed_actors")) continue;
+        await bootstrap.query(
+          sql
+            .replaceAll("{{userA}}", actors[0]!)
+            .replaceAll("{{userB}}", actors[1]!)
+            .replaceAll("a".repeat(64), (variant === 3 ? "3" : "1").repeat(64))
+            .replaceAll("b".repeat(64), (variant === 3 ? "4" : "2").repeat(64))
+            .replaceAll(
+              "64000000-0000-4000-8000-000000000001",
+              `64000000-0000-4000-8000-${String(variant).padStart(12, "0")}`
+            )
+            .replaceAll(
+              "65000000-0000-4000-8000-000000000001",
+              `65000000-0000-4000-8000-${String(variant).padStart(12, "0")}`
+            )
+        );
+      }
+    }
     for (const [index, actor] of actors.slice(0, 2).entries()) {
       const operation = randomUUID();
       await bootstrap.query(
@@ -65,7 +86,7 @@ export async function exportOracle(): Promise<{ path: string; cleanup(): Promise
       );
       await bootstrap.query(
         "UPDATE app.notes_recording_contributions SET operation_id=$2,cleanup_operation_id=$2,prose=$3,block_bytes=$4 WHERE owner_user_id=$1",
-        [actor, operation, `Private prose ${index}: 🌱 \\n\"quoted\"`, "<!-- exact -->\r\nline\r\n"]
+        [actor, operation, `Private prose ${index}: 🌱 \\n"quoted"`, "<!-- exact -->\r\nline\r\n"]
       );
       const payload = { nested: [null, "🌱", { revision: 3 }], text: `private payload ${index}` };
       await bootstrap.query(
