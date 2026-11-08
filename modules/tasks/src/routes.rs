@@ -54,16 +54,7 @@ fn dispatch<H: Host + ?Sized>(repo: &Repository<'_, H>, r: &RouteRequest) -> Res
             let mut rows = vec![];
             for task in repo.persisted_tasks()? {
                 if let Some(q) = &quadrant {
-                    let important = task.priority.is_some_and(|p| p >= 4);
-                    let urgent = task
-                        .due_at
-                        .is_some_and(|d| d <= now + chrono::Duration::hours(48));
-                    let actual = match (important, urgent) {
-                        (true, true) => "do",
-                        (true, false) => "schedule",
-                        (false, true) => "delegate",
-                        _ => "eliminate",
-                    };
+                    let actual = crate::list::quadrant(&task, now);
                     if q != actual {
                         continue;
                     }

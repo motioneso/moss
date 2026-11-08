@@ -1,4 +1,4 @@
-//! Tools do not advance recurrence on reads or call other modules. The host
+//! Current read handlers use persisted rows and do not call other modules. The host
 //! selects the actor and enforces the account's tool approval policy.
 use crate::{
     repository::{Error, Repository, Result},
@@ -24,6 +24,7 @@ pub fn handle<H: Host + ?Sized>(host: &H, request: ToolRequest) -> Result<Value>
     }
     let repo = Repository::new(host);
     Ok(match request.tool.as_str() {
+        "tasks.list" => return crate::list::execute(&repo, &input),
         "tasks.heartbeatWindow" => return crate::heartbeat::execute(&repo, &input),
         "tasks.listLists" => {
             json!({"data":{"items":repo.lists()?.iter().map(|v|v.dto()).collect::<Vec<_>>()}})

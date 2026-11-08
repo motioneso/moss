@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add the filtered task-list tool with legacy result ordering, tags and column order.
+- Compare compiled list results and privacy against the TypeScript executor; local-day recurrence and installed chat dispatch remain unfinished.
+
 - Add bounded owner-only heartbeat reads with revisions and time boundaries.
 - Add deferred-status enqueue and worker handlers using the captured account.
 - Check real queue enqueue/claim, a directly invoked compiled handler, and exact heartbeat results on a disposable database.
