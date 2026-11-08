@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 2,
+  "id": "notes",
+  "name": "Notes",
+  "description": "Notes package checkpoint with the existing managed-source account export. Folder controls, chat tools, sync and publication are unfinished.",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": [
+        "app.notes_managed_actors",
+        "app.notes_managed_sources",
+        "app.notes_destination_bindings",
+        "app.notes_recording_contributions",
+        "app.notes_contribution_proposals",
+        "app.notes_contribution_operations"
+      ]
+    }
+  ],
+  "database": {
+    "ownedTables": [
+      "app.notes_managed_actors",
+      "app.notes_managed_sources",
+      "app.notes_destination_bindings",
+      "app.notes_recording_contributions",
+      "app.notes_contribution_proposals",
+      "app.notes_contribution_operations"
+    ],
+    "migrations": [
+      "sql/0336_notes_managed_source_lifecycle.sql",
+      "sql/0337_notes_recording_contributions.sql",
+      "sql/0340_notes_recording_cleanup.sql"
+    ],
+    "ledger": "core-legacy"
+  },
+  "provides": {
+    "collectManagedNotesExportSection": "1.0.0"
+  },
+  "navigation": [],
+  "settings": [],
+  "features": [
+    {
+      "id": "notes.managed-source-export",
+      "description": "The Notes package provides the managed-source account-export section through its public API. It includes saved source status, destination labels, contributions, proposals and operation receipts visible to the calling account. The account export screen is not joined yet; folder controls, chat tools and sync are unfinished. Notes has no standalone screen or navigation entry.",
+      "errors": [
+        {
+          "code": "notes-export-unavailable",
+          "class": "bug",
+          "description": "The host could not complete the export. No partial export is returned.",
+          "remediationRef": "notes.retry-export"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "notes.retry-export",
+          "description": "Retry the account export after the host service is available.",
+          "path": "/settings"
+        }
+      ]
+    }
+  ],
+  "screens": {},
+  "icons": ["icons/notes.svg"],
+  "accounts": {
+    "supportsUserDisable": false,
+    "defaultEnabled": true
+  }
+}
