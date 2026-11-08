@@ -2,9 +2,9 @@
 
 The Rust checkpoint contains the People core, SDK-backed repository, canonical-note service,
 two job handlers, route envelopes and a packaged Leptos Settings pane. The installed-package
-gate adds registry installation and dispatch assertions. Installation/reload passed, but
-the full replay and consumer checks remain unverified after the final folder-setting fix. The authenticated Rust application still
-needs to compose that package into its real Settings and chat flows.
+gate now passes signed registry installation, reload, the enumerated route replay and all
+four public lookup APIs through an installed consumer fixture. The authenticated Rust
+application still needs to compose that package into its real Settings and chat flows.
 The [delivery report](../../docs/superpowers/specs/2026-11-08-rust-phase5-people-report.md)
 records each delivered slice and the exact remaining continuation work.
 
@@ -168,11 +168,12 @@ scripts/run-gate.sh wait --follow
 
 The gate pins both artifacts, signs a temporary registry, downloads and installs the actual
 People package with `PostgresLifecycle` and its unchanged legacy SQL, then reopens the
-installer. A separate installed consumer fixture is set up to call all four public lookup APIs;
-that portion has not completed successfully. The provider
-package and unavailable AI service are explicit fixtures; no real source delivery is claimed.
-The gate contains Settings HTML asset assertions, not a rendered or authenticated installed
-screen check. The final package replay still needs a green run.
+installer. In part seven, the full enumerated replay and all four public lookup APIs passed
+through an installed consumer fixture, with a positive owner lookup before unrelated-user
+and administrator denial checks. The provider package and unavailable AI service remain
+explicit fixtures; no real source delivery is claimed. Settings HTML, bootstrap, JavaScript,
+Wasm and bridge assets are retrieved through the installer. This is not a rendered or
+authenticated installed screen check.
 
 The legacy `/people/notes-directories` endpoint browses relative to the selected folder;
 the additive `/people/note-folders` endpoint remains the absolute-root chooser. Empty and null folder
@@ -186,3 +187,13 @@ ingest nudges, real source providers and command retention/quotas; broaden HTTP 
 (including locale-sensitive directory ordering and unusual note-only values); and run the
 real UI on desktop and a second physical device over HTTPS with sign-in, origin and privacy
 checks. This is a checkpoint, not full People acceptance. Exact receipts are in the report.
+
+## Part seven canonical-edit checkpoint
+
+The configured-folder replay compares real legacy Fastify responses, all seven table
+snapshots and canonical note bytes against installed Rust dispatch. It covers rename,
+archive/reactivation, ignored summaries, contact-list clearing, mixed JSON entries and
+malformed edits. Note-backed PATCH preserves the legacy untyped contact-list behavior;
+the typed note-service API and public lookup contracts are unchanged. The baseline guest
+fails this replay; the corrected generated package passes. Broader inputs and live
+application/device acceptance remain open as listed above.

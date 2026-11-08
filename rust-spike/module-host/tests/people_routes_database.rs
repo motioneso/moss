@@ -226,7 +226,8 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         assert_eq!(
             actual.value(&reply),
             expected.value(&case["expected"]),
-            "Route response differs: {method} {path}"
+            "Route response differs: {method} {path}; body={}",
+            case["body"]
         );
         if let Some(files) = case["files"].as_object() {
             for (file, content) in files {
@@ -313,7 +314,29 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
                 &moss_module_host::frame::AssetPolicy::new("https://moss.example.test").unwrap(),
             )
             .unwrap();
-        assert!(String::from_utf8(asset.body).unwrap().contains("people.js"));
+        assert!(String::from_utf8(asset.body)
+            .unwrap()
+            .contains("./boot.mjs"));
+        let policy =
+            moss_module_host::frame::AssetPolicy::new("https://moss.example.test").unwrap();
+        let boot = installer
+            .ui_asset("people", parts[3], "ui/boot.mjs", &policy)
+            .unwrap();
+        let boot = String::from_utf8(boot.body).unwrap();
+        assert!(boot.contains("./people.js"));
+        assert!(boot.contains("./people_bg.wasm"));
+        for file in [
+            "people.js",
+            "people_bg.wasm",
+            "bridge.mjs",
+            "guest-bridge.mjs",
+        ] {
+            assert!(!installer
+                .ui_asset("people", parts[3], &format!("ui/{file}"), &policy)
+                .unwrap()
+                .body
+                .is_empty());
+        }
         println!("All four public APIs routed through an installed consumer; other-user/admin lookup denied; installed Settings asset verified (no browser claimed)");
         let request = |actor, method, path, body: Value| {
             serde_json::from_str::<Value>(
@@ -350,6 +373,9 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
             request(owner, "GET", "/people/notes-settings", Value::Null),
             json!({"status":200,"body":{"folder":notes_root}})
         );
+        // The preceding replay leaves a canonical note. Remove it explicitly
+        // before asserting the separate projection-only fallback below.
+        std::fs::remove_file(notes_root.join("Route.md")).unwrap();
         let person_path = format!("/people/{}", oracle["ids"]["primary"].as_str().unwrap());
         assert_eq!(
             request(owner, "PATCH", &person_path, json!({"aliases":{}}))["status"],

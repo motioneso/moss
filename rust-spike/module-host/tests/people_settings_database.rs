@@ -202,7 +202,11 @@ fn people_settings_preserve_shared_preferences_and_owner_privacy() {
                 "/people/notes-settings",
                 json!({"folder":null})
             )["status"],
-            200
+            400
+        );
+        assert_eq!(
+            call(other, "GET", "/people/notes-settings", Value::Null)["body"],
+            json!({"folder":null})
         );
         assert_eq!(
             call(actor, "GET", "/people/notes-settings", Value::Null)["body"],
@@ -214,8 +218,12 @@ fn people_settings_preserve_shared_preferences_and_owner_privacy() {
                 "PUT",
                 "/people/notes-settings",
                 json!({"folder":null})
-            )["body"],
-            json!({"folder":null})
+            ),
+            json!({"status":400,"body":{"error":"People notes folder is unavailable"}})
+        );
+        assert_eq!(
+            call(actor, "GET", "/people/notes-settings", Value::Null)["body"],
+            json!({"folder":folder})
         );
         assert_eq!(
             call(
@@ -232,7 +240,7 @@ fn people_settings_preserve_shared_preferences_and_owner_privacy() {
         ))
         .unwrap();
         println!(
-            "{env}: compiled Settings save/clear/browse/default-on/sibling settings checks PASSED"
+            "{env}: compiled Settings save/rejected-clear/browse/default-on/sibling settings checks PASSED"
         );
     }
     rt.block_on(bootstrap.execute(

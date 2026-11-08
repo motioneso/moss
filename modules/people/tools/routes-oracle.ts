@@ -297,6 +297,14 @@ Human text stays.
     await run("PATCH", `/people/${ids.primary}`, { aliases: { length: 0 }, emails: { length: 0 } });
     await run("PATCH", `/people/${ids.primary}`, { aliases: [{ toString: null }] });
     await run("PATCH", `/people/${ids.primary}`, { phones: {} });
+    for (const aliases of ["x", true, 0, [[{ toString: null }]]]) {
+      await run("PATCH", `/people/${ids.primary}`, { aliases });
+    }
+    await run("PATCH", `/people/${ids.primary}`, {
+      aliases: [1.5, 1e-7, 1e21],
+      phones: { length: 0 },
+      status: "archived"
+    });
     await run("POST", `/people/${ids.primary}/archive`);
     await run("PATCH", `/people/${ids.primary}`, { status: "active" });
     await bootstrap.query(

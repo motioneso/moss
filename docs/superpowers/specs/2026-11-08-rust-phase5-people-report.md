@@ -905,3 +905,96 @@ Independent review results are attached to the task. No live application proof i
 
 Keep full People parity and live-device acceptance open. Prioritize working installed
 screens and chat after the final package replay is green.
+
+## People part seven: canonical contact-edit parity checkpoint (JS-76)
+
+Card 523. Base: merged main `05ff17370`. This continuation is a bounded checkpoint,
+not full People acceptance. The authenticated application, real chat and second-device
+HTTPS check remain required before accepting the whole port.
+
+### Canonical note behavior
+
+The route replay now configures a real temporary People folder and drives the actual
+legacy Fastify handlers through `VaultContextRunner`. The generated guest replays the
+same requests through the shared note adapter. Each configured-folder case compares
+canonical file bytes, response envelopes and all seven table snapshots. Rename, archive,
+reactivation, ignored summary fields, list clearing and unusual contact values are included.
+Rejected edits also compare the unchanged file bytes.
+
+The legacy PATCH schema validates name/status but leaves contact lists untyped. Its
+formatter accepts empty strings and objects with numeric zero length as empty lists,
+and interpolates array entries into frontmatter. Rust now keeps those boundary semantics,
+including the different null rendering used in frontmatter and managed-summary joins.
+Invalid non-array values still fail; summaries and unknown fields remain ignored on
+note-backed edits. Canonical-note discovery still precedes interpreting those fields,
+so the existing projection fallback remains available when the note is missing.
+The typed note-service API and the four public consumer contracts remain unchanged.
+
+The module app map describes canonical edits and list clearing. The installed consumer
+fixture now requires an owner lookup to find the active private contact before checking
+that unrelated users and administrators cannot find it.
+
+### Build and proof boundaries
+
+Every build and gate in this continuation uses a target directory owned by this task.
+An existing host cache was copied into that directory; subsequent work does not depend
+on the original remaining available. The pinned, previously approved `wit-bindgen`
+`=0.57.1` remains a declared guest dependency. No tool or target was installed globally.
+JavaScript dependencies were restored from the repository's frozen lockfile and offline
+store without install scripts. No new third-party dependency was added.
+
+The installed replay passed after correcting old test expectations: HTML loads `boot.mjs`,
+which loads the compiled screen; the installer requires its `ui/` prefix. The Settings
+suite also still expected null saves to clear a folder, despite part six's intentional
+legacy-compatible rejection. Its assertions now require a 400 response and an unchanged
+chosen folder for both owner and unrelated-account attempts. No host product code changed.
+
+### Part seven verification receipts
+
+- Failing first: the generated baseline guest built before the contact-edit change returned
+  500 where the real legacy handler returned 200 for a configured-folder PATCH. The gate
+  ended with `rc=101`; this is the same replay's first contact-clearing regression.
+- The corrected installed-package route gate ended with `rc=0`. It downloads a signed
+  temporary registry package, installs unchanged legacy SQL, reopens the installer, compares
+  the enumerated responses/seven-table snapshots/canonical files, routes all four consumer
+  APIs, retrieves Settings and bootstrap assets, and verifies folder-save/fallback behavior.
+- The complete nine-suite People gate ended with `rc=0`: linked-note preferences, guest
+  ABI, guest database differential, jobs, notes, persistence, seven-table privacy, Settings
+  and all seven tool execution handlers. Privacy assertions failed with RLS removed and
+  passed with it restored for both app and worker roles, including administrator actors.
+  This qualifies those database/adapter seams, not the real UI or chat approval policy.
+- Native People tests: 14 passed. Strict People Clippy passed. Repository lint, typecheck
+  and Prettier checks passed; changed Rust files pass scoped rustfmt. Whole host-crate fmt
+  still reports pre-existing formatting in `rust-spike/parity/src/dbs.rs`.
+- Rust app-map generation and the repository file-size check passed. The UI and generated
+  guest built from declared locked dependencies. No browser or real listener was started.
+
+Artifact identity (SHA-256):
+
+- Baseline guest: `7c65c0868e73d30c2da856c8e0c442a1d1aaebfe7febd086f0cac7a8580adcc0`.
+- Corrected generated guest: `943a2749d2a653620ccbb30a2f9e55be840f38b7a24c0d69e5ac509be3cae472`.
+- Tested package: `7cc16b7c623548cfe707df1e086a4b60f146b260535fd47bd354c0391ed1b77d` (403534 bytes).
+
+The gate receipts identify product commit `ad2df419d` plus dirty test/report inputs. The
+installed replay input fingerprint begins `637dff417917`; the nine-suite gate fingerprint
+begins `354c754630f6`. The latter includes both corrected Settings assertions. Subsequent
+documentation-only edits are recorded in the final checkpoint commit. These are scoped
+People integration receipts, not the full repository foundation gate or CI/e2e results.
+
+### Remaining acceptance work
+
+The following remain open regardless of this checkpoint's integration results:
+
+1. Compose the installed module frame and adapters into the authenticated Rust Settings
+   shell, then exercise actual reads/writes, real chat approvals, blocked app actions and
+   policy behavior through that listener.
+2. Finish index-refresh/cooldown, ingest nudges, actual source-provider composition, and
+   command retention/quotas. The registry suite's provider remains an explicit fixture.
+3. Broaden the HTTP oracle beyond its enumerated cases, including locale-sensitive
+   directory ordering, backend errors, larger datasets and remaining numeric edge cases.
+4. Run the installed screen at desktop and phone widths and sign in from a second physical
+   device over HTTPS with trusted-origin and cross-account privacy checks. Library dispatch,
+   a retrieved HTML asset and a phone viewport cannot substitute for that proof.
+
+The completed checks above qualify only the named integration seams. Do not label this
+checkpoint as the complete HTTP parity harness or live-device acceptance.
