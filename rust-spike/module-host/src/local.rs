@@ -21,7 +21,7 @@ impl Ports for LocalPorts {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
         let module = self.root.create_subdir(&scope.module().id)?;
         let instance = access_context::AccessContext::new(uuid::Uuid::nil(), "install-wide-kv");
-        let account = VaultContext::for_access(
+        let account = VaultContext::for_module_files(
             &module,
             if port == "kv" && scope.module().install_wide_kv.contains(&request.resource) {
                 &instance
@@ -80,7 +80,7 @@ impl Ports for LocalPorts {
                         .context("Missing data folder")?
                         .join("notes"),
                 )?;
-                let notes = VaultContext::for_access(&notes, scope.access())?;
+                let notes = VaultContext::for_module_files(&notes, scope.access())?;
                 Ok(json!({"text":notes.read_to_string(&request.resource)?}))
             }
             "vault" => {

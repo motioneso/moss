@@ -28,6 +28,8 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
+mod module_files;
+
 #[derive(Debug)]
 pub enum VaultError {
     /// The path is not a plain relative path.

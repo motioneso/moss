@@ -33,7 +33,7 @@ impl FileLifecycle {
 impl Lifecycle for FileLifecycle {
     fn account_enabled(&self, id: &str, access: &AccessContext, default: bool) -> Result<bool> {
         let root = vault::Root::create(&self.data.join("modules/accounts"))?;
-        let cx = vault::VaultContext::for_access(&root, access)?;
+        let cx = vault::VaultContext::for_module_files(&root, access)?;
         match cx.read(&format!("{id}.json")) {
             Ok(bytes) => Ok(serde_json::from_slice(&bytes)?),
             Err(vault::VaultError::NotFound(_)) => Ok(default),
@@ -43,7 +43,7 @@ impl Lifecycle for FileLifecycle {
     fn set_account_enabled(&self, id: &str, access: &AccessContext, enabled: bool) -> Result<()> {
         ensure!(crate::manifest::identifier(id), "Invalid module id");
         let root = vault::Root::create(&self.data.join("modules/accounts"))?;
-        vault::VaultContext::for_access(&root, access)?
+        vault::VaultContext::for_module_files(&root, access)?
             .write(&format!("{id}.json"), &serde_json::to_vec(&enabled)?)?;
         Ok(())
     }
