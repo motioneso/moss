@@ -25,6 +25,9 @@ controls = [
     ("handed attachment ownership", "src/services.rs", r'ensure!\(\s*!attachment.is_null\(\),\s*"This account did not hand this attachment to this module"\s*\);', 'let _ = &attachment;', "services", "installed_signed_packages_read_only_attachments_handed_to_their_account_and_module"),
     ("attachment resource permission", "src/runtime.rs", r'ensure!\(\s*cap.resources.contains\(&request.resource\).*?"This resource was not approved"\s*\);', 'let _ = &cap.resources;', "services", "installed_signed_packages_read_only_attachments_handed_to_their_account_and_module"),
 
+    ("public API handler isolation", "src/services.rs", r'"api", &payload.to_string\(\)', '"route", &payload.to_string()', "services", "api_calls_cannot_dispatch_private_provider_routes"),
+    ("public API envelope validation", "src/services.rs", r'ensure!\(\s*r.parameters.as_object\(\).*?"Public API calls accept only a name and parameters"\s*\);', 'let _ = &r.parameters;', "services", "api_calls_cannot_dispatch_private_provider_routes"),
+
 ]
 environment = dict(os.environ, CARGO_TARGET_DIR=os.environ.get("CARGO_TARGET_DIR", str(Path(tempfile.gettempdir()) / "moss-module-host-target")))
 for name, file, pattern, replacement, suite, test in controls:

@@ -62,6 +62,14 @@ The expanded tests caught and fixed these faults:
 - A signed package could not predict future attachment UUIDs. The installed-package regression
   failed before the fix; the stable `attachments` resource `handed` now permits future uploads.
   The same real guest refuses other accounts, other modules, unhanded IDs and undeclared scope.
+- Registry refresh and download held exclusive lifecycle locks throughout network waits. Both
+  stalled-socket regressions failed before the fix. Transfers now run outside the locks, with
+  current selection checked again before activation and revisions checked before registry or
+  root commits. Installed Wasm stays callable during actual stalled index and package transfers.
+- A public API request could select a provider route handler. An installed real-Wasm regression
+  failed before the fix. Public APIs now use a dedicated `api` kind and host-built
+  `{name, parameters}` envelope; forged route fields are refused and route-shaped arguments
+  stay nested as API data.
 - Removal could return before recovering an interrupted install. Its regression failed with
   the recovery journal still present; removal now recovers before reading the catalog.
 
@@ -77,10 +85,11 @@ trust rejects its test certificate; private-network access must be allowed; addi
 source's public CA permits signed metadata and package retrieval. No system CA or global tool
 installation is changed.
 
-Twelve disposable removal controls require an assertion failure after removing signature checks,
+Fourteen disposable removal controls require an assertion failure after removing signature checks,
 the package hash, the import allowlist, publisher-prefix checks, private-address classification,
 compiled-cache authentication, credential response redaction, one-use tool approval, publisher
-provenance, actor/role selection, handed attachment ownership or attachment resource permission.
+provenance, actor/role selection, handed attachment ownership, attachment resource permission, public API handler isolation or
+public API envelope validation.
 The normal protected tests then pass. The import control checks refusal before guest execution;
 it is not a proof against every possible runtime attack.
 
@@ -138,3 +147,15 @@ forced-RLS catalog. The existing API separates that connection from account runt
 credential validation and preference reset on purge are not claimed. The review's suggested
 app-map path collision was unconfirmed: this library validates package metadata and does not
 merge it into a running UI. Namespace collision handling remains a server/UI join requirement.
+
+The fifth review accepted the attachment correction and found the registry-lock and public-API
+faults above. They were reproduced and fixed in `860b7a8fc` and `895d26610`. The final review
+round includes verification of those corrections before its verdict is recorded on the final
+commit; the proof artifact preserves the review and the real failing/passing runs.
+
+Its minor follow-ups are recorded here: uploads near the current size limit can exceed the
+reply limit after base64 encoding; instance-scope credentials have no administrative setter;
+response redaction may remove legitimate fields such as pagination tokens. The redaction is
+intentionally conservative until provider response contracts are defined. A root transition
+interrupted between catalog commit and metadata-file write can require a registry refresh;
+this is not an atomic cache update. None of those cases is claimed as covered by the proof.
