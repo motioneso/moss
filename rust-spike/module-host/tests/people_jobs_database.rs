@@ -199,6 +199,32 @@ fn compiled_index_jobs_match_legacy_rows_and_publish_only_references_after_commi
         ),
         armed: AtomicBool::new(false),
     });
+    // Exercise the released grant set too: the provider fixture below has broader
+    // capabilities and cannot establish that a packaged worker can start.
+    let shipping: Arc<Manifest> = Arc::new(
+        serde_json::from_str(include_str!("../../../modules/people/moss.module.json")).unwrap(),
+    );
+    let host = Host::new(Limits::default()).unwrap();
+    let missing_id = Uuid::new_v4();
+    host.call(
+        &component,
+        shipping.clone(),
+        AccessContext::new(actor, "people-shipping-enqueue"),
+        ports.clone(),
+        "api",
+        &json!({"name":"enqueueIndex","parameters":{"commandId":missing_id,"source":"manual","sourceRefHash":"shipping-no-provider","reason":"manual_refresh"}}).to_string(),
+    ).unwrap();
+    let before_shipping = rows(&rt, &bootstrap, actor);
+    host.call(
+        &component,
+        shipping,
+        AccessContext::new(actor, "people-shipping-worker"),
+        ports.clone(),
+        "job",
+        &json!({"queue":INDEX,"parameters":{"command-id":missing_id}}).to_string(),
+    )
+    .expect("The shipped People grants must allow missing-provider indexing to finish");
+    assert_eq!(rows(&rt, &bootstrap, actor), before_shipping);
     let mut manifest = common::manifest("0.1.0");
     manifest.id = "people".into();
     manifest.database.ledger = Ledger::CoreLegacy;

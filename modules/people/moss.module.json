@@ -43,6 +43,11 @@
       "resources": ["people-commands", "people-folder", "people-suggestions"]
     },
     {
+      "port": "kv",
+      "operations": ["get"],
+      "resources": ["person-providers"]
+    },
+    {
       "port": "jobs",
       "operations": ["enqueue-options", "enqueue-after-commit"],
       "resources": ["person-index", "sync-person-memory"]
@@ -147,6 +152,10 @@
     {
       "id": "people.canonical-edits",
       "description": "Renaming, archiving and contact-list edits update the canonical People note and its contact projection together. Empty contact lists can be cleared; summary fields stay unchanged on note-backed edits."
+    },
+    {
+      "id": "people.index-provider-check",
+      "description": "The packaged indexing worker can check for an optional source provider. When no provider is present it finishes without changing People data. Live provider delivery remains unverified."
     },
     {
       "id": "people.relative-folder-browse",

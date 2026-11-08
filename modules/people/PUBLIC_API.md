@@ -117,6 +117,9 @@ The provider implements `collectPersonSignals` with parameters
 `{sourceRefHash, sourceVersion?}` and result `{signals: PersonContextSignal[]}`. The same
 authenticated account reaches that API; no actor is taken from the command. Missing providers
 are a no-op, matching the existing worker. Provider I/O precedes the first People query.
+The shipping manifest grants only `kv/get/person-providers` for that lookup. A regression
+executes the compiled worker with the shipping manifest and real command records/queue,
+requiring a missing provider to finish without changing any of the seven People tables.
 The provider adapter in the differential test is a fixture; real installed provider dispatch
 remains a package-composition qualification step.
 
