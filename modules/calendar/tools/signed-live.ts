@@ -12,6 +12,7 @@ import {
   closeSync
 } from "node:fs";
 import https from "node:https";
+import { checkServerIdentity } from "node:tls";
 import type { IncomingHttpHeaders } from "node:http";
 import { networkInterfaces } from "node:os";
 import { join, resolve } from "node:path";
@@ -112,6 +113,10 @@ async function request(
         method: options.method ?? "GET",
         ca,
         rejectUnauthorized: true,
+        // Bind TLS verification to the connection URL even when testing a bad HTTP Host.
+        servername: "localhost",
+        checkServerIdentity: (_serverName, peerCertificate) =>
+          checkServerIdentity(url.hostname, peerCertificate),
         headers: {
           ...(options.method ? { origin: base } : {}),
           ...(body
@@ -156,6 +161,7 @@ const server = spawn(
 );
 const db = new pg.Client({ connectionString: urls.bootstrap });
 let browser: Awaited<ReturnType<typeof chromium.connectOverCDP>> | undefined;
+let completed = false;
 try {
   await db.connect();
   let ready = false;
@@ -320,6 +326,7 @@ try {
     join(out, "result.txt"),
     "PASS: real Rust HTTPS sign-in, installed Calendar screens, account isolation, static asset CSP/CORS, origin checks, LAN-address path, failure/retry and sign-out.\nNot proven: physical second device, production TLS trust, full shell/chat, provider writes/jobs and full Calendar parity.\n"
   );
+  completed = true;
   if (process.env.CALENDAR_BROWSER_HOLD === "1") {
     console.log("READY for task browser inspection; create the configured done sentinel to stop");
     const done = process.env.CALENDAR_BROWSER_DONE;
@@ -337,4 +344,8 @@ try {
   closeSync(log);
   for (const file of [credentials, key, configuration]) rmSync(file, { force: true });
   execFileSync("devports", ["release", String(port)], { stdio: "ignore" });
+  if (completed) {
+    assert.equal(server.exitCode, 0, "HTTPS fixture stops cleanly");
+    assert(!readFileSync(join(out, "https-server.log"), "utf8").includes("panicked at"));
+  }
 }

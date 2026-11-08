@@ -85,11 +85,16 @@ fn main() -> Result<()> {
         .map_err(anyhow::Error::msg)?;
     let app = Arc::new(app);
     let routes = moss_calendar_host::web::router(app.clone(), network, origins, shared)?;
-    f.rt.block_on(async move {
+    let result = f.rt.block_on(async move {
         let listener = tokio::net::TcpListener::bind(listen).await?;
         println!("PASS signed Calendar HTTPS listener ready");
         moss_network::tls::serve(listener, acceptor, routes)
             .await
             .map_err(anyhow::Error::msg)
-    })
+    });
+    // Keep the synchronous host alive until aborted connection tasks have dropped their
+    // route clones. Its nested runtimes must be dropped outside an async worker.
+    f.rt.shutdown_timeout(std::time::Duration::from_secs(5));
+    drop(app);
+    result
 }
