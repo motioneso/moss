@@ -23,6 +23,7 @@ const run = spawnSync(
     env: {
       ...process.env,
       JS51_APP_URL: urls.app,
+      JS51_WORKER_URL: urls.worker,
       JS51_BOOTSTRAP_URL: urls.bootstrap
     }
   }
@@ -33,6 +34,11 @@ const tools = spawnSync("pnpm", ["exec", "tsx", "modules/tasks/tools/tool-parity
   env: process.env
 });
 if (tools.status !== 0) process.exit(tools.status ?? 1);
+const heartbeat = spawnSync("pnpm", ["exec", "tsx", "modules/tasks/tools/heartbeat-parity.ts"], {
+  stdio: "inherit",
+  env: process.env
+});
+if (heartbeat.status !== 0) process.exit(heartbeat.status ?? 1);
 const appMap = spawnSync("pnpm", ["build:app-map"], {
   stdio: "inherit",
   env: process.env

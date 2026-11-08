@@ -2,11 +2,11 @@
 
 This is an unfinished Tasks module package. Rust code now compiles into a real
 component and handles basic task, list, tag, activity and view preference routes.
-It also handles sixteen tools: four reads and twelve mutations, with request
+It also handles seventeen tools: five reads and twelve mutations, with request
 schemas enforced inside the guest. It is not a
 complete replacement for Tasks. A package screen now covers list and priority views,
 task editing, subtasks, tags, comments and list creation/renaming. Full screen parity,
-seven other chat tools, background
+six other chat tools, background
 jobs, People calls and full endpoint parity remain unfinished.
 
 `src/` uses the guest-safe SDK. `wit/` defines its ABI. Ben approved the pinned
@@ -135,11 +135,23 @@ Only generated identifiers and clock timestamps are canonicalized. The endpoint
 harness keeps every existing case unchanged and adds the package's breakdown
 cases from `tests/parity/`. Failed comparisons remain failures.
 
-Remaining: eight HTTP endpoints (search interpretation, deferred status, list
-deletion, focus, at-risk, overdue and both assistant-policy routes); seven tools
-(summary, list, heartbeat window, focus, at-risk, overdue and deleteList); both
-job kinds, timezone and lazy recurrence contracts, public People linkage, policy
+Remaining: seven HTTP endpoints (search interpretation, list
+deletion, focus, at-risk, overdue and both assistant-policy routes); six tools
+(summary, list, focus, at-risk, overdue and deleteList); recurrence jobs and full deferred-queue policy parity, timezone and lazy recurrence contracts, public People linkage, policy
 and feedback orchestration, full screen/settings parity, real-shell integration,
 performance budgets and second-device HTTPS proof. The legacy HTTP list route
 only applies tag and quadrant filters; the wider filter set belongs to its
 repository/tool contract and must not be silently added to that HTTP route.
+
+Part 8 adds `tasks.heartbeatWindow`: bounded owner-only open/due tasks, UTF-16
+material revisions and time boundaries, without writes or lazy recurrence. The
+host still requires tool approval; scheduled background authorization is not joined.
+`POST /tasks/:id/deferred-status` enqueues typed status metadata and the job handler
+uses the captured account context. Host queue defaults differ from legacy retry
+and retention options; the optional request key is parsed but not retained or used
+for deduplication (the legacy route did not use it as a singleton key either).
+Full deferred-job parity and the endpoint harness queue observer remain unfinished.
+The database gate compares heartbeat results exactly with the TypeScript executor
+and enqueues/claims from a real PostgreSQL queue, then directly invokes the compiled
+handler with the claimed actor. Installed automatic worker dispatch is not proved. Privacy removal controls
+are separate from any claim of complete package or physical-device acceptance.
