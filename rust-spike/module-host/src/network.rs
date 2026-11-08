@@ -84,6 +84,9 @@ pub fn request(
             .timeout(remaining)
             .resolve_to_addrs(host, &addresses)
             .build()?;
+        let form = headers
+            .get(reqwest::header::CONTENT_TYPE)
+            .is_some_and(|h| h == "application/x-www-form-urlencoded");
         let mut req = client
             .request(method.clone(), current.clone())
             .headers(headers.clone());
@@ -92,7 +95,17 @@ pub fn request(
                 serde_json::to_vec(body)?.len() <= LIMIT,
                 "HTTP body too large"
             );
-            req = req.json(body);
+            if form {
+                let fields = body
+                    .as_object()
+                    .context("Form fields must be an object")?
+                    .iter()
+                    .map(|(k, v)| Ok((k.as_str(), v.as_str().context("Form fields must be text")?)))
+                    .collect::<Result<std::collections::BTreeMap<_, _>>>()?;
+                req = req.form(&fields);
+            } else {
+                req = req.json(body);
+            }
         }
         let response = req
             .send()
@@ -121,4 +134,33 @@ pub fn request(
         });
     }
     anyhow::bail!("Too many redirects")
+}
+
+/// Trusted upstream seam. Production uses Network; tests can stand in for the remote service
+/// while retaining the real guest, authorization, credential broker and encrypted store.
+pub struct Outbound<'a> {
+    pub url: &'a Url,
+    pub hosts: &'a BTreeSet<String>,
+    pub allow_private: bool,
+    pub method: Method,
+    pub headers: HeaderMap,
+    pub body: Option<serde_json::Value>,
+    pub timeout: Duration,
+}
+pub trait Transport: Send + Sync {
+    fn send(&self, request: Outbound<'_>) -> Result<Response>;
+}
+pub struct Network;
+impl Transport for Network {
+    fn send(&self, r: Outbound<'_>) -> Result<Response> {
+        request(
+            r.url,
+            r.hosts,
+            r.allow_private,
+            r.method,
+            r.headers,
+            r.body,
+            r.timeout,
+        )
+    }
 }

@@ -22,6 +22,7 @@ pub struct ServicePorts {
     installer: RwLock<Weak<Installer>>,
     next: Arc<dyn Ports>,
     pub(crate) ai: Arc<dyn crate::ai::Intelligence>,
+    pub(crate) network: Arc<dyn crate::network::Transport>,
 }
 impl ServicePorts {
     pub fn new(
@@ -37,7 +38,52 @@ impl ServicePorts {
             installer: RwLock::new(Weak::new()),
             next,
             ai,
+            network: Arc::new(crate::network::Network),
         })
+    }
+    pub fn with_network(mut self, transport: Arc<dyn crate::network::Transport>) -> Self {
+        self.network = transport;
+        self
+    }
+    fn serial_lock(&self) -> Result<(std::sync::MutexGuard<'_, ()>, std::fs::File)> {
+        let guard = self
+            .serial
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Service busy"))?;
+        let disk = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(self.files.path().join("service.lock"))?;
+        disk.lock()?;
+        Ok((guard, disk))
+    }
+    pub(crate) fn credential_lock(
+        &self,
+        module: &str,
+        actor: uuid::Uuid,
+        name: &str,
+    ) -> Result<std::fs::File> {
+        let key = crate::trust::digest(format!("{module}:{actor}:{name}").as_bytes());
+        let disk = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(self.files.path().join(format!("credential-{key}.lock")))?;
+        disk.lock()?;
+        Ok(disk)
+    }
+    pub fn remove_credential(
+        &self,
+        access: &AccessContext,
+        module: &str,
+        name: &str,
+    ) -> Result<()> {
+        ensure!(crate::manifest::identifier(name), "Invalid credential name");
+        let _lock = self.credential_lock(module, access.actor_user_id(), name)?;
+        self.write(module, access, &format!("credential-{name}"), &Value::Null)
     }
     pub fn bind(&self, installer: &Arc<Installer>) {
         *self.installer.write().expect("host binding") = Arc::downgrade(installer);
@@ -107,6 +153,16 @@ impl ServicePorts {
         fields: &SecretFields,
     ) -> Result<()> {
         ensure!(crate::manifest::identifier(name), "Invalid credential name");
+        let _lock = self.credential_lock(module, access.actor_user_id(), name)?;
+        self.store_credential(access, module, name, fields)
+    }
+    pub(crate) fn store_credential(
+        &self,
+        access: &AccessContext,
+        module: &str,
+        name: &str,
+        fields: &SecretFields,
+    ) -> Result<()> {
         self.write(
             module,
             access,
@@ -134,10 +190,7 @@ impl ServicePorts {
         tool: &str,
         parameters: &Value,
     ) -> Result<()> {
-        let _guard = self
-            .serial
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Service busy"))?;
+        let _guard = self.serial_lock()?;
         let key = tool_key(tool, parameters)?;
         self.write(
             module,
@@ -220,10 +273,7 @@ impl ServicePorts {
                                 .as_bool()
                                 .unwrap_or(true);
                         if required {
-                            let _guard = self
-                                .serial
-                                .lock()
-                                .map_err(|_| anyhow::anyhow!("Service busy"))?;
+                            let _guard = self.serial_lock()?;
                             let key = tool_key(&r.resource, &params)?;
                             let grant = self.read(id, access, &key)?;
                             ensure!(
@@ -283,10 +333,7 @@ impl ServicePorts {
                         scope.module().provides.contains_key(&r.resource),
                         "Event not declared"
                     );
-                    let _guard = self
-                        .serial
-                        .lock()
-                        .map_err(|_| anyhow::anyhow!("Service busy"))?;
+                    let _guard = self.serial_lock()?;
                     let key = format!("event-{}", crate::trust::digest(r.resource.as_bytes()));
                     let mut entries = self
                         .read(id, access, &key)?
@@ -306,6 +353,19 @@ impl ServicePorts {
                         .context("Event publisher required")?;
                     let host = self.host()?;
                     let state = host.catalog.load()?;
+                    let provider_entry = state
+                        .installed
+                        .get(provider)
+                        .context("Publisher unavailable")?;
+                    ensure!(
+                        provider_entry.disabled.is_none()
+                            && host.lifecycle.account_enabled(
+                                provider,
+                                access,
+                                provider_entry.manifest.accounts.default_enabled
+                            )?,
+                        "Publisher is switched off for this account"
+                    );
                     let provider_manifest = &state
                         .installed
                         .get(provider)
@@ -349,7 +409,7 @@ impl Ports for ServicePorts {
         crate::runtime::authorize(scope.module(), port, r)?;
         let result = self.invoke_service(scope, port, r);
         // Activity contains only declared resource names and status, never request/response data.
-        if let Ok(_guard) = self.serial.lock() {
+        if let Ok(_guard) = self.serial_lock() {
             let mut entries = self
                 .read(&scope.module().id, scope.access(), "activity")
                 .ok()

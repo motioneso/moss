@@ -30,6 +30,7 @@ impl ServicePorts {
         } else {
             scope.access()
         };
+        let _lock = self.credential_lock(&scope.module().id, access.actor_user_id(), name)?;
         let mut fields = self.credential(access, &scope.module().id, name)?;
         let url = url::Url::parse(r.parameters["url"].as_str().context("URL required")?)?;
         ensure!(
@@ -97,15 +98,15 @@ impl ServicePorts {
             .as_str()
             .unwrap_or("GET")
             .parse::<Method>()?;
-        let response = crate::network::request(
-            &url,
-            &declaration.hosts,
-            scope.module().capability("credentials")?.allow_private,
+        let response = self.network.send(crate::network::Outbound {
+            url: &url,
+            hosts: &declaration.hosts,
+            allow_private: scope.module().capability("credentials")?.allow_private,
             method,
             headers,
             body,
-            scope.remaining(),
-        )?;
+            timeout: scope.remaining(),
+        })?;
         let mut value: Value = serde_json::from_slice(&response.body)
             .unwrap_or_else(|_| json!({"text":String::from_utf8_lossy(&response.body)}));
         sanitize(&mut value, &fields);
@@ -133,15 +134,20 @@ impl ServicePorts {
             body["grant_type"] = json!("refresh_token");
             body["refresh_token"] = json!(token.expose_secret());
         }
-        let response = crate::network::request(
-            &url::Url::parse(&exchange.endpoint)?,
-            &declaration.hosts,
-            scope.module().capability("credentials")?.allow_private,
-            Method::POST,
-            HeaderMap::new(),
-            Some(body),
-            scope.remaining(),
-        )?;
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/x-www-form-urlencoded"),
+        );
+        let response = self.network.send(crate::network::Outbound {
+            url: &url::Url::parse(&exchange.endpoint)?,
+            hosts: &declaration.hosts,
+            allow_private: scope.module().capability("credentials")?.allow_private,
+            method: Method::POST,
+            headers,
+            body: Some(body),
+            timeout: scope.remaining(),
+        })?;
         ensure!(
             (200..300).contains(&response.status),
             "Token exchange failed"
@@ -173,7 +179,7 @@ impl ServicePorts {
             .clamp(1, 31_536_000)
             + chrono::Utc::now().timestamp();
         next = next.with("expires", Secret::new(expires.to_string()));
-        self.set_credential(access, &scope.module().id, name, &next)?;
+        self.store_credential(access, &scope.module().id, name, &next)?;
         *fields = next;
         Ok(())
     }
@@ -192,10 +198,23 @@ pub(crate) fn sanitize(value: &mut Value, fields: &SecretFields) {
             }
         }
         Value::String(text) => {
+            use base64::Engine;
+            if let (Some(user), Some(password)) = (fields.get("username"), fields.get("password")) {
+                let encoded = base64::engine::general_purpose::STANDARD.encode(format!(
+                    "{}:{}",
+                    user.expose_secret(),
+                    password.expose_secret()
+                ));
+                *text = text.replace(&encoded, "[redacted]");
+            }
             for key in fields.names() {
                 let secret = fields.get(key).expect("secret").expose_secret();
                 if !secret.is_empty() {
                     *text = text.replace(secret, "[redacted]");
+                    *text = text.replace(
+                        &base64::engine::general_purpose::STANDARD.encode(secret),
+                        "[redacted]",
+                    );
                 }
             }
         }
