@@ -84,3 +84,40 @@ fn typed_upsert_keeps_conflicts_atomic_and_values_bound() {
         assert!(moss_module_host::typed_query::compile("app.sample_counter", &query).is_err());
     }
 }
+
+#[test]
+fn null_ordering_preserves_legacy_literals_and_rejects_unordered_options() {
+    use moss_module_host::typed_query::{compile, compile_with_nulls_first, parse, validate};
+    use moss_module_sdk::query::{Order, Query};
+    let mut query = Query::default();
+    query.order.push(Order {
+        column: "created_at".into(),
+        descending: true,
+    });
+    assert!(compile("app.sample_counter", &query)
+        .unwrap()
+        .sql
+        .contains("DESC NULLS LAST"));
+    let mut parameters = serde_json::to_value(&query).unwrap();
+    parameters["nullsFirst"] = json!(["created_at"]);
+    validate(parameters.clone()).unwrap();
+    let (query, first) = parse(parameters.clone()).unwrap();
+    assert!(
+        compile_with_nulls_first("app.sample_counter", &query, &first)
+            .unwrap()
+            .sql
+            .contains("DESC NULLS FIRST")
+    );
+    for invalid in [
+        json!(true),
+        json!(["missing"]),
+        json!(["created_at", "created_at"]),
+        json!(["created_at) OR true --"]),
+    ] {
+        parameters["nullsFirst"] = invalid;
+        assert!(validate(parameters.clone()).is_err());
+    }
+    parameters["nullsFirst"] = json!(["created_at"]);
+    parameters["sql"] = json!("SELECT * FROM app.users");
+    assert!(validate(parameters).is_err());
+}

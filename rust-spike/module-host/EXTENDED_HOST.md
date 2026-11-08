@@ -62,8 +62,10 @@ behavior; do not mix them into an atomic typed-query operation.
 
 The additive `lower-eq` comparison applies PostgreSQL `lower(column::text)` and compares it
 with the bound text parameter exactly. The caller normalizes the parameter; `%` and `_`
-are literal characters rather than patterns. Ordering accepts `nullsFirst`, defaulting to
-false to preserve existing queries. People opts into true for legacy descending link dates.
+are literal characters rather than patterns. The optional query-level `nullsFirst` list
+names distinct columns already present in `order`. `Client::query_with_nulls_first` opts in
+without adding required fields to existing Rust `Order` literals. The default remains
+NULLS LAST; People opts into NULLS FIRST for legacy descending link dates.
 
 The opt-in wrapper uses additive `DataContext::open_bounded` and `commit_bounded`
 helpers. Pool acquisition, context initialization, queries and completion share

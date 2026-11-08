@@ -21,10 +21,40 @@ fn column(value: &str) -> Result<String> {
     Ok(format!("\"{value}\""))
 }
 pub fn compile(table: &str, query: &Query) -> Result<Statement> {
+    compile_with_nulls_first(table, query, &[])
+}
+/// Optional wire extension; legacy SDK Query and Order struct literals stay unchanged.
+pub fn parse(mut parameters: Value) -> Result<(Query, Vec<String>)> {
+    let object = parameters
+        .as_object_mut()
+        .ok_or_else(|| anyhow::anyhow!("Expected a typed query"))?;
+    let nulls_first = match object.remove("nullsFirst") {
+        Some(value) => serde_json::from_value(value)?,
+        None => Vec::new(),
+    };
+    Ok((serde_json::from_value(parameters)?, nulls_first))
+}
+pub fn compile_with_nulls_first(
+    table: &str,
+    query: &Query,
+    nulls_first: &[String],
+) -> Result<Statement> {
     let name = table
         .strip_prefix("app.")
         .ok_or_else(|| anyhow::anyhow!("Invalid owned table"))?;
     column(name)?;
+    ensure!(
+        nulls_first.len() <= 8
+            && nulls_first
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+                == nulls_first.len()
+            && nulls_first
+                .iter()
+                .all(|name| query.order.iter().any(|order| &order.column == name)),
+        "NULLS FIRST needs distinct ordered columns"
+    );
     ensure!(
         query.order.len() <= 8 && query.values.len() <= 64 && query.offset <= 1_000_000,
         "Typed query exceeds its limit"
@@ -47,7 +77,11 @@ pub fn compile(table: &str, query: &Query) -> Result<Statement> {
                 "row.{} {} NULLS {}",
                 column(&o.column)?,
                 if o.descending { "DESC" } else { "ASC" },
-                if o.nulls_first { "FIRST" } else { "LAST" }
+                if nulls_first.contains(&o.column) {
+                    "FIRST"
+                } else {
+                    "LAST"
+                }
             ))
         })
         .collect::<Result<Vec<_>>>()?
@@ -251,9 +285,9 @@ impl Builder<'_> {
 
 /// Validation used before a guest reaches any database adapter.
 pub fn validate(parameters: Value) -> Result<()> {
-    let query: Query = serde_json::from_value(parameters)?;
+    let (query, nulls_first) = parse(parameters)?;
     // The placeholder table is never executed; it validates all guest-controlled syntax.
-    compile("app.validation", &query)?;
+    compile_with_nulls_first("app.validation", &query, &nulls_first)?;
     if query.values.contains_key("owner_user_id") {
         bail!("The host sets ownership");
     }

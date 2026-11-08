@@ -6,7 +6,7 @@ use crate::{
     typed_query,
 };
 use anyhow::{ensure, Context, Result};
-use moss_module_sdk::query::{Kind, Query};
+use moss_module_sdk::query::Kind;
 use safety_core::db::{DataContext, Database};
 use serde_json::{json, Value};
 use std::{
@@ -67,9 +67,9 @@ impl TransactionalDatabasePorts {
     }
     async fn query(&self, cx: &DataContext, scope: &CallScope, request: &Request) -> Result<Value> {
         let table = &request.resource;
-        let mut query: Query = serde_json::from_value(request.parameters.clone())?;
+        let (mut query, nulls_first) = typed_query::parse(request.parameters.clone())?;
         // Validate before using the table in any PostgreSQL metadata request.
-        typed_query::compile(table, &query)?;
+        typed_query::compile_with_nulls_first(table, &query, &nulls_first)?;
         let role = if scope.module().database.ledger != crate::manifest::Ledger::Module
             && crate::legacy::owns(&scope.module().id, table)
         {
@@ -126,7 +126,7 @@ impl TransactionalDatabasePorts {
                 query.values.insert("id".into(), json!(Uuid::new_v4()));
             }
         }
-        let statement = typed_query::compile(table, &query)?;
+        let statement = typed_query::compile_with_nulls_first(table, &query, &nulls_first)?;
         let params: Vec<&(dyn ToSql + Sync)> = statement
             .parameters
             .iter()

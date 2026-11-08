@@ -42,7 +42,13 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
     }
 
     pub(crate) fn query(&self, table: &str, query: Query) -> Result<Vec<Value>> {
-        Client(self.host).query(table, &query)
+        let nulls_first: Vec<_> = query
+            .order
+            .iter()
+            .filter(|order| order.descending)
+            .map(|order| order.column.as_str())
+            .collect();
+        Client(self.host).query_with_nulls_first(table, &query, &nulls_first)
     }
     /// Page instead of silently truncating at the host's thousand-row cap. The host
     /// transaction keeps a single invocation. Callers supply the legacy ordering;
@@ -338,7 +344,6 @@ pub(crate) fn orders(fields: &[(&str, bool)]) -> Vec<Order> {
         .map(|(name, descending)| Order {
             column: (*name).into(),
             descending: *descending,
-            nulls_first: *descending,
         })
         .collect()
 }

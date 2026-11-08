@@ -533,6 +533,15 @@ with the shared-host change. A fresh gate against the final checkpoint and the f
 are recorded in the acceptance proof. No installed UI or device proof is supplied by this
 internal checkpoint; those checks remain explicitly assigned to People part three.
 
+PR CI found a shared-SDK source-compatibility regression before acceptance: adding a
+required `Order` field broke Calendar's existing struct literals. A dedicated SDK test
+reproduced the same compiler error. `Order` now retains its original two fields and default
+wire shape. The additive `Client::query_with_nulls_first` method supplies a query-level
+`nullsFirst` list; the host accepts only distinct columns already present in the ordering.
+People opts into that method for its legacy descending order, while other callers keep
+their original behavior. The earlier unfinished review was interrupted so the final review
+and rebuilt guest/database proof cover this corrected revision.
+
 The next implementation step is the two job kinds. The merged host deliberately permits
 only UUID IDs, flags, counts and fixed choices as queue parameters; its underlying contract
 explicitly excludes free text. People must retain the original source hash and optional

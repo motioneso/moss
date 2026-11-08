@@ -46,8 +46,6 @@ pub struct Order {
     pub column: String,
     #[serde(default)]
     pub descending: bool,
-    #[serde(default)]
-    pub nulls_first: bool,
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "kebab-case", deny_unknown_fields)]

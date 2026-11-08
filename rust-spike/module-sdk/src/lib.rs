@@ -53,6 +53,21 @@ impl<H: Host + ?Sized> Client<'_, H> {
             .call("db", "query", table, serde_json::to_value(query)?)?;
         Ok(serde_json::from_value(value)?)
     }
+    /// Opt-in NULLS FIRST columns without adding required fields to legacy Order literals.
+    pub fn query_with_nulls_first(
+        &self,
+        table: &str,
+        query: &query::Query,
+        columns: &[&str],
+    ) -> Result<Vec<Value>> {
+        if columns.is_empty() {
+            return self.query(table, query);
+        }
+        let mut parameters = serde_json::to_value(query)?;
+        parameters["nullsFirst"] = json!(columns);
+        let value = self.0.call("db", "query", table, parameters)?;
+        Ok(serde_json::from_value(value)?)
+    }
 }
 
 /// Additive route-dispatch envelope. The old route envelope remains supported by the host.
