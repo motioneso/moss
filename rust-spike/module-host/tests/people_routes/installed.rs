@@ -155,7 +155,9 @@ pub fn install(
         )
         .unwrap();
     for artifact in &artifacts {
-        installer.install(admin, &source, artifact, true).unwrap();
+        installer
+            .install(admin, &source, artifact, true)
+            .unwrap_or_else(|error| panic!("Installing {}: {error:#}", artifact.id));
     }
     installer
 }

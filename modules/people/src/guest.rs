@@ -30,6 +30,10 @@ struct Names {
 }
 
 pub fn handle(host: &impl Host, kind: &str, payload: &str) -> Result<String> {
+    // The host applies the package SQL before invoking this lifecycle hook.
+    if kind == "install" {
+        return Ok("{}".into());
+    }
     if kind == "health" {
         return Ok("healthy".into());
     }
