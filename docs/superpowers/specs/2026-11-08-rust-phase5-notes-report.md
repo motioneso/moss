@@ -803,7 +803,9 @@ The search guest preserves legacy query trimming, empty-query short-circuiting,
 limit coercion/default/clamp and the exact source path, line range and text
 projection. A corpus executes the actual legacy handler body, including its real
 constants, with a named retrieval stand-in. Malformed/unknown fields are rejected
-more strictly than legacy; full invalid-input/error parity is not claimed.
+more strictly than legacy. Queries are also capped at 64 KiB, and malformed
+chunk line ranges are refused; those bounds are stricter than legacy. Full
+invalid-input/error parity is not claimed.
 
 An additive `memory_search` host adapter handles `vault/index.search` over a
 trusted resource alias. Core memory remains outside Notes' SQL grants. The host
@@ -828,7 +830,10 @@ current results, compiled/database checks, privacy removal controls and review
 verdict are recorded in this part's proof artifact and checkpoint PR. The README
 contains the commands and the gate still requires both `NOTES_COMPONENT` and
 `NOTES_TOOL_COMPONENT`, built into separate guest target folders. Installer
-metadata uses app credentials even for the worker execution fixture.
+metadata uses app credentials even for the worker execution fixture. The gate
+also removes the explicit search owner predicate in a temporary source copy:
+with RLS removed too, the real installed-component privacy assertion must fail,
+then pass after source restoration. The worktree protection remains intact.
 
 The build uses the already approved pinned `wit-bindgen` 0.57.1 dependency from
 scratch Cargo and Rust toolchain folders. Dependencies come from project lockfiles;
@@ -839,7 +844,11 @@ HTTPS proof is claimed. Complete Notes acceptance remains unverified.
 ### Remaining work after part seven
 
 1. Implement/assemble the real account-configured query embedding service and join
-   the declared search tool into installed chat and automatic recall.
+   the declared search tool into installed chat and automatic recall. First extend
+   the host tool contract to preserve legacy input/output schemas and the
+   `content: "outside"` / `externalContent: true` untrusted-result classification.
+   The current Rust tool manifest has only description and risk; never join these
+   results to chat as trusted instructions.
 2. Port core ingestion and `notes.sync`: manual and fifteen-minute scheduling,
    continuation, hundred-chunk budget, unchanged-file detection, deleted-file
    cleanup, unlink no-op and safe saved errors.

@@ -257,11 +257,18 @@ fn installed_search_matches_legacy_and_privacy_controls_fail_first() {
         }
     }
     // A second, independent owner predicate keeps the actual compiled search private.
-    for case in oracle["expected"].as_array().unwrap() {
-        assert_eq!(run(case), case["value"]);
-    }
+    let owner_control = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        for case in oracle["expected"].as_array().unwrap() {
+            assert_eq!(
+                run(case),
+                case["value"],
+                "search owner predicate failed under removed RLS"
+            );
+        }
+    }));
     rt.block_on(bootstrap.batch_execute("ALTER TABLE app.memory_chunks ENABLE ROW LEVEL SECURITY"))
         .unwrap();
+    owner_control.unwrap();
     assert_eq!(failures, 4);
     for db in [&app, &worker] {
         for actor in &actors[1..] {

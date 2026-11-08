@@ -76,6 +76,24 @@ try {
     approval = undefined;
     search = await searchOracle();
     process.exitCode = run(["search"]);
+    if (process.exitCode === 0) {
+      const control = spawnSync(
+        "python3",
+        ["modules/notes/tools/search-controls.py", join(folder, "controls")],
+        {
+          stdio: "inherit",
+          env: {
+            ...process.env,
+            NOTES_COMPONENT: pinned,
+            NOTES_SEARCH_ORACLE: search.path,
+            JS55_APP_URL: urls.app,
+            JS55_WORKER_URL: urls.worker,
+            JS55_BOOTSTRAP_URL: urls.bootstrap
+          }
+        }
+      );
+      process.exitCode = control.status ?? 1;
+    }
   }
 } finally {
   try {

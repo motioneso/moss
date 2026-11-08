@@ -195,7 +195,9 @@ The ordinary component now offers `notes.search`. It preserves the legacy query
 trim, empty-query no-op, default limit of eight, one-to-twenty clamp and four-field
 chunk projection. The input corpus executes the actual legacy handler with an
 explicit retrieval stand-in. Unknown input fields are rejected more strictly than
-legacy, rather than accepting actor/source overrides.
+legacy, rather than accepting actor/source overrides. The adapter also caps queries
+at 64 KiB, and the guest rejects malformed chunk line ranges. These deliberate
+bounds are stricter than the legacy handler.
 
 The guest calls `vault/index.search` on the `source` alias. It has no database
 grant on core memory tables and cannot select a source kind, actor or embedding
@@ -205,7 +207,11 @@ service must resolve the actor's configured query embedding model, including any
 query prefix, and honor the invocation deadline. No production implementation of
 that service, local model port, or app-shell chat join is included here. A missing
 adapter/provider fails closed. This is installed tool-boundary support, not a claim
-that chat search works in the assembled app.
+that chat search works in the assembled app. Before joining chat, the host must
+preserve the legacy input/output schemas and mark returned note text as outside,
+untrusted content (`content: "outside"`, `externalContent: true`). The current
+Rust `Tool` manifest represents only description and risk; those missing contracts
+are required chat-integration work, not permission to treat note text as instructions.
 
 The host reads existing `app.memory_chunks` with the same source-kind, non-null
 embedding, explicit owner predicate, cosine ordering and limit as legacy, under
@@ -228,4 +234,7 @@ semantic ordering, limit, exact text/line projection, null embeddings, other sou
 kinds and empty queries. Direct database cross-account read/update/delete privacy
 assertions must fail with memory RLS removed, then pass restored. The compiled
 search must remain owner-only even during that removal because of its independent
-owner predicate. These are distinct protections and distinct assertions.
+owner predicate. A temporary source copy then removes that predicate and repeats
+the installed-component test with RLS also removed: the compiled search assertion
+must fail, and must pass after restoring the source. The worktree protection is
+never changed. These are distinct protections and distinct assertions.

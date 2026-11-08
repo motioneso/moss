@@ -158,7 +158,7 @@
     },
     {
       "id": "notes.semantic-search",
-      "description": "The read-only notes.search tool returns your existing indexed Notes chunks in semantic order, with source paths and line ranges. The host must connect core memory and your configured query embedding service. Sync and automatic chat recall are not implemented yet; file changes are not indexed by this checkpoint.",
+      "description": "The read-only notes.search tool returns your existing indexed Notes chunks in semantic order, with source paths and line ranges. The host must connect core memory and your configured query embedding service. Sync and automatic chat recall are not implemented yet; file changes are not indexed by this checkpoint. Chat integration must first preserve the legacy schemas and outside-content classification; note text is untrusted data.",
       "errors": [
         {
           "code": "notes-search-unavailable",
