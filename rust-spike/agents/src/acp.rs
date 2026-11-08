@@ -61,29 +61,36 @@ impl AcpSession {
             .ok_or_else(|| AgentError::Protocol(format!("session/new gave no id: {created}")))?
             .to_string();
 
-        let offered: Vec<String> = created["models"]["availableModels"]
+        // OpenCode 2 reports the model as a session setting; older agents use `models`.
+        let current = created["configOptions"]
             .as_array()
             .into_iter()
             .flatten()
-            .filter_map(|m| m["modelId"].as_str().map(str::to_string))
-            .collect();
-        let current = created["models"]["currentModelId"].as_str().map(str::to_string);
-        let model = match (&spec.model, crate::models::pick_cheapest(offered)) {
-            (Some(m), _) => Some(m.clone()),
-            (None, Some(cheap)) => Some(cheap),
-            (None, None) => None,
-        };
-        let model = match model {
-            Some(m) if Some(&m) != current.as_ref() => {
-                rpc.call(
-                    "session/set_model",
-                    json!({"sessionId": session_id, "modelId": m}),
-                    setup,
-                )
-                .await?;
-                m
+            .find(|o| o["id"] == "model")
+            .and_then(|o| o["currentValue"].as_str())
+            .or(created["models"]["currentModelId"].as_str())
+            .map(str::to_string);
+        // With no model named, the agent keeps the person's own default.
+        let model = match &spec.model {
+            Some(m) if Some(m) != current.as_ref() => {
+                let set = rpc
+                    .call(
+                        "session/set_config_option",
+                        json!({"sessionId": session_id, "configId": "model", "value": m}),
+                        setup,
+                    )
+                    .await;
+                if set.is_err() {
+                    rpc.call(
+                        "session/set_model",
+                        json!({"sessionId": session_id, "modelId": m}),
+                        setup,
+                    )
+                    .await?;
+                }
+                m.clone()
             }
-            Some(m) => m,
+            Some(m) => m.clone(),
             None => current.unwrap_or_else(|| "default".into()),
         };
         Ok(Self {
@@ -131,14 +138,29 @@ impl AcpSession {
                         }
                         Some("tool_call") => {
                             let id = u["toolCallId"].as_str().unwrap_or_default().to_string();
-                            let name = real_tool_name(u).unwrap_or_else(|| "unknown".into());
-                            self.announced.insert(id.clone(), name.clone());
-                            events(AgentEvent::ToolStarted { id, name: name.clone() });
-                            tools_used.push(name);
+                            let real = real_tool_name(u);
+                            let name = real.clone().unwrap_or_else(|| {
+                                u["title"].as_str().unwrap_or("tool").to_string()
+                            });
+                            events(AgentEvent::ToolStarted { id: id.clone(), name: name.clone() });
+                            if let Some(n) = real {
+                                self.announced.insert(id, n.clone());
+                                tools_used.push(n);
+                            }
                         }
                         Some("tool_call_update") => {
                             let status = u["status"].as_str();
                             if matches!(status, Some("completed") | Some("failed")) {
+                                // A code-running tool reports the tools it called inside it.
+                                for inner in u["rawOutput"]["metadata"]["toolCalls"]
+                                    .as_array()
+                                    .into_iter()
+                                    .flatten()
+                                {
+                                    if let Some(t) = inner["tool"].as_str() {
+                                        tools_used.push(t.replace('.', "_"));
+                                    }
+                                }
                                 events(AgentEvent::ToolFinished {
                                     id: u["toolCallId"].as_str().unwrap_or_default().into(),
                                     ok: status == Some("completed"),

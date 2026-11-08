@@ -23,8 +23,6 @@ pub struct ClaudeSession {
 
 impl ClaudeSession {
     pub async fn start(spec: &LaunchSpec, approver: Approver) -> Result<Self, AgentError> {
-        // Claude takes aliases; "haiku" is always its lowest-cost family.
-        let model = spec.model.clone().unwrap_or_else(|| "haiku".into());
         let mut args: Vec<String> = [
             "-p",
             "--input-format",
@@ -40,12 +38,15 @@ impl ClaudeSession {
             // Moss, and another program's settings must not widen what the agent may do.
             "--setting-sources",
             "",
-            "--model",
         ]
         .iter()
         .map(|s| s.to_string())
         .collect();
-        args.push(model.clone());
+        // With no model named, Claude uses the person's own default.
+        if let Some(m) = &spec.model {
+            args.extend(["--model".into(), m.clone()]);
+        }
+        let model = spec.model.clone().unwrap_or_else(|| "default".into());
         if let Some(tools) = &spec.tools {
             let env: serde_json::Map<String, Value> = tools
                 .env

@@ -8,7 +8,6 @@ pub mod confine;
 pub mod driver;
 pub mod gateway;
 pub mod hello;
-pub mod models;
 pub mod policy;
 pub mod redact;
 pub mod session;

@@ -27,24 +27,25 @@ fn toml_str(s: &str) -> String {
 
 impl CodexSession {
     pub async fn start(spec: &LaunchSpec, approver: Approver) -> Result<Self, AgentError> {
-        let mut args = vec!["app-server".to_string()];
-        if let Some(tools) = &spec.tools {
-            let list = tools.args.iter().map(|a| toml_str(a)).collect::<Vec<_>>().join(",");
-            let env = tools
-                .env
-                .iter()
-                .map(|(k, v)| format!("{k}={}", toml_str(v)))
-                .collect::<Vec<_>>()
-                .join(",");
-            args.extend([
-                "-c".into(),
-                format!("mcp_servers.moss.command={}", toml_str(&tools.command.to_string_lossy())),
-                "-c".into(),
-                format!("mcp_servers.moss.args=[{list}]"),
-                "-c".into(),
-                format!("mcp_servers.moss.env={{{env}}}"),
-            ]);
-        }
+        // The whole tool-server table is replaced, so servers from the person's own Codex
+        // settings never start inside a Moss chat.
+        let servers = match &spec.tools {
+            Some(tools) => {
+                let list = tools.args.iter().map(|a| toml_str(a)).collect::<Vec<_>>().join(",");
+                let env = tools
+                    .env
+                    .iter()
+                    .map(|(k, v)| format!("{}={}", toml_str(k), toml_str(v)))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!(
+                    "mcp_servers={{moss={{command={},args=[{list}],env={{{env}}}}}}}",
+                    toml_str(&tools.command.to_string_lossy())
+                )
+            }
+            None => "mcp_servers={}".into(),
+        };
+        let args = vec!["app-server".to_string(), "-c".into(), servers];
         let lines = JsonLines::spawn(spec, &args)?;
         let mut rpc = JsonRpc::new(lines);
         let setup = Duration::from_secs(60);
@@ -56,23 +57,23 @@ impl CodexSession {
         .await?;
         rpc.notify("initialized", json!({})).await?;
 
-        let model = match &spec.model {
-            Some(m) => m.clone(),
-            None => cheapest_model(&mut rpc).await?,
-        };
-        let started = rpc
-            .call(
-                "thread/start",
-                json!({
-                    "model": model,
-                    "cwd": spec.cwd,
-                    "approvalPolicy": "on-request",
-                    "sandbox": "read-only",
-                    "ephemeral": true,
-                }),
-                setup,
-            )
-            .await?;
+        // With no model named, Codex uses the person's own configured default. Its model list
+        // is a built-in catalogue and does not say what their sign-in or provider accepts.
+        let mut params = json!({
+            "cwd": spec.cwd,
+            "approvalPolicy": "on-request",
+            "sandbox": "read-only",
+            "ephemeral": true,
+        });
+        if let Some(m) = &spec.model {
+            params["model"] = json!(m);
+        }
+        let started = rpc.call("thread/start", params, setup).await?;
+        let model = started["model"]
+            .as_str()
+            .or(spec.model.as_deref())
+            .unwrap_or("default")
+            .to_string();
         let thread_id = started["thread"]["id"]
             .as_str()
             .ok_or_else(|| AgentError::Protocol(format!("thread/start gave no id: {started}")))?
@@ -90,7 +91,10 @@ impl CodexSession {
             .rpc
             .start_request(
                 "turn/start",
-                json!({"threadId": self.thread_id, "input": [{"type": "text", "text": text}]}),
+                json!({
+                    "threadId": self.thread_id,
+                    "input": [{"type": "text", "text": text}],
+                }),
             )
             .await?;
         let mut tools_used = Vec::new();
@@ -204,13 +208,4 @@ fn classify_error(e: &str) -> AgentError {
     } else {
         AgentError::Rpc(e.into())
     }
-}
-
-/// The lowest-cost model the signed-in account offers, never a hard-coded name.
-async fn cheapest_model(rpc: &mut JsonRpc) -> Result<String, AgentError> {
-    let list = rpc.call("model/list", json!({}), Duration::from_secs(60)).await?;
-    let models: Vec<&Value> = list["data"].as_array().into_iter().flatten().collect();
-    let id = |m: &Value| m["id"].as_str().or(m["model"].as_str()).unwrap_or_default().to_string();
-    crate::models::pick_cheapest(models.iter().map(|m| id(m)).collect())
-        .ok_or_else(|| AgentError::Protocol(format!("no models offered: {list}")))
 }

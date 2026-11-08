@@ -1,6 +1,7 @@
 //! Kill-gate check: can Rust drive this agent, with a Moss tool, and no Node from Moss?
 //!
 //!   moss-agent-probe <claude|codex|opencode> --program <path> --work <dir> [--model <id>]
+//!                    [--agent-home <dir>]
 //!
 //! Starts the agent through its native protocol, offers one Moss tool that returns a random
 //! word, and asks the agent to call it and repeat the word. The word exists only inside this
@@ -48,13 +49,14 @@ impl ToolHost for ProbeTools {
 async fn main() {
     let mut args = std::env::args().skip(1);
     let kind = args.next().and_then(|k| AgentKind::parse(&k)).unwrap_or_else(|| die("agent?"));
-    let (mut program, mut work, mut model) = (None, None, None);
+    let (mut program, mut work, mut model, mut agent_home) = (None, None, None, None::<PathBuf>);
     while let Some(flag) = args.next() {
         let v = args.next().unwrap_or_else(|| die("flag needs a value"));
         match flag.as_str() {
             "--program" => program = Some(PathBuf::from(v)),
             "--work" => work = Some(PathBuf::from(v)),
             "--model" => model = Some(v),
+            "--agent-home" => agent_home = Some(PathBuf::from(v)),
             _ => die("unknown flag"),
         }
     }
@@ -91,7 +93,7 @@ async fn main() {
             &folders,
         );
         let answer = if d == policy::Decision::Allow { Answer::Allow } else { Answer::Deny };
-        log.lock().unwrap().push(json!({"tool": ask.tool_name, "decision": d, "answer": answer}));
+        log.lock().unwrap().push(json!({"tool": ask.tool_name, "title": ask.title, "input": ask.raw_input, "decision": d, "answer": answer}));
         Box::pin(async move { answer })
     });
 
@@ -101,6 +103,18 @@ async fn main() {
         .collect();
     let _ = &home;
     env.push(("NO_COLOR".into(), "1".into()));
+    // A Moss-owned settings folder for the agent, so the person's own tool servers never load
+    // in a Moss chat. Codex reads it from CODEX_HOME; OpenCode from its config folder (its
+    // sign-ins live in the data folder, which stays).
+    if let Some(dir) = &agent_home {
+        let var = match kind {
+            AgentKind::Codex => "CODEX_HOME",
+            AgentKind::OpenCode => "XDG_CONFIG_HOME",
+            AgentKind::Claude => die("Claude is isolated by its launch flags; --agent-home is not used"),
+        };
+        env.retain(|(k, _)| k != var);
+        env.push((var.into(), dir.to_string_lossy().into()));
+    }
     // Prove Moss passes no Node of its own: the agent's PATH has no Node directory added by us,
     // and the probe records whether the agent process tree ever ran node.
     let spec = LaunchSpec {
@@ -128,14 +142,26 @@ async fn main() {
         let mut session = AgentSession::start(&spec, approver).await?;
         let pid = session.pid();
         let model = session.model().to_string();
-        let tree_before = process_tree(pid);
+        // Sample the process tree all through the turn, so a short-lived helper is still seen.
+        let seen: Arc<Mutex<std::collections::BTreeSet<String>>> = Arc::default();
+        let sampler = {
+            let seen = seen.clone();
+            tokio::spawn(async move {
+                loop {
+                    seen.lock().unwrap().extend(process_tree(pid));
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+            })
+        };
         let outcome = session
             .prompt(
                 "Call the Moss tool named secret_word, then reply with only the word it returned.",
                 &sink,
             )
             .await;
-        let tree = process_tree(pid);
+        sampler.abort();
+        let tree: Vec<String> = seen.lock().unwrap().iter().cloned().collect();
+        let tree_before: Vec<String> = vec![];
         session.shutdown().await;
         Ok::<_, AgentError>((model, outcome?, tree_before, tree))
     }
@@ -172,8 +198,11 @@ fn process_tree(root: Option<u32>) -> Vec<String> {
         if let Ok(exe) = std::fs::read_link(format!("/proc/{pid}/exe")) {
             out.push(exe.to_string_lossy().into_owned());
         }
-        if let Ok(children) = std::fs::read_to_string(format!("/proc/{pid}/task/{pid}/children")) {
-            queue.extend(children.split_whitespace().filter_map(|c| c.parse::<u32>().ok()));
+        // Each thread keeps its own child list, so read every thread's.
+        for task in std::fs::read_dir(format!("/proc/{pid}/task")).into_iter().flatten().flatten() {
+            if let Ok(children) = std::fs::read_to_string(task.path().join("children")) {
+                queue.extend(children.split_whitespace().filter_map(|c| c.parse::<u32>().ok()));
+            }
         }
     }
     out
