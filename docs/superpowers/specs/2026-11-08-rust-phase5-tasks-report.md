@@ -1,8 +1,10 @@
 # Rust Phase 5 Tasks — implementation checkpoints
 
-Current status: JS-53, Card 526 adds a real component and basic routes on the
-merged data foundation. **The full Tasks port is unfinished and is not Ready.**
-The final section records this continuation and its remaining work. Earlier
+Current status: JS-53, Card 526 is an **approved partial checkpoint for merge**:
+a real Rust component and basic routes on the merged data foundation. The user
+approved pushing this slice and opening its PR so Tasks part 4 can continue.
+**Full Phase 5 Tasks parity remains unfinished.** The final section records the
+verified checkpoint and the exact continuation work. Earlier
 sections preserve the evidence and limits of their respective checkpoints.
 
 ## Earlier shared-host checkpoint (JS-46)
@@ -311,7 +313,7 @@ The host validation test must pass before calling that output runnable.
 The component exports the host's `handle` contract, imports only the declared
 Moss database and context interfaces, and delegates to the same Rust domain code
 used by native checks. Context supplies actor, time and recurrence-series UUIDs.
-The manifest declares basic task create/read/update, subtask reads, list
+The manifest declares 18 routes: basic task create/read/update, subtask reads, list
 create/read/rename, tags and assignments, activity, and view preferences. Task
 updates include list-move tag cleanup, child list moves, completion cascades that
 skip staged suggestions, parent auto-close, and next-recurring-occurrence
@@ -350,8 +352,17 @@ clippy for the guest, checks and encoder crates, Rust formatting, shell syntax
 and targeted Markdown formatting. The real host refused the preliminary WASI
 component; it accepted and executed the generated component without WASI imports.
 The unsigned archive round-trip validates all nine original migration hashes.
-Repository static validation is run separately; its final result belongs in the
-proof rather than being inferred from the narrower checks.
+Repository static verification passed, including lint, formatting, file size,
+design/catalogue, dependency and migration checks, all TypeScript checks and the
+app-map build. The final clean-commit gate on `ceac38948` passed two component
+tests, five database/privacy tests and all 29 legacy Tasks integration tests.
+Its input fingerprint was `d716a7e92e82`. The preceding candidate run passed the
+Rust tests but timed out in the legacy suite's 30-second setup hook and skipped
+all 29 tests; it is not counted as green. The final gate kept the assertions and
+used the supported 180-second hook/test timeout options. Actual Wasm-target
+strict clippy also passed. The task proof retains both outcomes and the commands.
+These receipts cover the implementation commit; the later handoff edit changes
+only this report and receives its own formatting check and review.
 
 ### Independent review and limits
 
@@ -359,8 +370,12 @@ Round one reviewed commit `e5aa4cffc` read-only. Its major finding was the prior
 boundary above; a failing-first compiled query regression reproduces it. The
 review also requested query-string and failed-mutation rollback coverage; both
 are now exercised. The build now isolates the encoder in `bindings/` so producing
-the component does not compile the host verification toolchain. Round two must
-review the final committed checkpoint; its result is recorded on that commit.
+the component does not compile the host verification toolchain. Round two
+reviewed `ceac38948` and found no blocker or major implementation defect in the
+explicitly incomplete checkpoint. Both rounds are recorded. A later report-only
+commit records the approved partial-merge boundary and requires its own review
+record before Ready. The reviewer counted 20 routes; a direct manifest/dispatcher
+inventory confirms 18, which is the count used here.
 
 Remaining minor review limits: task/tag response assembly performs per-task tag
 queries and has no large-account runtime/message-size measurement. Manifest error
@@ -370,25 +385,95 @@ needs to be completed before publication. This unfinished unsigned package must
 not be published or presented as the production replacement. These limits remain
 visible rather than being counted as parity proof.
 
-Not proven and still required before the full task can be Ready:
+### Tasks part 4: exact remaining work
 
-- Complete route schemas and errors, list deletion/reassignment, focus, drift,
-  search, agency preferences, deferred status, and the remaining source endpoints.
-- Actor timezone/preferences through a public core contract. ISO timestamps with
-  no offset currently use UTC rather than the legacy process-local timezone;
-  lazy recurrence roll-forward is deliberately absent rather than advancing a
-  still-due task on the wrong local day. JavaScript legacy free-text dates and
-  exceptional date/interval ranges are also outside this checkpoint's claims.
-- Exact chat tools, suggestion and feedback behavior, public APIs, typed job
-  kinds, scheduling and recurrence orchestration. People must remain behind its
-  declared public interface; no People tables or internals were accessed.
-- Full endpoint parity through `rust-spike/parity/` against this component. The
-  existing runner still launches the Phase 0b native Tasks server, so running it
-  unchanged would not prove this port.
-- Signed installation and registry selection/download of this actual package.
-- Packaged Tasks screens using the shared UI kit and frame bridge, authenticated
-  Rust shell integration, HTTPS/trusted-origin behavior and a real second-device
-  UI check. The present shell does not yet wire installed module frames/routes.
-- A single final PR, Part of #4027, release note Category N/A, plus independent
-  review and the live proof recipe before full acceptance. No push or merge is
-  authorized in this task run. Workshop and Food remain excluded.
+This PR is the partial component checkpoint, Part of #4027, with release note
+Category N/A. Ready applies to merging this bounded slice, not to a completed
+Tasks replacement. The user approved pushing and opening this PR after the
+checkpoint was saved. Merge remains the person's decision. Workshop and Food
+remain excluded.
+
+1. **Finish HTTP behavior.** `packages/tasks/src/manifest.ts` declares 27 legacy
+   routes; `modules/tasks/moss.module.json` and `src/routes.rs` implement 18 after
+   normalizing `/api` and parameter-name spelling. Add these nine endpoints
+   under the module host's route prefix:
+
+   | Method | Legacy path                      | Required behavior                               |
+   | ------ | -------------------------------- | ----------------------------------------------- |
+   | POST   | `/api/tasks/search/interpret`    | Structured search interpretation                |
+   | POST   | `/api/tasks/:id/deferred-status` | Actor-scoped deferred status job                |
+   | DELETE | `/api/tasks/lists/:listId`       | Existing list deletion/reassignment rules       |
+   | POST   | `/api/tasks/:id/breakdown`       | Existing task breakdown and suggestion behavior |
+   | GET    | `/api/tasks/focus`               | Focus selection                                 |
+   | GET    | `/api/tasks/at-risk`             | At-risk/drift view                              |
+   | GET    | `/api/tasks/overdue`             | Overdue view                                    |
+   | GET    | `/api/tasks/agency-auto-execute` | Read assistant-action preferences               |
+   | PATCH  | `/api/tasks/agency-auto-execute` | Save assistant-action preferences               |
+
+   The 18 existing routes still need full request/response schema, validation,
+   filter and error parity. In particular, the list route currently implements
+   quadrant and tag filtering; port `listId`, status, priority, due bounds and
+   `completedAfter` too. Preserve suggestion/triage feedback on mutations and
+   legacy duplicate-name conflict responses, including the concurrent rename
+   case already recorded above. Do not interpret route presence as endpoint
+   parity. Keep all six existing tables and nine original migrations unchanged.
+
+2. **Complete calendar orchestration.** Obtain actor timezone/preferences through
+   a public core contract. Offset-free timestamps currently use UTC; restore
+   legacy parsing/local-day behavior, free-text dates and exceptional interval
+   handling before claiming parity. Port lazy roll-forward for reads and drift
+   views, account-scoped schedule reconciliation and recurrence worker behavior
+   from `recurrence.ts`, `drift.ts`, `jobs.ts` and `recurrence-schedule.ts`. The
+   existing daily trigger is `0 3 * * *` in UTC, keyed per actor; the worker uses
+   that actor's local day. Preserve schedule failure isolation and idempotency.
+   Next-occurrence creation on completion is already present and tested.
+
+3. **Port all assistant tools and policies.** No tools are declared or handled by
+   this Rust package yet. Match the 23 current tool names and schemas in the
+   legacy manifest and summary tool:
+   `tasks.summary`, `tasks.list`, `tasks.heartbeatWindow`, `tasks.get`,
+   `tasks.focus`, `tasks.atRisk`, `tasks.overdue`, `tasks.listLists`,
+   `tasks.listTags`, `tasks.activity`, `tasks.create`, `tasks.update`,
+   `tasks.updateStatus`, `tasks.breakDown`, `tasks.addActivity`, `tasks.assignTag`,
+   `tasks.unassignTag`, `tasks.createList`, `tasks.renameList`, `tasks.createTag`,
+   `tasks.renameTag`, `tasks.deleteList`, `tasks.deleteTag`. Preserve approval
+   policy, action presentation, chat targets and structured visual summaries.
+   Port the Tasks heartbeat/monitor and suggestion/feedback behavior through
+   public host services; background reads must not advance recurrence.
+
+4. **Port both job kinds.** Declare and consume `tasks-deferred-status` and
+   `tasks-recurrence-materialize` with metadata-only typed payloads, captured
+   actor context, idempotency and existing queue retention/retry behavior.
+   Deferred status carries task/status metadata; recurrence carries actor and
+   optional idempotency metadata, never task text. Reuse the jobs host contract;
+   do not embed a separate scheduler in the guest.
+
+5. **Use public People/core interfaces.** Add the required People linkage and
+   public module API surfaces without reading People tables or implementation
+   code. This checkpoint accesses only Tasks tables and has no People calls.
+   Add declared host capabilities and public API tests as each call is ported.
+
+6. **Package the real screens and install path.** Build the Tasks list/grid,
+   list picker, editing/subtasks, tags, activity and action-policy settings on
+   the shared UI kit and frame bridge. Preserve phone behavior, completion and
+   recurrence interactions, loading/error states and chat affordances. Wire the
+   installed package into the authenticated Rust shell and add truthful
+   navigation/settings/features and error remediations to its app-map metadata.
+   Finish dependency attribution in NOTICE, sign the actual archive and prove
+   registry selection/download and installation; the current archive is unsigned
+   format evidence only. No Tasks screen or navigation entry is shipped here.
+
+7. **Close the acceptance evidence.** Adapt `rust-spike/parity/` to the actual
+   component/host rather than the old Phase 0b native server and run endpoint,
+   tool and job comparisons. Keep the failing-first privacy controls; expand
+   cross-account/admin cases to newly added surfaces, and measure large-account
+   tag/query and message-size limits. Exercise the real installed Tasks UI on a
+   running Rust instance with sign-in, HTTPS and trusted origins, then from an
+   actual second device over LAN or tailnet. Use a claimed dev port. Capture
+   real UI screenshots and record any remaining failures; none of those live
+   checks has been performed for Tasks in this checkpoint.
+
+The component build, manifest and database tests are reproducible from
+`modules/tasks/README.md`. Keep the existing approved generator pins and the
+WASI-free build. Full parity, signed installation and live remote UI proof remain
+acceptance gates for the continuation, not claims made by this partial PR.
