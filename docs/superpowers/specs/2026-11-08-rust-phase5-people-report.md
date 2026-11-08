@@ -1,12 +1,14 @@
 # Rust Phase 5: People & Context
 
-Task JS-45, Card 523. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
+Tasks JS-45 (part one) and JS-50 (part two), Card 523.
+Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
 Release note Category: N/A.
 
-Status: **People part one: internal core and additive host prerequisites.** The coordinator
-approved this smaller slice and a fresh part-two task to finish the port. People is not yet
-an installable Rust package or reachable through the Rust UI. This report does not claim
-full parity, database privacy, live UI or second-device verification.
+Status: **People part two in progress: internal compiled-guest checkpoints.** Part one
+merged separately; the latest checkpoints below consume the merged shared host and Notes
+adapter. People is not yet an installable Rust package or reachable through the Rust UI.
+The database checks below cover their stated boundaries. Full parity, installed chat,
+live UI and second-device verification remain open.
 
 ## Scope and dependencies
 
@@ -233,12 +235,13 @@ keeps dollar replacement tokens literal and proves that repeating a managed-note
 update does not duplicate human text. This is a deliberate correction to the legacy
 JavaScript replacement behavior, not a claim of byte parity for that corrupting case.
 
-### Decision for Ben: generated guest bindings
+### Generated guest binding decision (superseded)
 
-Do not add new third-party packages without Ben's approval. No generator was installed
-for this continuation. `wit-bindgen`'s Rust generator would generate canonical ABI
-imports/exports, string/result ownership and component type metadata from the host WIT,
-and implement the shared SDK's `Host::call` edge for a compiled Rust guest. The existing
+The initial checkpoint did not have approval for a generator. Ben explicitly approved
+`wit-bindgen` on 2026-11-08, confined to this worktree or scratch space. The later generated
+guest checkpoint records its use. `wit-bindgen`'s Rust generator supplies canonical ABI
+imports/exports, string/result ownership and component type metadata from the host WIT.
+A small People adapter implements the shared SDK's `Host::call` edge with those imports. The existing
 handwritten WAT component path remains available for host verification. The later compiled
 guest checkpoint below adds a handwritten ABI without installing a generator. A Wasm trampoline
 calling a native test driver is not proof of a compiled People guest, package installation
@@ -285,8 +288,9 @@ its actual Settings pane. Existing People declarations are not evidence of a Rus
 ### Remaining work by continuation step
 
 1. The repository consumes the shared query/context contracts. The compiled guest now uses
-   the handwritten `Host::call` ABI described below; the required `wasm32-wasip2` build is
-   still open. JS-47's merged generic linked-notes adapter is now consumed below. No generator package is authorized.
+   the handwritten `Host::call` ABI described below and the generated
+   `wasm32-wasip2` path verified below. JS-47's merged generic linked-notes
+   adapter is consumed unchanged. Ben has approved the pinned generator dependency.
 2. Native identity/link mutations, match review and merge/split now have the differential
    checkpoint below. Register them through actual handlers, complete indexing response
    mapping and prove the remaining error/edge cases. `findPeopleByNames` runs in the
@@ -297,9 +301,10 @@ its actual Settings pane. Existing People declarations are not evidence of a Rus
 3. The canonical-note service now consumes the merged adapter as described below. Complete
    the legacy rename/archive projection fallback, safe HTTP errors and actual ingest nudges.
    The service checkpoint does not prove crash recovery or unlimited-folder parity.
-4. Connect all seven tools and both job kinds to real host dispatch. Verify approval blocks,
+4. The compiled guest now implements all seven tool execution functions, as described below.
+   Connect them and both job kinds to installed host dispatch. Verify approval blocks,
    metadata-only payloads, retries, source versions, cooldown, repeated indexing and delay.
-5. Complete the shipping component build, installable package and shared-frame Settings pane; retain preferences
+5. Package the verified component build and complete installation and the shared-frame Settings pane; retain preferences
    in `app.preferences`. Update app-map navigation, settings, features and recovery metadata.
 6. Extend the HTTP parity harness across all remaining behavior. The new native differential
    and failing-first database matrix cover only the bounded checkpoint described above.
@@ -345,8 +350,9 @@ protection-removal proof; a passing guest read is not a substitute for that matr
 This build uses an already available `wasm32-unknown-unknown` standard library and the
 handwritten wrapper. The spec's `wasm32-wasip2` shipping build remains unproven. This is not
 an installed package, route parity, Settings/chat integration or second-device proof.
-The generator decision for Ben remains open: generated ownership/type metadata would replace
-this manually maintained ABI; it would not supply the missing module behavior or live proof.
+At that checkpoint the generator decision remained open. Ben subsequently approved
+`wit-bindgen`, as recorded below; its ownership/type metadata does not supply the missing
+module behavior or live proof.
 
 ### Persistence mutations and public name lookup checkpoint
 
@@ -426,3 +432,102 @@ implementation. The adapter's read-only-folder limitation, external-editor races
 crash reconciliation remain as documented in `modules/notes/HOST_ADAPTER.md`. Package,
 Settings, tools/jobs, app-map surfaces, full HTTP parity and actual UI/device proof remain
 open. **Do not mark JS-50 Ready on this checkpoint.**
+
+### Generated guest and tool-execution checkpoint
+
+Ben approved `wit-bindgen` on 2026-11-08. People now declares optional, pinned version
+`0.57.1`, with its normal locked transitive dependencies. Generator dependencies, the
+pinned compiler's target and build outputs were kept in task-local scratch caches; no
+program, package or compiler target was installed globally. The generator consumes the
+shared host WIT and selects only the People database, context and linked-notes ports.
+Its generated code owns canonical imports/exports, allocation and returned strings/results.
+The SDK's handwritten component path is retained for comparison and compatibility.
+
+The first generated `wasm32-wasip2` component was rejected by the unchanged host validator:
+the Rust standard library brought in a WASI poll import. Trimming and abort-on-panic did not
+remove that boundary. The additive build wrapper now closes WASI core function imports
+with internal trap-only functions, then lifts the generator's canonical exports. It gives
+no WASI service to the host linker. A normal People operation must use the declared Moss
+ports; an attempted WASI call fails the invocation. Unknown foreign imports remain errors.
+The note parser uses a tree map so it does not request randomized hash seeds.
+
+The real generated People guest passed the existing canonical ABI check, including long
+Unicode strings, malformed inputs, missing capabilities, redacted host errors and call
+finalization. Build-wrapper fixtures separately check that a closed WASI call traps and a
+foreign import is rejected. These fixtures are boundary tests, not product or privacy proof.
+The trap assertion was observed failing after replacing the traps with zero-returning
+functions, then passing after restoring the same source. The restored implementation is
+committed; the weakened control is not shipped.
+The complete generated build is reproducible through
+`modules/people/tools/build-generated-component.sh`; its optional guest cache variables are
+documented in the People README. No new third-party CLI is required.
+
+All seven existing tools now have execution handlers in the compiled People guest. The
+rollback-only oracle calls the actual TypeScript tool execute functions, then the Rust test
+runs the same requests on their original synthetic database rows. It compares response
+shapes, citation tokens, column order, match review, merge and identity split through the
+existing parity normalizer. It verifies that refusing an explicit merge/split candidate
+leaves that candidate pending, and exercises other-user and administrator read/mutation
+attempts. The old compiled component first failed because the tool handler was unavailable.
+The first new test reached all tool responses, then exposed an enum-to-text decoding error
+in its own assertion. After correcting that assertion, the handwritten guest run passed.
+These are execution-seam checks; installed chat, its approval policy and app-action blocks
+are still unproven.
+
+The first complete generated-guest run stopped at the canonical-note response comparison:
+compilation and other suites had separated the real TypeScript and Rust operations by more
+than ten minutes. Both normalizers incorrectly used the later comparison time. Each oracle
+now records its own operation start, and each Rust workflow captures its start before
+running. The existing ten-minute normalization window and comparison fields are unchanged.
+Pre-existing synthetic rows have explicit historical timestamps, so they remain exact
+shared fixtures rather than being treated as fresh writes on only one side of a long run.
+This is a test-clock correction, not a People behavior change.
+
+The complete generated-guest People gate then passed all seven suites, with eight tests
+and exit code zero. It exercised the real generated ABI, public APIs against TypeScript,
+canonical-note responses and bytes, conflict/compensation cases, persisted mutations,
+all seven tool executors, and the failing-first legacy-table and preference privacy
+matrices. Both runtime roles were checked, including other-user and administrator access.
+The throwaway database container was removed. The first clock-anchor run still failed
+on a pre-existing tool link's timestamp; the successful confirmation includes the fixed
+historical fixture dates in `55c6503e8`.
+
+The successful run is `20261108-055807-EpLAN0`, with input fingerprint
+`sha256:4c2043d149b269adbe3a5aeba7962df6079b875eed3be600ecd9f23ffd8b8c5e`.
+It began on `5ba163741` with the clock/fixture changes present; those source changes were
+then committed as `55c6503e8`. Its pinned generated component digest is
+`sha256:b9e8557b3e782fae4d7d2828432f5edc3c4a0196a00ebfcb9b823449adab94ff`.
+These are guest/host integration receipts, not an installed package, HTTP parity, CI,
+chat approval-policy or UI/device proof. Independent final review remains pending; one
+of the task's two permitted rounds has been used on the earlier persistence checkpoint.
+
+Repository-wide lint passed at this checkpoint. Scoped lint and formatting for the changed
+TypeScript oracles, report formatting, both pinned Rust formatting checks and
+`git diff --check` passed. The repository-wide formatting check is still running; the
+same background runner will then run file-size and type checks. Their results must be
+collected before final acceptance: this checkpoint does not claim a complete project-check
+pass. The task remains in Doing, without an acceptance request.
+
+No installed screen, setting or package ships in this checkpoint, so the existing app map
+must not advertise a Rust People surface. Add the package's truthful navigation, settings,
+features and recovery metadata together with its working Settings pane in step five.
+
+The remaining work still exceeds a single bounded continuation: finish metadata-only jobs
+and provider/indexing dispatch; complete HTTP routes, safe errors and projection fallbacks;
+connect shared account preferences and ingest nudges; build and install the real package
+and shared-frame Settings pane; extend HTTP parity; and prove signed-in UI/chat plus a second
+device over the approved HTTPS path. The assembled shell at this checkpoint still uses its
+stub contract; a module frame fixture is not a substitute for that final application check.
+Do not mark JS-50 Ready until all seven steps are demonstrated.
+
+The next implementation step is the two job kinds. The merged host deliberately permits
+only UUID IDs, flags, counts and fixed choices as queue parameters; its underlying contract
+explicitly excludes free text. People must retain the original source hash and optional
+source version without coercing them into UUIDs or silently discarding them. Keep that
+data behind an account-scoped command reference and make each new indexing cycle a new
+command, while retries retain the same command identity. The current checkpoint has not
+implemented that command storage/dispatch or the provider seam. In particular, a permanent
+queue deduplication key must not suppress later indexing of the same source.
+The existing account key-value port locks individual get/set operations but has no atomic
+read-modify-write operation. A command collection cannot safely be implemented as concurrent
+get/replace calls on one map; its storage seam must preserve simultaneous enqueues.
