@@ -26,6 +26,13 @@ Intl aliases and fixed-offset names are not reconciled; full timezone parity rem
 open. No job or screen is declared. App-map metadata describes only delivered behavior
 and points missing adapter failures to module settings.
 
+The existing injected Tasks/Briefing references now use declared read-only host resources
+`calendar.task-reference` and `calendar.briefing-reference`, each taking only an `id`.
+The earlier `api` port usage was rejected by shared-host dependency authorization before
+the wrapper could run. These resources model trusted host projections through the public
+interfaces, not versioned installed-package dispatch. The wrapper queries no Tasks or
+Briefing table and still requires real actor-scoped adapters at final composition.
+
 ## Verification approach
 
 Native tests exercise rejection before host access and heartbeat projections. The

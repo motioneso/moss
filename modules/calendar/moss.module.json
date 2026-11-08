@@ -27,12 +27,12 @@
     {
       "port": "kv",
       "operations": ["get"],
-      "resources": ["calendar.briefing-settings", "calendar.chat-context"]
-    },
-    {
-      "port": "api",
-      "operations": ["call"],
-      "resources": ["tasks", "briefing"]
+      "resources": [
+        "calendar.briefing-settings",
+        "calendar.chat-context",
+        "calendar.task-reference",
+        "calendar.briefing-reference"
+      ]
     }
   ],
   "database": {

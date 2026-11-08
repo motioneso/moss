@@ -29,8 +29,10 @@ Briefing projections; no other module's tables are queried here. Without those p
 drafts containing task references or a source run fail before committing. The returned task
 shape is `{task:{id,ownerUserId}}`; the briefing shape is `{run:{id,ownerUserId}}`. The later
 composition must provide real public adapters and validate full source-run provenance before
-exposing the original HTTP create route. These projections are host-injected services, not
-undeclared module-to-module dispatch. No People data is read by this slice.
+exposing the original HTTP create route. These projections use the declared read-only host
+resources `calendar.task-reference` and `calendar.briefing-reference`, accepting only an `id`.
+They are host-injected public-interface projections, not installed-package API dispatch.
+No People data is read by this slice.
 
 ## Build and verify
 

@@ -2,7 +2,7 @@
 use crate::{context, model, query, Error, Result};
 use moss_module_sdk::{
     query::{Conflict, Filter, Order, Query},
-    Client, Host,
+    Host,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -152,7 +152,7 @@ fn require_tasks(host: &impl Host, intent: &Value, blocks: &[Value]) -> Result<(
             .map(|id| (id, "block")),
     );
     for (id, field) in ids {
-        let task = Client(host).api("tasks", "getTask", json!({"id":id}))?;
+        let task = host.call("kv", "get", "calendar.task-reference", json!({"id":id}))?;
         if task["task"]["id"] != id || task["task"]["ownerUserId"] != actor {
             return Err(Error::new(
                 404,
@@ -181,7 +181,7 @@ pub fn create(host: &impl Host, input: Create) -> Result<Value> {
         if id.is_empty() {
             return Err(model::invalid("sourceRunId must be an id or null"));
         }
-        let run = Client(host).api("briefing", "getRun", json!({"id":id}))?;
+        let run = host.call("kv", "get", "calendar.briefing-reference", json!({"id":id}))?;
         if run["run"]["id"] != *id
             || run["run"]["ownerUserId"] != context(host, "read", "call")?["actorUserId"]
         {
