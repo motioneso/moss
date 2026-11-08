@@ -675,6 +675,7 @@ impl Installer {
             .write()
             .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
         let _disk_lock = self.disk_lock(true)?;
+        self.recover_locked()?;
         let mut state = self.catalog.load()?;
         let revision = state.revision;
         let module = state

@@ -336,6 +336,17 @@ mod tests {
         let installer = open();
         assert_eq!(files.read("account.json").unwrap(), b"before");
         assert!(!data.path().join("modules/operation.json").exists());
+        let interrupted = lifecycle.snapshot("sample.data").unwrap();
+        installer
+            .begin_change("sample.data", &interrupted, Some("b".repeat(64)))
+            .unwrap();
+        files
+            .write("account.json", b"another interrupted install")
+            .unwrap();
+        // Even an absent catalog entry must not make removal skip pending recovery.
+        assert!(installer.remove(&access, "sample.data", None).is_err());
+        assert!(!data.path().join("modules/operation.json").exists());
+        assert_eq!(files.read("account.json").unwrap(), b"before");
         let snapshot = lifecycle.snapshot("sample.data").unwrap();
         installer
             .begin_change("sample.data", &snapshot, None)
@@ -347,7 +358,7 @@ mod tests {
         drop(installer);
         let installer = open();
         assert!(!data.path().join("modules/files/sample.data").exists());
-        assert_eq!(installer.snapshots(&access).unwrap().len(), 2);
+        assert_eq!(installer.snapshots(&access).unwrap().len(), 3);
         installer
             .expire_snapshots(&access, Utc::now() + Duration::days(31))
             .unwrap();
