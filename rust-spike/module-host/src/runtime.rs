@@ -31,11 +31,16 @@ impl Default for Limits {
 }
 #[derive(Clone)]
 pub struct CallScope {
+    call_id: uuid::Uuid,
     access: AccessContext,
     module: Arc<Manifest>,
     deadline: Instant,
 }
 impl CallScope {
+    /// Unique to this guest invocation, including nested calls sharing a request ID.
+    pub fn call_id(&self) -> uuid::Uuid {
+        self.call_id
+    }
     pub fn access(&self) -> &AccessContext {
         &self.access
     }
@@ -59,6 +64,31 @@ pub struct Request {
 /// are returned through this interface. Missing services fail closed.
 pub trait Ports: Send + Sync {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value>;
+    /// Opt-in finalization. Wrappers must forward this to their downstream services.
+    /// A false result means guest failure, trap, or an unsuccessful route response.
+    fn finish_call(&self, _scope: &CallScope, _success: bool) -> Result<()> {
+        Ok(())
+    }
+}
+struct Completion {
+    scope: CallScope,
+    ports: Arc<dyn Ports>,
+    finished: bool,
+}
+impl Completion {
+    fn finish(&mut self, success: bool) -> Result<()> {
+        self.finished = true;
+        self.ports.finish_call(&self.scope, success)
+    }
+}
+impl Drop for Completion {
+    fn drop(&mut self) {
+        if !self.finished {
+            // Preserve the original guest error. Trusted services must release their state
+            // even when rollback itself fails; an error must never turn into a commit.
+            let _ = self.ports.finish_call(&self.scope, false);
+        }
+    }
 }
 pub struct DenyPorts;
 impl Ports for DenyPorts {
@@ -224,9 +254,15 @@ impl Host {
             )?;
         }
         let scope = CallScope {
+            call_id: uuid::Uuid::new_v4(),
             access,
             module: manifest,
             deadline: Instant::now() + self.limits.deadline,
+        };
+        let mut completion = Completion {
+            scope: scope.clone(),
+            ports: ports.clone(),
+            finished: false,
         };
         let mut store = Store::new(
             &self.engine,
@@ -259,6 +295,12 @@ impl Host {
             response.len() <= self.limits.message_bytes,
             "The module response is too large"
         );
+        let success = kind != "route"
+            || serde_json::from_str::<Value>(&response)
+                .ok()
+                .and_then(|v| v.get("status").and_then(Value::as_u64))
+                .is_none_or(|status| status < 400);
+        completion.finish(success)?;
         Ok(response)
     }
 }
