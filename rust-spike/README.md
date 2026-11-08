@@ -14,6 +14,9 @@ It is not the start of the Rust app. Delete it once the reports are accepted.
 - Phase 2b (`platform/`) builds the job queue, module registry and capability routing in its
   own Cargo workspace, with its own readme. Findings are in
   `docs/superpowers/specs/2026-11-07-rust-phase2b-report.md`.
+- Phase 3 (`agents/`) drives Claude, Codex and OpenCode from Rust, confines each account's agent
+  and links the chat drawer to it. It is its own Cargo workspace. Findings are in
+  `docs/superpowers/specs/2026-11-08-rust-phase3-report.md`.
 
 Nothing here changes the TypeScript app or its tests. Phases 0b and 2a use only throwaway databases
 made by `scripts/run-gate.sh`, never the dev or prod database. Phase 1 makes its own throwaway
@@ -51,6 +54,10 @@ databases in a scratch folder and never touches the dev or prod database.
 | `parity/cases/20-safety-*.json`           | Phase 2a: the safety cases, run against both servers                       |
 | `tools/check-safety-rules.sh`             | Phase 2a: fails on file access, secret use or prints out of place          |
 | `tools/remove-protections.sh`             | Phase 2a: removes each protection in a copy and checks a test fails        |
+| `agents/src/runner.rs`                    | Phase 3: one confined agent per account, clean launch environment          |
+| `agents/src/bin/moss-runner.rs`           | Phase 3: the runner process and its owner-only socket                      |
+| `agents/parity/`                          | Phase 3: permission and approval rules checked against the TypeScript      |
+| `agents/proof/containment.sh`             | Phase 3: what a confined agent can reach, with an unconfined control       |
 
 ## Running
 

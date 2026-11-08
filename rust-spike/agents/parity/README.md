@@ -3,10 +3,10 @@
 Runs the same cases through the TypeScript rules and the Rust port and compares the answers.
 Needs `tsx` from a checkout with `node_modules` (development only; Moss itself ships no Node).
 
-| Check | Cases | Last result |
-|---|---|---|
-| Agent permission asks (`classifyAcpPermission` vs `policy::classify`) | 225 shared names, 127 OpenCode names against their twins | 0 differ |
-| Approval route (`resolvePolicy`, `familyAllowsAutoRun` vs `approvals`) | 14,336 (every combination) | 0 differ |
+| Check                                                                  | Cases                                                    | Last result |
+| ---------------------------------------------------------------------- | -------------------------------------------------------- | ----------- |
+| Agent permission asks (`classifyAcpPermission` vs `policy::classify`)  | 225 shared names, 127 OpenCode names against their twins | 0 differ    |
+| Approval route (`resolvePolicy`, `familyAllowsAutoRun` vs `approvals`) | 14,336 (every combination)                               | 0 differ    |
 
 ```sh
 python3 -I parity/gen-cases.py > /tmp/cases.json
