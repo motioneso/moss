@@ -310,3 +310,52 @@ Live state and final receipts for this part are in its task Proof artifact; loca
 build output, fixture credentials and screenshots stay outside the repository.
 No global install is authorized or performed. The existing task-local Rust/Wasm
 compiler is reused; no wit-bindgen installation is needed for this slice.
+
+### Delivered boundary
+
+Package 0.5.0 adds event links on the Calendar-owned signed-in page. The parent sends
+only the requested event ID over its existing presentation bridge; event contents
+still come from installed account-scoped reads. Successfully refreshed events update
+an open peek or dismiss it when absent. Failed refreshes retain the prior snapshot;
+retry and background refresh display progress. Details now include elapsed duration,
+correct singular/plural attendees, and accepted/RSVP/observed/held status wording.
+
+Three original GET URLs (event list, event detail and briefing settings) are aliases
+for the existing installed dispatch. They retain the Network guard, installed
+manifest, account enablement and guest transaction. Other original URLs and write
+methods are not exposed by these aliases. The production TypeScript screen remains
+active in the old application; this does not perform its full replacement.
+
+The new HTTP oracle registers production Fastify routes with real Calendar and
+preference repositories and runtime-role data contexts on the gate database. The
+installed test compares status and complete bodies for the three read contracts,
+including a missing event, for owner, unrelated user and administrator before a
+view grant, with that grant, and after revocation (thirty-six comparisons). The
+signed-live runner additionally compares both URL prefixes after real password
+sign-in (sixteen comparisons), then exercises linked and refreshed event details.
+These are scoped differential checks, not the complete parity-harness acceptance.
+Task/source-run projections are deliberately unexercised by this read oracle.
+
+The new details regression was observed failing on the old rendering: duration was
+absent and a single attendee appeared as `1 people`. The same test passed after the
+fix. The UI model adds twelve comparisons against production `fmtDur`, including
+hour boundaries and signed inputs. Existing data/tool/UI comparisons and all five
+tables' failing-first privacy witnesses remain in the Calendar gate. Final gate,
+root checks, live browser receipts and review verdict belong to this task's Proof
+artifact, tied to the exact tested commit rather than a stale receipt in source.
+
+### Still required for final Calendar acceptance
+
+The remaining list from part 4 still applies: ten other original HTTP contracts and
+all untested errors/defaults; four provider tools and both jobs; plan preview,
+authority/approval, apply, retry/recovery, follow-through and monitoring; real public
+reference/provider adapters; writable automation and external-calendar status; full
+shell/Today/chat integration; old-screen replacement and full assembled parity.
+No malformed-UUID or exhaustive HTTP-error equivalence is claimed. The current
+Calendar-only composition and local fixture do not prove installation of the whole
+Rust app, a production trusted certificate, or a physical second device. A same-host
+LAN-address request and phone-width screenshot remain distinct from that requirement.
+
+Builds reuse the existing scratch Rust 1.95.0 compiler and Wasm target. Only existing
+lockfile dependencies are prepared in the worktree. No global tool, new dependency,
+wit-bindgen installation or sibling crate change is part of this checkpoint.
