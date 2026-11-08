@@ -10,6 +10,25 @@ impl Host for NoCalls {
 }
 
 #[test]
+fn settings_patch_reaches_the_scoped_host_once() {
+    struct Settings;
+    impl Host for Settings {
+        fn call(&self, port: &str, operation: &str, resource: &str, body: Value) -> Result<Value> {
+            assert_eq!((port, operation, resource), ("kv", "set", "calendar.briefing-settings"));
+            assert_eq!(body, json!({"lookaheadDays":0,"timeBlockMode":"auto"}));
+            Ok(json!({"calendar.briefing_lookahead_days":0,"calendar.time_block_mode":"auto"}))
+        }
+    }
+    let response: Value = serde_json::from_str(&handle(&Settings, "route", &json!({
+        "method":"PATCH","path":"/briefing-settings","params":{},"query":{},
+        "body":{"lookaheadDays":0,"timeBlockMode":"auto"}
+    }).to_string()).unwrap()).unwrap();
+    assert_eq!(response["status"], 200);
+    assert_eq!(response["body"]["settings"]["lookaheadDays"], 0);
+    assert_eq!(response["body"]["settings"]["timeBlockMode"], "auto");
+}
+
+#[test]
 fn chat_rejects_provider_effects_and_extra_authority_before_host_access() {
     for key in [
         "startsAt",

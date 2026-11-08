@@ -373,3 +373,21 @@ Rust metadata serializes zero as `0.0`, while the TypeScript response uses `0`. 
 comparison now applies JavaScript numeric semantics to both complete JSON bodies;
 array order, fields and nonnumeric values remain compared. The live runner also
 passes its required browser launch flags through the supported environment setting.
+
+## JS-82 / part 6: editable briefing settings
+
+Card 525. Work stays in Calendar-owned files in the `~/Jarv1s` task worktree.
+This checkpoint replaces the read-only settings summary with saved lookahead, prep-task
+and time-block controls. The installed PATCH route will preserve the seven existing
+preference keys and the time-block writeback policy, atomically under the signed-in
+actor. Invalid input must fail before writes, and unsuccessful guest calls must roll
+back the settings transaction. The app map will describe this boundary.
+
+Verification will compare valid write sequences with the production TypeScript route
+and its real policy adapter, exercise foreign-user and administrator isolation with
+RLS removed and restored, and save/reload settings through the real signed-in UI.
+Full provider execution, source-behavior controls, Today/chat shell assembly, old-screen
+replacement, exhaustive error/coercion equivalence and physical second-device trusted
+HTTPS remain outside this bounded checkpoint and required for final acceptance.
+No new global tools or dependencies are planned; builds reuse the existing scratch
+Rust/Wasm toolchain. Proof receipts and review disposition will accompany the checkpoint.
