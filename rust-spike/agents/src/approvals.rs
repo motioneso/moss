@@ -78,12 +78,12 @@ pub enum Route {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Policy {
+pub enum Policy {
     Run,
     Confirm,
 }
 
-fn resolve_policy(tool: &ToolFacts, call: &CallFacts, sorted_safe: bool, tainted: bool) -> Policy {
+pub fn resolve_policy(tool: &ToolFacts, call: &CallFacts, sorted_safe: bool, tainted: bool) -> Policy {
     if tainted && call.confirm_when_tainted {
         return Policy::Confirm;
     }
@@ -113,7 +113,7 @@ fn resolve_policy(tool: &ToolFacts, call: &CallFacts, sorted_safe: bool, tainted
 }
 
 /// Whether YOLO may run this tool with no card. Fails closed.
-fn family_allows_auto_run(tool: &ToolFacts, per_call_resolved: bool) -> bool {
+pub fn family_allows_auto_run(tool: &ToolFacts, per_call_resolved: bool) -> bool {
     if tool.risk == Risk::Destructive || tool.confirm_under_yolo {
         return false;
     }
@@ -123,6 +123,10 @@ fn family_allows_auto_run(tool: &ToolFacts, per_call_resolved: bool) -> bool {
             Some(None) => false,
             Some(Some(f)) => f.allowed_tiers.contains(&Tier::TrustedAuto),
         };
+    }
+    // Outbound first: a per-call resolution never lets unattended mode send something out.
+    if tool.risk == Risk::Outbound {
+        return false;
     }
     if per_call_resolved {
         return true;
@@ -201,5 +205,23 @@ mod tests {
         let mut t = tool(Risk::Write);
         t.family = None;
         assert_eq!(route(&t, &CallFacts::default()), Route::Confirm);
+    }
+
+    #[test]
+    fn outbound_never_runs_unattended_even_when_resolved_per_call() {
+        let tool = ToolFacts {
+            risk: Risk::Outbound,
+            is_external: false,
+            execution_auto: true,
+            confirm_under_yolo: false,
+            family: None,
+        };
+        assert!(!family_allows_auto_run(&tool, true));
+        let call = CallFacts {
+            yolo: true,
+            per_call_resolved: true,
+            ..Default::default()
+        };
+        assert_ne!(route(&tool, &call), Route::YoloRun);
     }
 }

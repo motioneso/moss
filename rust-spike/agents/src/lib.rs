@@ -12,4 +12,5 @@ pub mod policy;
 pub mod redact;
 pub mod runner;
 pub mod session;
+pub mod terminal;
 pub mod transport;
