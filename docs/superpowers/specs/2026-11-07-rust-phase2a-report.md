@@ -6,7 +6,7 @@
 - Code: `rust-spike/safety-core/`, `rust-spike/access-context/`, `rust-spike/vault/`, the safety
   cases in `rust-spike/parity/cases/20-safety-1.json` and `20-safety-2.json`, and
   `rust-spike/tools/`. `rust-spike/README.md` says how to run them.
-- Run on 2026-11-07 at commit `f7a0055ad` with cargo 1.95.0, Node 22.22.2 and Postgres 17.11
+- Run on 2026-11-07 at commit `c368eaea6` with cargo 1.95.0, Node 22.22.2 and Postgres 17.11
   (pgvector image), each database run inside its own throwaway gate. Later commits change only
   this report.
 
@@ -18,7 +18,7 @@ way the TypeScript server does, and Tasks runs on it.
 
 - Both servers pass the same nine privacy and secrecy cases, and all 77 side-by-side cases match.
   Two of the nine test only the database rules both servers share.
-- Each of the 17 protections was removed in turn, and its check caught the removal every time.
+- Each of the 18 protections was removed in turn, and its check caught the removal every time.
 - That meets this part's share of the Phase 2 kill gate.
 - One database rule lets an admin's blanket update change an AI key row that admin cannot see.
   The rule is live in the TypeScript app's database, but the app never sends such an update. A
@@ -30,24 +30,27 @@ way the TypeScript server does, and Tasks runs on it.
 
 ## What was built
 
-| Part                   | What it does                                                                                                                                                   | Code                                   |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| Sign-in and sessions   | Sign-up, sign-in, sign-out and `/api/me` with the TypeScript cookies, password hashes, validation messages and 7-day sessions, renewed after a day             | `safety-core/src/auth.rs`              |
-| Origin check           | Refuses a sign-in posted from a page the server does not trust                                                                                                 | `safety-core/src/origin.rs`            |
-| Data context and roles | Each query runs in a transaction as a no-bypass role with the actor set, so row-level security applies to admins too. Start-up refuses a role that can skip it | `safety-core/src/db.rs`                |
-| Admin routes           | List, approve, reactivate, deactivate (ends sessions), end sessions, promote, demote. Reject and delete check every guard, then answer 501                     | `safety-core/src/admin.rs`             |
-| Connector accounts     | List and add. The secret is sealed before it is stored, and replies only say whether one exists                                                                | `safety-core/src/views.rs`             |
-| Secret cipher          | The TypeScript AES-256-GCM envelope and keys. The secret type cannot be printed                                                                                | `safety-core/src/secret.rs`            |
-| Log redaction          | One log writer, start-up errors included. Every line passes the TypeScript sanitizer's secret-name rules, and the request log drops query strings              | `safety-core/src/redact.rs`, `http.rs` |
-| Job payloads           | Ids, fixed choices, small numbers, flags and hashed keys only. There is no free-text field                                                                     | `safety-core/src/payload.rs`           |
-| Module SQL refusal     | Refuses module SQL that touches another module's tables or the shared migrations folder                                                                        | `safety-core/src/module_sql.rs`        |
-| Vault                  | Opens only the acting user's folder, from their access context. Refuses `..`, links and malformed names                                                        | `vault/src/lib.rs`                     |
-| Rules check            | Five rules the compiler cannot see: file access, file serving, secret reads, privileged database addresses and prints                                          | `tools/check-safety-rules.sh`          |
-| Removal run            | Removes each protection in a copy and checks that a test fails                                                                                                 | `tools/remove-protections.sh`          |
-| Side-by-side additions | Cookies by name, field comparisons, absent fields, SQL probes as any role and actor, a log scan for planted secrets, recorded observations                     | `parity/`                              |
+| Part                   | What it does                                                                                                                                                                                              | Code                                   |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| Sign-in and sessions   | Sign-up, sign-in, sign-out and `/api/me` with the TypeScript cookies, password hashes, validation messages and 7-day sessions, renewed after a day                                                        | `safety-core/src/auth.rs`              |
+| Origin check           | Refuses a sign-in posted from a page the server does not trust                                                                                                                                            | `safety-core/src/origin.rs`            |
+| Data context and roles | Each query runs in a transaction as a no-bypass role with the actor set, so row-level security applies to admins too. Start-up refuses a role that can skip it                                            | `safety-core/src/db.rs`                |
+| Admin routes           | List, approve, reactivate, deactivate (ends sessions), end sessions, promote, demote. Reject and delete check every guard, then answer 501                                                                | `safety-core/src/admin.rs`             |
+| Connector accounts     | List and add. The secret is sealed before it is stored, and replies only say whether one exists                                                                                                           | `safety-core/src/views.rs`             |
+| Secret cipher          | The TypeScript AES-256-GCM envelope and keys. The secret type cannot be printed                                                                                                                           | `safety-core/src/secret.rs`            |
+| Log redaction          | One log writer, start-up errors included. Every line passes the TypeScript sanitizer's secret-name rules, and the request log drops query strings                                                         | `safety-core/src/redact.rs`, `http.rs` |
+| Job payloads           | Ids, fixed choices, small numbers, flags and hashed keys only. There is no free-text field                                                                                                                | `safety-core/src/payload.rs`           |
+| Module SQL refusal     | Refuses module SQL that touches another module's tables or the shared migrations folder                                                                                                                   | `safety-core/src/module_sql.rs`        |
+| Vault                  | The vaults folder has its own handle, and only an access context opens a user's folder in it. No plain folder handle can open the vaults folder or reach into it. Refuses `..`, links and malformed names | `vault/src/lib.rs`                     |
+| Rules check            | Five rules the compiler cannot see: file access, file serving, secret reads, privileged database addresses and prints                                                                                     | `tools/check-safety-rules.sh`          |
+| Removal run            | Removes each protection in a copy and checks that a test fails                                                                                                                                            | `tools/remove-protections.sh`          |
+| Side-by-side additions | Cookies by name, field comparisons, absent fields, SQL probes as any role and actor, a log scan for planted secrets, recorded observations                                                                | `parity/`                              |
 
 - Tasks now uses this crate for sign-in, data access, errors and its one job.
-- Sizes: `safety-core` is 4,087 lines including 44 unit tests. `vault` is 385 lines with 4 tests.
+- Any code can build an access context for any user id, as in TypeScript. The vault guard stops
+  a plain folder handle, not a made-up access context. It also covers only the process that
+  opened the vaults folder.
+- Sizes: `safety-core` is 4,087 lines including 44 unit tests. `vault` is 494 lines with 7 tests.
   `access-context` is 37 lines with 1 test.
 - The job queue in `safety-core/src/queue.rs` is a stand-in for Tasks' one job. Phase 2b's
   `jobs` crate should replace it.
@@ -58,13 +61,13 @@ All logs and reports are kept outside the repo in the task's scratch folder.
 
 ### Unit tests
 
-167 tests pass on `f7a0055ad` with no warnings.
+170 tests pass on `c368eaea6` with no warnings.
 
 | Crate                                      | Tests |
 | ------------------------------------------ | ----- |
 | `safety-core`                              | 44    |
 | `access-context`                           | 1     |
-| `vault`                                    | 4     |
+| `vault`                                    | 7     |
 | `tasks`                                    | 14    |
 | `parity`                                   | 9     |
 | Phase 0 crates (`portability`, `keystore`) | 53    |
@@ -72,7 +75,7 @@ All logs and reports are kept outside the repo in the task's scratch folder.
 
 ### Side-by-side run
 
-Gate log for run 6, commit `f7a0055ad`, clean tree, `### FINAL rc=0`:
+Gate log for run 7, commit `c368eaea6`, clean tree, `### FINAL rc=0`:
 
 ```text
 PASS safety: member isolation, another member's task reads as missing
@@ -96,7 +99,7 @@ PARITY 77/77 cases match
 | Admin cannot read private data    | The admin gets 404 on A's task and empty lists. SQL run as the admin counts none of A's tasks, connectors or AI keys                                                                  |
 | Roles cannot read sign-in secrets | Database rules only, with no web request. The app and worker roles are refused on the sign-in tables. The sign-in role may query them, so the refusal comes from the role             |
 | Account lifecycle                 | A pending member is held and approval lets them in. Deactivation ends the session, and a new sign-in is held. Reactivation does not revive the ended session. The audit trail matches |
-| Admin guardrails                  | Members get 403 and strangers 401. An admin cannot delete or deactivate their own account, and the last admin cannot step down. The audit trail matches                               |
+| Admin guardrails                  | Members get 403 and strangers 401. An admin cannot delete or deactivate their own account, even with a second admin, and the last admin cannot step down. The audit trail matches     |
 | Bootstrap owner                   | An admin gets 409 trying to deactivate, demote or delete the bootstrap owner, and the account is unchanged                                                                            |
 | Connectors                        | Replies carry no secret, other members and the admin see nothing, and the stored secret is a sealed envelope                                                                          |
 | AI credentials                    | Database rules only, with no web request. SQL run as B, as the admin and as a job for B counts none of A's keys. Edits by B and the admin change nothing. A sees the key              |
@@ -106,7 +109,7 @@ PARITY 77/77 cases match
   database copy, so they test the database rules both servers share, not Rust code. Rust has no
   AI routes yet.
 - Each server's log is scanned after the last case for any `MOSS-SENTINEL-` value. None was found.
-- All 546 lines of the Rust server's log in run 6 are JSON from the one log writer.
+- All 548 lines of the Rust server's log in run 7 are JSON from the one log writer.
 
 ### The first run found real differences
 
@@ -132,6 +135,7 @@ The run used commit `f7a0055ad` on a clean tree and ended `### FINAL rc=0`. All 
 | The secret type made printable with `derive(Debug)`                                                                             | The build, through a compile-time check                                                | 101  |
 | Log redaction passes lines and JSON through unchanged                                                                           | 2 redaction unit tests                                                                 | 101  |
 | The vault stops refusing `..`                                                                                                   | The vault's climb-out test                                                             | 101  |
+| A plain folder handle may open the vaults folder or walk into it                                                                | 3 vault unit tests                                                                     | 101  |
 | The origin check dropped from sign-up, sign-in and sign-out                                                                     | The sign-in route test                                                                 | 101  |
 | Code added that reads a file, serves a folder and a single file, reads a secret and the privileged database address, and prints | All five rules                                                                         | 1    |
 | The start-up role guard switched off                                                                                            | The guard script's own copy starts on a role that skips row-level security             | 0    |
@@ -172,7 +176,12 @@ redaction: caught (exit 101)
   test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 41 filtered out; finished in 0.00s
 vault-dotdot: caught (exit 101)
   ---- tests::refuses_paths_that_climb_out stdout ----
-  test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+vaults-folder: caught (exit 101)
+  ---- tests::plain_handles_cannot_walk_into_the_vaults_folder stdout ----
+  ---- tests::plain_handles_cannot_open_the_vaults_folder stdout ----
+  ---- tests::a_handle_made_before_the_vaults_folder_opens_is_closed_after stdout ----
+  test result: FAILED. 4 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
 origin-check: caught (exit 101)
   ---- origin::tests::the_sign_in_routes_run_both_checks stdout ----
   test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 36 filtered out; finished in 0.00s
