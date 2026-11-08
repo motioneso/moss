@@ -130,14 +130,15 @@ try {
   // RLS removal must expose the actual private rows and fail this exact assertion.
   const assertPrivate = (output: { data: { items: unknown[] } }) =>
     assert.deepEqual(output.data.items, [], "Private list rows must be hidden");
-  assertPrivate(await compiled(other, {}));
+  const privacyInput = { listId: list };
+  assertPrivate(await compiled(other, privacyInput));
   await bootstrap.query("ALTER TABLE app.tasks DISABLE ROW LEVEL SECURITY");
   try {
-    const exposed = await compiled(other, {});
+    const exposed = await compiled(other, privacyInput);
     assert.equal(
       exposed.data.items.filter((item: { ownerUserId: string }) => item.ownerUserId === owner)
         .length,
-      12
+      6
     );
     assert(exposed.data.items.some((item: { id: string }) => item.id === shared));
     assert.throws(() => assertPrivate(exposed), assert.AssertionError);
@@ -147,7 +148,7 @@ try {
       "ALTER TABLE app.tasks ENABLE ROW LEVEL SECURITY; ALTER TABLE app.tasks FORCE ROW LEVEL SECURITY"
     );
   }
-  assertPrivate(await compiled(other, {}));
+  assertPrivate(await compiled(other, privacyInput));
   await bootstrap.query(
     "INSERT INTO app.shares(resource_type,resource_id,owner_user_id,grantee_user_id,level) VALUES('task',$1,$2,$3,'view')",
     [shared, owner, other]
