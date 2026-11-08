@@ -23,9 +23,6 @@
         <p id="boot-loading" role="status">Loading Moss</p>
       </main>
     </div>
-    <script type="module">
-      const app = await import("/app.js");
-      await app.default({ module_or_path: "/app_bg.wasm" });
-    </script>
+    <script type="module" src="/moss-start.js"></script>
   </body>
 </html>

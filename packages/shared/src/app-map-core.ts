@@ -1,6 +1,7 @@
 import type { AiModelCapability, AiModelTier } from "./ai-types.js";
 
 export interface CoreAppSurfaceDeclaration {
+  readonly runtime?: "rust";
   readonly id: string;
   readonly label: string;
   readonly description: string;
@@ -16,6 +17,7 @@ export interface CoreAppErrorDeclaration {
 }
 
 export interface CoreAppRemediationDeclaration {
+  readonly runtime?: "rust";
   readonly id: string;
   readonly description: string;
   readonly path?: string;
@@ -23,6 +25,7 @@ export interface CoreAppRemediationDeclaration {
 }
 
 export interface AppMapItem {
+  readonly runtime?: "rust";
   readonly moduleId: string;
   readonly id?: string;
   readonly featureId?: string;
@@ -53,6 +56,15 @@ export interface AppMapArtifact {
 }
 
 export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
+  {
+    id: "rust-sign-in",
+    runtime: "rust",
+    label: "Rust Moss - sign in and owner setup",
+    description:
+      "The Rust app requires sign-in before private pages or API calls. Create the first administrator at /setup using a loopback address on the computer running Moss; setup closes after the owner exists. Passwords use the existing hash format. Browser sessions use Secure HttpOnly cookies and sign-in replies contain only public user fields. Sign-in is limited after repeated attempts; wait a minute before retrying. Further registration awaits the Rust People screens.",
+    path: "/sign-in",
+    scope: "user"
+  },
   {
     id: "today",
     label: "Today",
@@ -157,6 +169,15 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
 // source of truth for what a user can actually reach). Native Android settings
 // identify the installed activity instead of inventing a web settings route.
 export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
+  {
+    id: "rust-network-sharing",
+    runtime: "rust",
+    label: "Rust Moss - LAN and tailnet sharing",
+    description:
+      "Sharing starts off. An administrator can save Allow LAN and tailnet access under Sharing; disabling it refuses remote requests on their next call, including existing connections. Exact HTTPS addresses and certificates are configured on the host. Local certificates need verified trust on each device; tailnet and user-supplied PEM certificates are supported. Open the configured address after a Host or origin refusal. Forwarded headers do not grant trust. The page explains the limits of accounts sharing one operating system user and offers Sign out.",
+    path: "/settings/sharing",
+    scope: "admin"
+  },
   {
     id: "android-hardware",
     label: "Hardware (Moss for Android)",
@@ -547,6 +568,24 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
 
 export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
   {
+    code: "host_refused",
+    class: "permission",
+    remediationRef: "rust-trusted-address",
+    description: "Rust Moss refused an address not listed as a trusted HTTPS authority."
+  },
+  {
+    code: "origin_or_sharing_refused",
+    class: "permission",
+    remediationRef: "rust-trusted-address",
+    description: "Rust Moss refused a cross-origin request or remote access while sharing is off."
+  },
+  {
+    code: "sign_in_rate_limited",
+    class: "transient",
+    remediationRef: "rust-sign-in-wait",
+    description: "Rust Moss reached its sign-in attempt or concurrent password-check limit."
+  },
+  {
     code: "core.page.page_load_failed",
     class: "transient",
     remediationRef: "core.page.reload_page",
@@ -734,6 +773,21 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
 ];
 
 export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
+  {
+    id: "rust-trusted-address",
+    runtime: "rust",
+    description:
+      "Open Moss at a configured HTTPS address. On the host, sign in as an administrator and enable sharing for other devices. Complete first-owner setup through a loopback address.",
+    path: "/settings/sharing",
+    scope: "admin"
+  },
+  {
+    id: "rust-sign-in-wait",
+    runtime: "rust",
+    description: "Wait one minute, then try signing in again.",
+    path: "/sign-in",
+    scope: "user"
+  },
   {
     id: "core.page.reload_page",
     description:

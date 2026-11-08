@@ -12,19 +12,18 @@ use moss_shell_contract::stub::StubShellData;
 use moss_shell_contract::{ChatMessage, ChatRole, ChatThread, ShellData, ShellView, TodayView};
 use serde_json::{json, Value};
 
-/// Single local account until sign-in arrives with the core platform port.
-const ACCOUNT: &str = "local";
-
 pub struct RunnerShellData {
     root: PathBuf,
+    account: String,
     sample: StubShellData,
     messages: Mutex<Vec<ChatMessage>>,
 }
 
 impl RunnerShellData {
-    pub fn new(root: PathBuf) -> Self {
+    pub fn new(root: PathBuf, account: String) -> Self {
         Self {
             root,
+            account,
             sample: StubShellData::default(),
             messages: Mutex::new(Vec::new()),
         }
@@ -46,12 +45,14 @@ impl RunnerShellData {
             writer.write_all(&line).map_err(|e| e.to_string())
         };
         send(json!({"op": "hello", "secret": secret.trim()}))?;
-        send(json!({"op": "chat", "account": ACCOUNT, "text": text}))?;
+        send(json!({"op": "chat", "account": self.account, "text": text}))?;
 
         let mut refused = 0;
         for line in BufReader::new(stream).lines() {
             let line = line.map_err(|e| format!("lost the runner: {e}"))?;
-            let Ok(m) = serde_json::from_str::<Value>(&line) else { continue };
+            let Ok(m) = serde_json::from_str::<Value>(&line) else {
+                continue;
+            };
             match m["event"].as_str() {
                 Some("approval") => {
                     refused += 1;
@@ -61,7 +62,10 @@ impl RunnerShellData {
                     return Ok((m["text"].as_str().unwrap_or_default().to_string(), refused));
                 }
                 Some("error") => {
-                    return Err(m["message"].as_str().unwrap_or("the runner failed").to_string());
+                    return Err(m["message"]
+                        .as_str()
+                        .unwrap_or("the runner failed")
+                        .to_string());
                 }
                 _ => {}
             }
