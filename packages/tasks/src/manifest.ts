@@ -124,7 +124,14 @@ export const tasksModuleManifest = {
       "sql/0075_tasks_worker_recurrence_grant.sql"
     ],
     migrationDirectories: ["packages/tasks/sql"],
-    ownedTables: ["app.tasks", "app.task_activity"]
+    ownedTables: [
+      "app.tasks",
+      "app.task_activity",
+      "app.task_lists",
+      "app.task_tags",
+      "app.task_tag_assignments",
+      "app.task_preferences"
+    ]
   },
   navigation: [
     {

@@ -104,3 +104,90 @@ calls discard connections; cancellation during BEGIN/COMMIT lacks direct tests;
 malformed non-ui screen entries fail only during serving; and encoded literal
 routes can resolve differently from canonical paths. `EXTENDED_HOST.md` describes
 each limitation for downstream builders. No finding was rejected to end review.
+
+## Tasks continuation (JS-51, Card 526)
+
+This continuation starts from merged PR #4044. Its first checkpoint builds the
+native package data core in `modules/tasks/src/` and a separate host-side test
+crate. The package uses only the SDK and already declared pure dependencies;
+it does not import host, database-driver, filesystem or network code. Tests
+must use the real existing Tasks tables through the merged typed database host.
+The original migration files stay in `packages/tasks/sql/`, unchanged.
+
+The immediate sequence is: port row serialization and typed data operations;
+exercise them under a real host invocation against a disposable database; remove
+RLS to verify the same cross-account assertion fails; restore it and verify the
+protected case passes. Validate package metadata and the original migration
+hashes. Keep each checkpoint committed and record its exact limits here.
+
+### Decision for Ben: generated guest binding
+
+The SDK currently supplies pure traits and JSON contracts, but no Rust component
+ABI binding. The approved host accepts a component exporting the WIT `handle`
+function and importing the declared Moss ports. `wit-bindgen` would generate the
+canonical ABI lowering/lifting, string/result allocation and export metadata
+from that WIT, allowing the native Tasks core to compile as the shipped guest
+without handwritten unsafe memory glue. Its code-generation dependencies would
+be new direct build inputs. A lockfile currently contains a transitive
+`wit-bindgen` runtime entry; that is not approval for its code-generation feature
+or new macro dependencies.
+
+Request: approve the Bytecode Alliance `wit-bindgen` Rust binding generator and
+its pinned transitive build dependencies, plus a task-local `wasm32-wasip2`
+compiler target. No package or target has been installed for this request.
+The coordinator instructed this continuation to proceed without the dependency
+while Ben is away. A native test adapter is evidence about native package
+logic and host database behavior only; it is not evidence that the package runs
+as a Rust WebAssembly component. Wasm execution, signed package installation,
+speed-budget measurement and live Tasks screens remain unproven until that
+binding and the application joins are available.
+
+### Native data checkpoint: what changed
+
+The new `modules/tasks/` folder contains row-to-response conversion, basic task
+reads and title updates, lists, tags and owner-only assignments, activity and
+view preferences. Every effect uses the shared SDK's typed database or context
+port; native host/test dependencies live in a separate verification crate.
+Calendar recurrence calculations have a differential check against today's
+TypeScript implementation. These are data primitives, not complete route,
+chat-tool or background-job handlers.
+
+The manifest names all six existing tables and all nine original migrations.
+Its app-map feature describes only this unfinished foundation; navigation,
+settings and screens stay empty so the package does not advertise a usable UI.
+The TypeScript ownership declaration and the host's frozen table inventory now
+include the four Tasks tables they previously omitted: lists, tags, assignments
+and preferences. No migration bytes, hashes or ledger identities change. The
+metadata test first failed because that inventory refused `app.task_lists`, then
+passed after the ownership correction.
+
+No new third-party package has been added: every registry package/version in the
+two new lockfiles already occurs in a tracked repository lockfile. No global
+installation, compiler target installation, production data change, Workshop or
+Food port was performed. `wit-bindgen` remains a decision for Ben, not a hidden
+fallback dependency.
+
+### Remaining work after the data checkpoint
+
+This is **partial implementation, unverified as a Tasks module**. The complete
+Phase 5 acceptance criteria have not been met. The bounded checkpoint preserves
+work before another context rollover, as requested; it does not replace the
+original continuation or authorize a native-only production module.
+
+1. Finish native route/tool/job orchestration against the SDK: validation,
+   create/update/delete tasks, completion, list moves, subtasks, recurring-series
+   maintenance, suggestion handling and the existing response/error contracts.
+2. Declare and call People only through its published interface; port exact
+   public APIs, chat tools, typed queue kinds and schedules.
+3. After the binding decision, compile the same core as a Rust component,
+   package the original SQL bytes, install through the signed host, add boundary
+   and Wasm CI checks, and measure its speed budget. No hand-written unsafe ABI
+   substitute is included.
+4. Port the existing screens using the shared Leptos kit and frame bridge; update
+   navigation/settings and full app-map errors/remediations alongside them.
+5. Run the complete Tasks parity harness against the actual package. The current
+   native recurrence comparison is only a small subset. JavaScript Date overflow,
+   extended years and huge intervals are outside that subset.
+6. Exercise signup/sign-in and Tasks through the real Rust shell over HTTPS,
+   including trusted-origin refusal and a second physical device over LAN or
+   tailnet. No live UI or second-device proof is claimed for this checkpoint.
