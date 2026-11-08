@@ -119,7 +119,8 @@ export async function routesOracle() {
       rows: Record<string, unknown>;
       noteContent?: string;
     }[] = [];
-    let configuredNote: string | undefined;
+    const configuredNote = "Route-Alpha.md";
+    let compareNote = false;
     const run = async (
       method: "GET" | "POST" | "PATCH" | "PUT",
       path: string,
@@ -151,7 +152,7 @@ export async function routesOracle() {
         ...(body !== undefined ? { body } : {}),
         expected: { status: response.statusCode, body: response.json() },
         rows,
-        ...(configuredNote
+        ...(compareNote
           ? { noteContent: await readFile(join(selected, configuredNote), "utf8") }
           : {})
       });
@@ -262,7 +263,6 @@ export async function routesOracle() {
     }
     // Replay actual note-backed HTTP edits, not just the no-folder fallback.
     // Fixed canonical ID/path permit exact file-byte comparison across runtimes.
-    configuredNote = "Route-Alpha.md";
     const noteContent = formatPeopleNote({
       frontmatter: {
         jarvisPersonId: ids.primary!,
@@ -281,15 +281,19 @@ export async function routesOracle() {
       "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'people-notes-folder',$2)",
       [actor, JSON.stringify(selected)]
     );
+    compareNote = true;
     const configuredStart = cases.length;
     for (const body of [
       { displayName: "Note-backed edit" },
       { aliases: [23, true, null, ["Nested", null], {}] },
       { aliases: "" },
       { emails: [23, false, null, ["Nested", null], {}] },
+      { phones: [23, false, null, ["Nested", null], {}] },
       { phones: { length: 0 } },
       { aliases: { length: 1 } },
       { aliases: [{ toString: "not callable" }] },
+      { aliases: null },
+      { status: "archived" },
       { displayName: "Restored", aliases: null, emails: null, phones: null },
       { displayName: "Final note-backed edit" }
     ])

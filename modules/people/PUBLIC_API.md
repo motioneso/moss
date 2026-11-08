@@ -176,6 +176,11 @@ These rules apply after canonical-note discovery; projection fallback ignores th
 members. Unknown fields and summaries remain ignored. Dollar replacement tokens
 remain literal, as the documented note-corruption safeguard requires.
 
+HTTP body decoding is not yet fully equivalent: Fastify rejects JSON bodies containing
+`__proto__` or constructor/prototype keys before dispatch. The current Rust route-value
+boundary does not reproduce that parser rejection. This remains an acceptance gap,
+including when such an object appears inside a note-only list.
+
 The differential gate compares legacy body-schema errors and coercion as well as selected
 query/error cases through installed dispatch when supplied a package. Positive limits
 above `u32::MAX` use an uncapped SDK scan if they fit PostgreSQL `int8`; repeated search

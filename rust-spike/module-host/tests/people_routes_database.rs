@@ -259,6 +259,15 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         }
     }
     std::fs::remove_file(note_path).unwrap();
+    rt.block_on(async {
+        bootstrap
+            .execute(
+                "DELETE FROM app.preferences WHERE owner_user_id=$1 AND key='people-notes-folder'",
+                &[&owner],
+            )
+            .await
+            .unwrap();
+    });
     if let Some(installer) = &installer {
         for (name, parameters) in [
             ("findPeopleByNames", json!({"names":["Route split"]})),

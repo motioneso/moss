@@ -8,8 +8,8 @@ Status: **People part eight: note-backed edit parity checkpoint; full parity rem
 The continuation brief permits a bounded checkpoint before a second compaction. People
 now builds as a package and prior checkpoints proved signed installation and reload.
 This continuation adds configured-folder HTTP response, row and note-byte comparisons
-and retains the legacy handling of unvalidated note-only PATCH members. The latest
-verification receipts are below. The authenticated Rust shell still needs to compose
+and retains the legacy handling of unvalidated note-only PATCH members. Part-eight
+package and database replay verification is pending. The authenticated Rust shell still needs to compose
 People into its real Settings and chat flows. Full parity, installed chat, live UI and
 second-device verification remain open; library dispatch is not that proof.
 
