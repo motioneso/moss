@@ -29,6 +29,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 mod module_files;
+mod linked_files;
+pub use linked_files::FolderLock;
 
 #[derive(Debug)]
 pub enum VaultError {
