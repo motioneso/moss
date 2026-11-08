@@ -39,6 +39,11 @@ const heartbeat = spawnSync("pnpm", ["exec", "tsx", "modules/tasks/tools/heartbe
   env: process.env
 });
 if (heartbeat.status !== 0) process.exit(heartbeat.status ?? 1);
+const list = spawnSync("pnpm", ["exec", "tsx", "modules/tasks/tools/list-parity.ts"], {
+  stdio: "inherit",
+  env: process.env
+});
+if (list.status !== 0) process.exit(list.status ?? 1);
 const appMap = spawnSync("pnpm", ["build:app-map"], {
   stdio: "inherit",
   env: process.env
