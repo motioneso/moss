@@ -28,6 +28,11 @@ const run = spawnSync(
   }
 );
 if (run.status !== 0) process.exit(run.status ?? 1);
+const appMap = spawnSync("pnpm", ["build:app-map"], {
+  stdio: "inherit",
+  env: process.env
+});
+if (appMap.status !== 0) process.exit(appMap.status ?? 1);
 const legacy = spawnSync(
   "pnpm",
   ["exec", "tsx", "scripts/test-integration.ts", "tests/integration/tasks.test.ts"],

@@ -252,3 +252,22 @@ whole invocation on a SQL constraint error. That rare race does not yet preserve
 the original conflict response. Full route parity requires a safe structured
 constraint-error contract in the shared host, plus a concurrent regression,
 before this package can replace Tasks. No raw database error is exposed.
+
+### Second review and final setup correction
+
+The second review of `facfa3302` found one major setup problem: the new legacy
+suite needed the generated app map, but the narrowed gate did not build it.
+The actual fresh-checkout run failed with the missing artifact before the
+manually prepared run passed all 29 legacy tests. The gate now runs the existing
+`pnpm build:app-map` command before that suite and stops if the build fails.
+The final proof removes the generated artifact first, then runs the corrected
+gate to check the clean-checkout path.
+
+Both authorized review rounds are consumed. The setup correction is a later
+commit and therefore needs an additional independent review round authorized by
+the Assistant before Ready; passing checks do not substitute for that review.
+The remaining minor review note is non-ASCII case folding: `ILIKE` preflight may
+differ from the unique indexes' `lower(name)` for some names. The database still
+refuses duplicates, but the structured conflict-response gap described above
+covers these cases too. The shared inventory may conflict with sibling work;
+regenerate it with the repository's existing inventory script if necessary.
