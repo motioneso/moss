@@ -75,6 +75,20 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
+
+### JS-60: Calendar continuation base — 2026-11-08
+
+JS-60 assumes JS-54 is merged, but the task service still reports JS-54 Ready with
+PR #4055. After fetching main, its head is `3316d5bd9` and does not contain JS-54
+checkpoint `042a9601b`. The checkpoint report is
+`docs/superpowers/specs/2026-11-08-rust-calendar-js54-report.md` on that branch.
+It delivers two tools and leaves jobs, execution, screens and final parity open.
+
+Decision needed: accept/merge PR #4055 first, or authorize JS-60 to build on its
+unmerged checkpoint. Recommendation: merge the reviewed checkpoint first so JS-60
+remains based on main as briefed. No JS-60 implementation has started.
+
+
 No open Outlook calendar decision. Ben approved the
 [calendar-first design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md)
 on 2026-10-21. Implementation and isolated-dev verification are authorized;
