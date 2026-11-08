@@ -288,9 +288,11 @@ its actual Settings pane. Existing People declarations are not evidence of a Rus
    the handwritten `Host::call` ABI described below; the required `wasm32-wasip2` build is
    still open. Consume JS-47's generic linked-notes
    adapter after merge; do not duplicate it. No generator package is authorized.
-2. Complete identity/link mutations, match review, merge/split and `findPeopleByNames` through
-   declared public APIs. Current projection writes read before insert/update, so concurrent
-   upsert parity remains unproven. Multi-page reads use the host's read-committed transaction;
+2. Native identity/link mutations, match review and merge/split now have the differential
+   checkpoint below. Register them through actual handlers, complete indexing response
+   mapping and prove the remaining error/edge cases. `findPeopleByNames` runs in the
+   compiled guest; installed public API routing remains open. Projection upserts now use
+   an atomic conflict update and a concurrent-call regression. Multi-page reads use the host's read-committed transaction;
    a stable snapshot under concurrent changes remains unproven. Register responses/errors
    through actual handlers and complete indexing response mapping.
 3. Integrate canonical note mutations with fresh reads, bounded host roots, canonical-ID
@@ -346,3 +348,36 @@ handwritten wrapper. The spec's `wasm32-wasip2` shipping build remains unproven.
 an installed package, route parity, Settings/chat integration or second-device proof.
 The generator decision for Ben remains open: generated ownership/type metadata would replace
 this manually maintained ABI; it would not supply the missing module behavior or live proof.
+
+### Persistence mutations and public name lookup checkpoint
+
+The compiled guest now also handles `findPeopleByNames`, compared with the current
+TypeScript helper on the same committed PostgreSQL rows. Cases cover exact active
+names/aliases, case folding, duplicate requests, the raw thirty-name cap, wildcard
+characters, first-created ordering and summary truncation. Another account and an
+administrator receive no matches. One exceptional compatibility gap remains: if the
+legacy UTF-16 summary cutoff splits a surrogate pair, Rust rejects the response because
+the shared JSON value model cannot represent the lone surrogate. Ordinary Unicode
+summaries are covered; this is not full Unicode wire parity.
+
+The internal repository now supports identity/link/source/candidate writes, candidate
+review, merge and split. A rollback-only TypeScript oracle executes those existing
+repository/service operations and records responses plus all seven tables. The native
+Rust driver executes the same workflow through Wasmtime and shared transactional ports;
+the existing parity harness compares generated IDs, timestamps and persisted rows.
+Integral JSON floats normalize to JavaScript's integral number spelling without rounding
+large integers. Mutation handlers, canonical-note coordination and HTTP parity are still open.
+
+Typed queries gain a bounded owner-scoped conflict-update option for atomic projection,
+link, candidate and composite-state upserts. The guest cannot change ownership. A pair of
+concurrent host calls proves both projections succeed for the same new person ID. Active
+unique email/source identities retain conflict-ignore then update because their legacy
+unique index is partial. Background calls now keep the configured worker database role;
+a real compiled guest read first failed under the old hardcoded app-role switch and passed
+with the pool's actual runtime role. This does not change module-ledger role selection.
+
+The current disposable database run passed compiled read/name responses, native mutation
+responses and persisted rows, concurrent projections, rollback, forged IDs, paging and the
+failing-first raw RLS matrix. It does not prove installed public API routing, tools/jobs,
+linked-note operations, a package or a live Settings/chat/device path. No screen or setting
+ships at this checkpoint, so no app-map surface has been added yet.

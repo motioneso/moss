@@ -2,6 +2,8 @@
 //! queries use real shared ports, a single call scope and PostgreSQL. This is NOT
 //! proof of a compiled People guest, an installed package, UI or chat integration.
 mod common;
+#[path = "people_persistence/mutations.rs"]
+mod mutations;
 // Reuse the project's parity harness normalization, rather than inventing a looser
 // comparator for this native persistence checkpoint. This is not the HTTP harness.
 #[path = "../../parity/src/canon.rs"]
@@ -62,6 +64,7 @@ impl Ports for NativeDriver {
         let repo = Repository::new(&bridge);
         let id = request.parameters["id"].as_str().unwrap_or("");
         Ok(match request.operation.as_str() {
+            "mutations" => mutations::run(&bridge)?,
             "project" => {
                 let person = repo.project_person(&PersonProjection {
                     id,
@@ -192,6 +195,7 @@ fn native_people_repository_uses_real_transactional_ports() {
                 "detail".into(),
                 "resolve".into(),
                 "rollback".into(),
+                "mutations".into(),
             ]
             .into(),
             resources: ["native-driver".into()].into(),
@@ -262,10 +266,28 @@ fn native_people_repository_uses_real_transactional_ports() {
     }
     let rows:Vec<Value>=rt.block_on(async {db.query("SELECT to_jsonb(p) FROM app.person_context_people p WHERE owner_user_id=$1 ORDER BY id",&[&oracle_actor]).await.unwrap().iter().map(|r|r.get(0)).collect()});
     assert_eq!(
-        json!(rows),
-        oracle["rows"],
+        parity_canon::json_numbers(&json!(rows)),
+        parity_canon::json_numbers(&oracle["rows"]),
         "Native reads changed the persisted TypeScript projection"
     );
+    let actual: Value =
+        serde_json::from_str(&run(oracle_actor, "mutations", json!({})).unwrap()).unwrap();
+    let known = std::collections::HashSet::from([oracle_actor.to_string()]);
+    let start = chrono::Utc::now();
+    let mut expected_canon = parity_canon::Canon::new(start, &known);
+    let mut actual_canon = parity_canon::Canon::new(start, &known);
+    let expected = expected_canon.value(&oracle["mutation"]["responses"]);
+    let got = actual_canon.value(&actual["responses"]);
+    assert!(
+        parity_canon::diff(&expected, &got, 10).is_empty(),
+        "People mutation responses: {:?}",
+        parity_canon::diff(&expected, &got, 10)
+    );
+    for table in TABLES {
+        let expected = expected_canon.rows(oracle["mutation"]["rows"][table].as_array().unwrap());
+        let got = actual_canon.rows(actual["rows"][table].as_array().unwrap());
+        assert_eq!(got, expected, "People persisted mutation parity: {table}");
+    }
     let projection = serde_json::from_str::<Value>(
         &run(
             oracle_actor,
@@ -301,6 +323,24 @@ fn native_people_repository_uses_real_transactional_ports() {
             parity_canon::diff(&expected, &actual, 10)
         );
     }
+    let race_id = Uuid::new_v4();
+    let barrier = std::sync::Barrier::new(2);
+    std::thread::scope(|scope| {
+        let calls: Vec<_> = (0..2)
+            .map(|_| {
+                scope.spawn(|| {
+                    barrier.wait();
+                    run(oracle_actor, "project-only", json!({"id":race_id}))
+                })
+            })
+            .collect();
+        for call in calls {
+            assert!(
+                call.join().unwrap().is_ok(),
+                "Concurrent projection upserts must both succeed"
+            );
+        }
+    });
     let id = Uuid::new_v4();
     let result: Value =
         serde_json::from_str(&run(actor, "project", json!({"id":id})).unwrap()).unwrap();
@@ -339,5 +379,5 @@ fn native_people_repository_uses_real_transactional_ports() {
         .await
         .unwrap();
     });
-    println!("PASS native People projection, composite indexing state, forged IDs, rollback and 1006-row paging through real Wasmtime/shared PostgreSQL ports; compiled People guest not proven");
+    println!("PASS native TypeScript differential: mutation responses and persisted rows, review/merge/split, concurrent projection upserts, composite indexing, forged IDs, rollback and 1006-row paging; this driver is not compiled-guest or UI proof");
 }

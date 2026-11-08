@@ -29,11 +29,16 @@ pub enum Kind {
     Delete,
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub enum Conflict {
     #[default]
     Error,
     Ignore,
+    /// A single owner-scoped ON CONFLICT update, never guest-supplied SQL.
+    Update {
+        columns: Vec<String>,
+        values: BTreeMap<String, Value>,
+    },
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

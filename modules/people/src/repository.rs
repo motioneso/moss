@@ -45,7 +45,8 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
         Client(self.host).query(table, &query)
     }
     /// Page instead of silently truncating at the host's thousand-row cap. The host
-    /// transaction keeps a single invocation; ordering includes the stable primary key.
+    /// transaction keeps a single invocation. Callers supply the legacy ordering;
+    /// some legacy lookups leave ties unspecified and must not gain an ID tie-break.
     pub(crate) fn select(
         &self,
         table: &str,
@@ -192,7 +193,7 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
             .filter_map(|r| r["normalized_value"].as_str().map(str::to_owned))
             .collect())
     }
-    fn now(&self) -> Result<String> {
+    pub(crate) fn now(&self) -> Result<String> {
         self.host.call("context", "read", "call", json!({}))?["now"]
             .as_str()
             .map(str::to_owned)
@@ -203,6 +204,20 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
     }
     pub(crate) fn update(&self, table: &str, filter: Filter, values: Value) -> Result<Vec<Value>> {
         self.query(table, Query::update(owned(filter), fields(values)?))
+    }
+    pub(crate) fn upsert(
+        &self,
+        table: &str,
+        columns: &[&str],
+        initial: Value,
+        update: Value,
+    ) -> Result<Value> {
+        let mut query = Query::insert(fields(initial)?);
+        query.conflict = Conflict::Update {
+            columns: columns.iter().map(|s| (*s).to_owned()).collect(),
+            values: fields(update)?,
+        };
+        first(self.query(table, query)?)
     }
     /// This is a projection operation, never a replacement for a canonical note write.
     pub fn project_person(&self, projection: &PersonProjection<'_>) -> Result<Value> {
@@ -215,17 +230,16 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
             confidence,
         } = *projection;
         let now = self.now()?;
-        let mut values = json!({"display_name":display_name,"relationship_summary":relationship,"context_summary":context,"status":status,"confidence":confidence,"archived_at":if status == "archived" {json!(now)} else {Value::Null},"updated_at":now});
-        if self.one(PEOPLE, Filter::eq("id", id))?.is_some() {
-            return Ok(person_response(&first(self.update(
-                PEOPLE,
-                Filter::eq("id", id),
-                values,
-            )?)?));
-        }
-        values["id"] = json!(id);
-        values["created_at"] = json!(now);
-        Ok(person_response(&self.insert(PEOPLE, values)?))
+        let values = json!({"display_name":display_name,"relationship_summary":relationship,"context_summary":context,"status":status,"confidence":confidence,"archived_at":if status == "archived" {json!(now)} else {Value::Null},"updated_at":now});
+        let mut initial = values.clone();
+        initial["id"] = json!(id);
+        initial["created_at"] = json!(now);
+        Ok(person_response(&self.upsert(
+            PEOPLE,
+            &["id"],
+            initial,
+            values,
+        )?))
     }
     pub fn find_or_create_person(&self, name: &str) -> Result<Value> {
         let filter = and(vec![
@@ -287,19 +301,16 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
             }
             values[&key] = value;
         }
-        let filter = and(vec![
-            Filter::eq("source", source),
-            Filter::eq("source_ref_hash", hash),
-        ]);
-        // Conflict-ignore and update preserve the existing composite key under a racing insert.
         let mut initial = values.clone();
         initial["source"] = json!(source);
         initial["source_ref_hash"] = json!(hash);
         initial["created_at"] = json!(now);
-        let mut insert = Query::insert(fields(initial)?);
-        insert.conflict = Conflict::Ignore;
-        self.query(INDEXING, insert)?;
-        first(self.update(INDEXING, filter, values)?)
+        self.upsert(
+            INDEXING,
+            &["owner_user_id", "source", "source_ref_hash"],
+            initial,
+            values,
+        )
     }
 }
 
@@ -332,7 +343,7 @@ pub(crate) fn orders(fields: &[(&str, bool)]) -> Vec<Order> {
         .collect()
 }
 
-fn response(row: &Value, fields: &[&str]) -> Value {
+pub(crate) fn response(row: &Value, fields: &[&str]) -> Value {
     let mut result = serde_json::Map::new();
     for field in fields {
         let mut name = String::new();
@@ -388,7 +399,7 @@ pub(crate) fn person_response(row: &Value) -> Value {
         ],
     )
 }
-fn identity_response(row: &Value) -> Value {
+pub(crate) fn identity_response(row: &Value) -> Value {
     response(
         row,
         &[
@@ -409,7 +420,7 @@ fn identity_response(row: &Value) -> Value {
         ],
     )
 }
-fn link_response(row: &Value) -> Value {
+pub(crate) fn link_response(row: &Value) -> Value {
     response(
         row,
         &[

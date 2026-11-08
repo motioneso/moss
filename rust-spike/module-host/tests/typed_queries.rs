@@ -52,3 +52,35 @@ fn typed_query_values_remain_parameters_and_identifiers_are_checked() {
     let bad = Query::delete(Filter::All);
     assert!(moss_module_host::typed_query::compile("app.sample_counter", &bad).is_err());
 }
+
+#[test]
+fn typed_upsert_keeps_conflicts_atomic_and_values_bound() {
+    let query = serde_json::from_value(json!({
+        "kind":"insert", "values":{"id":"one","title":"first"},
+        "conflict":{"update":{"columns":["id"],"values":{"title":"'; DELETE FROM app.users; --"}}}
+    }))
+    .unwrap();
+    let statement = moss_module_host::typed_query::compile("app.sample_counter", &query).unwrap();
+    assert!(statement.sql.contains("ON CONFLICT (\"id\") DO UPDATE"));
+    assert!(statement
+        .sql
+        .contains("WHERE row.owner_user_id = app.current_actor_user_id()"));
+    assert!(!statement.sql.contains("DELETE"));
+    assert_eq!(
+        statement.parameters[1],
+        json!({"title":"'; DELETE FROM app.users; --"})
+    );
+    for conflict in [
+        json!({"update":{"columns":[],"values":{"title":"x"}}}),
+        json!({"update":{"columns":["id) OR true --"],"values":{"title":"x"}}}),
+        json!({"update":{"columns":["id"],"values":{"owner_user_id":"forged"}}}),
+        json!({"update":{"columns":["id"],"values":{}}}),
+        json!({"update":{"columns":["missing"],"values":{"title":"x"}}}),
+    ] {
+        let query = serde_json::from_value(
+            json!({"kind":"insert","values":{"id":"one"},"conflict":conflict}),
+        )
+        .unwrap();
+        assert!(moss_module_host::typed_query::compile("app.sample_counter", &query).is_err());
+    }
+}

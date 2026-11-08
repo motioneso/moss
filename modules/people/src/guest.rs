@@ -23,6 +23,11 @@ struct Person {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Empty {}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Names {
+    names: Vec<String>,
+}
 
 pub fn handle(host: &impl Host, kind: &str, payload: &str) -> Result<String> {
     if kind == "health" {
@@ -34,6 +39,10 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> Result<String> {
     let request: ApiRequest = serde_json::from_str(payload)?;
     let repo = Repository::new(host);
     let value = match request.name.as_str() {
+        "findPeopleByNames" => {
+            let args: Names = serde_json::from_value(request.parameters)?;
+            json!(repo.find_people_by_names(&args.names)?)
+        }
         "resolve" => {
             let args: Resolve = serde_json::from_value(request.parameters)?;
             json!({"person":repo.resolve(&args.query)?})

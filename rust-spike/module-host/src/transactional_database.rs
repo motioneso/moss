@@ -73,7 +73,7 @@ impl TransactionalDatabasePorts {
         let role = if scope.module().database.ledger != crate::manifest::Ledger::Module
             && crate::legacy::owns(&scope.module().id, table)
         {
-            "jarvis_app_runtime".into()
+            self.database.role().name().into()
         } else {
             runtime_role(&scope.module().id)
         };

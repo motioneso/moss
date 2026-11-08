@@ -1,9 +1,12 @@
 //! People & Context. Pure domain logic; all persistence belongs to the module SDK ports.
 pub mod guest;
 pub mod matching;
+mod name_lookup;
 pub mod note_edits;
 pub mod notes_format;
 pub mod repository;
+pub mod repository_mutations;
+mod review;
 
 #[cfg(all(feature = "component", target_arch = "wasm32"))]
 moss_module_sdk::export_module!(

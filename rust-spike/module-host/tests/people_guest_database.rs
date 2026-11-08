@@ -76,6 +76,33 @@ fn compiled_people_read_apis_match_typescript_on_real_database() {
             case["request"]["name"]
         );
     }
+    // A background job authenticates through the worker pool, not the app pool.
+    let worker_db = rt
+        .block_on(safety_core::db::Database::connect(
+            &std::env::var("JS43_WORKER_URL").unwrap(),
+            2,
+            safety_core::db::RuntimeRole::Worker,
+        ))
+        .unwrap();
+    let worker_ports = Arc::new(
+        TransactionalDatabasePorts::new(
+            worker_db,
+            Arc::new(ContextPorts::new(Arc::new(DenyPorts))),
+        )
+        .unwrap(),
+    );
+    let worker = host
+        .call(
+            &component,
+            manifest.clone(),
+            AccessContext::new(actor, "compiled-people-worker"),
+            worker_ports,
+            "api",
+            &json!({"name":"getPerson","parameters":{"personId":oracle["personId"]}}).to_string(),
+        )
+        .expect("A legacy People query must work as the real worker role");
+    let worker: Value = serde_json::from_str(&worker).unwrap();
+    assert_eq!(worker, oracle["guestCases"][0]["expected"]);
     // An unowned random actor has no rows. Use a real administrator fixture too;
     // database privilege is configuration power, never a private-data bypass.
     let other = Uuid::new_v4();
@@ -111,6 +138,10 @@ fn compiled_people_read_apis_match_typescript_on_real_database() {
         )
         .unwrap();
         assert_eq!(resolved, json!({"person":null}));
+        assert_eq!(
+            run(reader, &json!({"name":"findPeopleByNames","parameters":{"names":["Alice_%","Al_%","First Alias"]}})).unwrap(),
+            "[]"
+        );
     }
     rt.block_on(async {
         bootstrap

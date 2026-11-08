@@ -8,6 +8,8 @@ import pg from "pg";
 import { createDatabase, DataContextRunner, getMossDatabaseUrls } from "@moss/db";
 import { PeopleRepository } from "../../../packages/people/src/repository.js";
 import { PersonContextService } from "../../../packages/people/src/service.js";
+import { findPeopleByNames } from "../../../packages/people/src/find-by-names.js";
+import { mutationOracle } from "./people-mutation-oracle.js";
 
 export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise<void> }> {
   if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
@@ -53,10 +55,27 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
       FROM generate_series(1,24) n`,
       [actor, person]
     );
+    const aliasPerson = randomUUID();
+    await bootstrap.query(
+      `INSERT INTO app.person_context_people(id,owner_user_id,display_name,relationship_summary,context_summary,status,created_at)
+       VALUES($1,$2,'Alias Person',$3,$4,'active','2019-01-01Z')`,
+      [aliasPerson, actor, " \r\n  Role line \r\nsecond line", `\nX${"🪴".repeat(100)}\nignored`]
+    );
+    await bootstrap.query(
+      `INSERT INTO app.person_context_identities(owner_user_id,person_id,identity_kind,source_kind,normalized_value,display_value,status)
+       VALUES($1,$2,'alias','manual','first alias','First Alias','active'),
+             ($1,$2,'display_name','manual','friendly name','Friendly Name','active'),
+             ($1,$2,'alias','manual','inactive','Inactive','rejected'),
+             ($1,$3,'alias','manual','archived alias','Archived Alias','active')`,
+      [actor, aliasPerson, archived]
+    );
     const runner = new DataContextRunner(app);
     const repo = new PeopleRepository();
     const service = new PersonContextService(repo);
-    const guestCases = await runner.withDataContext({ actorUserId: actor }, async (scope) => [
+    const guestCases: {
+      request: { name: string; parameters: Record<string, unknown> };
+      expected: unknown;
+    }[] = await runner.withDataContext({ actorUserId: actor }, async (scope) => [
       {
         request: { name: "getPerson", parameters: { personId: person } },
         expected: await service.getPerson(scope, actor, person)
@@ -78,6 +97,23 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
         expected: await repo.listEmailIdentityValues(scope, actor)
       }
     ]);
+    await runner.withDataContext({ actorUserId: actor }, async (scope) => {
+      for (const names of [
+        [],
+        [" \ufeff", "ALICE_%", "aLiCe_%", "Al_%"],
+        ["First Alias", "Alias Person", "Friendly Name", "Alice_%"],
+        ["First Alias", "Friendly Name", "Al_%"],
+        ["Inactive", "Archived Alias", "Archived Person", "AliceZZ", "Alice"],
+        [...Array<string>(30).fill(" "), "Alice_%"],
+        ["Alias Person", "ALIAS PERSON", "aLiAs PeRsOn"],
+        ["\ufeff First Alias \u00a0", "aL_%"]
+      ]) {
+        guestCases.push({
+          request: { name: "findPeopleByNames", parameters: { names } },
+          expected: await findPeopleByNames(scope, actor, names)
+        });
+      }
+    });
     const cases = await runner.withDataContext({ actorUserId: actor }, async (scope) => [
       {
         operation: "get",
@@ -164,6 +200,16 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
       )
     ).rows[0] as { row: unknown };
     await bootstrap.query("DELETE FROM app.person_context_people WHERE id=$1", [projectionId]);
+    let mutation: unknown;
+    const rollback = new Error("Roll back the TypeScript mutation oracle");
+    try {
+      await runner.withDataContext({ actorUserId: actor }, async (scope) => {
+        mutation = await mutationOracle(scope, actor);
+        throw rollback;
+      });
+    } catch (error) {
+      if (error !== rollback) throw error;
+    }
     await writeFile(
       path,
       JSON.stringify({
@@ -174,7 +220,8 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
         rows,
         projection,
         projectionRow: projectionRow.row,
-        projectionId
+        projectionId,
+        mutation
       })
     );
     return { path, cleanup };

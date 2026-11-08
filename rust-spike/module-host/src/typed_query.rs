@@ -85,8 +85,41 @@ pub fn compile(table: &str, query: &Query) -> Result<Statement> {
                 .collect::<Result<Vec<_>>>()?
                 .join(",");
             let n = builder.parameter(serde_json::to_value(&query.values)?);
-            format!("INSERT INTO {table} AS row ({columns}) SELECT {columns} FROM jsonb_populate_record(NULL::{table},${n}) {} RETURNING to_jsonb(row)",
-                if query.conflict == Conflict::Ignore { "ON CONFLICT DO NOTHING" } else { "" })
+            let conflict = match &query.conflict {
+                Conflict::Error => String::new(),
+                Conflict::Ignore => "ON CONFLICT DO NOTHING".into(),
+                Conflict::Update { columns, values } => {
+                    ensure!(
+                        !columns.is_empty()
+                            && columns.len() <= 8
+                            && !values.is_empty()
+                            && values.len() <= 64
+                            && !values.contains_key("owner_user_id")
+                            && columns
+                                .iter()
+                                .all(|c| c == "owner_user_id" || query.values.contains_key(c))
+                            && columns
+                                .iter()
+                                .collect::<std::collections::BTreeSet<_>>()
+                                .len()
+                                == columns.len(),
+                        "Invalid conflict update"
+                    );
+                    let target = columns
+                        .iter()
+                        .map(|c| column(c))
+                        .collect::<Result<Vec<_>>>()?
+                        .join(",");
+                    let updates = values
+                        .keys()
+                        .map(|c| column(c))
+                        .collect::<Result<Vec<_>>>()?
+                        .join(",");
+                    let parameter = builder.parameter(serde_json::to_value(values)?);
+                    format!("ON CONFLICT ({target}) DO UPDATE SET ({updates})=(SELECT {updates} FROM jsonb_populate_record(NULL::{table},${parameter})) WHERE row.owner_user_id = app.current_actor_user_id()")
+                }
+            };
+            format!("INSERT INTO {table} AS row ({columns}) SELECT {columns} FROM jsonb_populate_record(NULL::{table},${n}) {conflict} RETURNING to_jsonb(row)")
         }
         Kind::Update | Kind::Delete => {
             ensure!(

@@ -53,7 +53,8 @@ the interface. Internal normalized identity values and raw source references are
 to the ordinary identity/link response.
 
 The current `repository` module is an internal persistence checkpoint. The compiled guest
-implements the `resolve`, `getPerson` and `listEmailIdentityValues` API envelopes above, but
+implements the `findPeopleByNames`, `resolve`, `getPerson` and
+`listEmailIdentityValues` API envelopes above, but
 no installed package registers them yet. It also covers person projections and composite
 indexing state internally. Indexing-state
 rows currently retain database field names internally; the eventual service must preserve
