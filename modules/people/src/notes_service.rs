@@ -34,11 +34,12 @@ impl<'a, H: Host + ?Sized> NotesService<'a, H> {
         }
     }
     fn read(&self, path: &str) -> Result<CurrentNote> {
-        Ok(serde_json::from_value(
-            self.host
-                .call("vault", "notes.read", RESOURCE, json!({"path":path}))
-                .map_err(|_| Error::new(UNAVAILABLE))?,
-        )?)
+        Ok(serde_json::from_value(self.host.call(
+            "vault",
+            "notes.read",
+            RESOURCE,
+            json!({"path":path}),
+        )?)?)
     }
     fn write(&self, current: &CurrentNote, content: &str) -> Result<()> {
         self.host.call("vault", "notes.compare-write", RESOURCE,
@@ -51,10 +52,9 @@ impl<'a, H: Host + ?Sized> NotesService<'a, H> {
         let mut total = 0usize;
         let mut bytes = 0usize;
         while let Some(directory) = directories.pop() {
-            let listing = self
-                .host
-                .call("vault", "notes.list", RESOURCE, json!({"path":directory}))
-                .map_err(|_| Error::new(UNAVAILABLE))?;
+            let listing =
+                self.host
+                    .call("vault", "notes.list", RESOURCE, json!({"path":directory}))?;
             let entries = listing["entries"]
                 .as_array()
                 .ok_or_else(|| Error::new("Invalid notes listing"))?;
@@ -184,12 +184,13 @@ impl<'a, H: Host + ?Sized> NotesService<'a, H> {
     /// Only pre-publication failures permit the old projection-only HTTP fallback.
     /// Compare-write, projection and finalization failures abort the whole call.
     pub fn update_for_route(&self, id: &str, patch: &UpdateNote) -> Result<Option<Value>> {
+        if !self.folder_available()? {
+            return Ok(None);
+        }
         let (current, content) = match self.prepare_update(id, patch) {
             Ok(prepared) => prepared,
             Err(error)
-                if error.message == UNAVAILABLE
-                    || error.message
-                        == note_edits::EditError::CanonicalNoteNotFound.to_string() =>
+                if error.message == note_edits::EditError::CanonicalNoteNotFound.to_string() =>
             {
                 return Ok(None)
             }
@@ -198,12 +199,16 @@ impl<'a, H: Host + ?Sized> NotesService<'a, H> {
         self.publish_update(&current, &content).map(Some)
     }
     pub fn refresh_for_route(&self) -> Result<Option<Value>> {
-        let files = match self.files() {
-            Ok(files) => files,
-            Err(error) if error.message == UNAVAILABLE => return Ok(None),
-            Err(error) => return Err(error),
-        };
-        self.refresh_files(files).map(Some)
+        if !self.folder_available()? {
+            return Ok(None);
+        }
+        self.refresh().map(Some)
+    }
+    fn folder_available(&self) -> Result<bool> {
+        self.host
+            .call("vault", "notes.status", RESOURCE, json!({}))?["available"]
+            .as_bool()
+            .ok_or_else(|| Error::new(UNAVAILABLE))
     }
     fn refresh_files(&self, files: Vec<NoteFile>) -> Result<Value> {
         let people: Vec<_> = self

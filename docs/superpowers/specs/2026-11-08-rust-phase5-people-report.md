@@ -678,16 +678,25 @@ compiled guest, shared route resolver and invocation transaction adapter. The sh
 parity normalizer compares responses and persisted rows. Cases include numeric-prefix,
 zero, invalid, negative and repeated limits; matching and nonmatching lookup; mutations;
 missing folder; and another account's and administrator's read/mutation attempts.
-The guest has no note-folder grant in that route replay; the separate linked-notes test
+The route replay resolves real shared preferences with no selected folder; the separate linked-notes test
 exercises real selected-folder I/O and compensation. No network response is replaced or
 browser proof claimed.
+
+Independent review found that mapping every file-port failure to folder unavailability
+could silently accept a projection-only edit when a note was oversized or the folder busy.
+The correction adds the optional generic `notes.status` operation, documented in
+`rust-spike/module-host/LINKED_NOTES_STATUS.md`. Only a typed, confirmed folder-unavailability
+result permits that fallback. Subsequent scan/read failures abort. A real oversized-note
+regression and native availability/lock/provider-failure cases cover this distinction.
 
 ### Exact remaining work after part four
 
 1. Finish folder-settings, directory-browsing and index-refresh routes. Implement and compare
    Fastify-compatible request schema validation/coercion: malformed bodies currently can
    return 500 where legacy HTTP returns 400. Broaden query and route-error coverage beyond
-   the enumerated cases, then run it through installed HTTP dispatch.
+   the enumerated cases, then run it through installed HTTP dispatch. Known query gaps are
+   limits above `u32::MAX` and repeated status/search values; the latter are currently
+   dropped rather than passed through like legacy arrays.
 2. Connect the shared account folder/suggestion preferences, ingest nudges and actual source
    providers to the existing job APIs. Declare versioned provider dependencies and queue
    schemas in the package. Qualify command retention/quotas for sustained indexing.

@@ -17,6 +17,17 @@ const FILE_BYTES: usize = 256 * 1024;
 const CALL_BYTES: usize = 4 * 1024 * 1024;
 const FILES: usize = 32;
 
+/// A configured folder is absent, invalid or outside the account's allowed roots.
+/// Backend/lock/content failures must not be converted to this availability result.
+#[derive(Debug)]
+pub struct LinkedFolderUnavailable;
+impl std::fmt::Display for LinkedFolderUnavailable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("The linked notes folder is unavailable")
+    }
+}
+impl std::error::Error for LinkedFolderUnavailable {}
+
 pub struct LinkedFolder {
     actor: Uuid,
     identity: PathBuf,
@@ -25,7 +36,7 @@ pub struct LinkedFolder {
 impl LinkedFolder {
     pub fn open(access: &AccessContext, selected: &Path, allowed: &AllowedRoots) -> Result<Self> {
         let vault = VaultContext::at_allowed_root(access, selected, allowed)
-            .map_err(|_| anyhow::anyhow!("The linked notes folder is unavailable"))?;
+            .map_err(|_| LinkedFolderUnavailable)?;
         Ok(Self {
             actor: access.actor_user_id(),
             identity: vault.folder_identity().into(),
@@ -130,7 +141,7 @@ fn selected_path(config: &PreferenceFolder, paths: &BTreeMap<String, Value>) -> 
         .get(&config.preference)
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty())
-        .context("No notes folder is linked")?;
+        .ok_or(LinkedFolderUnavailable)?;
     let selected = Path::new(text);
     if selected.is_absolute() {
         return Ok(selected.into());
@@ -140,7 +151,7 @@ fn selected_path(config: &PreferenceFolder, paths: &BTreeMap<String, Value>) -> 
             && selected
                 .components()
                 .all(|p| matches!(p, Component::Normal(_))),
-        "The linked notes folder is unavailable"
+        LinkedFolderUnavailable
     );
     let base = config
         .relative_to
@@ -148,7 +159,7 @@ fn selected_path(config: &PreferenceFolder, paths: &BTreeMap<String, Value>) -> 
         .and_then(|key| paths.get(key))
         .and_then(Value::as_str)
         .filter(|s| Path::new(s).is_absolute())
-        .context("The linked notes folder is unavailable")?;
+        .ok_or(LinkedFolderUnavailable)?;
     Ok(Path::new(base).join(selected))
 }
 
@@ -180,6 +191,30 @@ impl LinkedNotesPorts {
     }
     fn notes(&self, scope: &CallScope, request: &Request) -> Result<Value> {
         crate::runtime::authorize(scope.module(), "vault", request)?;
+        if request.operation == "notes.status" {
+            ensure!(
+                request.parameters == json!({}),
+                "Notes status takes no parameters"
+            );
+            return match self.provider.resolve(
+                scope.access(),
+                &scope.module().id,
+                &request.resource,
+                scope.remaining(),
+            ) {
+                Ok(folder) => {
+                    ensure!(
+                        folder.actor == scope.access().actor_user_id(),
+                        "The linked folder belongs to another account"
+                    );
+                    Ok(json!({"available":true}))
+                }
+                Err(error) if error.is::<LinkedFolderUnavailable>() => {
+                    Ok(json!({"available":false}))
+                }
+                Err(error) => Err(error),
+            };
+        }
         ensure!(
             matches!(
                 request.operation.as_str(),

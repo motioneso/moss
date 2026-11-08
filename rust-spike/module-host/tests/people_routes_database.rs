@@ -8,6 +8,7 @@ use access_context::AccessContext;
 use moss_module_host::{
     context::ContextPorts,
     dispatch,
+    linked_notes::{LinkedNotesPorts, PreferenceFolder, PreferenceFolders},
     manifest::Ledger,
     runtime::{DenyPorts, Host, Limits},
     transactional_database::TransactionalDatabasePorts,
@@ -15,8 +16,12 @@ use moss_module_host::{
 use moss_people::repository::TABLES;
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    sync::Arc,
+};
 use uuid::Uuid;
+use vault::AllowedRoots;
 
 #[test]
 #[ignore = "Only through verify-gate and modules/people/tools/routes-gate.sh"]
@@ -35,9 +40,35 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
             RuntimeRole::App,
         ))
         .unwrap();
+    let roots = ["actor", "other", "admin"]
+        .into_iter()
+        .map(|key| {
+            let actor = Uuid::parse_str(oracle[key].as_str().unwrap()).unwrap();
+            let access = AccessContext::new(actor, "people-route-roots");
+            (actor, AllowedRoots::for_account(&access, vec![]))
+        })
+        .collect();
+    let folders = PreferenceFolders::new(
+        database.clone(),
+        BTreeMap::from([(
+            ("people".into(), "people-notes".into()),
+            PreferenceFolder {
+                preference: "people-notes-folder".into(),
+                relative_to: Some("notes-source-path".into()),
+            },
+        )]),
+        roots,
+    )
+    .unwrap();
     let ports = Arc::new(
-        TransactionalDatabasePorts::new(database, Arc::new(ContextPorts::new(Arc::new(DenyPorts))))
-            .unwrap(),
+        TransactionalDatabasePorts::new(
+            database,
+            Arc::new(LinkedNotesPorts::new(
+                Arc::new(folders),
+                Arc::new(ContextPorts::new(Arc::new(DenyPorts))),
+            )),
+        )
+        .unwrap(),
     );
     let mut manifest = common::manifest("0.1.0");
     manifest.id = "people".into();
@@ -46,7 +77,7 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
     manifest.capabilities = serde_json::from_value(json!([
         {"port":"db","operations":["query"],"resources":TABLES},
         {"port":"context","operations":["read","uuid"],"resources":["call","new"]},
-        {"port":"vault","operations":["notes.read","notes.list","notes.compare-write"],"resources":["people-notes"]}
+        {"port":"vault","operations":["notes.status","notes.read","notes.list","notes.compare-write"],"resources":["people-notes"]}
     ])).unwrap();
     common::people_job_imports(&mut manifest);
     let routes = [

@@ -84,8 +84,8 @@ Trusted composition maps the `people-notes` resource to `people-notes-folder` in
 uses its bounded list/read/compare-write contract, rechecks canonical IDs and projects aliases
 and emails through the same invocation's database transaction. Call failure compensates file
 writes only while the published bytes still match. External edits survive compensation;
-process death is not recovered. The host adapter's documented filesystem races and
-read-only-folder gap still apply (see [the adapter contract](../notes/HOST_ADAPTER.md)).
+process death is not recovered. The host adapter's remaining filesystem-race limitations
+are documented in [the adapter contract](../notes/HOST_ADAPTER.md).
 
 This checkpoint adds list/resolve/detail/links, match review, merge/split and
 create/update/archive/refresh route envelopes. Rename/archive retain the projection fallback

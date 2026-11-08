@@ -158,8 +158,13 @@ Responses use `{status, body}`. Internal failures return status 500 and
 envelopes as failures, rolling back the invocation and compensating its note writes.
 Rename/archive fall back only before publication when the folder or canonical note is
 unavailable; a failed publication/projection never becomes a projection-only success.
+The availability decision uses the host's opt-in
+[`notes.status` contract](../../rust-spike/module-host/LINKED_NOTES_STATUS.md).
+Busy folders, invalid/oversized content and backend failures abort instead of falling back.
 
 The differential gate covers selected query/error cases and valid JSON bodies. Fastify's
 schema validation/coercion is not implemented here: malformed bodies can currently return
 500 where the legacy HTTP layer returns 400. Settings/directory/index-refresh routes,
 ingest nudges, package route registration and real HTTP compatibility remain unfinished.
+Limits above `u32::MAX` currently fail rather than accepting the legacy larger count.
+Repeated `status`/`search` query values are not yet passed through like legacy arrays.

@@ -54,9 +54,9 @@ export async function routesOracle() {
       await bootstrap.query(`DELETE FROM ${table} WHERE owner_user_id=$1`, [actor]);
     }
     await bootstrap.query(
-      `INSERT INTO app.person_context_people(id,owner_user_id,display_name,status,confidence,created_at,updated_at)
-       VALUES($1,$3,'Route Alpha','active',0.75,'2020-01-01Z','2020-01-01Z'),
-             ($2,$3,'Route Beta','active',0.5,'2020-01-02Z','2020-01-02Z')`,
+      `INSERT INTO app.person_context_people(id,owner_user_id,display_name,relationship_summary,context_summary,status,confidence,created_at,updated_at)
+       VALUES($1,$3,'Route Alpha','Keeps relationship','Keeps context','active',0.75,'2020-01-01Z','2020-01-01Z'),
+             ($2,$3,'Route Beta',NULL,NULL,'active',0.5,'2020-01-02Z','2020-01-02Z')`,
       [ids.primary, ids.secondary, actor]
     );
     await bootstrap.query(

@@ -147,7 +147,7 @@ fn compiled_people_coordinates_canonical_notes_and_projection() {
     manifest.capabilities=serde_json::from_value(json!([
         {"port":"db","operations":["query"],"resources":TABLES},
         {"port":"context","operations":["read","uuid"],"resources":["call","new"]},
-        {"port":"vault","operations":["notes.read","notes.list","notes.compare-write"],"resources":["people-notes"]}
+        {"port":"vault","operations":["notes.status","notes.read","notes.list","notes.compare-write"],"resources":["people-notes"]}
     ])).unwrap();
     common::people_job_imports(&mut manifest);
     let manifest: Arc<Manifest> = Arc::new(manifest);
@@ -212,6 +212,37 @@ fn compiled_people_coordinates_canonical_notes_and_projection() {
         "archived"
     );
     let archived = std::fs::read_to_string(folder.join(path)).unwrap();
+    // A readable folder containing an oversized note is not an unavailable
+    // folder. Refuse the edit rather than silently changing only its projection.
+    let oversized = "x".repeat(256 * 1024 + 1);
+    std::fs::write(folder.join("oversized.md"), &oversized).unwrap();
+    assert!(
+        run(
+            actor,
+            "PATCH",
+            "/people/:id",
+            json!({"displayName":"Must not fall back"}),
+            json!({"id":id})
+        )
+        .is_err(),
+        "An unreadable note must not trigger a successful projection fallback"
+    );
+    let unchanged: String = rt.block_on(async {
+        bootstrap
+            .query_one(
+                "SELECT display_name FROM app.person_context_people WHERE id=$1",
+                &[&Uuid::parse_str(id).unwrap()],
+            )
+            .await
+            .unwrap()
+            .get(0)
+    });
+    assert_eq!(unchanged, "Renamed Person");
+    assert_eq!(
+        std::fs::read_to_string(folder.join(path)).unwrap(),
+        archived
+    );
+    std::fs::remove_file(folder.join("oversized.md")).unwrap();
     for mode in [1, 2, 3, 4] {
         std::fs::write(folder.join(path), &archived).unwrap();
         faults.reads.store(0, Ordering::SeqCst);
