@@ -303,12 +303,18 @@ try {
   );
   // The task browser is visible in Herdr. Its own session is opened by the task's wrapper.
   const wrapper = "/home/ben/.local/bin/herdr-browser";
-  execFileSync(
-    wrapper,
-    ["--args", "--no-sandbox", "--ignore-https-errors", "open", `${local}/sign-in`],
-    { stdio: "ignore" }
-  );
-  const cdp = execFileSync(wrapper, ["get", "cdp-url"], { encoding: "utf8" }).trim();
+  const browserEnv = {
+    ...process.env,
+    AGENT_BROWSER_ARGS: "--no-sandbox,--force-prefers-reduced-motion"
+  };
+  execFileSync(wrapper, ["--ignore-https-errors", "open", `${local}/sign-in`], {
+    stdio: "ignore",
+    env: browserEnv
+  });
+  const cdp = execFileSync(wrapper, ["--ignore-https-errors", "get", "cdp-url"], {
+    encoding: "utf8",
+    env: browserEnv
+  }).trim();
   browser = await chromium.connectOverCDP(cdp);
   const context = browser.contexts()[0];
   assert(context, "Task browser context is required");

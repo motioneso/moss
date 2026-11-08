@@ -367,3 +367,9 @@ fixtures beyond plain events and gives the live polling assertions a longer boun
 The remaining assistant-name gap is explicit: the package still says Moss where
 the old screen uses the configured assistant name. Final review disposition is
 recorded on the reviewed commit and in the task Proof artifact.
+
+The expanded HTTP fixtures exposed a harness-only numeric representation mismatch:
+Rust metadata serializes zero as `0.0`, while the TypeScript response uses `0`. The
+comparison now applies JavaScript numeric semantics to both complete JSON bodies;
+array order, fields and nonnumeric values remain compared. The live runner also
+passes its required browser launch flags through the supported environment setting.

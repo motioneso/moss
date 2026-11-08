@@ -7,6 +7,19 @@ use std::{
 };
 use uuid::Uuid;
 
+// JSON consumers use one numeric type. Compare 0 and 0.0 equally while retaining
+// full object/array contents and order; the guest serializer emits f64 metadata.
+fn javascript_numbers(value: &mut Value) {
+    match value {
+        Value::Number(number) => {
+            *number = serde_json::Number::from_f64(number.as_f64().unwrap()).unwrap();
+        }
+        Value::Array(values) => values.iter_mut().for_each(javascript_numbers),
+        Value::Object(values) => values.values_mut().for_each(javascript_numbers),
+        _ => {}
+    }
+}
+
 pub fn seed(f: &Fixture) {
     f.rt.block_on(async {
         for (index, metadata) in [
@@ -53,7 +66,7 @@ pub fn compare(app: &Application, f: &Fixture) {
             paths.len(),
             "Read oracle omitted a response"
         );
-        for (path, expected) in paths.iter().zip(expected) {
+        for (path, mut expected) in paths.iter().zip(expected) {
             let raw = app
                 .dispatch_extended(
                     f.access(actor),
@@ -63,9 +76,11 @@ pub fn compare(app: &Application, f: &Fixture) {
                 )
                 .unwrap();
             let actual: Value = serde_json::from_str(&raw).unwrap();
+            let mut response = json!({"status":actual["status"],"body":actual["body"]});
+            javascript_numbers(&mut response);
+            javascript_numbers(&mut expected);
             assert_eq!(
-                json!({"status":actual["status"],"body":actual["body"]}),
-                expected,
+                response, expected,
                 "Installed Wasm differs from production HTTP route at {path}"
             );
         }
