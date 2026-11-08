@@ -1,0 +1,17 @@
+[package]
+name = "moss-shell-ui"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+description = "Leptos app frame, Today and chat drawer, compiled to WebAssembly"
+
+[dependencies]
+moss-shell-contract = { path = "../contract" }
+leptos = { version = "0.8", features = ["csr"] }
+gloo-net = { version = "0.6", default-features = false, features = ["http", "json"] }
+js-sys = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Pinned to the version the bindgen helper runs.
+wasm-bindgen = "=0.2.130"
+web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement", "HtmlTextAreaElement", "History", "Location", "Storage", "MediaQueryList", "KeyboardEvent", "MouseEvent", "Event", "EventTarget", "Node", "NodeList", "DomRectList"] }
