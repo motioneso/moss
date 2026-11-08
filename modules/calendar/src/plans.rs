@@ -2,7 +2,7 @@
 use crate::{context, model, query, Error, Result};
 use moss_module_sdk::{
     query::{Conflict, Filter, Order, Query},
-    Client, Host,
+    Host,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -99,6 +99,13 @@ fn dto(host: &impl Host, row: &Value) -> Result<Value> {
         json!({"id":id,"localDay":row["local_day"],"timeZone":row["time_zone"],"revision":row["revision"],"sourceRunId":row["source_run_id"],"blocks":blocks,"eveningIntent":intent}),
     )
 }
+pub(crate) fn get_by_id(host: &impl Host, id: &str) -> Result<Value> {
+    let row = query(host, PLANS, &Query::select(Filter::eq("id", id)))?
+        .into_iter()
+        .next()
+        .ok_or_else(|| Error::new(404, "day plan is not available"))?;
+    dto(host, &row)
+}
 pub fn get_for_day(host: &impl Host, input: Day) -> Result<Value> {
     let (day, zone) = model::day_zone(&input.local_day, &input.time_zone)?;
     let rows = query(
@@ -115,7 +122,7 @@ fn require_tasks(host: &impl Host, intent: &Value, blocks: &[Value]) -> Result<(
     let actor = context(host, "read", "call")?["actorUserId"].clone();
     let mut ids = vec![];
     if let Some(priorities) = intent["priorityTaskIds"].as_array() {
-        ids.extend(priorities.iter().cloned());
+        ids.extend(priorities.iter().cloned().map(|id| (id, "priority")));
     }
     for field in ["corrections", "commitments"] {
         if let Some(items) = intent[field].as_array() {
@@ -123,7 +130,17 @@ fn require_tasks(host: &impl Host, intent: &Value, blocks: &[Value]) -> Result<(
                 items
                     .iter()
                     .map(|v| v["taskId"].clone())
-                    .filter(|v| !v.is_null()),
+                    .filter(|v| !v.is_null())
+                    .map(|id| {
+                        (
+                            id,
+                            if field == "corrections" {
+                                "correction"
+                            } else {
+                                "commitment"
+                            },
+                        )
+                    }),
             );
         }
     }
@@ -131,12 +148,16 @@ fn require_tasks(host: &impl Host, intent: &Value, blocks: &[Value]) -> Result<(
         blocks
             .iter()
             .map(|b| b["task_id"].clone())
-            .filter(|v| !v.is_null()),
+            .filter(|v| !v.is_null())
+            .map(|id| (id, "block")),
     );
-    for id in ids {
-        let task = Client(host).api("tasks", "getTask", json!({"id":id}))?;
+    for (id, field) in ids {
+        let task = host.call("kv", "get", "calendar.task-reference", json!({"id":id}))?;
         if task["task"]["id"] != id || task["task"]["ownerUserId"] != actor {
-            return Err(Error::new(404, "day plan task is not available"));
+            return Err(Error::new(
+                404,
+                format!("day plan {field} task is not available"),
+            ));
         }
     }
     Ok(())
@@ -160,7 +181,7 @@ pub fn create(host: &impl Host, input: Create) -> Result<Value> {
         if id.is_empty() {
             return Err(model::invalid("sourceRunId must be an id or null"));
         }
-        let run = Client(host).api("briefing", "getRun", json!({"id":id}))?;
+        let run = host.call("kv", "get", "calendar.briefing-reference", json!({"id":id}))?;
         if run["run"]["id"] != *id
             || run["run"]["ownerUserId"] != context(host, "read", "call")?["actorUserId"]
         {

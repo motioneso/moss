@@ -43,26 +43,20 @@ impl CalendarPorts {
 }
 impl Ports for CalendarPorts {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
-        if port == "api"
+        if port == "kv"
             && scope.module().id == "calendar"
-            && matches!(request.resource.as_str(), "tasks" | "briefing")
+            && matches!(
+                request.resource.as_str(),
+                "calendar.task-reference" | "calendar.briefing-reference"
+            )
         {
             moss_module_host::runtime::authorize(scope.module(), port, request)?;
             ensure!(
-                request.operation == "call",
-                "Unknown Calendar reference operation"
+                request.operation == "get",
+                "Calendar references are read-only"
             );
-            let fields = request
+            let parameters = request
                 .parameters
-                .as_object()
-                .ok_or_else(|| anyhow::anyhow!("Invalid reference request"))?;
-            ensure!(
-                fields.len() == 2
-                    && fields.contains_key("name")
-                    && fields.contains_key("parameters"),
-                "Invalid reference envelope"
-            );
-            let parameters = request.parameters["parameters"]
                 .as_object()
                 .ok_or_else(|| anyhow::anyhow!("Invalid reference parameters"))?;
             ensure!(
@@ -77,16 +71,18 @@ impl Ports for CalendarPorts {
                 .references
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Calendar public reference adapters unavailable"))?;
-            return match (
-                request.resource.as_str(),
-                request.parameters["name"].as_str(),
-            ) {
-                ("tasks", Some("getTask")) => references.task(scope, id),
-                ("briefing", Some("getRun")) => references.briefing_run(scope, id),
-                _ => anyhow::bail!("Unknown Calendar reference projection"),
+            return match request.resource.as_str() {
+                "calendar.task-reference" => references.task(scope, id),
+                "calendar.briefing-reference" => references.briefing_run(scope, id),
+                _ => unreachable!(),
             };
         }
-        if port != "kv" || request.resource != "calendar.briefing-settings" {
+        if port != "kv"
+            || !matches!(
+                request.resource.as_str(),
+                "calendar.briefing-settings" | "calendar.chat-context"
+            )
+        {
             return self.next.invoke(scope, port, request);
         }
         moss_module_host::runtime::authorize(scope.module(), port, request)?;
@@ -100,11 +96,13 @@ impl Ports for CalendarPorts {
             let cx = DataContext::open_bounded(&self.database, scope.access(), scope.remaining())
                 .await
                 .map_err(|_| anyhow::anyhow!("Calendar preferences unavailable"))?;
+            let chat = request.resource == "calendar.chat-context";
+            let keys: &[&str] = if chat { &["locale"] } else { &PREFERENCE_KEYS };
             let rows = cx
                 .db()
                 .query(
                     "SELECT key,value_json FROM app.preferences WHERE key = ANY($1)",
-                    &[&&PREFERENCE_KEYS[..]],
+                    &[&keys],
                 )
                 .await?;
             let mut values = Map::new();
@@ -114,7 +112,11 @@ impl Ports for CalendarPorts {
             cx.commit()
                 .await
                 .map_err(|_| anyhow::anyhow!("Calendar preferences unavailable"))?;
-            Ok(Value::Object(values))
+            if chat {
+                Ok(serde_json::json!({"timezone":values.get("locale").map(|v|v["timezone"].clone())}))
+            } else {
+                Ok(Value::Object(values))
+            }
         })
     }
     fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {

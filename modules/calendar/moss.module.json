@@ -2,9 +2,9 @@
   "schemaVersion": 2,
   "id": "calendar",
   "name": "Calendar",
-  "description": "Calendar data package, slice one; screens and execution follow separately.",
+  "description": "Calendar data and chat draft package checkpoint; provider execution and screens follow separately.",
   "publisher": "Moss",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -27,12 +27,12 @@
     {
       "port": "kv",
       "operations": ["get"],
-      "resources": ["calendar.briefing-settings"]
-    },
-    {
-      "port": "api",
-      "operations": ["call"],
-      "resources": ["tasks", "briefing"]
+      "resources": [
+        "calendar.briefing-settings",
+        "calendar.chat-context",
+        "calendar.task-reference",
+        "calendar.briefing-reference"
+      ]
     }
   ],
   "database": {
@@ -128,7 +128,7 @@
   "features": [
     {
       "id": "calendar.data",
-      "description": "Reads cached events and saves private day-plan drafts. Execution, tools and screens are not included in this package slice.",
+      "description": "Reads cached events and saves private day-plan drafts. Provider execution and screens are not included in this package checkpoint.",
       "errors": [
         {
           "code": "calendar-unavailable",
@@ -144,6 +144,51 @@
           "path": "/settings/modules"
         }
       ]
+    },
+    {
+      "id": "calendar.heartbeat_source",
+      "description": "Provides a bounded cache-only heartbeat read of owned events. Shared events are excluded; no provider request is made.",
+      "errors": [
+        {
+          "code": "invalid-heartbeat-input",
+          "class": "validation",
+          "description": "Retry with only horizonHours from one to forty-eight and limit from one to twenty. These are caller inputs, not account settings."
+        },
+        {
+          "code": "calendar_heartbeat_source_unavailable",
+          "class": "transient",
+          "description": "Cached Calendar events could not be read for a check-in. Check-in delivery and Alerts integration remain outside this package checkpoint."
+        }
+      ]
+    },
+    {
+      "id": "calendar.day_plan_draft",
+      "description": "The package tool saves intent and untimed task additions to today or tomorrow in the saved account timezone. It is not yet connected to signed-in chat. Drafts require the current revision and public task reference adapter. Provider writes and dialog execution are not shipped in this checkpoint.",
+      "errors": [
+        {
+          "code": "draft-not-available",
+          "class": "transient",
+          "description": "The draft, current revision or public task adapter is unavailable.",
+          "remediationRef": "calendar-read-draft"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "calendar-read-draft",
+          "description": "Read the current draft before retrying. Check the public task adapter for task-linked edits.",
+          "path": "/settings/modules"
+        }
+      ]
     }
-  ]
+  ],
+  "tools": {
+    "calendar.heartbeatWindow": {
+      "description": "Background cache-only read of the actor's own upcoming events, with bounded results, freshness and material revision.",
+      "risk": "read"
+    },
+    "calendar.dayPlanDraft": {
+      "description": "Save evening intent and untimed task additions to the current day-plan draft for dialog review. Does not schedule events.",
+      "risk": "write"
+    }
+  }
 }

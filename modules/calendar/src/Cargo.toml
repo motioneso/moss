@@ -21,6 +21,10 @@ chrono-tz = "0.10"
 name = "data"
 path = "tests/data.rs"
 
+[[test]]
+name = "tools"
+path = "tests/tools.rs"
+
 [[bin]]
 name = "calendar-data-parity"
 path = "bin/data-parity.rs"

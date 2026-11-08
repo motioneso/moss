@@ -11,6 +11,7 @@ import {
 } from "../../../packages/calendar/src/day-plan-model.js";
 import type { CalendarEvent } from "@moss/db";
 import type { DayPlanBlockInput, DayPlanEveningIntent } from "@moss/shared";
+import { heartbeatRevision, parseHeartbeatSourceReadInput } from "@moss/shared";
 
 type Case = {
   op: string;
@@ -36,6 +37,41 @@ const event = {
   updated_at: new Date("2026-11-08T09:00:00Z")
 };
 const cases: Case[] = [
+  ...[
+    {},
+    null,
+    [],
+    true,
+    1,
+    "input",
+    { limit: null, horizonHours: null },
+    { limit: 1.0, horizonHours: 48 },
+    { limit: 20, horizonHours: 1 },
+    { limit: 0 },
+    { limit: 21 },
+    { limit: 1.5 },
+    { limit: "2" },
+    { horizonHours: 0 },
+    { horizonHours: 49 },
+    { horizonHours: -1 },
+    { horizonHours: 1.5 },
+    { horizonHours: "24" },
+    { ownerUserId: "other" },
+    { actorUserId: "other" },
+    { limit: false },
+    { limit: {} },
+    { limit: 1e30 },
+    { limit: 1e-30 }
+  ].map((value) => ({ op: "heartbeat-input", value })),
+  ...[
+    [],
+    [""],
+    ["café", "🪴"],
+    ["a|b", "c"],
+    ["a", "b|c"],
+    ["漢字", "\u0000", "é"],
+    ...Array.from({ length: 32 }, (_, i) => [`event-${i}|Meeting 🪴 ${i}`, `${i}|\u001f`])
+  ].map((value) => ({ op: "heartbeat-revision", value })),
   ...[
     {},
     { jarvisCreated: true },
@@ -121,6 +157,14 @@ function ts(c: Case): unknown {
   try {
     let value: unknown;
     switch (c.op) {
+      case "heartbeat-input": {
+        value = parseHeartbeatSourceReadInput(c.value);
+        if (value === null) return { error: true };
+        break;
+      }
+      case "heartbeat-revision":
+        value = heartbeatRevision(c.value as string[]);
+        break;
       case "event":
         value = serializeCalendarEvent(c.value as CalendarEvent);
         break;

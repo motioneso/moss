@@ -2,6 +2,25 @@ use access_context::AccessContext;
 use moss_module_host::runtime::{DenyPorts, Host, Limits};
 use std::sync::Arc;
 
+#[test]
+fn injected_public_references_use_declared_read_only_host_resources() {
+    use moss_module_host::runtime::{authorize, Request};
+    let manifest = moss_calendar_host::package::manifest().unwrap();
+    for resource in ["calendar.task-reference", "calendar.briefing-reference"] {
+        authorize(
+            &manifest,
+            "kv",
+            &Request {
+                operation: "get".into(),
+                resource: resource.into(),
+                parameters: serde_json::json!({"id":uuid::Uuid::new_v4()}),
+            },
+        )
+        .unwrap();
+    }
+    assert!(!manifest.capabilities.iter().any(|cap| cap.port == "api"));
+}
+
 pub fn core() -> Vec<u8> {
     std::fs::read(
         std::env::var("CALENDAR_CORE_WASM")
