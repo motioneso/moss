@@ -20,8 +20,12 @@ fn package_owns_every_existing_tasks_table() {
     assert_eq!(m.tools.len(), 4);
     assert!(m.tools.values().all(|tool| tool.risk == "read"));
     assert!(
-        m.navigation.is_empty() && m.settings.is_empty() && m.screens.is_empty(),
-        "Do not advertise unfinished screens"
+        m.navigation.len() == 1
+            && m.settings.is_empty()
+            && m.screens
+                .get("/tasks")
+                .is_some_and(|path| path == "ui/index.html"),
+        "Advertise only the implemented package screen; action-policy settings are unfinished"
     );
 }
 #[test]

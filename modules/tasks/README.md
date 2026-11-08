@@ -4,7 +4,9 @@ This is an unfinished Tasks module package. Rust code now compiles into a real
 component and handles basic task, list, tag, activity and view preference routes.
 It also handles four read tools: `tasks.get`, `tasks.listLists`, `tasks.listTags`
 and `tasks.activity`, with request schemas enforced inside the guest. It is not a
-complete replacement for Tasks. Screens, nineteen other chat tools, background
+complete replacement for Tasks. A package screen now covers list and priority views,
+task editing, subtasks, tags, comments and list creation/renaming. Full screen parity,
+nineteen other chat tools, background
 jobs, People calls and full endpoint parity remain unfinished.
 
 `src/` uses the guest-safe SDK. `wit/` defines its ABI. Ben approved the pinned
@@ -17,8 +19,11 @@ WASI adapter. No global tool or compiler target installation is required by
 these scripts: use an already provisioned Rust 1.95 toolchain with that target.
 Restore the locked Cargo dependencies into a worktree or scratch Cargo home first.
 
-From the repository root (set `CARGO_HOME`, `RUSTUP_HOME` and `CARGO_TARGET_DIR`
-to your task's scratch directories if needed):
+From the repository root, use separate target folders: native guest tests with
+`CARGO_TARGET_DIR=/tmp/tasks-native-target`, host tools with
+`CARGO_TARGET_DIR=/tmp/tasks-host-target`, and component builds with
+`TASKS_GUEST_TARGET_DIR=/tmp/tasks-wasm-target`. Set `CARGO_HOME` and
+`RUSTUP_HOME` to existing task-local dependencies/toolchains as needed:
 
 ```sh
 cargo +1.95.0 test --locked --offline --manifest-path modules/tasks/src/Cargo.toml
@@ -71,7 +76,27 @@ cases and TypeScript server unchanged. Expected failures from unported routes,
 tools and jobs are reported as failures; this script is not an installed package
 or live UI proof. The unchanged harness does not yet compare the four new tools.
 
-No live Tasks page exists yet. The recurrence differential check covers ordinary
+The package screen is rendered with the shared Leptos kit; its controller uses
+the public parent bridge. The interactive check below creates a disposable signed
+registry and installs the actual archive through the module host. It uses the
+real network TLS/setup/sign-in boundary and a small fixture frame, **not** the
+Phase 4 application shell. It binds loopback only. A phone viewport is not proof
+of access from another physical device.
+
+```sh
+TASKS_UI_OUT=/tmp/tasks-ui scripts/run-gate.sh start --gate modules/tasks/tools/ui-gate.sh
+scripts/run-gate.sh wait --follow
+```
+
+Use a fresh output folder. Read its `url.txt` for the local setup URL, create a
+synthetic owner through the browser and exercise Tasks. The certificate check
+trusts only the generated certificate; it does not install a machine trust root.
+Create one task titled `Browser proof task`, then write `checked` to the output
+folder's `finished` file. The gate verifies persistence and stops the server.
+Its credentials and keys are private scratch files: never open, print or commit
+them. Do not use this fixture with real data.
+
+The recurrence differential check covers ordinary
 calendar dates and invalid inputs, not full endpoint parity. Date parsing covers
 the ISO branch; offset-free timestamps currently use UTC because the host has no
 actor-timezone port. Lazy recurrence roll-forward needs that public host seam

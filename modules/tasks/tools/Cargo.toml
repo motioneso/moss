@@ -12,6 +12,12 @@ axum = "0.8"
 chrono = "0.4"
 moss-tasks-module = { path = "../src" }
 moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
+moss-module-ui = { path = "../../../rust-spike/module-ui", features = ["ssr"] }
+leptos = { version = "0.8", default-features = false, features = ["ssr"] }
+moss-network = { path = "../../../rust-spike/network" }
+moss-platform-jobs = { path = "../../../rust-spike/module-host/bridges/jobs" }
+ring = "0.17"
+base64 = "0.22"
 moss-module-host = { path = "../../../rust-spike/module-host" }
 access-context = { path = "../../../rust-spike/access-context" }
 safety-core = { path = "../../../rust-spike/safety-core" }
@@ -45,3 +51,7 @@ path = "../../../rust-spike/parity/src/main.rs"
 # Its unit tests locate cases relative to the original parity crate's manifest.
 # Keep them in that crate; this package only reuses the unchanged executable.
 test = false
+
+[[bin]]
+name = "tasks-ui-check"
+path = "src/ui_server.rs"

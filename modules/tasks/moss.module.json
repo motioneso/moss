@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "tasks",
   "name": "Tasks",
-  "description": "Tasks component checkpoint with validated basic routes and four read tools. Screens, remaining tools and jobs are unfinished.",
+  "description": "Tasks component with package screens for lists, priority views, task editing, subtasks, tags and activity. Full legacy parity remains unfinished.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -53,12 +53,21 @@
     ],
     "ledger": "core-legacy"
   },
-  "navigation": [],
+  "navigation": [
+    {
+      "id": "tasks",
+      "label": "Tasks",
+      "description": "View tasks by list or priority, edit tasks, and manage subtasks, tags and comments. Account timezone, People, assistant policies and background jobs remain unfinished.",
+      "path": "/tasks",
+      "icon": "CheckSquare",
+      "order": 30
+    }
+  ],
   "settings": [],
   "features": [
     {
       "id": "tasks.package-data",
-      "description": "Tasks component routes with legacy request validation for task creation and updates, completion cascades, next recurrence, lists, tags, activity and view preferences. Four read tools fetch task details, lists, tags and activity. Full route parity, screens, remaining chat tools and background jobs are unfinished.",
+      "description": "Tasks component routes with legacy request validation for task creation and updates, completion cascades, next recurrence, lists, tags, activity and view preferences. Four read tools fetch task details, lists, tags and activity. Full route parity, remaining chat tools and background jobs are unfinished.",
       "errors": [
         {
           "code": "tasks-invalid-input",
@@ -76,9 +85,30 @@
           "description": "A data operation failed; internal details are withheld from the response."
         }
       ]
+    },
+    {
+      "id": "tasks.package-screens",
+      "description": "Package screen using the shared UI kit and parent bridge: list and priority views; status, list, text and tag filters; create and edit tasks; completion and suggestion review; list creation and renaming; subtasks; tag creation and assignment; activity comments; saved default view. Dates currently display in UTC. Full legacy screen and setting parity is unfinished.",
+      "remediations": [
+        {
+          "id": "reload-tasks",
+          "description": "Retry loading Tasks after checking the connection. Unsaved editor fields are retained on request failure.",
+          "path": "/tasks"
+        }
+      ],
+      "errors": [
+        {
+          "code": "tasks-screen-request-failed",
+          "class": "transient",
+          "description": "Tasks could not load or save a request. Check the connection and retry.",
+          "remediationRef": "reload-tasks"
+        }
+      ]
     }
   ],
-  "screens": {},
+  "screens": {
+    "/tasks": "ui/index.html"
+  },
   "icons": ["icons/tasks.svg"],
   "accounts": {
     "supportsUserDisable": false,

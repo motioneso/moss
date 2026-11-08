@@ -2,6 +2,7 @@
 use anyhow::{ensure, Result};
 use moss_module_host::{legacy, manifest::Manifest, trust};
 use std::path::Path;
+pub mod screen;
 
 pub fn manifest() -> Result<Manifest> {
     let manifest: Manifest = serde_json::from_str(include_str!("../../moss.module.json"))?;
@@ -41,5 +42,16 @@ pub fn package_files(
         files.insert(name.into(), std::fs::read(root.join(path))?);
     }
     files.insert("code/module.wasm".into(), component);
+    files.insert("ui/index.html".into(), screen::render().into_bytes());
+    for name in ["app.mjs", "model.mjs", "tasks.css"] {
+        files.insert(
+            format!("ui/{name}"),
+            std::fs::read(root.join("modules/tasks/ui").join(name))?,
+        );
+    }
+    files.insert(
+        "ui/guest-bridge.mjs".into(),
+        std::fs::read(root.join("rust-spike/module-ui/web/guest-bridge.mjs"))?,
+    );
     Ok(files)
 }

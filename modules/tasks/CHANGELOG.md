@@ -6,4 +6,8 @@
 - Add basic task, list, tag, activity and view preference routes over the shared host.
 - Add task completion cascades, list moves and next-occurrence generation.
 - Build reproducible unsigned archives with the unchanged Tasks migrations.
-- This checkpoint still lacks full parity, registry publication and Tasks screens.
+- Add package screens for tasks, lists, subtasks, tags and activity using the shared kit.
+- Preserve saved dates and repeat rules on unrelated editor changes.
+- Encode whole-number recurrence intervals consistently with the existing API.
+- Add a disposable signed-install HTTPS UI check.
+- Full screen/endpoint/tool/job parity, real-shell integration and remote-device proof remain unfinished.

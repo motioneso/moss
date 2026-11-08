@@ -1,0 +1,90 @@
+/* Layout only. All controls and type treatments use the authored Park Press kit. */
+[hidden] {
+  display: none !important;
+}
+.tasks-package {
+  max-width: 1220px;
+  margin: 0 auto;
+  padding: var(--space-6);
+}
+.tasks-controls,
+.tasks-actions,
+.tasks-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-3);
+}
+.tasks-controls {
+  margin-bottom: var(--space-7);
+}
+.tasks-controls .jds-field {
+  flex: 1 1 140px;
+}
+.tasks-fields {
+  display: grid;
+  gap: var(--space-5);
+  margin-block: var(--space-5);
+}
+.tasks-columns,
+.tasks-matrix {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+.tasks-section {
+  padding-block: var(--space-4);
+}
+.tasks-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+}
+.tasks-row-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tasks-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.tasks-inline .jds-field {
+  flex: 1 1 200px;
+}
+.tasks-package textarea {
+  width: 100%;
+  resize: vertical;
+}
+.tasks-package input,
+.tasks-package select {
+  max-width: 100%;
+}
+.tasks-package h2,
+.tasks-package h3 {
+  margin-block: var(--space-4);
+}
+.tasks-package ol {
+  padding-left: var(--space-6);
+}
+.tasks-package li {
+  padding-block: var(--space-2);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .tasks-package {
+    padding: var(--space-3);
+  }
+  .tasks-matrix,
+  .tasks-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tasks-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .tasks-row > .tasks-actions {
+    grid-column: 2;
+  }
+}
