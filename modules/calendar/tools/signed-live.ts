@@ -327,8 +327,14 @@ try {
   await tab.waitForURL(`${local}/calendar`, { timeout: 120000 });
   await tab.goto(`${local}/calendar?event=${encodeURIComponent(data.event)}`);
   const frame = tab.frameLocator("#calendar");
+  const screenshotDialog = async (filename: string) => {
+    await frame.getByRole("dialog").evaluate(async (dialog) => {
+      await Promise.all(dialog.getAnimations().map((animation) => animation.finished));
+    });
+    await tab.screenshot({ path: join(out, filename) });
+  };
   await frame.getByRole("dialog").filter({ hasText: "Calendar package check" }).waitFor();
-  await tab.screenshot({ path: join(out, "signed-in-linked-event.png") });
+  await screenshotDialog("signed-in-linked-event.png");
   await frame.getByRole("button", { name: "Close", exact: true }).click();
   await frame.getByRole("button", { name: "Month", exact: true }).waitFor();
   await frame.getByRole("button", { name: "Month", exact: true }).click();
@@ -348,7 +354,7 @@ try {
     .first()
     .click();
   await frame.getByRole("dialog").waitFor();
-  await tab.screenshot({ path: join(out, "signed-in-event.png") });
+  await screenshotDialog("signed-in-event.png");
   await frame.getByRole("button", { name: "Close", exact: true }).click();
   await frame.getByRole("button", { name: "Week", exact: true }).click();
   await frame.getByRole("button", { name: "Day", exact: true }).click();
@@ -381,7 +387,7 @@ try {
     .filter({ hasText: "Updated calendar meeting" })
     .waitFor({ timeout: 120000 });
   await frame.getByRole("dialog").getByText("1 person", { exact: true }).waitFor();
-  await tab.screenshot({ path: join(out, "signed-in-updated-event.png") });
+  await screenshotDialog("signed-in-updated-event.png");
   await db.query("DELETE FROM app.calendar_events WHERE id=$1", [data.event]);
   await frame.getByRole("dialog").waitFor({ state: "detached", timeout: 120000 });
   assert.equal(await frame.getByRole("button", { name: /Updated calendar meeting/ }).count(), 0);
