@@ -67,6 +67,10 @@ pub struct Manifest {
     pub accounts: Accounts,
     #[serde(default)]
     pub credentials: BTreeMap<String, Credential>,
+    #[serde(default)]
+    pub tools: BTreeMap<String, Tool>,
+    #[serde(default)]
+    pub install_wide_kv: BTreeSet<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
@@ -103,9 +107,23 @@ pub struct Accounts {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Credential {
+    #[serde(default)]
+    pub exchange: Option<Exchange>,
     pub scope: CredentialScope,
     pub hosts: BTreeSet<String>,
     pub attachment: Attachment,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Exchange {
+    pub endpoint: String,
+    pub grant_type: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Tool {
+    pub description: String,
+    pub risk: String,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
@@ -258,7 +276,37 @@ impl Manifest {
                 "Module routes must be signed in and use safe paths"
             );
         }
+        for namespace in &self.install_wide_kv {
+            ensure!(
+                self.capability("kv")?.resources.contains(namespace),
+                "Install-wide storage must name an approved namespace"
+            );
+        }
+        for (name, tool) in &self.tools {
+            ensure!(
+                identifier(name)
+                    && matches!(
+                        tool.risk.as_str(),
+                        "read" | "write" | "outbound" | "destructive"
+                    )
+                    && !tool.description.is_empty(),
+                "Invalid tool declaration"
+            );
+        }
         for cred in self.credentials.values() {
+            if let Some(exchange) = &cred.exchange {
+                let url = url::Url::parse(&exchange.endpoint)?;
+                ensure!(
+                    url.scheme() == "https"
+                        && url.port_or_known_default() == Some(443)
+                        && cred.hosts.contains(url.host_str().unwrap_or(""))
+                        && matches!(
+                            exchange.grant_type.as_str(),
+                            "client_credentials" | "refresh_token"
+                        ),
+                    "Invalid token exchange declaration"
+                );
+            }
             ensure!(
                 !cred.hosts.is_empty(),
                 "A credential needs an exact destination"
@@ -286,9 +334,35 @@ impl Manifest {
                     new.operations.is_subset(&c.operations)
                         && new.resources.is_subset(&c.resources)
                         && (!new.allow_private || c.allow_private)
+                        && self.permission_metadata(&p.port) == old.permission_metadata(&p.port)
                 })
             })
             .collect()
+    }
+    fn permission_metadata(&self, port: &str) -> Vec<String> {
+        match port {
+            "credentials" => self
+                .credentials
+                .iter()
+                .map(|(name, c)| {
+                    format!(
+                        "Credential {name}: {}",
+                        serde_json::to_string(c).expect("credential")
+                    )
+                })
+                .collect(),
+            "tools" | "action-policy" => self
+                .tools
+                .iter()
+                .map(|(name, t)| format!("Tool {name}: {}", t.risk))
+                .collect(),
+            "kv" => self
+                .install_wide_kv
+                .iter()
+                .map(|name| format!("Shared across accounts on this install: {name}"))
+                .collect(),
+            _ => vec![],
+        }
     }
     pub fn permissions(&self) -> Vec<Permission> {
         self.capabilities
@@ -308,10 +382,10 @@ impl Manifest {
                     port: cap.port.clone(),
                     group: group.into(),
                     headline: headline.into(),
-                    details: cap
-                        .resources
-                        .iter()
-                        .cloned()
+                    details: self
+                        .permission_metadata(&cap.port)
+                        .into_iter()
+                        .chain(cap.resources.iter().cloned())
                         .chain(std::iter::once(format!(
                             "Operations: {}",
                             cap.operations

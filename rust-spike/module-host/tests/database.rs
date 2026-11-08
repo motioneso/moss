@@ -27,6 +27,8 @@ fn a_postgres_catalog_and_real_sample_install() {
         let (db,connection)=tokio_postgres::connect(&std::env::var("JS43_BOOTSTRAP_URL").unwrap(),NoTls).await.unwrap();
         tokio::spawn(async move {let _=connection.await;});
         db.batch_execute(MIGRATION).await.unwrap();db.batch_execute(moss_module_host::migrations::MIGRATION).await.unwrap();
+        db.batch_execute(moss_platform_jobs::MIGRATION).await.unwrap();
+        db.batch_execute(moss_module_host::jobs::MIGRATION).await.unwrap();
         // Gate-only users are synthetic and live only in the throwaway database.
         db.execute("INSERT INTO app.users(id,email,name,is_instance_admin) VALUES($1,'module-admin@example.test','Module admin',true),($2,'module-member@example.test','Module member',false)",&[&actor,&member]).await.unwrap();
         Database::connect(&std::env::var("JS43_APP_URL").unwrap(),4,RuntimeRole::App).await.unwrap()
@@ -104,6 +106,18 @@ fn a_postgres_catalog_and_real_sample_install() {
         reopened.load().unwrap().installed["sample.counter"].digest,
         artifact.digest
     );
+    // Each test owns a temporary data directory; do not leave its catalog pointing at
+    // files which TempDir deletes before the next independent startup audit.
+    let current = reopened.load().unwrap();
+    reopened
+        .commit(
+            current.revision,
+            &State {
+                revision: current.revision + 1,
+                ..State::default()
+            },
+        )
+        .unwrap();
     println!("PASS PostgreSQL catalog: admin-only configuration, stale-write refusal, signed package installed and run by Wasmtime, saved account data, active version survives reopening");
 }
 

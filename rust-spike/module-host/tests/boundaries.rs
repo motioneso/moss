@@ -208,3 +208,52 @@ fn permission_growth_has_visible_operations_and_private_network_detail() {
         .iter()
         .any(|detail| detail.contains("private networks")));
 }
+
+#[test]
+fn approval_describes_changed_credential_tool_and_install_scope() {
+    use moss_module_host::manifest::{Attachment, Credential, CredentialScope, Tool};
+    let mut old = common::manifest("1.0.0");
+    old.capabilities
+        .push(moss_module_host::manifest::Capability {
+            port: "credentials".into(),
+            operations: ["request".into()].into(),
+            resources: ["example.test".into()].into(),
+            allow_private: false,
+        });
+    old.capabilities
+        .push(moss_module_host::manifest::Capability {
+            port: "tools".into(),
+            operations: ["run".into()].into(),
+            resources: ["save".into()].into(),
+            allow_private: false,
+        });
+    let mut new = old.clone();
+    new.credentials.insert(
+        "api".into(),
+        Credential {
+            exchange: None,
+            scope: CredentialScope::Instance,
+            hosts: ["example.test".into()].into(),
+            attachment: Attachment::Header("authorization".into()),
+        },
+    );
+    new.tools.insert(
+        "save".into(),
+        Tool {
+            description: "Save".into(),
+            risk: "destructive".into(),
+        },
+    );
+    new.install_wide_kv.insert("counter".into());
+    let added = new.newly_requested(&old);
+    for port in ["kv", "credentials", "tools"] {
+        assert!(
+            added.iter().any(|p| p.port == port),
+            "Missing approval for {port}"
+        );
+    }
+    let descriptions = serde_json::to_string(&new.permissions()).unwrap();
+    assert!(descriptions.contains("destructive"));
+    assert!(descriptions.contains("instance"));
+    assert!(descriptions.contains("counter"));
+}

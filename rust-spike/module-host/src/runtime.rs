@@ -306,7 +306,21 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
                 );
             }
         }
+        "jobs" if request.operation == "cancel" => {
+            ensure!(
+                request.parameters.as_object().is_some_and(|p| p.len() == 1)
+                    && request.parameters["id"]
+                        .as_str()
+                        .is_some_and(|s| uuid::Uuid::parse_str(s).is_ok()),
+                "Cancellation requires only a job id"
+            );
+            ensure!(
+                manifest.jobs.contains_key(&request.resource),
+                "Unknown module queue"
+            );
+        }
         "jobs" => {
+            ensure!(request.operation == "enqueue", "Unknown job operation");
             let schema = manifest
                 .jobs
                 .get(&request.resource)
@@ -344,13 +358,19 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
             manifest.provides.contains_key(&request.resource),
             "The event is not declared"
         ),
-        "tools" => ensure!(
-            matches!(
-                request.parameters["risk"].as_str(),
-                Some("read" | "write" | "outbound" | "destructive")
-            ),
-            "Tools must declare their approval risk"
-        ),
+        "tools" => {
+            let tool = manifest
+                .tools
+                .get(&request.resource)
+                .context("Tool not declared")?;
+            ensure!(
+                request
+                    .parameters
+                    .get("risk")
+                    .is_none_or(|risk| risk.as_str() == Some(&tool.risk)),
+                "Tool risk cannot change at call time"
+            );
+        }
         "ai" | "embed" => ensure!(
             request.parameters.get("model").is_none()
                 && request.parameters.get("provider").is_none(),

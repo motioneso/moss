@@ -12,3 +12,12 @@ pub mod lifecycle;
 pub mod local;
 pub mod migrations;
 pub mod postgres;
+
+pub mod recovery;
+
+pub mod jobs;
+
+pub mod ai;
+pub mod credentials;
+pub mod network;
+pub mod services;

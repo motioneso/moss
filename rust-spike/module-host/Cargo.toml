@@ -29,6 +29,12 @@ wasmtime = { version = "38", default-features = false, features = ["component-mo
 zstd = "0.13"
 wat = "=1.239.0"
 
+moss-platform-contracts = { path = "bridges/contracts" }
+moss-platform-jobs = { path = "bridges/jobs" }
+moss-platform-routing = { path = "bridges/routing" }
+moss-platform-adapters = { path = "bridges/adapters" }
+async-trait = "0.1"
+
 [dev-dependencies]
 tempfile = "3"
 

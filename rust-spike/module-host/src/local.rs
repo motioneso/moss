@@ -2,7 +2,7 @@
 use crate::runtime::{CallScope, Ports, Request};
 use anyhow::{bail, ensure, Context, Result};
 use serde_json::{json, Value};
-use std::{collections::BTreeMap, io::Read, path::Path, sync::Mutex};
+use std::{collections::BTreeMap, path::Path, sync::Mutex};
 use vault::{Root, VaultContext};
 
 pub struct LocalPorts {
@@ -20,7 +20,15 @@ impl LocalPorts {
 impl Ports for LocalPorts {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
         let module = self.root.create_subdir(&scope.module().id)?;
-        let account = VaultContext::for_access(&module, scope.access())?;
+        let instance = access_context::AccessContext::new(uuid::Uuid::nil(), "install-wide-kv");
+        let account = VaultContext::for_access(
+            &module,
+            if port == "kv" && scope.module().install_wide_kv.contains(&request.resource) {
+                &instance
+            } else {
+                scope.access()
+            },
+        )?;
         match port {
             "kv" => {
                 let _guard = self
@@ -55,6 +63,19 @@ impl Ports for LocalPorts {
                     _ => bail!("Unknown key-value operation"),
                 }
             }
+            "vault" if request.operation == "notes.read" => {
+                let notes = Root::create(
+                    &self
+                        .root
+                        .path()
+                        .parent()
+                        .and_then(|p| p.parent())
+                        .context("Missing data folder")?
+                        .join("notes"),
+                )?;
+                let notes = VaultContext::for_access(&notes, scope.access())?;
+                Ok(json!({"text":notes.read_to_string(&request.resource)?}))
+            }
             "vault" => {
                 // Internal key-value files and ordinary module files use separate folders.
                 account.create_dir("vault")?;
@@ -74,24 +95,23 @@ impl Ports for LocalPorts {
                 }
             }
             "fetch" => {
-                ensure!(
-                    request.operation == "get",
-                    "This local fetch adapter supports GET only"
-                );
-                let url = url::Url::parse(
-                    request.parameters["url"]
-                        .as_str()
-                        .context("The request needs a URL")?,
-                )?;
-                let response = crate::registry::https_request(
+                let url =
+                    url::Url::parse(request.parameters["url"].as_str().context("URL required")?)?;
+                let cap = scope.module().capability("fetch")?;
+                let method = request
+                    .operation
+                    .to_ascii_uppercase()
+                    .parse::<reqwest::Method>()?;
+                let response = crate::network::request(
                     &url,
-                    scope.module().capability("fetch")?.allow_private,
+                    &cap.resources,
+                    cap.allow_private,
+                    method,
+                    reqwest::header::HeaderMap::new(),
+                    request.parameters.get("body").cloned(),
                     scope.remaining(),
                 )?;
-                let mut bytes = Vec::new();
-                response.take(1024 * 1024 + 1).read_to_end(&mut bytes)?;
-                ensure!(bytes.len() <= 1024 * 1024, "The response is too large");
-                Ok(json!({"body":String::from_utf8(bytes)?}))
+                Ok(json!({"status":response.status,"body":String::from_utf8(response.body)?}))
             }
             _ => bail!("This service has not been connected to the module host"),
         }

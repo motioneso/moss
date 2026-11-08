@@ -53,18 +53,26 @@ pub trait Lifecycle: Send + Sync {
     fn migrate(&self, new: &Package, old: Option<&Installed>) -> Result<()>;
     fn restore(&self, id: &str, snapshot: &str) -> Result<()>;
     fn purge(&self, id: &str) -> Result<()>;
+    fn audit(&self, package: &Package) -> Result<()> {
+        ensure!(
+            package.manifest.database.migrations.is_empty(),
+            "SQL modules require a startup ledger audit service"
+        );
+        Ok(())
+    }
+    fn discard_snapshot(&self, id: &str, snapshot: &str) -> Result<()>;
 }
 pub struct Installer {
-    root: vault::Root,
-    catalog: Arc<dyn CatalogStore>,
-    lifecycle: Arc<dyn Lifecycle>,
-    host: Host,
-    ports: Arc<dyn Ports>,
-    moss: Version,
-    inventory: LegacyInventory,
-    fence: RwLock<()>,
+    pub(crate) root: vault::Root,
+    pub(crate) catalog: Arc<dyn CatalogStore>,
+    pub(crate) lifecycle: Arc<dyn Lifecycle>,
+    pub(crate) host: Host,
+    pub(crate) ports: Arc<dyn Ports>,
+    pub(crate) moss: Version,
+    pub(crate) inventory: LegacyInventory,
+    pub(crate) fence: RwLock<()>,
 }
-#[derive(Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Approval {
     pub new_permissions: Vec<Permission>,
     pub new_migrations: Vec<String>,
@@ -74,6 +82,25 @@ pub struct Approval {
 pub struct UpdateReport {
     pub pending: Vec<(String, Approval)>,
     pub failures: Vec<(String, String)>,
+}
+/// A consent is bound to one verified package and the version whose permissions were shown.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Consent {
+    pub digest: String,
+    pub previous: Option<String>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModuleApproval {
+    pub id: String,
+    pub registry: String,
+    pub consent: Consent,
+    pub changes: Approval,
+}
+struct Activation {
+    approved: bool,
+    pin_override: Option<Version>,
 }
 impl Approval {
     pub fn required(&self) -> bool {
@@ -106,6 +133,12 @@ impl Installer {
             fence: RwLock::new(()),
         };
         let _disk_lock = installer.disk_lock(true)?;
+        installer.recover_locked()?;
+        installer.cleanup_snapshots(chrono::Utc::now())?;
+        for module in installer.catalog.load()?.installed.values() {
+            let package = installer.read_package(&module.digest)?;
+            installer.lifecycle.audit(&package)?;
+        }
         for entry in std::fs::read_dir(installer.root.subdir("staging")?.path())? {
             let entry = entry?;
             if entry.file_type()?.is_dir() {
@@ -116,7 +149,7 @@ impl Installer {
         }
         Ok(installer)
     }
-    fn disk_lock(&self, exclusive: bool) -> Result<std::fs::File> {
+    pub(crate) fn disk_lock(&self, exclusive: bool) -> Result<std::fs::File> {
         let file = std::fs::OpenOptions::new()
             .create(true)
             .truncate(false)
@@ -130,7 +163,7 @@ impl Installer {
         }
         Ok(file)
     }
-    fn admin(&self, access: &AccessContext) -> Result<()> {
+    pub(crate) fn admin(&self, access: &AccessContext) -> Result<()> {
         ensure!(
             self.lifecycle.is_admin(access)?,
             "An administrator must approve module changes"
@@ -211,6 +244,17 @@ impl Installer {
         artifact: &Artifact,
         approved: bool,
     ) -> Result<()> {
+        self.install_selected(access, catalog, artifact, approved, None, None)
+    }
+    fn install_selected(
+        &self,
+        access: &AccessContext,
+        catalog: &Catalog,
+        artifact: &Artifact,
+        approved: bool,
+        pin_override: Option<Version>,
+        consent: Option<&Consent>,
+    ) -> Result<()> {
         self.admin(access)?;
         let _fence = self
             .fence
@@ -218,6 +262,14 @@ impl Installer {
             .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
         let _disk_lock = self.disk_lock(true)?;
         let state = self.catalog.load()?;
+        if let Some(consent) = consent {
+            ensure!(
+                consent.digest == artifact.digest
+                    && consent.previous
+                        == state.installed.get(&artifact.id).map(|m| m.digest.clone()),
+                "The module changed since its permissions were reviewed"
+            );
+        }
         let seen = state
             .registries
             .get(&catalog.trust.identity.id)
@@ -234,7 +286,7 @@ impl Installer {
             .and_then(|v| v.pin.as_ref());
         let selected = catalog.select(
             &artifact.id,
-            pin.or(Some(&artifact.version)),
+            pin_override.as_ref().or(pin).or(Some(&artifact.version)),
             &self.moss,
             &installed,
             seen,
@@ -259,7 +311,10 @@ impl Installer {
             &bytes,
             catalog,
             &artifact.publisher_key,
-            approved,
+            Activation {
+                approved,
+                pin_override,
+            },
         )
     }
     pub fn import_file(
@@ -304,7 +359,17 @@ impl Installer {
                 "A required module is missing or incompatible"
             );
         }
-        self.activate(access, package, bytes, catalog, publisher_key, approved)
+        self.activate(
+            access,
+            package,
+            bytes,
+            catalog,
+            publisher_key,
+            Activation {
+                approved,
+                pin_override: None,
+            },
+        )
     }
     fn activate(
         &self,
@@ -313,8 +378,12 @@ impl Installer {
         bytes: &[u8],
         catalog: &Catalog,
         key_id: &str,
-        approved: bool,
+        options: Activation,
     ) -> Result<()> {
+        let Activation {
+            approved,
+            pin_override,
+        } = options;
         crate::sql::check(&package, &self.inventory)?;
         if let Some(wasm) = package.files.get("code/module.wasm") {
             self.host.validate(wasm, &package.manifest)?;
@@ -342,8 +411,9 @@ impl Installer {
             let previous = self.read_package(&old.digest)?;
             package.unchanged_sql(&previous)?;
             ensure!(
-                old.pin
+                pin_override
                     .as_ref()
+                    .or(old.pin.as_ref())
                     .is_none_or(|pin| pin == &package.manifest.version),
                 "This module is pinned to another version"
             );
@@ -362,6 +432,7 @@ impl Installer {
                 return Err(e);
             }
         };
+        self.begin_change(id, &snapshot, Some(package.digest.clone()))?;
         let outcome = (|| -> Result<()> {
             self.lifecycle.migrate(&package, old.as_ref())?;
             if let Some(wasm) = package.files.get("code/module.wasm") {
@@ -391,7 +462,7 @@ impl Installer {
                     publisher_key: key_id.into(),
                     publisher_public_key: publisher.key.clone(),
                     registry: catalog.trust.identity.id.clone(),
-                    pin: old.as_ref().and_then(|m| m.pin.clone()),
+                    pin: pin_override.or_else(|| old.as_ref().and_then(|m| m.pin.clone())),
                     previous: old.as_ref().map(|m| m.digest.clone()),
                     disabled: None,
                 },
@@ -400,13 +471,9 @@ impl Installer {
             self.catalog.commit(revision, &state)?;
             Ok(())
         })();
-        if outcome.is_err() {
-            self.lifecycle.restore(id, &snapshot)?;
-        }
-        self.lifecycle.resume_jobs(id)?;
-        outcome
+        self.complete_change(id, &snapshot, outcome)
     }
-    fn stage(&self, package: &Package, bytes: &[u8]) -> Result<()> {
+    pub(crate) fn stage(&self, package: &Package, bytes: &[u8]) -> Result<()> {
         let blob = self.root.subdir("blobs/sha256")?;
         match blob.read(&package.digest) {
             Ok(existing) => ensure!(
@@ -436,7 +503,25 @@ impl Installer {
             .path()
             .join(package.manifest.version.to_string());
         if final_path.exists() {
-            std::fs::remove_dir_all(staging.path())?;
+            let active = self
+                .catalog
+                .load()?
+                .installed
+                .get(&package.manifest.id)
+                .is_some_and(|m| m.manifest.version == package.manifest.version);
+            if active {
+                for (path, bytes) in &package.files {
+                    ensure!(
+                        vault::Root::open(&final_path)?.read(path)? == *bytes,
+                        "The active package changed on disk"
+                    );
+                }
+                std::fs::remove_dir_all(staging.path())?;
+            } else {
+                make_writable(&final_path)?;
+                std::fs::remove_dir_all(&final_path)?;
+                std::fs::rename(staging.path(), &final_path)?;
+            }
         } else {
             std::fs::rename(staging.path(), &final_path)?;
         }
@@ -460,6 +545,19 @@ impl Installer {
             .read()
             .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
         let _disk_lock = self.disk_lock(false)?;
+        self.call_unfenced(id, access, kind, payload)
+    }
+    pub(crate) fn call_unfenced(
+        &self,
+        id: &str,
+        access: AccessContext,
+        kind: &str,
+        payload: &str,
+    ) -> Result<String> {
+        ensure!(
+            !self.root.path().join("operation.json").exists(),
+            "Module recovery must finish before calls resume"
+        );
         let state = self.catalog.load()?;
         let installed = state
             .installed
@@ -552,6 +650,9 @@ impl Installer {
         } else {
             None
         };
+        if let Some(snapshot) = &snapshot {
+            self.begin_change(id, snapshot, None)?;
+        }
         let outcome = (|| -> Result<()> {
             if delete_data.is_some() {
                 self.lifecycle.purge(id)?;
@@ -566,12 +667,10 @@ impl Installer {
             self.catalog.commit(revision, &state)?;
             Ok(())
         })();
-        if let Err(error) = outcome {
-            if let Some(snapshot) = snapshot {
-                self.lifecycle.restore(id, &snapshot)?;
-            }
-            self.lifecycle.resume_jobs(id)?;
-            return Err(error);
+        if let Some(snapshot) = &snapshot {
+            self.complete_change(id, snapshot, outcome)?;
+        } else {
+            outcome?;
         }
         match self.root.subdir("installed")?.subdir(id) {
             Ok(path) => {
@@ -583,13 +682,65 @@ impl Installer {
         }
         Ok(())
     }
+    /// Return exactly the packages and permission changes a person must review. Consent to
+    /// one entry never approves another entry or a different base version.
+    pub fn preview_list(
+        &self,
+        access: &AccessContext,
+        list: &ModuleList,
+        catalogs: &BTreeMap<String, Catalog>,
+    ) -> Result<Vec<ModuleApproval>> {
+        self.admin(access)?;
+        let state = self.catalog.load()?;
+        let installed = state
+            .installed
+            .iter()
+            .map(|(id, m)| (id.clone(), m.manifest.version.clone()))
+            .collect();
+        let mut preview = Vec::new();
+        for item in &list.modules {
+            if state.installed.get(&item.id).is_some_and(|m| {
+                item.version
+                    .as_ref()
+                    .is_none_or(|v| v == &m.manifest.version)
+            }) {
+                continue;
+            }
+            let catalog = catalogs
+                .get(&item.registry)
+                .context("The registry is not configured")?;
+            let seen = state
+                .registries
+                .get(&item.registry)
+                .context("Refresh the registry first")?;
+            catalog.assert_current(seen)?;
+            let artifact = catalog.select(
+                &item.id,
+                item.version.as_ref(),
+                &self.moss,
+                &installed,
+                seen,
+            )?;
+            let package = catalog.download(artifact, &self.moss)?;
+            preview.push(ModuleApproval {
+                id: item.id.clone(),
+                registry: item.registry.clone(),
+                consent: Consent {
+                    digest: artifact.digest.clone(),
+                    previous: state.installed.get(&item.id).map(|m| m.digest.clone()),
+                },
+                changes: self.approval(&package, artifact.urgent)?,
+            });
+        }
+        Ok(preview)
+    }
     /// Only listed modules are added or pinned. A missing name is never a removal request.
     pub fn apply_list(
         &self,
         access: &AccessContext,
         list: &ModuleList,
         catalogs: &BTreeMap<String, Catalog>,
-        approved: bool,
+        approvals: &BTreeMap<String, Consent>,
     ) -> Result<()> {
         self.admin(access)?;
         for item in &list.modules {
@@ -630,14 +781,22 @@ impl Installer {
                 .get(&item.id)
                 .is_none_or(|m| m.digest != artifact.digest)
             {
-                if state
-                    .installed
-                    .get(&item.id)
-                    .is_some_and(|m| m.pin.is_some())
-                {
-                    self.pin(access, &item.id, None)?;
-                }
-                self.install(access, catalog, artifact, approved)?;
+                let expected = Consent {
+                    digest: artifact.digest.clone(),
+                    previous: state.installed.get(&item.id).map(|m| m.digest.clone()),
+                };
+                ensure!(
+                    approvals.get(&item.id) == Some(&expected),
+                    "Review and approve this module's exact permission changes first"
+                );
+                self.install_selected(
+                    access,
+                    catalog,
+                    artifact,
+                    true,
+                    item.version.clone(),
+                    Some(&expected),
+                )?;
             }
             if let Some(version) = &item.version {
                 self.pin(access, &item.id, Some(version.clone()))?;

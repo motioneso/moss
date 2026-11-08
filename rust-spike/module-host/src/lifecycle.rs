@@ -84,6 +84,17 @@ impl Lifecycle for FileLifecycle {
         }
         Ok(())
     }
+    fn discard_snapshot(&self, id: &str, snapshot: &str) -> Result<()> {
+        ensure!(
+            crate::manifest::identifier(id) && uuid::Uuid::parse_str(snapshot).is_ok(),
+            "Invalid snapshot identity"
+        );
+        let path = self.data.join("modules/snapshots").join(id).join(snapshot);
+        if path.exists() {
+            std::fs::remove_dir_all(path)?;
+        }
+        Ok(())
+    }
     fn purge(&self, id: &str) -> Result<()> {
         let files = self.files(id);
         if files.exists() {

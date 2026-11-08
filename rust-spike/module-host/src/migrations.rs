@@ -84,9 +84,33 @@ impl Lifecycle for PostgresLifecycle {
         })
     }
     fn pause_jobs(&self, id: &str) -> Result<()> {
+        self.runtime.block_on(async {self.privileged().await?.execute("INSERT INTO moss_modules.paused_modules(module_id) VALUES($1) ON CONFLICT DO NOTHING",&[&crate::jobs::module_key(id)]).await?;Ok::<_,anyhow::Error>(())})?;
         self.files.pause_jobs(id)
     }
     fn resume_jobs(&self, id: &str) -> Result<()> {
+        self.runtime.block_on(async {
+            let db = self.privileged().await?;
+            let state: crate::store::State = serde_json::from_value(
+                db.query_opt("SELECT state FROM moss_modules.catalog WHERE id=true", &[])
+                    .await?
+                    .map(|r| r.get::<_, Value>(0))
+                    .unwrap_or_else(|| {
+                        serde_json::to_value(crate::store::State::default()).expect("state")
+                    }),
+            )?;
+            if state
+                .installed
+                .get(id)
+                .is_some_and(|m| m.disabled.is_none())
+            {
+                db.execute(
+                    "DELETE FROM moss_modules.paused_modules WHERE module_id=$1",
+                    &[&crate::jobs::module_key(id)],
+                )
+                .await?;
+            }
+            Ok::<_, anyhow::Error>(())
+        })?;
         self.files.resume_jobs(id)
     }
     fn snapshot(&self, id: &str) -> Result<String> {
@@ -113,10 +137,6 @@ impl Lifecycle for PostgresLifecycle {
         Ok(snapshot)
     }
     fn migrate(&self, new: &Package, _old: Option<&Installed>) -> Result<()> {
-        ensure!(
-            new.manifest.jobs.is_empty(),
-            "Connect the queue lifecycle service before installing a module with scheduled jobs"
-        );
         ensure!(
             new.manifest.database.ledger == crate::manifest::Ledger::Module,
             "Legacy SQL requires the release's legacy ledger adapter"
@@ -185,6 +205,46 @@ impl Lifecycle for PostgresLifecycle {
             tx.commit().await?;Ok::<_,anyhow::Error>(())
         })?;
         self.files.restore(id, snapshot)
+    }
+    fn audit(&self, package: &Package) -> Result<()> {
+        self.runtime.block_on(async {
+            let db = self.privileged().await?;
+            for row in db
+                .query(
+                    "SELECT path,checksum FROM moss_modules.migrations WHERE module_id=$1",
+                    &[&package.manifest.id],
+                )
+                .await?
+            {
+                let path: String = row.get(0);
+                let checksum: String = row.get(1);
+                ensure!(
+                    package
+                        .files
+                        .get(&path)
+                        .is_some_and(|b| crate::trust::digest(b) == checksum),
+                    "An applied module migration changed or disappeared at startup"
+                );
+            }
+            Ok(())
+        })
+    }
+    fn discard_snapshot(&self, id: &str, snapshot: &str) -> Result<()> {
+        ensure!(
+            crate::manifest::identifier(id) && uuid::Uuid::parse_str(snapshot).is_ok(),
+            "Invalid snapshot identity"
+        );
+        self.runtime.block_on(async {
+            self.privileged()
+                .await?
+                .batch_execute(&format!(
+                    "DROP SCHEMA IF EXISTS moss_snapshot_{} CASCADE",
+                    snapshot.replace('-', "")
+                ))
+                .await?;
+            Ok::<_, anyhow::Error>(())
+        })?;
+        self.files.discard_snapshot(id, snapshot)
     }
     fn purge(&self, id: &str) -> Result<()> {
         self.runtime.block_on(async {

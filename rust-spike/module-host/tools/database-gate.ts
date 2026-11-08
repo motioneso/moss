@@ -21,6 +21,7 @@ const run = spawnSync(
     env: {
       ...process.env,
       JS43_APP_URL: urls.app,
+      JS43_WORKER_URL: urls.worker,
       JS43_MIGRATION_URL: urls.migration,
       JS43_BOOTSTRAP_URL: urls.bootstrap
     }

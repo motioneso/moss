@@ -14,12 +14,16 @@ use std::{
     sync::{Arc, Mutex},
 };
 #[derive(Default)]
-struct MemoryCatalog(Mutex<State>);
+struct MemoryCatalog(Mutex<State>, std::sync::atomic::AtomicBool);
 impl CatalogStore for MemoryCatalog {
     fn load(&self) -> Result<State> {
         Ok(self.0.lock().unwrap().clone())
     }
     fn commit(&self, expected: u64, next: &State) -> Result<()> {
+        ensure!(
+            !self.1.load(std::sync::atomic::Ordering::SeqCst),
+            "Simulated catalog failure"
+        );
         let mut old = self.0.lock().unwrap();
         ensure!(old.revision == expected, "Stale catalog");
         *old = next.clone();
@@ -133,7 +137,7 @@ fn sample_install_pin_upgrade_remove_and_reinstall_preserves_account_data() {
         ModuleList::parse(br#"{"modules":[{"id":"sample.counter","registry":"sample-registry"}]}"#)
             .unwrap();
     installer
-        .apply_list(&access, &unpinned_list, &catalogs, false)
+        .apply_list(&access, &unpinned_list, &catalogs, &BTreeMap::new())
         .unwrap();
     assert_eq!(
         state.load().unwrap().installed["sample.counter"]
@@ -144,6 +148,46 @@ fn sample_install_pin_upgrade_remove_and_reinstall_preserves_account_data() {
     assert_eq!(
         state.load().unwrap().installed["sample.counter"].digest,
         a.digest
+    );
+    let changing_list = ModuleList::parse(
+        br#"{"modules":[{"id":"sample.counter","registry":"sample-registry","version":"1.1.0"}]}"#,
+    )
+    .unwrap();
+    let preview = installer
+        .preview_list(&access, &changing_list, &catalogs)
+        .unwrap();
+    assert_eq!(preview.len(), 1);
+    assert!(installer
+        .apply_list(&access, &changing_list, &catalogs, &BTreeMap::new())
+        .is_err());
+    let mut wrong = preview[0].consent.clone();
+    wrong.previous = None;
+    assert!(installer
+        .apply_list(
+            &access,
+            &changing_list,
+            &catalogs,
+            &BTreeMap::from([("sample.counter".into(), wrong)])
+        )
+        .is_err());
+    assert_eq!(
+        state.load().unwrap().installed["sample.counter"]
+            .pin
+            .as_ref(),
+        Some(&"1.0.0".parse().unwrap())
+    );
+    let consent = BTreeMap::from([("sample.counter".into(), preview[0].consent.clone())]);
+    state.1.store(true, std::sync::atomic::Ordering::SeqCst);
+    let failure = installer
+        .apply_list(&access, &changing_list, &catalogs, &consent)
+        .unwrap_err();
+    assert!(failure.to_string().contains("Simulated catalog failure"));
+    state.1.store(false, std::sync::atomic::Ordering::SeqCst);
+    assert_eq!(
+        state.load().unwrap().installed["sample.counter"]
+            .pin
+            .as_ref(),
+        Some(&"1.0.0".parse().unwrap())
     );
     let catalog = catalogs.remove("sample-registry").unwrap();
     assert!(installer.install(&access, &catalog, &b, false).is_err());
