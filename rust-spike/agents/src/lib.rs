@@ -10,5 +10,6 @@ pub mod gateway;
 pub mod hello;
 pub mod policy;
 pub mod redact;
+pub mod runner;
 pub mod session;
 pub mod transport;

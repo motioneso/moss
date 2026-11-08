@@ -29,7 +29,9 @@ pub const SYSTEM_READ: &[&str] = &[
     "/usr", "/lib", "/lib64", "/lib32", "/bin", "/sbin", "/etc", "/opt", "/proc", "/sys", "/snap",
     "/nix",
 ];
-pub const SYSTEM_WRITE: &[&str] = &["/dev", "/tmp"];
+/// The shared temporary folder is left out on purpose: every account's agent could read what
+/// another left there. Each agent gets a private one through TMPDIR instead.
+pub const SYSTEM_WRITE: &[&str] = &["/dev"];
 
 impl Confinement {
     /// Rewrites a launch so the launcher confines itself first, then runs the agent.
