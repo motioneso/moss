@@ -165,7 +165,7 @@ Failing output, from the gate log and each removal's own log, with long lines cu
 module-sql-owner: caught (exit 101)
   ---- module_sql::tests::accepts_every_shipped_module_migration stdout ----
   ---- module_sql::tests::refuses_sql_that_reaches_past_the_module stdout ----
-  test result: FAILED. 7 passed; 2 failed; 0 ignored; 0 measured; 35 filtered out; finished in 0.03s
+  test result: FAILED. 7 passed; 2 failed; 0 ignored; 0 measured; 35 filtered out; finished in 0.04s
 secret-debug: caught (exit 101)
   error[E0283]: type annotations needed
     --> safety-core/src/secret.rs:63:22
@@ -182,7 +182,7 @@ vaults-folder: caught (exit 101)
   ---- tests::plain_handles_cannot_walk_into_the_vaults_folder stdout ----
   ---- tests::plain_handles_cannot_open_the_vaults_folder stdout ----
   ---- tests::a_handle_made_before_the_vaults_folder_opens_is_closed_after stdout ----
-  test result: FAILED. 4 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: FAILED. 4 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
 origin-check: caught (exit 101)
   ---- origin::tests::the_sign_in_routes_run_both_checks stdout ----
   test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 36 filtered out; finished in 0.00s
