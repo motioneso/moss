@@ -1,4 +1,4 @@
-# Rust Phase 5 Notes — part one
+# Rust Phase 5 Notes — progress and retained work
 
 Part of https://github.com/motioneso/moss/issues/4027. Card: 524.
 Release note Category: N/A.
@@ -6,6 +6,10 @@ Release note Category: N/A.
 The coordinator approved splitting JS-47: this slice supplies the generic linked-file adapter
 and Notes domain parity. The coordinator will create part two for the complete Notes module.
 This report does not claim that Notes is available in the Rust app yet.
+
+The part-one results below are historical. The part-two checkpoint later in this
+report records the continuation's narrower changes and current evidence. The full
+seven-step continuation remains unfinished.
 
 ## Scope and current evidence
 
@@ -157,7 +161,84 @@ for resource configuration, response shapes and limits.
 Database tests must use `.claude/skills/verify-gate/SKILL.md` and a disposable gate server.
 Do not point tests at the normal development database.
 
-## Part two continuation
+## Part two checkpoint
+
+Started from merged main `889c1e7ef`, including Notes part one (#4047) and the shared
+SDK/host (#4044). This checkpoint closes the three retained helper/adapter gaps on
+Linux and adds Notes-table privacy cases. It does not supply the Notes guest or an
+installable package. The remaining continuation is larger than the task's context
+bound, so work stops at a committed, reviewed checkpoint.
+
+### Changes and evidence
+
+- The edit helper now expands the same dollar tokens as JavaScript string-search
+  replacement. `tools/edit-parity.ts` extracts and executes the actual legacy
+  `notesEditExecute` handler with filesystem and queue stand-ins. Its 182 vectors
+  cover dollar tokens, Unicode, ambiguous/missing matches and line endings. The old
+  helper failed on `$$`; the corrected helper passes all vectors alongside the 118
+  existing block/identity vectors. This is domain evidence, not chat-tool parity.
+- Unix folder locking uses the directory handle, permitting reads and listings in
+  a non-writable folder without a syncable lock file. The real Wasm read/list test
+  failed before the fix and passes afterwards. Non-Unix still uses the sidecar.
+  Old sidecar-locking and new directory-locking hosts must not run together.
+- The shared pending-call mutex no longer spans file I/O. A Wasm test deliberately
+  holds one invocation's inner mutex while a different account completes. It proves
+  invocation isolation under a simulated held lock, not a filesystem deadline.
+- Six language-neutral cases in `modules/notes/tests/` exercise owner reads/updates
+  and other-account, unrelated-admin and anonymous refusal for app and worker roles.
+  They include read, update, delete and spoofed-owner insert attempts. Owner delete
+  is excluded because existing dependent rows can legitimately prevent it.
+- The disposable database test removes RLS, observes twelve read/update assertions
+  per table fail on actual exposed rows, restores RLS and runs all twenty-eight
+  protected probes per table. It also verifies frozen raw SQL hashes, existing
+  core-ledger checksums and retention of both owners' original rows.
+- A fixture Wasm component forwards SDK typed queries into the real transactional
+  database host. The worker check first exposed the host's attempt to switch into
+  the app role. Core-legacy queries now retain the configured app or worker role.
+  This fixture is not the Notes guest, and does not prove Notes handlers or jobs.
+
+No existing SQL, schema or migration identity changes. No new third-party packages
+or global tools were installed. Production guest generation/toolchain setup remains
+to be selected within the dependency-approval rule; this checkpoint adds none.
+
+No user-facing Notes surface is registered, so the existing app map is unchanged.
+The eventual package must declare its real Settings controls, features, errors and
+remediations when those handlers exist. Do not register unavailable functionality.
+
+### Reproduce the checkpoint
+
+Run from `~/Jarv1s`. Keep build output outside the checkout:
+
+```sh
+pnpm exec tsx modules/notes/tools/edit-parity.ts
+CARGO_TARGET_DIR=/tmp/js52-domain-target cargo +1.95.0 test --locked --manifest-path modules/notes/src/Cargo.toml
+CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/js47-host-target cargo +1.95.0 test --locked --manifest-path rust-spike/module-host/Cargo.toml --lib --test linked_notes
+CARGO_TARGET_DIR=/tmp/js52-vault-target cargo +1.95.0 test --locked --manifest-path rust-spike/vault/Cargo.toml
+CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/js47-host-target scripts/run-gate.sh start --gate ./modules/notes/tools/gate.sh
+scripts/run-gate.sh wait --follow
+CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/js52-parity-target PARITY_OUT=/tmp/js52-parity scripts/run-gate.sh start --gate ./modules/notes/tools/parity-gate.sh
+scripts/run-gate.sh wait --follow
+```
+
+The second gate uses the existing two-server harness with the six Notes SQL cases.
+It compares isolated database copies; neither server implements the pending Notes
+HTTP handlers. SQL-only agreement must not be reported as Notes HTTP parity.
+Run the source-removal controls only after all host builds/tests have finished.
+
+### Still required
+
+All seven steps below remain acceptance work except the edit helper and the scoped
+SQL/privacy evidence above. Missing: production guest and package, Settings controls,
+complete approved chat tools, sync/scheduling, memory ports, managed publication and
+crash reconciliation, exports/archives, Notes HTTP cases and real authenticated UI
+checks from a second physical device. No Notes UI or second-device check was run in
+this checkpoint. No full Notes parity or ready-to-playtest claim is made.
+
+Filesystem deadlines, hostile open/rename races, crash recovery, non-Linux behavior
+and mixed-version lock interoperability remain unproven. The older non-transactional
+database port is outside this checkpoint's worker-role correction and verification.
+
+## Part two continuation — full acceptance
 
 1. Build the actual Notes guest using `moss-module-sdk`, native tests and a shipped Wasm component.
    Add `moss.module.json`, icons, changelog and the package build. Copy existing SQL into the

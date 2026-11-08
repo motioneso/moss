@@ -1,0 +1,182 @@
+{"input":{"content":"prefix old suffix","oldText":"old","newText":"new"},"expected":{"ok":"prefix new suffix"}}
+{"input":{"content":"prefix old suffix","oldText":"old","newText":""},"expected":{"ok":"prefix  suffix"}}
+{"input":{"content":"prefix old suffix","oldText":"old","newText":"$$"},"expected":{"ok":"prefix $ suffix"}}
+{"input":{"content":"prefix old suffix","oldText":"old","newText":"$&"},"expected":{"ok":"prefix old suffix"}}
+{"input":{"content":"prefix old suffix","oldText":"old","newText":"$`"},"expected":{"ok":"prefix prefix  suffix"}}
+{"input":{"content":"prefix old suffix","oldText":"old","newText":"$'"},"expected":{"ok":"prefix  suffix suffix"}}
+{"input":{"content":"prefix old suffix","oldText":"old","newText":"$1 $01 $99 $0 $<name>"},"expected":{"ok":"prefix $1 $01 $99 $0 $<name> suffix"}}
+{"input":{"content":"prefix old suffix","oldText":"old","newText":"$$& $$$& $$$$ $$` $$'"},"expected":{"ok":"prefix $& $old $$ $` $' suffix"}}
+{"input":{"content":"prefix old suffix","oldText":"old","newText":"$&$`$'$$"},"expected":{"ok":"prefix oldprefix  suffix$ suffix"}}
+{"input":{"content":"prefix old suffix","oldText":"old","newText":"😀 $& café\r\n$' $`"},"expected":{"ok":"prefix 😀 old café\r\n suffix prefix  suffix"}}
+{"input":{"content":"prefix old suffix","oldText":"old","newText":"$"},"expected":{"ok":"prefix $ suffix"}}
+{"input":{"content":"prefix old suffix","oldText":"old","newText":"$$$"},"expected":{"ok":"prefix $$ suffix"}}
+{"input":{"content":"prefix old suffix","oldText":"old","newText":"\\$&"},"expected":{"ok":"prefix \\old suffix"}}
+{"input":{"content":"old","oldText":"old","newText":"new"},"expected":{"ok":"new"}}
+{"input":{"content":"old","oldText":"old","newText":""},"expected":{"ok":""}}
+{"input":{"content":"old","oldText":"old","newText":"$$"},"expected":{"ok":"$"}}
+{"input":{"content":"old","oldText":"old","newText":"$&"},"expected":{"ok":"old"}}
+{"input":{"content":"old","oldText":"old","newText":"$`"},"expected":{"ok":""}}
+{"input":{"content":"old","oldText":"old","newText":"$'"},"expected":{"ok":""}}
+{"input":{"content":"old","oldText":"old","newText":"$1 $01 $99 $0 $<name>"},"expected":{"ok":"$1 $01 $99 $0 $<name>"}}
+{"input":{"content":"old","oldText":"old","newText":"$$& $$$& $$$$ $$` $$'"},"expected":{"ok":"$& $old $$ $` $'"}}
+{"input":{"content":"old","oldText":"old","newText":"$&$`$'$$"},"expected":{"ok":"old$"}}
+{"input":{"content":"old","oldText":"old","newText":"😀 $& café\r\n$' $`"},"expected":{"ok":"😀 old café\r\n "}}
+{"input":{"content":"old","oldText":"old","newText":"$"},"expected":{"ok":"$"}}
+{"input":{"content":"old","oldText":"old","newText":"$$$"},"expected":{"ok":"$$"}}
+{"input":{"content":"old","oldText":"old","newText":"\\$&"},"expected":{"ok":"\\old"}}
+{"input":{"content":"😀oldé","oldText":"old","newText":"new"},"expected":{"ok":"😀newé"}}
+{"input":{"content":"😀oldé","oldText":"old","newText":""},"expected":{"ok":"😀é"}}
+{"input":{"content":"😀oldé","oldText":"old","newText":"$$"},"expected":{"ok":"😀$é"}}
+{"input":{"content":"😀oldé","oldText":"old","newText":"$&"},"expected":{"ok":"😀oldé"}}
+{"input":{"content":"😀oldé","oldText":"old","newText":"$`"},"expected":{"ok":"😀😀é"}}
+{"input":{"content":"😀oldé","oldText":"old","newText":"$'"},"expected":{"ok":"😀éé"}}
+{"input":{"content":"😀oldé","oldText":"old","newText":"$1 $01 $99 $0 $<name>"},"expected":{"ok":"😀$1 $01 $99 $0 $<name>é"}}
+{"input":{"content":"😀oldé","oldText":"old","newText":"$$& $$$& $$$$ $$` $$'"},"expected":{"ok":"😀$& $old $$ $` $'é"}}
+{"input":{"content":"😀oldé","oldText":"old","newText":"$&$`$'$$"},"expected":{"ok":"😀old😀é$é"}}
+{"input":{"content":"😀oldé","oldText":"old","newText":"😀 $& café\r\n$' $`"},"expected":{"ok":"😀😀 old café\r\né 😀é"}}
+{"input":{"content":"😀oldé","oldText":"old","newText":"$"},"expected":{"ok":"😀$é"}}
+{"input":{"content":"😀oldé","oldText":"old","newText":"$$$"},"expected":{"ok":"😀$$é"}}
+{"input":{"content":"😀oldé","oldText":"old","newText":"\\$&"},"expected":{"ok":"😀\\oldé"}}
+{"input":{"content":"old\r\n","oldText":"old","newText":"new"},"expected":{"ok":"new\r\n"}}
+{"input":{"content":"old\r\n","oldText":"old","newText":""},"expected":{"ok":"\r\n"}}
+{"input":{"content":"old\r\n","oldText":"old","newText":"$$"},"expected":{"ok":"$\r\n"}}
+{"input":{"content":"old\r\n","oldText":"old","newText":"$&"},"expected":{"ok":"old\r\n"}}
+{"input":{"content":"old\r\n","oldText":"old","newText":"$`"},"expected":{"ok":"\r\n"}}
+{"input":{"content":"old\r\n","oldText":"old","newText":"$'"},"expected":{"ok":"\r\n\r\n"}}
+{"input":{"content":"old\r\n","oldText":"old","newText":"$1 $01 $99 $0 $<name>"},"expected":{"ok":"$1 $01 $99 $0 $<name>\r\n"}}
+{"input":{"content":"old\r\n","oldText":"old","newText":"$$& $$$& $$$$ $$` $$'"},"expected":{"ok":"$& $old $$ $` $'\r\n"}}
+{"input":{"content":"old\r\n","oldText":"old","newText":"$&$`$'$$"},"expected":{"ok":"old\r\n$\r\n"}}
+{"input":{"content":"old\r\n","oldText":"old","newText":"😀 $& café\r\n$' $`"},"expected":{"ok":"😀 old café\r\n\r\n \r\n"}}
+{"input":{"content":"old\r\n","oldText":"old","newText":"$"},"expected":{"ok":"$\r\n"}}
+{"input":{"content":"old\r\n","oldText":"old","newText":"$$$"},"expected":{"ok":"$$\r\n"}}
+{"input":{"content":"old\r\n","oldText":"old","newText":"\\$&"},"expected":{"ok":"\\old\r\n"}}
+{"input":{"content":"$old$","oldText":"old","newText":"new"},"expected":{"ok":"$new$"}}
+{"input":{"content":"$old$","oldText":"old","newText":""},"expected":{"ok":"$$"}}
+{"input":{"content":"$old$","oldText":"old","newText":"$$"},"expected":{"ok":"$$$"}}
+{"input":{"content":"$old$","oldText":"old","newText":"$&"},"expected":{"ok":"$old$"}}
+{"input":{"content":"$old$","oldText":"old","newText":"$`"},"expected":{"ok":"$$$"}}
+{"input":{"content":"$old$","oldText":"old","newText":"$'"},"expected":{"ok":"$$$"}}
+{"input":{"content":"$old$","oldText":"old","newText":"$1 $01 $99 $0 $<name>"},"expected":{"ok":"$$1 $01 $99 $0 $<name>$"}}
+{"input":{"content":"$old$","oldText":"old","newText":"$$& $$$& $$$$ $$` $$'"},"expected":{"ok":"$$& $old $$ $` $'$"}}
+{"input":{"content":"$old$","oldText":"old","newText":"$&$`$'$$"},"expected":{"ok":"$old$$$$"}}
+{"input":{"content":"$old$","oldText":"old","newText":"😀 $& café\r\n$' $`"},"expected":{"ok":"$😀 old café\r\n$ $$"}}
+{"input":{"content":"$old$","oldText":"old","newText":"$"},"expected":{"ok":"$$$"}}
+{"input":{"content":"$old$","oldText":"old","newText":"$$$"},"expected":{"ok":"$$$$"}}
+{"input":{"content":"$old$","oldText":"old","newText":"\\$&"},"expected":{"ok":"$\\old$"}}
+{"input":{"content":"x\u0000old\u0000z","oldText":"old","newText":"new"},"expected":{"ok":"x\u0000new\u0000z"}}
+{"input":{"content":"x\u0000old\u0000z","oldText":"old","newText":""},"expected":{"ok":"x\u0000\u0000z"}}
+{"input":{"content":"x\u0000old\u0000z","oldText":"old","newText":"$$"},"expected":{"ok":"x\u0000$\u0000z"}}
+{"input":{"content":"x\u0000old\u0000z","oldText":"old","newText":"$&"},"expected":{"ok":"x\u0000old\u0000z"}}
+{"input":{"content":"x\u0000old\u0000z","oldText":"old","newText":"$`"},"expected":{"ok":"x\u0000x\u0000\u0000z"}}
+{"input":{"content":"x\u0000old\u0000z","oldText":"old","newText":"$'"},"expected":{"ok":"x\u0000\u0000z\u0000z"}}
+{"input":{"content":"x\u0000old\u0000z","oldText":"old","newText":"$1 $01 $99 $0 $<name>"},"expected":{"ok":"x\u0000$1 $01 $99 $0 $<name>\u0000z"}}
+{"input":{"content":"x\u0000old\u0000z","oldText":"old","newText":"$$& $$$& $$$$ $$` $$'"},"expected":{"ok":"x\u0000$& $old $$ $` $'\u0000z"}}
+{"input":{"content":"x\u0000old\u0000z","oldText":"old","newText":"$&$`$'$$"},"expected":{"ok":"x\u0000oldx\u0000\u0000z$\u0000z"}}
+{"input":{"content":"x\u0000old\u0000z","oldText":"old","newText":"😀 $& café\r\n$' $`"},"expected":{"ok":"x\u0000😀 old café\r\n\u0000z x\u0000\u0000z"}}
+{"input":{"content":"x\u0000old\u0000z","oldText":"old","newText":"$"},"expected":{"ok":"x\u0000$\u0000z"}}
+{"input":{"content":"x\u0000old\u0000z","oldText":"old","newText":"$$$"},"expected":{"ok":"x\u0000$$\u0000z"}}
+{"input":{"content":"x\u0000old\u0000z","oldText":"old","newText":"\\$&"},"expected":{"ok":"x\u0000\\old\u0000z"}}
+{"input":{"content":"aaa","oldText":"aa","newText":"new"},"expected":{"ok":"newa"}}
+{"input":{"content":"aaa","oldText":"aa","newText":""},"expected":{"ok":"a"}}
+{"input":{"content":"aaa","oldText":"aa","newText":"$$"},"expected":{"ok":"$a"}}
+{"input":{"content":"aaa","oldText":"aa","newText":"$&"},"expected":{"ok":"aaa"}}
+{"input":{"content":"aaa","oldText":"aa","newText":"$`"},"expected":{"ok":"a"}}
+{"input":{"content":"aaa","oldText":"aa","newText":"$'"},"expected":{"ok":"aa"}}
+{"input":{"content":"aaa","oldText":"aa","newText":"$1 $01 $99 $0 $<name>"},"expected":{"ok":"$1 $01 $99 $0 $<name>a"}}
+{"input":{"content":"aaa","oldText":"aa","newText":"$$& $$$& $$$$ $$` $$'"},"expected":{"ok":"$& $aa $$ $` $'a"}}
+{"input":{"content":"aaa","oldText":"aa","newText":"$&$`$'$$"},"expected":{"ok":"aaa$a"}}
+{"input":{"content":"aaa","oldText":"aa","newText":"😀 $& café\r\n$' $`"},"expected":{"ok":"😀 aa café\r\na a"}}
+{"input":{"content":"aaa","oldText":"aa","newText":"$"},"expected":{"ok":"$a"}}
+{"input":{"content":"aaa","oldText":"aa","newText":"$$$"},"expected":{"ok":"$$a"}}
+{"input":{"content":"aaa","oldText":"aa","newText":"\\$&"},"expected":{"ok":"\\aaa"}}
+{"input":{"content":"aaaa","oldText":"aa","newText":"new"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"aaaa","oldText":"aa","newText":""},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"aaaa","oldText":"aa","newText":"$$"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"aaaa","oldText":"aa","newText":"$&"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"aaaa","oldText":"aa","newText":"$`"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"aaaa","oldText":"aa","newText":"$'"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"aaaa","oldText":"aa","newText":"$1 $01 $99 $0 $<name>"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"aaaa","oldText":"aa","newText":"$$& $$$& $$$$ $$` $$'"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"aaaa","oldText":"aa","newText":"$&$`$'$$"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"aaaa","oldText":"aa","newText":"😀 $& café\r\n$' $`"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"aaaa","oldText":"aa","newText":"$"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"aaaa","oldText":"aa","newText":"$$$"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"aaaa","oldText":"aa","newText":"\\$&"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"banana","oldText":"ana","newText":"new"},"expected":{"ok":"bnewna"}}
+{"input":{"content":"banana","oldText":"ana","newText":""},"expected":{"ok":"bna"}}
+{"input":{"content":"banana","oldText":"ana","newText":"$$"},"expected":{"ok":"b$na"}}
+{"input":{"content":"banana","oldText":"ana","newText":"$&"},"expected":{"ok":"banana"}}
+{"input":{"content":"banana","oldText":"ana","newText":"$`"},"expected":{"ok":"bbna"}}
+{"input":{"content":"banana","oldText":"ana","newText":"$'"},"expected":{"ok":"bnana"}}
+{"input":{"content":"banana","oldText":"ana","newText":"$1 $01 $99 $0 $<name>"},"expected":{"ok":"b$1 $01 $99 $0 $<name>na"}}
+{"input":{"content":"banana","oldText":"ana","newText":"$$& $$$& $$$$ $$` $$'"},"expected":{"ok":"b$& $ana $$ $` $'na"}}
+{"input":{"content":"banana","oldText":"ana","newText":"$&$`$'$$"},"expected":{"ok":"banabna$na"}}
+{"input":{"content":"banana","oldText":"ana","newText":"😀 $& café\r\n$' $`"},"expected":{"ok":"b😀 ana café\r\nna bna"}}
+{"input":{"content":"banana","oldText":"ana","newText":"$"},"expected":{"ok":"b$na"}}
+{"input":{"content":"banana","oldText":"ana","newText":"$$$"},"expected":{"ok":"b$$na"}}
+{"input":{"content":"banana","oldText":"ana","newText":"\\$&"},"expected":{"ok":"b\\anana"}}
+{"input":{"content":"😀😀","oldText":"😀","newText":"new"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"😀😀","oldText":"😀","newText":""},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"😀😀","oldText":"😀","newText":"$$"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"😀😀","oldText":"😀","newText":"$&"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"😀😀","oldText":"😀","newText":"$`"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"😀😀","oldText":"😀","newText":"$'"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"😀😀","oldText":"😀","newText":"$1 $01 $99 $0 $<name>"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"😀😀","oldText":"😀","newText":"$$& $$$& $$$$ $$` $$'"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"😀😀","oldText":"😀","newText":"$&$`$'$$"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"😀😀","oldText":"😀","newText":"😀 $& café\r\n$' $`"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"😀😀","oldText":"😀","newText":"$"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"😀😀","oldText":"😀","newText":"$$$"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"😀😀","oldText":"😀","newText":"\\$&"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"absent","oldText":"old","newText":"new"},"expected":{"error":"oldText appears 0 times","status":409}}
+{"input":{"content":"absent","oldText":"old","newText":""},"expected":{"error":"oldText appears 0 times","status":409}}
+{"input":{"content":"absent","oldText":"old","newText":"$$"},"expected":{"error":"oldText appears 0 times","status":409}}
+{"input":{"content":"absent","oldText":"old","newText":"$&"},"expected":{"error":"oldText appears 0 times","status":409}}
+{"input":{"content":"absent","oldText":"old","newText":"$`"},"expected":{"error":"oldText appears 0 times","status":409}}
+{"input":{"content":"absent","oldText":"old","newText":"$'"},"expected":{"error":"oldText appears 0 times","status":409}}
+{"input":{"content":"absent","oldText":"old","newText":"$1 $01 $99 $0 $<name>"},"expected":{"error":"oldText appears 0 times","status":409}}
+{"input":{"content":"absent","oldText":"old","newText":"$$& $$$& $$$$ $$` $$'"},"expected":{"error":"oldText appears 0 times","status":409}}
+{"input":{"content":"absent","oldText":"old","newText":"$&$`$'$$"},"expected":{"error":"oldText appears 0 times","status":409}}
+{"input":{"content":"absent","oldText":"old","newText":"😀 $& café\r\n$' $`"},"expected":{"error":"oldText appears 0 times","status":409}}
+{"input":{"content":"absent","oldText":"old","newText":"$"},"expected":{"error":"oldText appears 0 times","status":409}}
+{"input":{"content":"absent","oldText":"old","newText":"$$$"},"expected":{"error":"oldText appears 0 times","status":409}}
+{"input":{"content":"absent","oldText":"old","newText":"\\$&"},"expected":{"error":"oldText appears 0 times","status":409}}
+{"input":{"content":"x","oldText":"","newText":"new"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"x","oldText":"","newText":""},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"x","oldText":"","newText":"$$"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"x","oldText":"","newText":"$&"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"x","oldText":"","newText":"$`"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"x","oldText":"","newText":"$'"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"x","oldText":"","newText":"$1 $01 $99 $0 $<name>"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"x","oldText":"","newText":"$$& $$$& $$$$ $$` $$'"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"x","oldText":"","newText":"$&$`$'$$"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"x","oldText":"","newText":"😀 $& café\r\n$' $`"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"x","oldText":"","newText":"$"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"x","oldText":"","newText":"$$$"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"x","oldText":"","newText":"\\$&"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"","oldText":"","newText":"new"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"","oldText":"","newText":""},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"","oldText":"","newText":"$$"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"","oldText":"","newText":"$&"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"","oldText":"","newText":"$`"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"","oldText":"","newText":"$'"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"","oldText":"","newText":"$1 $01 $99 $0 $<name>"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"","oldText":"","newText":"$$& $$$& $$$$ $$` $$'"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"","oldText":"","newText":"$&$`$'$$"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"","oldText":"","newText":"😀 $& café\r\n$' $`"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"","oldText":"","newText":"$"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"","oldText":"","newText":"$$$"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"","oldText":"","newText":"\\$&"},"expected":{"error":"oldText must be non-empty","status":400}}
+{"input":{"content":"old old","oldText":"old","newText":"new"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"old old","oldText":"old","newText":""},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"old old","oldText":"old","newText":"$$"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"old old","oldText":"old","newText":"$&"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"old old","oldText":"old","newText":"$`"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"old old","oldText":"old","newText":"$'"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"old old","oldText":"old","newText":"$1 $01 $99 $0 $<name>"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"old old","oldText":"old","newText":"$$& $$$& $$$$ $$` $$'"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"old old","oldText":"old","newText":"$&$`$'$$"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"old old","oldText":"old","newText":"😀 $& café\r\n$' $`"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"old old","oldText":"old","newText":"$"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"old old","oldText":"old","newText":"$$$"},"expected":{"error":"oldText appears 2 times","status":409}}
+{"input":{"content":"old old","oldText":"old","newText":"\\$&"},"expected":{"error":"oldText appears 2 times","status":409}}

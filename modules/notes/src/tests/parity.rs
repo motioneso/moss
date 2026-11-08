@@ -76,3 +76,30 @@ fn edits_preserve_unrelated_text_and_refuse_ambiguous_changes() {
     assert!(moss_notes::edit("old old", "old", "new").is_err());
     assert!(moss_notes::edit("unrelated", "old", "new").is_err());
 }
+
+#[test]
+fn edit_matches_the_actual_legacy_handler() {
+    let vectors: Vec<Value> = include_str!("edit-vectors.jsonl")
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert!(vectors.len() >= 180);
+    for (i, vector) in vectors.iter().enumerate() {
+        let input = &vector["input"];
+        let old = input["oldText"].as_str().unwrap();
+        let result = match moss_notes::edit(
+            input["content"].as_str().unwrap(),
+            old,
+            input["newText"].as_str().unwrap(),
+        ) {
+            Ok(value) => json!({"ok": value}),
+            Err(error) => {
+                json!({"error": error.to_string(), "status": if old.is_empty() {400} else {409}})
+            }
+        };
+        assert_eq!(
+            result, vector["expected"],
+            "legacy edit vector {i}: {input}"
+        );
+    }
+}

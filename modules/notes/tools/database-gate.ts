@@ -13,6 +13,8 @@ const run = spawnSync(
     "rust-spike/module-host/Cargo.toml",
     "--test",
     "linked_notes_database",
+    "--test",
+    "notes_privacy",
     "--",
     "--ignored",
     "--nocapture",
