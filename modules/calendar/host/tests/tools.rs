@@ -158,8 +158,15 @@ impl Installed {
             result.status.success(),
             "TypeScript tool oracle failed (stderr omitted to avoid database diagnostics)"
         );
-        serde_json::from_slice(&result.stdout)
-            .expect("TypeScript oracle must return only a JSON result")
+        let value: Value = serde_json::from_slice(&result.stdout)
+            .expect("TypeScript oracle must return only a JSON result");
+        // The shared host intentionally sanitizes every guest Err at runtime.rs:293.
+        // Compare rejection outcomes here; message/status parity is explicitly deferred.
+        if value.get("error").is_some() {
+            json!({"error":"The module could not finish this request"})
+        } else {
+            value
+        }
     }
     fn plan(&self) -> Value {
         self.plan_on(&chrono::Utc::now().format("%Y-%m-%d").to_string())
@@ -343,5 +350,5 @@ fn installed_tools_match_production_typescript_and_keep_drafts_untimed() {
         t.call(f.a, "calendar.dayPlanDraft", input.clone()),
         t.oracle(f.a, "calendar.dayPlanDraft", &input)
     );
-    println!("PASS real signed Calendar Wasm tools against production TypeScript: owned heartbeat, shared-event exclusion, freshness, cap, Unicode revision, private drafts, conflicts, untimed additions and rejected timing keys. Public Tasks lookup is a test stand-in; no UI/provider/device claim.");
+    println!("PASS real signed Calendar Wasm tools against production TypeScript: success values and rejection/rollback outcomes for owned heartbeat, shared-event exclusion, freshness, cap, Unicode revision, private drafts, conflicts, untimed additions and timing keys. Host sanitizes errors; messages/statuses are not compared. Public Tasks lookup is a test stand-in; no UI/provider/device claim.");
 }

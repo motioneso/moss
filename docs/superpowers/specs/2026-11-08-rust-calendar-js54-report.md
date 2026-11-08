@@ -36,7 +36,7 @@ The disposable database suite installs a real signed test-registry package and i
 the shipped Wasm tools on the shared host. It compares results and persisted drafts
 against the actual production TypeScript handlers on the same actor/data. The
 TypeScript draft transaction deliberately rolls back before the Rust invocation;
-only newly generated block identities are normalized. The public Tasks projection
+Newly generated block identities are normalized on successful writes. The public Tasks projection
 is explicitly a fixture stand-in in both implementations, not installed Tasks proof.
 These calls use the installer's guest invocation, not the host's public `tools.run`
 approval path. That path currently prompts for every write tool and defaults read
@@ -44,8 +44,12 @@ tools to approval. The original draft tool is approved at installation and heart
 is an authorized background read. Reconciling those policies is required before chat
 or heartbeat integration; the current suite does not establish that parity.
 
-Tool errors currently cross the guest ABI as message strings, so the differential
-suite compares messages, not HTTP status codes. HTTP error/status parity remains open.
+Tool errors cross the guest ABI as message strings, and the shared host sanitizes
+every guest error to one generic message. The installed differential suite therefore
+compares exact successful values and rejection/rollback outcomes, normalizing the
+TypeScript errors to that host message. It does not establish error-text or HTTP status
+parity; both remain open. Invalid heartbeat inputs and Unicode revisions also have
+pure differential coverage without that host normalization.
 The existing Rust draft save also bounds positive revisions below the database integer
 ceiling; production accepts larger positive integers and fails later. This rare input
 difference remains open rather than being called full tool parity.

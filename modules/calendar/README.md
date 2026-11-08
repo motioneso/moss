@@ -56,7 +56,9 @@ registry package, exercises real Wasm data calls, checks draft revision conflict
 and runs the same foreign read/write assertions with row security removed and restored.
 Those temporary fixtures are not UI or second-device proof.
 The tool suite compares installed Wasm with the production TypeScript handlers on the
-same disposable database. Its Tasks projection is an explicit test stand-in. A heartbeat
+same disposable database: successful values and rejection/rollback outcomes. The host
+sanitizes guest errors, so error text and status parity are not established. Its Tasks
+projection is an explicit test stand-in. A heartbeat
 fault witness removes and restores guest owner predicates around the same shared-event
 exclusion assertion. The full checkpoint and remaining parity work are recorded in
 `docs/superpowers/specs/2026-11-08-rust-calendar-js54-report.md` from the repository root.
