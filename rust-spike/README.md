@@ -205,7 +205,7 @@ The rules check needs no database either. It exits 1 and prints the lines if any
 tools/check-safety-rules.sh .
 ```
 
-The protection-removal run needs a gate run, because 11 of its 17 removals start servers on a
+The protection-removal run needs a gate run, because 11 of its 18 removals start servers on a
 database. It exits 0 only if every removal makes a test fail. Each removal's diff and output go
 to `target/protections` unless `PROTECTIONS_OUT` says otherwise.
 

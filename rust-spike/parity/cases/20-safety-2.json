@@ -102,6 +102,15 @@
         }
       },
       {
+        "id": "admin deactivates self while B is also an admin",
+        "method": "POST",
+        "path": "/api/admin/users/{{admin}}/deactivate",
+        "as": "admin",
+        "expect": {
+          "status": 422
+        }
+      },
+      {
         "id": "admin demotes self",
         "method": "POST",
         "path": "/api/admin/users/{{admin}}/demote",
