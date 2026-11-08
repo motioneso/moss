@@ -36,6 +36,9 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> Result<String> {
     if kind == "route" {
         return crate::routes::handle(host, payload);
     }
+    if kind == "tool" {
+        return crate::tools::handle(host, payload);
+    }
     if kind != "api" {
         return Err(Error::new("People handler is not available"));
     }

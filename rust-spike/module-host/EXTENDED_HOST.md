@@ -40,6 +40,15 @@ the shared memory, and validate the completed component. This path uses the exis
 Wasmtime/WAT dependencies; it adds no generator, WASI adapter or native module driver.
 It does not fulfill the package spec's `wasm32-wasip2` shipping-build requirement.
 
+An additional build-time `guest_component::wrap_generated` entry accepts the canonical
+exports emitted by the approved `wit-bindgen` generator. The `wrap_generated_guest` example
+and People build script compile a `wasm32-wasip2` core with `--skip-wit-component` and shared
+memory, then assemble the existing Moss component interface. Standard-library WASI function
+imports become internal trap-only functions; invoking one fails, rather than reaching a host
+service. Foreign non-Moss/non-WASI imports remain rejected. The runtime's import validator
+and linker are unchanged. This path provides generated allocation/result ownership without
+granting WASI authority, and leaves the handwritten assembly available.
+
 Typed queries allow select/insert/update/delete, explicit nested filters, ordering,
 paging and insert conflict-ignore. They accept checked identifiers and bound JSON
 values, never SQL. Mutations reject a bare `Filter::All`; nested tautologies and broad account filters

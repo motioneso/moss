@@ -8,6 +8,7 @@ publish = false
 
 [features]
 component = ["moss-module-sdk/component"]
+generated-component = ["dep:wit-bindgen"]
 
 [lib]
 path = "lib.rs"
@@ -20,6 +21,9 @@ sha2 = "0.10"
 regex = "1"
 moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
 chrono = { version = "0.4", default-features = false, features = ["std"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen = { version = "=0.57.1", default-features = false, features = ["macros", "realloc"], optional = true }
 
 [[test]]
 name = "note_edits"

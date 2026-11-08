@@ -9,8 +9,10 @@ records the approved slice and exact continuation plan for part two.
 The crate lives in `src/`, as required by section 7 of the module package spec. Its repository
 consumes the merged shared SDK's query and context ports. The host supplies the actor and
 invocation transaction; the repository has no database connection or filesystem access.
-No component binding generator has been added. The handwritten SDK canonical ABI and host
-wrapper now run a compiled Rust People guest, with its completed read APIs and partial note route wiring. Older handwritten
+Ben approved the optional pinned `wit-bindgen` dependency on 2026-11-08. Its generated
+binding and the host wrapper build a `wasm32-wasip2` People component. The handwritten SDK
+canonical ABI remains available for comparison. Both paths use the same People handlers,
+including read APIs, partial note routes and seven tool execution handlers. Older handwritten
 fixtures still exercise a native test driver; those are separate persistence evidence.
 
 From `~/Jarv1s`:
@@ -30,13 +32,28 @@ parity can be accepted.
 
 Build the current handwritten component with an already available `wasm32-unknown-unknown`
 standard library compatible with the pinned compiler (the optional `MOSS_WASM_SYSROOT` selects
-an existing sysroot). This is not the required `wasm32-wasip2` shipping build, and does not
-authorize installing a target or generator:
+an existing sysroot). This comparison build uses `wasm32-unknown-unknown`; use the separate
+generated build below for `wasm32-wasip2`:
 
 ```sh
 CARGO_TARGET_DIR=/tmp/moss-people-wasm MOSS_HOST_TARGET_DIR=/tmp/moss-module-host-target modules/people/tools/build-component.sh /tmp/moss-people-component.wasm
 JS50_PEOPLE_COMPONENT=/tmp/moss-people-component.wasm CARGO_TARGET_DIR=/tmp/moss-module-host-target cargo +1.95.0 test --locked --manifest-path rust-spike/module-host/Cargo.toml --test people_guest -- --ignored --nocapture
 ```
+
+The generated build uses the pinned Rust compiler and its `wasm32-wasip2` target. Keep any
+dependency/target setup inside this worktree or scratch space. `MOSS_GUEST_CARGO_HOME` and
+`MOSS_GUEST_RUSTUP_HOME` optionally select those existing guest caches independently of the
+host builder's Cargo configuration:
+
+```sh
+CARGO_TARGET_DIR=/tmp/moss-people-wasip2 MOSS_HOST_TARGET_DIR=/tmp/moss-module-host-target modules/people/tools/build-generated-component.sh /tmp/moss-people-generated.wasm
+```
+
+The wrapper closes standard-library WASI functions with local traps. They confer no host
+filesystem, network, clock or randomness service. Normal module work must use the declared
+Moss ports. Calling a closed WASI function fails the invocation; the host's runtime import
+rules remain unchanged. The note parser uses a tree map rather than randomized hashing.
+This build is still an internal component, not an installed module or a complete Settings UI.
 
 The database differential and failing-first privacy matrix use a disposable verify-gate
 server, the unchanged seven legacy tables, and both production runtime roles:
@@ -47,7 +64,9 @@ scripts/run-gate.sh wait --follow
 ```
 
 The TypeScript oracles check native mutation responses and persisted rows, compiled read
-responses, and canonical-note service responses and bytes against the existing implementation.
+responses, seven tool execution functions, and canonical-note service responses and bytes
+against the existing implementation. Set `JS50_PEOPLE_SUITE` to one of the suite names in
+`people-gate.ts` to isolate a failure; leaving it unset runs the whole People gate.
 Generated IDs and timestamps use the parity harness's normalization. This is not the full HTTP parity suite. Complete route/error/fallback compatibility, ingest scheduling, package installation and authenticated UI/chat/device checks remain
 in the report's continuation plan. Preferences still belong to `app.preferences`.
 

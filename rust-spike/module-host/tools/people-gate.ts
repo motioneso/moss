@@ -16,6 +16,17 @@ console.log(
   "Compiled People component sha256:",
   createHash("sha256").update(component).digest("hex")
 );
+const suites = [
+  "people_privacy",
+  "people_persistence",
+  "people_guest_database",
+  "people_tools_database",
+  "people_notes_database",
+  "linked_notes_database",
+  "people_guest"
+];
+const selected = process.env.JS50_PEOPLE_SUITE;
+if (selected && !suites.includes(selected)) throw new Error("Unknown People test suite");
 const componentFolder = await mkdtemp(join(tmpdir(), "moss-people-component-"));
 const componentPath = join(componentFolder, "people.wasm");
 let oracle: Awaited<ReturnType<typeof peopleOracle>> | undefined;
@@ -32,18 +43,7 @@ try {
       "--offline",
       "--manifest-path",
       "rust-spike/module-host/Cargo.toml",
-      "--test",
-      "people_privacy",
-      "--test",
-      "people_persistence",
-      "--test",
-      "people_guest_database",
-      "--test",
-      "people_notes_database",
-      "--test",
-      "linked_notes_database",
-      "--test",
-      "people_guest",
+      ...(selected ? [selected] : suites).flatMap((suite) => ["--test", suite]),
       "--",
       "--ignored",
       "--nocapture",

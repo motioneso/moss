@@ -9,6 +9,12 @@ pub mod repository;
 pub mod repository_mutations;
 mod review;
 mod routes;
+mod tools;
+
+#[cfg(all(feature = "generated-component", feature = "component"))]
+compile_error!("Select either the generated or handwritten component binding");
+#[cfg(all(feature = "generated-component", target_arch = "wasm32"))]
+mod generated_component;
 
 #[cfg(all(feature = "component", target_arch = "wasm32"))]
 moss_module_sdk::export_module!(

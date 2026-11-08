@@ -1,6 +1,6 @@
 use crate::js_space;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 pub const PEOPLE_MANAGED_START: &str = "<!-- jarvis:people:start -->";
 pub const PEOPLE_MANAGED_END: &str = "<!-- jarvis:people:end -->";
@@ -35,7 +35,7 @@ enum Field {
 }
 
 fn parse_frontmatter(block: &str) -> Option<Frontmatter> {
-    let mut fields = HashMap::<String, Field>::new();
+    let mut fields = BTreeMap::<String, Field>::new();
     let mut current_array: Option<String> = None;
     for raw in block.split('\n') {
         let line = raw.trim_end_matches(js_space);

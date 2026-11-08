@@ -11,6 +11,7 @@ import { PersonContextService } from "../../../packages/people/src/service.js";
 import { findPeopleByNames } from "../../../packages/people/src/find-by-names.js";
 import { notesOracle } from "./people-notes-oracle.js";
 import { mutationOracle } from "./people-mutation-oracle.js";
+import { toolsOracle } from "./people-tools-oracle.js";
 
 export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise<void> }> {
   if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
@@ -19,12 +20,13 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
   const app = createDatabase({ connectionString: urls.app });
   const folder = await mkdtemp(join(tmpdir(), "moss-people-oracle-"));
   const actor = randomUUID();
+  const toolActor = randomUUID();
   const person = randomUUID();
   const archived = randomUUID();
   const path = join(folder, "expected.json");
   const cleanup = async (): Promise<void> => {
     try {
-      await bootstrap.query("DELETE FROM app.users WHERE id=$1", [actor]);
+      await bootstrap.query("DELETE FROM app.users WHERE id=ANY($1::uuid[])", [[actor, toolActor]]);
     } finally {
       await Promise.allSettled([
         bootstrap.end(),
@@ -213,6 +215,7 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
     } catch (error) {
       if (error !== rollback) throw error;
     }
+    const tools = await toolsOracle(bootstrap, runner, toolActor);
     await writeFile(
       path,
       JSON.stringify({
@@ -225,7 +228,8 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
         projectionRow: projectionRow.row,
         projectionId,
         mutation,
-        notes
+        notes,
+        tools
       })
     );
     return { path, cleanup };
