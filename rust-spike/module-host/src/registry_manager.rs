@@ -52,6 +52,7 @@ impl Installer {
             .registries
             .get_mut(&config.id)
             .context("Registry is not trusted")?;
+        catalog.assert_current(seen)?;
         seen.configuration = Some(config.clone());
         seen.removed = false;
         state.revision += 1;
@@ -146,11 +147,6 @@ impl Installer {
             crate::manifest::identifier(&transition.registry),
             "Invalid registry id"
         );
-        let _fence = self
-            .fence
-            .write()
-            .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
-        let _disk = self.disk_lock(true)?;
         let folder = self
             .root
             .subdir("registries")?
@@ -189,6 +185,15 @@ impl Installer {
         ensure!(
             catalog.index.serial >= transition.serial && catalog.trust.identity.id == config.id,
             "Root transition index is too old"
+        );
+        let _fence = self
+            .fence
+            .write()
+            .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
+        let _disk = self.disk_lock(true)?;
+        ensure!(
+            self.catalog.load()?.revision == revision,
+            "Module settings changed during the root transfer; refresh and retry"
         );
         config.root_key = transition.next_key.clone();
         next.configuration = Some(config.clone());

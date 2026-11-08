@@ -38,7 +38,8 @@ Registry settings, signed metadata, serial floors, revocations and publisher bin
 Folder sources support offline mirrors; HTTPS sources accept an explicit public CA for that
 source only. `preview_list` returns one consent per package, bound to both package digest and
 previous installation. `apply_list` accepts those exact consents. A failed install retains the
-old version and pin. Snapshot APIs list, expire and explicitly restore retained recovery points.
+old version and pin. Network transfers run outside lifecycle locks; activation rechecks current
+trust, dependencies, pins and consent, and registry commits refuse a changed revision. Snapshot APIs list, expire and explicitly restore retained recovery points.
 
 ## Attachment permissions
 
@@ -79,3 +80,11 @@ CARGO_TARGET_DIR=/tmp/moss-module-host-target cargo +1.95.0 test --locked --mani
 The removal-control runner changes disposable sibling copies and requires each matching
 assertion to fail. It never adds a bypass option to the delivered host. Use its log alongside
 the passing protected tests; a stand-in upstream is not proof of a live provider integration.
+
+The stalled-network proof also claims and releases development ports. It holds actual TLS
+handshakes open while an installed Wasm module is called, covering index and package transfers.
+Run it separately from the database gate:
+
+```sh
+CARGO_TARGET_DIR=/tmp/moss-module-host-target cargo +1.95.0 test --locked --manifest-path rust-spike/module-host/Cargo.toml --test transfers -- --ignored --nocapture
+```

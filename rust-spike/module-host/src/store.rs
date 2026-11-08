@@ -191,11 +191,6 @@ impl Installer {
         registry_id: &str,
     ) -> Result<Catalog> {
         self.admin(access)?;
-        let _fence = self
-            .fence
-            .write()
-            .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
-        let _disk_lock = self.disk_lock(true)?;
         let mut state = self.catalog.load()?;
         let previous = state.revision;
         let catalog = Catalog::fetch(
@@ -207,6 +202,15 @@ impl Installer {
         ensure!(
             catalog.trust.identity.id == registry_id,
             "The registry has a different identity"
+        );
+        let _fence = self
+            .fence
+            .write()
+            .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
+        let _disk_lock = self.disk_lock(true)?;
+        ensure!(
+            self.catalog.load()?.revision == previous,
+            "Module settings changed during the registry transfer; refresh again"
         );
         // Keep every prefix binding visible to the host even before anything is installed.
         // Installation checks it against other configured registries.
@@ -287,12 +291,52 @@ impl Installer {
         consent: Option<&Consent>,
     ) -> Result<()> {
         self.admin(access)?;
+        self.check_selection(
+            &self.catalog.load()?,
+            catalog,
+            artifact,
+            pin_override.as_ref(),
+            consent,
+        )?;
+        let bytes = catalog.source.fetch(
+            &format!("packages/{}.mosspkg", artifact.digest),
+            artifact.size,
+        )?;
+        let package = catalog.read_download(artifact, &bytes, &self.moss)?;
         let _fence = self
             .fence
             .write()
             .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
         let _disk_lock = self.disk_lock(true)?;
-        let state = self.catalog.load()?;
+        self.check_selection(
+            &self.catalog.load()?,
+            catalog,
+            artifact,
+            pin_override.as_ref(),
+            consent,
+        )?;
+        self.activate(
+            access,
+            package,
+            &bytes,
+            catalog,
+            &artifact.publisher_key,
+            Activation {
+                approved,
+                pin_override,
+            },
+        )
+    }
+    /// Recheck selection after downloading: pins, dependencies, consent and registry trust
+    /// can change while network I/O runs without the lifecycle locks.
+    fn check_selection(
+        &self,
+        state: &State,
+        catalog: &Catalog,
+        artifact: &Artifact,
+        pin_override: Option<&Version>,
+        consent: Option<&Consent>,
+    ) -> Result<()> {
         if let Some(consent) = consent {
             ensure!(
                 consent.digest == artifact.digest
@@ -317,7 +361,7 @@ impl Installer {
             .and_then(|v| v.pin.as_ref());
         let selected = catalog.select(
             &artifact.id,
-            pin_override.as_ref().or(pin).or(Some(&artifact.version)),
+            pin_override.or(pin).or(Some(&artifact.version)),
             &self.moss,
             &installed,
             seen,
@@ -326,22 +370,7 @@ impl Installer {
             selected.digest == artifact.digest,
             "The requested package is not the selected signed version"
         );
-        let bytes = catalog.source.fetch(
-            &format!("packages/{}.mosspkg", artifact.digest),
-            artifact.size,
-        )?;
-        let package = catalog.read_download(artifact, &bytes, &self.moss)?;
-        self.activate(
-            access,
-            package,
-            &bytes,
-            catalog,
-            &artifact.publisher_key,
-            Activation {
-                approved,
-                pin_override,
-            },
-        )
+        Ok(())
     }
     pub fn import_file(
         &self,
