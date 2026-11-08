@@ -1,0 +1,15 @@
+[package]
+name = "parity"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+description = "Phase 0b spike: differential checks between the TypeScript and Rust Tasks servers"
+
+[dependencies]
+chrono = "0.4"
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "process", "time", "fs", "signal"] }
+tokio-postgres = { version = "0.7", features = ["with-serde_json-1"] }
+url = "2"

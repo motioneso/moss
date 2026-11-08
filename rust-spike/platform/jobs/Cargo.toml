@@ -1,0 +1,15 @@
+[package]
+name = "moss-platform-jobs"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+[dependencies]
+moss-platform-contracts = { path = "../contracts" }
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+tokio.workspace = true
+tokio-postgres.workspace = true
+async-trait.workspace = true
+cron = "0.15"
+chrono-tz = "0.10"

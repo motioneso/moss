@@ -1,0 +1,17 @@
+[package]
+name = "moss-notes"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Guest-safe Notes domain operations; host integration follows in part two"
+
+[workspace]
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+uuid = "1"

@@ -1,7 +1,7 @@
 # Throwaway spike for the Rust port, Phase 0a (JS-34). Not product code.
 [workspace]
 resolver = "2"
-members = ["keystore", "portability"]
+members = ["access-context", "bundled-db", "keystore", "parity", "portability", "safety-core", "tasks", "vault"]
 
 [workspace.package]
 edition = "2021"

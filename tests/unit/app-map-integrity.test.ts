@@ -3,10 +3,24 @@ import { readFileSync } from "node:fs";
 
 import { webRoutes } from "../../apps/web/src/app-route-metadata.js";
 import { getBuiltInModuleManifests } from "@moss/module-registry";
-import { CORE_APP_ERRORS, CORE_APP_SCREENS, CORE_APP_SETTINGS } from "@moss/shared";
+import {
+  CORE_APP_ERRORS,
+  CORE_APP_REMEDIATIONS,
+  CORE_APP_SCREENS,
+  CORE_APP_SETTINGS,
+  RUST_APP_SCREENS
+} from "@moss/shared";
 import { buildAppMap } from "../../scripts/build-app-map.js";
 
 describe("app-map integrity and truthfulness", () => {
+  const rustRoutes = new Set(
+    [
+      ...readFileSync(
+        new URL("../../rust-spike/network/src/web.rs", import.meta.url),
+        "utf8"
+      ).matchAll(/\.route\(\s*"([^" ]+)"/g)
+    ].map((match) => match[1])
+  );
   const appMap = buildAppMap({
     manifests: getBuiltInModuleManifests(),
     coreScreens: CORE_APP_SCREENS,
@@ -14,6 +28,49 @@ describe("app-map integrity and truthfulness", () => {
     version: "test",
     buildId: "test",
     narrative: ""
+  });
+
+  it("builds a separate Rust map with only real Rust routes", () => {
+    const rustMap = buildAppMap({
+      runtime: "rust",
+      manifests: [],
+      coreScreens: [...CORE_APP_SCREENS, ...RUST_APP_SCREENS],
+      coreSettings: CORE_APP_SETTINGS,
+      coreErrors: CORE_APP_ERRORS,
+      coreRemediations: CORE_APP_REMEDIATIONS,
+      version: "test",
+      buildId: "test",
+      narrative: ""
+    });
+    expect(rustMap.screens.map((entry) => entry.id)).toEqual(["rust-sign-in"]);
+    expect(rustMap.settings.map((entry) => entry.id)).toEqual(["rust-network-sharing"]);
+    for (const entry of [...rustMap.screens, ...rustMap.settings, ...rustMap.remediations]) {
+      expect(rustRoutes.has(entry.path ?? "")).toBe(true);
+    }
+    expect(rustMap.errors.some((entry) => entry.code === "host_refused")).toBe(true);
+  });
+
+  it("keeps Rust-only declarations out of the production TypeScript app map", () => {
+    const production = buildAppMap({
+      manifests: [],
+      coreScreens: [...CORE_APP_SCREENS, ...RUST_APP_SCREENS],
+      coreSettings: CORE_APP_SETTINGS,
+      coreErrors: CORE_APP_ERRORS,
+      coreRemediations: CORE_APP_REMEDIATIONS,
+      version: "test",
+      buildId: "test",
+      narrative: ""
+    });
+    for (const entries of [
+      production.screens,
+      production.settings,
+      production.errors,
+      production.remediations
+    ]) {
+      expect(entries.some((entry) => "runtime" in entry && entry.runtime === "rust")).toBe(false);
+    }
+    expect(production.errors.some((entry) => entry.code === "host_refused")).toBe(false);
+    expect(production.screens.some((entry) => entry.path === "/today")).toBe(true);
   });
 
   it("distinguishes corrective input failures from unavailable approval details", () => {
@@ -114,11 +171,23 @@ describe("app-map integrity and truthfulness", () => {
     ]);
 
     for (const screen of appMap.screens) {
+      if ("runtime" in screen && screen.runtime === "rust") {
+        expect(rustRoutes.has(screen.path), `Rust screen "${screen.id}" has no Rust route`).toBe(
+          true
+        );
+        continue;
+      }
       expect(
         validPaths.has(screen.path) || screen.path.startsWith("/m/"),
         `Screen "${screen.id}" has invalid path "${screen.path}"`
       ).toBe(true);
     }
+  });
+
+  it("Rust core remediations point at declared Rust routes", () => {
+    const rustRemediations = CORE_APP_REMEDIATIONS.filter((entry) => entry.runtime === "rust");
+    expect(rustRemediations.length).toBeGreaterThan(0);
+    for (const entry of rustRemediations) expect(rustRoutes.has(entry.path ?? "")).toBe(true);
   });
 
   it("every app map remediation points at a truthful route", () => {
@@ -159,6 +228,13 @@ describe("app-map integrity and truthfulness", () => {
     );
 
     for (const setting of appMap.settings) {
+      if ("runtime" in setting && setting.runtime === "rust") {
+        expect(
+          rustRoutes.has(setting.path ?? ""),
+          `Rust setting "${setting.id}" has no Rust route`
+        ).toBe(true);
+        continue;
+      }
       if (setting.path?.startsWith("android:")) {
         const native = /^android:([^/]+)\/(\.[A-Za-z][A-Za-z0-9]*)$/.exec(setting.path);
         expect(native?.[1], `Setting "${setting.id}" has an unknown Android package`).toBe(
@@ -230,7 +306,7 @@ describe("app-map integrity and truthfulness", () => {
 
   it("keeps each core description short enough to summarise", () => {
     // Long topics are split into several entries that share a path rather than one wall of text.
-    for (const surface of [...CORE_APP_SCREENS, ...CORE_APP_SETTINGS]) {
+    for (const surface of [...CORE_APP_SCREENS, ...RUST_APP_SCREENS, ...CORE_APP_SETTINGS]) {
       expect(
         surface.description.length,
         `Core entry "${surface.id}" is too long; split it into topic entries`
@@ -262,12 +338,25 @@ describe("app-map integrity and truthfulness", () => {
     // twice reads as two different things even when the owners differ.
     const screenIds = new Set<string>();
     for (const screen of appMap.screens) {
+      if ("runtime" in screen && screen.runtime === "rust") {
+        expect(rustRoutes.has(screen.path), `Rust screen "${screen.id}" has no Rust route`).toBe(
+          true
+        );
+        continue;
+      }
       expect(screenIds.has(screen.id!), `Duplicate screen id "${screen.id}"`).toBe(false);
       screenIds.add(screen.id!);
     }
 
     const settingIds = new Set<string>();
     for (const setting of appMap.settings) {
+      if ("runtime" in setting && setting.runtime === "rust") {
+        expect(
+          rustRoutes.has(setting.path ?? ""),
+          `Rust setting "${setting.id}" has no Rust route`
+        ).toBe(true);
+        continue;
+      }
       expect(settingIds.has(setting.id!), `Duplicate setting id "${setting.id}"`).toBe(false);
       settingIds.add(setting.id!);
     }

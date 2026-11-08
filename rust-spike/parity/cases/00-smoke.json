@@ -1,0 +1,196 @@
+[
+  {
+    "name": "smoke: create, read back, other user and anonymous are refused",
+    "source": "harness smoke",
+    "steps": [
+      {
+        "id": "make",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "Write the parity harness",
+          "priority": 2
+        },
+        "expect": {
+          "status": 201,
+          "body": {
+            "task": {
+              "title": "Write the parity harness"
+            }
+          }
+        }
+      },
+      {
+        "id": "read",
+        "method": "GET",
+        "path": "/api/tasks/{{make:/body/task/id}}",
+        "as": "A",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "other",
+        "method": "GET",
+        "path": "/api/tasks/{{make:/body/task/id}}",
+        "as": "B",
+        "expect": {
+          "status": 404
+        }
+      },
+      {
+        "id": "anon",
+        "method": "GET",
+        "path": "/api/tasks",
+        "expect": {
+          "status": 401
+        }
+      },
+      {
+        "id": "list",
+        "method": "GET",
+        "path": "/api/tasks",
+        "as": "A",
+        "expect": {
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.tasks", "app.task_activity"]
+  },
+  {
+    "name": "smoke: deferred status job marks the task done",
+    "source": "harness smoke",
+    "steps": [
+      {
+        "id": "make",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "Finish later"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "defer",
+        "method": "POST",
+        "path": "/api/tasks/{{make:/body/task/id}}/deferred-status",
+        "as": "A",
+        "body": {
+          "status": "done"
+        },
+        "expect": {
+          "status": 202
+        }
+      },
+      {
+        "id": "job",
+        "wait_job": "{{defer:/body/jobId}}",
+        "expect": {
+          "state": "completed"
+        }
+      },
+      {
+        "id": "after",
+        "method": "GET",
+        "path": "/api/tasks/{{make:/body/task/id}}",
+        "as": "A",
+        "expect": {
+          "status": 200,
+          "body": {
+            "task": {
+              "status": "done"
+            }
+          }
+        }
+      }
+    ],
+    "rows": ["app.tasks"]
+  },
+  {
+    "name": "smoke: row security as each runtime role",
+    "source": "harness smoke",
+    "steps": [
+      {
+        "id": "make",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "Private to A"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "owner",
+        "sql": "select count(*)::int as n from app.tasks",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "n": 1
+            }
+          ]
+        }
+      },
+      {
+        "id": "stranger",
+        "sql": "select count(*)::int as n from app.tasks",
+        "as": "B",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      },
+      {
+        "id": "worker as owner",
+        "sql": "select count(*)::int as n from app.tasks",
+        "role": "worker",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "n": 1
+            }
+          ]
+        }
+      },
+      {
+        "id": "no actor",
+        "sql": "select count(*)::int as n from app.tasks",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      },
+      {
+        "id": "stranger write",
+        "sql": "update app.tasks set title = 'taken'",
+        "as": "B",
+        "expect": {
+          "affected": [0]
+        }
+      },
+      {
+        "id": "owner write",
+        "sql": "update app.tasks set title = 'renamed'",
+        "as": "A",
+        "expect": {
+          "affected": [1]
+        }
+      }
+    ]
+  }
+]

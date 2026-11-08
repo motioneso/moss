@@ -1,0 +1,11 @@
+[package]
+name = "ui-bindgen"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Runs wasm-bindgen on a built wasm file, so no global wasm-bindgen-cli is needed"
+
+[workspace]
+
+[dependencies]
+wasm-bindgen-cli-support = "=0.2.130"

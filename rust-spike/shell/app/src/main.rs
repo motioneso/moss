@@ -1,0 +1,244 @@
+//! The browser and desktop shell use the same authenticated HTTPS entrypoint.
+//! Supply --network <private configuration file>; see rust-spike/network/README.md.
+
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+
+use axum::extract::State;
+use axum::handler::HandlerWithoutStateExt;
+use axum::http::{StatusCode, Uri};
+use axum::response::{Html, IntoResponse, Response};
+use axum::routing::{get, post};
+use axum::{Extension, Json, Router};
+use moss_network::{
+    config::Config,
+    tls,
+    web::{self, Network},
+};
+use moss_shell_contract::stub::StubShellData;
+use moss_shell_contract::{ChatMessage, ChatThread, SendMessage, ShellData, ShellView, TodayView};
+use safety_core::access::AccessContext;
+use tower_http::services::ServeDir;
+
+mod runner_data;
+
+type Data = Arc<dyn ShellData>;
+
+struct Accounts {
+    platform: Arc<safety_core::http::Platform>,
+    runner: Option<PathBuf>,
+    data: Mutex<HashMap<uuid::Uuid, Data>>,
+}
+
+impl Accounts {
+    fn for_actor(&self, access: &AccessContext) -> Data {
+        self.data
+            .lock()
+            .expect("account data lock")
+            .entry(access.actor_user_id())
+            .or_insert_with(|| match &self.runner {
+                Some(root) => Arc::new(runner_data::RunnerShellData::new(
+                    root.clone(),
+                    access.actor_user_id().to_string(),
+                )) as Data,
+                None => Arc::new(StubShellData::default()) as Data,
+            })
+            .clone()
+    }
+}
+
+/// The UI shell's routes. `ShellData` is the seam: Phase 2/3 pass a database-backed
+/// implementation here instead of the stub.
+fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
+    let index = web.join("index.html");
+    Router::new()
+        .route(
+            "/api/shell",
+            get(|State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>| async move {
+                let cx = safety_core::db::DataContext::open(&d.platform.app, &access).await?;
+                let row = cx.db().query_one("SELECT name FROM app.get_user_by_id($1::uuid)", &[&access.actor_user_id()]).await?;
+                let mut shell = d.for_actor(&access).shell();
+                shell.account.display_name = row.get(0);
+                cx.commit().await?;
+                Ok::<_, safety_core::error::ApiError>(Json::<ShellView>(shell))
+            }),
+        )
+        .route(
+            "/api/today",
+            get(|State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>| async move { Json::<TodayView>(d.for_actor(&access).today()) }),
+        )
+        .route(
+            "/api/chat/thread",
+            get(|State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>| async move { Json::<ChatThread>(d.for_actor(&access).chat_thread()) }),
+        )
+        .route(
+            "/api/chat/messages",
+            post(
+                |State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>, Json(body): Json<SendMessage>| async move {
+                    // A chat turn can take minutes, so it waits off the request threads.
+                    let data = d.for_actor(&access);
+                    match tokio::task::spawn_blocking(move || data.send_message(&body.text)).await {
+                        Ok(m) => Json::<ChatMessage>(m).into_response(),
+                        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+                    }
+                },
+            ),
+        )
+        // Client-side routes (/today, /tasks, ...) load the app page. Unknown API routes and
+        // missing files answer 404 instead.
+        .fallback_service(
+            ServeDir::new(&web)
+                .fallback((move |uri: Uri| app_page(uri, index.clone())).into_service()),
+        )
+        .with_state(data)
+}
+
+async fn app_page(uri: Uri, index: PathBuf) -> Response {
+    let path = uri.path();
+    let last = path.rsplit('/').next().unwrap_or_default();
+    if path == "/api" || path.starts_with("/api/") || last.contains('.') {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    match tokio::fs::read_to_string(&index).await {
+        Ok(page) => Html(page).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+struct Args {
+    mode: String,
+    network: PathBuf,
+    web: PathBuf,
+    runner: Option<PathBuf>,
+}
+
+fn parse_args() -> Result<Args, String> {
+    let mut raw = std::env::args().skip(1).peekable();
+    let mode = match raw.peek().map(String::as_str) {
+        Some("serve") | Some("desktop") => raw.next().unwrap_or_default(),
+        _ => "desktop".to_string(),
+    };
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(PathBuf::from))
+        .unwrap_or_default();
+    let mut args = Args {
+        mode,
+        network: exe_dir.join("network.json"),
+        web: exe_dir.join("web"),
+        runner: None,
+    };
+    while let Some(flag) = raw.next() {
+        let value = raw.next().ok_or_else(|| format!("{flag} needs a value"))?;
+        match flag.as_str() {
+            "--network" => args.network = PathBuf::from(value),
+            "--web" => args.web = PathBuf::from(value),
+            "--runner" => args.runner = Some(PathBuf::from(value)),
+            _ => return Err(format!("unknown option {flag}")),
+        }
+    }
+    if !args.web.join("index.html").is_file() {
+        return Err(format!(
+            "no web build at {} (run rust-spike/shell/build.sh)",
+            args.web.display()
+        ));
+    }
+    Ok(args)
+}
+
+fn main() {
+    let args = match parse_args() {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("moss-shell: {e}");
+            std::process::exit(2);
+        }
+    };
+    let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let prepared = runtime.block_on(async {
+        let config = Config::read(&args.network)?;
+        if args.mode == "desktop" && !config.listen.ip().is_loopback() {
+            return Err(
+                "Desktop mode needs a loopback listener; use serve for network sharing".to_string(),
+            );
+        }
+        let platform = config.platform().await?;
+        let acceptor = tls::acceptor(&config.certificate, &config.private_key)?;
+        let listener = tokio::net::TcpListener::bind(config.listen)
+            .await
+            .map_err(|_| "Cannot bind the configured HTTPS listener")?;
+        let desktop_origin = config
+            .local_origin()
+            .ok_or("No local HTTPS origin")?
+            .to_owned();
+        let network = Network::new(platform.clone(), config, args.network)?;
+        let data = Arc::new(Accounts {
+            platform,
+            runner: args.runner,
+            data: Mutex::new(HashMap::new()),
+        });
+        let app = web::router(network, router(data, args.web.clone()), args.web);
+        Ok::<_, String>((listener, acceptor, app, desktop_origin))
+    });
+    let (listener, acceptor, app, desktop_origin) = match prepared {
+        Ok(parts) => parts,
+        Err(_) => {
+            eprintln!("moss-shell: could not start secure HTTPS; check private configuration, certificates and runtime database roles");
+            std::process::exit(1);
+        }
+    };
+    if args.mode == "serve" {
+        if runtime
+            .block_on(tls::serve(listener, acceptor, app))
+            .is_err()
+        {
+            std::process::exit(1);
+        }
+    } else {
+        runtime.spawn(tls::serve(listener, acceptor, app));
+        desktop::run(desktop_origin);
+    }
+}
+
+mod desktop {
+    use tao::dpi::LogicalSize;
+    use tao::event::{Event, WindowEvent};
+    use tao::event_loop::{ControlFlow, EventLoop};
+    use tao::window::WindowBuilder;
+    use wry::WebViewBuilder;
+
+    pub fn run(origin: String) {
+        let event_loop = EventLoop::new();
+        let window = WindowBuilder::new()
+            .with_title("Moss")
+            .with_inner_size(LogicalSize::new(1360.0, 860.0))
+            .with_min_inner_size(LogicalSize::new(360.0, 560.0))
+            .build(&event_loop)
+            .expect("window");
+
+        let builder = WebViewBuilder::new().with_url(format!("{origin}/today"));
+
+        #[cfg(not(target_os = "linux"))]
+        let _webview = builder.build(&window).expect("webview");
+        #[cfg(target_os = "linux")]
+        let _webview = {
+            use tao::platform::unix::WindowExtUnix;
+            use wry::WebViewBuilderExtUnix;
+            builder
+                .build_gtk(window.default_vbox().expect("vbox"))
+                .expect("webview")
+        };
+
+        event_loop.run(move |event, _, control_flow| {
+            *control_flow = ControlFlow::Wait;
+            if let Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                ..
+            } = event
+            {
+                *control_flow = ControlFlow::Exit;
+            }
+        });
+    }
+}

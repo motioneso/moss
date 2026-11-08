@@ -1,0 +1,554 @@
+[
+  {
+    "name": "rename-recurrence 47: rename a list, duplicate 409, foreign 404",
+    "source": "tasks-rename-recurrence.test.ts:47 PATCH /api/tasks/lists/:listId renames a list (200), duplicate \u2192 409, foreign \u2192 404",
+    "steps": [
+      {
+        "id": "src",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Route Rename Src"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "clash",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Route Rename Clash"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "ok",
+        "method": "PATCH",
+        "path": "/api/tasks/lists/{{src:/body/list/id}}",
+        "as": "A",
+        "body": {
+          "name": "Route Rename Done"
+        },
+        "expect": {
+          "body": {
+            "list": {
+              "name": "Route Rename Done"
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "dup",
+        "method": "PATCH",
+        "path": "/api/tasks/lists/{{src:/body/list/id}}",
+        "as": "A",
+        "body": {
+          "name": "Route Rename Clash"
+        },
+        "expect": {
+          "status": 409
+        }
+      },
+      {
+        "id": "foreign",
+        "method": "PATCH",
+        "path": "/api/tasks/lists/{{src:/body/list/id}}",
+        "as": "B",
+        "body": {
+          "name": "Hijacked"
+        },
+        "expect": {
+          "status": 404
+        }
+      }
+    ],
+    "rows": ["app.task_lists"]
+  },
+  {
+    "name": "rename-recurrence 83: delete a list, 409 when not empty, 200 with a move target",
+    "source": "tasks-rename-recurrence.test.ts:83 DELETE /api/tasks/lists/:listId \u2192 409 non-empty, 200 with reassign",
+    "steps": [
+      {
+        "id": "src",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Route Delete Src"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "dst",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Route Delete Dst"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "task",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "route-del-task",
+          "listId": "{{src:/body/list/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "conflict",
+        "method": "DELETE",
+        "path": "/api/tasks/lists/{{src:/body/list/id}}",
+        "as": "A",
+        "body": {},
+        "expect": {
+          "status": 409
+        }
+      },
+      {
+        "id": "ok",
+        "method": "DELETE",
+        "path": "/api/tasks/lists/{{src:/body/list/id}}",
+        "as": "A",
+        "body": {
+          "reassignToListId": "{{dst:/body/list/id}}"
+        },
+        "expect": {
+          "body": {
+            "deleted": true
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "moved",
+        "sql": "select list_id from app.tasks where id = '{{task:/body/task/id}}'",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "list_id": "{{dst:/body/list/id}}"
+            }
+          ]
+        }
+      }
+    ],
+    "rows": ["app.task_lists", "app.tasks"]
+  },
+  {
+    "name": "rename-recurrence 119: rename a tag, duplicate 409",
+    "source": "tasks-rename-recurrence.test.ts:119 PATCH /api/tasks/lists/:listId/tags/:tagId renames a tag (200), duplicate \u2192 409",
+    "steps": [
+      {
+        "id": "list",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Route Tag Rename List"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "tag",
+        "method": "POST",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}/tags",
+        "as": "A",
+        "body": {
+          "name": "route-tag-src"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "clash",
+        "method": "POST",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}/tags",
+        "as": "A",
+        "body": {
+          "name": "route-tag-clash"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "ok",
+        "method": "PATCH",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}/tags/{{tag:/body/tag/id}}",
+        "as": "A",
+        "body": {
+          "name": "route-tag-done"
+        },
+        "expect": {
+          "body": {
+            "tag": {
+              "name": "route-tag-done"
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "dup",
+        "method": "PATCH",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}/tags/{{tag:/body/tag/id}}",
+        "as": "A",
+        "body": {
+          "name": "route-tag-clash"
+        },
+        "expect": {
+          "status": 409
+        }
+      }
+    ],
+    "rows": ["app.task_tags"]
+  },
+  {
+    "name": "rename-recurrence 149: deleting a tag removes its assignments",
+    "source": "tasks-rename-recurrence.test.ts:149 DELETE /api/tasks/lists/:listId/tags/:tagId \u2192 200, assignments cascaded",
+    "steps": [
+      {
+        "id": "list",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Route Tag Delete List"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "tag",
+        "method": "POST",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}/tags",
+        "as": "A",
+        "body": {
+          "name": "route-tag-del"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "task",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "route-tag-del-task",
+          "listId": "{{list:/body/list/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "assign",
+        "method": "POST",
+        "path": "/api/tasks/{{task:/body/task/id}}/tags",
+        "as": "A",
+        "body": {
+          "tagId": "{{tag:/body/tag/id}}"
+        },
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "ok",
+        "method": "DELETE",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}/tags/{{tag:/body/tag/id}}",
+        "as": "A",
+        "expect": {
+          "body": {
+            "deleted": true
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "after",
+        "method": "GET",
+        "path": "/api/tasks/{{task:/body/task/id}}",
+        "as": "A",
+        "expect": {
+          "body": {
+            "task": {
+              "tags": []
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "gone",
+        "sql": "select count(*)::int as n from app.task_tag_assignments",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      }
+    ],
+    "rows": ["app.task_tags", "app.task_tag_assignments"],
+    "note": "The test assigns the tag through the repository; this case uses the assign route. Cascade is read through the task and a row count."
+  },
+  {
+    "name": "rename-recurrence 178: assign then unassign a tag",
+    "source": "tasks-rename-recurrence.test.ts:178 POST /api/tasks/:id/tags assigns a tag (200, task.tags reflects it); DELETE unassigns (200)",
+    "steps": [
+      {
+        "id": "list",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Route Assign List"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "tag",
+        "method": "POST",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}/tags",
+        "as": "A",
+        "body": {
+          "name": "route-assign-tag"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "task",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "route-assign-task",
+          "listId": "{{list:/body/list/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "assign",
+        "method": "POST",
+        "path": "/api/tasks/{{task:/body/task/id}}/tags",
+        "as": "A",
+        "body": {
+          "tagId": "{{tag:/body/tag/id}}"
+        },
+        "expect": {
+          "body": {
+            "task": {
+              "tags": [
+                {
+                  "id": "{{tag:/body/tag/id}}"
+                }
+              ]
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "unassign",
+        "method": "DELETE",
+        "path": "/api/tasks/{{task:/body/task/id}}/tags/{{tag:/body/tag/id}}",
+        "as": "A",
+        "expect": {
+          "body": {
+            "task": {
+              "tags": []
+            }
+          },
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.task_tag_assignments"]
+  },
+  {
+    "name": "rename-recurrence 208: assigning a tag to someone else's task is 404",
+    "source": "tasks-rename-recurrence.test.ts:208 POST /api/tasks/:id/tags by a non-owner is 404 (RLS owner-only assignment)",
+    "steps": [
+      {
+        "id": "list",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Route Assign Foreign List"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "tag",
+        "method": "POST",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}/tags",
+        "as": "A",
+        "body": {
+          "name": "route-assign-foreign-tag"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "task",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "route-assign-foreign-task",
+          "listId": "{{list:/body/list/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "foreign",
+        "method": "POST",
+        "path": "/api/tasks/{{task:/body/task/id}}/tags",
+        "as": "B",
+        "body": {
+          "tagId": "{{tag:/body/tag/id}}"
+        },
+        "expect": {
+          "status": 404
+        }
+      }
+    ],
+    "rows": ["app.task_tag_assignments"]
+  },
+  {
+    "name": "rename-recurrence 228: tag filter keeps only tagged tasks",
+    "source": "tasks-rename-recurrence.test.ts:228 GET /api/tasks?tagId=\u2026 filters to tasks carrying that tag (RLS-scoped)",
+    "steps": [
+      {
+        "id": "list",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Route TagFilter List"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "tag",
+        "method": "POST",
+        "path": "/api/tasks/lists/{{list:/body/list/id}}/tags",
+        "as": "A",
+        "body": {
+          "name": "route-tagfilter-tag"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "tagged",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "route-tagfilter-tagged",
+          "listId": "{{list:/body/list/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "untagged",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "route-tagfilter-untagged",
+          "listId": "{{list:/body/list/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "assign",
+        "method": "POST",
+        "path": "/api/tasks/{{tagged:/body/task/id}}/tags",
+        "as": "A",
+        "body": {
+          "tagId": "{{tag:/body/tag/id}}"
+        },
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "filtered",
+        "method": "GET",
+        "path": "/api/tasks?tagId={{tag:/body/tag/id}}",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "id": "{{tagged:/body/task/id}}"
+              }
+            ]
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "as B",
+        "method": "GET",
+        "path": "/api/tasks?tagId={{tag:/body/tag/id}}",
+        "as": "B",
+        "expect": {
+          "body": {
+            "tasks": []
+          },
+          "status": 200
+        }
+      }
+    ],
+    "note": "Exact result instead of contains / not contains. Adds the same filter as user B, who sees nothing."
+  }
+]

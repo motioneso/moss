@@ -1,0 +1,194 @@
+{
+  "schemaVersion": 2,
+  "id": "calendar",
+  "name": "Calendar",
+  "description": "Calendar data and chat draft package checkpoint; provider execution and screens follow separately.",
+  "publisher": "Moss",
+  "version": "0.2.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": [
+        "app.calendar_events",
+        "app.day_plans",
+        "app.day_plan_blocks",
+        "app.day_plan_operations",
+        "app.day_plan_operation_items"
+      ]
+    },
+    {
+      "port": "context",
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
+    },
+    {
+      "port": "kv",
+      "operations": ["get"],
+      "resources": [
+        "calendar.briefing-settings",
+        "calendar.chat-context",
+        "calendar.task-reference",
+        "calendar.briefing-reference"
+      ]
+    }
+  ],
+  "database": {
+    "ownedTables": [
+      "app.calendar_events",
+      "app.day_plans",
+      "app.day_plan_blocks",
+      "app.day_plan_operations",
+      "app.day_plan_operation_items"
+    ],
+    "migrations": [
+      "sql/0011_calendar_module.sql",
+      "sql/0020_calendar_owner_or_share.sql",
+      "sql/0066_calendar_worker_grants_and_google_insert.sql",
+      "sql/0087_calendar_events_update_connector_scope.sql",
+      "sql/0113_worker_calendar_events_delete.sql",
+      "sql/0126_app_runtime_calendar_events_delete.sql",
+      "sql/0229_day_plans.sql",
+      "sql/0229a_day_plan_preserve_legacy.sql",
+      "sql/0230_day_plan_ownership.sql",
+      "sql/0231_day_plan_reconcile_storage.sql",
+      "sql/0232_day_plan_blank_legacy_notes.sql",
+      "sql/0233_day_plan_block_task_soft_reference.sql",
+      "sql/0234_day_plan_apply_batch.sql",
+      "sql/0235_day_plan_apply_item_result.sql",
+      "sql/0236_day_plan_worker_apply_grants.sql"
+    ],
+    "ledger": "core-legacy",
+    "access": {
+      "app.calendar_events": {
+        "access": "owner-or-share",
+        "resourceType": "calendar_event",
+        "shareKey": "id"
+      },
+      "app.day_plans": {
+        "access": "owner-only"
+      },
+      "app.day_plan_blocks": {
+        "access": "owner-only"
+      },
+      "app.day_plan_operations": {
+        "access": "owner-only"
+      },
+      "app.day_plan_operation_items": {
+        "access": "owner-only"
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/events",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/events/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/day-plan",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/day-plans",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/day-plans/:id/draft",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/briefing-settings",
+      "signIn": true
+    }
+  ],
+  "provides": {
+    "listEvents": "1.0.0",
+    "getEvent": "1.0.0",
+    "getPlan": "1.0.0",
+    "createPlan": "1.0.0",
+    "saveDraft": "1.0.0"
+  },
+  "icons": ["icons/calendar.svg"],
+  "accounts": {
+    "supportsUserDisable": true,
+    "defaultEnabled": true
+  },
+  "features": [
+    {
+      "id": "calendar.data",
+      "description": "Reads cached events and saves private day-plan drafts. Provider execution and screens are not included in this package checkpoint.",
+      "errors": [
+        {
+          "code": "calendar-unavailable",
+          "class": "transient",
+          "description": "Calendar storage or a declared public dependency is unavailable",
+          "remediationRef": "calendar-check-package"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "calendar-check-package",
+          "description": "Check that Calendar and its public dependencies are enabled",
+          "path": "/settings/modules"
+        }
+      ]
+    },
+    {
+      "id": "calendar.heartbeat_source",
+      "description": "Provides a bounded cache-only heartbeat read of owned events. Shared events are excluded; no provider request is made.",
+      "errors": [
+        {
+          "code": "invalid-heartbeat-input",
+          "class": "validation",
+          "description": "Retry with only horizonHours from one to forty-eight and limit from one to twenty. These are caller inputs, not account settings."
+        },
+        {
+          "code": "calendar_heartbeat_source_unavailable",
+          "class": "transient",
+          "description": "Cached Calendar events could not be read for a check-in. Check-in delivery and Alerts integration remain outside this package checkpoint."
+        }
+      ]
+    },
+    {
+      "id": "calendar.day_plan_draft",
+      "description": "The package tool saves intent and untimed task additions to today or tomorrow in the saved account timezone. It is not yet connected to signed-in chat. Drafts require the current revision and public task reference adapter. Provider writes and dialog execution are not shipped in this checkpoint.",
+      "errors": [
+        {
+          "code": "draft-not-available",
+          "class": "transient",
+          "description": "The draft, current revision or public task adapter is unavailable.",
+          "remediationRef": "calendar-read-draft"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "calendar-read-draft",
+          "description": "Read the current draft before retrying. Check the public task adapter for task-linked edits.",
+          "path": "/settings/modules"
+        }
+      ]
+    }
+  ],
+  "tools": {
+    "calendar.heartbeatWindow": {
+      "description": "Background cache-only read of the actor's own upcoming events, with bounded results, freshness and material revision.",
+      "risk": "read"
+    },
+    "calendar.dayPlanDraft": {
+      "description": "Save evening intent and untimed task additions to the current day-plan draft for dialog review. Does not schedule events.",
+      "risk": "write"
+    }
+  }
+}

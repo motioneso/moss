@@ -1,0 +1,797 @@
+[
+  {
+    "name": "metadata payload admitted",
+    "path": "/probe/payload",
+    "body": {
+      "queue": {
+        "name": "tasks.defer",
+        "moduleId": "tasks",
+        "jobKinds": ["defer"],
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "taskId": {
+              "type": "uuid"
+            },
+            "requestedStatus": {
+              "type": "enum",
+              "values": ["todo", "done"]
+            }
+          }
+        },
+        "retryLimit": 3,
+        "retryDelaySeconds": 1,
+        "retryBackoff": true,
+        "leaseSeconds": 60
+      },
+      "payload": {
+        "actorUserId": "00000000-0000-4000-8000-000000000001",
+        "moduleId": "tasks",
+        "jobKind": "defer",
+        "manifestHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "params": {
+          "taskId": "00000000-0000-4000-8000-000000000100",
+          "requestedStatus": "done"
+        }
+      }
+    },
+    "expected": {
+      "accepted": true
+    }
+  },
+  {
+    "name": "top-level content refused",
+    "path": "/probe/payload",
+    "body": {
+      "queue": {
+        "name": "tasks.defer",
+        "moduleId": "tasks",
+        "jobKinds": ["defer"],
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "taskId": {
+              "type": "uuid"
+            },
+            "requestedStatus": {
+              "type": "enum",
+              "values": ["todo", "done"]
+            }
+          }
+        },
+        "retryLimit": 3,
+        "retryDelaySeconds": 1,
+        "retryBackoff": true,
+        "leaseSeconds": 60
+      },
+      "payload": {
+        "actorUserId": "00000000-0000-4000-8000-000000000001",
+        "moduleId": "tasks",
+        "jobKind": "defer",
+        "manifestHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "params": {
+          "taskId": "00000000-0000-4000-8000-000000000100",
+          "requestedStatus": "done"
+        },
+        "content": "SENTINEL-private-value"
+      }
+    },
+    "expected": {
+      "accepted": false
+    }
+  },
+  {
+    "name": "param content refused",
+    "path": "/probe/payload",
+    "body": {
+      "queue": {
+        "name": "tasks.defer",
+        "moduleId": "tasks",
+        "jobKinds": ["defer"],
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "taskId": {
+              "type": "uuid"
+            },
+            "requestedStatus": {
+              "type": "enum",
+              "values": ["todo", "done"]
+            }
+          }
+        },
+        "retryLimit": 3,
+        "retryDelaySeconds": 1,
+        "retryBackoff": true,
+        "leaseSeconds": 60
+      },
+      "payload": {
+        "actorUserId": "00000000-0000-4000-8000-000000000001",
+        "moduleId": "tasks",
+        "jobKind": "defer",
+        "manifestHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "params": {
+          "taskId": "00000000-0000-4000-8000-000000000100",
+          "requestedStatus": "done",
+          "content": "SENTINEL-private-value"
+        }
+      }
+    },
+    "expected": {
+      "accepted": false
+    }
+  },
+  {
+    "name": "top-level prompt refused",
+    "path": "/probe/payload",
+    "body": {
+      "queue": {
+        "name": "tasks.defer",
+        "moduleId": "tasks",
+        "jobKinds": ["defer"],
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "taskId": {
+              "type": "uuid"
+            },
+            "requestedStatus": {
+              "type": "enum",
+              "values": ["todo", "done"]
+            }
+          }
+        },
+        "retryLimit": 3,
+        "retryDelaySeconds": 1,
+        "retryBackoff": true,
+        "leaseSeconds": 60
+      },
+      "payload": {
+        "actorUserId": "00000000-0000-4000-8000-000000000001",
+        "moduleId": "tasks",
+        "jobKind": "defer",
+        "manifestHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "params": {
+          "taskId": "00000000-0000-4000-8000-000000000100",
+          "requestedStatus": "done"
+        },
+        "prompt": "SENTINEL-private-value"
+      }
+    },
+    "expected": {
+      "accepted": false
+    }
+  },
+  {
+    "name": "param prompt refused",
+    "path": "/probe/payload",
+    "body": {
+      "queue": {
+        "name": "tasks.defer",
+        "moduleId": "tasks",
+        "jobKinds": ["defer"],
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "taskId": {
+              "type": "uuid"
+            },
+            "requestedStatus": {
+              "type": "enum",
+              "values": ["todo", "done"]
+            }
+          }
+        },
+        "retryLimit": 3,
+        "retryDelaySeconds": 1,
+        "retryBackoff": true,
+        "leaseSeconds": 60
+      },
+      "payload": {
+        "actorUserId": "00000000-0000-4000-8000-000000000001",
+        "moduleId": "tasks",
+        "jobKind": "defer",
+        "manifestHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "params": {
+          "taskId": "00000000-0000-4000-8000-000000000100",
+          "requestedStatus": "done",
+          "prompt": "SENTINEL-private-value"
+        }
+      }
+    },
+    "expected": {
+      "accepted": false
+    }
+  },
+  {
+    "name": "top-level secret refused",
+    "path": "/probe/payload",
+    "body": {
+      "queue": {
+        "name": "tasks.defer",
+        "moduleId": "tasks",
+        "jobKinds": ["defer"],
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "taskId": {
+              "type": "uuid"
+            },
+            "requestedStatus": {
+              "type": "enum",
+              "values": ["todo", "done"]
+            }
+          }
+        },
+        "retryLimit": 3,
+        "retryDelaySeconds": 1,
+        "retryBackoff": true,
+        "leaseSeconds": 60
+      },
+      "payload": {
+        "actorUserId": "00000000-0000-4000-8000-000000000001",
+        "moduleId": "tasks",
+        "jobKind": "defer",
+        "manifestHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "params": {
+          "taskId": "00000000-0000-4000-8000-000000000100",
+          "requestedStatus": "done"
+        },
+        "secret": "SENTINEL-private-value"
+      }
+    },
+    "expected": {
+      "accepted": false
+    }
+  },
+  {
+    "name": "param secret refused",
+    "path": "/probe/payload",
+    "body": {
+      "queue": {
+        "name": "tasks.defer",
+        "moduleId": "tasks",
+        "jobKinds": ["defer"],
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "taskId": {
+              "type": "uuid"
+            },
+            "requestedStatus": {
+              "type": "enum",
+              "values": ["todo", "done"]
+            }
+          }
+        },
+        "retryLimit": 3,
+        "retryDelaySeconds": 1,
+        "retryBackoff": true,
+        "leaseSeconds": 60
+      },
+      "payload": {
+        "actorUserId": "00000000-0000-4000-8000-000000000001",
+        "moduleId": "tasks",
+        "jobKind": "defer",
+        "manifestHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "params": {
+          "taskId": "00000000-0000-4000-8000-000000000100",
+          "requestedStatus": "done",
+          "secret": "SENTINEL-private-value"
+        }
+      }
+    },
+    "expected": {
+      "accepted": false
+    }
+  },
+  {
+    "name": "top-level apiKey refused",
+    "path": "/probe/payload",
+    "body": {
+      "queue": {
+        "name": "tasks.defer",
+        "moduleId": "tasks",
+        "jobKinds": ["defer"],
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "taskId": {
+              "type": "uuid"
+            },
+            "requestedStatus": {
+              "type": "enum",
+              "values": ["todo", "done"]
+            }
+          }
+        },
+        "retryLimit": 3,
+        "retryDelaySeconds": 1,
+        "retryBackoff": true,
+        "leaseSeconds": 60
+      },
+      "payload": {
+        "actorUserId": "00000000-0000-4000-8000-000000000001",
+        "moduleId": "tasks",
+        "jobKind": "defer",
+        "manifestHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "params": {
+          "taskId": "00000000-0000-4000-8000-000000000100",
+          "requestedStatus": "done"
+        },
+        "apiKey": "SENTINEL-private-value"
+      }
+    },
+    "expected": {
+      "accepted": false
+    }
+  },
+  {
+    "name": "param apiKey refused",
+    "path": "/probe/payload",
+    "body": {
+      "queue": {
+        "name": "tasks.defer",
+        "moduleId": "tasks",
+        "jobKinds": ["defer"],
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "taskId": {
+              "type": "uuid"
+            },
+            "requestedStatus": {
+              "type": "enum",
+              "values": ["todo", "done"]
+            }
+          }
+        },
+        "retryLimit": 3,
+        "retryDelaySeconds": 1,
+        "retryBackoff": true,
+        "leaseSeconds": 60
+      },
+      "payload": {
+        "actorUserId": "00000000-0000-4000-8000-000000000001",
+        "moduleId": "tasks",
+        "jobKind": "defer",
+        "manifestHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "params": {
+          "taskId": "00000000-0000-4000-8000-000000000100",
+          "requestedStatus": "done",
+          "apiKey": "SENTINEL-private-value"
+        }
+      }
+    },
+    "expected": {
+      "accepted": false
+    }
+  },
+  {
+    "name": "top-level token refused",
+    "path": "/probe/payload",
+    "body": {
+      "queue": {
+        "name": "tasks.defer",
+        "moduleId": "tasks",
+        "jobKinds": ["defer"],
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "taskId": {
+              "type": "uuid"
+            },
+            "requestedStatus": {
+              "type": "enum",
+              "values": ["todo", "done"]
+            }
+          }
+        },
+        "retryLimit": 3,
+        "retryDelaySeconds": 1,
+        "retryBackoff": true,
+        "leaseSeconds": 60
+      },
+      "payload": {
+        "actorUserId": "00000000-0000-4000-8000-000000000001",
+        "moduleId": "tasks",
+        "jobKind": "defer",
+        "manifestHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "params": {
+          "taskId": "00000000-0000-4000-8000-000000000100",
+          "requestedStatus": "done"
+        },
+        "token": "SENTINEL-private-value"
+      }
+    },
+    "expected": {
+      "accepted": false
+    }
+  },
+  {
+    "name": "param token refused",
+    "path": "/probe/payload",
+    "body": {
+      "queue": {
+        "name": "tasks.defer",
+        "moduleId": "tasks",
+        "jobKinds": ["defer"],
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "taskId": {
+              "type": "uuid"
+            },
+            "requestedStatus": {
+              "type": "enum",
+              "values": ["todo", "done"]
+            }
+          }
+        },
+        "retryLimit": 3,
+        "retryDelaySeconds": 1,
+        "retryBackoff": true,
+        "leaseSeconds": 60
+      },
+      "payload": {
+        "actorUserId": "00000000-0000-4000-8000-000000000001",
+        "moduleId": "tasks",
+        "jobKind": "defer",
+        "manifestHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "params": {
+          "taskId": "00000000-0000-4000-8000-000000000100",
+          "requestedStatus": "done",
+          "token": "SENTINEL-private-value"
+        }
+      }
+    },
+    "expected": {
+      "accepted": false
+    }
+  },
+  {
+    "name": "invalid actorUserId refused",
+    "path": "/probe/payload",
+    "body": {
+      "queue": {
+        "name": "tasks.defer",
+        "moduleId": "tasks",
+        "jobKinds": ["defer"],
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "taskId": {
+              "type": "uuid"
+            },
+            "requestedStatus": {
+              "type": "enum",
+              "values": ["todo", "done"]
+            }
+          }
+        },
+        "retryLimit": 3,
+        "retryDelaySeconds": 1,
+        "retryBackoff": true,
+        "leaseSeconds": 60
+      },
+      "payload": {
+        "actorUserId": "invalid",
+        "moduleId": "tasks",
+        "jobKind": "defer",
+        "manifestHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "params": {
+          "taskId": "00000000-0000-4000-8000-000000000100",
+          "requestedStatus": "done"
+        }
+      }
+    },
+    "expected": {
+      "accepted": false
+    }
+  },
+  {
+    "name": "invalid moduleId refused",
+    "path": "/probe/payload",
+    "body": {
+      "queue": {
+        "name": "tasks.defer",
+        "moduleId": "tasks",
+        "jobKinds": ["defer"],
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "taskId": {
+              "type": "uuid"
+            },
+            "requestedStatus": {
+              "type": "enum",
+              "values": ["todo", "done"]
+            }
+          }
+        },
+        "retryLimit": 3,
+        "retryDelaySeconds": 1,
+        "retryBackoff": true,
+        "leaseSeconds": 60
+      },
+      "payload": {
+        "actorUserId": "00000000-0000-4000-8000-000000000001",
+        "moduleId": "invalid",
+        "jobKind": "defer",
+        "manifestHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "params": {
+          "taskId": "00000000-0000-4000-8000-000000000100",
+          "requestedStatus": "done"
+        }
+      }
+    },
+    "expected": {
+      "accepted": false
+    }
+  },
+  {
+    "name": "invalid jobKind refused",
+    "path": "/probe/payload",
+    "body": {
+      "queue": {
+        "name": "tasks.defer",
+        "moduleId": "tasks",
+        "jobKinds": ["defer"],
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "taskId": {
+              "type": "uuid"
+            },
+            "requestedStatus": {
+              "type": "enum",
+              "values": ["todo", "done"]
+            }
+          }
+        },
+        "retryLimit": 3,
+        "retryDelaySeconds": 1,
+        "retryBackoff": true,
+        "leaseSeconds": 60
+      },
+      "payload": {
+        "actorUserId": "00000000-0000-4000-8000-000000000001",
+        "moduleId": "tasks",
+        "jobKind": "INVALID kind",
+        "manifestHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "params": {
+          "taskId": "00000000-0000-4000-8000-000000000100",
+          "requestedStatus": "done"
+        }
+      }
+    },
+    "expected": {
+      "accepted": false
+    }
+  },
+  {
+    "name": "invalid manifestHash refused",
+    "path": "/probe/payload",
+    "body": {
+      "queue": {
+        "name": "tasks.defer",
+        "moduleId": "tasks",
+        "jobKinds": ["defer"],
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "taskId": {
+              "type": "uuid"
+            },
+            "requestedStatus": {
+              "type": "enum",
+              "values": ["todo", "done"]
+            }
+          }
+        },
+        "retryLimit": 3,
+        "retryDelaySeconds": 1,
+        "retryBackoff": true,
+        "leaseSeconds": 60
+      },
+      "payload": {
+        "actorUserId": "00000000-0000-4000-8000-000000000001",
+        "moduleId": "tasks",
+        "jobKind": "defer",
+        "manifestHash": "invalid",
+        "params": {
+          "taskId": "00000000-0000-4000-8000-000000000100",
+          "requestedStatus": "done"
+        }
+      }
+    },
+    "expected": {
+      "accepted": false
+    }
+  },
+  {
+    "name": "declared route admitted",
+    "path": "/probe/coverage",
+    "body": {
+      "manifests": [
+        {
+          "id": "tasks",
+          "name": "Tasks",
+          "version": "1",
+          "routes": [
+            {
+              "method": "GET",
+              "path": "/api/tasks"
+            }
+          ]
+        }
+      ],
+      "registered": [
+        {
+          "method": "GET",
+          "path": "/api/tasks"
+        }
+      ],
+      "platform": []
+    },
+    "expected": {
+      "accepted": true
+    }
+  },
+  {
+    "name": "HEAD shares GET declaration",
+    "path": "/probe/coverage",
+    "body": {
+      "manifests": [
+        {
+          "id": "tasks",
+          "name": "Tasks",
+          "version": "1",
+          "routes": [
+            {
+              "method": "GET",
+              "path": "/api/tasks"
+            }
+          ]
+        }
+      ],
+      "registered": [
+        {
+          "method": "HEAD",
+          "path": "/api/tasks"
+        }
+      ],
+      "platform": []
+    },
+    "expected": {
+      "accepted": true
+    }
+  },
+  {
+    "name": "undeclared route refused",
+    "path": "/probe/coverage",
+    "body": {
+      "manifests": [
+        {
+          "id": "tasks",
+          "name": "Tasks",
+          "version": "1",
+          "routes": [
+            {
+              "method": "GET",
+              "path": "/api/tasks"
+            }
+          ]
+        }
+      ],
+      "registered": [
+        {
+          "method": "GET",
+          "path": "/api/tasks"
+        },
+        {
+          "method": "POST",
+          "path": "/api/unlisted"
+        }
+      ],
+      "platform": []
+    },
+    "expected": {
+      "accepted": false
+    }
+  },
+  {
+    "name": "manifest drift refused",
+    "path": "/probe/coverage",
+    "body": {
+      "manifests": [
+        {
+          "id": "tasks",
+          "name": "Tasks",
+          "version": "1",
+          "routes": [
+            {
+              "method": "GET",
+              "path": "/api/tasks"
+            }
+          ]
+        }
+      ],
+      "registered": [],
+      "platform": []
+    },
+    "expected": {
+      "accepted": false
+    }
+  },
+  {
+    "name": "explicit platform route admitted",
+    "path": "/probe/coverage",
+    "body": {
+      "manifests": [
+        {
+          "id": "tasks",
+          "name": "Tasks",
+          "version": "1",
+          "routes": [
+            {
+              "method": "GET",
+              "path": "/api/tasks"
+            }
+          ]
+        }
+      ],
+      "registered": [
+        {
+          "method": "GET",
+          "path": "/api/tasks"
+        },
+        {
+          "method": "GET",
+          "path": "/health"
+        }
+      ],
+      "platform": ["GET /health"]
+    },
+    "expected": {
+      "accepted": true
+    }
+  },
+  {
+    "name": "explicit null params refused",
+    "path": "/probe/payload",
+    "body": {
+      "queue": {
+        "name": "tasks.defer",
+        "moduleId": "tasks",
+        "jobKinds": ["defer"],
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "taskId": {
+              "type": "uuid"
+            },
+            "requestedStatus": {
+              "type": "enum",
+              "values": ["todo", "done"]
+            }
+          }
+        },
+        "retryLimit": 3,
+        "retryDelaySeconds": 1,
+        "retryBackoff": true,
+        "leaseSeconds": 60
+      },
+      "payload": {
+        "actorUserId": "00000000-0000-4000-8000-000000000001",
+        "moduleId": "tasks",
+        "jobKind": "defer",
+        "manifestHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "params": null
+      }
+    },
+    "expected": {
+      "accepted": false
+    }
+  }
+]

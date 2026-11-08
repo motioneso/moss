@@ -1,0 +1,47 @@
+[package]
+name = "moss-tasks-checks"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+anyhow = "1"
+axum = "0.8"
+chrono = "0.4"
+moss-tasks-module = { path = "../src" }
+moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
+moss-module-host = { path = "../../../rust-spike/module-host" }
+access-context = { path = "../../../rust-spike/access-context" }
+safety-core = { path = "../../../rust-spike/safety-core" }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+url = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "process", "fs"] }
+tokio-postgres = { version = "0.7", features = ["with-serde_json-1"] }
+uuid = { version = "1", features = ["v4"] }
+wat = "=1.239.0"
+
+[profile.dev]
+debug = 0
+
+[[bin]]
+name = "tasks-domain-check"
+path = "src/domain_check.rs"
+
+[[bin]]
+name = "tasks-pack"
+path = "src/pack.rs"
+
+[[bin]]
+name = "tasks-component-server"
+path = "src/parity_server.rs"
+
+[[bin]]
+name = "tasks-component-parity"
+path = "../../../rust-spike/parity/src/main.rs"
+# Its unit tests locate cases relative to the original parity crate's manifest.
+# Keep them in that crate; this package only reuses the unchanged executable.
+test = false

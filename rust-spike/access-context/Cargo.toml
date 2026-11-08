@@ -1,0 +1,9 @@
+[package]
+name = "access-context"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+description = "Phase 2 part 1: who is acting, shared by the safety core and the vault"
+
+[dependencies]
+uuid = "1"

@@ -1,0 +1,557 @@
+[
+  {
+    "name": "safety: account guardrails hold for admins",
+    "source": "packages/settings/src/routes.ts 444-736: admin power is configuration power, with guardrails",
+    "steps": [
+      {
+        "id": "member lists users",
+        "method": "GET",
+        "path": "/api/admin/users",
+        "as": "A",
+        "expect": {
+          "status": 403
+        }
+      },
+      {
+        "id": "anonymous lists users",
+        "method": "GET",
+        "path": "/api/admin/users",
+        "expect": {
+          "status": 401
+        }
+      },
+      {
+        "id": "approve an active member",
+        "method": "POST",
+        "path": "/api/admin/users/{{userA}}/approve",
+        "as": "admin",
+        "expect": {
+          "status": 409
+        }
+      },
+      {
+        "id": "approve an unknown user",
+        "method": "POST",
+        "path": "/api/admin/users/00000000-0000-4000-8000-0000000000ff/approve",
+        "as": "admin",
+        "expect": {
+          "status": 404
+        }
+      },
+      {
+        "id": "admin deletes self",
+        "method": "DELETE",
+        "path": "/api/admin/users/{{admin}}",
+        "as": "admin",
+        "expect": {
+          "status": 422
+        }
+      },
+      {
+        "id": "admin deactivates self",
+        "method": "POST",
+        "path": "/api/admin/users/{{admin}}/deactivate",
+        "as": "admin",
+        "expect": {
+          "status": 422
+        }
+      },
+      {
+        "id": "last admin demotes self",
+        "method": "POST",
+        "path": "/api/admin/users/{{admin}}/demote",
+        "as": "admin",
+        "expect": {
+          "status": 409
+        }
+      },
+      {
+        "id": "reject an active member",
+        "method": "POST",
+        "path": "/api/admin/users/{{userA}}/reject",
+        "as": "admin",
+        "expect": {
+          "status": 409
+        }
+      },
+      {
+        "id": "revoke a member's sessions",
+        "method": "POST",
+        "path": "/api/admin/users/{{userA}}/revoke-sessions",
+        "as": "admin",
+        "expect": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "count": 0
+          }
+        }
+      },
+      {
+        "id": "promote B",
+        "method": "POST",
+        "path": "/api/admin/users/{{userB}}/promote",
+        "as": "admin",
+        "expect": {
+          "status": 200,
+          "body": {
+            "user": {
+              "isInstanceAdmin": true
+            }
+          }
+        }
+      },
+      {
+        "id": "admin deactivates self while B is also an admin",
+        "method": "POST",
+        "path": "/api/admin/users/{{admin}}/deactivate",
+        "as": "admin",
+        "expect": {
+          "status": 422
+        }
+      },
+      {
+        "id": "admin demotes self",
+        "method": "POST",
+        "path": "/api/admin/users/{{admin}}/demote",
+        "as": "admin",
+        "expect": {
+          "status": 200,
+          "body": {
+            "user": {
+              "isInstanceAdmin": false
+            }
+          }
+        }
+      },
+      {
+        "id": "B, now the last admin, demotes self",
+        "method": "POST",
+        "path": "/api/admin/users/{{userB}}/demote",
+        "as": "B",
+        "expect": {
+          "status": 409
+        }
+      },
+      {
+        "id": "B lists users",
+        "method": "GET",
+        "path": "/api/admin/users",
+        "as": "B",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "former admin lists users",
+        "method": "GET",
+        "path": "/api/admin/users",
+        "as": "admin",
+        "expect": {
+          "status": 403
+        }
+      },
+      {
+        "id": "audit trail, request ids by presence only",
+        "sql": "select actor_user_id, action, target_type, target_id, metadata, request_id is not null as has_request_id from app.admin_audit_events order by created_at, action",
+        "as": "B",
+        "expect": {
+          "rows": [{ "has_request_id": true }, { "has_request_id": true }]
+        }
+      }
+    ],
+    "rows": ["app.users"],
+    "note": "Delete and reject are only called where a guard refuses them, because the Rust server answers 501 once every guard passes."
+  },
+  {
+    "name": "safety: the bootstrap owner cannot be deactivated, demoted or deleted",
+    "source": "packages/settings/src/repository.ts 435 and 472, routes.ts 680: the bootstrap owner keeps the instance",
+    "seed": [
+      "update app.users set is_bootstrap_owner = true, is_instance_admin = true where id = '{{userB}}'"
+    ],
+    "steps": [
+      {
+        "id": "deactivate the owner",
+        "method": "POST",
+        "path": "/api/admin/users/{{userB}}/deactivate",
+        "as": "admin",
+        "expect": {
+          "status": 409,
+          "body": {
+            "error": "The bootstrap owner cannot be deactivated"
+          }
+        }
+      },
+      {
+        "id": "demote the owner",
+        "method": "POST",
+        "path": "/api/admin/users/{{userB}}/demote",
+        "as": "admin",
+        "expect": {
+          "status": 409,
+          "body": {
+            "error": "The bootstrap owner cannot be demoted"
+          }
+        }
+      },
+      {
+        "id": "delete the owner",
+        "method": "DELETE",
+        "path": "/api/admin/users/{{userB}}",
+        "as": "admin",
+        "expect": {
+          "status": 409,
+          "body": {
+            "error": "The bootstrap owner cannot be deleted"
+          }
+        }
+      },
+      {
+        "id": "the owner is unchanged",
+        "sql": "select status, is_instance_admin from app.get_user_by_id('{{userB}}'::uuid)",
+        "as": "admin",
+        "expect": {
+          "rows": [
+            {
+              "status": "active",
+              "is_instance_admin": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "safety: connectors are private and never return the secret",
+    "source": "Hard invariant: secrets never escape; connector secrets are AES-256-GCM at rest",
+    "steps": [
+      {
+        "id": "A adds a connector",
+        "method": "POST",
+        "path": "/api/connectors/accounts",
+        "as": "A",
+        "body": {
+          "providerId": "google-calendar",
+          "scopes": ["https://www.googleapis.com/auth/calendar.readonly"],
+          "tokenPayload": {
+            "accessToken": "MOSS-SENTINEL-access-1",
+            "refreshToken": "MOSS-SENTINEL-refresh-1"
+          }
+        },
+        "absent": [
+          "MOSS-SENTINEL-",
+          "encryptedSecret",
+          "encrypted_secret",
+          "ciphertext",
+          "aes-256-gcm",
+          "keyId",
+          "\"iv\"",
+          "\"tag\""
+        ],
+        "expect": {
+          "status": 201,
+          "body": {
+            "account": {
+              "providerId": "google-calendar",
+              "ownerUserId": "{{userA}}",
+              "hasSecret": true
+            }
+          }
+        }
+      },
+      {
+        "id": "A lists connectors",
+        "method": "GET",
+        "path": "/api/connectors/accounts",
+        "as": "A",
+        "absent": [
+          "MOSS-SENTINEL-",
+          "encryptedSecret",
+          "encrypted_secret",
+          "ciphertext",
+          "aes-256-gcm",
+          "keyId",
+          "\"iv\"",
+          "\"tag\""
+        ],
+        "expect": {
+          "status": 200,
+          "body": {
+            "accounts": [
+              {
+                "hasSecret": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "B lists connectors",
+        "method": "GET",
+        "path": "/api/connectors/accounts",
+        "as": "B",
+        "expect": {
+          "status": 200,
+          "body": {
+            "accounts": []
+          }
+        }
+      },
+      {
+        "id": "admin lists connectors",
+        "method": "GET",
+        "path": "/api/connectors/accounts",
+        "as": "admin",
+        "expect": {
+          "status": 200,
+          "body": {
+            "accounts": []
+          }
+        }
+      },
+      {
+        "id": "B probes A's connectors",
+        "sql": "select count(*)::int as n from app.connector_accounts where owner_user_id = '{{userA}}'",
+        "as": "B",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      },
+      {
+        "id": "the secret is sealed at rest",
+        "sql": "select encrypted_secret::text like '%MOSS-SENTINEL-%' as readable, encrypted_secret->>'algorithm' as algorithm from app.connector_accounts",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "readable": false,
+              "algorithm": "aes-256-gcm"
+            }
+          ]
+        }
+      },
+      {
+        "id": "the Outlook calendar is refused here",
+        "method": "POST",
+        "path": "/api/connectors/accounts",
+        "as": "A",
+        "body": {
+          "providerId": "outlook-browser-calendar",
+          "tokenPayload": {
+            "accessToken": "MOSS-SENTINEL-outlook"
+          }
+        },
+        "absent": ["MOSS-SENTINEL-"],
+        "expect": {
+          "status": 403
+        }
+      }
+    ]
+  },
+  {
+    "name": "safety: AI credentials stay with their owner",
+    "source": "packages/ai/sql 0091 and 0250: a member's own provider key is visible to that member only",
+    "seed": [
+      "insert into app.ai_provider_configs (id, owner_user_id, provider_kind, display_name, encrypted_credential) values ('50000000-0000-4000-8000-000000000001','{{userA}}','anthropic','User A key','{\"version\":1,\"algorithm\":\"aes-256-gcm\",\"keyId\":\"parity\",\"iv\":\"AAAA\",\"tag\":\"AAAA\",\"ciphertext\":\"AAAA\"}'::jsonb)"
+    ],
+    "steps": [
+      {
+        "id": "B probes A's AI keys",
+        "sql": "select count(*)::int as n from app.ai_provider_configs where owner_user_id = '{{userA}}'",
+        "as": "B",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      },
+      {
+        "id": "admin probes A's AI keys",
+        "sql": "select count(*)::int as n from app.ai_provider_configs where owner_user_id = '{{userA}}'",
+        "as": "admin",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      },
+      {
+        "id": "worker as B probes A's AI keys",
+        "sql": "select count(*)::int as n from app.ai_provider_configs where owner_user_id = '{{userA}}'",
+        "role": "worker",
+        "as": "B",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      },
+      {
+        "id": "A probes own AI keys",
+        "sql": "select count(*)::int as n from app.ai_provider_configs where owner_user_id = '{{userA}}'",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "n": 1
+            }
+          ]
+        }
+      },
+      {
+        "id": "B edits A's AI key",
+        "sql": "update app.ai_provider_configs set display_name = 'Taken' where owner_user_id = '{{userA}}'",
+        "as": "B",
+        "expect": {
+          "affected": [0]
+        }
+      },
+      {
+        "id": "admin edits A's AI key",
+        "sql": "update app.ai_provider_configs set display_name = 'Taken' where owner_user_id = '{{userA}}'",
+        "as": "admin",
+        "expect": {
+          "affected": [0]
+        }
+      },
+      {
+        "id": "admin edits AI keys with no filter (observed, not asserted)",
+        "sql": "update app.ai_provider_configs set base_url = 'https://parity.invalid'",
+        "as": "admin",
+        "record": true
+      }
+    ],
+    "note": "The last step records, in the run log and the report, whether an admin update with no WHERE clause reaches a member's row. Update rules alone decide that, because the statement reads no column."
+  },
+  {
+    "name": "safety: passwords never come back or reach a log",
+    "source": "Hard invariant: secrets never escape; the harness scans both server logs for MOSS-SENTINEL- after the last case",
+    "seed": [
+      "update app.users set is_bootstrap_owner = true where id = '{{admin}}'",
+      "insert into app.instance_settings (key, value) values ('registration.enabled', '{\"value\": true}'::jsonb), ('registration.requires_approval', '{\"value\": false}'::jsonb) on conflict (key) do update set value = excluded.value"
+    ],
+    "steps": [
+      {
+        "id": "sign up",
+        "method": "POST",
+        "path": "/api/auth/sign-up/email",
+        "body": {
+          "email": "password-check@example.test",
+          "password": "MOSS-SENTINEL-right-pass",
+          "name": "Password Check"
+        },
+        "compare": ["/status", "/body/user"],
+        "absent": ["MOSS-SENTINEL-"],
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "wrong password",
+        "method": "POST",
+        "path": "/api/auth/sign-in/email",
+        "body": {
+          "email": "password-check@example.test",
+          "password": "MOSS-SENTINEL-wrong-pass"
+        },
+        "absent": ["MOSS-SENTINEL-"],
+        "expect": {
+          "status": 401
+        }
+      },
+      {
+        "id": "unknown email",
+        "method": "POST",
+        "path": "/api/auth/sign-in/email",
+        "body": {
+          "email": "nobody@example.test",
+          "password": "MOSS-SENTINEL-unknown-pass"
+        },
+        "absent": ["MOSS-SENTINEL-"],
+        "expect": {
+          "status": 401
+        }
+      },
+      {
+        "id": "right password",
+        "method": "POST",
+        "path": "/api/auth/sign-in/email",
+        "body": {
+          "email": "password-check@example.test",
+          "password": "MOSS-SENTINEL-right-pass"
+        },
+        "compare": ["/status", "/body/redirect", "/body/user"],
+        "absent": ["MOSS-SENTINEL-"],
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "same email again",
+        "method": "POST",
+        "path": "/api/auth/sign-up/email",
+        "body": {
+          "email": "password-check@example.test",
+          "password": "MOSS-SENTINEL-right-pass",
+          "name": "Password Check"
+        },
+        "absent": ["MOSS-SENTINEL-"],
+        "expect": {
+          "status": 422
+        }
+      },
+      {
+        "id": "password too long",
+        "method": "POST",
+        "path": "/api/auth/sign-up/email",
+        "body": {
+          "email": "long-password@example.test",
+          "password": "MOSS-SENTINEL-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "name": "Long"
+        },
+        "absent": ["MOSS-SENTINEL-"],
+        "expect": {
+          "status": 400
+        }
+      },
+      {
+        "id": "invalid email",
+        "method": "POST",
+        "path": "/api/auth/sign-up/email",
+        "body": {
+          "email": "not-an-email",
+          "password": "MOSS-SENTINEL-bad-email",
+          "name": "Bad"
+        },
+        "absent": ["MOSS-SENTINEL-"],
+        "expect": {
+          "status": 400
+        }
+      },
+      {
+        "id": "the password is stored as a hash",
+        "sql": "select a.password ~ '^[0-9a-f]{32}:[0-9a-f]{128}$' as hashed, a.password like '%MOSS-SENTINEL-%' as readable from app.auth_accounts a join app.users u on u.id = a.user_id where u.email = 'password-check@example.test'",
+        "role": "auth",
+        "expect": {
+          "rows": [
+            {
+              "hashed": true,
+              "readable": false
+            }
+          ]
+        }
+      }
+    ],
+    "rows": ["app.users"]
+  }
+]

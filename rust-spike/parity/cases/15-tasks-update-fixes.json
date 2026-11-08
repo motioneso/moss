@@ -1,0 +1,383 @@
+[
+  {
+    "name": "update-fixes 26: moving a parent moves its subtasks and drops their tags",
+    "source": "tasks-update-fixes.test.ts:26 moving a parent task moves its subtasks and drops their foreign tags",
+    "steps": [
+      {
+        "id": "la",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "A2"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "lb",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "B2"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "taga",
+        "method": "POST",
+        "path": "/api/tasks/lists/{{la:/body/list/id}}/tags",
+        "as": "A",
+        "body": {
+          "name": "child-only-A"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "parent",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "parent",
+          "listId": "{{la:/body/list/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "child",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "child",
+          "listId": "{{la:/body/list/id}}",
+          "parentTaskId": "{{parent:/body/task/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "assign",
+        "method": "POST",
+        "path": "/api/tasks/{{child:/body/task/id}}/tags",
+        "as": "A",
+        "body": {
+          "tagId": "{{taga:/body/tag/id}}"
+        },
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "move",
+        "method": "PATCH",
+        "path": "/api/tasks/{{parent:/body/task/id}}",
+        "as": "A",
+        "body": {
+          "listId": "{{lb:/body/list/id}}"
+        },
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "child",
+        "method": "GET",
+        "path": "/api/tasks/{{child:/body/task/id}}",
+        "as": "A",
+        "expect": {
+          "body": {
+            "task": {
+              "listId": "{{lb:/body/list/id}}",
+              "tags": []
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "tags gone",
+        "sql": "select count(*)::int as n from app.task_tag_assignments",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      }
+    ],
+    "rows": ["app.tasks", "app.task_tag_assignments"]
+  },
+  {
+    "name": "update-fixes 61: saving a parent with the same list leaves subtasks alone",
+    "source": "tasks-update-fixes.test.ts:61 saving a parent with its list unchanged leaves subtasks and their tags alone",
+    "steps": [
+      {
+        "id": "la",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "A3"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "lb",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "B3"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "tagb",
+        "method": "POST",
+        "path": "/api/tasks/lists/{{lb:/body/list/id}}/tags",
+        "as": "A",
+        "body": {
+          "name": "child-only-B"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "parent",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "parent",
+          "listId": "{{la:/body/list/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "child",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "child",
+          "listId": "{{lb:/body/list/id}}",
+          "parentTaskId": "{{parent:/body/task/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "assign",
+        "method": "POST",
+        "path": "/api/tasks/{{child:/body/task/id}}/tags",
+        "as": "A",
+        "body": {
+          "tagId": "{{tagb:/body/tag/id}}"
+        },
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "before",
+        "method": "GET",
+        "path": "/api/tasks/{{child:/body/task/id}}",
+        "as": "A",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "save",
+        "method": "PATCH",
+        "path": "/api/tasks/{{parent:/body/task/id}}",
+        "as": "A",
+        "body": {
+          "title": "parent renamed",
+          "listId": "{{la:/body/list/id}}"
+        },
+        "expect": {
+          "body": {
+            "task": {
+              "title": "parent renamed"
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "child",
+        "method": "GET",
+        "path": "/api/tasks/{{child:/body/task/id}}",
+        "as": "A",
+        "expect": {
+          "body": {
+            "task": {
+              "listId": "{{lb:/body/list/id}}",
+              "updatedAt": "{{before:/body/task/updatedAt}}",
+              "tags": [
+                {
+                  "id": "{{tagb:/body/tag/id}}"
+                }
+              ]
+            }
+          },
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.tasks", "app.task_tag_assignments"],
+    "note": "'Before' timestamp is read after the tag is assigned, which does not touch the task row's update time."
+  },
+  {
+    "name": "update-fixes 97: changing and clearing a recurrence on update",
+    "source": "tasks-update-fixes.test.ts:97 update persists a changed recurrence, keeps the series, and clears it with null",
+    "steps": [
+      {
+        "id": "make",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "repeating",
+          "recurrence": {
+            "freq": "daily",
+            "interval": 1,
+            "occurrence_date": "2026-06-08"
+          }
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "series0",
+        "sql": "select recurrence_series_id::text as s from app.tasks where id = '{{make:/body/task/id}}'",
+        "as": "A"
+      },
+      {
+        "id": "change",
+        "method": "PATCH",
+        "path": "/api/tasks/{{make:/body/task/id}}",
+        "as": "A",
+        "body": {
+          "recurrence": {
+            "freq": "weekly",
+            "interval": 2,
+            "occurrence_date": "2026-06-08"
+          }
+        },
+        "expect": {
+          "body": {
+            "task": {
+              "recurrence": {
+                "freq": "weekly",
+                "interval": 2
+              }
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "series kept",
+        "sql": "select recurrence_series_id = '{{series0:/rows/0/s}}'::uuid as same from app.tasks where id = '{{make:/body/task/id}}'",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "same": true
+            }
+          ]
+        }
+      },
+      {
+        "id": "clear",
+        "method": "PATCH",
+        "path": "/api/tasks/{{make:/body/task/id}}",
+        "as": "A",
+        "body": {
+          "recurrence": null
+        },
+        "expect": {
+          "body": {
+            "task": {
+              "recurrence": null
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "series cleared",
+        "sql": "select recurrence_series_id is null as cleared from app.tasks where id = '{{make:/body/task/id}}'",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "cleared": true
+            }
+          ]
+        }
+      },
+      {
+        "id": "add",
+        "method": "PATCH",
+        "path": "/api/tasks/{{make:/body/task/id}}",
+        "as": "A",
+        "body": {
+          "recurrence": {
+            "freq": "monthly",
+            "interval": 1,
+            "occurrence_date": "2026-06-08"
+          }
+        },
+        "expect": {
+          "body": {
+            "task": {
+              "recurrence": {
+                "freq": "monthly"
+              }
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "series added",
+        "sql": "select recurrence_series_id is not null as has from app.tasks where id = '{{make:/body/task/id}}'",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "has": true
+            }
+          ]
+        }
+      }
+    ],
+    "rows": ["app.tasks"],
+    "note": "The series id is not in the task answer, so it is read by SQL."
+  }
+]

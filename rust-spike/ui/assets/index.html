@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tasks</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <div id="main"></div>
+    <script type="module">
+      // Times are ms since navigation start, the same probe for both candidates.
+      const perf = (window.__perf = {});
+      const watch = { page: ".tasks-page", rows: ".tk-task" };
+      new MutationObserver(() => {
+        for (const [name, selector] of Object.entries(watch)) {
+          if (perf[name] === undefined && document.querySelector(selector)) {
+            perf[name] = Math.round(performance.now());
+            performance.mark("ui-" + name);
+          }
+        }
+      }).observe(document.documentElement, { childList: true, subtree: true });
+      const app = await import("/app.js");
+      perf.moduleLoaded = Math.round(performance.now());
+      await app.default({ module_or_path: "/app_bg.wasm" });
+      perf.initDone = Math.round(performance.now());
+    </script>
+  </body>
+</html>
