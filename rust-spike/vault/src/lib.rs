@@ -16,6 +16,9 @@
 //! link between the check and the open could still be followed. `openat2` with
 //! `RESOLVE_BENEATH` closes that on Linux and is the next step.
 
+mod allowed_roots;
+pub use allowed_roots::AllowedRoots;
+
 use std::fmt;
 
 pub use access_context::AccessContext;

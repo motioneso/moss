@@ -89,6 +89,15 @@ The pure crate ports identity normalization, candidate signatures, signal groupi
 frontmatter parsing/formatting and managed-section replacement. Its differential fixtures
 come from the current TypeScript functions, including Unicode whitespace and UTF-16 sorting.
 
+The additive vault constructor now binds allowed notes roots to an authenticated account and
+opens only an existing selected folder through the confined root API. It does not create a
+folder or turn module storage into canonical notes storage. Seven tests cover owner access,
+cross-account reads and writes, containment, missing folders, protected canonical vaults and
+symlink selection. With the guards removed, the cross-account read/write and containment/link
+tests failed; restoring them passed all fourteen vault tests and strict Clippy. This tests the
+new constructor only: the notes host adapter and database RLS remain unproven. The existing
+vault component-check/open race described in its crate documentation is unchanged.
+
 Before ready, complete and record all of the following:
 
 1. Consume the integrated shared SDK/host checkpoint and build the package natively and as
