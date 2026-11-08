@@ -1,8 +1,14 @@
-# Calendar Rust package: slice one
+# Calendar Rust package: data and two chat tools
 
 Part of #4027. This is the package and data foundation, **not the full Calendar port**.
-The existing TypeScript app stays in place. Screens, settings writes, chat tools, jobs,
-provider execution and the assembled HTTP/UI parity gate belong to the next two slices.
+The existing TypeScript app stays in place. Screens, settings writes, the remaining four
+chat tools, jobs, provider execution and the assembled HTTP/UI parity gate remain open.
+
+Version 0.2.0 adds `calendar.heartbeatWindow` (owned cache reads) and
+`calendar.dayPlanDraft` (typed evening intent and untimed task proposals). The latter
+retains recorded placement and requires an actor-scoped public Tasks projection for
+new task references. Neither tool calls a provider. The package advertises only these
+two tools; it does not yet wire them into the authenticated chat gateway.
 
 The guest in `src/` depends only on the SDK and pure Rust libraries. Its six storage routes
 and five public methods expose cached events, day-plan draft reads/create/save, and legacy
@@ -17,7 +23,8 @@ retain owner-only rules. A draft cannot overwrite recorded placement.
 
 `host/` is a **trusted host wrapper**, separate from the guest. Use `CalendarPorts::new` in
 `Application::open_extended_with`. It reads only the seven existing Calendar preference keys
-through the authenticated data context. `with_references` accepts actor-scoped public Tasks and
+through the authenticated data context, plus the actor's saved locale timezone for chat.
+`with_references` accepts actor-scoped public Tasks and
 Briefing projections; no other module's tables are queried here. Without those projections,
 drafts containing task references or a source run fail before committing. The returned task
 shape is `{task:{id,ownerUserId}}`; the briefing shape is `{run:{id,ownerUserId}}`. The later
@@ -48,6 +55,11 @@ The disposable database gate additionally downloads and installs a locally signe
 registry package, exercises real Wasm data calls, checks draft revision conflicts/rollback,
 and runs the same foreign read/write assertions with row security removed and restored.
 Those temporary fixtures are not UI or second-device proof.
+The tool suite compares installed Wasm with the production TypeScript handlers on the
+same disposable database. Its Tasks projection is an explicit test stand-in. A heartbeat
+fault witness removes and restores guest owner predicates around the same shared-event
+exclusion assertion. The full checkpoint and remaining parity work are recorded in
+`docs/superpowers/specs/2026-11-08-rust-calendar-js54-report.md` from the repository root.
 
 To emit an unsigned registry archive after `check.sh`:
 

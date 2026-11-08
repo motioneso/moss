@@ -23,4 +23,6 @@ Final Calendar acceptance stays open: remaining routes, four other tools, both
 jobs, provider execution/approval/recovery, screens/settings, authenticated host
 assembly, full parity and physical second-device HTTPS proof.
 
-Live state: implementation in progress; no parity or live-device claim yet.
+Live state: two tools implemented; disposable database validation and independent
+review in progress. The checkpoint report records the remaining work. No full parity
+or live-device claim.

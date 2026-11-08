@@ -86,7 +86,12 @@ impl Ports for CalendarPorts {
                 _ => anyhow::bail!("Unknown Calendar reference projection"),
             };
         }
-        if port != "kv" || request.resource != "calendar.briefing-settings" {
+        if port != "kv"
+            || !matches!(
+                request.resource.as_str(),
+                "calendar.briefing-settings" | "calendar.chat-context"
+            )
+        {
             return self.next.invoke(scope, port, request);
         }
         moss_module_host::runtime::authorize(scope.module(), port, request)?;
@@ -100,11 +105,13 @@ impl Ports for CalendarPorts {
             let cx = DataContext::open_bounded(&self.database, scope.access(), scope.remaining())
                 .await
                 .map_err(|_| anyhow::anyhow!("Calendar preferences unavailable"))?;
+            let chat = request.resource == "calendar.chat-context";
+            let keys: &[&str] = if chat { &["locale"] } else { &PREFERENCE_KEYS };
             let rows = cx
                 .db()
                 .query(
                     "SELECT key,value_json FROM app.preferences WHERE key = ANY($1)",
-                    &[&&PREFERENCE_KEYS[..]],
+                    &[&keys],
                 )
                 .await?;
             let mut values = Map::new();
@@ -114,7 +121,11 @@ impl Ports for CalendarPorts {
             cx.commit()
                 .await
                 .map_err(|_| anyhow::anyhow!("Calendar preferences unavailable"))?;
-            Ok(Value::Object(values))
+            if chat {
+                Ok(serde_json::json!({"timezone":values.get("locale").map(|v|v["timezone"].clone())}))
+            } else {
+                Ok(Value::Object(values))
+            }
         })
     }
     fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {

@@ -4,7 +4,9 @@ use serde_json::{json, Value};
 
 #[cfg(target_arch = "wasm32")]
 mod abi;
+mod draft_tool;
 pub mod events;
+pub mod heartbeat;
 pub mod model;
 pub mod plans;
 pub mod settings;
@@ -37,6 +39,23 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Result<String, String> {
     if matches!(kind, "health" | "install") {
         return Ok("{}".into());
+    }
+    if kind == "tool" {
+        #[derive(serde::Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Tool {
+            tool: String,
+            parameters: Value,
+        }
+        let input: Tool =
+            serde_json::from_str(payload).map_err(|_| "Invalid calendar tool request")?;
+        let result = match input.tool.as_str() {
+            "calendar.heartbeatWindow" => heartbeat::read(host, &input.parameters),
+            "calendar.dayPlanDraft" => draft_tool::save(host, &input.parameters),
+            _ => Err(Error::new(404, "Calendar tool is unavailable")),
+        }
+        .map_err(|e| e.message)?;
+        return serde_json::to_string(&result).map_err(|_| "Invalid calendar tool response".into());
     }
     if kind == "api" {
         let input: Value = serde_json::from_str(payload).map_err(|_| "Invalid calendar request")?;

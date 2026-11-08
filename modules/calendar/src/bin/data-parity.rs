@@ -1,10 +1,18 @@
 //! Narrow data parity oracle. This is not the full Calendar HTTP/UI parity gate.
-use moss_calendar::{events, model};
+use moss_calendar::{events, heartbeat, model};
 use serde_json::{json, Value};
 use std::io::{self, Read};
 fn run(v: &Value) -> moss_calendar::Result<Value> {
     match v["op"].as_str().unwrap_or("") {
         "event" => Ok(events::serialize(&v["value"])),
+        "heartbeat-input" => {
+            let (horizon_hours, limit) = heartbeat::parse(&v["value"])?;
+            Ok(json!({"horizonHours":horizon_hours,"limit":limit}))
+        }
+        "heartbeat-revision" => {
+            let parts: Vec<String> = serde_json::from_value(v["value"].clone())?;
+            Ok(json!(heartbeat::revision(&parts)))
+        }
         "intent" => model::merge_intent(&v["current"], v.get("patch")),
         "day" => {
             let (day, zone) = model::day_zone(
