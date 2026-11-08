@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "notes",
   "name": "Notes",
-  "description": "Notes package checkpoint with folder selection in Settings \u2192 Connections and the existing managed-source account export. Sync, chat tools and publication remain unfinished.",
+  "description": "Notes package checkpoint with folder selection in Settings → Connections and the existing managed-source account export. Write handlers have a separate parity-check build; chat tools, sync and publication are not offered yet.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -78,7 +78,7 @@
     },
     {
       "id": "notes.folder-settings",
-      "description": "Settings \u2192 Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. This checkpoint does not run sync or chat tools and is not a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
+      "description": "Settings → Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. This checkpoint does not run sync or chat tools and is not a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
       "errors": [
         {
           "code": "notes-folder-path-refused",

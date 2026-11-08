@@ -562,3 +562,76 @@ up before reaching its final database receipt assertion. The watcher now waits
 through an empty create notification. The screenshots and live HTTP responses
 are evidence for the browser actions; a successful final UI-gate receipt is not
 claimed, and the watcher correction has not had a repeat interactive run.
+
+## Part five checkpoint — write-tool execution and approval parity
+
+This continuation starts from merged Notes part four, `d5dda108d` (#4062).
+The brief permits a bounded checkpoint when the remaining scope would require
+repeated context handoffs. This part advances the three write handlers rather than
+claiming complete Notes parity. The Rust core currently has embedding and queue
+ports but no memory ingestion/search service. Porting that service, all Notes
+publication behavior and physical-device acceptance exceeds this checkpoint.
+
+### Implementation and boundaries
+
+The separate `write-tools` feature implements create, edit and delete through SDK
+ports only. It retains non-overwrite conflict refusal, JavaScript dollar-token
+replacement, normalized relative paths, absolute paths under the selected root,
+exact expected-content/destination checks, and the legacy queued-success shape.
+Its sync request has empty parameters, a host-supplied fresh identifier and time;
+source paths and note text do not enter that request. The future worker must
+resolve the authenticated account's chosen folder itself.
+
+The feature is disabled in the ordinary package. Its additional context/job
+imports and linked-file mutation permissions are present only in the tool-check
+manifest. The shipped manifest offers no chat tools, sync job or additional queue
+permission. Its description records that distinction. Existing SQL, routes,
+settings screen and navigation remain unchanged. No People internals are used.
+
+Read-only approval preparation retains the actual legacy card fields, their input
+order, permanent-delete warning, overwrite title and version digest for ordinary
+canonical POSIX folder preferences. It is a native helper, not a newly published
+host handler. It neither grants nor consumes approval. A future host join must
+freeze and recheck the version and enforce delete/overwrite confirmation before
+any write; current default package users cannot invoke these mutations.
+
+The actual legacy TypeScript execute functions produce 55 differential cases;
+the actual approval hooks and field presenters produce 41 cases. Filesystem,
+DataContext, enqueue and approval-target resolution are named stand-ins in that
+oracle. The first native comparison failed when the Rust handlers were absent;
+all comparisons passed after implementation. Earlier 118 domain and 182 edit
+vectors remain in the native suite. These claims are limited to the covered inputs.
+Missing files, source failures, malformed inputs, symlinks, source aliases and
+non-POSIX behavior do not yet have full legacy error/path parity.
+
+The generated component builds with the already approved pinned `wit-bindgen`
+0.57.1 macro dependency in scratch Cargo/Rust toolchain folders. No standalone CLI,
+global tool, unlisted package or real application was installed. The first scratch
+toolchain lacked the Wasm target; the prepared scratch toolchain used by earlier
+People work supplies it. The declared `serde_json` dependency enables its existing
+`preserve_order` feature so approval fields retain submitted order.
+
+Real-component, privacy-control, disposable database, SQL-harness and root-check
+results are recorded below only after their current runs finish. Reproduction is
+in `modules/notes/README.md`. No complete Notes UI or physical-device proof is
+claimed by this part.
+
+### Remaining work after part five
+
+1. Add the core memory ingestion/search join and port `notes.search`, then finish
+   `notes.sync`: manual and fifteen-minute schedules, continuation, hundred-chunk
+   budget, unchanged-file detection, unlink no-op and safe saved error messages.
+2. Join the write handlers and approval helper into installed chat, rechecking
+   approval versions and requiring delete/overwrite confirmation. Enable the
+   feature and manifest tools only with a real sync worker and installed tests.
+3. Complete managed publication/fencing, proposals/receipts, reconciliation,
+   exact-block cleanup, private note exports and daily chat archives.
+4. Resolve managed export snapshot/paging and join account export. Complete path,
+   missing-file and error parity and all-handler/job differential cases.
+5. Join Connections into the assembled Phase 4 shell; prove the complete signed-in
+   Notes UI and chat, including from a separate physical device over HTTPS and
+   trusted origins. A same-host browser or phone viewport does not prove that.
+
+The earlier filesystem race, crash, deadline, cross-platform and mixed-lock-version
+limits still apply. Deferred queue publication can fail after file finalization:
+a saved file then needs a later sync retry. No distributed atomicity is claimed.

@@ -45,7 +45,7 @@ tests use fresh synthetic signing keys.
 Read `.claude/skills/verify-gate/SKILL.md`. Never run the database tests directly.
 
 ```sh
-NOTES_COMPONENT=/tmp/notes.wasm CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/notes-host scripts/run-gate.sh start --gate ./modules/notes/tools/gate.sh
+NOTES_COMPONENT=/tmp/notes.wasm NOTES_TOOL_COMPONENT=/tmp/notes-tools.wasm CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/notes-host scripts/run-gate.sh start --gate ./modules/notes/tools/gate.sh
 scripts/run-gate.sh wait --follow
 CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/notes-parity PARITY_OUT=/tmp/notes-parity-result scripts/run-gate.sh start --gate ./modules/notes/tools/parity-gate.sh
 scripts/run-gate.sh wait --follow
@@ -94,3 +94,54 @@ installed guest routes and performs a preference RLS removal control. Differenti
 coverage is limited to the cases in `tools/settings-oracle.ts`. Symlink descendant
 selection, locale-sensitive directory ordering, invalid-input response parity and
 sync scheduling remain unfinished. Existing linked-file platform limits apply.
+
+## Write-tool parity checkpoint (part five)
+
+The `write-tools` Cargo feature contains `notes.create`, `notes.edit` and
+`notes.delete` execution plus read-only approval details. It is off by default.
+The package still offers no chat tools or sync job. Do not enable this feature
+in a release package until the core memory/sync worker and approval join exist.
+`notes.search` remains unported; embeddings alone do not provide memory retrieval.
+
+The separate tool-check component uses the same generated ABI and SDK calls with
+extra permissions supplied only by its test manifest. It reads the actor's selected
+folder, compares the current destination and exact file text, then requests sync
+with empty job parameters after the outer call commits. The queued result matches
+the legacy `{ data: { path, synced: true } }` shape; it means a sync request, not
+completed ingestion. The test queue acknowledges metadata; it does not ingest.
+A refusal before call finalization compensates file writes. A queue publication
+failure after finalization can leave the file saved without sync; no atomic
+filesystem/database/queue guarantee is made.
+
+Read-only approval preparation matches the legacy card fields and version for
+ordinary canonical POSIX folder preferences. It grants no approval. Its version
+must be rechecked after approval and before writing in the future host join.
+Delete and overwrite must still require explicit approval even with a trusted
+write policy. Neither approval consumption nor that orchestration is implemented
+here. Source aliases, Windows paths, symlink selection, missing-file error parity,
+and invalid-input/source-error parity remain unproven or stricter than legacy.
+
+```sh
+pnpm exec tsx modules/notes/tools/write-tool-parity.ts
+CARGO_TARGET_DIR=/tmp/notes-domain cargo +1.95.0 test --locked --features write-tools --manifest-path modules/notes/src/Cargo.toml
+NOTES_TOOL_CHECKPOINT=1 MOSS_GUEST_CARGO_HOME=/tmp/notes-cargo MOSS_GUEST_RUSTUP_HOME=/tmp/notes-rustup MOSS_HOST_TARGET_DIR=/tmp/notes-host CARGO_TARGET_DIR=/tmp/notes-tool-guest modules/notes/tools/build-component.sh /tmp/notes-tools.wasm
+NOTES_COMPONENT=/tmp/notes.wasm NOTES_TOOL_COMPONENT=/tmp/notes-tools.wasm CARGO_TARGET_DIR=/tmp/notes-host cargo +1.95.0 test --locked --manifest-path modules/notes/tools/Cargo.toml --test component --test write_tools --test screen
+```
+
+The ordinary package build leaves `NOTES_TOOL_CHECKPOINT` unset. Use distinct
+Cargo guest target folders for the two builds: the wrapper reads each target's
+core guest after the host helper has built. Installing the tool-check component under
+the ordinary package is rejected because its additional imports are undeclared.
+The database gate now also needs `NOTES_TOOL_COMPONENT`; the SQL-only parity gate
+is unchanged. After all builds/gates finish, run the compiled-guest account guard
+removal control separately:
+
+```sh
+NOTES_TOOL_COMPONENT=/tmp/notes-tools.wasm CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/notes-host python3 modules/notes/tools/write-tool-controls.py /tmp/notes-tool-controls
+```
+
+The manually refreshed corpus executes actual TypeScript write handlers (55 cases)
+and approval hooks (41 cases), with explicit filesystem/sync/target stand-ins.
+The real-component tests use actual temporary files and the linked-folder adapter,
+with a queue acknowledgement stand-in. These are tool-boundary checks, not installed
+chat, HTTP differential, full sync or second-device proof.
