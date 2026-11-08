@@ -1,4 +1,4 @@
-/** Real HTTPS/sign-in + installed Calendar. Fixture passwords/keys exist only in this process. */
+/** Disposable HTTPS/sign-in + installed Calendar with generated fixture credentials. */
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { randomBytes, randomUUID, scryptSync } from "node:crypto";
@@ -140,19 +140,8 @@ async function request(
 }
 const log = openSync(join(out, "https-server.log"), "w", 0o600);
 const server = spawn(
-  "cargo",
-  [
-    "+1.95.0",
-    "run",
-    "--locked",
-    "--offline",
-    "--manifest-path",
-    "modules/calendar/host/Cargo.toml",
-    "--features",
-    "web",
-    "--example",
-    "signed_ui"
-  ],
+  join(process.env.CARGO_TARGET_DIR ?? "/tmp/js72-host-target", "debug/examples/signed_ui"),
+  [],
   {
     cwd: resolve("."),
     stdio: ["ignore", log, log],
@@ -251,6 +240,18 @@ try {
       `https://127.0.0.1:${port}/module-ui/calendar/`
     )
   );
+  assert.equal(
+    (await request("/api/network", { cookie: owner, method: "PUT", body: { sharing: false } }))
+      .status,
+    200
+  );
+  assert.equal((await request("/calendar", { base: lan, cookie: owner })).status, 403);
+  assert.equal((await request(asset, { base: lan, headers: { origin: "null" } })).status, 403);
+  assert.equal(
+    (await request("/api/network", { cookie: owner, method: "PUT", body: { sharing: true } }))
+      .status,
+    200
+  );
   const remote = await login(data.email, lan);
   assert.equal((await request("/calendar", { base: lan, cookie: remote })).status, 200);
   console.log(
@@ -266,6 +267,7 @@ try {
   const cdp = execFileSync(wrapper, ["get", "cdp-url"], { encoding: "utf8" }).trim();
   browser = await chromium.connectOverCDP(cdp);
   const context = browser.contexts()[0];
+  assert(context, "Task browser context is required");
   const tab = context.pages().find((p) => p.url().startsWith(local));
   assert(tab);
   await tab.getByLabel("Email").fill(data.email);
@@ -295,8 +297,17 @@ try {
   await frame.getByRole("alert").waitFor({ state: "detached" });
   await tab.setViewportSize({ width: 390, height: 844 });
   await tab.screenshot({ path: join(out, "signed-in-phone-width.png") });
+  const previousCookie = (await context.cookies(local))
+    .map((cookie) => `${cookie.name}=${cookie.value}`)
+    .join("; ");
+  assert(previousCookie, "Browser sign-in must have a session cookie");
   await tab.getByRole("button", { name: "Sign out", exact: true }).click();
   await tab.waitForURL(`${local}/sign-in`);
+  assert.equal(
+    (await request("/api/m/calendar/events", { cookie: previousCookie })).status,
+    401,
+    "signed-out browser session is revoked"
+  );
   assert.equal(
     (await request("/api/m/calendar/events", { cookie: owner })).status,
     200,

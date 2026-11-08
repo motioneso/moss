@@ -10,7 +10,7 @@
 - Compare installed Wasm tools with production TypeScript on a disposable database.
 - Add the Rust data package for cached events and private day-plan drafts.
 - Reuse all five existing tables and all fifteen original migration files and ledgers.
-- Authenticated screen composition, settings writes, four remaining tools, jobs and execution remain open.
+- Full authenticated shell composition, settings writes, four remaining tools, jobs and execution remain open.
 
 ## 0.4.0 — signed-in Calendar page composition
 

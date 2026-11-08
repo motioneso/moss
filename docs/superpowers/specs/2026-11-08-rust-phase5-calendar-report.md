@@ -270,3 +270,11 @@ page/own-package dispatch seam now supplied. Full shell/Today/chat integration, 
 context/error parity, writable settings and authority policy, four provider tools, both jobs,
 preview/apply/retry/recovery/follow-through, real public provider/reference adapters, full parity
 harness acceptance and an actual second device over trusted HTTPS remain unproven.
+
+The checkpoint review also records narrower composition limits: the Calendar router owns `/`
+and `/today`, uses the Sage theme and maps host dispatch failures to a retryable 503. Shared
+static assets must be generated public files in a dedicated directory; the router does not
+inspect arbitrary directory contents for private material. Static requests retain configured-host
+and sharing checks but do not use the private-request audit path. Full shell composition, theme
+selection and original HTTP error parity remain follow-up work. The browser runner checks
+server-side revocation of its old session after sign-out as well as a separate session staying valid.
