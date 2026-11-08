@@ -289,3 +289,24 @@ waits for real events after returning from settings before simulating a failed r
 allows the debug sign-in redirect longer on loaded machines. Final receipts and review
 disposition remain in the task proof; these fixes require a review round beyond the two
 already recorded for the earlier commit.
+
+## JS-78 / part 5: installed read routes and event-screen parity
+
+Card 525. Working folder: `~/Jarv1s` task worktree. This continuation consumes the
+merged part 4 checkpoint and stays in Calendar-owned files. The full remaining
+execution/provider/automation work exceeds the brief's context bound; this part
+will leave a reviewed checkpoint rather than claim final Calendar acceptance.
+
+Planned work: preserve event deep links through the authenticated opaque-frame
+composition; restore missing event-detail duration, attendee and status wording;
+refresh an open event from successfully loaded data; route original Calendar read
+URLs through the installed package; compare the three original read contracts
+against the production TypeScript routes on the disposable database. Re-run the
+Calendar gate, privacy fault witnesses and signed-in HTTPS browser check. Actual
+second-device trust, full shell/chat, writable automation, provider tools/jobs and
+full assembled parity remain acceptance requirements.
+
+Live state and final receipts for this part are in its task Proof artifact; local
+build output, fixture credentials and screenshots stay outside the repository.
+No global install is authorized or performed. The existing task-local Rust/Wasm
+compiler is reused; no wit-bindgen installation is needed for this slice.
