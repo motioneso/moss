@@ -11,7 +11,7 @@ The part-one results below are historical. The part-two checkpoint later in this
 report records the continuation's narrower changes and current evidence. The full
 seven-step continuation remains unfinished.
 
-## Scope and current evidence
+## Part one scope and evidence — historical
 
 - `modules/notes/src/` contains guest-safe recording block rendering, inspection, change, cleanup
   and pending-operation reconciliation; recording identities, fallback references and managed
@@ -32,7 +32,7 @@ No user-facing Notes behavior is added by this first slice, so the existing app 
 accurate. Part two must add the package's navigation/settings/features metadata with its actual
 handlers and Settings controls, without inventing a standalone Notes screen.
 
-## Verification on the integrated branch
+## Part one verification on the integrated branch — historical
 
 Merged the People prerequisites and shared host PR #4044 additively from main
 (`1ff33decd`). The initial integrated checkpoint is `6eeb6c4f1`. The first review
@@ -253,48 +253,66 @@ It compares isolated database copies; neither server implements the pending Note
 HTTP handlers. SQL-only agreement must not be reported as Notes HTTP parity.
 Run the source-removal controls only after all host builds/tests have finished.
 
-### Still required
+### Part two closeout — partial checkpoint only
 
-All seven steps below remain acceptance work except the edit helper and the scoped
-SQL/privacy evidence above. Missing: production guest and package, Settings controls,
-complete approved chat tools, sync/scheduling, memory ports, managed publication and
-crash reconciliation, exports/archives, Notes HTTP cases and real authenticated UI
-checks from a second physical device. No Notes UI or second-device check was run in
-this checkpoint. No full Notes parity or ready-to-playtest claim is made.
+Ben accepted this partial checkpoint for a PR and merge review on 2026-11-08, with
+the remaining implementation continuing as Notes part three. Ready on this task
+means the checkpoint is available to review and merge; it does not mean Notes is
+available in the Rust app or that full Notes parity has been demonstrated.
+
+Both final gates passed on clean commit `5df37c56e`, with input fingerprint
+`dcd019a6cfab`: the Notes privacy gate and the two-server SQL-only parity gate.
+The parity result is six Notes table cases plus the server-log check. Root lint,
+formatting, file-size and type checking passed. Two independent Claude review
+rounds found no major or blocker findings. This closeout changes documentation
+only; the implementation is unchanged from `a006ece2d`.
+
+Completed evidence is limited to the three hundred domain vectors, Linux linked
+files, per-invocation state isolation, the six frozen tables' SQL privacy and
+migration identities, and typed queries through a fixture Wasm component. No
+production Notes guest, Notes HTTP handler, Notes UI or physical second-device
+check exists in this checkpoint. The proof recipe retains those exclusions.
 
 Filesystem deadlines, hostile open/rename races, crash recovery, non-Linux behavior
 and mixed-version lock interoperability remain unproven. The older non-transactional
 database port is outside this checkpoint's worker-role correction and verification.
 
-## Part two continuation — full acceptance
+## Notes part three — exact remaining work
 
 1. Build the actual Notes guest using `moss-module-sdk`, native tests and a shipped Wasm component.
    Add `moss.module.json`, icons, changelog and the package build. Copy existing SQL into the
    artifact from `packages/notes/sql/` only after checking the frozen inventory hashes; use
    `core-legacy`. Keep the six existing managed-source/contribution tables and owner-only RLS.
+   Use the approved local-only `wit-bindgen` route as needed and record its actual use;
+   it has not been installed or used by part two. Prove package build, installation,
+   enable/disable and dispatch on the merged shared host.
 2. Port the settings contracts: notes-source browse/link/unlink, last-sync status and manual
    sync. Keep the current Settings → Connections controls, with no Notes navigation entry.
    Join those controls through the published Leptos kit and module frame.
-3. Preserve legacy JavaScript dollar replacement-token behavior when porting edits;
-   the preliminary literal helper is insufficient. Port the four chat tools (`notes.search/create/edit/delete`) and their prerequisites and
+3. Port the four chat tools (`notes.search/create/edit/delete`) and their prerequisites and
    approval presentations. Delete and overwrite must still require explicit approval; a write
-   must trigger sync and preserve the legacy response shape.
+   must trigger sync and preserve the legacy response shape. Use the corrected edit helper
+   and its 182 legacy-handler vectors; the helper is finished, but no complete tool handler
+   is implemented. Refresh the oracle manually if the legacy handler changes.
 4. Port `notes.sync`, its fifteen-minute account schedule, continuation metadata, the hundred-
    chunk budget, unchanged-file detection, unlink no-op and sink-safe last-error messages.
    Add a host memory-ingest/search port; the guest must not query memory's private tables.
 5. Port managed source admission/fencing, destination claims, contribution proposals/receipts,
    crash reconciliation, exact-block cleanup, account export, private note export and daily
    chat archives. Keep people links and other module collaboration on declared public APIs.
-6. Add cases to the HTTP/SQL parity harness, not just the domain oracle. Observe privacy tests
-   failing with protection removed and passing with it present for app, worker and admin
-   actors. Verify existing rows and unchanged migration identities.
+6. Add actual Notes HTTP and guest-handler cases to the parity harness for Settings,
+   chat tools, sync and managed publication. Retain the six existing SQL cases and
+   failing-first app/worker/admin privacy controls from part two. Extend privacy
+   checks through the production Notes guest and jobs; the forwarding fixture is
+   insufficient for those claims. Keep existing rows and migration identities intact.
 7. Exercise real Notes controls and chat on the running authenticated Rust app, including a
    second device over configured HTTPS and trusted origins. Record executable assertions and
    genuine UI evidence. A viewport simulation is not a second-device check.
 
-## Not proven in part one
+## Full Notes acceptance still unproven after part two
 
 - Complete Notes behavior, an installable Notes package or a shipped Wasm guest.
-- HTTP/SQL differential parity, Notes database privacy through a guest, sync or memory search.
+- Notes HTTP differential parity, privacy through the production Notes guest, sync or memory
+  search. The six SQL cases and forwarding-fixture privacy checks are already verified.
 - Notes on the running Rust UI, phone/laptop access, or second-device sign-in.
 - Cross-platform filesystem behavior, hostile filesystem races or power-loss recovery.
