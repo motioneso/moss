@@ -111,7 +111,10 @@ export function connectModuleFrame(
     hostWindow.removeEventListener("message", connect);
   };
   const onLoad = () => {
-    if (loaded || !commandPort) dispose();
+    // postMessage queues a task: the initial document's load may be delivered
+    // before its connect message. Either initial ordering is valid; a subsequent
+    // load always revokes the one-shot bridge, even if it never connected.
+    if (loaded) dispose();
     loaded = true;
   };
   hostWindow.addEventListener("message", connect);

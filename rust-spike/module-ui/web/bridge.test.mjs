@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { connectModuleFrame } from "./host-bridge.mjs";
 import { moduleClient } from "./guest-bridge.mjs";
-function setup() {
+function setup({ loadsBeforeConnect = 0, request = () => ({ saved: true }) } = {}) {
   let listener;
   const replies = [];
   const calls = [];
@@ -19,7 +19,7 @@ function setup() {
     hostWindow,
     request: (...args) => {
       calls.push(args);
-      return { saved: true };
+      return request(...args);
     },
     theme: () => ({ theme: "sage" }),
     navigate: () => null,
@@ -36,15 +36,47 @@ function setup() {
   bootstrap("https://moss.example.test");
   bootstrap("null", {});
   assert.equal(commandPort.onmessage, undefined);
+  for (let i = 0; i < loadsBeforeConnect; i++) frame.dispatchEvent(new Event("load"));
   bootstrap();
-  frame.dispatchEvent(new Event("load"));
+  if (loadsBeforeConnect === 0) frame.dispatchEvent(new Event("load"));
   const send = (message) =>
-    commandPort.onmessage({
+    commandPort.onmessage?.({
       ports: [{ postMessage: (m) => replies.push(m), close() {} }],
       data: { channel: "moss.module.v1", id: "one", ...message }
     });
   return { send, replies, calls, frame, dispose, bootstrap };
 }
+test("initial frame load before the queued connect message still permits requests", async () => {
+  const s = setup({ loadsBeforeConnect: 1 });
+  await s.send({ type: "request", method: "GET", path: "/entries" });
+  assert.deepEqual(s.calls, [["GET", "/api/m/sample.counter/entries", null]]);
+  assert.equal(s.replies[0].ok, true);
+  s.frame.dispatchEvent(new Event("load"));
+  await s.send({ type: "request", method: "GET", path: "/entries" });
+  assert.equal(s.calls.length, 1);
+  s.dispose();
+});
+test("navigation before any connect message revokes a still-unconnected bridge", async () => {
+  const s = setup({ loadsBeforeConnect: 2 });
+  await s.send({ type: "request", method: "GET", path: "/entries" });
+  assert.equal(s.calls.length, 0);
+  assert.equal(s.replies.length, 0);
+  s.dispose();
+});
+test("navigation discards a response still waiting on the host", async () => {
+  let finish;
+  const s = setup({
+    loadsBeforeConnect: 1,
+    request: () => new Promise((resolve) => (finish = resolve))
+  });
+  const pending = s.send({ type: "request", method: "GET", path: "/entries" });
+  assert.equal(s.calls.length, 1);
+  s.frame.dispatchEvent(new Event("load"));
+  finish({ saved: true });
+  await pending;
+  assert.equal(s.replies.length, 0);
+  s.dispose();
+});
 test("only the bound opaque frame can invoke own-module routes", async () => {
   const s = setup();
   assert.equal(s.calls.length, 0);
