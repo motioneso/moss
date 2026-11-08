@@ -168,7 +168,7 @@ struct PendingCall {
 pub struct LinkedNotesPorts {
     provider: Arc<dyn FolderProvider>,
     next: Arc<dyn Ports>,
-    calls: Mutex<BTreeMap<Uuid, PendingCall>>,
+    calls: Mutex<BTreeMap<Uuid, Arc<Mutex<PendingCall>>>>,
 }
 impl LinkedNotesPorts {
     pub fn new(provider: Arc<dyn FolderProvider>, next: Arc<dyn Ports>) -> Self {
@@ -225,10 +225,21 @@ impl LinkedNotesPorts {
             calls.contains_key(&scope.call_id()) || calls.len() < 128,
             "Too many pending notes calls"
         );
-        let call = calls.entry(scope.call_id()).or_insert_with(|| PendingCall {
-            actor: scope.access().actor_user_id(),
-            folders: BTreeMap::new(),
-        });
+        let call = calls
+            .entry(scope.call_id())
+            .or_insert_with(|| {
+                Arc::new(Mutex::new(PendingCall {
+                    actor: scope.access().actor_user_id(),
+                    folders: BTreeMap::new(),
+                }))
+            })
+            .clone();
+        // Only this invocation's mutex spans filesystem I/O. Unrelated accounts never
+        // wait for it while looking up their own pending state.
+        drop(calls);
+        let mut call = call
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Notes files are busy"))?;
         ensure!(
             call.actor == scope.access().actor_user_id(),
             "This notes call belongs to another account"
@@ -377,6 +388,9 @@ impl Ports for LinkedNotesPorts {
         let mut conflict = false;
         if !success || next.is_err() {
             if let Some(call) = call {
+                let call = call
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("Notes files are busy"))?;
                 for pending in call.folders.values() {
                     for (path, mutation) in &pending.mutations {
                         if pending
@@ -405,3 +419,7 @@ impl Ports for LinkedNotesPorts {
         next
     }
 }
+
+#[cfg(test)]
+#[path = "linked_notes_concurrency.rs"]
+mod concurrency_tests;

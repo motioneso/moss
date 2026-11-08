@@ -1,5 +1,7 @@
 //! Bounded linked-file operations. Participating processes hold one folder lock until call end.
-use crate::{no_follow, set_create_mode, Entry, EntryKind, VaultContext, VaultError};
+#[cfg(not(unix))]
+use crate::set_create_mode;
+use crate::{no_follow, Entry, EntryKind, VaultContext, VaultError};
 use std::{
     fs::{self, File, OpenOptions},
     io::{self, Read},
@@ -16,9 +18,33 @@ impl VaultContext {
     pub fn folder_identity(&self) -> &Path {
         &self.root.path
     }
-    /// A private, non-Markdown lock file; external editors do not participate in this lock.
+    /// Unix locks the directory handle, so reads do not require a writable folder or create
+    /// a syncable sidecar. Other platforms retain the private, non-Markdown lock file.
+    /// External editors do not participate in this lock.
     /// try_lock refuses contention rather than waiting beyond the guest's call deadline.
     pub fn try_lock_folder(&self) -> Result<FolderLock, VaultError> {
+        #[cfg(unix)]
+        let file = {
+            use std::os::unix::fs::OpenOptionsExt;
+            self.root.check_vaults(&self.root.path, "")?;
+            let mut options = OpenOptions::new();
+            options
+                .read(true)
+                .custom_flags(libc::O_NOFOLLOW | libc::O_DIRECTORY);
+            options.open(&self.root.path)?
+        };
+        #[cfg(not(unix))]
+        let file = self.open_folder_lock_file()?;
+        file.try_lock()
+            .map_err(|error| VaultError::Io(io::Error::other(error.to_string())))?;
+        Ok(FolderLock {
+            _file: file,
+            root: self.root.path.clone(),
+        })
+    }
+
+    #[cfg(not(unix))]
+    fn open_folder_lock_file(&self) -> Result<File, VaultError> {
         let path = self.root.resolve(".moss-notes.lock", false)?;
         let mut options = OpenOptions::new();
         options.create(true).truncate(false).read(true).write(true);
@@ -27,12 +53,7 @@ impl VaultContext {
         if !file.metadata()?.is_file() {
             return Err(VaultError::BadPath("expected a regular folder lock".into()));
         }
-        file.try_lock()
-            .map_err(|error| VaultError::Io(io::Error::other(error.to_string())))?;
-        Ok(FolderLock {
-            _file: file,
-            root: self.root.path.clone(),
-        })
+        Ok(file)
     }
 
     pub fn read_limited(&self, relative: &str, limit: usize) -> Result<Vec<u8>, VaultError> {

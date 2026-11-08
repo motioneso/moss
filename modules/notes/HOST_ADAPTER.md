@@ -69,9 +69,15 @@ parent folders created before a failed write may remain. Do not use this adapter
 claim crash-safe managed contribution receipts until the continuation implements
 and verifies durable reconciliation.
 
-The current adapter creates `.moss-notes.lock` inside each chosen folder, including
-for reads and listings. The folder must be writable even for reads; external folder
-sync software may copy that hidden file. This is a known read-only-folder parity gap.
-A global state mutex currently spans file I/O, so a slow or stuck filesystem can
-stall other accounts. Filesystem I/O has no enforced wall-clock timeout. Per-call
-locking and read-only-folder support remain continuation work.
+On Unix the adapter locks an open directory handle without creating a sidecar.
+Linux tests exercise reads and listings in a non-writable folder and locking
+between processes. Other platforms retain `.moss-notes.lock`, including for reads,
+so they still require writable folders and may expose that file to folder sync.
+Do not mix an older sidecar-locking process with a directory-locking process:
+those locks do not coordinate. Stop old host processes before changing versions.
+
+Only an invocation's state mutex spans file I/O; the shared lookup mutex is released
+first. A real Wasm test holds one invocation's mutex while another account finishes.
+This simulates a blocked invocation, not a stalled disk. Filesystem I/O still has no
+enforced wall-clock timeout, and calls contending for the same folder are refused.
+Non-Linux filesystem behavior remains unverified.

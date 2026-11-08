@@ -1,0 +1,383 @@
+[
+  {
+    "name": "notes SQL: notes_managed_actors is owner-only for app and worker",
+    "source": "Existing Notes migrations and owner-only privacy invariant",
+    "seed": [
+      "INSERT INTO app.notes_managed_actors(owner_user_id) VALUES('{{userA}}')",
+      "INSERT INTO app.notes_managed_sources(owner_user_id,source_module_id,source_id) VALUES('{{userA}}','meetings','64000000-0000-4000-8000-000000000001')",
+      "INSERT INTO app.notes_destination_bindings(destination_id,owner_user_id,side) VALUES('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','{{userA}}','personal')",
+      "INSERT INTO app.notes_recording_contributions(owner_user_id,receipt_id,source_module_id,source_id,source_version,source_generation,item_key,revision,side,state,destination_id,destination,prose,block_bytes) VALUES('{{userA}}','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','meetings','64000000-0000-4000-8000-000000000001',1,0,'thought',1,'personal','applied','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','{\"id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}','Private contribution','Private block')",
+      "INSERT INTO app.notes_contribution_proposals(owner_user_id,proposal_id,source_module_id,source_id,payload) VALUES('{{userA}}','65000000-0000-4000-8000-000000000001','meetings','64000000-0000-4000-8000-000000000001','{}')",
+      "INSERT INTO app.notes_contribution_operations(owner_user_id,operation_id,receipt_id,source_module_id,source_id,state,destination_ids,payload) VALUES('{{userA}}','65000000-0000-4000-8000-000000000001','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','meetings','64000000-0000-4000-8000-000000000001','applied',ARRAY['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],'{}')",
+      "INSERT INTO app.notes_managed_actors(owner_user_id) VALUES('{{userB}}')",
+      "INSERT INTO app.notes_managed_sources(owner_user_id,source_module_id,source_id) VALUES('{{userB}}','meetings','64000000-0000-4000-8000-000000000001')",
+      "INSERT INTO app.notes_destination_bindings(destination_id,owner_user_id,side) VALUES('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','{{userB}}','personal')",
+      "INSERT INTO app.notes_recording_contributions(owner_user_id,receipt_id,source_module_id,source_id,source_version,source_generation,item_key,revision,side,state,destination_id,destination,prose,block_bytes) VALUES('{{userB}}','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','meetings','64000000-0000-4000-8000-000000000001',1,0,'thought',1,'personal','applied','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','{\"id\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}','Private contribution','Private block')",
+      "INSERT INTO app.notes_contribution_proposals(owner_user_id,proposal_id,source_module_id,source_id,payload) VALUES('{{userB}}','65000000-0000-4000-8000-000000000001','meetings','64000000-0000-4000-8000-000000000001','{}')",
+      "INSERT INTO app.notes_contribution_operations(owner_user_id,operation_id,receipt_id,source_module_id,source_id,state,destination_ids,payload) VALUES('{{userB}}','65000000-0000-4000-8000-000000000001','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','meetings','64000000-0000-4000-8000-000000000001','applied',ARRAY['bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],'{}')"
+    ],
+    "steps": [
+      {
+        "id": "app A read",
+        "role": "app",
+        "as": "A",
+        "sql": "SELECT count(*)::int AS n FROM app.notes_managed_actors WHERE owner_user_id='{{userA}}'",
+        "expect": {
+          "rows": [
+            {
+              "n": 1
+            }
+          ]
+        }
+      },
+      {
+        "id": "app A update",
+        "role": "app",
+        "as": "A",
+        "sql": "WITH changed AS (UPDATE app.notes_managed_actors SET generation=generation WHERE owner_user_id='{{userA}}' RETURNING 1) SELECT count(*)::text AS n FROM changed",
+        "expect": {
+          "rows": [
+            {
+              "n": "1"
+            }
+          ]
+        }
+      },
+      {
+        "id": "app B read",
+        "role": "app",
+        "as": "B",
+        "sql": "SELECT count(*)::int AS n FROM app.notes_managed_actors WHERE owner_user_id='{{userA}}'",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      },
+      {
+        "id": "app B update",
+        "role": "app",
+        "as": "B",
+        "sql": "WITH changed AS (UPDATE app.notes_managed_actors SET generation=generation WHERE owner_user_id='{{userA}}' RETURNING 1) SELECT count(*)::text AS n FROM changed",
+        "expect": {
+          "rows": [
+            {
+              "n": "0"
+            }
+          ]
+        }
+      },
+      {
+        "id": "app B delete",
+        "role": "app",
+        "as": "B",
+        "sql": "WITH changed AS (DELETE FROM app.notes_managed_actors WHERE owner_user_id='{{userA}}' RETURNING 1) SELECT count(*)::text AS n FROM changed",
+        "expect": {
+          "rows": [
+            {
+              "n": "0"
+            }
+          ]
+        }
+      },
+      {
+        "id": "app B cannot insert as A",
+        "role": "app",
+        "as": "B",
+        "sql": "INSERT INTO app.notes_managed_actors(owner_user_id) VALUES('{{userA}}')",
+        "expect": {
+          "error": {
+            "code": "42501"
+          }
+        }
+      },
+      {
+        "id": "app admin read",
+        "role": "app",
+        "as": "admin",
+        "sql": "SELECT count(*)::int AS n FROM app.notes_managed_actors WHERE owner_user_id='{{userA}}'",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      },
+      {
+        "id": "app admin update",
+        "role": "app",
+        "as": "admin",
+        "sql": "WITH changed AS (UPDATE app.notes_managed_actors SET generation=generation WHERE owner_user_id='{{userA}}' RETURNING 1) SELECT count(*)::text AS n FROM changed",
+        "expect": {
+          "rows": [
+            {
+              "n": "0"
+            }
+          ]
+        }
+      },
+      {
+        "id": "app admin delete",
+        "role": "app",
+        "as": "admin",
+        "sql": "WITH changed AS (DELETE FROM app.notes_managed_actors WHERE owner_user_id='{{userA}}' RETURNING 1) SELECT count(*)::text AS n FROM changed",
+        "expect": {
+          "rows": [
+            {
+              "n": "0"
+            }
+          ]
+        }
+      },
+      {
+        "id": "app admin cannot insert as A",
+        "role": "app",
+        "as": "admin",
+        "sql": "INSERT INTO app.notes_managed_actors(owner_user_id) VALUES('{{userA}}')",
+        "expect": {
+          "error": {
+            "code": "42501"
+          }
+        }
+      },
+      {
+        "id": "app anon read",
+        "role": "app",
+        "as": "anon",
+        "sql": "SELECT count(*)::int AS n FROM app.notes_managed_actors WHERE owner_user_id='{{userA}}'",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      },
+      {
+        "id": "app anon update",
+        "role": "app",
+        "as": "anon",
+        "sql": "WITH changed AS (UPDATE app.notes_managed_actors SET generation=generation WHERE owner_user_id='{{userA}}' RETURNING 1) SELECT count(*)::text AS n FROM changed",
+        "expect": {
+          "rows": [
+            {
+              "n": "0"
+            }
+          ]
+        }
+      },
+      {
+        "id": "app anon delete",
+        "role": "app",
+        "as": "anon",
+        "sql": "WITH changed AS (DELETE FROM app.notes_managed_actors WHERE owner_user_id='{{userA}}' RETURNING 1) SELECT count(*)::text AS n FROM changed",
+        "expect": {
+          "rows": [
+            {
+              "n": "0"
+            }
+          ]
+        }
+      },
+      {
+        "id": "app anon cannot insert as A",
+        "role": "app",
+        "as": "anon",
+        "sql": "INSERT INTO app.notes_managed_actors(owner_user_id) VALUES('{{userA}}')",
+        "expect": {
+          "error": {
+            "code": "42501"
+          }
+        }
+      },
+      {
+        "id": "worker A read",
+        "role": "worker",
+        "as": "A",
+        "sql": "SELECT count(*)::int AS n FROM app.notes_managed_actors WHERE owner_user_id='{{userA}}'",
+        "expect": {
+          "rows": [
+            {
+              "n": 1
+            }
+          ]
+        }
+      },
+      {
+        "id": "worker A update",
+        "role": "worker",
+        "as": "A",
+        "sql": "WITH changed AS (UPDATE app.notes_managed_actors SET generation=generation WHERE owner_user_id='{{userA}}' RETURNING 1) SELECT count(*)::text AS n FROM changed",
+        "expect": {
+          "rows": [
+            {
+              "n": "1"
+            }
+          ]
+        }
+      },
+      {
+        "id": "worker B read",
+        "role": "worker",
+        "as": "B",
+        "sql": "SELECT count(*)::int AS n FROM app.notes_managed_actors WHERE owner_user_id='{{userA}}'",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      },
+      {
+        "id": "worker B update",
+        "role": "worker",
+        "as": "B",
+        "sql": "WITH changed AS (UPDATE app.notes_managed_actors SET generation=generation WHERE owner_user_id='{{userA}}' RETURNING 1) SELECT count(*)::text AS n FROM changed",
+        "expect": {
+          "rows": [
+            {
+              "n": "0"
+            }
+          ]
+        }
+      },
+      {
+        "id": "worker B delete",
+        "role": "worker",
+        "as": "B",
+        "sql": "WITH changed AS (DELETE FROM app.notes_managed_actors WHERE owner_user_id='{{userA}}' RETURNING 1) SELECT count(*)::text AS n FROM changed",
+        "expect": {
+          "rows": [
+            {
+              "n": "0"
+            }
+          ]
+        }
+      },
+      {
+        "id": "worker B cannot insert as A",
+        "role": "worker",
+        "as": "B",
+        "sql": "INSERT INTO app.notes_managed_actors(owner_user_id) VALUES('{{userA}}')",
+        "expect": {
+          "error": {
+            "code": "42501"
+          }
+        }
+      },
+      {
+        "id": "worker admin read",
+        "role": "worker",
+        "as": "admin",
+        "sql": "SELECT count(*)::int AS n FROM app.notes_managed_actors WHERE owner_user_id='{{userA}}'",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      },
+      {
+        "id": "worker admin update",
+        "role": "worker",
+        "as": "admin",
+        "sql": "WITH changed AS (UPDATE app.notes_managed_actors SET generation=generation WHERE owner_user_id='{{userA}}' RETURNING 1) SELECT count(*)::text AS n FROM changed",
+        "expect": {
+          "rows": [
+            {
+              "n": "0"
+            }
+          ]
+        }
+      },
+      {
+        "id": "worker admin delete",
+        "role": "worker",
+        "as": "admin",
+        "sql": "WITH changed AS (DELETE FROM app.notes_managed_actors WHERE owner_user_id='{{userA}}' RETURNING 1) SELECT count(*)::text AS n FROM changed",
+        "expect": {
+          "rows": [
+            {
+              "n": "0"
+            }
+          ]
+        }
+      },
+      {
+        "id": "worker admin cannot insert as A",
+        "role": "worker",
+        "as": "admin",
+        "sql": "INSERT INTO app.notes_managed_actors(owner_user_id) VALUES('{{userA}}')",
+        "expect": {
+          "error": {
+            "code": "42501"
+          }
+        }
+      },
+      {
+        "id": "worker anon read",
+        "role": "worker",
+        "as": "anon",
+        "sql": "SELECT count(*)::int AS n FROM app.notes_managed_actors WHERE owner_user_id='{{userA}}'",
+        "expect": {
+          "rows": [
+            {
+              "n": 0
+            }
+          ]
+        }
+      },
+      {
+        "id": "worker anon update",
+        "role": "worker",
+        "as": "anon",
+        "sql": "WITH changed AS (UPDATE app.notes_managed_actors SET generation=generation WHERE owner_user_id='{{userA}}' RETURNING 1) SELECT count(*)::text AS n FROM changed",
+        "expect": {
+          "rows": [
+            {
+              "n": "0"
+            }
+          ]
+        }
+      },
+      {
+        "id": "worker anon delete",
+        "role": "worker",
+        "as": "anon",
+        "sql": "WITH changed AS (DELETE FROM app.notes_managed_actors WHERE owner_user_id='{{userA}}' RETURNING 1) SELECT count(*)::text AS n FROM changed",
+        "expect": {
+          "rows": [
+            {
+              "n": "0"
+            }
+          ]
+        }
+      },
+      {
+        "id": "worker anon cannot insert as A",
+        "role": "worker",
+        "as": "anon",
+        "sql": "INSERT INTO app.notes_managed_actors(owner_user_id) VALUES('{{userA}}')",
+        "expect": {
+          "error": {
+            "code": "42501"
+          }
+        }
+      }
+    ],
+    "rows": [
+      "app.notes_managed_actors",
+      "app.notes_managed_sources",
+      "app.notes_destination_bindings",
+      "app.notes_recording_contributions",
+      "app.notes_contribution_proposals",
+      "app.notes_contribution_operations"
+    ],
+    "note": "SQL-only parity. Every probe rolls back. This does not establish Notes HTTP, guest handler, sync, or UI parity. Owner deletion with dependent rows is outside this privacy case."
+  }
+]
