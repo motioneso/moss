@@ -36,6 +36,7 @@ fn run(op: &str, v: &Value) -> Result<Value, String> {
                 v["side"].as_str().unwrap(),
             )
             .map(|x| json!(x)),
+            "destination" => Ok(json!(identity::destination_id(v["path"].as_str().unwrap()))),
             "snapshot" => identity::snapshot_key(&serde_json::from_value(v.clone()).unwrap())
                 .map(|x| json!(x)),
             _ => panic!("unknown parity operation"),

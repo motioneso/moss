@@ -15,6 +15,8 @@ import {
 } from "../../../packages/notes/src/recording-note-identity.js";
 import { managedNoteSnapshotKey as snapshotKey } from "../../../packages/notes/src/managed-note-snapshot-key.js";
 
+import { noteDestinationId as destinationId } from "../../../packages/notes/src/contribution-destinations.js";
+
 const vectors: unknown[] = [];
 function record(op: string, input: unknown, run: () => unknown) {
   let expected: unknown;
@@ -24,6 +26,9 @@ function record(op: string, input: unknown, run: () => unknown) {
     expected = { error: (error as Error).message };
   }
   vectors.push({ op, input, expected });
+}
+for (const path of ["/notes/Contacts/a.md", "/notes/Contacts/b.md", "/notes/日記/😀.md"]) {
+  record("destination", { path }, () => destinationId(path));
 }
 const id = "a".repeat(64);
 const before = render(id, "Saved thought");
