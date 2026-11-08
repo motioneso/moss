@@ -1,3 +1,4 @@
+/* global document, location */
 import { openModuleFrame } from "/host-bridge.mjs";
 const frame = document.querySelector("#calendar");
 openModuleFrame(frame, "calendar", frame.dataset.src, {

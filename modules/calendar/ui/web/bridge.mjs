@@ -1,3 +1,4 @@
+/* global document, location, requestAnimationFrame, addEventListener */
 import { moduleClient } from "./guest-bridge.mjs";
 
 // Establish the document port before the first iframe load, including slow Wasm startup.
