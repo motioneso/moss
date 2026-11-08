@@ -608,6 +608,129 @@ fn installed_public_apis_events_tool_grants_and_account_routes_use_the_real_host
     println!("PASS installed Wasm public API/dependency checks, event subscriptions/account boundaries, one-use tool approval, signed-in route declarations and per-account disable");
 }
 
+#[test]
+fn api_calls_cannot_dispatch_private_provider_routes() {
+    use moss_module_host::{
+        lifecycle::FileLifecycle, registry::Source, sql::LegacyInventory, store::Installer,
+    };
+    let data = tempfile::tempdir().unwrap();
+    let registry = tempfile::tempdir().unwrap();
+    let keys = common::Keys::new();
+    keys.write(registry.path(), "1.0.0", 1, vec![]);
+    let actor = uuid::Uuid::new_v4();
+    let access = AccessContext::new(actor, "api-routing");
+    let services = Arc::new(
+        ServicePorts::new(
+            data.path(),
+            Arc::new(SecretCipher::connectors(&Default::default()).unwrap()),
+            Arc::new(NoAi),
+            Arc::new(LocalPorts::new(data.path()).unwrap()),
+        )
+        .unwrap(),
+    );
+    let installer = Arc::new(
+        Installer::new(
+            data.path(),
+            Arc::new(ServiceCatalog::default()),
+            Arc::new(FileLifecycle::new(data.path(), [actor].into()).unwrap()),
+            Host::new(Limits::default()).unwrap(),
+            services.clone(),
+            "0.1.0".parse().unwrap(),
+            LegacyInventory::default(),
+        )
+        .unwrap(),
+    );
+    services.bind(&installer);
+    let root = common::Keys::public(&keys.root);
+    let catalog = installer
+        .refresh(
+            &access,
+            Source::Folder(registry.path().into()),
+            &root,
+            &root,
+            "sample-registry",
+        )
+        .unwrap();
+    let mut provider = common::manifest("1.0.0");
+    provider.id = "sample.provider".into();
+    provider
+        .provides
+        .insert("read".into(), "1.0.0".parse().unwrap());
+    let mut consumer = common::manifest("1.0.0");
+    consumer.id = "sample.consumer".into();
+    consumer
+        .requires
+        .insert(provider.id.clone(), "^1".parse().unwrap());
+    consumer.capabilities = vec![Capability {
+        port: "api".into(),
+        operations: ["call".into()].into(),
+        resources: [provider.id.clone()].into(),
+        allow_private: false,
+    }];
+    let template = include_str!("../sample/module.wat");
+    let start = template.find("      local.get $kind").unwrap();
+    let end = template.find("      i32.const 32))").unwrap();
+    let body = r#"      local.get $kind i32.load8_u i32.const 97 i32.eq
+      if
+        i32.const 32 i32.const 0 i32.store
+        i32.const 36 local.get $payload i32.store
+        i32.const 40 local.get $length i32.store
+      else
+        i32.const 32 i32.const 0 i32.store
+        i32.const 36 i32.const 128 i32.store
+        i32.const 40 i32.const 16 i32.store
+      end
+"#;
+    let provider_source = format!("{}{}{}", &template[..start], body, &template[end..])
+        .replace(r#""healthy""#, r#""{\22private\22:true}""#);
+    for (manifest, wasm) in [
+        (&provider, wat::parse_str(provider_source).unwrap()),
+        (
+            &consumer,
+            wat::parse_str(template.replace("moss:module/kv@", "moss:module/api@")).unwrap(),
+        ),
+    ] {
+        let mut files = common::files(manifest);
+        files.insert("code/module.wasm".into(), wasm);
+        let bytes = moss_module_host::archive::pack(&files).unwrap();
+        let digest = moss_module_host::trust::digest(&bytes);
+        installer
+            .import_file(
+                &access,
+                &catalog,
+                &bytes,
+                &common::Keys::sign(&keys.publisher, digest.as_bytes()),
+                "sample",
+                true,
+            )
+            .unwrap();
+    }
+    let request = |parameters: Value| {
+        json!({"operation":"call","resource":"sample.provider","parameters":parameters}).to_string()
+    };
+    assert!(installer
+        .call(
+            "sample.consumer",
+            access.clone(),
+            "route",
+            &request(json!({"name":"read","method":"POST","path":"/private","body":{}}))
+        )
+        .is_err());
+    let result = installer
+        .call(
+            "sample.consumer",
+            access,
+            "route",
+            &request(json!({"name":"read","parameters":{"method":"POST","path":"/private"}})),
+        )
+        .unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(&result).unwrap(),
+        json!({"name":"read","parameters":{"method":"POST","path":"/private"}})
+    );
+    println!("PASS real installed API guest: forged route envelope refused; route-shaped arguments reach only the dedicated public API handler");
+}
+
 struct ActorModels;
 #[async_trait::async_trait]
 impl moss_platform_routing::ConfigurationStore for ActorModels {

@@ -180,7 +180,7 @@ impl Host {
         ensure!(
             matches!(
                 kind,
-                "route" | "job" | "tool" | "event" | "install" | "health"
+                "route" | "api" | "job" | "tool" | "event" | "install" | "health"
             ),
             "Unknown module handler"
         );

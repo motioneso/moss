@@ -319,13 +319,18 @@ impl ServicePorts {
                     target.manifest.provides.contains_key(api),
                     "This API is not public"
                 );
-                host.invoke_public(
-                    &r.resource,
-                    access.clone(),
-                    "route",
-                    &r.parameters.to_string(),
-                )
-                .and_then(|s| Ok(serde_json::from_str(&s)?))
+                ensure!(
+                    r.parameters.as_object().is_some_and(|fields| fields
+                        .keys()
+                        .all(|key| matches!(key.as_str(), "name" | "parameters"))),
+                    "Public API calls accept only a name and parameters"
+                );
+                let payload = json!({
+                    "name": api,
+                    "parameters": r.parameters.get("parameters").cloned().unwrap_or_else(|| json!({}))
+                });
+                host.invoke_public(&r.resource, access.clone(), "api", &payload.to_string())
+                    .and_then(|s| Ok(serde_json::from_str(&s)?))
             }
             "events" => match r.operation.as_str() {
                 "publish" => {

@@ -14,6 +14,9 @@ real host. No production signing keys or pretrusted registry address ship with t
 `Application::open` connects the existing account database, typed database port, Phase 2b queue,
 service ports, installer and Wasmtime host. The authenticated server supplies an `AccessContext`
 and calls `dispatch` for declared `/api/m/<module>/...` routes. Workers call `Installer::run_job`.
+Public API calls use the separate `api` handler kind with a host-built `{name, parameters}`
+envelope. Only names in the provider's `provides` declaration can be called; caller arguments
+stay inside `parameters` and never select a route handler.
 Both interfaces are synchronous: call them on a bounded blocking executor, never directly from
 an async request task. The application supplies its trusted keys, secret cipher, AI router and
 optional compiled-cache key. The queue and module-host schema constants must be applied by the
