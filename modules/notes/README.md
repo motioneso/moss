@@ -150,7 +150,7 @@ chat, HTTP differential, full sync or second-device proof.
 
 ## Installed action details (part six)
 
-Package version `0.1.1` declares `prepareNoteAction` version `1.0.0`.
+Since package version `0.1.1`, Notes declares `prepareNoteAction` version `1.0.0`.
 Call it through the host's public API with this envelope:
 
 ```json
@@ -191,7 +191,7 @@ remain on the continuation list.
 
 ## Indexed-search checkpoint (part seven)
 
-The ordinary component now offers `notes.search`. It preserves the legacy query
+Package version `0.1.2` adds `notes.search` to the ordinary component. It preserves the legacy query
 trim, empty-query no-op, default limit of eight, one-to-twenty clamp and four-field
 chunk projection. The input corpus executes the actual legacy handler with an
 explicit retrieval stand-in. Unknown input fields are rejected more strictly than

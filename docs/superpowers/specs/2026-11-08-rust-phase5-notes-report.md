@@ -791,6 +791,11 @@ complete Phase 5 acceptance.
 
 ## Part seven checkpoint — read-only indexed search
 
+This checkpoint includes merged part six (#4074), based on main `6c26f775a`.
+Package version `0.1.2` retains its installed action-details API. The database
+gate cleans the earlier oracle accounts before the approval RLS-removal control,
+then runs the independent search fixtures after approval cleanup.
+
 This continuation uses the brief's bounded checkpoint allowance. It adds the
 fourth tool's read handler and a core-owned search adapter; it does not complete
 the Notes port. The ordinary package now declares `notes.search`, while the three

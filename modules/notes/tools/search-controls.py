@@ -31,7 +31,8 @@ def run(source, name):
 
 with tempfile.TemporaryDirectory(prefix="notes-search-source-") as folder:
     isolated = Path(folder)
-    for relative in ["rust-spike", "modules/notes", "packages/notes"]:
+    # Cargo resolves the host's People dev-dependency even for this Notes target.
+    for relative in ["rust-spike", "modules/notes", "modules/people", "packages/notes"]:
         shutil.copytree(root / relative, isolated / relative,
                         ignore=shutil.ignore_patterns("target", "node_modules", ".git"))
     shutil.copyfile(root / "LICENSE", isolated / "LICENSE")
