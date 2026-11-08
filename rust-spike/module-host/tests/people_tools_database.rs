@@ -50,6 +50,7 @@ fn compiled_people_tools_match_the_legacy_execute_functions() {
         {"port":"context","operations":["read"],"resources":["call"]},
         {"port":"vault","operations":["notes.read","notes.list","notes.compare-write"],"resources":["people-notes"]}
     ])).unwrap();
+    common::people_job_imports(&mut manifest);
     let manifest = Arc::new(manifest);
     let host = Host::new(Limits::default()).unwrap();
     let run = |user, request: &Value| {

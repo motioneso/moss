@@ -86,6 +86,7 @@ fn compiled_people_guest_uses_the_real_canonical_abi() {
     let mut undeclared = manifest.clone();
     undeclared.capabilities.clear();
     assert!(host.validate(&core, &undeclared).is_err());
+    common::people_job_imports(&mut manifest);
     let manifest = Arc::new(manifest);
     let run = |kind: &str, payload: Value| {
         host.call(

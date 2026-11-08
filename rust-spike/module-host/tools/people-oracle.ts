@@ -12,6 +12,7 @@ import { findPeopleByNames } from "../../../packages/people/src/find-by-names.js
 import { notesOracle } from "./people-notes-oracle.js";
 import { mutationOracle } from "./people-mutation-oracle.js";
 import { toolsOracle } from "./people-tools-oracle.js";
+import { jobsOracle } from "./people-jobs-oracle.js";
 
 export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise<void> }> {
   if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
@@ -21,12 +22,15 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
   const folder = await mkdtemp(join(tmpdir(), "moss-people-oracle-"));
   const actor = randomUUID();
   const toolActor = randomUUID();
+  const jobActor = randomUUID();
   const person = randomUUID();
   const archived = randomUUID();
   const path = join(folder, "expected.json");
   const cleanup = async (): Promise<void> => {
     try {
-      await bootstrap.query("DELETE FROM app.users WHERE id=ANY($1::uuid[])", [[actor, toolActor]]);
+      await bootstrap.query("DELETE FROM app.users WHERE id=ANY($1::uuid[])", [
+        [actor, toolActor, jobActor]
+      ]);
     } finally {
       await Promise.allSettled([
         bootstrap.end(),
@@ -217,6 +221,7 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
       if (error !== rollback) throw error;
     }
     const tools = await toolsOracle(bootstrap, runner, toolActor);
+    const jobs = await jobsOracle(bootstrap, runner, jobActor);
     await writeFile(
       path,
       JSON.stringify({
@@ -231,7 +236,8 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
         projectionStartedAt,
         mutation,
         notes,
-        tools
+        tools,
+        jobs
       })
     );
     return { path, cleanup };

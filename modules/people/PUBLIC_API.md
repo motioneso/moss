@@ -81,3 +81,50 @@ host allowed-root checks as absolute folders. Module-local storage is not canoni
 The job kinds remain `person-index` and `sync-person-memory`. Job envelopes are account-scoped
 and metadata-only. Indexing retains the batch cap, delayed start and stable idempotency behavior;
 memory sync remains the existing stub until its composition layer supplies a memory provider.
+
+## Internal job dispatch checkpoint
+
+The compiled guest now implements both job kinds and these additive API names. They are
+not installed public package APIs yet; the four consumer lookups above remain unchanged.
+
+| Name                | Parameters                   | Result                                 |
+| ------------------- | ---------------------------- | -------------------------------------- |
+| `enqueueIndex`      | `IndexCommand`               | `{enqueued: true}`                     |
+| `enqueueIndexBatch` | `{commands: IndexCommand[]}` | `{enqueued: number}`; first fifty only |
+| `enqueueMemorySync` | `MemoryCommand`              | `{enqueued: true}`                     |
+
+`IndexCommand` is `{commandId, source, sourceRefHash, sourceVersion?, reason}`.
+`MemoryCommand` is `{commandId, personId, personUpdatedAt, reason}`. Command IDs are UUIDs;
+all other fields retain their existing string values, including opaque hashes and versions.
+The host supplies the actor. Strict envelopes reject extra fields, including caller-selected
+actors. A new logical cycle needs a fresh command UUID. Retry the same command unchanged;
+reusing its ID for different content fails. Queue deduplication includes completed work,
+so a permanent source/person ID would incorrectly suppress future cycles.
+
+The guest stores an immutable record in the account-scoped `people-commands` collection
+through `kv/records.get` and `kv/records.put`. Only `{"command-id": "<uuid>"}` reaches the
+queue. The command retains its original availability time across retries: fifteen minutes
+after the first index enqueue, immediate for memory sync. Records survive completion until
+module data purge; aggregate quotas and automatic cleanup are not implemented.
+
+Trusted composition supplies the account KV resource `person-providers`, mapping each
+source kind to its declared provider module. It must declare the corresponding `api/call`
+resources and versioned dependencies; a guest cannot use this map to widen its grant.
+The provider implements `collectPersonSignals` with parameters
+`{sourceRefHash, sourceVersion?}` and result `{signals: PersonContextSignal[]}`. The same
+authenticated account reaches that API; no actor is taken from the command. Missing providers
+are a no-op, matching the existing worker. Provider I/O precedes the first People query.
+The provider adapter in the differential test is a fixture; real installed provider dispatch
+remains a package-composition qualification step.
+
+The `job` export accepts `{queue, parameters: {"command-id": "<uuid>"}}` for the two exact
+job names. Indexing uses the invocation's database transaction for projections, identities,
+links, events and indexing state. Its memory follow-ups require both
+`jobs/enqueue-after-commit` and `jobs/enqueue-options`; assemble the generic adapter as
+specified in [the host contract](../../rust-spike/module-host/COMMAND_RECORDS.md).
+Publication happens after commit, with deterministic child command IDs for retries. This is
+an at-least-once seam, not an atomic database/queue outbox. A publication failure returns an
+error for queue retry; another indexing pass can append another legacy event.
+
+The installed package must still declare both queue schemas, retries and capability grants.
+This checkpoint does not connect ingest nudges, HTTP routes, installed chat or Settings.

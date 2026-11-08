@@ -42,6 +42,9 @@ impl Ports for LocalPorts {
                     .write(true)
                     .open(self.root.path().join("kv.lock"))?;
                 disk.lock()?;
+                if request.operation.starts_with("records.") {
+                    return crate::command_records::invoke(&account, request);
+                }
                 let mut values: BTreeMap<String, Value> = match account.read("kv.json") {
                     Ok(bytes) => serde_json::from_slice(&bytes)?,
                     Err(vault::VaultError::NotFound(_)) => BTreeMap::new(),

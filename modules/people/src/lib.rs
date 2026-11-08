@@ -1,5 +1,6 @@
 //! People & Context. Pure domain logic; all persistence belongs to the module SDK ports.
 pub mod guest;
+pub mod jobs;
 pub mod matching;
 mod name_lookup;
 pub mod note_edits;
@@ -23,6 +24,9 @@ moss_module_sdk::export_module!(
         moss_module_sdk::component::ports::DB,
         moss_module_sdk::component::ports::CONTEXT,
         moss_module_sdk::component::ports::VAULT,
+        moss_module_sdk::component::ports::KV,
+        moss_module_sdk::component::ports::JOBS,
+        moss_module_sdk::component::ports::API,
     ]
 );
 

@@ -39,10 +39,23 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> Result<String> {
     if kind == "tool" {
         return crate::tools::handle(host, payload);
     }
+    if kind == "job" {
+        return crate::jobs::handle(host, payload);
+    }
     if kind != "api" {
         return Err(Error::new("People handler is not available"));
     }
     let request: ApiRequest = serde_json::from_str(payload)?;
+    if matches!(
+        request.name.as_str(),
+        "enqueueIndex" | "enqueueIndexBatch" | "enqueueMemorySync"
+    ) {
+        return Ok(serde_json::to_string(&crate::jobs::api(
+            host,
+            &request.name,
+            request.parameters,
+        )?)?);
+    }
     let repo = Repository::new(host);
     let value = match request.name.as_str() {
         "findPeopleByNames" => {
