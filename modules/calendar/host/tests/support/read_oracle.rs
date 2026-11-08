@@ -7,6 +7,22 @@ use std::{
 };
 use uuid::Uuid;
 
+pub fn seed(f: &Fixture) {
+    f.rt.block_on(async {
+        for (index, metadata) in [
+            json!({"allDay":true}),
+            json!({"status":"tentative","attendeeCount":1}),
+            json!({"source":"outlook-browser-calendar","mirrorUnconfirmed":true}),
+            json!({"jarvisCreated":true,"attendeeCount":2}),
+        ].into_iter().enumerate() {
+            assert_eq!(f.root.execute(
+                "INSERT INTO app.calendar_events(id,connector_account_id,owner_user_id,title,starts_at,ends_at,external_id,external_metadata) SELECT gen_random_uuid(),connector_account_id,owner_user_id,$2,starts_at,ends_at,$3,$4 FROM app.calendar_events WHERE id=$1",
+                &[&f.event, &format!("HTTP parity {index}"), &format!("http-{}-{index}",f.event), &metadata],
+            ).await.unwrap(), 1);
+        }
+    });
+}
+
 pub fn compare(app: &Application, f: &Fixture) {
     let paths = vec![
         "/events".to_string(),

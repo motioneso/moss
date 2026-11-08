@@ -32,6 +32,7 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
         f.root.batch_execute(moss_module_host::jobs::MIGRATION).await.unwrap();
         f.root.execute("INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'calendar.prep_task_mode','\"auto\"')",&[&f.a]).await.unwrap();
     });
+    read_oracle::seed(&f);
     let dir = tempfile::tempdir().unwrap();
     let registry = tempfile::tempdir().unwrap();
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");

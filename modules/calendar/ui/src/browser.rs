@@ -33,12 +33,18 @@ async fn request(method: &str, path: &str, body: Value) -> Result<Value, ()> {
     serde_json::from_str(&result.as_string().ok_or(())?).map_err(|_| ())
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum Refresh {
+    Idle,
+    Background,
+    Explicit,
+}
 #[derive(Clone, Copy)]
 struct State {
     events: RwSignal<Option<Vec<Event>>>,
     display: RwSignal<Value>,
     briefing: RwSignal<Value>,
-    loading: RwSignal<bool>,
+    loading: RwSignal<Refresh>,
     failed: RwSignal<bool>,
     view: RwSignal<String>,
     cursor: RwSignal<Option<NaiveDate>>,
@@ -72,11 +78,15 @@ impl State {
     fn twelve(self) -> bool {
         model::twelve(self.display.get()["dateFormat"].as_str())
     }
-    fn refresh(self) {
-        if self.loading.get_untracked() {
+    fn refresh(self, explicit: bool) {
+        if self.loading.get_untracked() != Refresh::Idle {
             return;
         }
-        self.loading.set(true);
+        self.loading.set(if explicit {
+            Refresh::Explicit
+        } else {
+            Refresh::Background
+        });
         spawn_local(async move {
             let result = async {
                 let display = request("GET", "/display-settings", Value::Null).await?;
@@ -127,7 +137,7 @@ impl State {
                 }
                 Err(()) => self.failed.set(true),
             }
-            self.loading.set(false);
+            self.loading.set(Refresh::Idle);
         });
     }
     fn persist(self) {
@@ -150,7 +160,7 @@ pub fn Calendar() -> impl IntoView {
         events: RwSignal::new(None),
         display: RwSignal::new(Value::Null),
         briefing: RwSignal::new(Value::Null),
-        loading: RwSignal::new(false),
+        loading: RwSignal::new(Refresh::Idle),
         failed: RwSignal::new(false),
         view: RwSignal::new("day".into()),
         cursor: RwSignal::new(None),
@@ -210,8 +220,8 @@ pub fn Calendar() -> impl IntoView {
             }
         });
     }
-    state.refresh();
-    let tick = Closure::<dyn Fn()>::new(move || state.refresh());
+    state.refresh(false);
+    let tick = Closure::<dyn Fn()>::new(move || state.refresh(false));
     watch(tick.as_ref().unchecked_ref());
     tick.forget();
     if settings() {
@@ -236,8 +246,8 @@ pub fn Calendar() -> impl IntoView {
         </div></div>
         <div class="cal-legend"><span>"Accepted · Moss holding"</span><span>{move||state.zone().name()}</span></div>
         <div class="cal-notice" aria-live="polite">
-            {move||state.loading.get().then(||view!{<p role="status">{if state.events.get().is_some(){"Refreshing calendar…"}else{"Loading calendar…"}}</p>})}
-            {move||state.failed.get().then(||view!{<ReadFailure retained=state.events.get().is_some() on_retry=Callback::new(move |_|state.refresh())/>})}
+            {move||(state.loading.get()!=Refresh::Idle && (state.events.get().is_none() || state.loading.get()==Refresh::Explicit)).then(||view!{<p role="status">{if state.events.get().is_some(){"Refreshing calendar…"}else{"Loading calendar…"}}</p>})}
+            {move||state.failed.get().then(||view!{<ReadFailure retained=state.events.get().is_some() on_retry=Callback::new(move |_|state.refresh(true))/>})}
             {move||state.unsaved.get().then(||view!{<p role="status">"Your view choice could not be saved. It will last for this visit."</p>})}
         </div>
         <div class="cal-body" tabindex="0" aria-label="Calendar days">{move||state.events.get().map(|events|{
@@ -260,8 +270,8 @@ pub fn Calendar() -> impl IntoView {
 #[component]
 fn Settings(state: State) -> impl IntoView {
     view! {<main class="calendar-settings"><Masthead title="Calendar" eyebrow="Settings" lede="How Moss helps you plan your days"/>
-        {move||(state.loading.get() && state.briefing.get()==Value::Null).then(||view!{<p role="status">"Loading settings…"</p>})}
-        {move||state.failed.get().then(||view!{<ReadFailure settings_page=true retained=state.briefing.get()!=Value::Null on_retry=Callback::new(move |_|state.refresh())/>})}
+        {move||(state.loading.get()!=Refresh::Idle && (state.briefing.get()==Value::Null || state.loading.get()==Refresh::Explicit)).then(||view!{<p role="status">{if state.briefing.get()==Value::Null {"Loading settings…"}else{"Refreshing settings…"}}</p>})}
+        {move||state.failed.get().then(||view!{<ReadFailure settings_page=true retained=state.briefing.get()!=Value::Null on_retry=Callback::new(move |_|state.refresh(true))/>})}
         {move||(state.briefing.get()!=Value::Null).then(||{
             let s=state.briefing.get()["settings"].clone();
             view!{<dl><dt>"Look ahead"</dt><dd>{format!("{} days",s["lookaheadDays"])}</dd><dt>"Prep tasks"</dt><dd>{s["prepTaskMode"].as_str().unwrap_or("suggest").to_string()}</dd><dt>"Time blocks"</dt><dd>{s["timeBlockMode"].as_str().unwrap_or("suggest").to_string()}</dd><dt>"Timezone"</dt><dd>{state.zone().name()}</dd></dl>}

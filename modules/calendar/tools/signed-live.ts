@@ -373,11 +373,11 @@ try {
   await frame
     .getByRole("dialog")
     .filter({ hasText: "Updated calendar meeting" })
-    .waitFor({ timeout: 45000 });
+    .waitFor({ timeout: 120000 });
   await frame.getByRole("dialog").getByText("1 person", { exact: true }).waitFor();
   await tab.screenshot({ path: join(out, "signed-in-updated-event.png") });
   await db.query("DELETE FROM app.calendar_events WHERE id=$1", [data.event]);
-  await frame.getByRole("dialog").waitFor({ state: "detached", timeout: 45000 });
+  await frame.getByRole("dialog").waitFor({ state: "detached", timeout: 120000 });
   assert.equal(await frame.getByRole("button", { name: /Updated calendar meeting/ }).count(), 0);
   console.log(
     "PASS event deep link, updated open details and dismissal after actual cached-event removal"

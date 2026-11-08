@@ -317,7 +317,7 @@ Package 0.5.0 adds event links on the Calendar-owned signed-in page. The parent 
 only the requested event ID over its existing presentation bridge; event contents
 still come from installed account-scoped reads. Successfully refreshed events update
 an open peek or dismiss it when absent. Failed refreshes retain the prior snapshot;
-retry and background refresh display progress. Details now include elapsed duration,
+initial loads and explicit retries display progress; background refresh stays quiet. Details now include elapsed duration,
 correct singular/plural attendees, and accepted/RSVP/observed/held status wording.
 
 Three original GET URLs (event list, event detail and briefing settings) are aliases
@@ -329,7 +329,8 @@ active in the old application; this does not perform its full replacement.
 The new HTTP oracle registers production Fastify routes with real Calendar and
 preference repositories and runtime-role data contexts on the gate database. The
 installed test compares status and complete bodies for the three read contracts,
-including a missing event, for owner, unrelated user and administrator before a
+including a missing event and all-day, tentative, Outlook-mirror and Moss-block
+serialization in event lists, for owner, unrelated user and administrator before a
 view grant, with that grant, and after revocation (thirty-six comparisons). The
 signed-live runner additionally compares both URL prefixes after real password
 sign-in (sixteen comparisons), then exercises linked and refreshed event details.
@@ -359,3 +360,10 @@ LAN-address request and phone-width screenshot remain distinct from that require
 Builds reuse the existing scratch Rust 1.95.0 compiler and Wasm target. Only existing
 lockfile dependencies are prepared in the worktree. No global tool, new dependency,
 wit-bindgen installation or sibling crate change is part of this checkpoint.
+
+The first independent review found no blocker or major and four minor follow-ups.
+This part suppresses recurring background-refresh announcements, expands the HTTP
+fixtures beyond plain events and gives the live polling assertions a longer bound.
+The remaining assistant-name gap is explicit: the package still says Moss where
+the old screen uses the configured assistant name. Final review disposition is
+recorded on the reviewed commit and in the task Proof artifact.
