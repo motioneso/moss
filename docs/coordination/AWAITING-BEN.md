@@ -75,19 +75,6 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-### JS-48 Calendar: split the build scope — 2026-11-08
-
-Card 525. The full Calendar port includes event storage, saved day plans, approval/recovery,
-six tools, two jobs and the existing screens. It exceeds the task brief's limit of one
-compaction. Discovery is saved in
-[`2026-11-08-rust-phase5-calendar-report.md`](../superpowers/specs/2026-11-08-rust-phase5-calendar-report.md).
-No Calendar implementation or parity/privacy/live-device proof is claimed.
-
-Recommendation: split the build into package/data/privacy, tools/jobs/execution, then
-screens/assembled proof, retaining full parity as the final acceptance gate. Alternatively,
-explicitly relax the context limit for the existing task. Can JS-48 be split into these three
-build tasks so each can be implemented and verified within the required context limit?
-
 No open Outlook calendar decision. Ben approved the
 [calendar-first design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md)
 on 2026-10-21. Implementation and isolated-dev verification are authorized;

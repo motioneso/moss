@@ -1,25 +1,95 @@
-# Rust Phase 5: Calendar scope checkpoint
+# Rust Phase 5: Calendar package and data foundation
 
 Task JS-48, Card 525. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
 Release note Category: N/A.
 
-**Status: discovery only; the Calendar port is not implemented.** This checkpoint records the
-existing behavior and recommends smaller build tasks. It does not claim package, privacy,
-parity, UI or second-device verification. The full rewrite remains the approved goal.
+**Scope: approved slice one only.** The coordinator approved JS-48 keeping the package,
+data, privacy proofs and host wrapper. Separate tasks own tools/jobs/execution and
+screens/live proof/full parity. This report does **not** claim the full Calendar port,
+HTTP parity, UI verification or second-device verification.
 
-## Why this checkpoint exists
+## What this slice implements
 
-The task branch started at Phase 0a and was rebased onto main `1ff33decd`. That main contains
-the Phase 4b host, shared module SDK, transactional queries and module-frame toolkit. The
-brief requires stopping at a clean commit if the work would need more than one compaction.
-The full Calendar port, including its day-plan execution system and assembled UI proof,
-exceeds that limit. No implementation slice has been silently substituted for the brief.
+- `modules/calendar/` contains the package manifest, icon, changelog, SDK-only Rust guest,
+  separate trusted host wrapper, archive builder, data differential harness and gate scripts.
+- The guest lists/reads cached events, reads/creates day-plan aggregates, saves drafts with
+  revision checks, and reads existing briefing settings. Draft saves retain recorded placement
+  and reject attempts to replace it. One host invocation is one database transaction.
+- All five original Calendar tables and fifteen original SQL files retain their identities.
+  No existing SQL is edited or moved. The package build verifies every raw hash, and install
+  retains the historical core ledger, including `0229a`.
+- Three additive host compatibility repairs: freeze all four day-plan table ownerships;
+  order the exact historical suffixed migration between its numeric neighbours; accept the
+  exact existing `calendar_event` sharing identity without opening that namespace to other
+  downloaded packages. New migration names remain numeric.
+- The wrapper reads only the existing seven Calendar preference keys through the actor's
+  data context. Public Tasks/Briefing reference projections are injected at the wrapper seam;
+  absent adapters fail closed before a draft commits. No People or Tasks tables are read.
+- The package app map describes only this data foundation. It advertises no screen, settings
+  editor, chat tool or job handler. The TypeScript Calendar remains the active user-facing app.
 
-At this revision, `packages/calendar/src/` contains 32 non-test TypeScript/TSX files with
-8,981 lines, plus seven colocated test files with 1,904 lines. The seven files under
-`apps/web/src/calendar/` add 1,118 lines. These counts exclude shared contracts, integration
-tests, connector adapters and chat composition. Calendar also owns fifteen legacy SQL files.
-These are source-inventory counts, not estimates of equivalent Rust size.
+## Integration boundaries for the next slices
+
+The six package routes are storage interfaces, not a claim of matching the old HTTP envelope.
+The UI slice must retain `date`, the default account timezone, task/source-run projections,
+error contracts and other contextual response fields from the existing routes. The five public
+methods are `listEvents`, `getEvent`, `getPlan`, `createPlan` and `saveDraft`.
+
+The host wrapper's `References` seam needs real actor-scoped public adapters. Its projections
+return `{task:{id,ownerUserId}}` and `{run:{id,ownerUserId}}`; the guest verifies the requested
+identity and owner. Full briefing source-run eligibility and provenance belong to composition
+before the original create route is exposed. Missing adapters return an unavailable result.
+Authority-changing settings writes are deliberately absent until the action-policy bridge is
+assembled. Operation and operation-item rows are retained and privacy-tested; their state
+machines and execution are slice two.
+
+The guest builds natively and as a pure `wasm32-unknown-unknown` core, wrapped as a real
+`moss:module` component using only the already declared WAT tooling. This differs from the
+spec's proposed `wasm32-wasip2` compiler target. The shipped component has no WASI imports;
+this choice avoids adding a binding generator or exposing additional host interfaces. Keep
+this difference visible when standardizing the combined Phase 5 build. Native and component
+checks are included in the scoped CI job; database proofs run only through verify-gate.
+
+## Verification
+
+This is an implementation checkpoint, not a Ready submission. The scoped disposable
+verify-gate completed with exit zero on the implementation's dirty tree at base commit
+`79c81b2fc`. Its input fingerprint was `2034974a2305`. This receipt does not cover the
+subsequent Clippy-only boolean-expression change or this report, and it is not a receipt for
+the checkpoint commit. A final committed-code gate is still required.
+
+Observed checks from this work:
+
+- Four native guest tests and twenty-eight differential cases against the existing
+  TypeScript serializer/model passed. These are scoped data checks, not full HTTP parity.
+- The actual Rust Wasm component loaded in the real host. Packaging preserved all fifteen
+  legacy SQL files. The signed local registry download/install test passed with retained
+  rows, event sharing/revocation, actor-separated preferences, revision conflict, rejected
+  save rollback, successful draft save and unavailable public-reference adapter rollback.
+- All five table privacy assertions rejected unrelated users and administrators. The same
+  read/write assertions were observed failing with row security disabled in the disposable
+  database, then passing after restoration. Missing-actor reads and a forged parent insert
+  were rejected. Owner reads and updates were successful controls. The Google fixture must
+  include the existing Calendar scope for owner updates; production RLS was not weakened.
+- Root lint, typecheck, formatting and file-size checks passed during implementation.
+  Scoped tools typecheck passed. Guest and host Clippy with warnings denied passed after
+  the final fixture style fix. Guest, host and module-host Rust formatting checks passed.
+- The earlier host migration-order regressions were observed failing before their fixes
+  and passing after. The module-host native suite passed.
+
+Repeat the gate against the final reviewed commit before publishing proof. Commands:
+
+```sh
+modules/calendar/tools/check.sh
+scripts/run-gate.sh start --gate ./modules/calendar/tools/gate.sh
+scripts/run-gate.sh wait --follow
+```
+
+Set `CALENDAR_RUSTUP_HOME` for an already provisioned task-local compiler when necessary.
+The scripts install nothing. Keep native guest and host Cargo output folders separate: the
+standalone `rlib`/`cdylib` guest otherwise collides across different feature graphs in one target.
+
+The discovery below remains the source inventory for the remaining slices.
 
 ## Existing behavior to retain
 
@@ -78,8 +148,8 @@ worker-only; the misleadingly named `0126_app_runtime_calendar_events_delete.sql
 adds no application DELETE grant. The day-plan tables use owner-only rules. Do not replace
 these distinct rules with one generated generic policy.
 
-These statements describe the checked SQL source. No database policy was exercised here.
-Implementation acceptance still requires:
+The disposable database checks above exercise these policies for this data slice.
+The combined Calendar acceptance obligations remain:
 
 - Keep existing SQL byte-for-byte in its current directory, package it against the compiled
   hash inventory and retain the `core-legacy` ledger. Never edit applied migrations.
@@ -110,10 +180,11 @@ default launcher builds the Phase 0b Tasks server, and its TypeScript fixture st
 workers. Calendar needs a scoped launcher/fixture that runs the real Calendar guest and
 workers; running the existing Tasks cases would not prove Calendar parity.
 
-## Recommended build split
+## Approved build split
 
-This is a proposal, not approval to reduce the original acceptance criteria. Keep the final
-Calendar acceptance open until every slice and the combined live proof pass.
+The coordinator approved this split after discovery commit `fe8af3b7f`. JS-48 owns only
+the first slice. Keep final Calendar acceptance open until all three slices and their
+combined live proof pass.
 
 1. **Package and data path.** Create `modules/calendar/` using section 7 of the package spec:
    manifest, native/Wasm crate, SDK-only host access, exact legacy SQL inventory and a real
@@ -129,17 +200,31 @@ Calendar acceptance open until every slice and the combined live proof pass.
    and writes, chat actions and failure recovery in the real Rust UI, then on a second
    device through configured HTTPS and trusted origins.
 
-Each slice needs its own bounded build brief and independent review. No new build agents,
-global installs, server processes, database runs, pushes or merges were started here.
-Workshop and Food remain excluded.
+Each slice needs its own bounded build brief and independent review. This slice ran only
+disposable database tests; it started no app server or live browser session. No new tools
+were installed and no build agents or merges were started. Workshop and Food remain excluded.
 
-## Verification and remaining work
+## Checkpoint and remaining work
 
-This commit changes documentation only. Verification is limited to source inspection,
-inventory counts, Markdown formatting and whitespace checks; the actual command outcomes
-are recorded in the task chat. No product app-map declaration is changed because no product
-behavior or screen is added.
+The brief requires a clean committed checkpoint when work would exceed one compaction.
+This checkpoint preserves the slice-one implementation and observed checks. It has not had
+its independent review, and no final Proof artifact or Ready submission has been published.
+Do not present it as full Calendar parity or a live-verified feature.
 
-Everything in the original implementation and proof request remains outstanding. This
-checkpoint must not be presented as a completed module, a passing privacy test, parity
-evidence, an independently reviewed implementation or a Ready-to-Playtest build.
+To finish JS-48:
+
+1. Inspect the complete checkpoint diff, run the final committed-code scoped gate and repeat
+   formatting/type checks when relevant inputs changed. The gate command above builds the
+   actual guest and exercises package installation and privacy controls.
+2. Have fresh Claude eyes review the reduced brief and diff against main using the Herdr
+   reviewer template. Zero of the allowed two review rounds have been used. Fix major or
+   blocker findings and record each review on the commit it reviewed.
+3. Publish the required recipe Proof artifact with real gate output, each proof captioned,
+   and a Not proven list covering full parity, UI, second-device access and execution.
+4. Push this task branch and open one PR with Part of #4027 and Release note Category: N/A.
+   Comment on Card 525 with the final commit and checks, move it to Ready to Playtest, then
+   run Herdr ready with the proof artifact. Do not merge or mark Done.
+
+Slices two and three retain the outstanding tools/jobs/execution and screens/live-device/
+full-parity work described above. The manual component build target and missing concrete
+public-reference adapters must remain explicit integration limitations.

@@ -321,8 +321,10 @@ impl Manifest {
                 share_key,
             } = access
             {
+                let legacy = self.database.ledger == Ledger::CoreLegacy
+                    && crate::legacy::sharing(&self.id, table, resource_type, share_key);
                 ensure!(
-                    identifier(resource_type)
+                    (identifier(resource_type) || legacy)
                         && !share_key.is_empty()
                         && share_key.len() <= 63
                         && share_key
@@ -331,7 +333,8 @@ impl Manifest {
                     "Invalid sharing declaration"
                 );
                 ensure!(
-                    resource_type == &self.id
+                    legacy
+                        || resource_type == &self.id
                         || resource_type.starts_with(&(self.id.clone() + ".")),
                     "New shared resource types must belong to this module"
                 );

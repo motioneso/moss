@@ -1,0 +1,32 @@
+name: Rust Calendar data package
+on:
+  pull_request:
+    paths:
+      - "modules/calendar/**"
+      - "packages/calendar/sql/**"
+      - "rust-spike/module-host/**"
+      - "rust-spike/module-sdk/**"
+      - ".github/workflows/rust-calendar.yml"
+permissions:
+  contents: read
+jobs:
+  data-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.95.0
+          targets: wasm32-unknown-unknown
+      - run: pnpm install --frozen-lockfile
+      - run: cargo +1.95.0 fetch --locked --manifest-path modules/calendar/src/Cargo.toml
+      - run: cargo +1.95.0 fetch --locked --manifest-path modules/calendar/host/Cargo.toml
+      - name: Native tests, data parity and real Rust component
+        run: modules/calendar/tools/check.sh

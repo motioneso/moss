@@ -42,6 +42,10 @@ pub fn owns(module: &str, table: &str) -> bool {
         .get(module)
         .is_some_and(|t| t.iter().any(|t| t == table))
 }
+/// Reviewed pre-package sharing identity. It cannot be chosen by downloaded SQL.
+pub fn sharing(module: &str, table: &str, resource: &str, key: &str) -> bool {
+    (module, table, resource, key) == ("calendar", "app.calendar_events", "calendar_event", "id")
+}
 pub fn entry(module: &str, path: &str) -> Option<&'static File> {
     inventory()
         .files

@@ -42,3 +42,22 @@ fn frozen_calendar_suffix_keeps_its_original_ledger_identity() {
     m.database.migrations = vec!["sql/0229a_day_plan_preserve_legacy.sql".into()];
     assert!(m.validate(&"0.1.0".parse().unwrap()).is_err());
 }
+
+#[test]
+fn only_frozen_calendar_event_sharing_can_keep_the_old_resource_type() {
+    use moss_module_host::manifest::TableAccess;
+    let mut m = common::manifest("1.0.0");
+    m.id = "calendar".into();
+    m.database.ledger = Ledger::CoreLegacy;
+    m.database.owned_tables = vec!["app.calendar_events".into()];
+    m.database.access.insert(
+        "app.calendar_events".into(),
+        TableAccess::OwnerOrShare {
+            resource_type: "calendar_event".into(),
+            share_key: "id".into(),
+        },
+    );
+    m.validate(&"0.1.0".parse().unwrap()).unwrap();
+    m.database.ledger = Ledger::Module;
+    assert!(m.validate(&"0.1.0".parse().unwrap()).is_err());
+}

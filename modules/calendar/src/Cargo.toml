@@ -1,0 +1,26 @@
+[package]
+name = "moss-calendar"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[lib]
+path = "lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+chrono-tz = "0.10"
+
+[[test]]
+name = "data"
+path = "tests/data.rs"
+
+[[bin]]
+name = "calendar-data-parity"
+path = "bin/data-parity.rs"
