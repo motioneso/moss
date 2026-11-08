@@ -15,6 +15,8 @@ extern "C" {
     fn bridge_request(method: &str, path: &str, body: &str) -> js_sys::Promise;
     #[wasm_bindgen(js_namespace=calendarBridge)]
     fn settings() -> bool;
+    #[wasm_bindgen(js_namespace=calendarBridge, js_name=requestedEvent)]
+    fn requested_event() -> js_sys::Promise;
     #[wasm_bindgen(js_namespace=calendarBridge)]
     fn preserve() -> JsValue;
     #[wasm_bindgen(js_namespace=calendarBridge)]
@@ -182,6 +184,32 @@ pub fn Calendar() -> impl IntoView {
             state.persist();
         }
     });
+    let requested = RwSignal::new(None::<String>);
+    if !settings() {
+        spawn_local(async move {
+            if let Ok(id) = JsFuture::from(requested_event()).await {
+                requested.set(id.as_string());
+            }
+        });
+        Effect::new(move |_| {
+            let Some(events) = state.events.get() else {
+                return;
+            };
+            if let Some(old) = peek.get_untracked() {
+                let current = events.iter().find(|e| e.id == old.id).cloned();
+                if current.as_ref() != Some(&old) {
+                    peek.set(current);
+                }
+            }
+            if let Some(id) = requested.get() {
+                if let Some(event) = events.iter().find(|e| e.id == id) {
+                    opening.set_value(preserve());
+                    peek.set(Some(event.clone()));
+                    requested.set(None);
+                }
+            }
+        });
+    }
     state.refresh();
     let tick = Closure::<dyn Fn()>::new(move || state.refresh());
     watch(tick.as_ref().unchecked_ref());
@@ -208,7 +236,7 @@ pub fn Calendar() -> impl IntoView {
         </div></div>
         <div class="cal-legend"><span>"Accepted · Moss holding"</span><span>{move||state.zone().name()}</span></div>
         <div class="cal-notice" aria-live="polite">
-            {move||(state.loading.get() && state.events.get().is_none()).then(||view!{<p role="status">"Loading calendar…"</p>})}
+            {move||state.loading.get().then(||view!{<p role="status">{if state.events.get().is_some(){"Refreshing calendar…"}else{"Loading calendar…"}}</p>})}
             {move||state.failed.get().then(||view!{<ReadFailure retained=state.events.get().is_some() on_retry=Callback::new(move |_|state.refresh())/>})}
             {move||state.unsaved.get().then(||view!{<p role="status">"Your view choice could not be saved. It will last for this visit."</p>})}
         </div>

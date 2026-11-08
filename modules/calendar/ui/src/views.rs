@@ -109,9 +109,10 @@ pub fn EventDetails(
     } else {
         match (starts, ends) {
             (Some(a), Some(b)) => format!(
-                "{} – {}",
+                "{} – {} · {}",
                 model::time(a.hour() * 60 + a.minute(), twelve),
-                model::time(b.hour() * 60 + b.minute(), twelve)
+                model::time(b.hour() * 60 + b.minute(), twelve),
+                model::duration(((b - a).num_milliseconds() as f64 / 60000.0 + 0.5).floor() as i64)
             ),
             _ => "Time unavailable".into(),
         }
@@ -126,13 +127,27 @@ pub fn EventDetails(
     } else {
         "On your calendar"
     };
+    let detail_status = if event.is_moss_block {
+        "Moss focus block"
+    } else if event.read_only {
+        if event.unconfirmed {
+            "Needs verification"
+        } else {
+            "Observed in Outlook"
+        }
+    } else if matches!(event.status.as_deref(), Some("tentative" | "needsAction")) {
+        "Pending RSVP"
+    } else {
+        "Accepted"
+    };
     view! {<PeekPanel on_close=on_close>
         <div class="cal-peek__head"><span class="cal-peek__kind">{state}</span></div>
         <h2 class="cal-peek__title">{event.title}</h2>
         {event.read_only.then(||view!{<p>"Outlook · Read only. Check or change this event in Outlook."</p>})}
         <div class="cal-peek__rows"><p>{time}</p><p>{dates}</p><p>{timezone}</p>
             {event.location.map(|where_|view!{<p>{where_}</p>})}
-            {(event.attendee_count>0.0).then(||view!{<p>{format!("{} people",event.attendee_count)}</p>})}
+            {(event.attendee_count>0.0).then(||view!{<p>{format!("{} {}",event.attendee_count,if event.attendee_count==1.0 {"person"}else{"people"})}</p>})}
+            <p>{detail_status}</p>
         </div>
         {event.is_moss_block.then(||view!{<p class="cal-held-banner">"Moss can move or shorten this block when your day changes. Hard events always come first."</p>})}
     </PeekPanel>}

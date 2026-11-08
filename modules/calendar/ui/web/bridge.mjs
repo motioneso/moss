@@ -3,11 +3,17 @@ import { moduleClient } from "./guest-bridge.mjs";
 
 // Establish the document port before the first iframe load, including slow Wasm startup.
 const client = moduleClient();
+const presentation = client.theme();
 let interval;
 globalThis.calendarBridge = {
   async request(method, path, body) {
     const value = await client.request(method, path, body ? JSON.parse(body) : null);
     return JSON.stringify(value);
+  },
+  requestedEvent() {
+    return presentation.then((value) =>
+      typeof value?.calendarEvent === "string" ? value.calendarEvent : null
+    );
   },
   settings() {
     return new URL(location.href).pathname.endsWith("/settings.html");
@@ -43,8 +49,7 @@ globalThis.calendarBridge = {
     interval = setInterval(callback, 30000);
   }
 };
-client
-  .theme()
+presentation
   .then((value) => {
     // Theme names are host-owned. No markup or script is accepted from the parent.
     if (typeof value?.theme === "string") document.documentElement.dataset.theme = value.theme;

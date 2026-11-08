@@ -1,5 +1,13 @@
 # Calendar package
 
+## 0.5.0
+
+- Open linked events through the signed-in Calendar page and keep their details current.
+- Show event duration, attendee grammar and status labels; show refresh progress.
+- Dispatch original event and briefing-settings read URLs through the installed package.
+- Compare real TypeScript read routes with installed Wasm and signed-in HTTPS responses.
+- Full parity, provider execution, settings edits and second-device trust remain open.
+
 ## Unreleased
 
 - Add packaged Rust Day, Week and Month screens, event details and view-only settings.

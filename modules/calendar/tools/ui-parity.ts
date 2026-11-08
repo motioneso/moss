@@ -6,6 +6,7 @@ import {
   dayKey,
   dtoToViewEvent,
   fmtTime,
+  fmtDur,
   groupEventsByDay,
   navigateCursor,
   packDay
@@ -130,3 +131,8 @@ for (const format of [null, "12", "24"] as const) {
 console.log(
   `Calendar UI: ${count} differential cases passed against production TypeScript date, segmentation and overlap code`
 );
+
+for (const minutes of [-61, -1, 0, 1, 15, 30, 59, 60, 61, 90, 120, 1440]) {
+  compare({ operation: "duration", minutes }, fmtDur(minutes));
+}
+console.log("PASS 12 duration comparisons against the production Calendar model");

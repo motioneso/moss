@@ -237,3 +237,16 @@ pub fn date_range(event: &Event, zone: Tz) -> String {
 pub fn twelve(format: Option<&str>) -> bool {
     format == Some("12")
 }
+
+/// Match Calendar's fmtDur for rounded elapsed minutes, including signed input.
+pub fn duration(minutes: i64) -> String {
+    let hours = minutes.div_euclid(60);
+    let rest = minutes % 60;
+    if hours == 0 {
+        format!("{rest} min")
+    } else if rest == 0 {
+        format!("{hours} hr")
+    } else {
+        format!("{hours} hr {rest} min")
+    }
+}

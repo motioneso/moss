@@ -1,10 +1,12 @@
 # Calendar Rust package: cached-event screens and two chat tools
 
 Part of #4027. This is the package and data foundation, **not the full Calendar port**.
-The existing TypeScript app stays in place. Version 0.3.0 adds packaged Day, Week and
-Month screens, event details and view-only automation settings. Authenticated shell
-composition, settings writes, the remaining four chat tools, jobs, provider execution
-and the assembled HTTP/UI parity gate remain open.
+The existing TypeScript app stays in place. Version 0.5.0 connects event links at
+`/calendar?event=<id>` through the signed-in Calendar composition, restores duration,
+attendee and status details, refreshes open details and closes a removed event.
+Day, Week and Month screens, saved views and view-only settings are packaged.
+Full shell composition, settings writes, the remaining four chat tools, jobs,
+provider execution and the assembled HTTP/UI parity gate remain open.
 
 Version 0.2.0 adds `calendar.heartbeatWindow` (owned cache reads) and
 `calendar.dayPlanDraft` (typed evening intent and untimed task proposals). The latter
@@ -109,7 +111,13 @@ It consumes the already installed `Application`, the existing `moss_network::web
 that network's exact configured HTTPS origins, and the generated shared-asset directory.
 The caller still owns database bootstrap, signed registry installation, TLS and shutdown.
 Calendar's pages are `/calendar` and `/settings/calendar`; data requests go through
-`/api/m/calendar/`. This is a Calendar-only composition, not the full Today/chat shell.
+`/api/m/calendar/`. Original `GET /api/calendar/events`, `GET /api/calendar/events/:id`
+and `GET /api/calendar/briefing-settings` URLs also dispatch through the installed
+package with the same authenticated actor. Other original routes are not aliased.
+The parent's presentation bridge supplies the requested event ID; account data is
+still read through installed routes. A successful refresh updates open details or
+closes them when the event is absent; a failed refresh retains the loaded snapshot.
+This is a Calendar-only composition, not the full Today/chat shell.
 
 The parent uses the actual signed-in actor and the opaque module bridge. Verified package
 assets and generated shared CSS/fonts are static code and are served without account cookies,
@@ -141,3 +149,17 @@ On hosts where Chrome cannot use its sandbox, pass `AGENT_BROWSER_ARGS=--no-sand
 to the runner so every task-browser command uses the same launch setting. Run the live
 check after the full gate on a loaded machine. Its browser assertions include authored
 grid styling, shared font tokens and loaded events before the offline/retry probe.
+
+## Read-contract parity checkpoint (part 5)
+
+`tools/http-oracle.ts` runs the production TypeScript Fastify routes with the real
+repositories and runtime-role data contexts against the gate database. Installed
+Wasm comparisons cover owner, unrelated user and administrator before sharing,
+after a view grant, and after revocation. They compare status and full response
+bodies for event list, event detail, missing event and briefing settings. The
+signed-live runner checks both URL prefixes after real password sign-in and
+exercises event links, detail refresh and cached-event removal in the visible UI.
+Its direct fixture row changes are synthetic cache setup, not provider execution.
+Malformed UUID errors, every HTTP method/error, provider-backed paths and full
+Calendar parity remain unproven. Existing privacy fault witnesses still run in
+`gate.sh`; the new read comparisons do not replace those controls.

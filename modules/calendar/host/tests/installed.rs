@@ -1,5 +1,7 @@
 #[path = "support/kv_guard.rs"]
 mod kv_guard;
+#[path = "support/read_oracle.rs"]
+mod read_oracle;
 #[path = "support/registry.rs"]
 mod registry;
 mod support;
@@ -112,6 +114,7 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
         );
         assert_eq!(write["status"], 404);
     }
+    read_oracle::compare(&app, &f);
     let settings = call(f.a, "GET", "/briefing-settings", Value::Null);
     assert_eq!(settings["body"]["settings"]["prepTaskMode"], "auto");
     let display = call(f.a, "GET", "/display-settings", Value::Null);
@@ -154,6 +157,7 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
         call(f.b, "GET", &format!("/events/{}", f.event), Value::Null)["status"],
         200
     );
+    read_oracle::compare(&app, &f);
     // A view grant does not grant write authority, and never shares the day plan.
     f.isolation("app.calendar_events", f.event, f.b, true)
         .unwrap();
@@ -188,6 +192,7 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
         call(f.b, "GET", &format!("/events/{}", f.event), Value::Null)["status"],
         404
     );
+    read_oracle::compare(&app, &f);
     let path = format!("/day-plans/{}/draft", f.plan);
     let input = json!({"localDay":"2026-11-08","timeZone":"UTC","expectedRevision":1,"eveningIntent":{"notes":"saved"}});
     assert_eq!(call(f.a, "PATCH", &path, input.clone())["status"], 200);

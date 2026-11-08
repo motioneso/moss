@@ -60,3 +60,44 @@ fn unsaved_locale_uses_the_production_twenty_four_hour_clock() {
     assert!(moss_calendar_ui::model::twelve(Some("12")));
     assert_eq!(moss_calendar_ui::model::time(13 * 60 + 30, false), "13:30");
 }
+
+#[test]
+fn event_details_keep_duration_attendee_grammar_and_status() {
+    for (count, expected) in [(1, "1 person"), (2, "2 people")] {
+        let event: Event = serde_json::from_value(serde_json::json!({
+            "id":"meeting", "title":"Review", "startsAt":"2026-11-08T10:00:00Z",
+            "endsAt":"2026-11-08T11:30:00Z", "attendeeCount":count
+        }))
+        .unwrap();
+        let output = view!{<EventDetails event=event timezone="UTC".to_string() twelve=false on_close=Callback::new(|_|{})/>}.to_html();
+        assert!(
+            output.contains("1 hr 30 min"),
+            "Duration is missing: {output}"
+        );
+        assert!(output.contains(expected), "Attendee grammar is missing");
+        assert!(output.contains("Accepted"), "Event status is missing");
+    }
+}
+
+#[test]
+fn event_details_distinguish_rsvp_observation_and_held_blocks() {
+    for (metadata, label) in [
+        (serde_json::json!({"status":"tentative"}), "Pending RSVP"),
+        (serde_json::json!({"status":"needsAction"}), "Pending RSVP"),
+        (serde_json::json!({"readOnly":true}), "Observed in Outlook"),
+        (
+            serde_json::json!({"readOnly":true,"unconfirmed":true}),
+            "Needs verification",
+        ),
+        (serde_json::json!({"isMossBlock":true}), "Moss focus block"),
+    ] {
+        let mut value = serde_json::json!({"id":"event","title":"Meeting", "startsAt":"2026-11-08T10:00:00Z", "endsAt":"2026-11-08T11:00:00Z"});
+        value
+            .as_object_mut()
+            .unwrap()
+            .extend(metadata.as_object().unwrap().clone());
+        let event: Event = serde_json::from_value(value).unwrap();
+        let output = view!{<EventDetails event=event timezone="UTC".to_string() twelve=false on_close=Callback::new(|_|{})/>}.to_html();
+        assert!(output.contains(label), "Missing {label}");
+    }
+}
