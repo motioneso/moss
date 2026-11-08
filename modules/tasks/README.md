@@ -8,8 +8,8 @@ People calls and full endpoint parity remain unfinished.
 `src/` uses the guest-safe SDK. `wit/` defines its ABI. Ben approved the pinned
 `wit-bindgen` generator on 2026-11-08, superseding the earlier decline. `tools/`
 is a separate host-side verification crate, never linked into the guest.
-It uses the same approved generator graph's `wit-component` encoder to wrap the
-core Wasm. Building directly for WASI imports services the host deliberately
+The small `bindings/` crate uses the same approved generator graph's
+`wit-component` encoder to wrap the core Wasm. Building directly for WASI imports services the host deliberately
 refuses; the shipped build therefore targets `wasm32-unknown-unknown` and has no
 WASI adapter. No global tool or compiler target installation is required by
 these scripts: use an already provisioned Rust 1.95 toolchain with that target.

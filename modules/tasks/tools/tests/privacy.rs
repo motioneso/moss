@@ -222,21 +222,20 @@ impl Fixture {
         Ok(serde_json::from_str(&value)?)
     }
     fn route(&self, actor: Uuid, method: &str, path: &str, body: Value) -> Value {
-        let mut request =
-            moss_module_host::dispatch::resolve(&self.manifest.routes, method, path).unwrap();
+        self.try_route(actor, method, path, body).unwrap()
+    }
+    fn try_route(&self, actor: Uuid, method: &str, path: &str, body: Value) -> Result<Value> {
+        let mut request = moss_module_host::dispatch::resolve(&self.manifest.routes, method, path)?;
         request.body = body;
-        let value = self
-            .host
-            .call(
-                &self.wasm,
-                self.manifest.clone(),
-                AccessContext::new(actor, "component-route"),
-                self.ports.clone(),
-                "route",
-                &serde_json::to_string(&request).unwrap(),
-            )
-            .unwrap();
-        serde_json::from_str(&value).unwrap()
+        let value = self.host.call(
+            &self.wasm,
+            self.manifest.clone(),
+            AccessContext::new(actor, "component-route"),
+            self.ports.clone(),
+            "route",
+            &serde_json::to_string(&request)?,
+        )?;
+        Ok(serde_json::from_str(&value)?)
     }
     fn body(&self, actor: Uuid, parameters: Value) -> Value {
         let result = self.run(actor, parameters).unwrap();
@@ -584,6 +583,22 @@ fn compiled_routes_preserve_tags_moves_nullable_fields_and_completion_cascades()
             1
         );
     }
+    // The parent UPDATE is rejected by the original self-parent trigger, after
+    // child moves and tag cleanup have executed. The host must roll all of it back.
+    match f.try_route(
+        f.owner,
+        "PATCH",
+        &format!("/tasks/{parent}"),
+        json!({"listId":second,"parentTaskId":parent}),
+    ) {
+        Err(_) => {}
+        Ok(reply) => assert!(reply["status"].as_u64().unwrap() >= 400, "{reply}"),
+    }
+    for id in [&parent, &child] {
+        let row = f.route(f.owner, "GET", &format!("/tasks/{id}"), Value::Null);
+        assert_eq!(row["body"]["task"]["listId"], first);
+        assert_eq!(row["body"]["task"]["tags"].as_array().unwrap().len(), 1);
+    }
     let moved = f.route(
         f.owner,
         "PATCH",
@@ -651,4 +666,76 @@ fn compiled_routes_preserve_tags_moves_nullable_fields_and_completion_cascades()
         "priority"
     );
     println!("PASS compiled Tasks: tags, atomic parent/child list moves, nullable dates, completion cascades, activity and isolated view preferences");
+}
+
+#[test]
+#[ignore = "Database work only through verify-gate"]
+fn compiled_quadrant_queries_match_the_priority_four_boundary() {
+    let f = Fixture::open_with(true);
+    let mut tasks = vec![];
+    for (title, priority) in [("Lower", 3), ("Higher", 4)] {
+        let result = f.route(
+            f.owner,
+            "POST",
+            "/tasks",
+            json!({"title":title,"priority":priority}),
+        );
+        assert_eq!(result["status"], 201, "{result}");
+        tasks.push(result["body"]["task"].clone());
+    }
+    let titles = |path: &str| {
+        let response = f.route(f.owner, "GET", path, Value::Null);
+        assert_eq!(response["status"], 200, "{response}");
+        let mut titles: Vec<String> = response["body"]["tasks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["title"].as_str().unwrap().to_owned())
+            .collect();
+        titles.sort();
+        titles
+    };
+    assert_eq!(
+        titles("/tasks?quadrant=schedule"),
+        vec!["Higher"],
+        "priority three must not enter the important quadrant"
+    );
+    assert_eq!(titles("/tasks?quadrant=eliminate"), vec!["Lower"]);
+    for task in &tasks {
+        assert_eq!(
+            f.route(
+                f.owner,
+                "PATCH",
+                &format!("/tasks/{}", task["id"].as_str().unwrap()),
+                json!({"dueAt":"2020-01-01T00:00:00Z"})
+            )["status"],
+            200
+        );
+    }
+    assert_eq!(titles("/tasks?quadrant=do"), vec!["Higher"]);
+    assert_eq!(titles("/tasks?quadrant=delegate"), vec!["Lower"]);
+    assert_eq!(
+        f.route(f.owner, "GET", "/tasks?quadrant=unknown", Value::Null)["status"],
+        400
+    );
+    let list = tasks[1]["listId"].as_str().unwrap();
+    let tag = f.route(
+        f.owner,
+        "POST",
+        &format!("/tasks/lists/{list}/tags"),
+        json!({"name":"Query check"}),
+    );
+    assert_eq!(tag["status"], 201, "{tag}");
+    let tag = tag["body"]["tag"]["id"].as_str().unwrap();
+    assert_eq!(
+        f.route(
+            f.owner,
+            "POST",
+            &format!("/tasks/{}/tags", tasks[1]["id"].as_str().unwrap()),
+            json!({"tagId":tag})
+        )["status"],
+        200
+    );
+    assert_eq!(titles(&format!("/tasks?tagId={tag}")), vec!["Higher"]);
+    println!("PASS compiled Tasks: priority-three/four boundary in all quadrants, query rejection and tag query filtering");
 }

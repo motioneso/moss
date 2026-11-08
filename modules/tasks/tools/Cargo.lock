@@ -1390,7 +1390,6 @@ dependencies = [
  "tokio-postgres",
  "uuid",
  "wat",
- "wit-component",
 ]
 
 [[package]]

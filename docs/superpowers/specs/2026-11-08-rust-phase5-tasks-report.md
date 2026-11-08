@@ -1,4 +1,11 @@
-# Rust Phase 5 Tasks — shared host checkpoint
+# Rust Phase 5 Tasks — implementation checkpoints
+
+Current status: JS-53, Card 526 adds a real component and basic routes on the
+merged data foundation. **The full Tasks port is unfinished and is not Ready.**
+The final section records this continuation and its remaining work. Earlier
+sections preserve the evidence and limits of their respective checkpoints.
+
+## Earlier shared-host checkpoint (JS-46)
 
 Task JS-46, Card 522. Part of #4027. Work is in the task's own checkout of
 `~/Jarv1s`. This report currently covers the shared prerequisite requested by the
@@ -289,7 +296,9 @@ support only, to generate the canonical ABI from `wit/tasks.wit`. The provisiona
 handwritten ABI was discarded. Host-side `wit-component` `0.247.0` already belongs
 to that approved generator's transitive graph and wraps the generated core Wasm;
 it adds no separate third-party toolchain. The lockfiles retain the exact inputs.
-New dependency downloads stayed in scratch Cargo storage. No global tool, compiler
+A separate small `bindings/` encoder crate keeps the guest build independent of
+the Wasmtime verification toolchain; producing the component does not build the
+host checks. New dependency downloads stayed in scratch Cargo storage. No global tool, compiler
 target, production app or production data was installed or changed.
 
 A direct `wasm32-wasip2` build succeeded but includes WASI I/O and CLI imports.
@@ -318,11 +327,48 @@ or setting entry promises a Tasks page that does not exist.
 
 ### Validation and remaining work
 
-Validation is in progress; final commands, outcomes and independent review are
-recorded below before the checkpoint is committed. The new real-component gate
-requires failing-first cross-account read and write controls, restored owner-only
-privacy, admin refusal, recurring completion and repeated-completion idempotency.
-Earlier native test adapters stay labeled as native evidence.
+The first compiled-route regression run ended with four database tests passing
+and one failing: priority three incorrectly entered the important quadrant. The
+source rule starts at four (`TASK_IMPORTANT_PRIORITY_MIN`). The route now uses
+four; the new compiled test exercises all four quadrants, invalid query handling
+and a tag query through real route envelopes. The same gate observed both
+cross-account read and write assertions fail with Tasks RLS removed, then pass
+with RLS restored, including for an instance admin. These are deliberate privacy
+controls, not unexpected privacy failures in the protected configuration.
+
+The compiled mutation checks passed list/tag moves, nullable dates, completion
+cascades and rollback after a self-parent constraint rejects an update following
+child moves and tag removals. Recurring completion creates one next occurrence;
+repeating completion creates no duplicate. Earlier native test adapters stay
+labeled as native evidence. The final green gate and exact reviewed commit are
+recorded in the task's proof and review record; this report does not claim that
+the full endpoint harness or live Tasks UI passed.
+
+Other observed checks: six native Rust tests, 48 recurrence comparisons with the
+current TypeScript implementation, two real component/archive tests, strict
+clippy for the guest, checks and encoder crates, Rust formatting, shell syntax
+and targeted Markdown formatting. The real host refused the preliminary WASI
+component; it accepted and executed the generated component without WASI imports.
+The unsigned archive round-trip validates all nine original migration hashes.
+Repository static validation is run separately; its final result belongs in the
+proof rather than being inferred from the narrower checks.
+
+### Independent review and limits
+
+Round one reviewed commit `e5aa4cffc` read-only. Its major finding was the priority
+boundary above; a failing-first compiled query regression reproduces it. The
+review also requested query-string and failed-mutation rollback coverage; both
+are now exercised. The build now isolates the encoder in `bindings/` so producing
+the component does not compile the host verification toolchain. Round two must
+review the final committed checkpoint; its result is recorded on that commit.
+
+Remaining minor review limits: task/tag response assembly performs per-task tag
+queries and has no large-account runtime/message-size measurement. Manifest error
+identifiers are descriptive app-map metadata, while wire errors retain plain
+source-compatible messages. Dependency attribution in the packaged NOTICE still
+needs to be completed before publication. This unfinished unsigned package must
+not be published or presented as the production replacement. These limits remain
+visible rather than being counted as parity proof.
 
 Not proven and still required before the full task can be Ready:
 
