@@ -61,8 +61,11 @@ that evidence is kept outside the source tree to avoid changing the commit under
 
 Observed checks from this work:
 
-- Four native guest tests and twenty-eight differential cases against the existing
-  TypeScript serializer/model passed. These are scoped data checks, not full HTTP parity.
+- Four native guest tests and forty-five differential cases against the existing
+  TypeScript serializer/model passed after review fixes. These are scoped data checks, not
+  full HTTP parity. The initial harness included six copied settings expectations; review
+  removed those from the differential count. Settings reads retain native fixture checks
+  and installed-package preference/actor checks, without a settings HTTP parity claim.
 - The actual Rust Wasm component loaded in the real host. Packaging preserved all fifteen
   legacy SQL files. The signed local registry download/install test passed with retained
   rows, event sharing/revocation, actor-separated preferences, revision conflict, rejected
@@ -204,6 +207,22 @@ combined live proof pass.
 Each slice needs its own bounded build brief and independent review. This slice ran only
 disposable database tests; it started no app server or live browser session. No new tools
 were installed and no build agents or merges were started. Workshop and Food remain excluded.
+
+## Review follow-through
+
+The first independent review found two major issues, addressed in this slice: blank draft
+titles now clear to null and other JSON titles use the old string conversion; CI provisions
+the already declared toolchain using the runner's existing rustup command instead of adding
+a third-party action. The same title repro was observed failing before and passing after.
+The real-Wasm save check also now saves a blank title.
+
+The correction source and other enum fields are checked without trimming, and the copied
+settings oracle was removed from the differential harness. Common IANA zones are covered
+with UTC, Europe/London, America/New_York and Australia/Sydney. The review's remaining minor
+timezone concern is explicit: unusual aliases and case variants accepted by JavaScript
+Intl can differ from chrono_tz. Those are not proven equivalent and must be reconciled before
+claiming full parity. Final review findings and their disposition are recorded in the task
+Proof artifact, without changing the reviewed commit.
 
 ## Completion boundary and remaining slices
 

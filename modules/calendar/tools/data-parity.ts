@@ -9,7 +9,6 @@ import {
   normalizeLocalDay,
   normalizeTimeZone
 } from "../../../packages/calendar/src/day-plan-model.js";
-import { parseCalendarAutomationMode } from "@moss/shared";
 import type { CalendarEvent } from "@moss/db";
 import type { DayPlanBlockInput, DayPlanEveningIntent } from "@moss/shared";
 
@@ -44,16 +43,18 @@ const cases: Case[] = [
     { jarvisCreated: true, source: "outlook-browser-calendar", mirrorUnconfirmed: true },
     { allDay: true, attendeeCount: 3, status: "confirmed", ignoredProviderField: "omitted" }
   ].map((external_metadata) => ({ op: "event", value: { ...event, external_metadata } })),
-  ...[
-    {},
-    { "calendar.signal_create_tasks": true },
-    { "calendar.signal_suggest_tasks": false },
-    { "calendar.prep_task_mode": "off", "calendar.signal_create_tasks": true },
-    { "calendar.time_block_mode": "auto", "calendar.briefing_lookahead_days": 1 },
-    { "calendar.briefing_lookahead_days": 5 }
-  ].map((value) => ({ op: "settings", value })),
   { op: "intent", current: base },
   { op: "intent", current: base, patch: null },
+  {
+    op: "intent",
+    current: base,
+    patch: { corrections: [{ taskId: null, note: "Correction", source: " actor " as "actor" }] }
+  },
+  {
+    op: "intent",
+    current: base,
+    patch: { commitments: [{ taskId: "one", decision: " defer " as "defer" }] }
+  },
   {
     op: "intent",
     current: { ...base, notes: "kept", priorityTaskIds: ["one"] },
@@ -74,6 +75,11 @@ const cases: Case[] = [
     day,
     zone: "UTC"
   })),
+  ...["Europe/London", "America/New_York", "Australia/Sydney"].map((zone) => ({
+    op: "day",
+    day: "2026-11-08",
+    zone
+  })),
   { op: "day", day: "2026-11-08", zone: "bad/zone" },
   ...[
     null,
@@ -86,6 +92,29 @@ const cases: Case[] = [
     op: "block",
     value: { kind: "focus", title: " Work ", pendingChange }
   })),
+  ...[
+    "",
+    "   ",
+    "\uFEFF ",
+    "\u0085",
+    null,
+    " Work ",
+    5,
+    1e21,
+    1e20,
+    1e-6,
+    1e-7,
+    -0,
+    -1e22,
+    false,
+    [],
+    [" Work "],
+    {}
+  ].map((title) => ({
+    op: "block",
+    value: { kind: "focus", title }
+  })),
+  { op: "block", value: { kind: " focus " } },
   { op: "block", value: { kind: "focus", actualPlacement: null } }
 ];
 function ts(c: Case): unknown {
@@ -104,36 +133,6 @@ function ts(c: Case): unknown {
       case "block": {
         const b = normalizeBlockInput(c.value as DayPlanBlockInput, 0);
         value = { kind: b.kind, title: b.title, taskId: b.taskId, pendingChange: b.pendingChange };
-        break;
-      }
-      case "settings": {
-        const p = c.value as Record<string, unknown>;
-        const prep = parseCalendarAutomationMode(
-          p["calendar.prep_task_mode"],
-          p["calendar.signal_create_tasks"] === true
-            ? "auto"
-            : p["calendar.signal_suggest_tasks"] === false
-              ? "off"
-              : "suggest"
-        );
-        const block = parseCalendarAutomationMode(
-          p["calendar.time_block_mode"],
-          p["calendar.signal_block_time"] === true
-            ? "auto"
-            : p["calendar.signal_suggest_time_blocks"] === false
-              ? "off"
-              : "suggest"
-        );
-        const days = p["calendar.briefing_lookahead_days"];
-        value = {
-          lookaheadDays: days === 0 || days === 1 || days === 2 ? days : 2,
-          prepTaskMode: prep,
-          timeBlockMode: block,
-          suggestTasks: prep !== "off",
-          createTasks: prep === "auto",
-          suggestTimeBlocks: block !== "off",
-          blockTime: block === "auto"
-        };
         break;
       }
     }

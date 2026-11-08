@@ -169,10 +169,11 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
         f.a,
         "PATCH",
         &path,
-        json!({"localDay":"2026-11-08","timeZone":"UTC","expectedRevision":2,"blocks":[{"id":f.block,"kind":"focus","title":"Kept placement"},{"kind":"break","title":"New draft","pendingChange":{"kind":"add","startsAt":"2026-11-08T12:00:00Z","durationMinutes":15}}]}),
+        json!({"localDay":"2026-11-08","timeZone":"UTC","expectedRevision":2,"blocks":[{"id":f.block,"kind":"focus","title":"Kept placement"},{"kind":"break","title":"   ","pendingChange":{"kind":"add","startsAt":"2026-11-08T12:00:00Z","durationMinutes":15}}]}),
     );
     assert_eq!(saved["status"], 200);
     assert_eq!(saved["body"]["plan"]["blocks"].as_array().unwrap().len(), 2);
+    assert_eq!(saved["body"]["plan"]["blocks"][1]["title"], Value::Null);
     assert_eq!(
         saved["body"]["plan"]["blocks"][0]["actualPlacement"]["durationMinutes"],
         60

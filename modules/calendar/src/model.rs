@@ -51,13 +51,13 @@ pub fn merge_intent(current: &Value, patch: Option<&Value>) -> Result<Value> {
                 items.push(match field {
                     "priorityTaskIds"=>json!(text(item)?),
                     "corrections"=> {
-                        let source=text(&item["source"])?;
-                        if !["briefing","planner","actor"].contains(&source.as_str()) { return Err(invalid("Unknown correction source")); }
+                        let source=item["source"].as_str().ok_or_else(|| invalid("Unknown correction source"))?;
+                        if !["briefing","planner","actor"].contains(&source) { return Err(invalid("Unknown correction source")); }
                         json!({"note":text(&item["note"])?,"source":source,"taskId":nullable_text(&item["taskId"])?})
                     },
                     _=> {
-                        let decision=text(&item["decision"])?;
-                        if !["commit","defer","drop"].contains(&decision.as_str()) { return Err(invalid("Unknown commitment decision")); }
+                        let decision=item["decision"].as_str().ok_or_else(|| invalid("Unknown commitment decision"))?;
+                        if !["commit","defer","drop"].contains(&decision) { return Err(invalid("Unknown commitment decision")); }
                         json!({"taskId":text(&item["taskId"])?,"decision":decision})
                     }
                 });
@@ -83,11 +83,58 @@ pub fn nullable_text(v: &Value) -> Result<Value> {
         Ok(json!(text(v)?))
     }
 }
+// JavaScript prints ordinary numbers in decimal and switches to an exponent outside
+// [1e-6, 1e21). Rust Display keeps decimal form, so retain the old title conversion.
+fn number_title(number: &serde_json::Number) -> String {
+    let value = number.as_f64().unwrap();
+    if value == 0.0 {
+        return "0".into();
+    }
+    let plain = value.to_string();
+    if (1e-6..1e21).contains(&value.abs()) {
+        return plain;
+    }
+    let unsigned = plain.trim_start_matches('-');
+    let dot = unsigned.find('.').unwrap_or(unsigned.len());
+    let first = unsigned
+        .bytes()
+        .position(|b| b.is_ascii_digit() && b != b'0')
+        .unwrap();
+    let exponent = dot as isize - first as isize - isize::from(first < dot);
+    let digits: String = unsigned.chars().filter(char::is_ascii_digit).collect();
+    let digits = digits.trim_start_matches('0').trim_end_matches('0');
+    let mut mantissa = digits[..1].to_owned();
+    if digits.len() > 1 {
+        mantissa.push('.');
+        mantissa.push_str(&digits[1..]);
+    }
+    format!(
+        "{}{mantissa}e{exponent:+}",
+        if value < 0.0 { "-" } else { "" }
+    )
+}
+// The existing draft model uses String(title), including for JSON scalar/array inputs.
+fn title_string(value: &Value) -> String {
+    match value {
+        Value::Null => String::new(),
+        Value::String(value) => value.clone(),
+        Value::Bool(value) => value.to_string(),
+        Value::Number(value) => number_title(value),
+        Value::Array(values) => values
+            .iter()
+            .map(title_string)
+            .collect::<Vec<_>>()
+            .join(","),
+        Value::Object(_) => "[object Object]".into(),
+    }
+}
 pub fn block(value: &Value, position: usize) -> Result<Value> {
     if !value.is_object() || value.get("actualPlacement").is_some() {
         return Err(invalid("blocks must not set actualPlacement"));
     }
-    let kind = text(&value["kind"])?;
+    let kind = value["kind"]
+        .as_str()
+        .ok_or_else(|| invalid("Unknown block kind"))?;
     if ![
         "focus",
         "meeting",
@@ -96,7 +143,7 @@ pub fn block(value: &Value, position: usize) -> Result<Value> {
         "personal",
         "unscheduled",
     ]
-    .contains(&kind.as_str())
+    .contains(&kind)
     {
         return Err(invalid("Unknown block kind"));
     }
@@ -105,12 +152,18 @@ pub fn block(value: &Value, position: usize) -> Result<Value> {
             return Err(invalid("Invalid block position"));
         }
     }
+    let title = title_string(&value["title"]);
+    let title =
+        title.trim_matches(|c: char| c == '\u{feff}' || (c != '\u{85}' && c.is_whitespace()));
+    let title = (!title.is_empty()).then_some(title);
     let pending = &value["pendingChange"];
     let pending = if pending.is_null() {
         Value::Null
     } else {
-        let kind = text(&pending["kind"])?;
-        match kind.as_str() {
+        let kind = pending["kind"]
+            .as_str()
+            .ok_or_else(|| invalid("Unknown pending change kind"))?;
+        match kind {
             "remove" => json!({"kind":"remove"}),
             "add" | "move" => {
                 let stamp = text(&pending["startsAt"])?;
@@ -138,6 +191,6 @@ pub fn block(value: &Value, position: usize) -> Result<Value> {
         }
     };
     Ok(
-        json!({"id":value["id"],"kind":kind,"task_id":nullable_text(&value["taskId"])?,"title":nullable_text(&value["title"])?,"position":position,"pending_change":pending}),
+        json!({"id":value["id"],"kind":kind,"task_id":nullable_text(&value["taskId"])?,"title":title,"position":position,"pending_change":pending}),
     )
 }

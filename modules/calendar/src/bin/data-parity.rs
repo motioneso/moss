@@ -1,11 +1,10 @@
 //! Narrow data parity oracle. This is not the full Calendar HTTP/UI parity gate.
-use moss_calendar::{events, model, settings};
+use moss_calendar::{events, model};
 use serde_json::{json, Value};
 use std::io::{self, Read};
 fn run(v: &Value) -> moss_calendar::Result<Value> {
     match v["op"].as_str().unwrap_or("") {
         "event" => Ok(events::serialize(&v["value"])),
-        "settings" => Ok(settings::derive(&v["value"])),
         "intent" => model::merge_intent(&v["current"], v.get("patch")),
         "day" => {
             let (day, zone) = model::day_zone(
