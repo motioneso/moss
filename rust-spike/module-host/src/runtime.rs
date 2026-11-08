@@ -357,9 +357,16 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
         }
         "jobs" => {
             ensure!(
-                matches!(request.operation.as_str(), "enqueue" | "schedule"),
+                matches!(
+                    request.operation.as_str(),
+                    "enqueue" | "enqueue-options" | "schedule"
+                ),
                 "Unknown job operation"
             );
+            if request.operation == "enqueue-options" {
+                let options = crate::enqueue_options::parse(&request.parameters)?;
+                return validate_job_parameters(manifest, &request.resource, &options.params);
+            }
             let parameters = if request.operation == "schedule" {
                 let p = request
                     .parameters
@@ -439,7 +446,9 @@ fn reject_context(value: &Value) -> Result<()> {
 pub(crate) fn authorize_job(manifest: &Manifest, resource: &str, parameters: &Value) -> Result<()> {
     let capability = manifest.capability("jobs")?;
     ensure!(
-        capability.operations.contains("enqueue") || capability.operations.contains("schedule"),
+        capability.operations.contains("enqueue")
+            || capability.operations.contains("enqueue-options")
+            || capability.operations.contains("schedule"),
         "Creating work on this queue was not approved"
     );
     ensure!(

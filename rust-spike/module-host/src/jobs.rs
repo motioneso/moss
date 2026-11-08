@@ -106,6 +106,24 @@ impl Ports for JobPorts {
                     let id=queue.enqueue(actor(scope),&spec.name,payload,uuid::Uuid::new_v4(),chrono::Utc::now()).await?;
                     Ok(json!({"id":id}))
                 }
+                "enqueue-options" => {
+                    let options = crate::enqueue_options::parse(&request.parameters)?;
+                    let queue = Queue::connect(
+                        self.producer.expose_secret(), Role::Producer, vec![spec.clone()],
+                    ).await?;
+                    let payload = json!({
+                        "actorUserId": scope.access().actor_user_id(),
+                        "moduleId": module_key(&scope.module().id),
+                        "manifestHash": manifest_hash(scope.module()),
+                        "jobKind": spec.name,
+                        "params": options.params,
+                    });
+                    let id = queue.enqueue(
+                        actor(scope), &spec.name, payload,
+                        options.idempotency_key, options.available_at,
+                    ).await?;
+                    Ok(json!({"id": id}))
+                }
                 "schedule"=> {
                     let queue=Queue::connect(self.producer.expose_secret(),Role::Producer,vec![spec.clone()]).await?;
                     let payload=json!({"actorUserId":scope.access().actor_user_id(),"moduleId":module_key(&scope.module().id),"manifestHash":manifest_hash(scope.module()),"jobKind":spec.name,"params":request.parameters["params"]});
