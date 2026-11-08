@@ -52,6 +52,7 @@ export function loadAppMap(path: string): AppMapArtifact {
 }
 
 export function createAppMapReadService(deps: {
+  readonly runtime?: "typescript" | "rust";
   readonly artifact: AppMapArtifact;
   readonly resolveActiveModules: (actorUserId: string) => Promise<readonly { id: string }[]>;
   readonly resolveFeatureFlagState: ResolveFeatureFlagState;
@@ -111,6 +112,7 @@ export function createAppMapReadService(deps: {
       const needle = raw.trim().toLowerCase();
       const visible = source.filter(
         (item: AppMapItem) =>
+          (item.runtime ?? "typescript") === (deps.runtime ?? "typescript") &&
           activeIds.has(item.moduleId) &&
           (isAdmin || item.scope !== "admin") &&
           (item.featureFlagId === undefined ||

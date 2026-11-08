@@ -365,8 +365,8 @@ fn Frame(shell: ShellView) -> impl IntoView {
                             type="button"
                             class="jds-menu__trigger jds-menu__trigger--content"
                             aria-label=account_label
-                            aria-expanded="false"
-                            title="Account settings arrive with the Settings screen"
+                            title="Open account and sharing settings"
+                            on:click=move |_| { let _ = window().location().set_href("/settings/sharing"); }
                         >
                             <span class="jds-avatar jds-avatar--sm" aria-hidden="true">{initial}</span>
                             <span class="jds-usermenu__id">

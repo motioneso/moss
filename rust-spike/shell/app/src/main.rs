@@ -1,56 +1,84 @@
-//! One program, two ways to run:
-//!
-//!   moss-shell serve [--host 127.0.0.1] [--port 5180] [--web <dir>] [--runner <dir>]
-//!   moss-shell desktop [--port 0] [--web <dir>] [--runner <dir>]
-//!
-//! `--runner` sends chat to the Moss runner whose data folder is `<dir>`; without it the
-//! chat gives sample replies.
-//!
-//! `serve` answers browsers on the LAN or this machine. `desktop` starts the same server on a
-//! private loopback port and opens it in a native window (tao + wry, the system webview).
-//! With no subcommand it opens the desktop window.
+//! The browser and desktop shell use the same authenticated HTTPS entrypoint.
+//! Supply --network <private configuration file>; see rust-spike/network/README.md.
 
-use std::net::SocketAddr;
+use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use axum::extract::State;
 use axum::handler::HandlerWithoutStateExt;
 use axum::http::{StatusCode, Uri};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
-use axum::{Json, Router};
+use axum::{Extension, Json, Router};
+use moss_network::{
+    config::Config,
+    tls,
+    web::{self, Network},
+};
 use moss_shell_contract::stub::StubShellData;
 use moss_shell_contract::{ChatMessage, ChatThread, SendMessage, ShellData, ShellView, TodayView};
+use safety_core::access::AccessContext;
 use tower_http::services::ServeDir;
 
 mod runner_data;
 
 type Data = Arc<dyn ShellData>;
 
+struct Accounts {
+    platform: Arc<safety_core::http::Platform>,
+    runner: Option<PathBuf>,
+    data: Mutex<HashMap<uuid::Uuid, Data>>,
+}
+
+impl Accounts {
+    fn for_actor(&self, access: &AccessContext) -> Data {
+        self.data
+            .lock()
+            .expect("account data lock")
+            .entry(access.actor_user_id())
+            .or_insert_with(|| match &self.runner {
+                Some(root) => Arc::new(runner_data::RunnerShellData::new(
+                    root.clone(),
+                    access.actor_user_id().to_string(),
+                )) as Data,
+                None => Arc::new(StubShellData::default()) as Data,
+            })
+            .clone()
+    }
+}
+
 /// The UI shell's routes. `ShellData` is the seam: Phase 2/3 pass a database-backed
 /// implementation here instead of the stub.
-fn router(data: Data, web: PathBuf) -> Router {
+fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
     let index = web.join("index.html");
     Router::new()
         .route(
             "/api/shell",
-            get(|State(d): State<Data>| async move { Json::<ShellView>(d.shell()) }),
+            get(|State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>| async move {
+                let cx = safety_core::db::DataContext::open(&d.platform.app, &access).await?;
+                let row = cx.db().query_one("SELECT name FROM app.get_user_by_id($1::uuid)", &[&access.actor_user_id()]).await?;
+                let mut shell = d.for_actor(&access).shell();
+                shell.account.display_name = row.get(0);
+                cx.commit().await?;
+                Ok::<_, safety_core::error::ApiError>(Json::<ShellView>(shell))
+            }),
         )
         .route(
             "/api/today",
-            get(|State(d): State<Data>| async move { Json::<TodayView>(d.today()) }),
+            get(|State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>| async move { Json::<TodayView>(d.for_actor(&access).today()) }),
         )
         .route(
             "/api/chat/thread",
-            get(|State(d): State<Data>| async move { Json::<ChatThread>(d.chat_thread()) }),
+            get(|State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>| async move { Json::<ChatThread>(d.for_actor(&access).chat_thread()) }),
         )
         .route(
             "/api/chat/messages",
             post(
-                |State(d): State<Data>, Json(body): Json<SendMessage>| async move {
+                |State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>, Json(body): Json<SendMessage>| async move {
                     // A chat turn can take minutes, so it waits off the request threads.
-                    match tokio::task::spawn_blocking(move || d.send_message(&body.text)).await {
+                    let data = d.for_actor(&access);
+                    match tokio::task::spawn_blocking(move || data.send_message(&body.text)).await {
                         Ok(m) => Json::<ChatMessage>(m).into_response(),
                         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
                     }
@@ -80,8 +108,7 @@ async fn app_page(uri: Uri, index: PathBuf) -> Response {
 
 struct Args {
     mode: String,
-    host: String,
-    port: u16,
+    network: PathBuf,
     web: PathBuf,
     runner: Option<PathBuf>,
 }
@@ -98,23 +125,18 @@ fn parse_args() -> Result<Args, String> {
         .unwrap_or_default();
     let mut args = Args {
         mode,
-        host: "127.0.0.1".into(),
-        port: 0,
+        network: exe_dir.join("network.json"),
         web: exe_dir.join("web"),
         runner: None,
     };
     while let Some(flag) = raw.next() {
         let value = raw.next().ok_or_else(|| format!("{flag} needs a value"))?;
         match flag.as_str() {
-            "--host" => args.host = value,
-            "--port" => args.port = value.parse().map_err(|_| format!("bad port {value}"))?,
+            "--network" => args.network = PathBuf::from(value),
             "--web" => args.web = PathBuf::from(value),
             "--runner" => args.runner = Some(PathBuf::from(value)),
             _ => return Err(format!("unknown option {flag}")),
         }
-    }
-    if args.mode == "desktop" && args.host != "127.0.0.1" {
-        return Err("desktop mode listens on 127.0.0.1 only; use `serve --host` instead".into());
     }
     if !args.web.join("index.html").is_file() {
         return Err(format!(
@@ -133,57 +155,60 @@ fn main() {
             std::process::exit(2);
         }
     };
-    let data: Data = match &args.runner {
-        Some(root) => Arc::new(runner_data::RunnerShellData::new(root.clone())),
-        None => Arc::new(StubShellData::default()),
-    };
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
-
-    if args.mode == "serve" {
-        runtime.block_on(async {
-            let listener = bind(&args.host, args.port).await;
-            let addr = listener.local_addr().expect("addr");
-            println!("moss-shell serving on http://{addr}");
-            if !addr.ip().is_loopback() {
-                // Sign-in arrives with the core platform port; until then anyone who can
-                // reach this address sees the sample data.
-                eprintln!(
-                    "moss-shell: listening beyond this machine with no sign-in (sample data only)"
-                );
-            }
-            axum::serve(listener, router(data, args.web))
-                .await
-                .expect("server");
+    let prepared = runtime.block_on(async {
+        let config = Config::read(&args.network)?;
+        if args.mode == "desktop" && !config.listen.ip().is_loopback() {
+            return Err(
+                "Desktop mode needs a loopback listener; use serve for network sharing".to_string(),
+            );
+        }
+        let platform = config.platform().await?;
+        let acceptor = tls::acceptor(&config.certificate, &config.private_key)?;
+        let listener = tokio::net::TcpListener::bind(config.listen)
+            .await
+            .map_err(|_| "Cannot bind the configured HTTPS listener")?;
+        let desktop_origin = config
+            .local_origin()
+            .ok_or("No local HTTPS origin")?
+            .to_owned();
+        let network = Network::new(platform.clone(), config, args.network)?;
+        let data = Arc::new(Accounts {
+            platform,
+            runner: args.runner,
+            data: Mutex::new(HashMap::new()),
         });
-        return;
-    }
-
-    // Desktop: the server lives on a loopback port only this window is told about.
-    let listener = runtime.block_on(bind("127.0.0.1", args.port));
-    let addr = listener.local_addr().expect("addr");
-    let app = router(data, args.web);
-    runtime.spawn(async move { axum::serve(listener, app).await.expect("server") });
-    desktop::run(addr);
-}
-
-async fn bind(host: &str, port: u16) -> tokio::net::TcpListener {
-    tokio::net::TcpListener::bind((host, port))
-        .await
-        .unwrap_or_else(|e| {
-            eprintln!("moss-shell: cannot listen on {host}:{port}: {e}");
+        let app = web::router(network, router(data, args.web.clone()), args.web);
+        Ok::<_, String>((listener, acceptor, app, desktop_origin))
+    });
+    let (listener, acceptor, app, desktop_origin) = match prepared {
+        Ok(parts) => parts,
+        Err(_) => {
+            eprintln!("moss-shell: could not start secure HTTPS; check private configuration, certificates and runtime database roles");
             std::process::exit(1);
-        })
+        }
+    };
+    if args.mode == "serve" {
+        if runtime
+            .block_on(tls::serve(listener, acceptor, app))
+            .is_err()
+        {
+            std::process::exit(1);
+        }
+    } else {
+        runtime.spawn(tls::serve(listener, acceptor, app));
+        desktop::run(desktop_origin);
+    }
 }
 
 mod desktop {
-    use super::SocketAddr;
     use tao::dpi::LogicalSize;
     use tao::event::{Event, WindowEvent};
     use tao::event_loop::{ControlFlow, EventLoop};
     use tao::window::WindowBuilder;
     use wry::WebViewBuilder;
 
-    pub fn run(addr: SocketAddr) {
+    pub fn run(origin: String) {
         let event_loop = EventLoop::new();
         let window = WindowBuilder::new()
             .with_title("Moss")
@@ -192,7 +217,7 @@ mod desktop {
             .build(&event_loop)
             .expect("window");
 
-        let builder = WebViewBuilder::new().with_url(format!("http://{addr}/today"));
+        let builder = WebViewBuilder::new().with_url(format!("{origin}/today"));
 
         #[cfg(not(target_os = "linux"))]
         let _webview = builder.build(&window).expect("webview");

@@ -28,28 +28,22 @@ The program lands in `$CARGO_TARGET_DIR/dist/moss-shell` with the web build in `
 
 ## Run
 
-Browser, on this machine only:
+Both browser and desktop modes require the authenticated HTTPS network configuration described
+in `rust-spike/network/README.md`. There is no plaintext or anonymous mode.
 
 ```bash
-moss-shell serve --port <port from devports claim>
+moss-shell serve --network <private-configuration>
+moss-shell desktop --network <private-configuration>
 ```
 
-Browser, from other devices on the LAN or tailnet:
-
-```bash
-moss-shell serve --host 0.0.0.0 --port <port from devports claim>
-```
-
-Desktop window (Linux needs webkit2gtk-4.1 and gtk3):
-
-```bash
-moss-shell desktop
-```
+Start with a loopback listener and sharing off. For access from other devices, configure exact
+HTTPS origins and certificates, bind the intended interface, and enable sharing as the owner.
 
 `--web <dir>` points either mode at a web build somewhere else.
 
 ## Data
 
-Every screen reads `StubShellData`, which is invented sample data. The topbar says "Sample data",
-the chat status says "Sample replies only" and the model pill says "Sample model". Phase 2/3
-replace it by passing their own `ShellData` to `router()` in `app/src/main.rs`.
+Today still reads explicitly labelled sample data. With `--runner <runner-state-folder>`, chat
+uses the Phase 3 runner for the signed-in account; otherwise it shows sample replies. The shell
+name comes from the signed-in person's database record. Every route and app file is wrapped by
+`moss-network`, and each actor gets separate shell/chat state.

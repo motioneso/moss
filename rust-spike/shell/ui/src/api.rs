@@ -7,6 +7,11 @@ use serde::de::DeserializeOwned;
 async fn get<T: DeserializeOwned>(path: &str) -> Result<T, String> {
     let response = Request::get(path).send().await.map_err(|e| e.to_string())?;
     if !response.ok() {
+        if response.status() == 401 {
+            if let Some(window) = web_sys::window() {
+                let _ = window.location().set_href("/sign-in");
+            }
+        }
         return Err(format!("{path} answered {}", response.status()));
     }
     response.json().await.map_err(|e| e.to_string())
