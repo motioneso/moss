@@ -40,6 +40,7 @@ t "Moss process memory" "python3 -c 'f=open(\"/proc/$MP/mem\",\"rb\");m=[l for l
 t "another process's command line" "grep -q sleep /proc/$MP/cmdline"
 t "key store (session bus)" "busctl --user --address=unix:path=/run/user/$(id -u)/bus list"
 t "another session's terminal ($PTS)" "exec 3<>$PTS"
+t "new pseudo-terminal of its own" "python3 -c 'import pty; pty.openpty()'"
 t "login file in the sign-in folder (write)" "mkdir -p $H/.config/systemd/user && echo x > $H/.config/systemd/user/moss-probe.service && rm $H/.config/systemd/user/moss-probe.service"
 t "own folder (write, should be reached)" "echo x > $A/work/probe && rm $A/work/probe"
 t "/dev/null (write, should be reached)" "echo x > /dev/null"

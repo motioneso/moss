@@ -124,12 +124,14 @@ async fn main() {
         plain_facts(),
     ));
     let status = moss_agents::confine::status();
-    eprintln!("moss-runner: confinement on {}: {} ({})", status.os, status.enforced, status.detail);
     if setup.person_home {
         eprintln!(
-            "moss-runner: warning: the agent signs in from the person's own home folder, so it can \
-             write files that run at login; confinement is no boundary for this launch"
+            "moss-runner: confinement on {}: not a boundary (the agent signs in from the person's own \
+             home folder, so it can read it and write files that run at login)",
+            status.os
         );
+    } else {
+        eprintln!("moss-runner: confinement on {}: {} ({})", status.os, status.enforced, status.detail);
     }
 
     let secret = moss_agents::hello::random_secret();

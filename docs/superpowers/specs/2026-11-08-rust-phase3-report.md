@@ -91,16 +91,18 @@ Each agent is a native binary the person installs; Moss ships none of them.
   accounts. These checks are per runner process. Two runners, one per account, could each be
   given the same sign-in folder. One runner per account is the model until part 2, so part 2's
   per-account sign-in folders close this.
-- The runner refuses a sign-in folder that is or holds the person's own home, or that sits in
-  their config, data or agent folders (the folders where a planted file would later run outside
-  confinement). The config setting `person_home` lifts this for testing, and the runner then logs
-  a warning that confinement is no boundary for that launch.
+- The runner refuses a sign-in folder that is or holds the person's own home, or that sits
+  anywhere in it outside the account's own Moss folder. Any such folder can hold a planted file
+  that later runs outside confinement. It also refuses when it cannot find the person's home. The
+  config setting `person_home` lifts this for testing, and the runner then logs that confinement
+  is not a boundary for that launch.
 - The agent's permission rules see its real home, as in the TypeScript chat. A request to read
   anything there, such as the agent's own sign-in token, is refused, not offered as a card.
 - Only the device nodes agents need are writable. All of `/dev` would include `/dev/shm`, a
   shared folder every account could pass files through. The terminal devices are left out too,
-  because they open every terminal session of the same OS user. New pseudo-terminals can still be
-  made. Whether Codex's shell commands need more than that is not checked.
+  because they open every terminal session of the same OS user. So a confined agent cannot make
+  pseudo-terminals at all. Shell commands that need a terminal (`script`, `ssh -t`, programs that
+  ask for one) fail, and whether Codex's own shell commands do is not checked.
 - With no approval waiting (between turns), any permission ask is refused.
 - When an agent fails, the app gets a fixed message. The agent's error output, with tokens
   masked, stays in the runner's log.
@@ -133,12 +135,15 @@ designed for, but no agent can sign in from it yet (see Summary).
 | Read another program's command line             | reached                         | **reached** |
 | Talk to the key store over the session bus      | reached                         | **reached** |
 | Open another session's terminal                 | reached                         | blocked     |
+| Make a new pseudo-terminal of its own           | reached                         | blocked     |
 | Write its own folder and `/dev/null` (expected) | reached                         | reached     |
 
 With the person's own home as the sign-in folder (the script's `person-home` mode), every row
-above reads the same. The difference is what the writable sign-in folder is. Alice's agent wrote
-a user service file there, and in a real home that file would run at the next login with no
-confinement, able to reach everything in the table. So in that setup confinement is no boundary.
+above reads the same. The difference is what the writable sign-in folder is. A confined shell
+wrote a user service file into a stand-in folder. In a real home that file would run at the next
+login with no confinement, able to reach everything in the table. The agent can also read and
+write everything in the person's home right away, such as SSH keys, other sign-ins and settings
+files. So in that setup confinement is no boundary.
 
 Three more checks went through the real agent and the plain shell:
 
@@ -288,7 +293,7 @@ Builds and tests:
 - The runner as a long-running service that restarts on failure.
 - A connection to another account's gateway socket without the secret (argued from code, not
   probed).
-- Whether Codex's shell commands work without the terminal devices.
+- Whether Codex's shell commands work without pseudo-terminals.
 - The real Moss tool list. The runner offers one built-in tool.
 
 ## Part 2 (second task)

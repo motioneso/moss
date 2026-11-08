@@ -100,19 +100,16 @@ pub enum RunnerError {
     SignInOverlap,
     #[error("another account already uses this sign-in folder")]
     SignInShared,
-    #[error("the sign-in folder holds the person's own home or login files; that would let the agent escape confinement")]
+    #[error("the sign-in folder is or holds the person's home, or sits in it outside this account's Moss folder; the agent could escape confinement")]
     PersonHome,
     #[error(transparent)]
     Agent(#[from] AgentError),
 }
 
-/// True when an agent that can write `sign_in` could plant files the person's own unconfined
-/// programs run later: the home folder itself, or its config, data and key folders.
-pub fn touches_person_home(sign_in: &Path, person: &Path) -> bool {
-    person.starts_with(sign_in)
-        || [".config", ".local", ".ssh", ".claude", ".codex"]
-            .iter()
-            .any(|d| sign_in.starts_with(person.join(d)))
+/// True when `sign_in` is the person's home, holds it, or sits anywhere in it outside the
+/// account's own tree. Any such folder can hold files the person's unconfined programs run later.
+pub fn touches_person_home(sign_in: &Path, person: &Path, account_tree: &Path) -> bool {
+    person.starts_with(sign_in) || (sign_in.starts_with(person) && !sign_in.starts_with(account_tree))
 }
 
 /// Account ids become folder names, so only plain characters pass.
@@ -153,9 +150,14 @@ impl Runner {
             return Err(RunnerError::RootExposed);
         }
         let home = std::fs::canonicalize(&setup.sign_in_home).map_err(RunnerError::Folders)?;
-        let person = std::env::var_os("HOME").and_then(|h| std::fs::canonicalize(h).ok());
-        if !setup.person_home && person.is_some_and(|p| touches_person_home(&home, &p)) {
-            return Err(RunnerError::PersonHome);
+        if !setup.person_home {
+            // Without a resolvable home the check cannot be made, so the launch is refused.
+            let person = std::env::var_os("HOME")
+                .and_then(|h| std::fs::canonicalize(h).ok())
+                .ok_or(RunnerError::PersonHome)?;
+            if touches_person_home(&home, &person, &root.join("accounts").join(account)) {
+                return Err(RunnerError::PersonHome);
+            }
         }
         if root.starts_with(&home) || (home.starts_with(&root) && !home.starts_with(root.join("accounts").join(account))) {
             return Err(RunnerError::SignInOverlap);
@@ -397,6 +399,12 @@ mod tests {
         }
     }
 
+    /// The test folders sit under the person's home, so checks other than that one need the
+    /// setting to be reached.
+    fn setup_in_home(home: &Path) -> AccountSetup {
+        AccountSetup { person_home: true, ..setup(home) }
+    }
+
     #[test]
     fn data_root_under_a_system_folder_is_refused() {
         let r = runner(Path::new("/tmp/moss-runner-test"));
@@ -408,21 +416,21 @@ mod tests {
     fn sign_in_home_holding_the_data_folder_is_refused() {
         let home = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
         let r = runner(&home.path().join("moss"));
-        assert!(matches!(r.prepare("alice", &setup(home.path())), Err(RunnerError::SignInOverlap)));
+        assert!(matches!(r.prepare("alice", &setup_in_home(home.path())), Err(RunnerError::SignInOverlap)));
         // Inside the data folder but in another account's tree.
         let bob = home.path().join("moss/accounts/bob/home");
         std::fs::create_dir_all(&bob).unwrap();
-        assert!(matches!(r.prepare("alice", &setup(&bob)), Err(RunnerError::SignInOverlap)));
+        assert!(matches!(r.prepare("alice", &setup_in_home(&bob)), Err(RunnerError::SignInOverlap)));
     }
 
     #[test]
     fn the_persons_home_and_login_folders_are_refused_as_sign_in() {
-        let p = Path::new("/home/p");
-        for bad in ["/home/p", "/home", "/", "/home/p/.config/systemd", "/home/p/.local/share", "/home/p/.claude"] {
-            assert!(touches_person_home(Path::new(bad), p), "{bad}");
+        let (p, tree) = (Path::new("/home/p"), Path::new("/home/p/moss/accounts/a"));
+        for bad in ["/home/p", "/home", "/", "/home/p/.config/systemd", "/home/p/.cargo", "/home/p/bin", "/home/p/.gnupg"] {
+            assert!(touches_person_home(Path::new(bad), p, tree), "{bad}");
         }
         for ok in ["/home/p/moss/accounts/a/home", "/srv/moss/a"] {
-            assert!(!touches_person_home(Path::new(ok), p), "{ok}");
+            assert!(!touches_person_home(Path::new(ok), p, tree), "{ok}");
         }
     }
 
@@ -433,8 +441,10 @@ mod tests {
         let r = runner(root.path());
         let mut s = setup(&home);
         assert!(matches!(r.prepare("alice", &s), Err(RunnerError::PersonHome)));
+        // With the setting, the person's-home check is passed and the next check, that the data
+        // folder (here under HOME) is not inside the sign-in folder, is the one that refuses.
         s.person_home = true;
-        assert!(!matches!(r.prepare("alice", &s), Err(RunnerError::PersonHome)));
+        assert!(matches!(r.prepare("alice", &s), Err(RunnerError::SignInOverlap)));
     }
 
     #[test]
@@ -442,12 +452,12 @@ mod tests {
         let dir = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
         let home = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
         let r = runner(dir.path());
-        r.prepare("alice", &setup(home.path())).unwrap();
-        r.prepare("alice", &setup(home.path())).unwrap();
-        assert!(matches!(r.prepare("bob", &setup(home.path())), Err(RunnerError::SignInShared)));
+        r.prepare("alice", &setup_in_home(home.path())).unwrap();
+        r.prepare("alice", &setup_in_home(home.path())).unwrap();
+        assert!(matches!(r.prepare("bob", &setup_in_home(home.path())), Err(RunnerError::SignInShared)));
         let inner = home.path().join("sub");
         std::fs::create_dir_all(&inner).unwrap();
-        assert!(matches!(r.prepare("bob", &setup(&inner)), Err(RunnerError::SignInShared)));
+        assert!(matches!(r.prepare("bob", &setup_in_home(&inner)), Err(RunnerError::SignInShared)));
     }
 
     #[tokio::test]
