@@ -199,6 +199,25 @@ const fieldSource = ts.createSourceFile(
 );
 const approvalVectors = [];
 const approvalCases: Case[] = [
+  { tool: "create", files: {}, parameters: { path: "new.md", content: null } },
+  { tool: "create", files: {}, parameters: { path: "new.md" } },
+  { tool: "create", files: {}, parameters: { path: "new.md", content: "new", overwrite: null } },
+  {
+    tool: "edit",
+    files: { "note.md": "old" },
+    parameters: { path: "note.md", oldText: "", newText: "new" }
+  },
+  {
+    tool: "edit",
+    files: { "note.md": "old" },
+    parameters: { path: "note.md", oldText: "old", newText: 3 }
+  },
+  {
+    tool: "delete",
+    files: { "note.md": "old" },
+    parameters: { path: "note.md", actorUserId: "other" }
+  },
+  { tool: "delete", files: {}, parameters: { path: 3 } },
   ...cases.filter(
     (c) =>
       !String(c.parameters.path).includes("..") &&

@@ -81,3 +81,21 @@ first. A real Wasm test holds one invocation's mutex while another account finis
 This simulates a blocked invocation, not a stalled disk. Filesystem I/O still has no
 enforced wall-clock timeout, and calls contending for the same folder are refused.
 Non-Linux filesystem behavior remains unverified.
+
+## Canonical action source
+
+`FolderSettingsPorts` additionally offers `vault/folder.resolve` on the configured
+source resource. Parameters must be `{}`. It reads the calling account's saved
+path using preference RLS and returns `{status: 200, body: canonicalPath}` after
+opening it through `VaultContext`. Missing/non-string selections return 409;
+missing or refused paths return 400; unavailable allowed roots return 503. Error
+messages are fixed prerequisite text. Backend failures still cross the ordinary
+scrubbed host-error boundary.
+
+Compose this adapter and `LinkedNotesPorts` with the same roots and preference.
+The Notes `prepareNoteAction` public API uses canonical identity for the legacy
+action version, then reads through the linked-file adapter. It never changes a file
+or enqueues work. These are separate preference reads, not an atomic source/file
+snapshot. A future approval executor must re-resolve and compare the version before
+writing, and still use destination/content fencing. Source aliases at configured
+anchors are supported; symlink descendants retain the stricter vault refusal.

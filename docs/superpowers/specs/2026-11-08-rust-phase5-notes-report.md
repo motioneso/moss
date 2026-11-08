@@ -680,3 +680,60 @@ ingestion are not claimed. The gate input is intentional and documented in the
 README. None of those findings is treated as full Notes acceptance. After the
 runtime correction, all nine compiled component/screen/write-tool checks and the
 native approval comparison pass, as does strict native Clippy.
+
+## Part six checkpoint — installed action details
+
+JS-80 starts from merged main `c75d891e7`, including part five (#4067).
+The task permits a reviewed checkpoint when completing the entire continuation
+would require repeated context handoffs. The Rust core still has no memory
+retrieval/ingestion service. This checkpoint advances real Notes approval parity
+and installed API routing without advertising an unavailable sync worker or chat
+execution. No existing SQL, schema, migration identity or People internals change.
+
+The ordinary package provides `prepareNoteAction` version `1.0.0` through the
+installed public API. It prepares create/edit/delete details, including field
+order, overwrite title, permanent-delete disclosure and the legacy version digest.
+Malformed disclosure fields return no presentation before folder access. An empty
+`oldText` is valid for legacy presentation even though execution rejects it.
+Preparation neither grants nor consumes approval and does not mutate or enqueue.
+The future executor must recheck the server-held version after approval.
+
+The API takes `{tool, inputJson}`. The JSON string preserves submitted field order
+through the host's deterministic object maps without enabling randomized maps or
+new WASI imports. It returns `{ok: details}`, `{ok: null}` or a typed `{error}`
+value, because the host intentionally scrubs guest-error strings. Backend messages
+remain fixed safe errors. This is a host/public API join, not the chat UI join.
+
+The additive `folder.resolve` operation reads only the account's configured source,
+opens it through VaultContext and returns canonical identity. It fixes version
+identity at configured root aliases and supplies fixed unlinked/missing/outside/
+roots-unavailable prerequisites to the write helpers and action API. It takes no
+path or account parameters. Hosts must compose folder settings and linked files
+with matching preferences and account-specific roots. The source and file reads
+are not an atomic snapshot; symlink descendants remain refused. Full malformed
+path, missing-file, root-error precedence and non-POSIX parity remain unfinished.
+The module app map declares the API and its prerequisites/remediations; it still
+declares no installed chat tools, jobs or standalone Notes navigation.
+
+### Validation and remaining acceptance
+
+The native API test was observed failing before implementation because the old
+handler rejected the API. Its protected comparison passes after implementation.
+The refreshed actual-hook corpus has 48 cases; the 55 execution cases and earlier
+118 domain/182 edit vectors are retained. Signed-package database, SQL harness,
+browser, root-check and independent-review results are recorded below once run;
+this paragraph does not claim a pending command passed.
+
+Local builds use the already approved pinned `wit-bindgen` 0.57.1 macro dependency,
+a scratch Cargo home and a prepared scratch Rust toolchain. No global or new
+unlisted tool/package is installed. The ordinary and write-tools components use
+separate target directories as required by the task. Database work runs only
+through `scripts/run-gate.sh` on disposable servers.
+
+Remaining: core memory ingestion/search and `notes.search`; manual/scheduled sync,
+continuation and safe status; installed write-tool approval consumption/version
+rechecks; managed publication/fencing, receipts/reconciliation and exact cleanup;
+private note exports/daily archives; export snapshot/account-export join; full
+handler/job/path parity; assembled Settings/chat UI; separate physical-device HTTPS
+acceptance. The existing filesystem race, crash, deadline and cross-platform limits
+remain. No complete Phase 5 Notes acceptance or Docker cutover is claimed.

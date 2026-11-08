@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "notes",
   "name": "Notes",
-  "description": "Notes package checkpoint with folder selection in Settings → Connections and the existing managed-source account export. Write handlers have a separate parity-check build; chat tools, sync and publication are not offered yet.",
+  "description": "Notes package checkpoint with Connections folder controls, managed-source account export and read-only action details. Installed chat, sync and publication remain unfinished.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -22,7 +22,14 @@
     },
     {
       "port": "vault",
-      "operations": ["folder.get", "folder.status", "folder.list", "folder.set"],
+      "operations": [
+        "folder.get",
+        "folder.status",
+        "folder.list",
+        "folder.set",
+        "folder.resolve",
+        "notes.read"
+      ],
       "resources": ["source"]
     }
   ],
@@ -43,7 +50,8 @@
     "ledger": "core-legacy"
   },
   "provides": {
-    "collectManagedNotesExportSection": "1.0.0"
+    "collectManagedNotesExportSection": "1.0.0",
+    "prepareNoteAction": "1.0.0"
   },
   "navigation": [],
   "settings": [
@@ -113,6 +121,36 @@
         {
           "id": "notes.retry-folder",
           "description": "Check the connection and use Try again before changing the folder.",
+          "path": "/settings/connections"
+        }
+      ]
+    },
+    {
+      "id": "notes.action-details",
+      "description": "The prepareNoteAction public API prepares legacy create, edit and delete approval details from the calling account's linked folder. It returns the target, ordered fields and current version, including the permanent-delete warning. Preparing details does not grant approval, change files or request sync. Installed chat execution and approval consumption remain unfinished. Canonical source identity is used for versions; symlink descendant selections remain refused.",
+      "errors": [
+        {
+          "code": "notes-action-source-unavailable",
+          "class": "prerequisite",
+          "description": "The source is unlinked, missing or outside allowed roots. No action details are returned.",
+          "remediationRef": "notes.link-action-source"
+        },
+        {
+          "code": "notes-action-details-unavailable",
+          "class": "transient",
+          "description": "The source or file could not be checked. No action is approved or run.",
+          "remediationRef": "notes.retry-action-details"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "notes.link-action-source",
+          "description": "Link an available notes folder within the allowed roots. Ask the administrator to configure roots if none are available.",
+          "path": "/settings/connections"
+        },
+        {
+          "id": "notes.retry-action-details",
+          "description": "Check the connection and prepare the action again before approving it.",
           "path": "/settings/connections"
         }
       ]

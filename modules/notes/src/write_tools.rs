@@ -106,9 +106,22 @@ fn call(
         .map_err(|_| failure(503, "Notes service is unavailable"))
 }
 fn source(host: &impl Host) -> Result<String> {
-    let value = call(host, "vault", "folder.get", "source", json!({}))?;
+    let value = call(host, "vault", "folder.resolve", "source", json!({}))?;
     if value["status"] != 200 {
-        return Err(failure(503, "Notes service is unavailable"));
+        // Only these fixed prerequisite messages may cross the tool boundary.
+        // Backend errors and arbitrary host text remain the safe service error.
+        let message = value["body"]["error"].as_str().unwrap_or("");
+        let status = match message {
+            "Notes source is not configured" => 409,
+            "Notes source path does not exist or cannot be resolved"
+            | "Notes source path is not within an allowed notes root" => 400,
+            "Notes roots not configured on this server" => 503,
+            _ => return Err(failure(503, "Notes service is unavailable")),
+        };
+        if value["status"] != status {
+            return Err(failure(503, "Notes service is unavailable"));
+        }
+        return Err(failure(status, message));
     }
     value["body"]
         .as_str()
@@ -221,7 +234,50 @@ pub fn handle(host: &impl Host, payload: &str) -> Result<String> {
 pub fn presentation(host: &impl Host, payload: &str) -> Result<String> {
     let request: Request =
         serde_json::from_str(payload).map_err(|_| failure(400, "Invalid Notes input"))?;
-    let input = Input::parse(&request)?;
+    Ok(prepare(host, &request)?.to_string())
+}
+
+/// Preserve input order through map-based SDK transports without accepting an actor.
+pub(crate) fn prepare_json(host: &impl Host, tool: &str, input_json: &str) -> Result<Value> {
+    let parameters =
+        serde_json::from_str(input_json).map_err(|_| failure(400, "Invalid Notes input"))?;
+    prepare(
+        host,
+        &Request {
+            tool: tool.into(),
+            parameters,
+        },
+    )
+}
+
+/// Read-only public API. It neither grants approval nor runs a write or sync.
+fn prepare(host: &impl Host, request: &Request) -> Result<Value> {
+    let raw = &request.parameters.values;
+    let (allowed, required): (&[&str], &[&str]) = match request.tool.as_str() {
+        "notes.create" => (&["path", "content", "overwrite"], &["content"]),
+        "notes.edit" => (&["path", "oldText", "newText"], &["oldText", "newText"]),
+        "notes.delete" => (&["path"], &[]),
+        _ => return Err(failure(400, "Unknown Notes write tool")),
+    };
+    // Match presentApprovalFields: malformed fields produce no presentation,
+    // including a missing/non-string path, before resolving the private source.
+    if !raw["path"].is_string()
+        || required.iter().any(|key| raw.get(key).is_none())
+        || raw.as_object().unwrap().iter().any(|(key, value)| {
+            !allowed.contains(&key.as_str())
+                || if key == "overwrite" {
+                    !value.is_boolean()
+                } else {
+                    !value.is_string()
+                }
+        })
+    {
+        return Ok(Value::Null);
+    }
+    let input = Input {
+        tool: &request.tool,
+        raw,
+    };
     let root = source(host)?;
     let path = relative(&input.raw["path"], &root)?;
     let note = read(host, &path)?;
@@ -269,5 +325,5 @@ pub fn presentation(host: &impl Host, payload: &str) -> Result<String> {
     if input.tool == "notes.delete" {
         result["approvalKind"] = json!("note_delete");
     }
-    Ok(result.to_string())
+    Ok(result)
 }

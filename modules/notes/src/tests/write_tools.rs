@@ -17,7 +17,7 @@ impl Host for Ports {
         parameters: Value,
     ) -> Result<Value> {
         match (port, operation, resource) {
-            ("vault", "folder.get", "source") => Ok(json!({"status":200,"body":"/notes"})),
+            ("vault", "folder.resolve", "source") => Ok(json!({"status":200,"body":"/notes"})),
             ("vault", "notes.read", "source") => {
                 let path = parameters["path"].as_str().unwrap();
                 Ok(
