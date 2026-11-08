@@ -239,7 +239,8 @@ Do not add new third-party packages without Ben's approval. No generator was ins
 for this continuation. `wit-bindgen`'s Rust generator would generate canonical ABI
 imports/exports, string/result ownership and component type metadata from the host WIT,
 and implement the shared SDK's `Host::call` edge for a compiled Rust guest. The existing
-handwritten WAT component path remains available for host verification. A Wasm trampoline
+handwritten WAT component path remains available for host verification. The later compiled
+guest checkpoint below adds a handwritten ABI without installing a generator. A Wasm trampoline
 calling a native test driver is not proof of a compiled People guest, package installation
 or the real application. Installing a generator would not itself prove any of those.
 
@@ -283,8 +284,9 @@ its actual Settings pane. Existing People declarations are not evidence of a Rus
 
 ### Remaining work by continuation step
 
-1. The native repository consumes the shared query/context contracts. The production guest
-   `Host::call` ABI seam remains handwritten/unfinished. Consume JS-47's generic linked-notes
+1. The repository consumes the shared query/context contracts. The compiled guest now uses
+   the handwritten `Host::call` ABI described below; the required `wasm32-wasip2` build is
+   still open. Consume JS-47's generic linked-notes
    adapter after merge; do not duplicate it. No generator package is authorized.
 2. Complete identity/link mutations, match review, merge/split and `findPeopleByNames` through
    declared public APIs. Current projection writes read before insert/update, so concurrent
@@ -296,7 +298,7 @@ its actual Settings pane. Existing People declarations are not evidence of a Rus
    pure decision tests do not prove the linked-notes integration.
 4. Connect all seven tools and both job kinds to real host dispatch. Verify approval blocks,
    metadata-only payloads, retries, source versions, cooldown, repeated indexing and delay.
-5. Build/install the real component package and shared-frame Settings pane; retain preferences
+5. Complete the shipping component build, installable package and shared-frame Settings pane; retain preferences
    in `app.preferences`. Update app-map navigation, settings, features and recovery metadata.
 6. Extend the HTTP parity harness across all remaining behavior. The new native differential
    and failing-first database matrix cover only the bounded checkpoint described above.
@@ -320,3 +322,27 @@ Reproduce database verification with `scripts/run-gate.sh start --gate
 rust-spike/module-host/tools/people-gate.sh`, followed by `scripts/run-gate.sh wait --follow`.
 Set `CARGO_TARGET_DIR` outside the checkout and use the pinned Rust toolchain. The recipe
 proof records actual command output and the unproven areas; its files stay outside commits.
+
+### Compiled guest checkpoint
+
+The SDK's optional `component` feature now has handwritten canonical ABI imports, owned
+string/result allocation and finalization, and an export macro. The additive host build
+wrapper turns the compiled Rust core into the existing Moss WIT component using the already
+declared Wasmtime and WAT crates. It rejects imports outside shared memory and Moss ports,
+then validates the completed component. Legacy assembly remains available. No third-party
+package or generator was installed.
+
+The real compiled People guest handles `resolve`, `getPerson` and
+`listEmailIdentityValues`. The boundary check exercises long Unicode inputs/results, missing
+capabilities, invalid parameters, host errors and call completion. The disposable database
+gate compares those guest responses exactly with the actual TypeScript service/repository
+on the same synthetic legacy rows, including literal wildcard characters, rejected identities,
+archived people and null-first recent links. Other-user and administrator reads return no
+private person or email data. The separate failing-first RLS matrix remains the privacy
+protection-removal proof; a passing guest read is not a substitute for that matrix.
+
+This build uses an already available `wasm32-unknown-unknown` standard library and the
+handwritten wrapper. The spec's `wasm32-wasip2` shipping build remains unproven. This is not
+an installed package, route parity, Settings/chat integration or second-device proof.
+The generator decision for Ben remains open: generated ownership/type metadata would replace
+this manually maintained ABI; it would not supply the missing module behavior or live proof.

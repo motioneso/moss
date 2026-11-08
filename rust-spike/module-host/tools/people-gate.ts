@@ -3,6 +3,8 @@ import { getMossDatabaseUrls } from "@moss/db";
 import { peopleOracle } from "./people-oracle.js";
 
 if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
+if (!process.env.JS50_PEOPLE_COMPONENT)
+  throw new Error("Build People component and set JS50_PEOPLE_COMPONENT");
 const urls = getMossDatabaseUrls();
 const oracle = await peopleOracle();
 try {
@@ -19,6 +21,8 @@ try {
       "people_privacy",
       "--test",
       "people_persistence",
+      "--test",
+      "people_guest_database",
       "--",
       "--ignored",
       "--nocapture",

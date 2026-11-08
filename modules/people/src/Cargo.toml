@@ -6,6 +6,9 @@ publish = false
 
 [workspace]
 
+[features]
+component = ["moss-module-sdk/component"]
+
 [lib]
 path = "lib.rs"
 crate-type = ["rlib", "cdylib"]

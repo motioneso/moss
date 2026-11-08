@@ -52,9 +52,10 @@ differential check verifies that behavior; changing it to a JSON number would ch
 the interface. Internal normalized identity values and raw source references are not added
 to the ordinary identity/link response.
 
-The current native `repository` module is an internal persistence checkpoint, not the
-registered public API above. It covers reads, identity-first resolution, person projections
-and composite indexing state. No installed handlers expose these methods yet. Indexing-state
+The current `repository` module is an internal persistence checkpoint. The compiled guest
+implements the `resolve`, `getPerson` and `listEmailIdentityValues` API envelopes above, but
+no installed package registers them yet. It also covers person projections and composite
+indexing state internally. Indexing-state
 rows currently retain database field names internally; the eventual service must preserve
 the legacy external response shape. Do not use this internal module as a consumer interface.
 

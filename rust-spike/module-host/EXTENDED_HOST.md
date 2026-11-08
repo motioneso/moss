@@ -32,6 +32,14 @@ resource, serde_json::Value) -> Result<Value>` at the component ABI boundary.
 public API dispatcher. `Client::query(table, &Query)` sends `db/query`.
 This checkpoint supplies contracts, not a generated Rust component ABI binding.
 
+The optional SDK `component` feature now supplies a handwritten canonical ABI and
+`export_module!` macro for compiled Rust guests. `guest_component::wrap` and the
+`wrap_guest` build example lift a Rust `wasm32-unknown-unknown` core into the same
+Moss string/result component interface. They reject imports outside Moss ports and
+the shared memory, and validate the completed component. This path uses the existing
+Wasmtime/WAT dependencies; it adds no generator, WASI adapter or native module driver.
+It does not fulfill the package spec's `wasm32-wasip2` shipping-build requirement.
+
 Typed queries allow select/insert/update/delete, explicit nested filters, ordering,
 paging and insert conflict-ignore. They accept checked identifiers and bound JSON
 values, never SQL. Mutations reject a bare `Filter::All`; nested tautologies and broad account filters

@@ -51,3 +51,4 @@ pub mod context;
 
 mod application_extended;
 pub mod frame;
+pub mod guest_component;

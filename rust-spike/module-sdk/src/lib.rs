@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
+#[cfg(all(feature = "component", target_arch = "wasm32"))]
+pub mod component;
 pub mod query;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

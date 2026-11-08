@@ -1,0 +1,125 @@
+//! Real Rust guest -> canonical ABI -> shared transactional ports -> legacy tables.
+//! Run only in the disposable People gate, with the component freshly built.
+mod common;
+use access_context::AccessContext;
+use moss_module_host::{
+    context::ContextPorts,
+    manifest::{Capability, Ledger},
+    runtime::{DenyPorts, Host, Limits},
+    transactional_database::TransactionalDatabasePorts,
+};
+use moss_people::repository::TABLES;
+use serde_json::{json, Value};
+use std::sync::Arc;
+use uuid::Uuid;
+
+#[test]
+#[ignore = "Only through verify-gate and tools/people-gate.sh"]
+fn compiled_people_read_apis_match_typescript_on_real_database() {
+    assert_eq!(std::env::var("JARVIS_GATE_RUN").as_deref(), Ok("1"));
+    let component = std::fs::read(
+        std::env::var("JS50_PEOPLE_COMPONENT").expect("Build the People component first"),
+    )
+    .unwrap();
+    let oracle: Value = serde_json::from_slice(
+        &std::fs::read(std::env::var("JS50_PEOPLE_ORACLE").unwrap()).unwrap(),
+    )
+    .unwrap();
+    let actor = Uuid::parse_str(oracle["actor"].as_str().unwrap()).unwrap();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let db = rt
+        .block_on(safety_core::db::Database::connect(
+            &std::env::var("JS43_APP_URL").unwrap(),
+            4,
+            safety_core::db::RuntimeRole::App,
+        ))
+        .unwrap();
+    let ports = Arc::new(
+        TransactionalDatabasePorts::new(db, Arc::new(ContextPorts::new(Arc::new(DenyPorts))))
+            .unwrap(),
+    );
+    let mut manifest = common::manifest("0.1.0");
+    manifest.id = "people".into();
+    manifest.database.ledger = Ledger::CoreLegacy;
+    manifest.database.owned_tables = TABLES.map(str::to_owned).to_vec();
+    manifest.capabilities = vec![
+        Capability {
+            port: "db".into(),
+            operations: ["query".into()].into(),
+            resources: TABLES.map(str::to_owned).into(),
+            allow_private: false,
+        },
+        Capability {
+            port: "context".into(),
+            operations: ["read".into()].into(),
+            resources: ["call".into()].into(),
+            allow_private: false,
+        },
+    ];
+    let manifest = Arc::new(manifest);
+    let host = Host::new(Limits::default()).unwrap();
+    let run = |actor, payload: &Value| {
+        host.call(
+            &component,
+            manifest.clone(),
+            AccessContext::new(actor, "compiled-people-database"),
+            ports.clone(),
+            "api",
+            &payload.to_string(),
+        )
+    };
+    for case in oracle["guestCases"].as_array().unwrap() {
+        let actual: Value = serde_json::from_str(&run(actor, &case["request"]).unwrap()).unwrap();
+        assert_eq!(
+            actual, case["expected"],
+            "Compiled People API parity: {}",
+            case["request"]["name"]
+        );
+    }
+    // An unowned random actor has no rows. Use a real administrator fixture too;
+    // database privilege is configuration power, never a private-data bypass.
+    let other = Uuid::new_v4();
+    let admin = Uuid::new_v4();
+    let bootstrap=rt.block_on(async {
+        let (bootstrap,connection)=tokio_postgres::connect(&std::env::var("JS43_BOOTSTRAP_URL").unwrap(),tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move {let _=connection.await;});
+        for (id,is_admin) in [(other,false),(admin,true)] {
+            bootstrap.execute("INSERT INTO app.users(id,email,name,is_instance_admin) VALUES($1,$2,'Compiled guest privacy',$3)",&[&id,&format!("people-guest-{id}@example.test"),&is_admin]).await.unwrap();
+        }
+        bootstrap
+    });
+    for reader in [other, admin] {
+        assert!(run(
+            reader,
+            &json!({"name":"getPerson","parameters":{"personId":oracle["personId"]}})
+        )
+        .is_err());
+        assert_eq!(
+            run(
+                reader,
+                &json!({"name":"listEmailIdentityValues","parameters":{}})
+            )
+            .unwrap(),
+            "[]"
+        );
+        let resolved: Value = serde_json::from_str(
+            &run(
+                reader,
+                &json!({"name":"resolve","parameters":{"query":"Alice_%"}}),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(resolved, json!({"person":null}));
+    }
+    rt.block_on(async {
+        bootstrap
+            .execute(
+                "DELETE FROM app.users WHERE id=ANY($1)",
+                &[&vec![other, admin]],
+            )
+            .await
+            .unwrap();
+    });
+    println!("PASS real compiled Rust People guest: exact TypeScript API responses from legacy PostgreSQL through canonical ABI; other-user and admin read isolation; no native driver, no UI proof");
+}

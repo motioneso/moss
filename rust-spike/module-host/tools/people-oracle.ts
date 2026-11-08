@@ -56,6 +56,28 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
     const runner = new DataContextRunner(app);
     const repo = new PeopleRepository();
     const service = new PersonContextService(repo);
+    const guestCases = await runner.withDataContext({ actorUserId: actor }, async (scope) => [
+      {
+        request: { name: "getPerson", parameters: { personId: person } },
+        expected: await service.getPerson(scope, actor, person)
+      },
+      {
+        request: { name: "resolve", parameters: { query: "  aL_%  " } },
+        expected: { person: await service.resolve(scope, actor, "  aL_%  ") }
+      },
+      {
+        request: { name: "resolve", parameters: { query: "archived@example.test" } },
+        expected: { person: await service.resolve(scope, actor, "archived@example.test") }
+      },
+      {
+        request: { name: "resolve", parameters: { query: "AliceZZ" } },
+        expected: { person: await service.resolve(scope, actor, "AliceZZ") }
+      },
+      {
+        request: { name: "listEmailIdentityValues", parameters: {} },
+        expected: await repo.listEmailIdentityValues(scope, actor)
+      }
+    ]);
     const cases = await runner.withDataContext({ actorUserId: actor }, async (scope) => [
       {
         operation: "get",
@@ -146,7 +168,9 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
       path,
       JSON.stringify({
         actor,
+        personId: person,
         cases,
+        guestCases,
         rows,
         projection,
         projectionRow: projectionRow.row,

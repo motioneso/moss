@@ -9,8 +9,9 @@ records the approved slice and exact continuation plan for part two.
 The crate lives in `src/`, as required by section 7 of the module package spec. Its repository
 consumes the merged shared SDK's query and context ports. The host supplies the actor and
 invocation transaction; the repository has no database connection or filesystem access.
-No component binding generator has been added. Existing handwritten Wasm fixtures exercise
-the host around a native test driver, which does not prove a compiled People guest.
+No component binding generator has been added. The handwritten SDK canonical ABI and host
+wrapper now run a compiled Rust People guest, with its completed read APIs. Older handwritten
+fixtures still exercise a native test driver; those are separate persistence evidence.
 
 From `~/Jarv1s`:
 
@@ -27,11 +28,21 @@ It performs no database work. These fixtures prove only pure domain behavior. Da
 and live checks must go through verify-gate and the real Rust application before full People
 parity can be accepted.
 
+Build the current handwritten component with an already available `wasm32-unknown-unknown`
+standard library compatible with the pinned compiler (the optional `MOSS_WASM_SYSROOT` selects
+an existing sysroot). This is not the required `wasm32-wasip2` shipping build, and does not
+authorize installing a target or generator:
+
+```sh
+CARGO_TARGET_DIR=/tmp/moss-people-wasm MOSS_HOST_TARGET_DIR=/tmp/moss-module-host-target modules/people/tools/build-component.sh /tmp/moss-people-component.wasm
+JS50_PEOPLE_COMPONENT=/tmp/moss-people-component.wasm CARGO_TARGET_DIR=/tmp/moss-module-host-target cargo +1.95.0 test --locked --manifest-path rust-spike/module-host/Cargo.toml --test people_guest -- --ignored --nocapture
+```
+
 The database differential and failing-first privacy matrix use a disposable verify-gate
 server, the unchanged seven legacy tables, and both production runtime roles:
 
 ```sh
-CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/moss-module-host-target scripts/run-gate.sh start --gate rust-spike/module-host/tools/people-gate.sh
+JS50_PEOPLE_COMPONENT=/tmp/moss-people-component.wasm CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/moss-module-host-target scripts/run-gate.sh start --gate rust-spike/module-host/tools/people-gate.sh
 scripts/run-gate.sh wait --follow
 ```
 
