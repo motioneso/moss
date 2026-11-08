@@ -248,3 +248,131 @@ fn sample_install_pin_upgrade_remove_and_reinstall_preserves_account_data() {
     );
     println!("PASS real signed package → disk install → Wasmtime → account-scoped kv → pin → upgrade → keep-data removal → reinstall → confirmed purge");
 }
+
+#[test]
+fn saved_registry_survives_outage_and_signed_root_rotation_preserves_replay_floor() {
+    use base64::Engine;
+    use moss_module_host::registry_manager::{RegistryConfiguration, RootTransition};
+    let data = tempfile::tempdir().unwrap();
+    let registry = tempfile::tempdir().unwrap();
+    let keys = common::Keys::new();
+    let a = keys.write(registry.path(), "1.0.0", 1, vec![]);
+    let actor = uuid::Uuid::new_v4();
+    let access = AccessContext::new(actor, "registry-settings");
+    let state = Arc::new(MemoryCatalog::default());
+    let open = || {
+        Installer::new(
+            data.path(),
+            state.clone(),
+            Arc::new(FileLifecycle::new(data.path(), [actor].into()).unwrap()),
+            Host::new(Limits::default()).unwrap(),
+            Arc::new(LocalPorts::new(data.path()).unwrap()),
+            "0.1.0".parse().unwrap(),
+            LegacyInventory::default(),
+        )
+        .unwrap()
+    };
+    let installer = open();
+    let config = RegistryConfiguration {
+        id: "sample-registry".into(),
+        source: Source::Folder(registry.path().into()),
+        root_key: common::Keys::public(&keys.root),
+        first_party_key: common::Keys::public(&keys.root),
+    };
+    installer.configure_registry(&access, &config).unwrap();
+    installer
+        .install(
+            &access,
+            &installer.saved_catalog(&access, "sample-registry").unwrap(),
+            &a,
+            true,
+        )
+        .unwrap();
+    std::fs::rename(
+        registry.path().join("index.json"),
+        registry.path().join("offline-index"),
+    )
+    .unwrap();
+    assert!(installer.refresh_configured(&access).unwrap()[0]
+        .1
+        .is_some());
+    drop(installer);
+    let installer = open();
+    assert_eq!(installer.registries(&access).unwrap().len(), 1);
+    assert_eq!(
+        installer
+            .saved_catalog(&access, "sample-registry")
+            .unwrap()
+            .index
+            .serial,
+        1
+    );
+    keys.write(registry.path(), "1.0.0", 3, vec![]);
+    let next = common::Keys::new();
+    let mut identity: moss_module_host::trust::RegistryIdentity =
+        serde_json::from_slice(&std::fs::read(registry.path().join("registry.json")).unwrap())
+            .unwrap();
+    let next_key = common::Keys::public(&next.root);
+    identity.root_fingerprint = moss_module_host::trust::digest(
+        &base64::engine::general_purpose::STANDARD
+            .decode(&next_key)
+            .unwrap(),
+    );
+    let bytes = serde_json::to_vec(&identity).unwrap();
+    std::fs::write(registry.path().join("registry.json"), &bytes).unwrap();
+    std::fs::write(
+        registry.path().join("registry.json.sig"),
+        common::Keys::sign(&next.root, &bytes),
+    )
+    .unwrap();
+    let transition = RootTransition {
+        registry: "sample-registry".into(),
+        previous_fingerprint: state.load().unwrap().registries["sample-registry"]
+            .root_fingerprint
+            .clone()
+            .unwrap(),
+        next_key: next_key.clone(),
+        serial: 3,
+    };
+    let transition = serde_json::to_vec(&transition).unwrap();
+    assert!(installer
+        .rotate_root(
+            &access,
+            &transition,
+            &common::Keys::sign(&next.root, &transition)
+        )
+        .is_err());
+    installer
+        .rotate_root(
+            &access,
+            &transition,
+            &common::Keys::sign(&keys.root, &transition),
+        )
+        .unwrap();
+    assert!(installer
+        .rotate_root(
+            &access,
+            &transition,
+            &common::Keys::sign(&keys.root, &transition)
+        )
+        .is_err());
+    drop(installer);
+    let installer = open();
+    assert_eq!(installer.registries(&access).unwrap()[0].root_key, next_key);
+    assert_eq!(
+        installer
+            .saved_catalog(&access, "sample-registry")
+            .unwrap()
+            .index
+            .serial,
+        3
+    );
+    installer
+        .remove_registry(&access, "sample-registry")
+        .unwrap();
+    assert!(installer.registries(&access).unwrap().is_empty());
+    assert_eq!(
+        state.load().unwrap().registries["sample-registry"].serial,
+        3
+    );
+}

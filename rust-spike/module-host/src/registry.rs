@@ -145,10 +145,21 @@ impl SeenRegistry {
     }
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+#[serde(
+    tag = "kind",
+    content = "configuration",
+    rename_all = "kebab-case",
+    deny_unknown_fields
+)]
 pub enum Source {
     Folder(PathBuf),
-    Https { base: Url, allow_private: bool },
+    Https {
+        base: Url,
+        allow_private: bool,
+        /// An explicit public CA for this source only. Never changes system trust.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        certificate_pem: Option<String>,
+    },
 }
 impl Source {
     pub fn fetch(&self, path: &str, cap: u64) -> Result<Vec<u8>> {
@@ -186,6 +197,7 @@ impl Source {
             Self::Https {
                 base,
                 allow_private,
+                certificate_pem,
             } => {
                 ensure!(
                     base.scheme() == "https"
@@ -197,7 +209,12 @@ impl Source {
                     "Registry addresses must be HTTPS folder URLs"
                 );
                 let url = base.join(path)?;
-                let response = https_request(&url, *allow_private, Duration::from_secs(30))?;
+                let response = https_request_with_ca(
+                    &url,
+                    *allow_private,
+                    Duration::from_secs(30),
+                    certificate_pem.as_deref(),
+                )?;
                 response.take(cap + 1).read_to_end(&mut bytes)?;
             }
         }
@@ -215,6 +232,14 @@ pub fn https_request(
     allow_private: bool,
     timeout: Duration,
 ) -> Result<reqwest::blocking::Response> {
+    https_request_with_ca(url, allow_private, timeout, None)
+}
+fn https_request_with_ca(
+    url: &Url,
+    allow_private: bool,
+    timeout: Duration,
+    certificate_pem: Option<&str>,
+) -> Result<reqwest::blocking::Response> {
     ensure!(
         url.scheme() == "https" && url.username().is_empty() && url.password().is_none(),
         "Only HTTPS destinations are allowed"
@@ -227,7 +252,12 @@ pub fn https_request(
         !addresses.is_empty() && (allow_private || addresses.iter().all(|a| public_ip(a.ip()))),
         "This destination resolves to a private or reserved network"
     );
-    let client = reqwest::blocking::Client::builder()
+    let mut builder = reqwest::blocking::Client::builder();
+    if let Some(pem) = certificate_pem {
+        ensure!(pem.len() <= 64 * 1024, "Registry CA is too large");
+        builder = builder.add_root_certificate(reqwest::Certificate::from_pem(pem.as_bytes())?);
+    }
+    let client = builder
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(timeout)
@@ -410,6 +440,14 @@ impl Catalog {
     pub fn download(&self, artifact: &Artifact, moss: &Version) -> Result<crate::archive::Package> {
         let path = format!("packages/{}.mosspkg", artifact.digest);
         let bytes = self.source.fetch(&path, artifact.size)?;
+        self.read_download(artifact, &bytes, moss)
+    }
+    pub fn read_download(
+        &self,
+        artifact: &Artifact,
+        bytes: &[u8],
+        moss: &Version,
+    ) -> Result<crate::archive::Package> {
         ensure!(
             bytes.len() as u64 == artifact.size,
             "The package size does not match"
@@ -420,7 +458,7 @@ impl Catalog {
             &artifact.digest,
             &artifact.signature,
         )?;
-        let package = crate::archive::Package::read(&bytes, &artifact.digest, moss)?;
+        let package = crate::archive::Package::read(bytes, &artifact.digest, moss)?;
         compare_manifest(&package.manifest, artifact)?;
         Ok(package)
     }

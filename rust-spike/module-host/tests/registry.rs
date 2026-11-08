@@ -277,3 +277,113 @@ fn forged_root_index_and_publisher_signatures_are_refused() {
         );
     }
 }
+
+#[test]
+#[ignore = "Explicit real TLS proof: requires installed openssl, python3 and devports"]
+fn real_self_hosted_https_requires_private_permission_and_its_trusted_ca() {
+    use std::{
+        process::{Command, Stdio},
+        time::{Duration, Instant},
+    };
+    struct Server {
+        child: std::process::Child,
+        port: String,
+    }
+    impl Drop for Server {
+        fn drop(&mut self) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+            let _ = Command::new("devports")
+                .args(["release", &self.port])
+                .output();
+        }
+    }
+    let registry = tempfile::tempdir().unwrap();
+    let keys = common::Keys::new();
+    let artifact = keys.write(registry.path(), "1.0.0", 1, vec![]);
+    let out = Command::new("devports")
+        .args(["claim", "js43-registry-proof"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let port = String::from_utf8(out.stdout).unwrap().trim().to_string();
+    let port_number: u16 = port.parse().expect("devports prints the port");
+    assert!((5180..=5299).contains(&port_number));
+    let cert = registry.path().join("tls.pem");
+    let key = registry.path().join("tls.key");
+    let ready = registry.path().join("ready");
+    let status = Command::new("openssl")
+        .args([
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-days",
+            "1",
+            "-subj",
+            "/CN=localhost",
+            "-addext",
+            "subjectAltName=DNS:localhost",
+            "-addext",
+            "basicConstraints=critical,CA:FALSE",
+            "-addext",
+            "extendedKeyUsage=serverAuth",
+            "-keyout",
+        ])
+        .arg(&key)
+        .arg("-out")
+        .arg(&cert)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let child = Command::new("python3")
+        .arg("tools/tls-server.py")
+        .arg(registry.path())
+        .arg(&cert)
+        .arg(&key)
+        .arg(&port)
+        .arg(&ready)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let _server = Server { child, port };
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !ready.exists() {
+        assert!(Instant::now() < deadline, "TLS fixture did not start");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let base: url::Url = format!("https://localhost:{port_number}/").parse().unwrap();
+    let source = |allow_private, certificate_pem| Source::Https {
+        base: base.clone(),
+        allow_private,
+        certificate_pem,
+    };
+    assert!(source(true, None)
+        .fetch("registry.json", 1024 * 1024)
+        .is_err());
+    let ca = Some(std::fs::read_to_string(cert).unwrap());
+    assert!(source(false, ca.clone())
+        .fetch("registry.json", 1024 * 1024)
+        .is_err());
+    let mut seen = SeenRegistry::default();
+    let catalog = Catalog::fetch(
+        source(true, ca),
+        &common::Keys::public(&keys.root),
+        &common::Keys::public(&keys.root),
+        &mut seen,
+    )
+    .unwrap();
+    assert_eq!(
+        catalog
+            .download(&artifact, &"0.1.0".parse().unwrap())
+            .unwrap()
+            .manifest
+            .id,
+        "sample.counter"
+    );
+    println!("PASS real self-hosted HTTPS registry: system trust rejects test CA, private access requires permission, source-specific CA verifies TLS, signed index and package verify over the actual socket");
+}

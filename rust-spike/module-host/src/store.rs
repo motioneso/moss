@@ -326,16 +326,11 @@ impl Installer {
             selected.digest == artifact.digest,
             "The requested package is not the selected signed version"
         );
-        let package = catalog.download(artifact, &self.moss)?;
         let bytes = catalog.source.fetch(
             &format!("packages/{}.mosspkg", artifact.digest),
             artifact.size,
         )?;
-        // Recheck the bytes saved to the blob store, including if a registry changed mid-fetch.
-        ensure!(
-            trust::digest(&bytes) == artifact.digest,
-            "The package changed during download"
-        );
+        let package = catalog.read_download(artifact, &bytes, &self.moss)?;
         self.activate(
             access,
             package,
