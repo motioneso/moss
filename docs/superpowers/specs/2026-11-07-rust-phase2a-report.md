@@ -6,7 +6,7 @@
 - Code: `rust-spike/safety-core/`, `rust-spike/access-context/`, `rust-spike/vault/`, the safety
   cases in `rust-spike/parity/cases/20-safety-1.json` and `20-safety-2.json`, and
   `rust-spike/tools/`. `rust-spike/README.md` says how to run them.
-- Run on 2026-11-07 at commit `c368eaea6` with cargo 1.95.0, Node 22.22.2 and Postgres 17.11
+- Run on 2026-11-07 at commit `a72979cad` with cargo 1.95.0, Node 22.22.2 and Postgres 17.11
   (pgvector image), each database run inside its own throwaway gate. Later commits change only
   this report.
 
@@ -61,7 +61,7 @@ All logs and reports are kept outside the repo in the task's scratch folder.
 
 ### Unit tests
 
-170 tests pass on `c368eaea6` with no warnings.
+170 tests pass on `a72979cad` with no warnings.
 
 | Crate                                      | Tests |
 | ------------------------------------------ | ----- |
@@ -75,7 +75,7 @@ All logs and reports are kept outside the repo in the task's scratch folder.
 
 ### Side-by-side run
 
-Gate log for run 7, commit `c368eaea6`, clean tree, `### FINAL rc=0`:
+Gate log for run 8, commit `a72979cad`, clean tree, `### FINAL rc=0`:
 
 ```text
 PASS safety: member isolation, another member's task reads as missing
@@ -109,7 +109,7 @@ PARITY 77/77 cases match
   database copy, so they test the database rules both servers share, not Rust code. Rust has no
   AI routes yet.
 - Each server's log is scanned after the last case for any `MOSS-SENTINEL-` value. None was found.
-- All 548 lines of the Rust server's log in run 7 are JSON from the one log writer.
+- All 548 lines of the Rust server's log in run 8 are JSON from the one log writer.
 
 ### The first run found real differences
 
