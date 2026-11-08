@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 2,
+  "id": "people",
+  "name": "People & Context",
+  "description": "People settings and legacy data component. Installed application and device qualification remain open.",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": [
+        "app.person_context_people",
+        "app.person_context_identities",
+        "app.person_context_links",
+        "app.person_context_link_sources",
+        "app.person_context_match_candidates",
+        "app.person_context_events",
+        "app.person_context_indexing_state"
+      ]
+    },
+    {
+      "port": "context",
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
+    },
+    {
+      "port": "vault",
+      "operations": ["notes.status", "notes.read", "notes.list", "notes.compare-write"],
+      "resources": ["people-notes"]
+    },
+    {
+      "port": "kv",
+      "operations": [
+        "records.get",
+        "records.put",
+        "preference.read",
+        "preference.write",
+        "preference.folders"
+      ],
+      "resources": ["people-commands", "people-folder", "people-suggestions"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue-options", "enqueue-after-commit"],
+      "resources": ["person-index", "sync-person-memory"]
+    },
+    {
+      "port": "api",
+      "operations": ["call"],
+      "resources": ["person-providers"]
+    }
+  ],
+  "database": {
+    "ownedTables": [
+      "app.person_context_people",
+      "app.person_context_identities",
+      "app.person_context_links",
+      "app.person_context_link_sources",
+      "app.person_context_match_candidates",
+      "app.person_context_events",
+      "app.person_context_indexing_state"
+    ],
+    "migrations": ["sql/0128_person_context.sql"],
+    "ledger": "core-legacy"
+  },
+  "jobs": {
+    "person-index": {
+      "command-id": {
+        "kind": "id"
+      }
+    },
+    "sync-person-memory": {
+      "command-id": {
+        "kind": "id"
+      }
+    }
+  },
+  "provides": {
+    "findPeopleByNames": "0.1.0",
+    "resolve": "0.1.0",
+    "getPerson": "0.1.0",
+    "listEmailIdentityValues": "0.1.0"
+  },
+  "requires": {
+    "person-providers": ">=1.0.0, <2.0.0"
+  },
+  "navigation": [],
+  "settings": [
+    {
+      "id": "people.settings",
+      "label": "People",
+      "description": "Choose your People notes folder, refresh notes, review matches and manage people. Requires the installed host preference and note adapters.",
+      "path": "/settings/memory/people",
+      "scope": "user",
+      "entry": "ui/index.html"
+    }
+  ],
+  "features": [
+    {
+      "id": "people.settings",
+      "description": "People Settings pane in the shared module frame. Full installed UI, chat and device parity remain unverified.",
+      "remediations": [
+        {
+          "id": "people-choose-folder",
+          "description": "Choose an existing folder inside your allowed notes folders, or clear an unavailable selection.",
+          "path": "/settings/memory/people"
+        },
+        {
+          "id": "people-retry",
+          "description": "Try again after checking the module and its host services are available.",
+          "path": "/settings/modules"
+        }
+      ],
+      "errors": [
+        {
+          "code": "people-folder-unavailable",
+          "class": "prerequisite",
+          "description": "The selected People folder cannot be opened.",
+          "remediationRef": "people-choose-folder"
+        },
+        {
+          "code": "people-operation-failed",
+          "class": "transient",
+          "description": "A People request failed. No successful save is shown.",
+          "remediationRef": "people-retry"
+        }
+      ]
+    },
+    {
+      "id": "people.note-suggestions",
+      "description": "Suggest note updates is on by default; the account switch preserves the existing sourceBehaviors preference."
+    }
+  ],
+  "screens": {
+    "/settings/memory/people": "ui/index.html"
+  },
+  "icons": ["icons/people.svg"],
+  "accounts": {
+    "supportsUserDisable": false,
+    "defaultEnabled": true
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/people",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/people/resolve",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/people/match-candidates",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/people/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/people/:id/links",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/people/:id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/people",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/people/:id/archive",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/people/:id/merge",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/people/:id/split-identity",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/people/notes/refresh",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/people/notes-settings",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/people/notes-settings",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/people/note-folders",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/people/note-suggestions",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/people/note-suggestions",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/people/match-candidates/:id/accept",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/people/match-candidates/:id/reject",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/people/match-candidates/:id/suppress",
+      "signIn": true
+    }
+  ]
+}

@@ -1,10 +1,10 @@
 # Rust Phase 5: People & Context
 
-Tasks JS-45 (part one), JS-50 (part two), JS-57 (part three) and JS-58 (part four), Card 523.
+Tasks JS-45 (part one), JS-50 (part two), JS-57 (part three) JS-58 (part four) and JS-69 (part five), Card 523.
 Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
 Release note Category: N/A.
 
-Status: **People part four: route-envelope checkpoint; full parity remains open.** The continuation
+Status: **People part five: Settings checkpoint; full parity remains open.** The continuation
 brief permits a bounded checkpoint before a second compaction. This checkpoint supplies
 data/review route envelopes and canonical-note fallbacks on top of part three's workers;
 it does not complete the package or
@@ -716,3 +716,57 @@ regression and native availability/lock/provider-failure cases cover this distin
 Final run receipts and independent review are recorded in the checkpoint proof artifact.
 The route gate is a guest/host comparison against legacy HTTP handlers; it is not a real
 HTTP-listener, signed-package, installed-chat, UI or device acceptance result.
+
+## People part five: Settings checkpoint (JS-69)
+
+Card 523. This task branch began at Phase 0a and was advanced to merged part-four main
+`a50e901db` before changes. The work below is a bounded continuation checkpoint; full
+People acceptance remains open. The authenticated Rust shell on this base has no installed
+module/frame composition, so this report does not claim a working installed People page.
+
+The People folder now supplies a Leptos Settings pane using the shared Park Press module
+kit and document-bound parent bridge. It includes a folder chooser, clear/refresh, refresh
+counts and guidance, match review, add, rename and archive, independent read errors and
+retry, and the default-on Suggest note updates switch. Merge/split candidates offer chat
+review rather than an Accept action. Loading data is never presented as an empty result.
+Phone layout uses wrapping actions and flexible input columns; live phone checks remain open.
+The shared module stylesheet adds token-based document defaults so an opaque frame has
+Moss typography and colours rather than browser defaults.
+
+New host preference bindings map only trusted module/resource pairs to existing account
+preferences. Folder saves use the account's allowed roots and `VaultContext`; the guest
+cannot select a preference key or account. The suggestion switch reads/writes the existing
+`sourceBehaviors` member `people.notes.suggest-updates`. Its SQL merge preserves sibling
+members and increments the existing preference revision. These operations commit immediately,
+like the existing local KV adapter; they are not part of guest invocation rollback. Keep
+settings writes as single-operation routes. Linked-note I/O still uses the shared adapter.
+
+The new manifest declares the Settings screen, account settings, recovery guidance, owned
+legacy tables, typed command-reference jobs and four existing public API versions. The
+package build utility checks the immutable People SQL against the host inventory and
+includes the compiled guest, built screen and authored assets. Its output is unsigned;
+registry signing, installation/reload and installed consumer routing remain unqualified.
+No tool approval/app-action policy is asserted by this manifest checkpoint.
+
+No tool or target was installed globally. The already approved pinned `wit-bindgen` remains
+in the guest crate; this work uses existing scratch guest caches and task-local build output.
+The UI adds only dependencies already declared elsewhere in this project.
+
+### Remaining work after part five
+
+1. Compose the actual authenticated shell with the installed module frame, preference and
+   linked-notes adapters. Build/sign/install/reload through the registry, qualify public
+   API consumers, chat approval/app-action rules and actual provider dependencies. The
+   current shell still only serves Today/chat, without installed modules.
+2. Compare folder-settings HTTP validation/coercion with Fastify. Implement legacy relative
+   directory browsing and index-refresh, remaining malformed-body/query cases, ingest
+   nudges, sustained command quotas/retention and actual source providers. The additive
+   `note-folders` chooser is not a replacement for the legacy `notes-directories` contract.
+3. Run complete HTTP parity through installed dispatch. Existing guest/host integration
+   suites and the Settings adapter tests cover their stated seams only.
+4. Exercise the installed screen and real chat in the authenticated Rust application at
+   desktop and phone widths, then sign in from a second physical device over HTTPS with
+   trusted-origin and privacy checks. No phone viewport is a second physical device.
+
+Verification receipts and the fresh independent review belong in the task proof artifact.
+Do not promote this checkpoint to complete People parity or device acceptance.

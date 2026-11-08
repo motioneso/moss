@@ -1,0 +1,20 @@
+[package]
+name = "moss-people-ui"
+version = "0.1.0"
+edition = "2021"
+publish = false
+[workspace]
+[lib]
+crate-type = ["cdylib", "rlib"]
+[features]
+default = ["csr"]
+csr = ["leptos/csr", "moss-module-ui/csr"]
+ssr = ["leptos/ssr", "moss-module-ui/ssr"]
+[dependencies]
+leptos = { version = "0.8", default-features = false }
+moss-module-ui = { path = "../../../rust-spike/module-ui" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+wasm-bindgen = "=0.2.130"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
