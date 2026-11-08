@@ -151,10 +151,9 @@
     {
       "id": "tasks.package-filtered-list",
       "description": "The tasks.list tool filters visible persisted tasks by list, tag, status, priority, strict date/completion boundaries and priority quadrant, preserving updated-time/identifier ordering and tag data. Explicit shares remain visible; private tasks remain hidden from other accounts including admins. Actor-local lazy recurrence and installed chat integration remain unfinished.",
-      "errors": [
+      "remediations": [
         {
-          "code": "tasks-list-invalid-filter",
-          "class": "validation",
+          "id": "retry-task-filters",
           "description": "Correct invalid filter types, status, priority, quadrant or date text and retry."
         }
       ]

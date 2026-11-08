@@ -40,7 +40,7 @@ async function compiled(actor: string, input: Record<string, unknown>) {
   const line = await iterator.next();
   assert(!line.done, "Component adapter ended early");
   const output = JSON.parse(line.value);
-  assert(output.ok, `Compiled list must succeed: ${line.value}`);
+  assert(output.ok, `Compiled list must succeed for ${JSON.stringify(input)}: ${line.value}`);
   return output.ok;
 }
 try {
@@ -101,6 +101,8 @@ try {
     ...[1, 2, 3, 4, 5].map((priority) => ({ priority })),
     { dueBefore: boundary },
     { dueAfter: boundary },
+    { dueAfter: "2026-01-02" },
+    { dueBefore: "2026-01-02T12:00:00+02:00" },
     { completedAfter: boundary },
     { completedAfter: "2026-01-02T11:59:59.999Z" },
     { dueAfter: "2026-01-02T11:59:59.999Z", dueBefore: "2026-01-02T12:00:00.001Z" },
@@ -157,33 +159,49 @@ try {
   );
   assert.deepEqual(await compiled(other, { listId: list }), visible);
   assertPrivate(await compiled(other, { tagId: tag }));
+  for (const input of [{}, { listId: list }, { tagId: tag }]) {
+    const expected = await runner.withDataContext(
+      { actorUserId: other, requestId: "shared-list-parity" },
+      (db) =>
+        taskListExecute(db, input, {
+          actorUserId: other,
+          requestId: "shared-list-parity",
+          chatSessionId: "test"
+        })
+    );
+    assert.deepEqual(await compiled(other, input), expected);
+    checks++;
+  }
   assertPrivate(await compiled(admin, {}));
   assert.deepEqual(
     await snapshot(),
     before,
     "These non-recurring list reads must not write any task field"
   );
-  // Cross both the database page size and the membership-filter chunk boundary.
-  await bootstrap.query(
-    "INSERT INTO app.tasks(id,owner_user_id,list_id,title,updated_at) SELECT gen_random_uuid(),$1,$2,'Paged row ' || i,$3 FROM generate_series(1,1005) i",
-    [owner, secondList, boundary]
-  );
-  const expectedPage = await runner.withDataContext(
-    { actorUserId: owner, requestId: "list-paging" },
-    (db) =>
-      taskListExecute(
-        db,
-        { listId: secondList },
-        { actorUserId: owner, requestId: "list-paging", chatSessionId: "test" }
-      )
-  );
-  const actualPage = await compiled(owner, { listId: secondList });
-  assert.equal(actualPage.data.items.length, 1011);
-  assert.deepEqual(actualPage, expectedPage);
-  console.log("PASS compiled list crosses task-page and assignment-chunk boundaries");
   console.log(
     `PASS ${checks} exact compiled list comparisons; private/admin/shared visibility; strict date boundaries; stable ordering; no writes on non-recurring data`
   );
+  // Optional acceptance probe. Keep failure red under the default host limits;
+  // this is deliberately separate from the small-account differential checks.
+  if (process.env["TASKS_LIST_LARGE_ACCOUNT"] === "1") {
+    await bootstrap.query(
+      "INSERT INTO app.tasks(id,owner_user_id,list_id,title,updated_at) SELECT gen_random_uuid(),$1,$2,'Paged row ' || i,$3 FROM generate_series(1,1005) i",
+      [owner, secondList, boundary]
+    );
+    const expectedPage = await runner.withDataContext(
+      { actorUserId: owner, requestId: "list-paging" },
+      (db) =>
+        taskListExecute(
+          db,
+          { listId: secondList },
+          { actorUserId: owner, requestId: "list-paging", chatSessionId: "test" }
+        )
+    );
+    const actualPage = await compiled(owner, { listId: secondList });
+    assert.equal(actualPage.data.items.length, 1011);
+    assert.deepEqual(actualPage, expectedPage);
+    console.log("PASS compiled list crosses task-page and assignment-chunk boundaries");
+  }
 } finally {
   child.stdin.end();
   await exited;

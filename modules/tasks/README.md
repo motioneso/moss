@@ -166,7 +166,14 @@ on both interactive listing paths, so this handler is not full list parity.
 
 The database gate includes `tools/list-parity.ts`: exact comparisons on synthetic
 non-recurring rows, private/admin/shared visibility, an RLS removal/restoration
-control, and task-page/assignment-chunk boundary coverage. These are component
+control. These are component
 handler checks, not proof of installed chat dispatch. No timezone, lock, People,
 action-policy, recurrence-worker or application-shell seam is fabricated here.
 Full-shell and second-device HTTPS acceptance remain outstanding.
+
+Large-account acceptance is separate and remains red. Run the same gate with
+`TASKS_LIST_LARGE_ACCOUNT=1` to include a list containing 1,011 tasks. The compiled
+handler exceeds the default host runtime allowance on that probe. The check is not
+truncated, its limits are not raised and its failure must not be reported as parity.
+Tag membership is chunked at the public query limit; quadrant filtering runs in
+the database. Cross-page success and the package speed budget remain unproved.

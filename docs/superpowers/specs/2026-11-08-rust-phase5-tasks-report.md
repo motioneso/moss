@@ -985,7 +985,8 @@ The existing ISO parser is reused; free-text and offset-free date parity is inco
 
 The new database check compares the actual component with the TypeScript executor
 on non-recurring rows, including private/admin/shared visibility, date boundaries,
-ordering, paging and tags. An RLS removal control must expose actual private rows
+ordering and tags. The optional thousand-task acceptance probe remains red.
+An RLS removal control must expose actual private rows
 and fail the exact hidden-row assertion before restoration. Before implementation,
 the comparison failed against the part 8 component because the handler was absent.
 Final current-build receipts, endpoint results, signed UI and review are in the proof.
