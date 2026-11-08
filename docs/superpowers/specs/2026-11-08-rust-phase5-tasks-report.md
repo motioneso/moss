@@ -826,3 +826,9 @@ startup reset and base styles plus Tasks' document foundations. No generated
 inventory entries were discarded. The combined bridge/controller suite has
 nineteen checks; the timeout check now waits for message delivery before closing
 its received port so machine load cannot cause a cleanup-only failure.
+
+The first post-merge gates stopped at the locked dependency check: main added
+`web-sys` to the shared module UI, so the Tasks verification lockfile also needed
+that existing dependency edge. An offline refresh changes only that one entry;
+no dependency version or new tool installation is introduced. The gates are
+rerun on the resulting clean commit.
