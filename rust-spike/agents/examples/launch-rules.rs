@@ -39,6 +39,7 @@ fn main() {
         kind: AgentKind::Claude,
         program: program.into(),
         sign_in_home: home.into(),
+        person_home: false,
         model: None,
     };
     let tools = ToolServer {

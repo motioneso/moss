@@ -3,7 +3,11 @@
 //!   moss-runner <config.json>
 //!
 //! Config: `{"root": DIR, "gateway_bin": PATH, "confine_bin": PATH|null, "account": "local",
-//!           "agent": {"kind": "claude", "program": PATH, "sign_in_home": DIR, "model": null}}`
+//!           "agent": {"kind": "claude", "program": PATH, "sign_in_home": DIR,
+//!                     "person_home": false, "model": null}}`
+//!
+//! `person_home: true` allows the person's own home as the sign-in folder. The agent can then
+//! write files that run at login, so confinement is no boundary; the runner logs a warning.
 //!
 //! The agent's sign-in folder belongs to that one account, so chats for any other account are
 //! refused until each account brings its own sign-in.
@@ -51,6 +55,10 @@ struct AgentConfig {
     kind: String,
     program: PathBuf,
     sign_in_home: PathBuf,
+    /// Lets the agent use the person's own home as its sign-in folder. Confinement is then no
+    /// boundary, because the agent can write files that run at login.
+    #[serde(default)]
+    person_home: bool,
     model: Option<String>,
 }
 
@@ -103,6 +111,7 @@ async fn main() {
         kind,
         program: cfg.agent.program,
         sign_in_home: cfg.agent.sign_in_home,
+        person_home: cfg.agent.person_home,
         model: cfg.agent.model,
     });
     let runner = Arc::new(Runner::new(
@@ -116,6 +125,12 @@ async fn main() {
     ));
     let status = moss_agents::confine::status();
     eprintln!("moss-runner: confinement on {}: {} ({})", status.os, status.enforced, status.detail);
+    if setup.person_home {
+        eprintln!(
+            "moss-runner: warning: the agent signs in from the person's own home folder, so it can \
+             write files that run at login; confinement is no boundary for this launch"
+        );
+    }
 
     let secret = moss_agents::hello::random_secret();
     let secret_path = cfg.root.join("runner.secret");

@@ -26,9 +26,11 @@ pub struct AccountSetup {
     /// The agent's native program.
     pub program: PathBuf,
     /// Where the agent finds its own sign-in. The agent can write it, so no two accounts may
-    /// share one, and it must not hold the Moss data folder. On a one-person install it is that
-    /// person's home folder.
+    /// share one, and it must not hold the Moss data folder.
     pub sign_in_home: PathBuf,
+    /// Allows the person's own home folder as the sign-in folder. The agent can then write
+    /// files that run at login, so confinement is no boundary for that launch.
+    pub person_home: bool,
     /// Leave empty to use the model the person set up in the agent.
     pub model: Option<String>,
 }
@@ -98,8 +100,19 @@ pub enum RunnerError {
     SignInOverlap,
     #[error("another account already uses this sign-in folder")]
     SignInShared,
+    #[error("the sign-in folder holds the person's own home or login files; that would let the agent escape confinement")]
+    PersonHome,
     #[error(transparent)]
     Agent(#[from] AgentError),
+}
+
+/// True when an agent that can write `sign_in` could plant files the person's own unconfined
+/// programs run later: the home folder itself, or its config, data and key folders.
+pub fn touches_person_home(sign_in: &Path, person: &Path) -> bool {
+    person.starts_with(sign_in)
+        || [".config", ".local", ".ssh", ".claude", ".codex"]
+            .iter()
+            .any(|d| sign_in.starts_with(person.join(d)))
 }
 
 /// Account ids become folder names, so only plain characters pass.
@@ -140,6 +153,10 @@ impl Runner {
             return Err(RunnerError::RootExposed);
         }
         let home = std::fs::canonicalize(&setup.sign_in_home).map_err(RunnerError::Folders)?;
+        let person = std::env::var_os("HOME").and_then(|h| std::fs::canonicalize(h).ok());
+        if !setup.person_home && person.is_some_and(|p| touches_person_home(&home, &p)) {
+            return Err(RunnerError::PersonHome);
+        }
         if root.starts_with(&home) || (home.starts_with(&root) && !home.starts_with(root.join("accounts").join(account))) {
             return Err(RunnerError::SignInOverlap);
         }
@@ -375,6 +392,7 @@ mod tests {
             kind: AgentKind::Codex,
             program: "/bin/sh".into(),
             sign_in_home: home.into(),
+            person_home: false,
             model: None,
         }
     }
@@ -395,6 +413,28 @@ mod tests {
         let bob = home.path().join("moss/accounts/bob/home");
         std::fs::create_dir_all(&bob).unwrap();
         assert!(matches!(r.prepare("alice", &setup(&bob)), Err(RunnerError::SignInOverlap)));
+    }
+
+    #[test]
+    fn the_persons_home_and_login_folders_are_refused_as_sign_in() {
+        let p = Path::new("/home/p");
+        for bad in ["/home/p", "/home", "/", "/home/p/.config/systemd", "/home/p/.local/share", "/home/p/.claude"] {
+            assert!(touches_person_home(Path::new(bad), p), "{bad}");
+        }
+        for ok in ["/home/p/moss/accounts/a/home", "/srv/moss/a"] {
+            assert!(!touches_person_home(Path::new(ok), p), "{ok}");
+        }
+    }
+
+    #[test]
+    fn the_runners_own_home_needs_the_explicit_setting() {
+        let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else { return };
+        let root = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
+        let r = runner(root.path());
+        let mut s = setup(&home);
+        assert!(matches!(r.prepare("alice", &s), Err(RunnerError::PersonHome)));
+        s.person_home = true;
+        assert!(!matches!(r.prepare("alice", &s), Err(RunnerError::PersonHome)));
     }
 
     #[test]
@@ -477,6 +517,7 @@ mod tests {
             kind: AgentKind::Codex,
             program: "/bin/sh".into(),
             sign_in_home: "/home/someone".into(),
+            person_home: false,
             model: None,
         };
         let f = r.folders("alice");

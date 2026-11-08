@@ -32,11 +32,11 @@ pub const SYSTEM_READ: &[&str] = &[
 /// The shared temporary folder is left out on purpose: every account's agent could read what
 /// another left there. Each agent gets a private one through TMPDIR instead.
 /// Only the device nodes agents need. All of `/dev` would include `/dev/shm`, which every
-/// account could share files through.
-pub const SYSTEM_WRITE: &[&str] = &[
-    "/dev/null", "/dev/zero", "/dev/full", "/dev/random", "/dev/urandom", "/dev/tty", "/dev/ptmx",
-    "/dev/pts",
-];
+/// account could share files through. `/dev/pts` and `/dev/tty` are left out because they open
+/// every terminal of the same OS user. An agent started in a pseudo-terminal keeps its own one
+/// through the inherited descriptor, which Landlock does not recheck. `/dev/ptmx` stays so an
+/// agent's shell commands can make new pseudo-terminals; it cannot open existing ones.
+pub const SYSTEM_WRITE: &[&str] = &["/dev/null", "/dev/zero", "/dev/full", "/dev/random", "/dev/urandom", "/dev/ptmx"];
 
 impl Confinement {
     /// Rewrites a launch so the launcher confines itself first, then runs the agent.

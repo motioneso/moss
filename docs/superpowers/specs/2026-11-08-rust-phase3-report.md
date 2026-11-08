@@ -11,11 +11,17 @@ accounts on one install". Code: `rust-spike/agents/` and the `--runner` flag in 
   answer. The rest of the gate (live chat on macOS and Windows, confinement per OS) is open.
 - One runner process owns every account's agent. Each account gets its own agent process, its own
   folders and a private temporary folder, and runs under Landlock confinement.
-- Confinement, measured on the runner's own launch rules, blocks another account's files and
-  tool-gateway secret, the Moss data folder, database files, the shared temporary and shared
-  memory folders, and the Moss process's environment. It does not block the key store over the
+- Confinement holds only when the agent's sign-in folder sits inside its own account tree. There,
+  measured on the runner's own launch rules, it blocks another account's files and tool-gateway
+  secret, the Moss data folder, database files, the shared temporary and shared memory folders,
+  other terminals, and the Moss process's environment. It does not block the key store over the
   session bus, or reading other programs' command lines. Closing the key store gap is part 2's
   first item.
+- No agent can sign in from such a folder yet, because Moss has no agent sign-in flow. Today an
+  agent only works from the person's own home folder. The runner refuses that unless its config
+  says so explicitly, and then it logs that confinement is no boundary. With the person's home
+  writable, an agent can plant a file that runs at the next login, outside confinement. Every
+  live run in this phase used that setup.
 - Each agent's sign-in folder belongs to one account. The runner refuses a second account on the
   same sign-in folder, and a sign-in folder that holds the Moss data folder. So until each account
   has its own agent sign-in (part 2), a runner serves one account.
@@ -82,13 +88,19 @@ Each agent is a native binary the person installs; Moss ships none of them.
   system folder, the shared temporary folder or `/dev` (checked after resolving links).
 - The agent's sign-in folder is writable by that agent, so the runner refuses one that holds the
   data folder or sits in another account's tree, and refuses to give one sign-in folder to two
-  accounts. One consequence matters for part 2. A desktop install keeps its data folder in the
-  person's home, so the person's real home cannot be the sign-in folder there. Each account needs
-  its own sign-in folder under its account tree.
+  accounts. These checks are per runner process. Two runners, one per account, could each be
+  given the same sign-in folder. One runner per account is the model until part 2, so part 2's
+  per-account sign-in folders close this.
+- The runner refuses a sign-in folder that is or holds the person's own home, or that sits in
+  their config, data or agent folders (the folders where a planted file would later run outside
+  confinement). The config setting `person_home` lifts this for testing, and the runner then logs
+  a warning that confinement is no boundary for that launch.
 - The agent's permission rules see its real home, as in the TypeScript chat. A request to read
   anything there, such as the agent's own sign-in token, is refused, not offered as a card.
 - Only the device nodes agents need are writable. All of `/dev` would include `/dev/shm`, a
-  shared folder every account could pass files through.
+  shared folder every account could pass files through. The terminal devices are left out too,
+  because they open every terminal session of the same OS user. New pseudo-terminals can still be
+  made. Whether Codex's shell commands need more than that is not checked.
 - With no approval waiting (between turns), any permission ask is refused.
 - When an agent fails, the app gets a fixed message. The agent's error output, with tokens
   masked, stays in the runner's log.
@@ -99,8 +111,13 @@ Each agent is a native binary the person installs; Moss ships none of them.
 
 Measured with `rust-spike/agents/proof/containment.sh`. Alice's confined shell tries each item
 under the exact rules the runner gives alice's agent (printed by the `launch-rules` example). The
-same probes run unconfined first as the control. Landlock ABI 4, kernel 6.8. A `sleep` process
-holding a planted secret in its environment stands in for the Moss process.
+same probes run unconfined first as the control. Landlock ABI 4, kernel 6.8. Stand-ins are used
+for three things. A `sleep` process holding a planted secret in its environment plays the Moss
+process. A planted file plays bob's tool-gateway secret; no real gateway runs. A pseudo-terminal
+started by the script plays another login session.
+
+The table is for a sign-in folder inside alice's account tree. That is the setup confinement is
+designed for, but no agent can sign in from it yet (see Summary).
 
 | Attempt by alice's agent                        | Unconfined (control)            | Confined    |
 | ----------------------------------------------- | ------------------------------- | ----------- |
@@ -115,13 +132,24 @@ holding a planted secret in its environment stands in for the Moss process.
 | Read the Moss process's memory                  | blocked (kernel ptrace setting) | blocked     |
 | Read another program's command line             | reached                         | **reached** |
 | Talk to the key store over the session bus      | reached                         | **reached** |
+| Open another session's terminal                 | reached                         | blocked     |
 | Write its own folder and `/dev/null` (expected) | reached                         | reached     |
 
-Two more checks went through the real agent and the plain shell:
+With the person's own home as the sign-in folder (the script's `person-home` mode), every row
+above reads the same. The difference is what the writable sign-in folder is. Alice's agent wrote
+a user service file there, and in a real home that file would run at the next login with no
+confinement, able to reach everything in the table. So in that setup confinement is no boundary.
+
+Three more checks went through the real agent and the plain shell:
 
 - Through Claude: alice's agent was asked to read bob's file. The approval was answered yes, the
   command ran, and the result was "Permission denied".
 - The runner refuses a chat for an account it has no agent for.
+- Without the `person_home` setting, the runner refused to start Claude from the person's home.
+
+Connecting to bob's gateway socket without the secret is not probed, because no real gateway runs
+in the script. The argument rests on the gateway code, which closes a connection that does not
+present the secret first.
 
 Memory reads were already blocked by the kernel's ptrace setting on this machine (level 1), so
 that row does not prove Landlock. On a machine with that setting at 0, only Landlock's own ptrace
@@ -154,7 +182,9 @@ confinement is unproven.
 
 ## The shared-install notice
 
-Proposed text for Linux, using only the results above:
+Proposed text for Linux, using only the results above. It is true only once each account signs
+its agent in from its own folder (part 2). Until then the notice must say agents are not confined
+from the rest of this computer.
 
 > Everyone on this Moss runs under the same user on this computer. Moss keeps each person's notes,
 > chats and connections private inside the app. But someone who can sign in to this computer may be
@@ -218,9 +248,10 @@ and Food are not touched.
 Kept in the task's scratch folder, not the repo, because the logs hold local paths:
 
 - Kill gate runs for each agent, with process trees and tool calls.
-- The runner with confined Claude calling a Moss tool, run again after the review fixes (the
-  gateway secret now comes from a file, under the narrowed device rules).
-- The containment table above, control and confined.
+- The runner with confined Claude calling a Moss tool, run again on the final build. It used the
+  person's own home with the `person_home` setting, and logged that confinement is no boundary. A
+  run without the setting was refused.
+- The containment table above, control and confined, in both sign-in setups.
 - The agent negative control (asked to read bob's file, got "Permission denied").
 - The drawer run. A message through `moss-shell serve --runner` asked for the `current_time`
   tool, and the reply quoted the time the tool returned. A second message asked for a shell
@@ -229,8 +260,9 @@ Kept in the task's scratch folder, not the repo, because the logs hold local pat
 
 Builds and tests:
 
-- `cargo test` in `rust-spike/agents`: 22 pass. These cover account names, the clean launch
-  environment, own-folders-only, the refused data folders, the sign-in folder checks, the gateway
+- `cargo test` in `rust-spike/agents`: 24 pass. These cover account names, the clean launch
+  environment, own-folders-only, the refused data folders, the sign-in folder checks (including
+  the person's home), the gateway
   secret staying out of names and launch settings, the agent-home refusal, redaction, the route
   rules, and the terminal (echo, resize, clean environment).
 - `cargo build -p moss-shell`: builds clean.
@@ -240,6 +272,8 @@ Builds and tests:
 ## Not proven
 
 - Chat on macOS and Windows, and any confinement there.
+- Confinement in any setup an agent can actually run in. Live runs use the person's home as the
+  sign-in folder, where confinement is no boundary.
 - The key store and other programs' command lines are reachable from a confined agent on Linux.
 - Several accounts on one runner. The runner serves one configured account until each account
   has its own sign-in folder.
@@ -252,6 +286,9 @@ Builds and tests:
 - Sign-in, trusted origins and https for the drawer.
 - Agent sign-in through the terminal layer. The terminal works; no sign-in flow uses it yet.
 - The runner as a long-running service that restarts on failure.
+- A connection to another account's gateway socket without the secret (argued from code, not
+  probed).
+- Whether Codex's shell commands work without the terminal devices.
 - The real Moss tool list. The runner offers one built-in tool.
 
 ## Part 2 (second task)
