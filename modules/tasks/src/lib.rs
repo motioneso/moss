@@ -7,6 +7,11 @@ pub mod routes;
 pub mod rows;
 pub mod task_fields;
 pub mod tasks;
+pub mod tools;
+pub mod validation;
+
+pub mod schema;
+pub mod schemas;
 
 #[cfg(target_arch = "wasm32")]
 mod component;
@@ -22,6 +27,12 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
         "route" => {
             let request = serde_json::from_str(payload)?;
             Ok(serde_json::to_string(&routes::handle(host, request))?)
+        }
+        "tool" => {
+            let request = serde_json::from_str(payload)?;
+            let result = tools::handle(host, request)
+                .map_err(|_| moss_module_sdk::Error::new("Tasks tool failed"))?;
+            Ok(serde_json::to_string(&result)?)
         }
         _ => Err(moss_module_sdk::Error::new("Unsupported Tasks invocation")),
     }

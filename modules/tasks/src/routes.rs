@@ -7,7 +7,10 @@ use crate::{
 use moss_module_sdk::{Host, Response, RouteRequest};
 use serde_json::{json, Value};
 
-pub fn handle<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
+pub fn handle<H: Host + ?Sized>(host: &H, mut request: RouteRequest) -> Response {
+    if let Err(error) = crate::validation::validate(&mut request) {
+        return error.response();
+    }
     match dispatch(&Repository::new(host), &request) {
         Ok(response) => response,
         Err(error) => error.response(),

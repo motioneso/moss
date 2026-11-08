@@ -1,10 +1,10 @@
 # Rust Phase 5 Tasks — implementation checkpoints
 
-Current status: JS-53, Card 526 is an **approved partial checkpoint for merge**:
+Earlier status: JS-53, Card 526 was an **approved partial checkpoint for merge**:
 a real Rust component and basic routes on the merged data foundation. The user
 approved pushing this slice and opening its PR so Tasks part 4 can continue.
-**Full Phase 5 Tasks parity remains unfinished.** The final section records the
-verified checkpoint and the exact continuation work. Earlier
+**Full Phase 5 Tasks parity remains unfinished.** The final sections record the
+verified checkpoints and the exact continuation work. Earlier
 sections preserve the evidence and limits of their respective checkpoints.
 
 ## Earlier shared-host checkpoint (JS-46)
@@ -477,3 +477,129 @@ The component build, manifest and database tests are reproducible from
 `modules/tasks/README.md`. Keep the existing approved generator pins and the
 WASI-free build. Full parity, signed installation and live remote UI proof remain
 acceptance gates for the continuation, not claims made by this partial PR.
+
+## Tasks part 4 checkpoint (JS-56, Card 526)
+
+This is another **partial checkpoint**, using the brief's explicit instruction to
+save a clean PR when the remaining work would exceed one further compaction.
+Full Tasks replacement remains unfinished. This slice does not add a Tasks page
+or claim HTTPS, signed registry installation, or second-device proof.
+
+### What changed
+
+The guest now runs the existing route request schemas before data effects,
+including Fastify-compatible coercion, enum/range checks, required properties,
+unknown-property removal and error wording. The pure schema implementation was
+ported from the Phase 0b spike into the package's own source folder; the guest
+does not import the native spike or host implementation. The same validation
+runs for direct component route invocations.
+
+Four existing read tools now run in the component: `tasks.get`,
+`tasks.listLists`, `tasks.listTags`, and `tasks.activity`. Task details include
+tags, subtasks and the last ten activity records. The tool manifest marks each
+as a read and the app-map feature describes this limited set. There is no new
+navigation entry. The tests call the actual guest using host-supplied actors;
+chat discovery, presentation and the installed host's approval flow are not
+proved by direct tool invocation.
+
+The new disposable HTTP adapter authenticates with the existing safety core and
+runs declared task routes through Wasmtime and host-owned database transactions.
+It has no native Tasks repository fallback. Its HTTP parser and the unchanged
+language-neutral differential harness are reused from Phase 0b. Both binaries
+are built by the package verification crate. The adapter is test infrastructure,
+not the production shell or an installed signed package. It pre-validates HTTP
+bodies before authentication, matching Fastify's order; differential validation
+cases therefore do not independently prove guest validation. The direct
+component and native contract tests cover that boundary. Its listener is
+loopback-only, and its script claims and releases both ports through `devports`.
+
+The handoff's suggested extra HTTP list filters were checked against current
+`packages/tasks/src/routes.ts`: HTTP listing forwards only tag and quadrant.
+List, status, priority, due bounds and completion bounds are criteria for the
+`tasks.list` chat tool. Adding them to HTTP would change current behavior; they
+remain required for the unported tool.
+
+No original migration changes, new tool versions, global installs, production
+data changes, or Workshop/Food work are included. Locked dependencies and the
+already provisioned compiler target are used from scratch storage. The new
+host-side direct dependencies already exist in the project; their locked
+versions are unchanged.
+
+### Verification
+
+The native contract regression failed before validation was added: the component
+handler returned `title is required` instead of the source schema's
+`body must have required property 'title'`. After the change, that exact assertion
+and the other invalid-request cases pass. Native checks pass: eight unit tests,
+one contract test and three row/response tests. Strict guest and host-tools
+clippy passes, as do six HTTP parser tests and two metadata/migration checks.
+
+The disposable database gate passed: two compiled-component/package checks,
+six Tasks database checks, and all 29 legacy Tasks integration tests. The new
+tool check covers owner results, cross-account and admin denial, numeric-title
+coercion, tags, and the activity window. Its exact cross-account read assertion
+was observed failing with Tasks RLS removed, then passing after restoration.
+Existing compiled route read/write removal controls also still pass.
+
+The unchanged endpoint differential harness ran against the actual component:
+**61 of 77 cases passed; 16 failed**, and the gate correctly exited nonzero.
+This is a baseline for the continuation, not full parity or a completion score:
+the case set also includes safety-core cases. The failures are:
+
+- One deferred-status/job case: the route and queue are absent.
+- Seven list-deletion cases: the route and reassignment behavior are absent.
+- Seven focus, at-risk, overdue and timezone cases: unfinished static paths
+  currently fall through to the generic task-ID route and return a host error.
+- One recurrence-update expectation: the harness's raw subset assertion rejects
+  the numeric representation `2.0` versus `2`, although its canonical comparison
+  reports no value difference. Keep the failing result visible until resolved.
+
+The adapter does not test tool discovery or approval. The unchanged harness
+does not exercise the four new tools, both queue kinds or every missing route.
+Compiled tool fixtures are separate evidence and do not replace those parity
+cases. `report.json` and both server logs remain outside the public repository.
+The checkpoint PR and proof artifact carry the final static-check and fresh
+review receipts. Database gates are repeated on committed inputs before Ready;
+earlier dirty-tree receipts are not reused as final-commit verification.
+
+Fresh review found a missing tool-service capability. A new boundary test first
+failed with `moss:module/tools@1.0.0` refused as undeclared. The manifest now
+declares `offer` and `run` for exactly the four read tools. The same test uses a
+labeled sample trampoline through the actual host service to verify offers,
+permission summaries, approval denial and one-use approval consumption. It
+stops at the unbound installer after approval: installed dispatch and real
+assistant tool discovery remain unproved, rather than being inferred from
+these service checks. The database gate now also runs this service-boundary
+test and both metadata checks alongside the existing component checks.
+
+The review's lower-severity limits remain explicit. The current host's `Tool`
+metadata cannot express the legacy `tasks.view` permission, `content: outside`
+prompt-injection classification, background-read authorizers or output schemas.
+Port these through public host contracts before enabling assistant integration;
+read-result fixtures are not policy parity. Guest tool errors remain deliberately
+generic because the SDK lacks a typed safe tool-error contract. The copied pure
+schemas are package-owned, not linked to the native spike; their duplication
+must be reconciled or checked when the source request contract changes.
+
+### Remaining acceptance work
+
+All nine missing HTTP endpoints listed above remain absent. Preserve lazy
+recurrence, local-day/date behavior, suggestion/triage feedback, duplicate-name
+conflict behavior under concurrency, and all existing response contracts while
+porting them. The core SDK has no actor-timezone or transaction-lock operation;
+these joins need explicit public contracts rather than guest SQL or reads from
+other modules' tables.
+
+Nineteen tools remain: `tasks.summary`, `tasks.list`, `tasks.heartbeatWindow`,
+`tasks.focus`, `tasks.atRisk`, `tasks.overdue`, `tasks.create`, `tasks.update`,
+`tasks.updateStatus`, `tasks.breakDown`, `tasks.addActivity`, `tasks.assignTag`,
+`tasks.unassignTag`, `tasks.createList`, `tasks.renameList`, `tasks.createTag`,
+`tasks.renameTag`, `tasks.deleteList`, and `tasks.deleteTag`. Their policies,
+action presentation, chat targets, visual summaries, heartbeat/monitor and
+suggestion feedback remain part of parity.
+
+Both typed queues, schedule reconciliation, People/public core APIs, all Tasks
+screens and settings, signed registry installation, speed-budget measurements,
+full differential green, and live Rust-shell HTTPS UI proof from a second
+physical device remain unfinished. A passing component test or HTTP fixture is
+not that UI/device evidence. The manifest and README continue to say so.

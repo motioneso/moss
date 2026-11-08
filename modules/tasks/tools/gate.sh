@@ -9,5 +9,5 @@ tasks_build_dir="$(mktemp -d "${TMPDIR:-/tmp}/moss-tasks-component.XXXXXX")"
 trap 'rm -rf "$tasks_build_dir"' EXIT
 modules/tasks/tools/build-component.sh "$tasks_build_dir/module.wasm"
 export TASKS_COMPONENT="$tasks_build_dir/module.wasm"
-cargo +1.95.0 test --locked --offline --manifest-path modules/tasks/tools/Cargo.toml --test component
+cargo +1.95.0 test --locked --offline --manifest-path modules/tasks/tools/Cargo.toml --test component --test metadata --test tool_services
 pnpm exec tsx modules/tasks/tools/gate.ts

@@ -1381,13 +1381,18 @@ version = "0.1.0"
 dependencies = [
  "access-context",
  "anyhow",
+ "axum",
+ "chrono",
  "moss-module-host",
  "moss-module-sdk",
  "moss-tasks-module",
+ "reqwest",
  "safety-core",
+ "serde",
  "serde_json",
  "tokio",
  "tokio-postgres",
+ "url",
  "uuid",
  "wat",
 ]

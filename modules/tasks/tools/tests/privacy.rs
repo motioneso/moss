@@ -224,6 +224,17 @@ impl Fixture {
     fn route(&self, actor: Uuid, method: &str, path: &str, body: Value) -> Value {
         self.try_route(actor, method, path, body).unwrap()
     }
+    fn tool(&self, actor: Uuid, name: &str, parameters: Value) -> Result<Value> {
+        let value = self.host.call(
+            &self.wasm,
+            self.manifest.clone(),
+            AccessContext::new(actor, "component-tool"),
+            self.ports.clone(),
+            "tool",
+            &json!({"tool":name,"parameters":parameters}).to_string(),
+        )?;
+        Ok(serde_json::from_str(&value)?)
+    }
     fn try_route(&self, actor: Uuid, method: &str, path: &str, body: Value) -> Result<Value> {
         let mut request = moss_module_host::dispatch::resolve(&self.manifest.routes, method, path)?;
         request.body = body;
@@ -269,6 +280,105 @@ impl Fixture {
         self.private_read(actor);
         self.private_write(actor);
     }
+}
+
+#[test]
+#[ignore = "Database work only through modules/tasks/tools/gate.sh and verify-gate"]
+fn compiled_read_tools_keep_actor_scope_and_legacy_result_shapes() {
+    let f = Fixture::open_with(true);
+    let list = f.route(f.owner, "POST", "/tasks/lists", json!({"name":"Tool list"}));
+    let list = list["body"]["list"]["id"].as_str().unwrap();
+    let task = f.route(
+        f.owner,
+        "POST",
+        "/tasks",
+        json!({"title":123,"listId":list}),
+    );
+    assert_eq!(
+        task["status"], 201,
+        "schema coerces numeric titles before handler parsing"
+    );
+    assert_eq!(task["body"]["task"]["title"], "123");
+    let id = task["body"]["task"]["id"].as_str().unwrap();
+    let tag = f.route(
+        f.owner,
+        "POST",
+        &format!("/tasks/lists/{list}/tags"),
+        json!({"name":"tool tag"}),
+    );
+    let tag = tag["body"]["tag"]["id"].as_str().unwrap();
+    f.route(
+        f.owner,
+        "POST",
+        &format!("/tasks/{id}/tags"),
+        json!({"tagId":tag}),
+    );
+    for i in 0..12 {
+        f.route(
+            f.owner,
+            "POST",
+            &format!("/tasks/{id}/activity"),
+            json!({"body":format!("comment {i}")}),
+        );
+    }
+    let detail = f.tool(f.owner, "tasks.get", json!({"taskId":id})).unwrap();
+    assert_eq!(detail["data"]["task"]["title"], "123");
+    assert_eq!(detail["data"]["task"]["tags"][0]["id"], tag);
+    assert_eq!(detail["data"]["subtasks"], json!([]));
+    assert_eq!(detail["data"]["activity"].as_array().unwrap().len(), 10);
+    assert_eq!(detail["data"]["activity"][0]["body"], "comment 2");
+    assert_eq!(detail["data"]["activity"][9]["body"], "comment 11");
+    assert_eq!(
+        f.tool(f.owner, "tasks.listLists", json!({})).unwrap()["data"]["items"][0]["id"],
+        list
+    );
+    assert_eq!(
+        f.tool(f.owner, "tasks.listTags", json!({"listId":list}))
+            .unwrap()["data"]["items"][0]["id"],
+        tag
+    );
+    assert_eq!(
+        f.tool(f.owner, "tasks.activity", json!({"taskId":id}))
+            .unwrap()["data"]["items"]
+            .as_array()
+            .unwrap()
+            .len(),
+        12
+    );
+    for actor in [f.other, f.admin] {
+        assert_eq!(
+            f.tool(actor, "tasks.get", json!({"taskId":id})).unwrap(),
+            json!({"data":{"error":"Task not found"}})
+        );
+        for (name, params) in [
+            ("tasks.listLists", json!({})),
+            ("tasks.listTags", json!({"listId":list})),
+            ("tasks.activity", json!({"taskId":id})),
+        ] {
+            assert_eq!(
+                f.tool(actor, name, params).unwrap(),
+                json!({"data":{"items":[]}})
+            );
+        }
+    }
+    assert!(f.tool(f.owner, "tasks.get", json!({})).is_err());
+    assert!(f.tool(f.owner, "tasks.unknown", json!({})).is_err());
+    let private_read = || {
+        assert_eq!(
+            f.tool(f.other, "tasks.get", json!({"taskId":id})).unwrap(),
+            json!({"data":{"error":"Task not found"}}),
+            "compiled Tasks read tool must hide another account's task"
+        );
+    };
+    f.sql("ALTER TABLE app.tasks DISABLE ROW LEVEL SECURITY");
+    let failed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(private_read)).is_err();
+    f.sql("ALTER TABLE app.tasks ENABLE ROW LEVEL SECURITY; ALTER TABLE app.tasks FORCE ROW LEVEL SECURITY");
+    assert!(
+        failed,
+        "the same tool assertion must fail with Tasks RLS removed"
+    );
+    private_read();
+    println!("PASS compiled Tasks tool: identical cross-account read assertion fails with RLS removed, then passes with RLS restored");
 }
 #[test]
 #[ignore = "Database work only through modules/tasks/tools/gate.sh and verify-gate"]
