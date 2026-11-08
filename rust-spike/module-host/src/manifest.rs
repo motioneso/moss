@@ -20,6 +20,7 @@ pub const PORTS: &[&str] = &[
     "attachments",
     "tools",
     "action-policy",
+    "context",
 ];
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
