@@ -1,0 +1,13 @@
+[package]
+name = "moss-platform-contracts"
+version = "0.1.0"
+edition = "2021"
+publish = false
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["serde", "v4", "v5"] }
+
+# Compile the unchanged Phase 2b source; do not fork or modify its workspace.
+[lib]
+path = "../../../platform/contracts/src/lib.rs"

@@ -1,0 +1,42 @@
+[package]
+name = "moss-module-host"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+anyhow = "1"
+access-context = { path = "../access-context" }
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+ring = "0.17"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+semver = { version = "1", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+safety-core = { path = "../safety-core" }
+sqlparser = "0.63"
+tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
+tokio-postgres = { version = "0.7", features = ["with-serde_json-1"] }
+tar = "0.4"
+url = { version = "2", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+vault = { path = "../vault" }
+wasmtime = { version = "38", default-features = false, features = ["component-model", "cranelift", "runtime", "std", "wat"] }
+zstd = "0.13"
+wat = "=1.239.0"
+
+moss-platform-contracts = { path = "bridges/contracts" }
+moss-platform-jobs = { path = "bridges/jobs" }
+moss-platform-routing = { path = "bridges/routing" }
+moss-platform-adapters = { path = "bridges/adapters" }
+async-trait = "0.1"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.dev]
+debug = 0
