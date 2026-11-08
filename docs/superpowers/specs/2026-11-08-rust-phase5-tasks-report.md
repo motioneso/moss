@@ -507,7 +507,10 @@ runs declared task routes through Wasmtime and host-owned database transactions.
 It has no native Tasks repository fallback. Its HTTP parser and the unchanged
 language-neutral differential harness are reused from Phase 0b. Both binaries
 are built by the package verification crate. The adapter is test infrastructure,
-not the production shell or an installed signed package. Its listener is
+not the production shell or an installed signed package. It pre-validates HTTP
+bodies before authentication, matching Fastify's order; differential validation
+cases therefore do not independently prove guest validation. The direct
+component and native contract tests cover that boundary. Its listener is
 loopback-only, and its script claims and releases both ports through `devports`.
 
 The handoff's suggested extra HTTP list filters were checked against current
@@ -558,6 +561,25 @@ cases. `report.json` and both server logs remain outside the public repository.
 The checkpoint PR and proof artifact carry the final static-check and fresh
 review receipts. Database gates are repeated on committed inputs before Ready;
 earlier dirty-tree receipts are not reused as final-commit verification.
+
+Fresh review found a missing tool-service capability. A new boundary test first
+failed with `moss:module/tools@1.0.0` refused as undeclared. The manifest now
+declares `offer` and `run` for exactly the four read tools. The same test uses a
+labeled sample trampoline through the actual host service to verify offers,
+permission summaries, approval denial and one-use approval consumption. It
+stops at the unbound installer after approval: installed dispatch and real
+assistant tool discovery remain unproved, rather than being inferred from
+these service checks. The database gate now also runs this service-boundary
+test and both metadata checks alongside the existing component checks.
+
+The review's lower-severity limits remain explicit. The current host's `Tool`
+metadata cannot express the legacy `tasks.view` permission, `content: outside`
+prompt-injection classification, background-read authorizers or output schemas.
+Port these through public host contracts before enabling assistant integration;
+read-result fixtures are not policy parity. Guest tool errors remain deliberately
+generic because the SDK lacks a typed safe tool-error contract. The copied pure
+schemas are package-owned, not linked to the native spike; their duplication
+must be reconciled or checked when the source request contract changes.
 
 ### Remaining acceptance work
 

@@ -24,6 +24,11 @@
       "port": "context",
       "operations": ["read", "uuid"],
       "resources": ["call", "new"]
+    },
+    {
+      "port": "tools",
+      "operations": ["offer", "run"],
+      "resources": ["tasks.get", "tasks.listLists", "tasks.listTags", "tasks.activity"]
     }
   ],
   "database": {

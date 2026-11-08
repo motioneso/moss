@@ -24,6 +24,7 @@ to your task's scratch directories if needed):
 cargo +1.95.0 test --locked --offline --manifest-path modules/tasks/src/Cargo.toml
 modules/tasks/tools/build-component.sh /tmp/tasks-component.wasm
 TASKS_COMPONENT=/tmp/tasks-component.wasm cargo +1.95.0 test --locked --offline --manifest-path modules/tasks/tools/Cargo.toml --test component --test metadata
+cargo +1.95.0 test --locked --offline --manifest-path modules/tasks/tools/Cargo.toml --test tool_services
 cargo +1.95.0 run --locked --offline --manifest-path modules/tasks/tools/Cargo.toml --bin tasks-pack -- /tmp/tasks-component.wasm /tmp/tasks.mosspkg
 cargo +1.95.0 build --locked --offline --manifest-path modules/tasks/tools/Cargo.toml --bin tasks-domain-check
 JS51_DOMAIN_BIN=modules/tasks/tools/target/debug/tasks-domain-check pnpm exec tsx modules/tasks/tools/recurrence-parity.ts
@@ -32,6 +33,10 @@ JS51_DOMAIN_BIN=modules/tasks/tools/target/debug/tasks-domain-check pnpm exec ts
 When using `CARGO_TARGET_DIR`, point `JS51_DOMAIN_BIN` at that directory's
 `debug/tasks-domain-check` instead. The archive is reproducible and unsigned;
 registry trust, signing, installation and publication are separate checks.
+The tool-service test uses an explicitly labeled sample port trampoline to check
+the real host's offers, install-permission descriptions and one-use account
+approval guard. It stops at the unbound installer after approval; actual installed
+tool dispatch is not proved. Compiled tool result checks remain in the database gate.
 All nine SQL files come from the original `packages/tasks/sql/` and are checked
 against the host's frozen migration hashes. No migration bytes or ledger change.
 
