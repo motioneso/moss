@@ -273,9 +273,16 @@ impl Manifest {
                     && crate::legacy::has_ledger(&self.id, &Ledger::CoreLegacy)),
             "Only compiled first-party modules can use the historical core ledger"
         );
-        let mut last = 0_u64;
+        let mut last = (0_u64, "");
         for path in &self.database.migrations {
-            let number = crate::legacy::version(path)?.parse::<u64>()?;
+            let version = crate::legacy::version(path)?;
+            ensure!(
+                version.bytes().all(|b| b.is_ascii_digit())
+                    || crate::legacy::entry(&self.id, path)
+                        .is_some_and(|f| f.ledger == self.database.ledger),
+                "Only frozen migrations may retain a historical suffix"
+            );
+            let number = crate::legacy::order(path)?;
             ensure!(
                 number > last,
                 "Migrations must be unique and in forward numeric order"

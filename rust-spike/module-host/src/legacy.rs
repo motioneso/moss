@@ -61,10 +61,21 @@ pub fn version(path: &str) -> Result<&str> {
         .context("Invalid migration path")?;
     let version = name.split('_').next().unwrap_or("");
     ensure!(
-        !version.is_empty() && version.bytes().all(|b| b.is_ascii_digit()),
+        !version.is_empty()
+            && (version.bytes().all(|b| b.is_ascii_digit())
+                || inventory().files.iter().any(|f| f.path == path)),
         "Migrations need a numeric prefix"
     );
     Ok(version)
+}
+/// Numeric order with a frozen legacy suffix (0229 < 0229a < 0230).
+/// Manifest validation additionally binds suffixes to the owning release inventory.
+pub fn order(path: &str) -> Result<(u64, &str)> {
+    let version = version(path)?;
+    let split = version
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(version.len());
+    Ok((version[..split].parse()?, &version[split..]))
 }
 pub async fn applied(
     tx: &tokio_postgres::Transaction<'_>,

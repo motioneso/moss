@@ -13,6 +13,11 @@ for parent,ledger in [('packages','core-legacy'),('external-modules','module-leg
             text=source.read_text()
             match=re.search(r'ownedTables["\s]*:\s*\[([^]]*)\]',text,re.S)
             if match: tables+=re.findall(r'["\'](app\.[a-z0-9_]+)["\']',match[1])
+        # The original manifest predates the Calendar-owned day-plan aggregate.
+        # Freeze these reviewed identities explicitly; do not infer arbitrary SQL ownership.
+        if module.name == 'calendar':
+            tables += ['app.day_plans', 'app.day_plan_blocks',
+                       'app.day_plan_operations', 'app.day_plan_operation_items']
         ownership[module.name]=sorted(set(tables))
         for path in sorted((module/'sql').glob('*.sql')):
             data=path.read_bytes(); raw=hashlib.sha256(data).hexdigest()
