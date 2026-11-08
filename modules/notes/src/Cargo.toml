@@ -3,15 +3,30 @@ name = "moss-notes"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Guest-safe Notes domain operations; host integration follows in part two"
+description = "Guest-safe Notes module and domain operations"
 
 [workspace]
 
 [lib]
 path = "lib.rs"
+crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 uuid = "1"
+moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen = { version = "=0.57.1", default-features = false, features = ["macros", "realloc"] }
+
+[profile.release]
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[[test]]
+name = "export"
+path = "tests/export.rs"

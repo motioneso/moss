@@ -1,6 +1,11 @@
-//! Pure Notes operations. No filesystem, database, runtime or other module internals.
+//! Notes guest. Domain operations are pure; host access uses only the module SDK.
 pub mod blocks;
+pub mod export;
+pub mod guest;
 pub mod identity;
+
+#[cfg(target_arch = "wasm32")]
+mod component;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Error(pub String);
