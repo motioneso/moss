@@ -221,8 +221,8 @@ The next task must not close full People parity until steps one through seven ar
 
 The continuation starts from merged shared-host checkpoint `1ff33decd` (PR 4044).
 Its report is `2026-11-08-rust-phase5-tasks-report.md`; there is no separate Phase 4c
-report at this baseline. The generic Notes adapter has not merged at this baseline.
-People will consume it rather than duplicate its filesystem implementation. People
+report at this baseline. The generic Notes adapter was absent at that baseline. Its merged foundation from
+PR 4047 is now consumed unchanged; People does not duplicate its filesystem implementation. People
 preferences remain in `app.preferences`.
 
 The frontmatter gap above now has eighteen additional differential fixtures for
@@ -286,8 +286,7 @@ its actual Settings pane. Existing People declarations are not evidence of a Rus
 
 1. The repository consumes the shared query/context contracts. The compiled guest now uses
    the handwritten `Host::call` ABI described below; the required `wasm32-wasip2` build is
-   still open. Consume JS-47's generic linked-notes
-   adapter after merge; do not duplicate it. No generator package is authorized.
+   still open. JS-47's merged generic linked-notes adapter is now consumed below. No generator package is authorized.
 2. Native identity/link mutations, match review and merge/split now have the differential
    checkpoint below. Register them through actual handlers, complete indexing response
    mapping and prove the remaining error/edge cases. `findPeopleByNames` runs in the
@@ -295,9 +294,9 @@ its actual Settings pane. Existing People declarations are not evidence of a Rus
    an atomic conflict update and a concurrent-call regression. Multi-page reads use the host's read-committed transaction;
    a stable snapshot under concurrent changes remains unproven. Register responses/errors
    through actual handlers and complete indexing response mapping.
-3. Integrate canonical note mutations with fresh reads, bounded host roots, canonical-ID
-   rechecks, compare-write/delete, conflict-safe compensation and ingest nudges. Existing
-   pure decision tests do not prove the linked-notes integration.
+3. The canonical-note service now consumes the merged adapter as described below. Complete
+   the legacy rename/archive projection fallback, safe HTTP errors and actual ingest nudges.
+   The service checkpoint does not prove crash recovery or unlimited-folder parity.
 4. Connect all seven tools and both job kinds to real host dispatch. Verify approval blocks,
    metadata-only payloads, retries, source versions, cooldown, repeated indexing and delay.
 5. Complete the shipping component build, installable package and shared-frame Settings pane; retain preferences
@@ -381,3 +380,49 @@ responses and persisted rows, concurrent projections, rollback, forged IDs, pagi
 failing-first raw RLS matrix. It does not prove installed public API routing, tools/jobs,
 linked-note operations, a package or a live Settings/chat/device path. No screen or setting
 ships at this checkpoint, so no app-map surface has been added yet.
+
+### Linked canonical-note service checkpoint
+
+People now consumes the merged Notes foundation from PR 4047 through its public host
+contract. Trusted composition maps `people-notes` to the unchanged `people-notes-folder`
+account preference, with legacy relative folders resolved against `notes-source-path`.
+Allowed roots remain trusted account configuration. No preference moved to module storage.
+The guest performs no filesystem I/O.
+
+Create, update, archive and refresh use fresh host reads, canonical-ID checks, occupied-file
+checks and compare-write. Projections and note alias/email identities use the existing legacy
+tables in the same invocation. Phones remain note text, matching the old service. Refresh
+retains malformed-note counts, missing/duplicate-ID review and missing-canonical-note review.
+Guest scans refuse more than two thousand entries or four MiB of text rather than returning
+partial projections. These additional bounds remain a compatibility limit, not a claim of
+unlimited-folder parity.
+
+The first compiled-note check failed on create with the old guest. The initial follow-up
+also loaded the old artifact because the component wrapper was still compiling; that result
+is not a verification of the new implementation. Subsequent checks wait for build completion
+and record the actual component hash. The new guest imports the generic vault port, so its
+read-only fixture manifests now declare that import too; their read tests still connect no
+filesystem service.
+
+The new integration check uses the compiled guest, merged adapter, real `app.preferences`
+and legacy database tables. It compares canonical create/update/archive responses and note
+bytes with the actual TypeScript `PeopleNotesService` running through `VaultContext` in a
+rollback-only oracle. Fault controls interleave a real external edit and force a failure
+after actual file publication. A separate fault interrupts after projection and
+note-identity deletion; its first test implementation incorrectly stopped before projection
+and left the fault armed for refresh. The corrected run reaches the intended later failure.
+The test also attempts projection using another owner's
+real person ID after publication. Expected behavior is to restore unchanged originals, retain
+external edits, reject the foreign projection and leave database state unchanged. These are
+file compensation checks, never a distributed transaction or process-crash recovery claim.
+The compiled note workflow passed in the corrected disposable database run, including
+the real TypeScript response/byte comparisons and both publication and projection failures.
+The merged adapter's own failing-first preference tests are included in the People gate.
+
+Partial route entry points exercise this service; they are not installed HTTP dispatch.
+The old rename/archive fallback to projection-only changes when canonical notes are
+missing/unavailable, safe HTTP status/error mapping and actual ingest nudges still need
+implementation. The adapter's read-only-folder limitation, external-editor races and lack of
+crash reconciliation remain as documented in `modules/notes/HOST_ADAPTER.md`. Package,
+Settings, tools/jobs, app-map surfaces, full HTTP parity and actual UI/device proof remain
+open. **Do not mark JS-50 Ready on this checkpoint.**

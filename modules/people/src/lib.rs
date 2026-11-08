@@ -4,9 +4,11 @@ pub mod matching;
 mod name_lookup;
 pub mod note_edits;
 pub mod notes_format;
+pub mod notes_service;
 pub mod repository;
 pub mod repository_mutations;
 mod review;
+mod routes;
 
 #[cfg(all(feature = "component", target_arch = "wasm32"))]
 moss_module_sdk::export_module!(
@@ -14,6 +16,7 @@ moss_module_sdk::export_module!(
     [
         moss_module_sdk::component::ports::DB,
         moss_module_sdk::component::ports::CONTEXT,
+        moss_module_sdk::component::ports::VAULT,
     ]
 );
 

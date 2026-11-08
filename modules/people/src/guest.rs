@@ -1,4 +1,4 @@
-//! Package entry point. Only completed read APIs are enabled at this checkpoint.
+//! Compiled People entry point. Shipping routes, tools, jobs and UI remain incomplete.
 use crate::repository::Repository;
 use moss_module_sdk::{Error, Host, Result};
 use serde::Deserialize;
@@ -32,6 +32,9 @@ struct Names {
 pub fn handle(host: &impl Host, kind: &str, payload: &str) -> Result<String> {
     if kind == "health" {
         return Ok("healthy".into());
+    }
+    if kind == "route" {
+        return crate::routes::handle(host, payload);
     }
     if kind != "api" {
         return Err(Error::new("People handler is not available"));

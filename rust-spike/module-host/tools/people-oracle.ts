@@ -9,6 +9,7 @@ import { createDatabase, DataContextRunner, getMossDatabaseUrls } from "@moss/db
 import { PeopleRepository } from "../../../packages/people/src/repository.js";
 import { PersonContextService } from "../../../packages/people/src/service.js";
 import { findPeopleByNames } from "../../../packages/people/src/find-by-names.js";
+import { notesOracle } from "./people-notes-oracle.js";
 import { mutationOracle } from "./people-mutation-oracle.js";
 
 export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise<void> }> {
@@ -201,10 +202,12 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
     ).rows[0] as { row: unknown };
     await bootstrap.query("DELETE FROM app.person_context_people WHERE id=$1", [projectionId]);
     let mutation: unknown;
+    let notes: unknown;
     const rollback = new Error("Roll back the TypeScript mutation oracle");
     try {
       await runner.withDataContext({ actorUserId: actor }, async (scope) => {
         mutation = await mutationOracle(scope, actor);
+        notes = await notesOracle(scope, actor);
         throw rollback;
       });
     } catch (error) {
@@ -221,7 +224,8 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
         projection,
         projectionRow: projectionRow.row,
         projectionId,
-        mutation
+        mutation,
+        notes
       })
     );
     return { path, cleanup };

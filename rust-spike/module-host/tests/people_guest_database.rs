@@ -55,6 +55,17 @@ fn compiled_people_read_apis_match_typescript_on_real_database() {
             resources: ["call".into()].into(),
             allow_private: false,
         },
+        Capability {
+            port: "vault".into(),
+            operations: [
+                "notes.read".into(),
+                "notes.list".into(),
+                "notes.compare-write".into(),
+            ]
+            .into(),
+            resources: ["people-notes".into()].into(),
+            allow_private: false,
+        },
     ];
     let manifest = Arc::new(manifest);
     let host = Host::new(Limits::default()).unwrap();

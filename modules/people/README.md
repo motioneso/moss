@@ -1,7 +1,7 @@
 # People & Context
 
 The Rust checkpoint contains the pure People core, canonical-note decisions, TypeScript
-differential fixtures and a partial SDK-backed native repository. It is not yet an
+differential fixtures an SDK-backed repository and canonical-note service. It is not yet an
 installable package or a working Rust People screen.
 The [delivery report](../../docs/superpowers/specs/2026-11-08-rust-phase5-people-report.md)
 records the approved slice and exact continuation plan for part two.
@@ -10,7 +10,7 @@ The crate lives in `src/`, as required by section 7 of the module package spec. 
 consumes the merged shared SDK's query and context ports. The host supplies the actor and
 invocation transaction; the repository has no database connection or filesystem access.
 No component binding generator has been added. The handwritten SDK canonical ABI and host
-wrapper now run a compiled Rust People guest, with its completed read APIs. Older handwritten
+wrapper now run a compiled Rust People guest, with its completed read APIs and partial note route wiring. Older handwritten
 fixtures still exercise a native test driver; those are separate persistence evidence.
 
 From `~/Jarv1s`:
@@ -46,7 +46,23 @@ JS50_PEOPLE_COMPONENT=/tmp/moss-people-component.wasm CARGO_BUILD_JOBS=2 CARGO_T
 scripts/run-gate.sh wait --follow
 ```
 
-The TypeScript oracle checks native responses and persisted projection rows with the parity
-harness's normalization. This is not the full HTTP parity suite. Full mutation services,
-linked-notes integration, package installation and authenticated UI/chat/device checks remain
+The TypeScript oracles check native mutation responses and persisted rows, compiled read
+responses, and canonical-note service responses and bytes against the existing implementation.
+Generated IDs and timestamps use the parity harness's normalization. This is not the full HTTP parity suite. Complete route/error/fallback compatibility, ingest scheduling, package installation and authenticated UI/chat/device checks remain
 in the report's continuation plan. Preferences still belong to `app.preferences`.
+
+The merged Notes foundation supplies `LinkedNotesPorts`; People does not implement file I/O.
+Trusted composition maps the `people-notes` resource to `people-notes-folder` in
+`app.preferences`, resolving legacy relative values against `notes-source-path`. The guest
+uses its bounded list/read/compare-write contract, rechecks canonical IDs and projects aliases
+and emails through the same invocation's database transaction. Call failure compensates file
+writes only while the published bytes still match. External edits survive compensation;
+process death is not recovered. The host adapter's documented filesystem races and
+read-only-folder gap still apply (see [the adapter contract](../notes/HOST_ADAPTER.md)).
+
+This checkpoint wires create/update/archive/refresh into compiled route handlers only.
+It has no installed HTTP routing or UI. The existing projection fallback for rename/archive
+when canonical notes are missing/unavailable, safe HTTP errors and ingest nudges are still
+continuation work. Scans fail explicitly above two thousand entries or four MiB of text;
+individual files retain the adapter's size bound. This bounded scan is not unlimited-folder
+parity. No People screen or Settings choice is declared as available yet.

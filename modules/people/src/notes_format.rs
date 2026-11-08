@@ -1,7 +1,6 @@
 use crate::js_space;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::OnceLock};
+use std::collections::HashMap;
 
 pub const PEOPLE_MANAGED_START: &str = "<!-- jarvis:people:start -->";
 pub const PEOPLE_MANAGED_END: &str = "<!-- jarvis:people:end -->";
@@ -36,8 +35,6 @@ enum Field {
 }
 
 fn parse_frontmatter(block: &str) -> Option<Frontmatter> {
-    static KEY: OnceLock<Regex> = OnceLock::new();
-    let key = KEY.get_or_init(|| Regex::new(r"^([A-Za-z][A-Za-z0-9]*):(.*)$").unwrap());
     let mut fields = HashMap::<String, Field>::new();
     let mut current_array: Option<String> = None;
     for raw in block.split('\n') {
@@ -55,9 +52,16 @@ fn parse_frontmatter(block: &str) -> Option<Frontmatter> {
                 }
             }
         }
-        let captures = key.captures(line)?;
-        let name = captures.get(1)?.as_str().to_string();
-        let value = captures.get(2)?.as_str().trim_matches(js_space);
+        // Match the legacy ASCII key grammar without initializing a regex engine
+        // inside every fresh Wasm invocation.
+        let (name, value) = line.split_once(':')?;
+        if !name.as_bytes().first().is_some_and(u8::is_ascii_alphabetic)
+            || !name.bytes().all(|c| c.is_ascii_alphanumeric())
+        {
+            return None;
+        }
+        let name = name.to_owned();
+        let value = value.trim_matches(js_space);
         // JS /^key:\s*(.*)$/ permits leading whitespace (including line
         // separators), but its dot cannot consume an embedded line terminator.
         if !js_dot_text(value) {

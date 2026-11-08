@@ -70,6 +70,17 @@ fn compiled_people_guest_uses_the_real_canonical_abi() {
             resources: ["call".into()].into(),
             allow_private: false,
         },
+        Capability {
+            port: "vault".into(),
+            operations: [
+                "notes.read".into(),
+                "notes.list".into(),
+                "notes.compare-write".into(),
+            ]
+            .into(),
+            resources: ["people-notes".into()].into(),
+            allow_private: false,
+        },
     ];
     let host = Host::new(Limits::default()).unwrap();
     let mut undeclared = manifest.clone();
