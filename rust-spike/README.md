@@ -1,6 +1,6 @@
 # rust-spike (throwaway)
 
-Phases 0 and 1 of the Rust port plan (`docs/superpowers/specs/2026-11-06-rust-port-plan.md`).
+Phases 0, 1 and 2 of the Rust port plan (`docs/superpowers/specs/2026-11-06-rust-port-plan.md`).
 It is not the start of the Rust app. Delete it once the reports are accepted.
 
 - Phase 0a proves four portability facts. Findings are in
@@ -9,9 +9,14 @@ It is not the start of the Rust app. Delete it once the reports are accepted.
   Findings are in `docs/superpowers/specs/2026-11-07-rust-phase0b-report.md`.
 - Phase 1 (`bundled-db/`) proves that Rust can run a private, bundled Postgres with pgvector for
   one install. Findings are in `docs/superpowers/specs/2026-11-07-rust-phase1-report.md`.
+- Phase 2a builds the safety core every module shares and runs Tasks on it. Findings are in
+  `docs/superpowers/specs/2026-11-07-rust-phase2a-report.md`.
+- Phase 2b (`platform/`) builds the job queue, module registry and capability routing in its
+  own Cargo workspace, with its own readme. Findings are in
+  `docs/superpowers/specs/2026-11-07-rust-phase2b-report.md`.
 
-Nothing here changes the TypeScript app or its tests. Phase 0b uses only throwaway databases made
-by `scripts/run-gate.sh`, never the dev or prod database. Phase 1 makes its own throwaway
+Nothing here changes the TypeScript app or its tests. Phases 0b and 2a use only throwaway databases
+made by `scripts/run-gate.sh`, never the dev or prod database. Phase 1 makes its own throwaway
 databases in a scratch folder and never touches the dev or prod database.
 
 ## Layout
@@ -40,6 +45,12 @@ databases in a scratch folder and never touches the dev or prod database.
 | `bundled-db/pg-module/`                   | Phase 1: a Postgres add-on that stops crash dumps of the database on Linux |
 | `bundled-db/proof/linux/`                 | Phase 1: builds the Linux bundle and runs the crash and leftover proofs    |
 | `bundled-db/proof/mac/`                   | Phase 1: the same steps by hand on a Mac, plus the signing tests           |
+| `access-context/`                         | Phase 2a: who is acting, shared by the safety core and the vault           |
+| `safety-core/`                            | Phase 2a: sign-in, admin routes, data context, secrets, redaction          |
+| `vault/`                                  | Phase 2a: file access that cannot leave its folder                         |
+| `parity/cases/20-safety-*.json`           | Phase 2a: the safety cases, run against both servers                       |
+| `tools/check-safety-rules.sh`             | Phase 2a: fails on file access, secret use or prints out of place          |
+| `tools/remove-protections.sh`             | Phase 2a: removes each protection in a copy and checks a test fails        |
 
 ## Running
 
@@ -175,3 +186,33 @@ The Mac scripts run on the Mac itself, from a copy of `proof/mac/`, and keep eve
 `~/moss-js37`. In order: `build.sh`, `bundle.sh`, `flows.sh init`, `flows.sh lifecycle`, then
 the other `flows.sh` steps, `sign.sh adhoc` and `app-layout.sh`. `sign.sh identity` needs the
 login keychain unlocked, so run it in Terminal on the Mac, not over SSH.
+
+## Running Phase 2a
+
+The safety cases in `parity/cases/20-safety-1.json` and `20-safety-2.json` run as part of the
+side-by-side run above. Both servers run in test mode there, which turns off the sign-in origin
+check, so that check is covered by unit tests instead.
+
+The safety-core, vault and access-context unit tests need no database. From this folder:
+
+```
+cargo test -p safety-core -p vault -p access-context
+```
+
+The rules check needs no database either. It exits 1 and prints the lines if any rule breaks.
+
+```
+tools/check-safety-rules.sh .
+```
+
+The protection-removal run needs a gate run, because 11 of its 17 removals start servers on a
+database. It exits 0 only if every removal makes a test fail. Each removal's diff and output go
+to `target/protections` unless `PROTECTIONS_OUT` says otherwise.
+
+```
+scripts/run-gate.sh start --gate rust-spike/tools/remove-protections.sh
+```
+
+Outside test mode the server refuses a sign-in posted from a page it does not trust. It trusts its
+own address on this machine. To sign in from a phone or another computer, list that page's address
+in `JARVIS_AUTH_TRUSTED_ORIGINS`, separated by commas.

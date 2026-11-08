@@ -5,7 +5,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use serde_json::{Map, Value};
 
 use crate::dates::parse_js_date;
-use crate::error::ApiError;
+use safety_core::error::ApiError;
 use crate::model::{Recurrence, TaskStatus};
 
 /// A field the request may set, clear, or leave alone.

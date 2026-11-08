@@ -5,7 +5,12 @@
 //! - an HTTP request: `method`, `path`, optional `as` (A, B, admin, anon), `headers`, and a
 //!   JSON `body` or a `raw` text body;
 //! - `wait_job`: the id of a queued job, read once the worker has finished it;
-//! - `sql`: a statement run as a runtime `role` (app or worker) for actor `as`, rolled back.
+//! - `sql`: a statement run as a runtime `role` (app, worker or auth) for actor `as`, rolled back.
+//!
+//! An HTTP step may also `save_cookie` the cookies its response sets under a name, and send
+//! saved ones with `cookie`. `compare` narrows the comparison to some JSON pointers, for replies
+//! that differ by design, such as a fresh session token. `absent` lists text that must not appear
+//! anywhere in the step's output on either server.
 //!
 //! Strings may hold `{{name}}` placeholders: the seed ids (`userA`, `sessionB`, ...), times
 //! relative to the case start (`now`, `now+2d`, `now-3h`), or `step:/json/pointer` for a value
@@ -65,6 +70,22 @@ pub struct Step {
     /// A subset the step's output must contain, on both servers.
     #[serde(default)]
     pub expect: Option<Value>,
+    /// Saves the cookies the response sets under this name, separately on each server.
+    #[serde(default)]
+    pub save_cookie: Option<String>,
+    /// Sends the cookies saved under this name.
+    #[serde(default)]
+    pub cookie: Option<String>,
+    /// JSON pointers into the output. When set, only these parts are compared between servers.
+    #[serde(default)]
+    pub compare: Option<Vec<String>>,
+    /// Text that must not appear in the step's output on either server, ignoring case.
+    #[serde(default)]
+    pub absent: Vec<String>,
+    /// Prints both servers' output and keeps it in the report, for a step that is observed
+    /// rather than asserted.
+    #[serde(default)]
+    pub record: bool,
 }
 
 pub const SEED_IDS: &[(&str, &str)] = &[
@@ -280,5 +301,24 @@ mod tests {
         )
         .unwrap();
         assert!(check(&one_step).is_ok());
+    }
+
+    #[test]
+    fn every_case_file_loads_and_each_protection_filter_finds_its_case() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("cases");
+        assert!(!load_dir(&dir, None).unwrap().is_empty());
+
+        // The filters tools/remove-protections.sh passes to --only.
+        for filter in [
+            "safety: member isolation",
+            "safety: admin",
+            "safety: account lifecycle",
+            "safety: account guardrails hold",
+            "safety: the bootstrap owner",
+            "safety: connectors",
+            "safety: password",
+        ] {
+            assert_eq!(load_dir(&dir, Some(filter)).unwrap().len(), 1, "{filter}");
+        }
     }
 }

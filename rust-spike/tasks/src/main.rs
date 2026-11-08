@@ -1,44 +1,77 @@
-//! The Rust Tasks server. It runs only inside a gate run, against a throwaway database.
+//! The Rust server: the platform routes plus Tasks. It runs only inside a gate run, against a
+//! throwaway database.
 //!
 //! Environment:
 //! - `JARVIS_GATE_RUN=1`, or the server refuses to start
-//! - `MOSS_APP_DATABASE_URL` and `MOSS_WORKER_DATABASE_URL`, the two runtime roles
-//! - `TASKS_SPIKE_PORT`, served on 127.0.0.1 only
+//! - `MOSS_APP_DATABASE_URL`, `MOSS_WORKER_DATABASE_URL` and `MOSS_AUTH_DATABASE_URL`, the three
+//!   runtime roles
+//! - `TASKS_SPIKE_PORT`, the port to serve on
+//! - `HOST` (optional), the address to listen on. It defaults to loopback for test runs. Set it
+//!   to `0.0.0.0` to serve phones and other computers on the network, as the TypeScript server
+//!   does by default.
+//! - the sign-in and connector key variables the platform reads (`BETTER_AUTH_SECRET`,
+//!   `JARVIS_TRUST_PROXY`, `JARVIS_CONNECTOR_SECRET_KEY` and friends)
 //! - `TASKS_SPIKE_STATIC_DIR` (optional), a folder of built UI files served for every path the
 //!   API does not claim, so one process serves the API and the screen from one origin
 
-use std::net::SocketAddr;
+use std::collections::HashMap;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::process::ExitCode;
+use std::sync::Arc;
 
-use tasks::{db, jobs, routes};
+use safety_core::auth::SessionCookies;
+use safety_core::db::{Database, RuntimeRole};
+use safety_core::http::{self, Platform};
+use safety_core::origin::TrustedOrigins;
+use safety_core::secret::SecretCipher;
+use tasks::{jobs, routes};
+use serde_json::json;
 use tokio::signal::unix::{signal, SignalKind};
 
+/// Start-up and serve errors go through the redacting log writer like every other line.
 #[tokio::main]
-async fn main() -> Result<(), String> {
+async fn main() -> ExitCode {
+    match run().await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            http::log(json!({ "level": "error", "msg": "server stopped", "error": error }));
+            ExitCode::FAILURE
+        }
+    }
+}
+
+async fn run() -> Result<(), String> {
     if std::env::var("JARVIS_GATE_RUN").as_deref() != Ok("1") {
         return Err("refusing to start: JARVIS_GATE_RUN=1 is not set".into());
     }
-    let app_url = required("MOSS_APP_DATABASE_URL")?;
-    let worker_url = required("MOSS_WORKER_DATABASE_URL")?;
-    let port: u16 = required("TASKS_SPIKE_PORT")?
+    let env: HashMap<String, String> = std::env::vars().collect();
+    let port: u16 = required(&env, "TASKS_SPIKE_PORT")?
         .parse()
         .map_err(|_| "TASKS_SPIKE_PORT must be a port number".to_owned())?;
+    let host = match env.get("HOST").map(|host| host.trim()).filter(|host| !host.is_empty()) {
+        Some(host) => host.parse().map_err(|_| "HOST must be an IP address".to_owned())?,
+        None => IpAddr::V4(Ipv4Addr::LOCALHOST),
+    };
 
-    let app = db::pool(&app_url, 4)?;
-    let worker = db::pool(&worker_url, 2)?;
-    db::assert_runtime_role(&app, "jarvis_app_runtime").await?;
-    db::assert_runtime_role(&worker, "jarvis_worker_runtime").await?;
+    let app = connect(&env, "MOSS_APP_DATABASE_URL", 4, RuntimeRole::App).await?;
+    let worker = connect(&env, "MOSS_WORKER_DATABASE_URL", 2, RuntimeRole::Worker).await?;
+    let auth = connect(&env, "MOSS_AUTH_DATABASE_URL", 2, RuntimeRole::Auth).await?;
+    let sessions = SessionCookies::from_env(&env)?;
+    let connectors = SecretCipher::connectors(&env).map_err(|error| error.to_string())?;
+    let origins = TrustedOrigins::from_env(&env, port)?;
+    let platform = Arc::new(Platform { app, auth, sessions, connectors, origins });
 
     let (stop, stopped) = tokio::sync::watch::channel(false);
     let worker_task = tokio::spawn(jobs::run_worker(worker, stopped));
 
-    let address = SocketAddr::from(([127, 0, 0, 1], port));
+    let address = SocketAddr::new(host, port);
     let listener = tokio::net::TcpListener::bind(address).await.map_err(|error| error.to_string())?;
-    eprintln!("tasks spike listening on {address}");
-    let mut router = routes::router(routes::AppState { app });
-    if let Ok(dir) = std::env::var("TASKS_SPIKE_STATIC_DIR") {
-        router = router.fallback_service(tower_http::services::ServeDir::new(dir));
+    http::log(json!({ "level": "info", "msg": format!("tasks spike listening on {address}") }));
+    let mut tasks = routes::router(routes::AppState { platform: platform.clone() });
+    if let Some(dir) = env.get("TASKS_SPIKE_STATIC_DIR") {
+        tasks = tasks.fallback_service(tower_http::services::ServeDir::new(dir));
     }
-    axum::serve(listener, router)
+    axum::serve(listener, http::app(platform, tasks))
         .with_graceful_shutdown(shutdown_signal())
         .await
         .map_err(|error| error.to_string())?;
@@ -48,8 +81,18 @@ async fn main() -> Result<(), String> {
     Ok(())
 }
 
-fn required(name: &str) -> Result<String, String> {
-    std::env::var(name).map_err(|_| format!("{name} is not set"))
+/// Connects as one runtime role. [`Database::connect`] refuses a role that can bypass RLS.
+async fn connect(
+    env: &HashMap<String, String>,
+    name: &str,
+    max_size: usize,
+    role: RuntimeRole,
+) -> Result<Database, String> {
+    Database::connect(required(env, name)?, max_size, role).await
+}
+
+fn required<'a>(env: &'a HashMap<String, String>, name: &str) -> Result<&'a str, String> {
+    env.get(name).map(String::as_str).ok_or_else(|| format!("{name} is not set"))
 }
 
 async fn shutdown_signal() {

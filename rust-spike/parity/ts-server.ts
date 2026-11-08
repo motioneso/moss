@@ -30,7 +30,8 @@ async function main(): Promise<void> {
     workOptions: { pollingIntervalSeconds: 0.5 }
   });
 
-  const server = createApiServer({ appDb, boss: appBoss, logger: false });
+  // The production logger, so the harness's sentinel scan reads what the real server writes.
+  const server = createApiServer({ appDb, boss: appBoss, logger: true });
   await server.listen({ host: "127.0.0.1", port });
   console.log(`TS READY ${port}`);
 
