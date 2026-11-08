@@ -21,7 +21,7 @@ def build(out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
     seen: set[Path] = set()
     css = "\n".join(flatten(p, seen) for p in [
-        ROOT / "apps/web/src/styles/tokens.css",
+        ROOT / "apps/web/src/styles/boot.css",
         ROOT / "packages/ui/src/styles.css",
         ROOT / "rust-spike/module-ui/web/base.css",
     ])

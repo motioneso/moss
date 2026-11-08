@@ -2,9 +2,14 @@
  * navigation. An opaque frame cannot safely receive private replies with targetOrigin '*'. */
 export function moduleClient({ guestWindow = globalThis.window, timeoutMs = 30000 } = {}) {
   const transport = new MessageChannel();
-  guestWindow.parent.postMessage({ channel: "moss.module.v1", type: "connect" }, "*", [
-    transport.port2
-  ]);
+  const bootstrapToken = new URLSearchParams(guestWindow.location?.hash?.slice(1) ?? "").get(
+    "moss-bootstrap"
+  );
+  guestWindow.parent.postMessage(
+    { channel: "moss.module.v1", type: "connect", ...(bootstrapToken ? { bootstrapToken } : {}) },
+    "*",
+    [transport.port2]
+  );
   const pending = new Map();
   let nextId = 0;
   let live = true;

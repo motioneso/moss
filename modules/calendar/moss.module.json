@@ -2,9 +2,9 @@
   "schemaVersion": 2,
   "id": "calendar",
   "name": "Calendar",
-  "description": "Calendar data and chat draft package checkpoint; provider execution and screens follow separately.",
+  "description": "Calendar cached-event screens and draft tools; provider execution and authenticated shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -26,12 +26,13 @@
     },
     {
       "port": "kv",
-      "operations": ["get"],
+      "operations": ["get", "set"],
       "resources": [
         "calendar.briefing-settings",
         "calendar.chat-context",
         "calendar.task-reference",
-        "calendar.briefing-reference"
+        "calendar.briefing-reference",
+        "calendar.ui-view"
       ]
     }
   ],
@@ -111,6 +112,16 @@
       "method": "GET",
       "path": "/briefing-settings",
       "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/display-settings",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/display-settings",
+      "signIn": true
     }
   ],
   "provides": {
@@ -128,7 +139,7 @@
   "features": [
     {
       "id": "calendar.data",
-      "description": "Reads cached events and saves private day-plan drafts. Provider execution and screens are not included in this package checkpoint.",
+      "description": "Reads cached events and saves private day-plan drafts. Provider execution is not included in this package checkpoint.",
       "errors": [
         {
           "code": "calendar-unavailable",
@@ -179,6 +190,22 @@
           "path": "/settings/modules"
         }
       ]
+    },
+    {
+      "id": "calendar.screens",
+      "description": "Packaged Rust Day, Week and Month screens, event details and saved view choice; failed refreshes retain loaded events. The host must attach the module frame bridge. External-calendar status, settings edits, provider writes, signed-in shell assembly and full acceptance remain open.",
+      "errors": [
+        {
+          "code": "calendar-refresh-failed",
+          "class": "transient",
+          "description": "Retry Calendar. Previously loaded events remain visible."
+        },
+        {
+          "code": "calendar-view-save-failed",
+          "class": "transient",
+          "description": "The selected view lasts for this visit if its account preference cannot be saved."
+        }
+      ]
     }
   ],
   "tools": {
@@ -190,5 +217,26 @@
       "description": "Save evening intent and untimed task additions to the current day-plan draft for dialog review. Does not schedule events.",
       "risk": "write"
     }
-  }
+  },
+  "screens": {
+    "/calendar": "ui/index.html",
+    "/settings/calendar": "ui/settings.html"
+  },
+  "navigation": [
+    {
+      "id": "calendar",
+      "label": "Calendar",
+      "path": "/calendar",
+      "description": "Day, Week and Month views of visible cached events in the saved account timezone. Requires authenticated host frame assembly."
+    }
+  ],
+  "settings": [
+    {
+      "id": "calendar.automation",
+      "label": "Calendar",
+      "path": "/settings/calendar",
+      "description": "Read-only lookahead, prep-task and time-block settings. Editing and provider execution remain unavailable.",
+      "scope": "user"
+    }
+  ]
 }

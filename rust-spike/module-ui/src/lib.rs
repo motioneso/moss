@@ -1,6 +1,7 @@
 //! Shared Leptos markup for Park Press. Load the host's park-press.css; module CSS owns
 //! layout only. Options mirror packages/ui, and no private data or direct HTTP client lives here.
 use leptos::prelude::*;
+pub mod calendar;
 #[derive(Clone, Copy, Default)]
 pub enum ButtonVariant {
     #[default]

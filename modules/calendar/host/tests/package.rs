@@ -58,6 +58,12 @@ fn package_preserves_all_fifteen_applied_sql_files() {
     )
     .unwrap();
     assert_eq!(package.manifest.database.migrations.len(), 15);
+    assert!(package.files["ui/calendar_bg.wasm"].starts_with(b"\0asm"));
+    assert_eq!(package.manifest.screens["/calendar"], "ui/index.html");
+    assert_eq!(
+        package.manifest.screens["/settings/calendar"],
+        "ui/settings.html"
+    );
     moss_module_host::sql::check(&package, &Default::default()).unwrap();
     for path in &package.manifest.database.migrations {
         assert_eq!(

@@ -6,6 +6,8 @@ on:
       - "packages/calendar/sql/**"
       - "rust-spike/module-host/**"
       - "rust-spike/module-sdk/**"
+      - "rust-spike/module-ui/**"
+      - "rust-spike/ui/bindgen/**"
       - ".github/workflows/rust-calendar.yml"
 permissions:
   contents: read
@@ -26,5 +28,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: cargo +1.95.0 fetch --locked --manifest-path modules/calendar/src/Cargo.toml
       - run: cargo +1.95.0 fetch --locked --manifest-path modules/calendar/host/Cargo.toml
+      - run: cargo +1.95.0 fetch --locked --manifest-path modules/calendar/ui/Cargo.toml
+      - run: cargo +1.95.0 fetch --locked --manifest-path rust-spike/ui/bindgen/Cargo.toml
       - name: Native tests, data parity and real Rust component
         run: modules/calendar/tools/check.sh

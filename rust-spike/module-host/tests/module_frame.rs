@@ -84,6 +84,15 @@ fn installed_screens_use_verified_versioned_opaque_assets() {
     assert!(csp.contains("sandbox allow-scripts"));
     assert!(!csp.contains("allow-same-origin"));
     assert!(csp.contains("'wasm-unsafe-eval'"));
+    assert!(csp.contains("style-src-attr 'unsafe-inline'"));
+    assert!(!csp
+        .split("script-src ")
+        .nth(1)
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap()
+        .contains("'unsafe-inline'"));
     assert_eq!(asset.headers["Access-Control-Allow-Origin"], "null");
     assert!(!asset
         .headers

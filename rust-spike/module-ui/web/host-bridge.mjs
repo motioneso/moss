@@ -5,9 +5,11 @@
 export function connectModuleFrame(
   frame,
   moduleId,
-  { request, theme, navigate, chat, hostWindow = globalThis.window }
+  { request, theme, navigate, chat, hostWindow = globalThis.window, bootstrapToken = null }
 ) {
   if (!/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*$/.test(moduleId)) throw new Error("Invalid module");
+  if (bootstrapToken !== null && !/^[a-f0-9]{32}$/.test(bootstrapToken))
+    throw new Error("Invalid bootstrap token");
   let live = true;
   let commandPort;
   let loaded = false;
@@ -100,7 +102,8 @@ export function connectModuleFrame(
       event.source !== frame.contentWindow ||
       event.origin !== "null" ||
       event.data?.channel !== "moss.module.v1" ||
-      event.data?.type !== "connect"
+      event.data?.type !== "connect" ||
+      (bootstrapToken !== null && event.data?.bootstrapToken !== bootstrapToken)
     )
       return;
     const port = event.ports?.[0];
@@ -111,7 +114,7 @@ export function connectModuleFrame(
     hostWindow.removeEventListener("message", connect);
   };
   const onLoad = () => {
-    if (loaded || !commandPort) dispose();
+    if (loaded || (!commandPort && bootstrapToken === null)) dispose();
     loaded = true;
   };
   hostWindow.addEventListener("message", connect);
@@ -123,5 +126,27 @@ export function connectModuleFrame(
     frame.removeEventListener("load", onLoad);
   };
   frame.addEventListener("load", onLoad);
+  return dispose;
+}
+
+/** Open only the installer's verified same-origin screen. A fresh fragment token pins
+ * the initial document even when its queued postMessage arrives after the first load.
+ * No token is sent to a replacement document; every later load still revokes the bridge.
+ * Signed initial package code is trusted to hold its token, like its private reply ports.
+ */
+export function openModuleFrame(frame, moduleId, verifiedSrc, callbacks) {
+  const hostWindow = callbacks.hostWindow ?? globalThis.window;
+  const url = new URL(verifiedSrc, hostWindow.location.href);
+  if (
+    url.origin !== hostWindow.location.origin ||
+    !url.pathname.startsWith(`/module-ui/${moduleId}/`)
+  )
+    throw new Error("Use the verified module screen URL");
+  const bootstrapToken = Array.from(hostWindow.crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
+  url.hash = new URLSearchParams({ "moss-bootstrap": bootstrapToken }).toString();
+  const dispose = connectModuleFrame(frame, moduleId, { ...callbacks, bootstrapToken });
+  frame.src = url.href;
   return dispose;
 }
