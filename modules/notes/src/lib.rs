@@ -3,6 +3,7 @@ pub mod blocks;
 pub mod export;
 pub mod guest;
 pub mod identity;
+pub mod routes;
 
 #[cfg(target_arch = "wasm32")]
 mod component;

@@ -7,9 +7,10 @@ The coordinator approved splitting JS-47: this slice supplies the generic linked
 and Notes domain parity. The coordinator will create part two for the complete Notes module.
 This report does not claim that Notes is available in the Rust app yet.
 
-The part-one and part-two results below are historical. The part-three checkpoint
-adds the real guest, package builder and managed-source export. Full Notes parity,
-Settings, tools, sync and live UI/device acceptance remain unfinished.
+The earlier results below are historical. Part three adds the real guest, package
+builder and managed-source export. Part four adds Connections folder controls and
+installed settings routes. Full Notes parity, sync, tools, assembled-shell and
+physical second-device acceptance remain unfinished.
 
 ## Part one scope and evidence — historical
 
@@ -429,3 +430,135 @@ folder locking; file/database work compensates rather than commits atomically;
 crash/power-loss recovery, hostile open/rename races, filesystem deadlines,
 non-Linux behavior and mixed-version locking remain unproven. No new guarantee
 is made about the older non-transactional database adapter.
+
+## Part four checkpoint — Connections controls and installed routes
+
+This continuation starts from merged main and prioritizes a screen that can run.
+It adds Notes folder controls as a package screen at Settings → Connections, using
+shared Leptos controls, Park Press styles and the host's opaque module frame. Notes
+still has no standalone page or navigation entry. This is a continuation checkpoint,
+not complete Notes parity and not a replacement for a working legacy installation.
+
+### Implementation and boundaries
+
+The screen checks the saved source, browses allowed server folders, accepts a typed
+path, changes the link, confirms unlinking, and shows the saved last-sync result.
+It disables conflicting actions while a request runs and requires an authoritative
+read after an uncertain save. Folder names and saved status render as text. The
+screen states that sync and chat tools are unavailable in this checkpoint; it does
+not offer an inert Sync now button or claim that linking starts ingestion.
+
+The compiled guest handles the four declared installed routes under
+`/api/m/notes/`: GET and PUT `notes-source`, GET `notes-source/directories`, and
+GET `notes-last-sync`. Their successful bodies preserve the existing contracts.
+The package manifest includes the screen and its settings/features/errors and
+remediations. It retains the existing required-module choice and six Notes tables.
+No original SQL or migration identity changes, and no People internals are read.
+
+The additive `folder_settings` host adapter maps a module/resource to trusted
+preference names and account-specific allowed folders. It reads and writes the
+existing `notes-source-path` and `notes-last-sync` rows using the signed-in account's
+`DataContext`, and uses `VaultContext` for folder access. Preferences stay outside
+the guest's database capability. Writes update the existing revision counter.
+The adapter forwards unrelated calls and invocation finalization. A folder selection
+is an idempotent host configuration action committed before its successful reply;
+it is separate from the guest's module-table transaction and cannot promise rollback
+if later guest work fails. These routes perform no later mutation. Query/pool/commit
+waits have the invocation's deadline; filesystem deadlines remain unproven.
+
+The screen is served by the real signed package on a disposable Rust HTTPS host
+for checks. The small Connections frame used by that host is a check fixture,
+not the assembled Phase 4 settings shell. Integrating that shell remains open.
+The fixture uses the real sign-in, trust checks, registry, package installer,
+Wasm runtime, preference database and bridge; it does not fake API responses.
+
+Local build uses the already approved pinned `wit-bindgen` macro dependency from
+a scratch Cargo home and an existing scratch Rust toolchain. No standalone
+wit-bindgen CLI, global tool, or unlisted package was installed. Leptos and the
+shared UI/network crates are dependencies already used by this repository.
+
+### Browser and review corrections
+
+The first live Connections load reproduced a server error: the screen supplied
+`/api/m/notes/` even though the shared frame bridge adds that prefix. The screen
+now supplies module-relative paths. It uses the shared frame launcher from the
+latest main branch and includes the shared module document defaults, so its
+isolated document has the app's typography and colours. The live check also found
+that the opaque frame blocks native form submission. Linking now uses the bridge
+button directly, with Enter-key support, without adding form privileges to the frame.
+
+The first review found a major usability error: a rejected typed path closed the
+chooser and looked like a lost connection. Rejected paths now keep the chooser,
+entered path and saved link, explain the folder problem and focus the input.
+Unavailable roots explain the administrator action. Only an uncertain save forces
+an authoritative reload. The app map includes the path correction and root setup
+remediations. The review's receipt concern is also fixed: the interactive gate
+requires both a saved unlink and a revision showing prior writes. Its first-account
+fixture limit and incomplete invalid-input/path parity remain disclosed below.
+
+### Remaining acceptance work
+
+1. Port manual sync, the fifteen-minute schedule, memory ingestion/search, sync
+   continuation and safe errors, then enable Sync now and its status polling.
+2. Port all four chat tools, complete their approval behavior and sync triggers.
+3. Complete managed publication, proposals/receipts, crash reconciliation,
+   exact-block cleanup, private note export and daily chat archives.
+4. Resolve export snapshot/paging and join the real account-export orchestrator.
+5. Join Connections into the assembled Phase 4 shell. Extend differential coverage
+   across all handlers/jobs, invalid inputs, symlinks and locale-sensitive ordering.
+   The current folder adapter deliberately refuses symlink descendants; that is
+   stricter than legacy path selection and is not full path-selection parity.
+6. Exercise the complete authenticated app from a separate physical device over
+   HTTPS with trusted origins. Same-host HTTPS and a narrow browser viewport do
+   not prove that requirement. Cross-platform and hostile filesystem race/crash
+   guarantees remain unproven.
+
+### Part four validation record
+
+The screen code checkpoint is `236a9cd0d`. The disposable Notes gate completed
+with `rc=0`: linked-folder checks, all six Notes tables under app and worker
+roles, compiled guest export differential, signed registry installation and
+42 comparisons against actual legacy Settings handlers through installed routes.
+Removing Notes-table RLS made export privacy assertions fail; restoring it passed.
+Removing preferences RLS made the other-account source assertion fail; restoring
+it passed. Unrelated owners and admins could not read or link the owner's source,
+and unlinking retained files. The receipt identifies `3678e0989`, five dirty
+files and fingerprint `77b0e01696ca`; it is evidence for that run, not an exact
+final-commit gate receipt. Later fixes were to screen/bridge behavior and metadata.
+
+A prior SQL-only two-server comparison passed seven cases. The final rerun ended
+`rc=2` because the TypeScript reference server did not answer within ninety
+seconds under shared-host load. No final SQL comparison result is claimed.
+
+The real browser exercised the signed package on the disposable Rust HTTPS host:
+sign-in, Connections load, browse to Journal, link with Enter, reload retaining
+the saved Journal link, change to the allowed root with the Link folder button,
+cancel unlink while retaining the link, then confirm unlink. A real rejected
+typed path returned 400 and kept the chooser and input with a path-specific
+message. Desktop/light and 390-pixel/dark screenshots were captured. The fixture
+also verified its TLS certificate, unsigned redirect, unknown-host rejection and
+untrusted-origin rejection. This is same-host proof, not LAN/tailnet access or
+a physical second device. The fixture's first-account-only folder setup cannot
+prove multi-account browser behavior; the installed-route privacy gate is separate.
+
+Native screen tests and strict tools Clippy passed after the final code changes.
+Scoped UI ESLint, file-size, design-token and UI-class checks passed. Root lint
+passed before the final small screen fixes, which passed scoped ESLint. Whole-repo
+format and typecheck commands were started but had no completion receipt when
+this report was written; they are not claimed green. No CI or complete
+`verify:foundation` acceptance result is claimed. The final proof artifact and PR
+record any later command receipts separately.
+
+Review round one found the typed-path usability error described above (major),
+plus the unlink receipt weakness, invalid-input/path parity differences and
+first-account fixture limits (minor). The major and receipt weakness were fixed;
+the latter two remain documented limits. The initial board review line was
+incorrectly recorded as having no major findings; the final round must supersede
+that line with the actual verdict. Full Notes parity remains unfinished.
+
+The interactive fixture ended `rc=1` after the browser flow: its filesystem watcher
+read the newly created finish file before the producer wrote `checked`. It cleaned
+up before reaching its final database receipt assertion. The watcher now waits
+through an empty create notification. The screenshots and live HTTP responses
+are evidence for the browser actions; a successful final UI-gate receipt is not
+claimed, and the watcher correction has not had a repeat interactive run.

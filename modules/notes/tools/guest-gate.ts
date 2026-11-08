@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getMossDatabaseUrls } from "@moss/db";
+import { settingsOracle } from "./settings-oracle.js";
 import { exportOracle } from "./export-oracle.js";
 
 if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
@@ -13,10 +14,12 @@ console.log("Notes guest sha256:", createHash("sha256").update(component).digest
 const folder = await mkdtemp(join(tmpdir(), "moss-notes-guest-"));
 const pinned = join(folder, "notes.wasm");
 const urls = getMossDatabaseUrls();
+let settings: Awaited<ReturnType<typeof settingsOracle>> | undefined;
 let oracle: Awaited<ReturnType<typeof exportOracle>> | undefined;
 try {
   await writeFile(pinned, component, { mode: 0o400 });
   oracle = await exportOracle();
+  settings = await settingsOracle();
   const run = spawnSync(
     "cargo",
     [
@@ -28,6 +31,8 @@ try {
       "modules/notes/tools/Cargo.toml",
       "--test",
       "database",
+      "--test",
+      "settings",
       "--",
       "--ignored",
       "--nocapture",
@@ -39,6 +44,7 @@ try {
         ...process.env,
         NOTES_COMPONENT: pinned,
         NOTES_ORACLE: oracle.path,
+        NOTES_SETTINGS_ORACLE: settings.path,
         JS55_APP_URL: urls.app,
         JS55_WORKER_URL: urls.worker,
         JS55_BOOTSTRAP_URL: urls.bootstrap
@@ -48,6 +54,7 @@ try {
   process.exitCode = run.status ?? 1;
 } finally {
   try {
+    await settings?.cleanup();
     await oracle?.cleanup();
   } finally {
     await rm(folder, { recursive: true, force: true });

@@ -3,6 +3,8 @@ use anyhow::{ensure, Context, Result};
 use moss_module_host::{legacy, manifest::Manifest, trust};
 use std::{collections::BTreeMap, path::Path};
 
+pub mod screen;
+
 pub fn manifest() -> Result<Manifest> {
     let manifest: Manifest = serde_json::from_str(include_str!("../../moss.module.json"))?;
     manifest.validate(&"0.1.0".parse()?)?;
@@ -46,5 +48,22 @@ pub fn package_files(root: &Path, component: Vec<u8>) -> Result<BTreeMap<String,
         files.insert(name.into(), std::fs::read(root.join(path))?);
     }
     files.insert("code/module.wasm".into(), component);
+    files.insert("ui/index.html".into(), screen::render().into_bytes());
+    // Reuse the app's authored document defaults; isolated frames do not
+    // inherit the shell's typography, background or box sizing.
+    files.insert(
+        "ui/base.css".into(),
+        std::fs::read(root.join("rust-spike/module-ui/web/base.css"))?,
+    );
+    for name in ["app.mjs", "notes.css"] {
+        files.insert(
+            format!("ui/{name}"),
+            std::fs::read(root.join("modules/notes/ui").join(name))?,
+        );
+    }
+    files.insert(
+        "ui/guest-bridge.mjs".into(),
+        std::fs::read(root.join("rust-spike/module-ui/web/guest-bridge.mjs"))?,
+    );
     Ok(files)
 }

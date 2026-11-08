@@ -29,6 +29,20 @@ fn actual_guest_runs_without_wasi_and_archive_is_reproducible() {
             "{}"
         );
     }
+    let unavailable = host
+        .call(
+            &wasm,
+            manifest.clone(),
+            AccessContext::new(uuid::Uuid::new_v4(), "notes-route-unavailable"),
+            Arc::new(DenyPorts),
+            "route",
+            r#"{"method":"GET","path":"/notes-source","params":{},"query":{},"body":null}"#,
+        )
+        .unwrap();
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&unavailable).unwrap(),
+        serde_json::json!({"status":500,"body":{"error":"Internal Server Error"}})
+    );
     assert!(host
         .call(
             &wasm,

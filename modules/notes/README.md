@@ -7,8 +7,10 @@ six arrays and field projection, including exact saved JSON, text and null value
 The guest uses only `moss-module-sdk` database queries on Notes-owned tables.
 
 Notes remains required and has no standalone screen. This package is a continuation
-checkpoint: folder settings, chat tools, sync, managed publication, private note export,
-daily archives and the account export screen join are unfinished. Do not replace a
+checkpoint: Connections folder selection and saved sync status now have a package screen and
+installed routes. Chat tools, actual sync, managed publication, private note export,
+daily archives and the account export screen join are unfinished. The Connections
+screen still needs joining into the assembled Phase 4 settings shell. Do not replace a
 working legacy Notes installation with this checkpoint.
 
 ## Build
@@ -67,3 +69,28 @@ is returned as success. Streaming and the account export UI join remain work.
 Private note export and daily archive file behavior are separate from this managed
 source export. Existing linked-folder compensation, crash and platform limits in
 `HOST_ADAPTER.md` and the phase report still apply.
+
+## Connections checkpoint
+
+The package declares `/settings/connections`, without a Notes navigation entry.
+Its Leptos screen uses the shared UI kit and the opaque-frame bridge. Authenticated
+requests go through `/api/m/notes/notes-source`, `/notes-source/directories` and
+`/notes-last-sync`. The host must use `Application::open_extended_with` to connect
+`FolderSettingsPorts` with the `source` resource, the existing `notes-source-path`
+and `notes-last-sync` preference names, and each account's allowed folders. Do not
+share one account's root map with other accounts. Selection does not run sync yet.
+
+`tools/ui-gate.sh` runs a disposable signed-package HTTPS fixture through
+`run-gate.sh`. Supply `NOTES_COMPONENT`, `CARGO_TARGET_DIR` and `NOTES_UI_OUT`.
+After the browser has linked a folder and confirmed unlinking, create the output
+folder's `finished` file containing `checked`. The gate verifies the real saved
+unlink and a preference revision showing prior writes, stops the server and releases
+its claimed port. The fixture bounds Tokio and compiler workers so its nested host
+runtimes do not each create a worker for every CPU on a shared machine. This fixture is not the
+assembled Phase 4 shell or proof from a separate physical device.
+
+The standard Notes gate now also compares actual legacy Settings handlers with
+installed guest routes and performs a preference RLS removal control. Differential
+coverage is limited to the cases in `tools/settings-oracle.ts`. Symlink descendant
+selection, locale-sensitive directory ordering, invalid-input response parity and
+sync scheduling remain unfinished. Existing linked-file platform limits apply.
