@@ -2,9 +2,9 @@
   "schemaVersion": 2,
   "id": "calendar",
   "name": "Calendar",
-  "description": "Calendar cached-event screens and draft tools; provider execution and authenticated shell composition remain incomplete.",
+  "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -193,8 +193,13 @@
     },
     {
       "id": "calendar.screens",
-      "description": "Packaged Rust Day, Week and Month screens, event details and saved view choice; failed refreshes retain loaded events. The host must attach the module frame bridge. External-calendar status, settings edits, provider writes, signed-in shell assembly and full acceptance remain open.",
+      "description": "Packaged Rust Day, Week and Month screens, event details and saved view choice; failed refreshes retain loaded events. The Calendar web router connects the styled installed frame behind Rust sign-in and HTTPS, with account-scoped API dispatch and sign-out. Its public static route accepts opaque-frame stylesheet requests without an Origin header while retaining host, sharing and method checks. External-calendar status, settings edits, provider writes, full shell assembly and second-device acceptance remain open.",
       "errors": [
+        {
+          "code": "calendar-page-unavailable",
+          "class": "transient",
+          "description": "Calendar could not load. Check that its package is installed and enabled, then reload."
+        },
         {
           "code": "calendar-refresh-failed",
           "class": "transient",

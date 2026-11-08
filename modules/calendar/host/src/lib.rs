@@ -6,6 +6,8 @@ use serde_json::{Map, Value};
 use std::sync::Arc;
 
 pub mod package;
+#[cfg(feature = "web")]
+pub mod web;
 pub const PREFERENCE_KEYS: [&str; 7] = [
     "calendar.briefing_lookahead_days",
     "calendar.signal_suggest_tasks",

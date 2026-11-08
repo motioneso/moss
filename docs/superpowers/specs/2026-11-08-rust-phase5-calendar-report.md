@@ -3,7 +3,7 @@
 Task JS-48, Card 525. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
 Release note Category: N/A.
 
-**Scope: approved slice one only.** The coordinator approved JS-48 keeping the package,
+**Historical JS-48 scope: approved slice one only.** The coordinator approved JS-48 keeping the package,
 data, privacy proofs and host wrapper. Separate tasks own tools/jobs/execution and
 screens/live proof/full parity. This report does **not** claim the full Calendar port,
 HTTP parity, UI verification or second-device verification.
@@ -236,3 +236,56 @@ full-parity work described above. In particular, later builders must provide con
 actor-scoped public-reference adapters, preserve the old HTTP context/envelopes and use the
 shared authenticated host/shell integration. The manual component build target remains an
 explicit build difference to resolve or standardize across the assembled package.
+
+## JS-72 / part 4: signed-in Calendar composition checkpoint
+
+Card 525. This continuation is bounded to Calendar-owned files. It consumes the shared host
+on main, without changing sibling crates. The original full-parity and real second-device
+acceptance requirements remain open; the old TypeScript screen is not switched off.
+
+The host crate now offers an optional Calendar web router using the existing Rust Network
+account/HTTPS boundary. It opens the installed Calendar and settings screens, dispatches the
+package's declared routes as the authenticated actor, and offers sign-out. Synchronous installer
+and guest calls run on a blocking executor with an eight-call admission bound. Failed page loads
+and host failures return a retryable response without forwarding underlying diagnostics.
+
+Opaque frames cannot authenticate their static module/Wasm/font requests with app cookies.
+Calendar's composition therefore serves verified package assets and dedicated generated public
+shared assets separately, preserving package CSP, sandbox and opaque-origin CORS headers.
+The static route keeps configured-host and live sharing checks; private pages/API requests
+continue through the unchanged Network guard. Trusted asset policy origins come from the
+caller's network configuration. Package version 0.4.0 and its app map describe this boundary.
+
+The `signed_ui` example and `signed-live.sh` runner use a disposable database through verify-gate,
+a locally signed package, generated test accounts and a temporary TLS certificate. The runner
+uses real Rust password sign-in and the task's visible browser; it does not inject an account
+identity into Calendar requests. It also checks the listener through the machine's LAN address.
+These fixtures are not an installed production application, the full shell, a trusted production
+certificate or an actual second device. Check receipts and review findings belong in the task's
+proof artifact. No `wit-bindgen` or new global tool is installed by this part.
+
+Remaining work is the JS-60 list in
+`docs/superpowers/specs/2026-11-08-rust-calendar-js60-report.md`, with the Calendar-only signed-in
+page/own-package dispatch seam now supplied. Full shell/Today/chat integration, original HTTP
+context/error parity, writable settings and authority policy, four provider tools, both jobs,
+preview/apply/retry/recovery/follow-through, real public provider/reference adapters, full parity
+harness acceptance and an actual second device over trusted HTTPS remain unproven.
+
+The checkpoint review also records narrower composition limits: the Calendar router owns `/`
+and `/today`, uses the Sage theme and maps host dispatch failures to a retryable 503. Shared
+static assets must be generated public files in a dedicated directory; the router does not
+inspect arbitrary directory contents for private material. Static requests retain configured-host
+and sharing checks but do not use the private-request audit path. Full shell composition, theme
+selection and original HTTP error parity remain follow-up work. The browser runner checks
+server-side revocation of its old session after sign-out as well as a separate session staying valid.
+
+Live screenshot inspection found that opaque-frame no-CORS stylesheet requests omit `Origin`
+but carry cross-site fetch metadata. The initial static guard rejected them, leaving the
+working controls unstyled. The same regression assertion failed with 403 before the fix.
+The public static route now handles absent origins alongside opaque `null` origins; explicit
+foreign origins, unconfigured hosts, disabled sharing and non-read methods remain checked.
+The browser runner verifies both the Calendar grid layout and shared font tokens. It also
+waits for real events after returning from settings before simulating a failed refresh, and
+allows the debug sign-in redirect longer on loaded machines. Final receipts and review
+disposition remain in the task proof; these fixes require a review round beyond the two
+already recorded for the earlier commit.
