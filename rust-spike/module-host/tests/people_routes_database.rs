@@ -357,9 +357,13 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         }
         assert_eq!(
             request(owner, "PUT", "/people/notes-settings", json!({"folder":""})),
-            json!({"status":200,"body":{"folder":null}})
+            json!({"status":400,"body":{"error":"People notes folder is unavailable"}})
         );
-        println!("Installed folder save, invalid root-array refusal without clearing, relative root/child browsing, traversal refusal, other-user/admin fixture refusals and clear passed");
+        assert_eq!(
+            request(owner, "GET", "/people/notes-settings", Value::Null),
+            json!({"status":200,"body":{"folder":notes_root}})
+        );
+        println!("Installed folder save, invalid root-array refusal without clearing, relative root/child browsing, traversal refusal, other-user/admin fixture refusals and empty-folder refusal without clearing passed");
         installed::clear_catalog(database, admin);
     }
     println!("{} legacy route responses and all seven table snapshots matched, including other-user/admin attempts",oracle["cases"].as_array().unwrap().len());

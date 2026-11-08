@@ -44,3 +44,21 @@ fn root_arrays_are_rejected_without_clearing_the_saved_folder() {
         assert_eq!(*host.0.borrow(), json!("Previous folder"));
     }
 }
+
+#[test]
+fn empty_and_null_folder_saves_are_refused_without_clearing_the_preference() {
+    let host = Preferences(RefCell::new(json!("Previous folder")));
+    for folder in [json!(""), Value::Null] {
+        let reply = moss_people::guest::handle(
+            &host,
+            "route",
+            &json!({"method":"PUT","path":"/people/notes-settings","params":{},"query":{},"body":{"folder":folder}}).to_string(),
+        ).unwrap();
+        let reply: Value = serde_json::from_str(&reply).unwrap();
+        assert_eq!(
+            reply,
+            json!({"status":400,"body":{"error":"People notes folder is unavailable"}})
+        );
+        assert_eq!(*host.0.borrow(), json!("Previous folder"));
+    }
+}

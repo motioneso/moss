@@ -172,8 +172,8 @@ package and unavailable AI service are explicit fixtures; no real source deliver
 The gate checks the Settings HTML asset, not a rendered or authenticated installed screen.
 
 The legacy `/people/notes-directories` endpoint browses relative to the selected folder;
-the additive `/people/note-folders` endpoint remains the absolute-root chooser. Empty folder
-saves clear the existing preference. Body validation retains Fastify's coercion and safe
+the additive `/people/note-folders` endpoint remains the absolute-root chooser. Empty and null folder
+saves retain the legacy 400 folder error and preserve the existing preference. Body validation retains Fastify's coercion and safe
 400 error text for the cases in the oracle. Repeated equality filters use node-postgres
 array text; repeated search values use JavaScript array joining. Positive limits above the
 SDK's `u32` page space scan without a limit if they fit PostgreSQL `int8`.

@@ -198,4 +198,5 @@ the selected People root and returns `path: null`; child paths and returned dire
 are relative to that root. Repeated path values fail with the ordinary safe 500 response.
 Unavailable folders and rejected paths return the safe 400 folder error. Locale-sensitive
 ordering and unusual filesystem/backend failures remain outside the current parity cases.
-An empty folder save clears the preference. Neither endpoint accepts a caller-selected actor.
+Fastify coerces a null folder to an empty string; empty and null saves retain the legacy
+400 folder error and preserve the preference. Neither endpoint accepts a caller-selected actor.

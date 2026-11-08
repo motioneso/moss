@@ -105,7 +105,7 @@
       "remediations": [
         {
           "id": "people-choose-folder",
-          "description": "Choose an existing folder inside your allowed notes folders, or clear an unavailable selection.",
+          "description": "Choose an existing folder inside your allowed notes folders.",
           "path": "/settings/memory/people"
         },
         {

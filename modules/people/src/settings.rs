@@ -16,10 +16,18 @@ pub fn route(host: &impl Host, request: &RouteRequest) -> Result<Option<Response
                     json!({"error":"Invalid folder setting"}),
                 )));
             };
+            // Fastify coerces null to an empty string before the legacy handler;
+            // normalizeFolder rejects that path instead of clearing the preference.
+            if folder.as_str() == Some("") {
+                return Ok(Some(Response::new(
+                    400,
+                    json!({"error":"People notes folder is unavailable"}),
+                )));
+            }
             (
                 "preference.write",
                 "people-folder",
-                json!({"folder":folder.as_str().filter(|s| !s.is_empty())}),
+                json!({"folder":folder}),
             )
         }
         ("GET", "/people/note-folders") => {

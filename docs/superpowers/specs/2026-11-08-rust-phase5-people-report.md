@@ -828,8 +828,8 @@ scan if the count fits PostgreSQL `int8`; larger or negative values fail. This d
 remove the host's existing resource limits or establish unlimited-dataset parity.
 
 The legacy relative `GET /people/notes-directories` is separate from the additive absolute
-root chooser. Empty folder saves clear the shared preference. Installed checks exercise
-folder save, relative root/child listing, traversal refusal and clear, plus other-user
+root chooser. Empty and null folder saves retain the legacy 400 folder error and preserve the shared preference. Installed checks exercise
+folder save, relative root/child listing, traversal and empty-folder refusal, plus other-user
 and administrator folder/API attempts. The directory checks use accounts without allowed
 roots and do not establish a failing-first directory privacy property; the broader gate
 separately removes/restores RLS around the same database/privacy assertions. The app-map
