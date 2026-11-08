@@ -19,9 +19,13 @@ pub fn module_key(id: &str) -> String {
     format!("m-{}", &crate::trust::digest(id.as_bytes())[..32])
 }
 pub fn manifest_hash(manifest: &Manifest) -> String {
+    let mut value = serde_json::to_value(manifest).expect("manifest");
+    // PostgreSQL jsonb normalizes object order, while serde_json may preserve insertion
+    // order through a transitive feature. Identity must survive both representations.
+    value.sort_all_objects();
     format!(
         "sha256:{}",
-        crate::trust::digest(&serde_json::to_vec(manifest).expect("manifest"))
+        crate::trust::digest(&serde_json::to_vec(&value).expect("manifest"))
     )
 }
 pub fn specs(manifest: &Manifest) -> Vec<QueueSpec> {
@@ -184,4 +188,65 @@ impl Installer {
         result?;
         Ok(true)
     }
+}
+
+/// Rebind only parameters which still pass the new manifest. Removed or incompatible work
+/// ends explicitly; it is never silently run against a different schema.
+pub(crate) async fn reconcile(
+    db: &tokio_postgres::Client,
+    id: &str,
+    installed: Option<&crate::store::Installed>,
+) -> Result<()> {
+    let key = module_key(id);
+    for (table, pending) in [
+        ("moss_queue.jobs", "state='pending'"),
+        ("moss_queue.schedules", "disabled_reason IS NULL"),
+    ] {
+        for row in db
+            .query(
+                &format!(
+                    "SELECT id,payload FROM {table} WHERE payload->>'moduleId'=$1 AND {pending}"
+                ),
+                &[&key],
+            )
+            .await?
+        {
+            let id: uuid::Uuid = row.get(0);
+            let mut payload: Value = row.get(1);
+            let valid = installed.filter(|m| m.disabled.is_none()).is_some_and(|m| {
+                let local = payload["jobKind"]
+                    .as_str()
+                    .and_then(|s| s.strip_prefix(&format!("{key}.")))
+                    .unwrap_or("");
+                crate::runtime::authorize(
+                    &m.manifest,
+                    "jobs",
+                    &Request {
+                        operation: "enqueue".into(),
+                        resource: local.into(),
+                        parameters: payload["params"].clone(),
+                    },
+                )
+                .is_ok()
+            });
+            if valid {
+                payload["manifestHash"] =
+                    json!(manifest_hash(&installed.expect("active").manifest));
+                db.execute(
+                    &format!("UPDATE {table} SET payload=$2 WHERE id=$1"),
+                    &[&id, &payload],
+                )
+                .await?;
+            } else if table == "moss_queue.jobs" {
+                db.execute("UPDATE moss_queue.jobs SET state='failed',failure_code='invalid-payload' WHERE id=$1",&[&id]).await?;
+            } else {
+                db.execute(
+                    "UPDATE moss_queue.schedules SET disabled_reason='invalid-payload' WHERE id=$1",
+                    &[&id],
+                )
+                .await?;
+            }
+        }
+    }
+    Ok(())
 }

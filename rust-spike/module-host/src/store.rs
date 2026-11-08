@@ -46,6 +46,18 @@ pub trait CatalogStore: Send + Sync {
 /// This trusted service composes existing queue and migration services with the host. A
 /// module can never obtain it through the guest linker. A snapshot precedes any data change.
 pub trait Lifecycle: Send + Sync {
+    fn account_enabled(&self, _id: &str, _access: &AccessContext, default: bool) -> Result<bool> {
+        Ok(default)
+    }
+    fn set_account_enabled(
+        &self,
+        _id: &str,
+        _access: &AccessContext,
+        _enabled: bool,
+    ) -> Result<()> {
+        anyhow::bail!("Account settings are not connected")
+    }
+
     fn is_admin(&self, access: &AccessContext) -> Result<bool>;
     fn pause_jobs(&self, id: &str) -> Result<()>;
     fn resume_jobs(&self, id: &str) -> Result<()>;
@@ -196,6 +208,8 @@ impl Installer {
             catalog.trust.identity.id == registry_id,
             "The registry has a different identity"
         );
+        // Keep every prefix binding visible to the host even before anything is installed.
+        // Installation checks it against other configured registries.
         let seen = &state.registries[registry_id];
         for installed in state
             .installed
@@ -212,10 +226,27 @@ impl Installer {
             {
                 installed.disabled = Some("The registry blocked this module or publisher".into());
                 self.lifecycle.pause_jobs(&installed.manifest.id)?;
+            } else if installed.disabled.as_deref()
+                == Some("The registry blocked this module or publisher")
+            {
+                installed.disabled = None;
             }
         }
         state.revision += 1;
         self.catalog.commit(previous, &state)?;
+        for module in state
+            .installed
+            .values()
+            .filter(|m| m.registry == registry_id && m.disabled.is_none())
+        {
+            self.lifecycle.resume_jobs(&module.manifest.id)?;
+        }
+        catalog.save_metadata(
+            self.root
+                .create_subdir("registries")?
+                .create_subdir(registry_id)?
+                .path(),
+        )?;
         Ok(catalog)
     }
     pub fn approval(&self, package: &Package, urgent: bool) -> Result<Approval> {
@@ -397,6 +428,17 @@ impl Installer {
             .or_else(|| state.retained.get(id))
             .cloned();
         let publisher = catalog.trust.publisher(key_id, id)?;
+        for (registry, seen) in &state.registries {
+            ensure!(
+                seen.removed
+                    || registry == &catalog.trust.identity.id
+                    || seen
+                        .publishers
+                        .get(&publisher.prefix)
+                        .is_none_or(|key| key == &publisher.key),
+                "Resolve conflicting registry publisher prefixes before installing"
+            );
+        }
         if let Some(old) = &old {
             ensure!(
                 package.manifest.version > old.manifest.version || package.digest == old.digest,
@@ -526,6 +568,12 @@ impl Installer {
             std::fs::rename(staging.path(), &final_path)?;
         }
         make_readonly(&final_path)?;
+        crate::recovery::sync_tree(&final_path)?;
+        #[cfg(unix)]
+        {
+            std::fs::File::open(destination.path())?.sync_all()?;
+            std::fs::File::open(blob.path())?.sync_all()?;
+        }
         Ok(())
     }
     pub fn read_package(&self, digest: &str) -> Result<Package> {
@@ -564,6 +612,14 @@ impl Installer {
             .get(id)
             .context("This module is not installed")?;
         ensure!(installed.disabled.is_none(), "This module is disabled");
+        ensure!(
+            self.lifecycle.account_enabled(
+                id,
+                &access,
+                installed.manifest.accounts.default_enabled
+            )?,
+            "This module is switched off for this account"
+        );
         let package = self.read_package(&installed.digest)?;
         let dir = self
             .root
@@ -632,6 +688,13 @@ impl Installer {
             .or_else(|| state.retained.get(id))
             .cloned()
             .context("This module has no installed code or retained data")?;
+        ensure!(
+            !state
+                .installed
+                .values()
+                .any(|m| m.manifest.id != id && m.manifest.requires.contains_key(id)),
+            "Remove dependent modules first"
+        );
         if let Some(typed_name) = delete_data {
             ensure!(
                 typed_name == module.manifest.name,
@@ -671,6 +734,7 @@ impl Installer {
             self.complete_change(id, snapshot, outcome)?;
         } else {
             outcome?;
+            self.lifecycle.resume_jobs(id)?;
         }
         match self.root.subdir("installed")?.subdir(id) {
             Ok(path) => {

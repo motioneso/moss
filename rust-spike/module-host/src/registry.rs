@@ -73,6 +73,12 @@ pub struct SeenRegistry {
     pub index_digest: String,
     pub revocations: BTreeMap<String, Revocation>,
     pub versions: BTreeMap<String, String>,
+    #[serde(default)]
+    pub publishers: BTreeMap<String, String>,
+    #[serde(default)]
+    pub configuration: Option<crate::registry_manager::RegistryConfiguration>,
+    #[serde(default)]
+    pub removed: bool,
 }
 impl SeenRegistry {
     pub fn accept(&mut self, index: &Index, bytes: &[u8], trust: &TrustedRegistry) -> Result<()> {
@@ -95,6 +101,12 @@ impl SeenRegistry {
         );
         let mut next = self.clone();
         next.root_fingerprint = Some(trust.identity.root_fingerprint.clone());
+        next.publishers = trust
+            .identity
+            .publishers
+            .values()
+            .map(|p| (p.prefix.clone(), p.key.clone()))
+            .collect();
         for artifact in &index.modules {
             let version = format!("{}@{}", artifact.id, artifact.version);
             ensure!(
@@ -132,7 +144,8 @@ impl SeenRegistry {
         })
     }
 }
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum Source {
     Folder(PathBuf),
     Https { base: Url, allow_private: bool },
@@ -264,7 +277,8 @@ pub struct Catalog {
 impl Catalog {
     pub fn assert_current(&self, seen: &SeenRegistry) -> Result<()> {
         ensure!(
-            seen.root_fingerprint.as_ref() == Some(&self.trust.identity.root_fingerprint)
+            !seen.removed
+                && seen.root_fingerprint.as_ref() == Some(&self.trust.identity.root_fingerprint)
                 && self.index.serial == seen.serial
                 && self
                     .documents
@@ -323,6 +337,13 @@ impl Catalog {
             source,
             documents,
         })
+    }
+    pub fn save_metadata(&self, destination: &std::path::Path) -> Result<()> {
+        let root = vault::Root::create(destination)?;
+        for (name, bytes) in &self.documents {
+            root.write(name, bytes)?;
+        }
+        Ok(())
     }
     /// Copy verified metadata and content-addressed blobs without changing any signature.
     pub fn mirror(&self, destination: &std::path::Path) -> Result<()> {

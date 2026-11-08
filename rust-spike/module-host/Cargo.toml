@@ -22,7 +22,7 @@ sqlparser = "0.63"
 tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
 tokio-postgres = { version = "0.7", features = ["with-serde_json-1"] }
 tar = "0.4"
-url = "2"
+url = { version = "2", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 vault = { path = "../vault" }
 wasmtime = { version = "38", default-features = false, features = ["component-model", "cranelift", "runtime", "std", "wat"] }

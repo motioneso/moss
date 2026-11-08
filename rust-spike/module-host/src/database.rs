@@ -34,7 +34,7 @@ impl Ports for DatabasePorts {
         crate::runtime::authorize(scope.module(), port, request)?;
         self.runtime.block_on(async {
             let cx=DataContext::open(&self.database,scope.access()).await.map_err(|_|anyhow::anyhow!("Could not open the module data context"))?;
-            let role=runtime_role(&scope.module().id);
+            let role=if scope.module().database.ledger!=crate::manifest::Ledger::Module&&crate::legacy::owns(&scope.module().id,&request.resource) {"jarvis_app_runtime".into()}else{runtime_role(&scope.module().id)};
             let checked=cx.db().query_opt("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=$1",&[&role]).await?.context("The module runtime role has not been provisioned")?;
             ensure!(!checked.get::<_,bool>(0) && !checked.get::<_,bool>(1),"The module runtime role can bypass privacy rules");
             cx.db().batch_execute(&format!("SET LOCAL ROLE {role}")).await?;

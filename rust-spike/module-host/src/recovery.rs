@@ -58,6 +58,15 @@ impl Installer {
             .subdir(id)?
             .subdir(snapshot)?
             .write("snapshot.json", &serde_json::to_vec(&meta)?)?;
+        sync_tree(
+            self.root
+                .subdir("snapshots")?
+                .subdir(id)?
+                .subdir(snapshot)?
+                .path(),
+        )?;
+        sync_directory(self.root.subdir("snapshots")?.subdir(id)?.path())?;
+        sync_directory(self.root.subdir("snapshots")?.path())?;
         self.root.write(
             "operation.json",
             &serde_json::to_vec(&Journal {
@@ -228,9 +237,15 @@ impl Installer {
         );
         let mut state = self.catalog.load()?;
         let revision = state.revision;
-        let backup = self.lifecycle.snapshot(&snapshot.module)?;
-        self.begin_change(&snapshot.module, &backup, Some(module.digest.clone()))?;
         self.lifecycle.pause_jobs(&snapshot.module)?;
+        let backup = match self.lifecycle.snapshot(&snapshot.module) {
+            Ok(s) => s,
+            Err(e) => {
+                self.lifecycle.resume_jobs(&snapshot.module)?;
+                return Err(e);
+            }
+        };
+        self.begin_change(&snapshot.module, &backup, Some(module.digest.clone()))?;
         let outcome = (|| {
             self.lifecycle.restore(&snapshot.module, &snapshot.id)?;
             let package = self.read_package(&module.digest)?;
@@ -243,6 +258,19 @@ impl Installer {
         })();
         self.complete_change(&snapshot.module, &backup, outcome)
     }
+}
+pub(crate) fn sync_tree(path: &std::path::Path) -> Result<()> {
+    for entry in std::fs::read_dir(path)? {
+        let entry = entry?;
+        let kind = entry.file_type()?;
+        ensure!(!kind.is_symlink(), "Cannot sync a linked module folder");
+        if kind.is_dir() {
+            sync_tree(&entry.path())?;
+        } else {
+            std::fs::File::open(entry.path())?.sync_all()?;
+        }
+    }
+    sync_directory(path)
 }
 fn sync_directory(path: &std::path::Path) -> Result<()> {
     #[cfg(unix)]

@@ -106,6 +106,9 @@ fn sample_install_pin_upgrade_remove_and_reinstall_preserves_account_data() {
         common::Keys::public(&keys.publisher)
     );
 
+    installer
+        .remove_registry(&access, "other-registry")
+        .unwrap();
     // Install a genuine second package which the next index no longer lists.
     let mut absent = common::manifest("1.0.0");
     absent.id = "sample.absent".into();

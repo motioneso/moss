@@ -21,3 +21,14 @@ pub mod ai;
 pub mod credentials;
 pub mod network;
 pub mod services;
+
+pub mod legacy;
+pub mod rls;
+
+mod db_snapshot;
+
+pub mod application;
+
+mod compiled;
+
+pub mod registry_manager;

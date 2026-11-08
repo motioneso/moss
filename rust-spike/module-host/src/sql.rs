@@ -10,15 +10,13 @@ use sqlparser::{
 use std::collections::BTreeMap;
 
 /// The inventory is compiled into a host release. Publisher signatures cannot add exceptions.
-#[derive(Default)]
 pub struct LegacyInventory(pub BTreeMap<(String, String), String>);
+impl Default for LegacyInventory {
+    fn default() -> Self {
+        Self(crate::legacy::hashes())
+    }
+}
 pub fn check(package: &Package, inventory: &LegacyInventory) -> Result<()> {
-    let manifest = ModuleManifest::from_json(&serde_json::json!({
-        "id":package.manifest.id.replace('.',"-"),
-        "database":{"ownedTables":package.manifest.database.owned_tables}
-    }))
-    .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-    let mut checker = StatementChecker::new(&manifest);
     for path in &package.manifest.database.migrations {
         let bytes = &package.files[path];
         if inventory
@@ -56,7 +54,55 @@ pub fn check(package: &Package, inventory: &LegacyInventory) -> Result<()> {
             allowed,
             "This SQL statement is not part of the module package subset"
         );
-        checker.check(sql).map_err(anyhow::Error::msg)?;
+        // Existing first-party names predate the package namespace rule. Rename only SQL
+        // identifier tokens for the checker, never strings or the executed migration bytes.
+        let id = package.manifest.id.replace('-', "--").replace('.', "-");
+        let prefix = crate::manifest::table_prefix(&package.manifest.id);
+        let aliases: BTreeMap<String, String> = package
+            .manifest
+            .database
+            .owned_tables
+            .iter()
+            .filter(|t| !t.starts_with(&format!("app.{prefix}")))
+            .map(|t| {
+                (
+                    t[4..].to_string(),
+                    format!(
+                        "{prefix}legacy_{}",
+                        &crate::trust::digest(t.as_bytes())[..12]
+                    ),
+                )
+            })
+            .collect();
+        let owned: Vec<String> = package
+            .manifest
+            .database
+            .owned_tables
+            .iter()
+            .map(|t| {
+                aliases
+                    .get(&t[4..])
+                    .map(|a| format!("app.{a}"))
+                    .unwrap_or_else(|| t.clone())
+            })
+            .collect();
+        let manifest = ModuleManifest::from_json(
+            &serde_json::json!({"id":id,"database":{"ownedTables":owned}}),
+        )
+        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        let mut tokens =
+            sqlparser::tokenizer::Tokenizer::new(&PostgreSqlDialect {}, sql).tokenize()?;
+        for token in &mut tokens {
+            if let sqlparser::tokenizer::Token::Word(word) = token {
+                if let Some(alias) = aliases.get(&word.value) {
+                    word.value = alias.clone();
+                }
+            }
+        }
+        let checked = tokens.iter().map(ToString::to_string).collect::<String>();
+        StatementChecker::new(&manifest)
+            .check(&checked)
+            .map_err(anyhow::Error::msg)?;
     }
     Ok(())
 }

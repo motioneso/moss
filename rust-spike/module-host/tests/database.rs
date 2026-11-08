@@ -156,17 +156,18 @@ fn b_module_database_role_and_schema_rollback() {
     let ports = Arc::new(
         DatabasePorts::new(app.clone(), Arc::new(LocalPorts::new(data.path()).unwrap())).unwrap(),
     );
+    let lifecycle = Arc::new(
+        PostgresLifecycle::new(
+            Secret::new(std::env::var("JS43_BOOTSTRAP_URL").unwrap()),
+            app.clone(),
+            data.path(),
+        )
+        .unwrap(),
+    );
     let installer = Installer::new(
         data.path(),
         catalog.clone(),
-        Arc::new(
-            PostgresLifecycle::new(
-                Secret::new(std::env::var("JS43_BOOTSTRAP_URL").unwrap()),
-                app,
-                data.path(),
-            )
-            .unwrap(),
-        ),
+        lifecycle.clone(),
         Host::new(Limits::default()).unwrap(),
         ports,
         "0.1.0".parse().unwrap(),
@@ -187,6 +188,13 @@ fn b_module_database_role_and_schema_rollback() {
     manifest.id = "sample.records".into();
     manifest.database.owned_tables = vec![table.into()];
     manifest.database.migrations = vec!["sql/0001_entries.sql".into()];
+    manifest.database.access.insert(
+        table.into(),
+        moss_module_host::manifest::TableAccess::OwnerOrShare {
+            resource_type: "sample.records.entry".into(),
+            share_key: "id".into(),
+        },
+    );
     manifest.capabilities = vec![Capability {
         port: "db".into(),
         operations: BTreeSet::from([
@@ -246,6 +254,56 @@ fn b_module_database_role_and_schema_rollback() {
     )
     .unwrap();
     assert_eq!(rows[0]["title"], "Private row");
+    // Grant view, then manage through the same real share model the generated policy uses.
+    rt.block_on(async {
+        let (db,c)=tokio_postgres::connect(&std::env::var("JS43_BOOTSTRAP_URL").unwrap(),NoTls).await.unwrap();tokio::spawn(async move{let _=c.await;});
+        db.execute("INSERT INTO app.shares(resource_type,resource_id,owner_user_id,grantee_user_id,level) VALUES('sample.records.entry',$1,$2,$3,'view')",&[&row_id,&actor,&member]).await.unwrap();
+        // Existing-schema fixture probes serial, identity and generated-column recovery.
+        db.batch_execute("ALTER TABLE app.sample_records_entries ADD COLUMN serial_value serial, ADD COLUMN identity_value bigint GENERATED ALWAYS AS IDENTITY, ADD COLUMN upper_title text GENERATED ALWAYS AS (upper(title)) STORED").await.unwrap();
+    });
+    let member_access = AccessContext::new(member, "shared");
+    assert!(installer
+        .call("sample.records", member_access.clone(), "route", &get)
+        .unwrap()
+        .contains("Private row"));
+    let edit=serde_json::json!({"operation":"update","resource":table,"parameters":{"id":row_id,"values":{"title":"Shared edit"}}}).to_string();
+    assert_eq!(
+        installer
+            .call("sample.records", member_access.clone(), "route", &edit)
+            .unwrap(),
+        "[]"
+    );
+    rt.block_on(async {
+        let (db, c) = tokio_postgres::connect(&std::env::var("JS43_BOOTSTRAP_URL").unwrap(), NoTls)
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            let _ = c.await;
+        });
+        db.execute(
+            "UPDATE app.shares SET level='manage' WHERE resource_id=$1",
+            &[&row_id],
+        )
+        .await
+        .unwrap();
+    });
+    assert!(installer
+        .call("sample.records", member_access.clone(), "route", &edit)
+        .unwrap()
+        .contains("Shared edit"));
+    let delete =
+        serde_json::json!({"operation":"delete","resource":table,"parameters":{"id":row_id}})
+            .to_string();
+    assert_eq!(
+        installer
+            .call("sample.records", member_access, "route", &delete)
+            .unwrap(),
+        "[]"
+    );
+    let reset=serde_json::json!({"operation":"update","resource":table,"parameters":{"id":row_id,"values":{"title":"Private row"}}}).to_string();
+    installer
+        .call("sample.records", access.clone(), "route", &reset)
+        .unwrap();
     let foreign_table = "app.sample_records_unowned";
     rt.block_on(async {
         let (db, connection) =
@@ -319,6 +377,9 @@ fn b_module_database_role_and_schema_rollback() {
     .unwrap();
     assert_eq!(rows[0]["title"], "Private row");
     assert!(rows[0].get("extra").is_none());
+    assert_eq!(rows[0]["serial_value"], 1);
+    assert_eq!(rows[0]["identity_value"], 1);
+    assert_eq!(rows[0]["upper_title"], "PRIVATE ROW");
     assert_eq!(
         catalog.load().unwrap().installed["sample.records"]
             .manifest
@@ -326,6 +387,70 @@ fn b_module_database_role_and_schema_rollback() {
             .to_string(),
         "1.0.0"
     );
+    // Simulate process death after DDL commits but before catalog activation. A fresh host
+    // must restore schema and data, and the same journal must be safe to replay twice.
+    use moss_module_host::store::Lifecycle;
+    let before = catalog.load().unwrap();
+    lifecycle.pause_jobs("sample.records").unwrap();
+    let snapshot = lifecycle.snapshot("sample.records").unwrap();
+    let root = vault::Root::open(&data.path().join("modules")).unwrap();
+    let now = chrono::Utc::now();
+    root.subdir("snapshots")
+        .unwrap()
+        .subdir("sample.records")
+        .unwrap()
+        .subdir(&snapshot)
+        .unwrap()
+        .write(
+            "snapshot.json",
+            &serde_json::to_vec(&moss_module_host::recovery::Snapshot {
+                module: "sample.records".into(),
+                id: snapshot.clone(),
+                created: now,
+                expires: now + chrono::Duration::days(30),
+                reason: "upgrade".into(),
+                previous: Some(before.installed["sample.records"].clone()),
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    let journal=serde_json::to_vec(&serde_json::json!({"module":"sample.records","snapshot":snapshot,"before":before,"target":digest})).unwrap();
+    rt.block_on(async {
+        let (db, c) = tokio_postgres::connect(&std::env::var("JS43_BOOTSTRAP_URL").unwrap(), NoTls)
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            let _ = c.await;
+        });
+        db.batch_execute("ALTER TABLE app.sample_records_entries ADD COLUMN crash_only text")
+            .await
+            .unwrap();
+    });
+    for _ in 0..2 {
+        root.write("operation.json", &journal).unwrap();
+        let restarted = Installer::new(
+            data.path(),
+            catalog.clone(),
+            lifecycle.clone(),
+            Host::new(Limits::default()).unwrap(),
+            Arc::new(
+                DatabasePorts::new(app.clone(), Arc::new(LocalPorts::new(data.path()).unwrap()))
+                    .unwrap(),
+            ),
+            "0.1.0".parse().unwrap(),
+            LegacyInventory::default(),
+        )
+        .unwrap();
+        let rows: serde_json::Value = serde_json::from_str(
+            &restarted
+                .call("sample.records", access.clone(), "route", &get)
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(rows[0]["title"], "Private row");
+        assert!(rows[0].get("crash_only").is_none());
+        assert!(!data.path().join("modules/operation.json").exists());
+    }
     installer.remove(&access, "sample.records", None).unwrap();
     // A failing reinstall must not mistake retained tables for an empty first install.
     assert!(installer
@@ -387,4 +512,251 @@ fn b_module_database_role_and_schema_rollback() {
         "[]"
     );
     println!("PASS module SQL: restricted owner, generated forced RLS, actor-scoped typed queries, failed health hook restores old schema and rows");
+}
+
+#[test]
+#[ignore = "Only through verify-gate and tools/gate.sh; run serially"]
+fn c_real_queue_pauses_rebinds_upgrades_and_runs_with_actor() {
+    use moss_module_host::{
+        jobs::{manifest_hash, JobPorts},
+        manifest::{Capability, ParameterKind},
+        store::Lifecycle,
+    };
+    use serde_json::json;
+    assert_eq!(std::env::var("JARVIS_GATE_RUN").as_deref(), Ok("1"));
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let actor = uuid::Uuid::new_v4();
+    let member = uuid::Uuid::new_v4();
+    let app=rt.block_on(async {
+        let (db,c)=tokio_postgres::connect(&std::env::var("JS43_BOOTSTRAP_URL").unwrap(),NoTls).await.unwrap();tokio::spawn(async move{let _=c.await;});
+        db.execute("INSERT INTO app.users(id,email,name,is_instance_admin) VALUES($1,'queue-admin@example.test','Queue admin',true),($2,'queue-member@example.test','Queue member',false)",&[&actor,&member]).await.unwrap();
+        Database::connect(&std::env::var("JS43_APP_URL").unwrap(),4,RuntimeRole::App).await.unwrap()
+    });
+    let access = AccessContext::new(actor, "queue");
+    let catalog = Arc::new(PostgresCatalog::new(app.clone(), access.clone()).unwrap());
+    // Earlier tests' temporary package directories have ended.
+    let before = catalog.load().unwrap();
+    catalog
+        .commit(
+            before.revision,
+            &State {
+                revision: before.revision + 1,
+                ..State::default()
+            },
+        )
+        .unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let registry = tempfile::tempdir().unwrap();
+    let keys = common::Keys::new();
+    keys.write(registry.path(), "1.0.0", 1, vec![]);
+    let lifecycle = Arc::new(
+        PostgresLifecycle::new(
+            Secret::new(std::env::var("JS43_BOOTSTRAP_URL").unwrap()),
+            app.clone(),
+            data.path(),
+        )
+        .unwrap(),
+    );
+    let ports = Arc::new(
+        JobPorts::new(
+            Secret::new(std::env::var("JS43_APP_URL").unwrap()),
+            app,
+            Arc::new(LocalPorts::new(data.path()).unwrap()),
+        )
+        .unwrap(),
+    );
+    let installer = Installer::new(
+        data.path(),
+        catalog.clone(),
+        lifecycle.clone(),
+        Host::new(Limits::default()).unwrap(),
+        ports,
+        "0.1.0".parse().unwrap(),
+        LegacyInventory::default(),
+    )
+    .unwrap();
+    let source = installer
+        .refresh(
+            &access,
+            Source::Folder(registry.path().into()),
+            &common::Keys::public(&keys.root),
+            &common::Keys::public(&keys.root),
+            "sample-registry",
+        )
+        .unwrap();
+    let mut m = common::manifest("1.0.0");
+    m.id = "sample.jobs".into();
+    m.capabilities = vec![Capability {
+        port: "jobs".into(),
+        operations: ["enqueue".into(), "cancel".into()].into(),
+        resources: ["sync".into()].into(),
+        allow_private: false,
+    }];
+    m.jobs.insert(
+        "sync".into(),
+        [("count".into(), ParameterKind::Count)].into(),
+    );
+    let mut files = common::files(&m);
+    files.insert(
+        "code/module.wasm".into(),
+        wat::parse_str(
+            include_str!("../sample/module.wat").replace("moss:module/kv@", "moss:module/jobs@"),
+        )
+        .unwrap(),
+    );
+    let install = |files: &std::collections::BTreeMap<String, Vec<u8>>| {
+        let bytes = moss_module_host::archive::pack(files).unwrap();
+        let hash = moss_module_host::trust::digest(&bytes);
+        installer
+            .import_file(
+                &access,
+                &source,
+                &bytes,
+                &common::Keys::sign(&keys.publisher, hash.as_bytes()),
+                "sample",
+                true,
+            )
+            .unwrap();
+    };
+    install(&files);
+    let enqueue =
+        json!({"operation":"enqueue","resource":"sync","parameters":{"count":2}}).to_string();
+    let response: serde_json::Value = serde_json::from_str(
+        &installer
+            .call("sample.jobs", access.clone(), "route", &enqueue)
+            .unwrap(),
+    )
+    .unwrap();
+    let id: uuid::Uuid = response["id"].as_str().unwrap().parse().unwrap();
+    let cancel = json!({"operation":"cancel","resource":"sync","parameters":{"id":id}}).to_string();
+    assert_eq!(
+        installer
+            .call(
+                "sample.jobs",
+                AccessContext::new(member, "other"),
+                "route",
+                &cancel
+            )
+            .unwrap(),
+        "{\"cancelled\":false}"
+    );
+    lifecycle.pause_jobs("sample.jobs").unwrap();
+    let worker = Secret::new(std::env::var("JS43_WORKER_URL").unwrap());
+    assert!(!installer.run_job(&worker).unwrap());
+    lifecycle.resume_jobs("sample.jobs").unwrap();
+    m.version = "1.1.0".parse().unwrap();
+    files.insert("moss.module.json".into(), serde_json::to_vec(&m).unwrap());
+    install(&files);
+    let installed = catalog.load().unwrap().installed["sample.jobs"]
+        .manifest
+        .clone();
+    assert_eq!(installed.version, m.version);
+    assert_eq!(
+        manifest_hash(&installed),
+        manifest_hash(&m),
+        "Manifest identity changed on catalog round-trip"
+    );
+    rt.block_on(async {
+        let (db, c) = tokio_postgres::connect(&std::env::var("JS43_BOOTSTRAP_URL").unwrap(), NoTls)
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            let _ = c.await;
+        });
+        let payload: serde_json::Value = db
+            .query_one("SELECT payload FROM moss_queue.jobs WHERE id=$1", &[&id])
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(payload["manifestHash"], manifest_hash(&m));
+        assert_eq!(payload["actorUserId"], actor.to_string());
+    });
+    assert!(installer.run_job(&worker).unwrap());
+    assert!(!installer.run_job(&worker).unwrap());
+    let response: serde_json::Value = serde_json::from_str(
+        &installer
+            .call("sample.jobs", access.clone(), "route", &enqueue)
+            .unwrap(),
+    )
+    .unwrap();
+    let cancel = json!({"operation":"cancel","resource":"sync","parameters":{"id":response["id"]}})
+        .to_string();
+    assert_eq!(
+        installer
+            .call("sample.jobs", access.clone(), "route", &cancel)
+            .unwrap(),
+        "{\"cancelled\":true}"
+    );
+    installer
+        .call("sample.jobs", access.clone(), "route", &enqueue)
+        .unwrap();
+    installer.remove(&access, "sample.jobs", None).unwrap();
+    assert!(!installer.run_job(&worker).unwrap());
+    println!("PASS real Phase 2b queue: account-bound enqueue and cancellation, pause blocks claims, compatible upgrade rebinds payload, Wasm worker executes, removal stops work");
+}
+
+#[test]
+#[ignore = "Only through verify-gate and tools/gate.sh; run serially"]
+fn d_existing_core_and_module_ledgers_keep_their_hashes() {
+    use moss_module_host::{archive::Package, manifest::Ledger, store::Lifecycle};
+    assert_eq!(std::env::var("JARVIS_GATE_RUN").as_deref(), Ok("1"));
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let app = rt
+        .block_on(Database::connect(
+            &std::env::var("JS43_APP_URL").unwrap(),
+            4,
+            RuntimeRole::App,
+        ))
+        .unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let lifecycle = PostgresLifecycle::new(
+        Secret::new(std::env::var("JS43_BOOTSTRAP_URL").unwrap()),
+        app,
+        data.path(),
+    )
+    .unwrap();
+    let mut m = common::manifest("1.0.0");
+    m.id = "tasks".into();
+    m.database.ledger = Ledger::CoreLegacy;
+    m.database.owned_tables = vec!["app.tasks".into(), "app.task_activity".into()];
+    let mut files = common::files(&m);
+    let mut paths: Vec<_> = std::fs::read_dir("../../packages/tasks/sql")
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|x| x == "sql"))
+        .collect();
+    paths.sort();
+    for path in paths {
+        let name = format!("sql/{}", path.file_name().unwrap().to_str().unwrap());
+        m.database.migrations.push(name.clone());
+        files.insert(name, std::fs::read(path).unwrap());
+    }
+    m.validate(&"0.1.0".parse().unwrap()).unwrap();
+    let mut package = Package {
+        manifest: m,
+        files,
+        digest: String::new(),
+    };
+    moss_module_host::sql::check(&package, &LegacyInventory::default()).unwrap();
+    lifecycle.migrate(&package, None).unwrap();
+    lifecycle.audit(&package).unwrap();
+    let first = package.manifest.database.migrations[0].clone();
+    package.files.get_mut(&first).unwrap().push(b' ');
+    assert!(lifecycle.audit(&package).is_err());
+    let mut m = common::manifest("1.0.0");
+    m.id = "sample.ledger".into();
+    m.database.ledger = Ledger::ModuleLegacy;
+    m.database.owned_tables = vec!["app.sample_ledger_entries".into()];
+    m.database.migrations = vec!["sql/0001_entries.sql".into()];
+    let mut files = common::files(&m);
+    files.insert("sql/0001_entries.sql".into(),b"CREATE TABLE app.sample_ledger_entries(id uuid PRIMARY KEY,owner_user_id uuid NOT NULL REFERENCES app.users(id))".to_vec());
+    let p = Package {
+        manifest: m,
+        files,
+        digest: String::new(),
+    };
+    lifecycle.migrate(&p, None).unwrap();
+    lifecycle.audit(&p).unwrap();
+    lifecycle.migrate(&p, None).unwrap();
+    println!("PASS legacy ledgers: compiled Tasks inventory retains original core checksums, changed bytes fail startup audit, module ledger applies once with original text hash");
 }

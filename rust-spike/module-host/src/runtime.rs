@@ -77,6 +77,7 @@ pub struct Host {
     limits: Limits,
     _clock: Arc<()>,
     compiled: Mutex<std::collections::BTreeMap<String, Component>>,
+    disk: Option<crate::compiled::Compiled>,
 }
 impl Host {
     pub fn new(limits: Limits) -> Result<Self> {
@@ -105,19 +106,49 @@ impl Host {
             limits,
             _clock: clock,
             compiled: Mutex::new(Default::default()),
+            disk: None,
         })
+    }
+    pub fn cached(
+        limits: Limits,
+        path: &std::path::Path,
+        key: safety_core::secret::Secret,
+    ) -> Result<Self> {
+        let mut host = Self::new(limits)?;
+        host.disk = Some(crate::compiled::Compiled::new(path, key, &host.engine)?);
+        Ok(host)
     }
     fn compile(&self, wasm: &[u8]) -> Result<Component> {
         let key = crate::trust::digest(wasm);
+        if let Some(component) = self
+            .compiled
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Compiled cache is busy"))?
+            .get(&key)
+            .cloned()
+        {
+            return Ok(component);
+        }
+        // Compilation and disk access do not hold the process-wide cache mutex.
+        let component = match self
+            .disk
+            .as_ref()
+            .and_then(|cache| cache.load(&self.engine, &key))
+        {
+            Some(component) => component,
+            None => {
+                let component = Component::new(&self.engine, wasm)
+                    .context("The module is not a supported WebAssembly component")?;
+                if let Some(cache) = &self.disk {
+                    let _ = cache.save(&key, &component);
+                }
+                component
+            }
+        };
         let mut cache = self
             .compiled
             .lock()
-            .map_err(|_| anyhow::anyhow!("The compiled module cache is busy"))?;
-        if let Some(component) = cache.get(&key) {
-            return Ok(component.clone());
-        }
-        let component = Component::new(&self.engine, wasm)
-            .context("The module is not a supported WebAssembly component")?;
+            .map_err(|_| anyhow::anyhow!("Compiled cache is busy"))?;
         if cache.len() >= 32 {
             cache.clear();
         }

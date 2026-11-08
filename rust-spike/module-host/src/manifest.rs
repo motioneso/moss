@@ -82,6 +82,22 @@ pub struct Database {
     pub migrations: Vec<String>,
     #[serde(default)]
     pub ledger: Ledger,
+    #[serde(default)]
+    pub access: BTreeMap<String, TableAccess>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "access", rename_all = "kebab-case", deny_unknown_fields)]
+pub enum TableAccess {
+    OwnerOnly,
+    OwnerOrShare {
+        #[serde(rename = "resourceType")]
+        resource_type: String,
+        #[serde(rename = "shareKey")]
+        share_key: String,
+    },
+}
+pub fn table_prefix(id: &str) -> String {
+    id.replace('-', "__").replace('.', "_") + "_"
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
@@ -249,15 +265,62 @@ impl Manifest {
                 .all(|p| p.starts_with("sql/") && p.ends_with(".sql")),
             "Migrations must live in the sql folder"
         );
-        let prefix = self.id.replace(['.', '-'], "_") + "_";
+        let mut last = 0_u64;
+        for path in &self.database.migrations {
+            let number = crate::legacy::version(path)?.parse::<u64>()?;
+            ensure!(
+                number > last,
+                "Migrations must be unique and in forward numeric order"
+            );
+            last = number;
+        }
+        let prefix = table_prefix(&self.id);
         for table in &self.database.owned_tables {
             ensure!(
-                table.starts_with(&format!("app.{prefix}"))
+                (table.starts_with(&format!("app.{prefix}"))
+                    || (self.database.ledger != Ledger::Module
+                        && crate::legacy::owns(&self.id, table)))
+                    && table.len() <= 67
                     && table[4..]
                         .bytes()
                         .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_'),
                 "A module can own only its own tables"
             );
+        }
+        ensure!(
+            self.database
+                .owned_tables
+                .iter()
+                .collect::<BTreeSet<_>>()
+                .len()
+                == self.database.owned_tables.len(),
+            "Repeated owned table"
+        );
+        for (table, access) in &self.database.access {
+            ensure!(
+                self.database.owned_tables.contains(table),
+                "Sharing may name only an owned table"
+            );
+            if let TableAccess::OwnerOrShare {
+                resource_type,
+                share_key,
+            } = access
+            {
+                ensure!(
+                    identifier(resource_type)
+                        && !share_key.is_empty()
+                        && share_key.len() <= 63
+                        && share_key
+                            .bytes()
+                            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_'),
+                    "Invalid sharing declaration"
+                );
+                ensure!(
+                    resource_type == &self.id
+                        || resource_type.starts_with(&(self.id.clone() + ".")),
+                    "New shared resource types must belong to this module"
+                );
+            }
         }
         for (queue, params) in &self.jobs {
             ensure!(
@@ -356,6 +419,10 @@ impl Manifest {
                 .iter()
                 .map(|(name, t)| format!("Tool {name}: {}", t.risk))
                 .collect(),
+            "db" => vec![format!(
+                "Sharing: {}",
+                serde_json::to_string(&self.database.access).expect("sharing")
+            )],
             "kv" => self
                 .install_wide_kv
                 .iter()

@@ -257,3 +257,54 @@ fn approval_describes_changed_credential_tool_and_install_scope() {
     assert!(descriptions.contains("instance"));
     assert!(descriptions.contains("counter"));
 }
+
+#[test]
+fn migrations_are_numbered_forward_and_table_prefixes_do_not_alias() {
+    let mut m = common::manifest("1.0.0");
+    m.database.migrations = vec!["sql/0002_next.sql".into(), "sql/0001_first.sql".into()];
+    assert!(m.validate(&"0.1.0".parse().unwrap()).is_err());
+    m.database.migrations.clear();
+    m.id = "sample.counter-more".into();
+    m.database.owned_tables = vec!["app.sample_counter_more_entries".into()];
+    assert!(
+        m.validate(&"0.1.0".parse().unwrap()).is_err(),
+        "Hyphens and dots must not alias table namespaces"
+    );
+}
+
+#[test]
+fn authenticated_compile_cache_rebuilds_tampered_native_bytes() {
+    use safety_core::secret::Secret;
+    let cache = tempfile::tempdir().unwrap();
+    let m = common::manifest("1.0.0");
+    let host = Host::cached(
+        Limits::default(),
+        cache.path(),
+        Secret::new("test-only-cache-key-with-thirty-two-bytes"),
+    )
+    .unwrap();
+    host.validate(&common::wasm(), &m).unwrap();
+    drop(host);
+    let path = std::fs::read_dir(cache.path())
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let original = std::fs::read(&path).unwrap();
+    let mut tampered = original.clone();
+    tampered[0] ^= 1;
+    std::fs::write(&path, tampered).unwrap();
+    let host = Host::cached(
+        Limits::default(),
+        cache.path(),
+        Secret::new("test-only-cache-key-with-thirty-two-bytes"),
+    )
+    .unwrap();
+    host.validate(&common::wasm(), &m).unwrap();
+    assert_eq!(
+        std::fs::read(path).unwrap(),
+        original,
+        "Unauthenticated native code must be rebuilt"
+    );
+}
