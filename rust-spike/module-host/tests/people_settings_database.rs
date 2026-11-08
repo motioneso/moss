@@ -50,7 +50,7 @@ fn people_settings_preserve_shared_preferences_and_owner_privacy() {
         ("JS43_WORKER_URL", RuntimeRole::Worker),
     ] {
         // Each role gets the same isolated starting state. In particular, the
-        // other account's null folder must not turn the RLS-off control into a
+        // other account's settings must not turn the RLS-off control into a
         // multiple-row backend failure instead of the intended observed leak.
         rt.block_on(async {
             bootstrap.execute("DELETE FROM app.preferences WHERE owner_user_id=ANY($1::uuid[])", &[&vec![actor, other, admin]]).await.unwrap();
@@ -202,7 +202,8 @@ fn people_settings_preserve_shared_preferences_and_owner_privacy() {
                 "/people/notes-settings",
                 json!({"folder":null})
             )["status"],
-            200
+            400,
+            "Legacy null folder saves are refused"
         );
         assert_eq!(
             call(actor, "GET", "/people/notes-settings", Value::Null)["body"],
@@ -214,8 +215,12 @@ fn people_settings_preserve_shared_preferences_and_owner_privacy() {
                 "PUT",
                 "/people/notes-settings",
                 json!({"folder":null})
-            )["body"],
-            json!({"folder":null})
+            )["status"],
+            400
+        );
+        assert_eq!(
+            call(actor, "GET", "/people/notes-settings", Value::Null)["body"],
+            json!({"folder":folder})
         );
         assert_eq!(
             call(
@@ -232,7 +237,7 @@ fn people_settings_preserve_shared_preferences_and_owner_privacy() {
         ))
         .unwrap();
         println!(
-            "{env}: compiled Settings save/clear/browse/default-on/sibling settings checks PASSED"
+            "{env}: compiled Settings save/refused-null/browse/default-on/sibling settings checks PASSED"
         );
     }
     rt.block_on(bootstrap.execute(

@@ -314,15 +314,20 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
                 &moss_module_host::frame::AssetPolicy::new("https://moss.example.test").unwrap(),
             )
             .unwrap();
-        assert!(String::from_utf8(asset.body).unwrap().contains("./boot.mjs"));
-        let policy = moss_module_host::frame::AssetPolicy::new("https://moss.example.test").unwrap();
+        assert!(String::from_utf8(asset.body)
+            .unwrap()
+            .contains("./boot.mjs"));
+        let policy =
+            moss_module_host::frame::AssetPolicy::new("https://moss.example.test").unwrap();
         let boot = installer
             .ui_asset("people", parts[3], "ui/boot.mjs", &policy)
             .unwrap();
         let boot = String::from_utf8(boot.body).unwrap();
         assert!(boot.contains("./people.js") && boot.contains("./people_bg.wasm"));
         for path in ["ui/people.js", "ui/people_bg.wasm"] {
-            let asset = installer.ui_asset("people", parts[3], path, &policy).unwrap();
+            let asset = installer
+                .ui_asset("people", parts[3], path, &policy)
+                .unwrap();
             assert!(!asset.body.is_empty(), "Installed UI asset {path}");
             if path.ends_with(".wasm") {
                 assert!(asset.body.starts_with(b"\0asm"));
