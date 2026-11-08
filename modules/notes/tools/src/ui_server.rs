@@ -262,7 +262,10 @@ async fn private(
                 let screen = app
                     .installer
                     .screen(&access, "notes", "/settings/connections")?;
-                let html = include_str!("../../ui/host.html").replace("__SCREEN__", &screen.src);
+                let base = format!("{}/base.css", screen.src.rsplit_once('/').unwrap().0);
+                let html = include_str!("../../ui/host.html")
+                    .replace("__SCREEN__", &screen.src)
+                    .replace("__BASE__", &base);
                 return Ok(Html(html).into_response());
             }
             if uri.path().starts_with("/api/m/notes/") {

@@ -1,6 +1,11 @@
 /* global document, window */
 import { connectModuleFrame } from "/host-bridge.mjs";
 const frame = document.getElementById("module");
+document.documentElement.dataset.theme = "sage";
+document.documentElement.dataset.colorMode = window.matchMedia("(prefers-color-scheme: dark)")
+  .matches
+  ? "dark"
+  : "light";
 connectModuleFrame(frame, "notes", {
   request: async (method, path, body) => {
     const response = await fetch(path, {
@@ -10,7 +15,10 @@ connectModuleFrame(frame, "notes", {
     });
     return { status: response.status, body: await response.json() };
   },
-  theme: () => ({ theme: "sage", colorMode: "light" }),
+  theme: () => ({
+    theme: document.documentElement.dataset.theme,
+    colorMode: document.documentElement.dataset.colorMode
+  }),
   navigate: (path) => {
     window.location.href = path;
   },

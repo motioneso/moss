@@ -61,7 +61,13 @@ try {
   const log = openSync(join(out, "server.log"), "w", 0o600);
   child = spawn(binary, [], {
     stdio: ["ignore", log, log],
-    env: { ...process.env, NOTES_UI_BOOTSTRAP_URL: urls.bootstrap, NOTES_UI_PRODUCER_URL: urls.app }
+    env: {
+      ...process.env,
+      TOKIO_WORKER_THREADS: "2",
+      RAYON_NUM_THREADS: "2",
+      NOTES_UI_BOOTSTRAP_URL: urls.bootstrap,
+      NOTES_UI_PRODUCER_URL: urls.app
+    }
   });
   const running = new Promise<number | null>((done, fail) => {
     child!.once("exit", done);
@@ -137,11 +143,15 @@ try {
   const db = new pg.Client({ connectionString: urls.bootstrap });
   await db.connect();
   try {
-    const result = await db.query<{ value_json: unknown }>(
-      "select value_json from app.preferences where key = 'notes-source-path'"
+    const result = await db.query<{ value_json: unknown; revision: number }>(
+      "select value_json, revision from app.preferences where key = 'notes-source-path'"
     );
     assert.equal(result.rows.length, 1, "UI must have linked and then unlinked the owner's folder");
     assert.equal(result.rows[0]?.value_json, null, "Browser-confirmed unlink must persist");
+    assert(
+      (result.rows[0]?.revision ?? 0) >= 2,
+      "Link then unlink must have changed the saved preference at least twice"
+    );
   } finally {
     await db.end();
   }

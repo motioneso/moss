@@ -38,14 +38,26 @@ fn installed_settings_match_legacy_and_owner_privacy_fails_without_rls() {
         tokio::spawn(async move {
             let _ = connection.await;
         });
-        for migration in [
-            moss_module_host::postgres::MIGRATION,
-            moss_module_host::migrations::MIGRATION,
-            moss_platform_jobs::MIGRATION,
-            moss_module_host::jobs::MIGRATION,
-        ] {
-            db.batch_execute(migration).await.unwrap();
+        if !db
+            .query_one("SELECT to_regnamespace('moss_modules') IS NOT NULL", &[])
+            .await
+            .unwrap()
+            .get::<_, bool>(0)
+        {
+            for migration in [
+                moss_module_host::postgres::MIGRATION,
+                moss_module_host::migrations::MIGRATION,
+                moss_platform_jobs::MIGRATION,
+                moss_module_host::jobs::MIGRATION,
+            ] {
+                db.batch_execute(migration).await.unwrap();
+            }
         }
+        // The preceding export binary has its own temporary disk root. Reset
+        // only its fixture activation pointer, retaining Notes rows and ledgers.
+        db.execute("DELETE FROM moss_modules.catalog", &[])
+            .await
+            .unwrap();
         db
     });
     let database = rt

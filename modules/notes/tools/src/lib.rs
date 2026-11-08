@@ -49,6 +49,14 @@ pub fn package_files(root: &Path, component: Vec<u8>) -> Result<BTreeMap<String,
     }
     files.insert("code/module.wasm".into(), component);
     files.insert("ui/index.html".into(), screen::render().into_bytes());
+    // Reuse the app's authored document defaults; isolated frames do not
+    // inherit the shell's typography, background or box sizing.
+    files.insert(
+        "ui/base.css".into(),
+        std::fs::read_to_string(root.join("apps/web/src/styles/boot.css"))?
+            .replace("@import \"./tokens.css\";", "")
+            .into_bytes(),
+    );
     for name in ["app.mjs", "notes.css"] {
         files.insert(
             format!("ui/{name}"),
