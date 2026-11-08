@@ -127,4 +127,39 @@ an at-least-once seam, not an atomic database/queue outbox. A publication failur
 error for queue retry; another indexing pass can append another legacy event.
 
 The installed package must still declare both queue schemas, retries and capability grants.
-This checkpoint does not connect ingest nudges, HTTP routes, installed chat or Settings.
+This checkpoint does not connect ingest nudges, installed HTTP, chat or Settings.
+
+## Internal route-envelope checkpoint
+
+The guest accepts the shared SDK's `RouteRequest` for the paths below. `path` is the
+matched template; IDs come from `params`, decoded query values from `query`, and JSON
+input from `body`. These are not installed endpoints or new consumer API names.
+
+| Method | Template                                | Result body                                                |
+| ------ | --------------------------------------- | ---------------------------------------------------------- |
+| GET    | `/people`                               | `{people}`                                                 |
+| GET    | `/people/resolve`                       | `{person}`; null if unresolved                             |
+| GET    | `/people/match-candidates`              | `{candidates}`                                             |
+| GET    | `/people/:id`                           | `{person}` with identities and recent links                |
+| GET    | `/people/:id/links`                     | `{links}`                                                  |
+| POST   | `/people/match-candidates/:id/accept`   | `{accepted: true}`                                         |
+| POST   | `/people/match-candidates/:id/reject`   | `{rejected: true}`                                         |
+| POST   | `/people/match-candidates/:id/suppress` | `{suppressed: true}`                                       |
+| POST   | `/people/:id/merge`                     | `{person}`                                                 |
+| POST   | `/people/:id/split-identity`            | `{person}`                                                 |
+| POST   | `/people`                               | `{person, notePath}`                                       |
+| PATCH  | `/people/:id`                           | `{person, notePath}` or projection-only `{person}`         |
+| POST   | `/people/:id/archive`                   | `{archived: true, person, notePath}` or `{archived: true}` |
+| POST   | `/people/notes/refresh`                 | `{discovered, projected, ignored, candidates}`             |
+
+Responses use `{status, body}`. Internal failures return status 500 and
+`{error: "Internal Server Error"}`; unavailable refresh returns status 400 and
+`{error: "People notes folder is unavailable"}`. The host finalizes failed response
+envelopes as failures, rolling back the invocation and compensating its note writes.
+Rename/archive fall back only before publication when the folder or canonical note is
+unavailable; a failed publication/projection never becomes a projection-only success.
+
+The differential gate covers selected query/error cases and valid JSON bodies. Fastify's
+schema validation/coercion is not implemented here: malformed bodies can currently return
+500 where the legacy HTTP layer returns 400. Settings/directory/index-refresh routes,
+ingest nudges, package route registration and real HTTP compatibility remain unfinished.

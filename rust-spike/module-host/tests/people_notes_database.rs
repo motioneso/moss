@@ -164,6 +164,9 @@ fn compiled_people_coordinates_canonical_notes_and_projection() {
             )?;
             let reply: Value = serde_json::from_str(&reply)?;
             if reply["status"] != 200 {
+                if reply["status"] == 500 {
+                    assert_eq!(reply["body"], json!({"error":"Internal Server Error"}));
+                }
                 anyhow::bail!("People route refused with status {}", reply["status"]);
             }
             Ok(reply["body"].clone())
@@ -337,6 +340,31 @@ fn compiled_people_coordinates_canonical_notes_and_projection() {
         run(actor, "POST", "/people/notes/refresh", json!({}), json!({})).unwrap()["candidates"],
         2
     );
+    // With a valid selected folder but no canonical note, edits retain the
+    // legacy projection-only fallback without creating a replacement file.
+    let fallback = run(
+        actor,
+        "PATCH",
+        "/people/:id",
+        json!({"displayName":"Projection only"}),
+        json!({"id":id}),
+    )
+    .unwrap();
+    assert_eq!(fallback["person"]["displayName"], "Projection only");
+    assert_eq!(fallback["person"]["confidence"], "1.00");
+    assert!(fallback.get("notePath").is_none());
+    assert_eq!(
+        run(
+            actor,
+            "POST",
+            "/people/:id/archive",
+            json!({}),
+            json!({"id":id})
+        )
+        .unwrap(),
+        json!({"archived":true})
+    );
+    assert!(!folder.join(path).exists());
     let oracle: Value = serde_json::from_slice(
         &std::fs::read(std::env::var("JS50_PEOPLE_ORACLE").unwrap()).unwrap(),
     )
