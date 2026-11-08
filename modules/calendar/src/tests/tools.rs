@@ -14,15 +14,27 @@ fn settings_patch_reaches_the_scoped_host_once() {
     struct Settings;
     impl Host for Settings {
         fn call(&self, port: &str, operation: &str, resource: &str, body: Value) -> Result<Value> {
-            assert_eq!((port, operation, resource), ("kv", "set", "calendar.briefing-settings"));
+            assert_eq!(
+                (port, operation, resource),
+                ("kv", "set", "calendar.briefing-settings")
+            );
             assert_eq!(body, json!({"lookaheadDays":0,"timeBlockMode":"auto"}));
             Ok(json!({"calendar.briefing_lookahead_days":0,"calendar.time_block_mode":"auto"}))
         }
     }
-    let response: Value = serde_json::from_str(&handle(&Settings, "route", &json!({
-        "method":"PATCH","path":"/briefing-settings","params":{},"query":{},
-        "body":{"lookaheadDays":0,"timeBlockMode":"auto"}
-    }).to_string()).unwrap()).unwrap();
+    let response: Value = serde_json::from_str(
+        &handle(
+            &Settings,
+            "route",
+            &json!({
+                "method":"PATCH","path":"/briefing-settings","params":{},"query":{},
+                "body":{"lookaheadDays":0,"timeBlockMode":"auto"}
+            })
+            .to_string(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
     assert_eq!(response["status"], 200);
     assert_eq!(response["body"]["settings"]["lookaheadDays"], 0);
     assert_eq!(response["body"]["settings"]["timeBlockMode"], "auto");
@@ -92,4 +104,33 @@ fn heartbeat_projection_tracks_material_change_and_bounded_boundaries() {
     let changed = heartbeat::project(&rows, None, now, 1).unwrap();
     assert_ne!(out["data"]["revision"], changed["data"]["revision"]);
     assert_eq!(changed["data"]["freshness"], "unknown");
+}
+
+#[test]
+fn settings_reject_unknown_owners_and_invalid_values_before_host_access() {
+    for body in [
+        json!(null),
+        json!([]),
+        json!({"ownerUserId":"foreign"}),
+        json!({"lookaheadDays":3}),
+        json!({"lookaheadDays":null}),
+        json!({"prepTaskMode":"trusted_auto"}),
+        json!({"timeBlockMode":true}),
+        json!({"createTasks":"yes"}),
+        json!({"blockTime":null}),
+    ] {
+        let response: Value = serde_json::from_str(
+            &handle(
+                &NoCalls,
+                "route",
+                &json!({
+                    "method":"PATCH","path":"/briefing-settings","body":body
+                })
+                .to_string(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(response["status"], 400);
+    }
 }

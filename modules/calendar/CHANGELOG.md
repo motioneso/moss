@@ -1,5 +1,13 @@
 # Calendar package
 
+## 0.6.0
+
+- Save account lookahead, prep-task and time-block choices from Calendar settings.
+- Save the matching time-block permission atomically with settings.
+- Keep confirmed values after failed saves and allow retry.
+- Compare writes, stored preferences and policy against production routes; extend privacy controls.
+- Provider actions, source-behavior controls, full shell and second-device acceptance remain open.
+
 ## 0.5.0
 
 - Open linked events through the signed-in Calendar page and keep their details current.

@@ -391,3 +391,28 @@ replacement, exhaustive error/coercion equivalence and physical second-device tr
 HTTPS remain outside this bounded checkpoint and required for final acceptance.
 No new global tools or dependencies are planned; builds reuse the existing scratch
 Rust/Wasm toolchain. Proof receipts and review disposition will accompany the checkpoint.
+
+### Delivered settings boundary
+
+Package 0.6.0 exposes the original settings PATCH URL and the installed route.
+Lookahead, prep-task and time-block choices save per account, reload from existing
+preferences, retain confirmed values after failure and allow retry. Time-block mode
+also saves the existing writeback tier in the same transaction. The host validates
+all fields independently of the guest and commits only after successful completion.
+Concurrent account saves can wait for each other without blocking call finalization.
+The screen explicitly says automatic actions are unavailable; saving these choices
+does not run a provider or job. The briefing source-behavior switch is still open.
+
+The new PATCH regression failed first with 404 before the route was implemented.
+The disposable oracle adds 33 valid write-response comparisons across owner, foreign
+user and administrator, then compares stored preference values, revisions and policy
+with the production TypeScript repositories. Existing stored modes override legacy
+booleans just as before. A failed-guest witness checks settings and policy rollback.
+The preferences read/write assertions fail with RLS removed and pass after restoration.
+Existing five-table privacy fault witnesses remain required in the same gate.
+
+The builds use the existing scratch Rust 1.95.0/Wasm toolchain and lockfile dependencies.
+No global installation, new package dependency or wit-bindgen installation was needed.
+Builds and proof files live outside the worktree. Final tested-commit receipts and
+independent review disposition are in the task Proof artifact, not inferred from an
+earlier checkpoint. This remains a checkpoint, not full Calendar acceptance.

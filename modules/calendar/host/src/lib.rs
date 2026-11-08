@@ -3,9 +3,13 @@ use anyhow::{ensure, Result};
 use moss_module_host::runtime::{CallScope, Ports, Request};
 use safety_core::db::{DataContext, Database};
 use serde_json::{Map, Value};
-use std::sync::Arc;
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
 
 pub mod package;
+mod settings;
 #[cfg(feature = "web")]
 pub mod web;
 pub const PREFERENCE_KEYS: [&str; 7] = [
@@ -28,6 +32,7 @@ pub struct CalendarPorts {
     runtime: tokio::runtime::Runtime,
     next: Arc<dyn Ports>,
     references: Option<Arc<dyn References>>,
+    settings_writes: Mutex<BTreeMap<String, DataContext>>,
 }
 impl CalendarPorts {
     pub fn new(database: Database, next: Arc<dyn Ports>) -> Result<Self> {
@@ -36,6 +41,7 @@ impl CalendarPorts {
             runtime: tokio::runtime::Runtime::new()?,
             next,
             references: None,
+            settings_writes: Mutex::new(BTreeMap::new()),
         })
     }
     pub fn with_references(mut self, references: Arc<dyn References>) -> Self {
@@ -88,6 +94,12 @@ impl Ports for CalendarPorts {
             return self.next.invoke(scope, port, request);
         }
         moss_module_host::runtime::authorize(scope.module(), port, request)?;
+        if scope.module().id == "calendar"
+            && request.resource == "calendar.briefing-settings"
+            && request.operation == "set"
+        {
+            return self.save_settings(scope, &request.parameters);
+        }
         ensure!(
             scope.module().id == "calendar"
                 && request.operation == "get"
@@ -122,6 +134,24 @@ impl Ports for CalendarPorts {
         })
     }
     fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
-        self.next.finish_call(scope, success)
+        let pending = self
+            .settings_writes
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Calendar settings busy"))?
+            .remove(&scope.call_id().to_string());
+        self.next.finish_call(scope, success)?;
+        if let Some(cx) = pending {
+            if success {
+                ensure!(
+                    !scope.remaining().is_zero(),
+                    "Calendar settings deadline expired"
+                );
+                self.runtime
+                    .block_on(cx.commit())
+                    .map_err(|_| anyhow::anyhow!("Calendar settings unavailable"))?;
+            }
+            // Drop without commit rolls the actor-scoped write back on failed guest calls.
+        }
+        Ok(())
     }
 }

@@ -4,7 +4,7 @@ use crate::{
 };
 use chrono::{NaiveDate, Timelike};
 use leptos::{prelude::*, task::spawn_local};
-use moss_module_ui::{Button, ButtonVariant, EmptyState, Masthead};
+use moss_module_ui::{Button, ButtonVariant, EmptyState, Field, FormLabel, Masthead};
 use serde_json::{json, Value};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
@@ -44,6 +44,9 @@ struct State {
     events: RwSignal<Option<Vec<Event>>>,
     display: RwSignal<Value>,
     briefing: RwSignal<Value>,
+    briefing_saving: RwSignal<bool>,
+    briefing_failed: RwSignal<bool>,
+    briefing_saved: RwSignal<bool>,
     loading: RwSignal<Refresh>,
     failed: RwSignal<bool>,
     view: RwSignal<String>,
@@ -54,6 +57,30 @@ struct State {
     initialized: RwSignal<bool>,
 }
 impl State {
+    fn save_briefing(self, body: Value) {
+        if self.briefing_saving.get_untracked() || self.loading.get_untracked() != Refresh::Idle {
+            return;
+        }
+        let focused = preserve();
+        self.briefing_saving.set(true);
+        self.briefing_failed.set(false);
+        self.briefing_saved.set(false);
+        spawn_local(async move {
+            match request("PATCH", "/briefing-settings", body).await {
+                Ok(saved) => {
+                    self.briefing.set(saved);
+                    self.briefing_saved.set(true);
+                }
+                Err(_) => {
+                    self.briefing_failed.set(true);
+                    // Reapply confirmed values, including the select changed by the browser.
+                    self.briefing.set(self.briefing.get_untracked());
+                }
+            }
+            self.briefing_saving.set(false);
+            restore(&focused);
+        });
+    }
     fn zone(self) -> chrono_tz::Tz {
         self.display.get()["timezone"]
             .as_str()
@@ -79,7 +106,7 @@ impl State {
         model::twelve(self.display.get()["dateFormat"].as_str())
     }
     fn refresh(self, explicit: bool) {
-        if self.loading.get_untracked() != Refresh::Idle {
+        if self.loading.get_untracked() != Refresh::Idle || self.briefing_saving.get_untracked() {
             return;
         }
         self.loading.set(if explicit {
@@ -160,6 +187,9 @@ pub fn Calendar() -> impl IntoView {
         events: RwSignal::new(None),
         display: RwSignal::new(Value::Null),
         briefing: RwSignal::new(Value::Null),
+        briefing_saving: RwSignal::new(false),
+        briefing_failed: RwSignal::new(false),
+        briefing_saved: RwSignal::new(false),
         loading: RwSignal::new(Refresh::Idle),
         failed: RwSignal::new(false),
         view: RwSignal::new("day".into()),
@@ -269,14 +299,55 @@ pub fn Calendar() -> impl IntoView {
 
 #[component]
 fn Settings(state: State) -> impl IntoView {
+    let disabled =
+        Signal::derive(move || state.briefing_saving.get() || state.loading.get() != Refresh::Idle);
     view! {<main class="calendar-settings"><Masthead title="Calendar" eyebrow="Settings" lede="How Moss helps you plan your days"/>
         {move||(state.loading.get()!=Refresh::Idle && (state.briefing.get()==Value::Null || state.loading.get()==Refresh::Explicit)).then(||view!{<p role="status">{if state.briefing.get()==Value::Null {"Loading settings…"}else{"Refreshing settings…"}}</p>})}
         {move||state.failed.get().then(||view!{<ReadFailure settings_page=true retained=state.briefing.get()!=Value::Null on_retry=Callback::new(move |_|state.refresh(true))/>})}
-        {move||(state.briefing.get()!=Value::Null).then(||{
-            let s=state.briefing.get()["settings"].clone();
-            view!{<dl><dt>"Look ahead"</dt><dd>{format!("{} days",s["lookaheadDays"])}</dd><dt>"Prep tasks"</dt><dd>{s["prepTaskMode"].as_str().unwrap_or("suggest").to_string()}</dd><dt>"Time blocks"</dt><dd>{s["timeBlockMode"].as_str().unwrap_or("suggest").to_string()}</dd><dt>"Timezone"</dt><dd>{state.zone().name()}</dd></dl>}
+        {move||(state.briefing.get()!=Value::Null).then(||view!{
+            <section class="calendar-settings-section" aria-label="Briefings">
+                <h2>"Briefings"</h2>
+                <Field><FormLabel control_id="calendar-lookahead">"Look ahead"</FormLabel>
+                    <p class="jds-hint" id="lookahead-help">"Let the briefing flag prep-needed meetings coming up soon."</p>
+                    <span class="jds-selectwrap"><select id="calendar-lookahead" data-cal-focus="calendar-lookahead" class="jds-select" aria-describedby="lookahead-help"
+                        disabled=move||disabled.get()
+                        prop:value=move||state.briefing.get()["settings"]["lookaheadDays"].to_string()
+                        on:change=move|event|{if let Ok(days)=event_target_value(&event).parse::<u8>() {state.save_briefing(json!({"lookaheadDays":days}));}}>
+                        <option value="0">"Today only"</option><option value="1">"One day"</option><option value="2">"Two days"</option>
+                    </select></span>
+                </Field>
+            </section>
+            <section class="calendar-settings-section" aria-label="Follow-through">
+                <h2>"Follow-through"</h2>
+                <ModeSetting state=state field="prepTaskMode" label="Prep tasks"/>
+                <ModeSetting state=state field="timeBlockMode" label="Time blocks"/>
+                <p class="jds-hint">"These choices are saved for your account. Automatic actions are not available in this version."</p>
+            </section>
+            <p class="jds-hint">{move||format!("Timezone: {}",state.zone().name())}</p>
         })}
-        <p>"These settings are read only."</p>
+        {move||state.briefing_saving.get().then(||view!{<p role="status">"Saving settings…"</p>})}
+        {move||state.briefing_saved.get().then(||view!{<p role="status">"Settings saved."</p>})}
+        {move||state.briefing_failed.get().then(||view!{<p class="jds-hint jds-hint--error" role="alert">"Could not save calendar briefing settings. Your last confirmed settings are shown. Try again."</p>})}
         <Button variant=ButtonVariant::Secondary on_click=Callback::new(move |_|{let _=navigate("/calendar");})>"Open Calendar"</Button>
     </main>}
+}
+
+#[component]
+fn ModeSetting(state: State, field: &'static str, label: &'static str) -> impl IntoView {
+    let id = format!("calendar-{field}");
+    let help = format!("{id}-help");
+    view! {<Field><FormLabel control_id=id.clone()>{label}</FormLabel>
+        <p class="jds-hint" id=help.clone()>{move||match state.briefing.get()["settings"][field].as_str() {
+            Some("off")=>"Do not create suggestions or actions.",
+            Some("auto") if field=="timeBlockMode"=>"Create time blocks automatically, both when your assistant proposes them in chat and unattended in the background.",
+            Some("auto")=>"Create automatically without asking again.",
+            _=>"Offer suggestions for you to review.",
+        }}</p>
+        <span class="jds-selectwrap"><select id=id.clone() data-cal-focus=id class="jds-select" aria-describedby=help
+            disabled=move||state.briefing_saving.get() || state.loading.get()!=Refresh::Idle
+            prop:value=move||state.briefing.get()["settings"][field].as_str().unwrap_or("suggest").to_string()
+            on:change=move|event|state.save_briefing(json!({(field):event_target_value(&event)}))>
+            <option value="off">"Off"</option><option value="suggest">"Suggest"</option><option value="auto">"Auto"</option>
+        </select></span>
+    </Field>}
 }
