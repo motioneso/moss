@@ -73,10 +73,10 @@ pub fn install(
                 version: manifest.version.clone(),
                 digest: digest.clone(),
                 size: bytes.len() as u64,
-                publisher_key: if manifest.id.starts_with("people") {
+                publisher_key: if manifest.id.contains('.') {
                     "people-test"
                 } else {
-                    "provider-test"
+                    "core-test"
                 }
                 .into(),
                 signature: Keys::sign(&keys.publisher, digest.as_bytes()),
@@ -108,10 +108,10 @@ pub fn install(
                 },
             ),
             (
-                "provider-test".into(),
+                "core-test".into(),
                 Publisher {
                     key: Keys::public(&keys.publisher),
-                    prefix: "person-providers".into(),
+                    prefix: String::new(),
                     replaces: BTreeSet::new(),
                 },
             ),
@@ -150,7 +150,7 @@ pub fn install(
             admin,
             Source::Folder(registry.into()),
             &Keys::public(&keys.root),
-            &Keys::public(&keys.root),
+            &Keys::public(&keys.publisher),
             "people-test-registry",
         )
         .unwrap();
