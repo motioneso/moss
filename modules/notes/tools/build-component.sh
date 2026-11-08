@@ -1,12 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-notes_core_only=false
-if [[ "${1:-}" == --core-only ]]; then
-  notes_core_only=true
-  shift
-fi
 if [[ $# != 1 ]]; then
-  echo 'Usage: modules/notes/tools/build-component.sh [--core-only] output.wasm' >&2
+  echo 'Usage: modules/notes/tools/build-component.sh output.wasm' >&2
   exit 2
 fi
 notes_output=$(realpath -m -- "$1")
@@ -30,10 +25,6 @@ CARGO_ENCODED_RUSTFLAGS="$notes_flags" CARGO_TARGET_DIR="$notes_target" \
   -C link-arg=--initial-memory=2097152 -C link-arg=--max-memory=67108864
 mkdir -p -- "$(dirname "$notes_output")"
 notes_core="$notes_target/wasm32-wasip2/release/moss_notes.wasm"
-if $notes_core_only; then
-  cp -- "$notes_core" "$notes_output"
-else
-  CARGO_TARGET_DIR="${MOSS_HOST_TARGET_DIR:-$notes_target}" \
-    cargo +1.95.0 run --locked --offline --manifest-path rust-spike/module-host/Cargo.toml \
-    --example wrap_generated_guest -- "$notes_core" "$notes_output"
-fi
+CARGO_TARGET_DIR="${MOSS_HOST_TARGET_DIR:-$notes_target}" \
+  cargo +1.95.0 run --locked --offline --manifest-path rust-spike/module-host/Cargo.toml \
+  --example wrap_generated_guest -- "$notes_core" "$notes_output"

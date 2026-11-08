@@ -343,8 +343,9 @@ Notes acceptance and must not replace a working legacy Notes installation.
   existing host transaction uses ordinary isolation. Very large exports can exceed
   paging, fuel, deadline or message limits; streaming is unfinished.
 - The manifest uses the original `core-legacy` ledger and all six existing tables.
-  The deterministic unsigned builder checks the complete original migration
-  inventory and frozen raw hashes, then copies SQL bytes from `packages/notes/sql/`.
+  For fixed component bytes, the unsigned builder produces repeatable archives.
+  It checks the complete original migration inventory and frozen raw hashes,
+  then includes SQL bytes from `packages/notes/sql/`.
   Existing SQL is unchanged. Synthetic registry signing keys are generated only in
   tests; no publisher signature or registry release is claimed.
 - Notes remains a required module, enabled by default. The manifest declares only
@@ -370,7 +371,7 @@ rows and migration ledger snapshots are retained. This initial run used the
 pre-remapping component; it does not substitute for final corrected-artifact checks.
 
 See `modules/notes/README.md` for reproduction, including the component build,
-archive builder, independent-directory rebuild check and disposable database gates.
+archive builder and disposable database gates.
 The earlier reproduction commands for `tools/gate.sh` now also require
 `NOTES_COMPONENT` pointing to the built guest. Final command receipts and their
 exit codes accompany the task's proof recipe; they identify the tested revision.
@@ -381,10 +382,16 @@ The first read-only Claude review covered `300579737`. It found one major issue:
 embedded dependency paths varied with the builder's Cargo directory. A new path-
 hygiene regression fails against that original component. The build now remaps
 workspace, Cargo, sysroot and target paths for all dependencies, not just the final
-crate. `tools/check-reproducible.sh` rebuilds offline from two independent source,
-Cargo and target directories with the same pinned toolchain, then compares both
-components and archives. No cross-toolchain or cross-platform reproducibility is
-claimed.
+crate. All three corrected component tests pass, including the path-hygiene check.
+
+A separate scratch rebuild from another source/Cargo/target directory produced
+different component bytes even with the same pinned toolchain and remapped paths.
+The claim is narrowed accordingly: archive packing is deterministic for fixed
+component input bytes; compiled-component reproducibility across builders is not
+established. No cross-toolchain/cross-platform reproducibility or registry release
+is claimed. Publisher signatures must cover the exact built artifact, not an
+assumed byte-identical rebuild. The unsuccessful scratch experiment is retained
+in the proof's limits; it is not presented as a passing build-reproducibility check.
 
 Three minor notes were also addressed or retained explicitly. The paging comment
 now describes refusal of the host ceiling without promising a concurrent snapshot;

@@ -31,17 +31,12 @@ The builder reads existing SQL from `packages/notes/sql/`, checks exact hashes
 and the complete inventory, then includes the original bytes in the archive.
 The archive is deterministic for a given component and is unsigned. The build
 remaps source, Cargo, sysroot and target paths for the guest and all dependencies.
-Check rebuilds from two different source, Cargo and target directories with:
-
-```sh
-MOSS_GUEST_CARGO_HOME=/tmp/notes-cargo MOSS_GUEST_RUSTUP_HOME=/tmp/notes-rustup MOSS_HOST_TARGET_DIR=/tmp/notes-host modules/notes/tools/check-reproducible.sh
-```
-
-The check copies only the prepared registry cache, rebuilds offline and compares
-both component and archive bytes. It uses one pinned toolchain; reproducibility
-across different toolchain versions or operating systems is not claimed.
-Registry publishing and real publisher
-signatures belong to the release process; tests use fresh synthetic signing keys.
+Compiled component bytes differed between source directories in this work despite
+path remapping. Byte-identical compilation across builders is not established.
+Only archive packing from fixed component bytes is claimed deterministic; release
+signatures must cover the exact built artifact rather than an assumed rebuild.
+Registry publishing and real publisher signatures belong to the release process;
+tests use fresh synthetic signing keys.
 
 ## Disposable database checks
 
