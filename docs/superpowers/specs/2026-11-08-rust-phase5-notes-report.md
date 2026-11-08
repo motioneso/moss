@@ -198,12 +198,40 @@ bound, so work stops at a committed, reviewed checkpoint.
   This fixture is not the Notes guest, and does not prove Notes handlers or jobs.
 
 No existing SQL, schema or migration identity changes. No new third-party packages
-or global tools were installed. Production guest generation/toolchain setup remains
-to be selected within the dependency-approval rule; this checkpoint adds none.
+or global tools were installed. Ben approved `wit-bindgen` on 2026-11-08 for use
+inside this worktree or a scratch folder, never globally. It has not been installed
+or used for this checkpoint. The guest/package continuation can use that approval;
+record its actual version and use here when it does. Other new packages still need
+approval.
 
 No user-facing Notes surface is registered, so the existing app map is unchanged.
 The eventual package must declare its real Settings controls, features, errors and
 remediations when those handlers exist. Do not register unavailable functionality.
+
+The clean implementation commit `a006ece2d` passed the disposable Notes database
+gate with input fingerprint `2cfffe57a2df`. The native checks passed: three Notes
+tests covering three hundred vectors, seven host-library tests, ten linked-file
+guest tests, and nineteen vault tests (one subprocess helper is ignored directly
+and exercised by its parent). Notes, host and vault strict Clippy also passed.
+Removing the account, destination and expected-content guards produced failing
+assertions; the full ten-test guest suite passed after source restoration.
+
+### Independent review of the checkpoint
+
+Claude's first read-only round on `a006ece2d` found no major or blocker findings.
+It ran no tests independently. Its five minor notes were assessed as follows:
+
+- Auth-role rejection already happens in `DataContext::open_bounded` before a
+  transaction is created, so an auth connection cannot reach legacy role selection.
+- A poisoned invocation mutex can skip file compensation after an unexpected panic.
+  This remains a limitation; no panic or crash recovery guarantee is made.
+- The case-directory override intentionally uses the harness parser's existing
+  last-argument-wins behavior; a general parser refactor is outside this checkpoint.
+- The edit corpus refresh is manual, as shown in the reproduction commands below.
+  No automatic drift check is claimed.
+- The reviewer had not seen the separate new edit/folder failing-first logs. Those
+  logs and the worker failure accompany the proof recipe. No failing-first claim
+  is made for the simulated held-mutex test.
 
 ### Reproduce the checkpoint
 
