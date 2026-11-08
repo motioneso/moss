@@ -7,8 +7,9 @@
 # Rules:
 # 1. File access goes through the vault crate: no std::fs, tokio::fs or Path calls that touch
 #    the disk.
-# 2. Only tasks/src/main.rs serves files, through ServeDir, for the built screens. A
-#    hand-written file reply needs disk access, which rule 1 catches.
+# 2. Only tasks/src/main.rs serves files, for the built screens. ServeDir, ServeFile and the
+#    rest of tower_http::services appear nowhere else. A hand-written file reply passes this
+#    rule, but its disk access must still go through the vault crate (rule 1).
 # 3. Secret::expose_secret is called only where a secret must be used: sealing
 #    (safety-core/src/secret.rs), and signing cookies and hashing passwords (safety-core/src/auth.rs).
 # 4. The server never reads the bootstrap or migration database URL, so it has no connection

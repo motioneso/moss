@@ -7,8 +7,10 @@
 //! followed on the way in, and the last name is opened with `O_NOFOLLOW` on Unix. Folders are
 //! made private to the owner (0700) and files 0600.
 //!
-//! A [`VaultContext`] is the acting user's vault: the folder named by their id under the vaults
-//! root. It opens only from an [`AccessContext`], as `withVaultContext` does in TypeScript.
+//! [`Vaults`] is the folder that holds every user's vault, opened once at start-up. A
+//! [`VaultContext`] is the acting user's vault, the folder named by their id inside it. It opens
+//! only from an [`AccessContext`], as `withVaultContext` does in TypeScript. Once a vaults folder
+//! is open, no plain [`Root`] in the process can open it, sit inside it or walk into it.
 //!
 //! Known gap: names are checked one by one and then opened by path, so a folder swapped for a
 //! link between the check and the open could still be followed. `openat2` with
@@ -19,8 +21,9 @@ use std::fmt;
 pub use access_context::AccessContext;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 
 #[derive(Debug)]
 pub enum VaultError {
@@ -68,20 +71,37 @@ pub struct Entry {
 #[derive(Clone, Debug)]
 pub struct Root {
     path: PathBuf,
+    /// Set only on the handles inside [`Vaults`] and [`VaultContext`].
+    in_vault: bool,
 }
 
 impl Root {
     /// An existing directory. The path is resolved once, here; nothing below it is followed.
+    /// A vaults folder, or anything inside one, is refused.
     pub fn open(path: &Path) -> Result<Root, VaultError> {
         let path = fs::canonicalize(path)?;
         if !fs::metadata(&path)?.is_dir() {
             return Err(VaultError::BadPath(path.display().to_string()));
         }
-        Ok(Root { path })
+        if in_vaults(&path) {
+            return Err(VaultError::Escape(path.display().to_string()));
+        }
+        Ok(Root { path, in_vault: false })
     }
 
-    /// Creates the directory, private to the owner, if it is missing.
+    /// Creates the directory, private to the owner, if it is missing. Nothing is made when the
+    /// path holds ".." or its deepest existing folder is in a vaults folder.
     pub fn create(path: &Path) -> Result<Root, VaultError> {
+        if path.components().any(|part| part == Component::ParentDir) {
+            return Err(VaultError::BadPath(path.display().to_string()));
+        }
+        let existing = path
+            .ancestors()
+            .find(|folder| fs::symlink_metadata(folder).is_ok())
+            .unwrap_or(Path::new("."));
+        if in_vaults(&fs::canonicalize(existing)?) {
+            return Err(VaultError::Escape(path.display().to_string()));
+        }
         fs::create_dir_all(path)?;
         set_mode(path, 0o700)?;
         Root::open(path)
@@ -101,7 +121,7 @@ impl Root {
         if !fs::symlink_metadata(&path)?.is_dir() {
             return Err(VaultError::NotFound(relative.to_owned()));
         }
-        Ok(Root { path })
+        Ok(Root { path, in_vault: self.in_vault })
     }
 
     pub fn create_subdir(&self, relative: &str) -> Result<Root, VaultError> {
@@ -159,7 +179,12 @@ impl Root {
     }
 
     pub fn list(&self, relative: &str) -> Result<Vec<Entry>, VaultError> {
-        let dir = if relative.is_empty() { self.path.clone() } else { self.subdir(relative)?.path };
+        let dir = if relative.is_empty() {
+            self.check_vaults(&self.path, relative)?;
+            self.path.clone()
+        } else {
+            self.subdir(relative)?.path
+        };
         let mut entries = Vec::new();
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
@@ -191,6 +216,7 @@ impl Root {
         let mut path = self.path.clone();
         for (index, name) in names.iter().enumerate() {
             path.push(name);
+            self.check_vaults(&path, relative)?;
             let last = index + 1 == names.len();
             match fs::symlink_metadata(&path) {
                 Ok(meta) if meta.file_type().is_symlink() => {
@@ -210,6 +236,23 @@ impl Root {
         }
         Ok(path)
     }
+
+    /// A plain handle may not sit in a vaults folder or walk into one.
+    fn check_vaults(&self, path: &Path, relative: &str) -> Result<(), VaultError> {
+        if !self.in_vault && in_vaults(path) {
+            return Err(VaultError::Escape(relative.to_owned()));
+        }
+        Ok(())
+    }
+}
+
+/// The canonical paths of the vaults folders this process has opened.
+static VAULT_FOLDERS: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+
+/// Whether `path` is a vaults folder or inside one.
+fn in_vaults(path: &Path) -> bool {
+    let folders = VAULT_FOLDERS.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    folders.iter().any(|folder| path.starts_with(folder))
 }
 
 fn split_relative(relative: &str) -> Result<Vec<&str>, VaultError> {
@@ -236,14 +279,35 @@ pub fn canonical_dir(path: &Path) -> Result<PathBuf, VaultError> {
     Ok(Root::open(path)?.path)
 }
 
+/// The folder that holds every user's vault, opened once at start-up. It has no file access of
+/// its own. A user's folder inside it opens only through [`VaultContext::for_access`].
+pub struct Vaults {
+    root: Root,
+}
+
+impl Vaults {
+    /// Creates the folder, private to the owner, if it is missing, and closes it to plain
+    /// handles for the rest of the process.
+    pub fn create(path: &Path) -> Result<Vaults, VaultError> {
+        fs::create_dir_all(path)?;
+        set_mode(path, 0o700)?;
+        let path = fs::canonicalize(path)?;
+        let mut folders = VAULT_FOLDERS.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if !folders.contains(&path) {
+            folders.push(path.clone());
+        }
+        Ok(Vaults { root: Root { path, in_vault: true } })
+    }
+}
+
 /// The acting user's vault: `<vaults>/<actor id>`, created private to the owner.
 pub struct VaultContext {
     root: Root,
 }
 
 impl VaultContext {
-    pub fn for_access(vaults: &Root, access: &AccessContext) -> Result<VaultContext, VaultError> {
-        Ok(VaultContext { root: vaults.create_subdir(&access.actor_user_id().to_string())? })
+    pub fn for_access(vaults: &Vaults, access: &AccessContext) -> Result<VaultContext, VaultError> {
+        Ok(VaultContext { root: vaults.root.create_subdir(&access.actor_user_id().to_string())? })
     }
 
     pub fn read(&self, relative: &str) -> Result<Vec<u8>, VaultError> {
@@ -309,15 +373,19 @@ mod tests {
     const USER_A: &str = "00000000-0000-4000-8000-000000000001";
     const USER_B: &str = "00000000-0000-4000-8000-000000000002";
 
-    fn open(vaults: &Root, user_id: &str) -> VaultContext {
+    fn open(vaults: &Vaults, user_id: &str) -> VaultContext {
         let access = AccessContext::new(user_id.parse().unwrap(), "test");
         VaultContext::for_access(vaults, &access).unwrap()
     }
 
-    fn vaults() -> (tempfile::TempDir, Root) {
+    fn vaults() -> (tempfile::TempDir, Vaults) {
         let dir = tempfile::tempdir().unwrap();
-        let root = Root::create(&dir.path().join("vaults")).unwrap();
-        (dir, root)
+        let vaults = Vaults::create(&dir.path().join("vaults")).unwrap();
+        (dir, vaults)
+    }
+
+    fn escaped<T>(result: Result<T, VaultError>) -> bool {
+        matches!(result, Err(VaultError::Escape(_)))
     }
 
     #[test]
@@ -361,7 +429,7 @@ mod tests {
         let outside = dir.path().join("outside.txt");
         fs::write(&outside, b"outside").unwrap();
         let a = open(&vaults, USER_A);
-        let a_dir = vaults.path().join(USER_A);
+        let a_dir = vaults.root.path().join(USER_A);
         std::os::unix::fs::symlink(&outside, a_dir.join("link.txt")).unwrap();
         std::os::unix::fs::symlink(dir.path(), a_dir.join("linkdir")).unwrap();
         assert!(matches!(a.read("link.txt"), Err(VaultError::Escape(_))));
@@ -379,7 +447,48 @@ mod tests {
         let a = open(&vaults, USER_A);
         a.write("secret.md", b"x").unwrap();
         let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
-        assert_eq!(mode(&vaults.path().join(USER_A)), 0o700);
-        assert_eq!(mode(&vaults.path().join(USER_A).join("secret.md")), 0o600);
+        assert_eq!(mode(&vaults.root.path().join(USER_A)), 0o700);
+        assert_eq!(mode(&vaults.root.path().join(USER_A).join("secret.md")), 0o600);
+    }
+
+    #[test]
+    fn plain_handles_cannot_open_the_vaults_folder() {
+        let (dir, vaults) = vaults();
+        open(&vaults, USER_A).write("secret.md", b"a only").unwrap();
+        let folder = dir.path().join("vaults");
+        assert!(escaped(Root::open(&folder)));
+        assert!(escaped(Root::open(&folder.join(USER_A))));
+        assert!(escaped(Root::create(&folder.join(USER_B))));
+        assert!(!folder.join(USER_B).exists());
+        let climb = dir.path().join("new/../vaults/x");
+        assert!(matches!(Root::create(&climb), Err(VaultError::BadPath(_))));
+        assert!(!folder.join("x").exists());
+    }
+
+    #[test]
+    fn plain_handles_cannot_walk_into_the_vaults_folder() {
+        let (dir, vaults) = vaults();
+        open(&vaults, USER_A).write("secret.md", b"a only").unwrap();
+        let parent = Root::open(dir.path()).unwrap();
+        let secret = format!("vaults/{USER_A}/secret.md");
+        assert!(escaped(parent.read(&secret)));
+        assert!(escaped(parent.write(&secret, b"changed")));
+        assert!(escaped(parent.remove(&secret)));
+        assert!(escaped(parent.list("vaults")));
+        assert!(escaped(parent.subdir(&format!("vaults/{USER_A}"))));
+        assert!(escaped(parent.create_subdir(&format!("vaults/{USER_B}"))));
+        assert!(escaped(parent.write("vaults", b"x")));
+        assert_eq!(open(&vaults, USER_A).read("secret.md").unwrap(), b"a only");
+    }
+
+    #[test]
+    fn a_handle_made_before_the_vaults_folder_opens_is_closed_after() {
+        let dir = tempfile::tempdir().unwrap();
+        let early = Root::create(&dir.path().join("vaults")).unwrap();
+        early.write("before.md", b"x").unwrap();
+        let _vaults = Vaults::create(&dir.path().join("vaults")).unwrap();
+        assert!(escaped(early.read("before.md")));
+        assert!(escaped(early.list("")));
+        assert!(escaped(early.write("after.md", b"x")));
     }
 }

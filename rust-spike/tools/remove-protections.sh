@@ -115,6 +115,13 @@ if wanted vault-dotdot "$@"; then
   expect vault-dotdot 101 in_copy vault-dotdot cargo test --quiet -p vault
 fi
 
+# A plain folder handle may open the vaults folder or walk into it.
+if wanted vaults-folder "$@"; then
+  copy vaults-folder
+  plant vaults-folder vault/src/lib.rs 's/^fn in_vaults(path: &Path) -> bool {$/&\n    return false;/'
+  expect vaults-folder 101 in_copy vaults-folder cargo test --quiet -p vault
+fi
+
 # Sign-up, sign-in and sign-out accept a request from any web page.
 if wanted origin-check "$@"; then
   copy origin-check
