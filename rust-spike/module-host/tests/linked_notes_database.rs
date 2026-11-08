@@ -2,6 +2,7 @@ use access_context::AccessContext;
 use moss_module_host::linked_notes::{FolderProvider, PreferenceFolder, PreferenceFolders};
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::json;
+use std::time::Duration;
 use std::{
     collections::BTreeMap,
     panic::{catch_unwind, AssertUnwindSafe},
@@ -56,7 +57,9 @@ fn folder_preferences_respect_owner_rls_and_legacy_relative_settings() {
         let provider = PreferenceFolders::new(database, resources, roots).unwrap();
         let private_setting_assertion = || {
             assert!(
-                provider.resolve(&admin, "notes", "linked-notes").is_err(),
+                provider
+                    .resolve(&admin, "notes", "linked-notes", Duration::from_secs(5))
+                    .is_err(),
                 "admin must not see another account's chosen folder"
             )
         };
@@ -75,17 +78,79 @@ fn folder_preferences_respect_owner_rls_and_legacy_relative_settings() {
         );
         println!("{name}: owner-preference privacy assertion FAILED with RLS removed");
         private_setting_assertion();
-        assert!(provider.resolve(&owner, "notes", "linked-notes").is_ok());
+        assert!(provider
+            .resolve(&owner, "notes", "linked-notes", Duration::from_secs(5))
+            .is_ok());
         println!("{name}: same owner-preference assertion PASSED with RLS restored");
-        assert!(provider.resolve(&owner, "notes", "undeclared").is_err());
+        assert!(provider
+            .resolve(&owner, "notes", "undeclared", Duration::from_secs(5))
+            .is_err());
         for setting in [json!("../outside"), json!("/outside"), json!("")] {
             runtime.block_on(db.execute("UPDATE app.preferences SET value_json=$2 WHERE owner_user_id=$1 AND key='test-folder'", &[&owner.actor_user_id(),&setting])).unwrap();
-            assert!(provider.resolve(&owner, "notes", "linked-notes").is_err());
+            assert!(provider
+                .resolve(&owner, "notes", "linked-notes", Duration::from_secs(5))
+                .is_err());
         }
         // Absolute legacy settings are used directly; relative ones join the base.
         for setting in [json!(selected.to_str().unwrap()), json!("Contacts")] {
             runtime.block_on(db.execute("UPDATE app.preferences SET value_json=$2 WHERE owner_user_id=$1 AND key='test-folder'", &[&owner.actor_user_id(),&setting])).unwrap();
-            assert!(provider.resolve(&owner, "notes", "linked-notes").is_ok());
+            assert!(provider
+                .resolve(&owner, "notes", "linked-notes", Duration::from_secs(5))
+                .is_ok());
         }
     }
+}
+
+#[test]
+#[ignore = "Only through verify-gate and modules/notes/tools/gate.sh"]
+fn a_saturated_preference_pool_returns_within_the_call_budget() {
+    use safety_core::db::DataContext;
+    use std::sync::mpsc;
+    assert_eq!(std::env::var("JARVIS_GATE_RUN").as_deref(), Ok("1"));
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let actor = AccessContext::new(Uuid::new_v4(), "saturated-notes-pool");
+    let temp = tempfile::tempdir().unwrap();
+    let database = runtime
+        .block_on(Database::connect(
+            &std::env::var("JS47_APP_URL").unwrap(),
+            1,
+            RuntimeRole::App,
+        ))
+        .unwrap();
+    let held = runtime
+        .block_on(DataContext::open(&database, &actor))
+        .unwrap();
+    let provider = PreferenceFolders::new(
+        database,
+        BTreeMap::from([(
+            ("notes".into(), "linked-notes".into()),
+            PreferenceFolder {
+                preference: "test-folder".into(),
+                relative_to: None,
+            },
+        )]),
+        BTreeMap::from([(
+            actor.actor_user_id(),
+            AllowedRoots::for_account(&actor, vec![temp.path().into()]),
+        )]),
+    )
+    .unwrap();
+    let (sender, receiver) = mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        sender
+            .send(
+                provider
+                    .resolve(&actor, "notes", "linked-notes", Duration::from_millis(100))
+                    .is_err(),
+            )
+            .unwrap();
+    });
+    let result = receiver.recv_timeout(Duration::from_secs(2));
+    // Always release the connection and join, including the failing-first run.
+    runtime.block_on(held.commit()).unwrap();
+    worker.join().unwrap();
+    assert!(
+        result.unwrap_or(false),
+        "folder lookup waited beyond its call budget for a full pool"
+    );
 }

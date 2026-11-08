@@ -17,17 +17,19 @@ database wrapper, which finalizes files after database commit or rollback.
 - A runtime `Database` for the app or worker role.
 - A map from `(module ID, resource alias)` to `PreferenceFolder { preference,
 relative_to }`. The database lookup uses the invocation's authenticated account
-  and the existing preference RLS. Missing settings fail closed.
+  and the existing preference RLS. Missing settings fail closed. Pool acquisition,
+  the preference query and commit share the invocation's remaining time budget.
 - A map from account UUID to `AllowedRoots`, prepared by trusted host code.
 
 A relative folder setting joins the same account's `relative_to` preference, which
 must be absolute. Parent traversal is refused. An absolute folder setting is used
 directly and still passes the allowed-roots guard. No folder is created by opening it.
 
-A custom trusted `FolderProvider::resolve(access, module, resource)` may instead
+A custom trusted `FolderProvider::resolve(access, module, resource, budget)` may instead
 return `LinkedFolder::open(access, selected, allowed_roots)`. The adapter independently
 checks that the returned folder was opened for the current account. Guests cannot
 construct folders, choose an account or supply an absolute root through parameters.
+A custom provider must honor the supplied remaining time budget.
 
 ## Port contract
 
@@ -66,3 +68,10 @@ The Vault ancestor-check/open race and final comparison/rename race remain. Empt
 parent folders created before a failed write may remain. Do not use this adapter to
 claim crash-safe managed contribution receipts until the continuation implements
 and verifies durable reconciliation.
+
+The current adapter creates `.moss-notes.lock` inside each chosen folder, including
+for reads and listings. The folder must be writable even for reads; external folder
+sync software may copy that hidden file. This is a known read-only-folder parity gap.
+A global state mutex currently spans file I/O, so a slow or stuck filesystem can
+stall other accounts. Filesystem I/O has no enforced wall-clock timeout. Per-call
+locking and read-only-folder support remain continuation work.

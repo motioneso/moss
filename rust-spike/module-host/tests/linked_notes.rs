@@ -17,7 +17,13 @@ struct Folders {
     wrong_actor: Option<Uuid>,
 }
 impl FolderProvider for Folders {
-    fn resolve(&self, access: &AccessContext, _: &str, _: &str) -> Result<LinkedFolder> {
+    fn resolve(
+        &self,
+        access: &AccessContext,
+        _: &str,
+        _: &str,
+        _: std::time::Duration,
+    ) -> Result<LinkedFolder> {
         let actor = self.wrong_actor.unwrap_or(access.actor_user_id());
         let owner = AccessContext::new(actor, "folder-provider");
         let path = &self.folders[&actor];

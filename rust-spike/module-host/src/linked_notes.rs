@@ -8,6 +8,7 @@ use std::{
     collections::BTreeMap,
     path::{Component, Path, PathBuf},
     sync::{Arc, Mutex},
+    time::{Duration, Instant},
 };
 use uuid::Uuid;
 use vault::{AllowedRoots, FolderLock, VaultContext};
@@ -34,8 +35,13 @@ impl LinkedFolder {
 }
 /// Only trusted server code implements this. Guest parameters never choose a folder or account.
 pub trait FolderProvider: Send + Sync {
-    fn resolve(&self, access: &AccessContext, module: &str, resource: &str)
-        -> Result<LinkedFolder>;
+    fn resolve(
+        &self,
+        access: &AccessContext,
+        module: &str,
+        resource: &str,
+        budget: Duration,
+    ) -> Result<LinkedFolder>;
 }
 
 #[derive(Clone)]
@@ -70,7 +76,10 @@ impl FolderProvider for PreferenceFolders {
         access: &AccessContext,
         module: &str,
         resource: &str,
+        budget: Duration,
     ) -> Result<LinkedFolder> {
+        let started = Instant::now();
+        ensure!(!budget.is_zero(), "The linked notes lookup timed out");
         let config = self
             .resources
             .get(&(module.into(), resource.into()))
@@ -80,29 +89,37 @@ impl FolderProvider for PreferenceFolders {
             .get(&access.actor_user_id())
             .context("No notes roots are allowed for this account")?;
         let paths = self.runtime.block_on(async {
-            let context = safety_core::db::DataContext::open(&self.database, access)
-                .await
-                .map_err(|_| anyhow::anyhow!("The linked notes settings are unavailable"))?;
-            let keys: Vec<String> = std::iter::once(config.preference.clone())
-                .chain(config.relative_to.clone())
-                .collect();
-            let rows = context
-                .db()
-                .query(
-                    "SELECT key,value_json FROM app.preferences WHERE key = ANY($1::text[])",
-                    &[&keys],
+            tokio::time::timeout(budget.saturating_sub(started.elapsed()), async {
+                let context = safety_core::db::DataContext::open_bounded(
+                    &self.database,
+                    access,
+                    budget.saturating_sub(started.elapsed()),
                 )
                 .await
                 .map_err(|_| anyhow::anyhow!("The linked notes settings are unavailable"))?;
-            let paths: BTreeMap<String, Value> = rows
-                .into_iter()
-                .map(|row| (row.get(0), row.get(1)))
-                .collect();
-            context
-                .commit()
-                .await
-                .map_err(|_| anyhow::anyhow!("The linked notes settings are unavailable"))?;
-            Ok::<_, anyhow::Error>(paths)
+                let keys: Vec<String> = std::iter::once(config.preference.clone())
+                    .chain(config.relative_to.clone())
+                    .collect();
+                let rows = context
+                    .db()
+                    .query(
+                        "SELECT key,value_json FROM app.preferences WHERE key = ANY($1::text[])",
+                        &[&keys],
+                    )
+                    .await
+                    .map_err(|_| anyhow::anyhow!("The linked notes settings are unavailable"))?;
+                let paths: BTreeMap<String, Value> = rows
+                    .into_iter()
+                    .map(|row| (row.get(0), row.get(1)))
+                    .collect();
+                context
+                    .commit_bounded(budget.saturating_sub(started.elapsed()))
+                    .await
+                    .map_err(|_| anyhow::anyhow!("The linked notes settings are unavailable"))?;
+                Ok::<_, anyhow::Error>(paths)
+            })
+            .await
+            .map_err(|_| anyhow::anyhow!("The linked notes lookup timed out"))?
         })?;
         let selected = selected_path(config, &paths)?;
         LinkedFolder::open(access, &selected, roots)
@@ -189,9 +206,12 @@ impl LinkedNotesPorts {
         if request.operation != "notes.list" {
             ensure!(path.ends_with(".md"), "Notes requires a Markdown file");
         }
-        let folder =
-            self.provider
-                .resolve(scope.access(), &scope.module().id, &request.resource)?;
+        let folder = self.provider.resolve(
+            scope.access(),
+            &scope.module().id,
+            &request.resource,
+            scope.remaining(),
+        )?;
         ensure!(
             folder.actor == scope.access().actor_user_id(),
             "The linked folder belongs to another account"

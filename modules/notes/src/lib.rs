@@ -12,7 +12,8 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {}
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// The legacy editor replaces one non-overlapping occurrence, preserving all other bytes.
+/// Preliminary literal edit helper. Legacy JavaScript dollar replacement tokens are deferred;
+/// this helper must not stand in for complete chat-tool parity.
 pub fn edit(content: &str, old: &str, new: &str) -> Result<String> {
     if old.is_empty() {
         return Err(Error("oldText must be non-empty".into()));
