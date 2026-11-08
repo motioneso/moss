@@ -38,6 +38,17 @@ against the actual production TypeScript handlers on the same actor/data. The
 TypeScript draft transaction deliberately rolls back before the Rust invocation;
 only newly generated block identities are normalized. The public Tasks projection
 is explicitly a fixture stand-in in both implementations, not installed Tasks proof.
+These calls use the installer's guest invocation, not the host's public `tools.run`
+approval path. That path currently prompts for every write tool and defaults read
+tools to approval. The original draft tool is approved at installation and heartbeat
+is an authorized background read. Reconciling those policies is required before chat
+or heartbeat integration; the current suite does not establish that parity.
+
+Tool errors currently cross the guest ABI as message strings, so the differential
+suite compares messages, not HTTP status codes. HTTP error/status parity remains open.
+The existing Rust draft save also bounds positive revisions below the database integer
+ceiling; production accepts larger positive integers and fails later. This rare input
+difference remains open rather than being called full tool parity.
 
 The same heartbeat shared-event exclusion assertion is observed with guest owner
 predicates removed and restored. Existing five-table row-security fault witnesses

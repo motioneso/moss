@@ -11,6 +11,27 @@ fn invalid(message: impl Into<String>) -> Error {
     Error::new(400, message)
 }
 
+fn actor_day(now: DateTime<chrono::FixedOffset>, saved_zone: &str) -> chrono::NaiveDate {
+    // resolveEffectiveLocale validates the stored value before trimming it. IANA names
+    // contain no surrounding whitespace, and the preference contract caps them at 100.
+    let saved_zone = if saved_zone.len() <= 100 {
+        saved_zone
+    } else {
+        ""
+    };
+    let zone = saved_zone
+        .parse::<chrono_tz::Tz>()
+        .ok()
+        .or_else(|| {
+            chrono_tz::TZ_VARIANTS
+                .iter()
+                .copied()
+                .find(|zone| zone.name().eq_ignore_ascii_case(saved_zone))
+        })
+        .unwrap_or(chrono_tz::America::Los_Angeles);
+    now.with_timezone(&zone).date_naive()
+}
+
 pub fn save(host: &impl Host, input: &Value) -> Result<Value> {
     let fields = input
         .as_object()
@@ -85,18 +106,7 @@ pub fn save(host: &impl Host, input: &Value) -> Result<Value> {
     let now = DateTime::parse_from_rfc3339(clock["now"].as_str().unwrap_or(""))
         .map_err(|_| Error::new(503, "Calendar clock is unavailable"))?;
     let locale = host.call("kv", "get", "calendar.chat-context", json!({}))?;
-    let saved_zone = locale["timezone"].as_str().map(trim).unwrap_or("");
-    let zone = saved_zone
-        .parse::<chrono_tz::Tz>()
-        .ok()
-        .or_else(|| {
-            chrono_tz::TZ_VARIANTS
-                .iter()
-                .copied()
-                .find(|zone| zone.name().eq_ignore_ascii_case(saved_zone))
-        })
-        .unwrap_or(chrono_tz::America::Los_Angeles);
-    let today = now.with_timezone(&zone).date_naive();
+    let today = actor_day(now, locale["timezone"].as_str().unwrap_or(""));
     let tomorrow = today
         .succ_opt()
         .ok_or_else(|| invalid("Invalid chat day"))?;
@@ -150,4 +160,19 @@ pub fn save(host: &impl Host, input: &Value) -> Result<Value> {
         "planId":saved["id"],"revision":saved["revision"],"addedCount":additions.len(),
         "message":format!("Draft saved for review as revision {}. New tasks are untimed proposals; accept them in the Plan tomorrow dialog and its review to schedule anything.",saved["revision"])
     }}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn actor_day_validates_raw_preferences_and_uses_the_saved_zone() {
+        let now = DateTime::parse_from_rfc3339("2026-11-08T01:00:00Z").unwrap();
+        assert_eq!(actor_day(now, "Europe/London").to_string(), "2026-11-08");
+        assert_eq!(actor_day(now, "europe/london").to_string(), "2026-11-08");
+        for invalid in [" Europe/London", "Europe/London ", "", &"a".repeat(101)] {
+            assert_eq!(actor_day(now, invalid).to_string(), "2026-11-07");
+        }
+    }
 }

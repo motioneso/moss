@@ -152,21 +152,18 @@
         {
           "code": "invalid-heartbeat-input",
           "class": "validation",
-          "description": "Only horizonHours from one to forty-eight and limit from one to twenty are accepted.",
-          "remediationRef": "calendar-heartbeat-input"
-        }
-      ],
-      "remediations": [
+          "description": "Retry with only horizonHours from one to forty-eight and limit from one to twenty. These are caller inputs, not account settings."
+        },
         {
-          "id": "calendar-heartbeat-input",
-          "description": "Retry with only the supported bounded read fields.",
-          "path": "/settings/modules"
+          "code": "calendar_heartbeat_source_unavailable",
+          "class": "transient",
+          "description": "Cached Calendar events could not be read for a check-in. Check-in delivery and Alerts integration remain outside this package checkpoint."
         }
       ]
     },
     {
       "id": "calendar.day_plan_draft",
-      "description": "Chat can save intent and untimed task additions to today or tomorrow in the saved account timezone. Drafts require the current revision and public task reference adapter. Provider writes and dialog execution are not shipped in this checkpoint.",
+      "description": "The package tool saves intent and untimed task additions to today or tomorrow in the saved account timezone. It is not yet connected to signed-in chat. Drafts require the current revision and public task reference adapter. Provider writes and dialog execution are not shipped in this checkpoint.",
       "errors": [
         {
           "code": "draft-not-available",

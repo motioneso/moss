@@ -56,6 +56,11 @@ impl Installed {
     fn new() -> Self {
         let f = Fixture::new();
         f.rt.block_on(async {
+            // Test binaries share the disposable database, but each owns a fresh temporary
+            // package directory. Do not recover the preceding test's now-deleted artifacts.
+            f.root.execute("DELETE FROM moss_modules.catalog", &[]).await.unwrap();
+            assert_eq!(f.root.query_one("SELECT count(*) FROM moss_modules.catalog", &[]).await.unwrap().get::<_, i64>(0), 0);
+            println!("PASS fresh disposable host catalog before signed package installation");
             if !f.root.query_one("SELECT to_regnamespace('moss_queue') IS NOT NULL", &[]).await.unwrap().get::<_, bool>(0) {
                 f.root.batch_execute(moss_platform_jobs::MIGRATION).await.unwrap();
             }
