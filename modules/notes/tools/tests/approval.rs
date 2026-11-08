@@ -91,6 +91,13 @@ fn installed_approval_api_matches_legacy_and_fails_privacy_without_rls() {
         &moss_notes_checks::package_files(&repo, wasm).unwrap(),
     );
     let admin = AccessContext::new(actors[2], "notes-approval-install");
+    let catalog_database = rt
+        .block_on(Database::connect(
+            &std::env::var("JS55_APP_URL").unwrap(),
+            4,
+            RuntimeRole::App,
+        ))
+        .unwrap();
     for (url, role) in [
         ("JS55_APP_URL", RuntimeRole::App),
         ("JS55_WORKER_URL", RuntimeRole::Worker),
@@ -104,11 +111,11 @@ fn installed_approval_api_matches_legacy_and_fails_privacy_without_rls() {
         let check_ports = Arc::new(CheckPorts(Mutex::new(Arc::new(DenyPorts))));
         let installer = Installer::new(
             data.path(),
-            Arc::new(PostgresCatalog::new(database.clone(), admin.clone()).unwrap()),
+            Arc::new(PostgresCatalog::new(catalog_database.clone(), admin.clone()).unwrap()),
             Arc::new(
                 PostgresLifecycle::new(
                     Secret::new(std::env::var("JS55_BOOTSTRAP_URL").unwrap()),
-                    database.clone(),
+                    catalog_database.clone(),
                     data.path(),
                 )
                 .unwrap(),
@@ -229,11 +236,21 @@ fn installed_approval_api_matches_legacy_and_fails_privacy_without_rls() {
             bootstrap.batch_execute("ALTER TABLE app.preferences DISABLE ROW LEVEL SECURITY"),
         )
         .unwrap();
+        let disclosed = call(
+            actors[1],
+            "notes.delete",
+            input,
+            make_ports(vec![root.clone()]),
+        );
         let exposed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(private));
         rt.block_on(
             bootstrap.batch_execute("ALTER TABLE app.preferences ENABLE ROW LEVEL SECURITY"),
         )
         .unwrap();
+        assert!(
+            disclosed["ok"]["version"].is_string(),
+            "The negative control must expose the real target, not merely change the error"
+        );
         assert!(
             exposed.is_err(),
             "Approval privacy assertion must fail with RLS removed"

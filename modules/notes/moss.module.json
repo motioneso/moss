@@ -2,9 +2,9 @@
   "schemaVersion": 2,
   "id": "notes",
   "name": "Notes",
-  "description": "Notes package checkpoint with Connections folder controls, managed-source account export and read-only action details. Installed chat, sync and publication remain unfinished.",
+  "description": "Choose your notes folder, export managed-source details and prepare note changes for approval.",
   "publisher": "Moss",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [

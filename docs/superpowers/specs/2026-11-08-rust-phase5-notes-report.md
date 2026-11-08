@@ -690,7 +690,7 @@ retrieval/ingestion service. This checkpoint advances real Notes approval parity
 and installed API routing without advertising an unavailable sync worker or chat
 execution. No existing SQL, schema, migration identity or People internals change.
 
-The ordinary package provides `prepareNoteAction` version `1.0.0` through the
+Package `0.1.1` provides `prepareNoteAction` version `1.0.0` through the
 installed public API. It prepares create/edit/delete details, including field
 order, overwrite title, permanent-delete disclosure and the legacy version digest.
 Malformed disclosure fields return no presentation before folder access. An empty
@@ -721,8 +721,7 @@ The native API test was observed failing before implementation because the old
 handler rejected the API. Its protected comparison passes after implementation.
 The refreshed actual-hook corpus has 48 cases; the 55 execution cases and earlier
 118 domain/182 edit vectors are retained. Signed-package database, SQL harness,
-browser, root-check and independent-review results are recorded below once run;
-this paragraph does not claim a pending command passed.
+browser, root-check and independent-review results are recorded below.
 
 Local builds use the already approved pinned `wit-bindgen` 0.57.1 macro dependency,
 a scratch Cargo home and a prepared scratch Rust toolchain. No global or new
@@ -737,3 +736,55 @@ private note exports/daily archives; export snapshot/account-export join; full
 handler/job/path parity; assembled Settings/chat UI; separate physical-device HTTPS
 acceptance. The existing filesystem race, crash, deadline and cross-platform limits
 remain. No complete Phase 5 Notes acceptance or Docker cutover is claimed.
+
+### Part six verification and review follow-ups
+
+The native default and write-tools suites pass, including the failing-before API
+regression. Both remapped Wasm builds pass, in separate target folders. Strict
+all-target Clippy passes for the domain and package-check crates. The actual legacy
+corpora refresh without changes: 118 domain, 182 edit, 55 execution and 48 approval
+cases. Scoped TypeScript and ESLint checks, formatting and the file-size check pass.
+Root `pnpm lint`, `pnpm format:check` and `pnpm typecheck` also pass.
+
+The SQL parity harness passes all seven cases, including its log-sentinel check.
+These are SQL-only comparisons, not Notes HTTP or sync parity. The disposable
+package gate retains the six-table read/change RLS-removal controls, legacy export
+comparisons, signed installation and Connections route comparisons.
+
+The new installed API check compares 44 real legacy approval/source cases through
+the compiled signed package for each app and worker role. It checks another owner
+and an unrelated admin, verifies that preparation changes no file and queues no
+work, and confirms that changed file content changes the version. Catalog setup
+uses the app role; execution is repeated separately with each runtime role.
+The gate runs the original schema-installing test before the new approval binary.
+
+The first new privacy control only changed a response from not-configured to a
+query error: unrelated oracle accounts left several preferences visible when RLS
+was removed. That is insufficient evidence of target privacy. The corrected gate
+cleans those fixtures before creating the approval oracle and requires the removal
+control to expose an actual target/version. It then observes the protected assertion
+fail and restores RLS before repeating the protected checks. Earlier receipts do
+not establish this stronger claim; the final package-gate receipt does.
+
+The live browser check uses the actual signed package, its opaque-frame Connections
+screen, real HTTPS/sign-in and a disposable database. A synthetic account browsed
+an allowed folder, linked it, chose Unlink and confirmed. The final database value
+is null with a revision proving both writes, and the original note file remains.
+Certificate verification, unauthenticated redirect and rejection of untrusted
+hosts/origins pass. The certificate exception is scoped to this test certificate;
+no machine trust changes. The fixture now composes linked-file access with folder
+settings. Its server/browser were stopped and its claimed port released.
+This proves the fixture path only. There is no assembled shell/chat demonstration
+or separate physical-device proof. No attached device was available in the local
+ADB check; that does not establish availability of every other device.
+
+The first independent Claude review found no blocker or major. Its smaller findings
+were handled as follows: package version now advances to `0.1.1`; the module
+summary no longer contains internal progress wording; the UI fixture includes the
+linked-file adapter; these validation results replace the pending-results note.
+Two known limits remain below the fix bar: error precedence differs for a missing
+source outside usable roots, and source identity/file content are separate reads.
+Those are disclosed above and in the adapter notes. The future approval executor
+must use a stable source/content view and recheck after approval. The final review
+and exact gate receipts are attached to the task proof/tracker, not treated as
+complete Phase 5 acceptance.

@@ -95,6 +95,24 @@ impl Server {
                             roots.join("keep.md"),
                             b"Notes browser fixture; keep on unlink",
                         )?;
+                        let file_roots = std::collections::BTreeMap::from([(
+                            access.actor_user_id(),
+                            vault::AllowedRoots::for_account(&access, vec![roots.clone()]),
+                        )]);
+                        let next = Arc::new(moss_module_host::linked_notes::LinkedNotesPorts::new(
+                            Arc::new(moss_module_host::linked_notes::PreferenceFolders::new(
+                                self.platform.app.clone(),
+                                std::collections::BTreeMap::from([(
+                                    ("notes".into(), "source".into()),
+                                    moss_module_host::linked_notes::PreferenceFolder {
+                                        preference: "notes-source-path".into(),
+                                        relative_to: None,
+                                    },
+                                )]),
+                                file_roots,
+                            )?),
+                            next,
+                        ));
                         Ok(Arc::new(
                             moss_module_host::folder_settings::FolderSettingsPorts::new(
                                 self.platform.app.clone(),

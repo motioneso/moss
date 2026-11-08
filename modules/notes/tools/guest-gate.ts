@@ -22,42 +22,52 @@ try {
   await writeFile(pinned, component, { mode: 0o400 });
   oracle = await exportOracle();
   settings = await settingsOracle();
-  approval = await approvalOracle();
-  const run = spawnSync(
-    "cargo",
-    [
-      "+1.95.0",
-      "test",
-      "--locked",
-      "--offline",
-      "--manifest-path",
-      "modules/notes/tools/Cargo.toml",
-      "--test",
-      "database",
-      "--test",
-      "settings",
-      "--test",
-      "approval",
-      "--",
-      "--ignored",
-      "--nocapture",
-      "--test-threads=1"
-    ],
-    {
-      stdio: "inherit",
-      env: {
-        ...process.env,
-        NOTES_COMPONENT: pinned,
-        NOTES_ORACLE: oracle.path,
-        NOTES_SETTINGS_ORACLE: settings.path,
-        NOTES_APPROVAL_ORACLE: approval.path,
-        JS55_APP_URL: urls.app,
-        JS55_WORKER_URL: urls.worker,
-        JS55_BOOTSTRAP_URL: urls.bootstrap
-      }
-    }
-  );
-  process.exitCode = run.status ?? 1;
+  // The export test installs the host schemas. Keep approval after the original
+  // database/settings binaries rather than relying on Cargo's binary ordering.
+  function run(tests: string[]) {
+    return (
+      spawnSync(
+        "cargo",
+        [
+          "+1.95.0",
+          "test",
+          "--locked",
+          "--offline",
+          "--manifest-path",
+          "modules/notes/tools/Cargo.toml",
+          ...tests.flatMap((test) => ["--test", test]),
+          "--",
+          "--ignored",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        {
+          stdio: "inherit",
+          env: {
+            ...process.env,
+            NOTES_COMPONENT: pinned,
+            NOTES_ORACLE: oracle?.path,
+            NOTES_SETTINGS_ORACLE: settings?.path,
+            NOTES_APPROVAL_ORACLE: approval?.path,
+            JS55_APP_URL: urls.app,
+            JS55_WORKER_URL: urls.worker,
+            JS55_BOOTSTRAP_URL: urls.bootstrap
+          }
+        }
+      ).status ?? 1
+    );
+  }
+  process.exitCode = run(["database", "settings"]);
+  if (process.exitCode === 0) {
+    // Those accounts also own notes-source-path preferences. Remove them before
+    // the RLS-removal control so query_opt cannot fail on multiple visible rows.
+    await settings.cleanup();
+    settings = undefined;
+    await oracle.cleanup();
+    oracle = undefined;
+    approval = await approvalOracle();
+    process.exitCode = run(["approval"]);
+  }
 } finally {
   try {
     await approval?.cleanup();

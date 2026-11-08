@@ -143,14 +143,14 @@ NOTES_TOOL_COMPONENT=/tmp/notes-tools.wasm CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/
 ```
 
 The manually refreshed corpus executes actual TypeScript write handlers (55 cases)
-and approval hooks (41 cases), with explicit filesystem/sync/target stand-ins.
+and approval hooks (48 cases), with explicit filesystem/sync/target stand-ins.
 The real-component tests use actual temporary files and the linked-folder adapter,
 with a queue acknowledgement stand-in. These are tool-boundary checks, not installed
 chat, HTTP differential, full sync or second-device proof.
 
 ## Installed action details (part six)
 
-The ordinary signed package now declares `prepareNoteAction` version `1.0.0`.
+Package version `0.1.1` declares `prepareNoteAction` version `1.0.0`.
 Call it through the host's public API with this envelope:
 
 ```json
