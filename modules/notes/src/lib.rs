@@ -12,8 +12,8 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {}
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Preliminary literal edit helper. Legacy JavaScript dollar replacement tokens are deferred;
-/// this helper must not stand in for complete chat-tool parity.
+/// Legacy string-search replacement, including JavaScript's GetSubstitution tokens.
+/// A string search has no capture groups: numbered and named tokens remain literal.
 pub fn edit(content: &str, old: &str, new: &str) -> Result<String> {
     if old.is_empty() {
         return Err(Error("oldText must be non-empty".into()));
@@ -22,5 +22,27 @@ pub fn edit(content: &str, old: &str, new: &str) -> Result<String> {
     if count != 1 {
         return Err(Error(format!("oldText appears {count} times")));
     }
-    Ok(content.replacen(old, new, 1))
+    let at = content.find(old).expect("one occurrence");
+    let prefix = &content[..at];
+    let suffix = &content[at + old.len()..];
+    let mut replacement = String::new();
+    let mut chars = new.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '$' {
+            let value = match chars.peek() {
+                Some('$') => Some("$"),
+                Some('&') => Some(old),
+                Some('`') => Some(prefix),
+                Some('\'') => Some(suffix),
+                _ => None,
+            };
+            if let Some(value) = value {
+                chars.next();
+                replacement.push_str(value);
+                continue;
+            }
+        }
+        replacement.push(c);
+    }
+    Ok(format!("{prefix}{replacement}{suffix}"))
 }

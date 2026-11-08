@@ -1,4 +1,4 @@
-# Rust Phase 5 Notes — part one
+# Rust Phase 5 Notes — progress and retained work
 
 Part of https://github.com/motioneso/moss/issues/4027. Card: 524.
 Release note Category: N/A.
@@ -7,7 +7,11 @@ The coordinator approved splitting JS-47: this slice supplies the generic linked
 and Notes domain parity. The coordinator will create part two for the complete Notes module.
 This report does not claim that Notes is available in the Rust app yet.
 
-## Scope and current evidence
+The part-one results below are historical. The part-two checkpoint later in this
+report records the continuation's narrower changes and current evidence. The full
+seven-step continuation remains unfinished.
+
+## Part one scope and evidence — historical
 
 - `modules/notes/src/` contains guest-safe recording block rendering, inspection, change, cleanup
   and pending-operation reconciliation; recording identities, fallback references and managed
@@ -28,7 +32,7 @@ No user-facing Notes behavior is added by this first slice, so the existing app 
 accurate. Part two must add the package's navigation/settings/features metadata with its actual
 handlers and Settings controls, without inventing a standalone Notes screen.
 
-## Verification on the integrated branch
+## Part one verification on the integrated branch — historical
 
 Merged the People prerequisites and shared host PR #4044 additively from main
 (`1ff33decd`). The initial integrated checkpoint is `6eeb6c4f1`. The first review
@@ -157,35 +161,158 @@ for resource configuration, response shapes and limits.
 Database tests must use `.claude/skills/verify-gate/SKILL.md` and a disposable gate server.
 Do not point tests at the normal development database.
 
-## Part two continuation
+## Part two checkpoint
+
+Started from merged main `889c1e7ef`, including Notes part one (#4047) and the shared
+SDK/host (#4044). This checkpoint closes the three retained helper/adapter gaps on
+Linux and adds Notes-table privacy cases. It does not supply the Notes guest or an
+installable package. The remaining continuation is larger than the task's context
+bound, so work stops at a committed, reviewed checkpoint.
+
+### Changes and evidence
+
+- The edit helper now expands the same dollar tokens as JavaScript string-search
+  replacement. `tools/edit-parity.ts` extracts and executes the actual legacy
+  `notesEditExecute` handler with filesystem and queue stand-ins. Its 182 vectors
+  cover dollar tokens, Unicode, ambiguous/missing matches and line endings. The old
+  helper failed on `$$`; the corrected helper passes all vectors alongside the 118
+  existing block/identity vectors. This is domain evidence, not chat-tool parity.
+- Unix folder locking uses the directory handle, permitting reads and listings in
+  a non-writable folder without a syncable lock file. The real Wasm read/list test
+  failed before the fix and passes afterwards. Non-Unix still uses the sidecar.
+  Old sidecar-locking and new directory-locking hosts must not run together.
+- The shared pending-call mutex no longer spans file I/O. A Wasm test deliberately
+  holds one invocation's inner mutex while a different account completes. It proves
+  invocation isolation under a simulated held lock, not a filesystem deadline.
+- Six language-neutral cases in `modules/notes/tests/` exercise owner reads/updates
+  and other-account, unrelated-admin and anonymous refusal for app and worker roles.
+  They include read, update, delete and spoofed-owner insert attempts. Owner delete
+  is excluded because existing dependent rows can legitimately prevent it.
+- The disposable database test removes RLS, observes twelve read/update assertions
+  per table fail on actual exposed rows, restores RLS and runs all twenty-eight
+  protected probes per table. It also verifies frozen raw SQL hashes, existing
+  core-ledger checksums and retention of both owners' original rows.
+- A fixture Wasm component forwards SDK typed queries into the real transactional
+  database host. The worker check first exposed the host's attempt to switch into
+  the app role. Core-legacy queries now retain the configured app or worker role.
+  This fixture is not the Notes guest, and does not prove Notes handlers or jobs.
+
+No existing SQL, schema or migration identity changes. No new third-party packages
+or global tools were installed. Ben approved `wit-bindgen` on 2026-11-08 for use
+inside this worktree or a scratch folder, never globally. It has not been installed
+or used for this checkpoint. The guest/package continuation can use that approval;
+record its actual version and use here when it does. Other new packages still need
+approval.
+
+No user-facing Notes surface is registered, so the existing app map is unchanged.
+The eventual package must declare its real Settings controls, features, errors and
+remediations when those handlers exist. Do not register unavailable functionality.
+
+The clean implementation commit `a006ece2d` passed the disposable Notes database
+gate with input fingerprint `2cfffe57a2df`. The native checks passed: three Notes
+tests covering three hundred vectors, seven host-library tests, ten linked-file
+guest tests, and nineteen vault tests (one subprocess helper is ignored directly
+and exercised by its parent). Notes, host and vault strict Clippy also passed.
+Removing the account, destination and expected-content guards produced failing
+assertions; the full ten-test guest suite passed after source restoration.
+
+### Independent review of the checkpoint
+
+Claude's first read-only round on `a006ece2d` found no major or blocker findings.
+It ran no tests independently. Its five minor notes were assessed as follows:
+
+- Auth-role rejection already happens in `DataContext::open_bounded` before a
+  transaction is created, so an auth connection cannot reach legacy role selection.
+- A poisoned invocation mutex can skip file compensation after an unexpected panic.
+  This remains a limitation; no panic or crash recovery guarantee is made.
+- The case-directory override intentionally uses the harness parser's existing
+  last-argument-wins behavior; a general parser refactor is outside this checkpoint.
+- The edit corpus refresh is manual, as shown in the reproduction commands below.
+  No automatic drift check is claimed.
+- The reviewer had not seen the separate new edit/folder failing-first logs. Those
+  logs and the worker failure accompany the proof recipe. No failing-first claim
+  is made for the simulated held-mutex test.
+
+### Reproduce the checkpoint
+
+Run from `~/Jarv1s`. Keep build output outside the checkout:
+
+```sh
+pnpm exec tsx modules/notes/tools/edit-parity.ts
+CARGO_TARGET_DIR=/tmp/js52-domain-target cargo +1.95.0 test --locked --manifest-path modules/notes/src/Cargo.toml
+CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/js47-host-target cargo +1.95.0 test --locked --manifest-path rust-spike/module-host/Cargo.toml --lib --test linked_notes
+CARGO_TARGET_DIR=/tmp/js52-vault-target cargo +1.95.0 test --locked --manifest-path rust-spike/vault/Cargo.toml
+CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/js47-host-target scripts/run-gate.sh start --gate ./modules/notes/tools/gate.sh
+scripts/run-gate.sh wait --follow
+CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/js52-parity-target PARITY_OUT=/tmp/js52-parity scripts/run-gate.sh start --gate ./modules/notes/tools/parity-gate.sh
+scripts/run-gate.sh wait --follow
+```
+
+The second gate uses the existing two-server harness with the six Notes SQL cases.
+It compares isolated database copies; neither server implements the pending Notes
+HTTP handlers. SQL-only agreement must not be reported as Notes HTTP parity.
+Run the source-removal controls only after all host builds/tests have finished.
+
+### Part two closeout — partial checkpoint only
+
+Ben accepted this partial checkpoint for a PR and merge review on 2026-11-08, with
+the remaining implementation continuing as Notes part three. Ready on this task
+means the checkpoint is available to review and merge; it does not mean Notes is
+available in the Rust app or that full Notes parity has been demonstrated.
+
+Both final gates passed on clean commit `5df37c56e`, with input fingerprint
+`dcd019a6cfab`: the Notes privacy gate and the two-server SQL-only parity gate.
+The parity result is six Notes table cases plus the server-log check. Root lint,
+formatting, file-size and type checking passed. Two independent Claude review
+rounds found no major or blocker findings. This closeout changes documentation
+only; the implementation is unchanged from `a006ece2d`.
+
+Completed evidence is limited to the three hundred domain vectors, Linux linked
+files, per-invocation state isolation, the six frozen tables' SQL privacy and
+migration identities, and typed queries through a fixture Wasm component. No
+production Notes guest, Notes HTTP handler, Notes UI or physical second-device
+check exists in this checkpoint. The proof recipe retains those exclusions.
+
+Filesystem deadlines, hostile open/rename races, crash recovery, non-Linux behavior
+and mixed-version lock interoperability remain unproven. The older non-transactional
+database port is outside this checkpoint's worker-role correction and verification.
+
+## Notes part three — exact remaining work
 
 1. Build the actual Notes guest using `moss-module-sdk`, native tests and a shipped Wasm component.
    Add `moss.module.json`, icons, changelog and the package build. Copy existing SQL into the
    artifact from `packages/notes/sql/` only after checking the frozen inventory hashes; use
    `core-legacy`. Keep the six existing managed-source/contribution tables and owner-only RLS.
+   Use the approved local-only `wit-bindgen` route as needed and record its actual use;
+   it has not been installed or used by part two. Prove package build, installation,
+   enable/disable and dispatch on the merged shared host.
 2. Port the settings contracts: notes-source browse/link/unlink, last-sync status and manual
    sync. Keep the current Settings → Connections controls, with no Notes navigation entry.
    Join those controls through the published Leptos kit and module frame.
-3. Preserve legacy JavaScript dollar replacement-token behavior when porting edits;
-   the preliminary literal helper is insufficient. Port the four chat tools (`notes.search/create/edit/delete`) and their prerequisites and
+3. Port the four chat tools (`notes.search/create/edit/delete`) and their prerequisites and
    approval presentations. Delete and overwrite must still require explicit approval; a write
-   must trigger sync and preserve the legacy response shape.
+   must trigger sync and preserve the legacy response shape. Use the corrected edit helper
+   and its 182 legacy-handler vectors; the helper is finished, but no complete tool handler
+   is implemented. Refresh the oracle manually if the legacy handler changes.
 4. Port `notes.sync`, its fifteen-minute account schedule, continuation metadata, the hundred-
    chunk budget, unchanged-file detection, unlink no-op and sink-safe last-error messages.
    Add a host memory-ingest/search port; the guest must not query memory's private tables.
 5. Port managed source admission/fencing, destination claims, contribution proposals/receipts,
    crash reconciliation, exact-block cleanup, account export, private note export and daily
    chat archives. Keep people links and other module collaboration on declared public APIs.
-6. Add cases to the HTTP/SQL parity harness, not just the domain oracle. Observe privacy tests
-   failing with protection removed and passing with it present for app, worker and admin
-   actors. Verify existing rows and unchanged migration identities.
+6. Add actual Notes HTTP and guest-handler cases to the parity harness for Settings,
+   chat tools, sync and managed publication. Retain the six existing SQL cases and
+   failing-first app/worker/admin privacy controls from part two. Extend privacy
+   checks through the production Notes guest and jobs; the forwarding fixture is
+   insufficient for those claims. Keep existing rows and migration identities intact.
 7. Exercise real Notes controls and chat on the running authenticated Rust app, including a
    second device over configured HTTPS and trusted origins. Record executable assertions and
    genuine UI evidence. A viewport simulation is not a second-device check.
 
-## Not proven in part one
+## Full Notes acceptance still unproven after part two
 
 - Complete Notes behavior, an installable Notes package or a shipped Wasm guest.
-- HTTP/SQL differential parity, Notes database privacy through a guest, sync or memory search.
+- Notes HTTP differential parity, privacy through the production Notes guest, sync or memory
+  search. The six SQL cases and forwarding-fixture privacy checks are already verified.
 - Notes on the running Rust UI, phone/laptop access, or second-device sign-in.
 - Cross-platform filesystem behavior, hostile filesystem races or power-loss recovery.

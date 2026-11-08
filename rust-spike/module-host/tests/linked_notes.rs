@@ -408,3 +408,38 @@ fn relinked_folder_refuses_an_old_destination_even_with_identical_text() {
         assert_eq!(f.vault(f.b).read("private.md").unwrap(), b"A private note");
     }
 }
+
+#[cfg(unix)]
+#[test]
+fn read_only_folders_support_reads_and_listings_without_a_lock_file() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = Fixture::new();
+    let path = &f.paths[&f.a];
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o500)).unwrap();
+    let result = || {
+        let ports = f.ports(None, Arc::new(DenyPorts));
+        let read = f.call(
+            f.a,
+            ports.clone(),
+            "ok",
+            "notes.read",
+            json!({"path":"private.md"}),
+        );
+        let list = f.call(f.a, ports, "ok", "notes.list", json!({"path":""}));
+        assert!(
+            !path.join(".moss-notes.lock").exists(),
+            "read-only operations must not create lock files"
+        );
+        assert_eq!(read.unwrap()["content"], "A private note");
+        assert_eq!(
+            list.unwrap()["entries"],
+            json!([{"name":"private.md","kind":"file"}])
+        );
+    };
+    // Restore before propagating a failing assertion so fixture cleanup can remove its file.
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(result));
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).unwrap();
+    if let Err(error) = outcome {
+        std::panic::resume_unwind(error);
+    }
+}

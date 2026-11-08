@@ -73,6 +73,8 @@ impl TransactionalDatabasePorts {
         let role = if scope.module().database.ledger != crate::manifest::Ledger::Module
             && crate::legacy::owns(&scope.module().id, table)
         {
+            // Legacy tables already grant the app and worker their own RLS-bound
+            // roles. A worker cannot switch into the app role, nor should it need to.
             self.database.role().name().into()
         } else {
             runtime_role(&scope.module().id)
