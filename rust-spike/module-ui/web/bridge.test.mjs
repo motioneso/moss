@@ -7,7 +7,8 @@ function setup() {
   const replies = [];
   const calls = [];
   const source = { postMessage: (m) => replies.push(m) };
-  const frame = { contentWindow: source, style: {} };
+  const frame = new EventTarget();
+  Object.assign(frame, { contentWindow: source, style: {} });
   const hostWindow = {
     addEventListener: (_, fn) => {
       listener = fn;
@@ -24,19 +25,28 @@ function setup() {
     navigate: () => null,
     chat: () => null
   });
-  const send = (message, origin = "null", from = source) =>
+  const commandPort = { postMessage() {}, start() {}, close() {} };
+  const bootstrap = (origin = "null", from = source, port = commandPort) =>
     listener({
       source: from,
       origin,
+      data: { channel: "moss.module.v1", type: "connect" },
+      ports: [port]
+    });
+  bootstrap("https://moss.example.test");
+  bootstrap("null", {});
+  assert.equal(commandPort.onmessage, undefined);
+  bootstrap();
+  frame.dispatchEvent(new Event("load"));
+  const send = (message) =>
+    commandPort.onmessage({
       ports: [{ postMessage: (m) => replies.push(m), close() {} }],
       data: { channel: "moss.module.v1", id: "one", ...message }
     });
-  return { send, replies, calls, frame, dispose };
+  return { send, replies, calls, frame, dispose, bootstrap };
 }
 test("only the bound opaque frame can invoke own-module routes", async () => {
   const s = setup();
-  await s.send({ type: "request", method: "GET", path: "/entries" }, "https://moss.example.test");
-  await s.send({ type: "request", method: "GET", path: "/entries" }, "null", {});
   assert.equal(s.calls.length, 0);
   await s.send({ type: "request", method: "GET", path: "/entries?tag=one" });
   assert.deepEqual(s.calls, [["GET", "/api/m/sample.counter/entries?tag=one", null]]);
@@ -56,19 +66,29 @@ test("resize is bounded and errors do not forward host diagnostics", async () =>
   assert.equal(s.replies.at(-1).error, "Moss could not finish this request");
 });
 test("guest receives replies only on its document-bound port and disposes pending work", async () => {
-  let sent;
+  let receive;
+  let transport;
+  const next = () =>
+    new Promise((resolve) => {
+      receive = resolve;
+    });
   const client = moduleClient({
     guestWindow: {
       parent: {
         postMessage(message, target, ports) {
           assert.equal(target, "*");
-          sent = { message, port: ports[0] };
+          assert.equal(message.type, "connect");
+          transport = ports[0];
+          transport.onmessage = ({ data, ports: replies }) =>
+            receive({ message: data, port: replies[0] });
         }
       }
     },
     timeoutMs: 1000
   });
+  const first = next();
   const result = client.request("GET", "/entries");
+  let sent = await first;
   sent.port.postMessage({ channel: "moss.module.v1", id: "wrong", ok: true, result: "wrong" });
   sent.port.postMessage({
     channel: "moss.module.v1",
@@ -78,20 +98,27 @@ test("guest receives replies only on its document-bound port and disposes pendin
   });
   assert.deepEqual(await result, [{ title: "Own entry" }]);
   sent.port.close();
+  const second = next();
   const pending = client.theme();
+  sent = await second;
   const rejected = assert.rejects(pending, /Module closed/);
   client.dispose();
   await rejected;
   sent.port.close();
   await assert.rejects(client.theme(), /Module closed or busy/);
+  transport.close();
 });
 test("guest times out a parent which never replies", async () => {
   let port;
+  let transport;
   const client = moduleClient({
     guestWindow: {
       parent: {
         postMessage(_, __, ports) {
-          port = ports[0];
+          transport = ports[0];
+          transport.onmessage = (event) => {
+            port = event.ports[0];
+          };
         }
       }
     },
@@ -100,4 +127,26 @@ test("guest times out a parent which never replies", async () => {
   await assert.rejects(client.theme(), /Moss did not reply/);
   client.dispose();
   port.close();
+  transport.close();
+});
+
+test("a newly loaded document cannot invoke routes on the old frame bridge", async () => {
+  const s = setup();
+  await s.send({ type: "request", method: "GET", path: "/entries" });
+  assert.equal(s.calls.length, 1);
+  // The newly navigating document tries to bootstrap before its load event.
+  const replacement = {
+    postMessage() {},
+    start() {
+      throw new Error("new document accepted");
+    }
+  };
+  s.bootstrap("null", s.frame.contentWindow, replacement);
+  await s.send({ type: "request", method: "GET", path: "/entries" });
+  assert.equal(s.calls.length, 2); // the old document port still belongs to the old document
+  s.frame.dispatchEvent(new Event("load"));
+  await s.send({ type: "request", method: "GET", path: "/entries" });
+  assert.equal(s.calls.length, 2);
+  assert.equal(s.replies.length, 2);
+  s.dispose();
 });

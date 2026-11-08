@@ -86,3 +86,21 @@ routes, tools, jobs and screens; link People only through declared public APIs;
 update package app-map metadata; run failing-first Tasks privacy and parity
 checks; and exercise the authenticated Rust UI from a second device before
 claiming full Tasks parity. Workshop and Food remain excluded.
+
+## Independent review corrections and follow-up
+
+Round one found two major issues: navigation could reuse the frame bridge, and
+the plan failed formatting. A new public bridge test first reproduced the extra
+host call after a frame load. Commands now use a single document-bound transferred port; later bootstrap
+messages are ignored, and later loads revoke it. The fixture attaches before
+assigning its verified URL, and the guest bootstraps during initial startup. Repository lint also
+caught missing browser globals and control-character regexes; these are corrected.
+The fixture now omits a GET body.
+
+The remaining minor findings are accepted as documented limits, not merge gates:
+mutation filters can be broad/tautological; mutation results have no row cap;
+external side effects and nested calls are outside the typed transaction; failed
+calls discard connections; cancellation during BEGIN/COMMIT lacks direct tests;
+malformed non-ui screen entries fail only during serving; and encoded literal
+routes can resolve differently from canonical paths. `EXTENDED_HOST.md` describes
+each limitation for downstream builders. No finding was rejected to end review.

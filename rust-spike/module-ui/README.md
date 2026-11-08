@@ -17,5 +17,10 @@ the selected output directory; generated assets stay out of commits. Serve that
 directory at `/module-shared/`. Module screens use the host's opaque iframe and
 `web/guest-bridge.mjs`, not direct authenticated HTTP. The signed-in parent installs
 `web/host-bridge.mjs` and supplies its authenticated request and shell callbacks.
+Attach the parent bridge before assigning the verified screen URL. The guest
+constructs `moduleClient` during initial document startup, transferring a command
+port before the first load. Only that document port carries commands; later
+bootstrap messages are ignored even before navigation finishes. A missing initial
+bootstrap or any later load revokes the bridge. Never automatically reconnect it.
 Replies use transferred message ports so a navigated iframe cannot receive a
 previous document's private response. Dispose both ends when their views close.

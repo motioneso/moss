@@ -1,15 +1,20 @@
-/** Connect exactly one opaque module frame. `request` runs the signed-in own-module route;
+/** Attach before assigning the verified frame URL. Commands use the initial
+ * document's transferred port; later frame loads revoke the connection.
+ * `request` runs the signed-in own-module route;
  * theme/navigation/chat callbacks belong to the host. No credentials cross this channel. */
 export function connectModuleFrame(
   frame,
   moduleId,
-  { request, theme, navigate, chat, hostWindow = window }
+  { request, theme, navigate, chat, hostWindow = globalThis.window }
 ) {
   if (!/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*$/.test(moduleId)) throw new Error("Invalid module");
   let live = true;
+  let commandPort;
+  let loaded = false;
   const pending = new Set();
+  const hasControl = (value) => [...value].some((c) => c.charCodeAt(0) < 32);
   const listener = async (event) => {
-    if (!live || event.source !== frame.contentWindow || event.origin !== "null") return;
+    if (!live) return;
     const message = event.data;
     if (
       !message ||
@@ -37,7 +42,8 @@ export function connectModuleFrame(
             typeof path !== "string" ||
             !path.startsWith("/") ||
             path.startsWith("//") ||
-            /[\\#\u0000-\u001f]/.test(path) ||
+            /[\\#]/.test(path) ||
+            hasControl(path) ||
             path.length > 16384
           )
             throw new Error();
@@ -58,7 +64,8 @@ export function connectModuleFrame(
           if (
             typeof message.path !== "string" ||
             !/^\/(?!\/)/.test(message.path) ||
-            /[\\\u0000-\u001f]/.test(message.path)
+            /[\\]/.test(message.path) ||
+            hasControl(message.path)
           )
             throw new Error();
           result = await navigate(message.path);
@@ -86,10 +93,35 @@ export function connectModuleFrame(
       replyPort.close();
     }
   };
-  hostWindow.addEventListener("message", listener);
-  return () => {
+  const connect = (event) => {
+    if (
+      !live ||
+      commandPort ||
+      event.source !== frame.contentWindow ||
+      event.origin !== "null" ||
+      event.data?.channel !== "moss.module.v1" ||
+      event.data?.type !== "connect"
+    )
+      return;
+    const port = event.ports?.[0];
+    if (!port || typeof port.postMessage !== "function") return;
+    commandPort = port;
+    port.onmessage = listener;
+    port.start();
+    hostWindow.removeEventListener("message", connect);
+  };
+  const onLoad = () => {
+    if (loaded || !commandPort) dispose();
+    loaded = true;
+  };
+  hostWindow.addEventListener("message", connect);
+  const dispose = () => {
     live = false;
     pending.clear();
-    hostWindow.removeEventListener("message", listener);
+    hostWindow.removeEventListener("message", connect);
+    commandPort?.close();
+    frame.removeEventListener("load", onLoad);
   };
+  frame.addEventListener("load", onLoad);
+  return dispose;
 }

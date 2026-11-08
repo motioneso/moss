@@ -34,11 +34,12 @@ This checkpoint supplies contracts, not a generated Rust component ABI binding.
 
 Typed queries allow select/insert/update/delete, explicit nested filters, ordering,
 paging and insert conflict-ignore. They accept checked identifiers and bound JSON
-values, never SQL. Mutations require an explicit filter. The host supplies insert
+values, never SQL. Mutations reject a bare `Filter::All`; nested tautologies and broad account filters
+are permitted. This is a guard against an omitted filter, not proof of a narrow write. The host supplies insert
 ownership and UUID IDs where those columns exist. Composite keys and owner-only
 preference keys work without an artificial ID. Database grants and forced RLS
-remain the privacy boundary. Queries are bounded to a thousand returned rows;
-large reads require paging. SQL errors poison the whole invocation even if the
+remain the privacy boundary. Select queries are bounded to a thousand returned rows; large reads require paging.
+Update/delete return all affected rows and have no row-count cap. SQL errors poison the whole invocation even if the
 guest catches them. Legacy database operations retain their existing transaction
 behavior; do not mix them into an atomic typed-query operation.
 
@@ -46,7 +47,15 @@ The opt-in wrapper uses additive `DataContext::open_bounded` and `commit_bounded
 helpers. Pool acquisition, context initialization, queries and completion share
 the invocation's remaining deadline. The connection-discard guard is established
 before `BEGIN`; canceled initialization or commit cannot recycle an unfinished
-transaction. The existing unbounded constructors remain unchanged.
+transaction. The existing unbounded constructors remain unchanged. The gate covers a saturated
+pool and subsequent account isolation; cancellation during BEGIN/COMMIT is not
+directly exercised. Failed invocations discard their connection even after a
+successful rollback, which can create connection churn.
+
+Jobs, events and public API calls are outside the typed-query transaction; rollback
+does not undo those side effects. Nested public calls use separate connections
+(up to eight levels) and can wait on outer-call row locks until their deadline.
+Keep such effects outside an operation that needs database-only atomicity.
 
 Declare the context capability before calling `context/read/call {}` for
 `{actorUserId, now}` or `context/uuid/new {}` for `{id}`. These values are supplied
@@ -88,3 +97,16 @@ scripts/run-gate.sh wait --follow
 Wasmtime and account-scoped KV. Use a claimed dev port and generated shared assets.
 Its temporary account has no sign-in or private data. It is not Tasks parity,
 authenticated Moss UI, HTTPS, LAN or second-device proof.
+
+## Current integration limits
+
+Attach the bridge before assigning the verified frame URL. The guest creates
+`moduleClient` during initial startup and transfers a command port. Later
+documents cannot replace that port, even before their load event. If bootstrap
+is missing at the first load, or on any later load, the bridge is revoked.
+Do not automatically reconnect it.
+Screen entries outside `ui/` are rejected by asset serving, but screen lookup does
+not yet fail early, so such a malformed screen can appear blank. Literal routes
+use raw spelling while parameterized routes decode segments: `/tasks/tod%61y`
+can resolve to `/tasks/:id` rather than `/tasks/today`. Callers should use canonical
+unencoded literal paths until this opt-in dispatch seam is normalized.

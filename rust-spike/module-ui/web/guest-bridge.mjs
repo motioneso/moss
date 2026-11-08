@@ -1,6 +1,10 @@
 /** Each reply uses a transferred MessagePort, which remains bound to this document after
  * navigation. An opaque frame cannot safely receive private replies with targetOrigin '*'. */
-export function moduleClient({ guestWindow = window, timeoutMs = 30000 } = {}) {
+export function moduleClient({ guestWindow = globalThis.window, timeoutMs = 30000 } = {}) {
+  const transport = new MessageChannel();
+  guestWindow.parent.postMessage({ channel: "moss.module.v1", type: "connect" }, "*", [
+    transport.port2
+  ]);
   const pending = new Map();
   let nextId = 0;
   let live = true;
@@ -34,7 +38,7 @@ export function moduleClient({ guestWindow = window, timeoutMs = 30000 } = {}) {
         if (reply.ok === true) resolve(reply.result);
         else reject(new Error("Moss could not finish this request"));
       };
-      guestWindow.parent.postMessage({ ...data, channel: "moss.module.v1", id, type }, "*", [
+      transport.port1.postMessage({ ...data, channel: "moss.module.v1", id, type }, [
         channel.port2
       ]);
     });
@@ -46,6 +50,7 @@ export function moduleClient({ guestWindow = window, timeoutMs = 30000 } = {}) {
     resize: (height) => call("resize", { height }),
     dispose() {
       live = false;
+      transport.port1.close();
       for (const p of pending.values()) p.close();
       pending.clear();
     }

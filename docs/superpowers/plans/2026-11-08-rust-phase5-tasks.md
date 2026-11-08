@@ -16,6 +16,14 @@ each extension has a failing-first test and its own small commit, and the report
 identifies those extensions. Rebase on current main before starting. Do not wait for
 a prerequisite task.
 
+## Approved checkpoint split
+
+The coordinator subsequently approved finishing JS-46 at a separate shared-host
+foundation PR. Tasks itself is not ported here. The Tasks-specific steps below
+remain a separate continuation, with the exact remaining work recorded in the
+Phase 5 Tasks report. The shared checkpoint does not establish Tasks parity or
+signed-in, HTTPS or second-device behavior.
+
 ## Build order
 
 1. Add a pure `moss-module-sdk` crate with host-port traits and typed query contracts.
@@ -34,21 +42,21 @@ a prerequisite task.
 
 ## Core split
 
-| Area | Placement and reason |
-| --- | --- |
-| Sign-in and accounts | Host: establishes the actor before calling packages |
-| Settings frame and app map | Host: combines trusted account controls and module declarations |
-| Chat and agents | Host: owns conversations, approvals and agent execution |
-| Memory and embeddings | Host: shared account knowledge and capability routing |
-| Vault | Host: enforces account roots and file permissions |
-| AI router | Host: selects each account's configured capabilities |
-| Connectors framework | Host: brokers credentials without exposing them to packages |
-| Notifications | Host: routes account-scoped delivery |
-| Job queue | Host: enforces actor envelopes and typed metadata |
-| Workflows and structured state | Host: coordinates cross-module state through public ports |
-| Today shell | Host: composes module contributions |
-| Tasks | Package: owns task behavior and existing task tables |
-| People | Separate package: exposes only declared public APIs to Tasks |
+| Area                           | Placement and reason                                            |
+| ------------------------------ | --------------------------------------------------------------- |
+| Sign-in and accounts           | Host: establishes the actor before calling packages             |
+| Settings frame and app map     | Host: combines trusted account controls and module declarations |
+| Chat and agents                | Host: owns conversations, approvals and agent execution         |
+| Memory and embeddings          | Host: shared account knowledge and capability routing           |
+| Vault                          | Host: enforces account roots and file permissions               |
+| AI router                      | Host: selects each account's configured capabilities            |
+| Connectors framework           | Host: brokers credentials without exposing them to packages     |
+| Notifications                  | Host: routes account-scoped delivery                            |
+| Job queue                      | Host: enforces actor envelopes and typed metadata               |
+| Workflows and structured state | Host: coordinates cross-module state through public ports       |
+| Today shell                    | Host: composes module contributions                             |
+| Tasks                          | Package: owns task behavior and existing task tables            |
+| People                         | Separate package: exposes only declared public APIs to Tasks    |
 
 ## Verification and completion
 
