@@ -108,8 +108,8 @@ impl Fixture {
             })
             .collect();
         let mut manifest = moss_notes_checks::manifest().unwrap();
-        // Test-only grants. The shipped package deliberately does not offer tools
-        // or claim a sync worker while the core memory join is unfinished.
+        // Test-only grants. The shipped package offers only read-only search,
+        // with no write tools or sync worker while the core memory join is unfinished.
         manifest
             .capabilities
             .iter_mut()
@@ -294,7 +294,8 @@ fn compiled_guest_cannot_read_or_mutate_another_owners_folder() {
 fn ordinary_package_refuses_the_tool_check_component_and_offers_no_mutations() {
     let f = Fixture::new();
     let shipped = moss_notes_checks::manifest().unwrap();
-    assert!(shipped.tools.is_empty());
+    assert_eq!(shipped.tools.len(), 1);
+    assert_eq!(shipped.tools["notes.search"].risk, "read");
     assert!(shipped.jobs.is_empty());
     assert!(
         f.host.validate(&f.wasm, &shipped).is_err(),
