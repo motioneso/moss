@@ -1,19 +1,17 @@
 # Rust Phase 5: People & Context
 
-Tasks JS-45 (part one), JS-50 (part two), JS-57 (part three), JS-58 (part four) and JS-69 (part five), Card 523.
+Tasks JS-45 (part one), JS-50 (part two), JS-57 (part three), JS-58 (part four),
+JS-69 (part five) and subsequent continuations through JS-84 (part nine), Card 523.
 Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
 Release note Category: N/A.
 
-Status: **People part five: Settings checkpoint; full parity remains open.** The continuation
-brief permits a bounded checkpoint before a second compaction. This checkpoint supplies
-data/review route envelopes and canonical-note fallbacks on top of part three's workers;
-it does not complete the package or
-the requested UI/device proof. On 2026-11-08 the user authorized merging part two and
-continuing its unfinished work here. Part one
-merged separately; the latest checkpoints below consume the merged shared host and Notes
-adapter. People is not yet an installable Rust package or reachable through the Rust UI.
-The database checks below cover their stated boundaries. Full parity, installed chat,
-live UI and second-device verification remain open.
+Status: **Installed People package checkpoint; full parity remains open.** The latest
+continuation sections below record the current verification and remaining work; earlier
+sections are historical receipts. Signed installation, reload, enumerated route comparisons
+and public consumer APIs passed in part seven. The authenticated Rust application still
+needs to compose People into its Settings and chat flows. Full behavior parity, live UI
+and second-device HTTPS verification remain open. The continuation brief permits a bounded
+checkpoint before a second compaction.
 
 ## Scope and dependencies
 
@@ -980,6 +978,83 @@ installed replay input fingerprint begins `637dff417917`; the nine-suite gate fi
 begins `354c754630f6`. The latter includes both corrected Settings assertions. Subsequent
 documentation-only edits are recorded in the final checkpoint commit. These are scoped
 People integration receipts, not the full repository foundation gate or CI/e2e results.
+
+## Part nine: packaged worker permission and broader refresh replay (JS-84)
+
+Before editing, this task fast-forwarded its own stale branch to merged main `1dd8240b2`.
+That baseline contains People PR 4066 and the newer canonical-edit report from PR 4069
+(commit `4338dc3f5`). No work from another worktree was copied into the source tree.
+
+The compiled indexing worker could not finish even when no optional source provider was
+configured: it reads `kv/get/person-providers`, but the shipping manifest omitted that
+permission. The old worker differential used a broader fixture manifest and hid the problem.
+The regression now executes enqueue and worker calls with the actual shipping manifest,
+real command records, the queue and worker-role transaction adapter. The unchanged manifest
+failed this regression before the fix. The only product change adds `get` and `person-providers` to the existing KV capability.
+The host permits one capability per port and represents operations/resources as a cross
+product, so this also permits `get` on the existing resource names and existing operations
+on the new name. Raw KV `set` and `delete` remain ungranted: command records use separate
+namespace directories, and preference operations require trusted bindings. A standalone
+manifest test validates the actual package grants. An initial separate KV entry was rejected
+by package validation and corrected before the successful replay. The module app map
+now describes the optional-provider check without claiming live provider delivery.
+
+The real Fastify route oracle now adds successful canonical creation, search and identity
+resolution for that person, nested-folder refresh, duplicate canonical IDs, missing IDs,
+ordinary markdown, an ignored uppercase extension, a new canonical person, repeat refresh
+and candidate listing. Directory cases include dot/trailing-slash normalization, internal
+separators, missing folders and traversal. Every seeded or created note is compared after
+each configured-folder request, alongside replies and all seven table snapshots.
+
+Generated UUIDs differ between implementations. The replay normalizes only the first valid
+frontmatter ID in a canonical note; other bytes, line endings and user text stay literal.
+A candidate hash derived from a generated person ID is recognized only if it matches the
+correct hash for a person in that run, then compared using the parity harness's ID label.
+Wrong hashes remain literal. A separate comparator test covers these limits. Pure matching
+vectors remain the independent algorithm check. The public consumer interfaces are unchanged.
+
+Builds use task-owned host, guest, UI and native Cargo targets. A previously reused external
+scratch compiler disappeared during the UI build; the retry uses a task-owned copy of the
+already installed compiler and its task-local standard-library targets instead. The pinned,
+previously approved `wit-bindgen =0.57.1` remains a declared guest dependency; it was compiled
+inside task scratch, with no global install. JavaScript dependencies were restored from the
+frozen lockfile and offline store, without install scripts. No new dependency was added.
+
+### Part nine verification receipts
+
+- Failing first: the original shipping manifest failed the compiled missing-provider worker
+  regression with `rc=101`. The broader fixture alone had not exercised those grants.
+- Installed-package replay: `rc=0`, **127 legacy responses** and all seven table snapshots
+  matched. It checks successful canonical creation/search/resolve, two nested refreshes,
+  review candidates and note bytes, then routes all four consumer APIs through an installed
+  consumer. It also checks installed Settings assets, preserved folder preferences and
+  unrelated-user/administrator refusals. No browser or HTTP listener is exercised.
+- Complete nine-suite People gate: `rc=0`, including compiled worker/legacy row parity,
+  canonical-note projections, persistence, Settings, all seven tool execution handlers and
+  all seven tables' failing-first privacy controls for app/worker roles and admin actors.
+  Controls fail with protection removed and pass with it restored. This is the scoped
+  People integration suite, not the full HTTP parity harness or live application.
+- Native People tests: 14 passed. Strict People Clippy and the pure TypeScript matching/note
+  vectors passed. The new normalization test and shipping-manifest test each passed.
+- Repository lint, typecheck and Prettier checks passed. Changed Rust tests pass scoped
+  rustfmt; Rust app-map generation and the repository file-size check passed.
+
+Artifact identity (SHA-256):
+
+- Generated guest, unchanged by the manifest fix:
+  `4fdfdc7f350d681a84da61148383e378bbeb520593a15b1a4228cc56325ceb2e`.
+- Tested package: `b28b1ee50c55427b9d1d50959c947cc75312c144052ceec36970a4884b2bff1f`
+  (404372 bytes).
+
+Both successful database receipts identify code commit `3c8127a99` plus the dirty manifest,
+worker test and contract correction later committed as `896b826dd`; their input fingerprint
+begins `e8a717e66ecb`. Logs end `155045-j56WMp` (installed replay) and `155045-CDtoCu`
+(nine-suite gate). Subsequent edits only update this report. These receipts do not stand in
+for CI, the full foundation gate or browser e2e acceptance.
+
+This is a bounded checkpoint. The remaining full-port work below exceeds this continuation's
+single-context scope. No live listener, browser session or physical second device has been
+qualified by this task; those acceptance requirements remain open.
 
 ### Remaining acceptance work
 
