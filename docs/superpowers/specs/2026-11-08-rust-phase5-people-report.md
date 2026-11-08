@@ -898,10 +898,10 @@ checkpoint as the complete HTTP parity harness or live-device acceptance.
 ## People part eight: note-backed edit checkpoint (JS-79)
 
 Card 523. Original base `2ab3f5cd2`; current reconciliation includes main `6450d6ae4`.
-The earlier receipts below describe the pre-merge branch, not the combined result.
-Both replay workflows and their direct regressions are retained. New merged-code receipts
-are pending and will be attached to the task proof. This section supersedes the earlier continuation list;
-it does not complete People or the authenticated Rust application.
+The original receipts below describe the pre-merge branch. Both replay workflows and
+their direct regressions are retained; the merged-code receipts follow them. This section
+supersedes the earlier continuation list; it does not complete People or the authenticated
+Rust application.
 
 ### Changes and review
 
@@ -951,6 +951,30 @@ and part seven, and verifies the owner's folder survives.
 component 5fbe294845f2bc6ecce26c0a088617f584ca4a0f546e5242d41c65f18c8fb900
 package   e30709c29e7ce0a8cc1bb7411a50307a7e1defdcd31cf587aa93c248549addd7
 ```
+
+### Reconciliation verification
+
+Merge `6080e7d41` retains both note-backed replay workflows and the newer Notes/Tasks
+work from main. The merged implementation uses main's typed note-edit seam; this
+branch adds direct tests, managed-note fixtures and recovery wording beyond it.
+The combined replay restores an active owner contact before consumer privacy checks.
+
+Both gates tested clean `a0013c7b0`, input fingerprint
+`11a4838e0b0e866f6518dd216cead34b478168aede49b3ffeb8396a7ed11d0d3`:
+
+- Installed replay `150842-mwc2ht` ended 0, wait 0: 130 responses, all seven table
+  snapshots, canonical bytes, signed installation/reload, consumer APIs and assets passed.
+- Nine-suite run `150842-fbljBM` ended 0, wait 0: ten integration tests passed, including
+  protection-removed/restored privacy controls under both runtime roles.
+- Sixteen native tests, strict Clippy, scoped Rust formatting, repository lint/typecheck,
+  formatting, file-size checks and Rust core app-map generation passed.
+- Component SHA-256: `c8fe79f59c12de8c6bc6eee3bc93caa07ed96fedb7bcb92b7056342a1c5e5ab2`.
+- Package SHA-256: `436c3337143605a6e3bec7e08c621c5a967396194195e08a73bb727080a63c6a`.
+
+This receipt-only report update follows those runs. Build targets belong to this task;
+no global tool was installed. The merged commit still needs independent review: both
+permitted rounds were used before reconciliation, so another round must be granted.
+The updated recipe proof distinguishes these checks from the open live acceptance work.
 
 ### Remaining acceptance work
 
