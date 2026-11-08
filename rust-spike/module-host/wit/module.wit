@@ -15,6 +15,7 @@ interface notify { call: func(request: string) -> result<string, string>; }
 interface attachments { call: func(request: string) -> result<string, string>; }
 interface tools { call: func(request: string) -> result<string, string>; }
 interface action-policy { call: func(request: string) -> result<string, string>; }
+interface context { call: func(request: string) -> result<string, string>; }
 
 world module {
   import db; import kv; import vault; import fetch; import credentials;

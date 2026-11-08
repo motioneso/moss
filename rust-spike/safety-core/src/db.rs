@@ -7,6 +7,8 @@
 //! sets `app.actor_user_id` and `app.request_id` transaction-locally, as `DataContextRunner` does.
 
 use deadpool_postgres::{Config, Object, Pool, PoolConfig, Runtime};
+#[path = "db_deadline.rs"]
+mod deadline;
 use tokio_postgres::NoTls;
 use uuid::Uuid;
 

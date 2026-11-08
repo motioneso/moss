@@ -1,0 +1,12 @@
+[package]
+name = "moss-module-ui"
+version = "0.1.0"
+edition = "2021"
+publish = false
+[workspace]
+[features]
+default = []
+csr = ["leptos/csr"]
+ssr = ["leptos/ssr"]
+[dependencies]
+leptos = { version = "0.8", default-features = false }
