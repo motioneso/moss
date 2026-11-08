@@ -71,6 +71,10 @@ services:
     volumes: *workspace-volumes
     environment:
       CI: "true"
+      # Each dev service runs its own `pnpm install`. Skip onnxruntime's optional CUDA
+      # download from GitHub releases. Embeddings run on CPU, and the CPU binaries
+      # ship in the npm package.
+      ONNXRUNTIME_NODE_INSTALL_CUDA: skip
       JARVIS_BOOTSTRAP_DATABASE_URL: postgres://postgres:postgres@postgres:5432/jarv1s
       JARVIS_MIGRATION_DATABASE_URL: postgres://jarvis_migration_owner:migration_password@postgres:5432/jarv1s
       JARVIS_APP_DATABASE_URL: postgres://jarvis_app_runtime:app_password@postgres:5432/jarv1s
@@ -111,6 +115,7 @@ services:
       - jarv1s-sports-browser-socket:/run/moss-sports-browser
     environment:
       CI: "true"
+      ONNXRUNTIME_NODE_INSTALL_CUDA: skip
       PORT: "3000"
       HOST: 0.0.0.0
       # #1936: Settings > Host > Technical details reads these at startup. The dev stack runs from
@@ -156,6 +161,7 @@ services:
     volumes: *workspace-volumes
     environment:
       CI: "true"
+      ONNXRUNTIME_NODE_INSTALL_CUDA: skip
       JARVIS_API_PROXY_TARGET: http://api:3000
     command: sh -c "corepack enable && apt-get update && apt-get install -y --no-install-recommends python3 make g++ && pnpm install --frozen-lockfile --store-dir /tmp/pnpm-store && pnpm dev:web"
     restart: unless-stopped
@@ -173,6 +179,7 @@ services:
     volumes: *workspace-volumes
     environment:
       CI: "true"
+      ONNXRUNTIME_NODE_INSTALL_CUDA: skip
       JARVIS_WORKER_DATABASE_URL: postgres://jarvis_worker_runtime:worker_password@postgres:5432/jarv1s
     command: sh -c "corepack enable && apt-get update && apt-get install -y --no-install-recommends python3 make g++ && pnpm install --frozen-lockfile --store-dir /tmp/pnpm-store && pnpm start:worker"
     restart: unless-stopped

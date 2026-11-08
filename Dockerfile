@@ -22,10 +22,11 @@ COPY --parents apps/*/package.json packages/*/package.json ./
 # node-gyp during `pnpm install`. bookworm-slim lacks the toolchain, so install python3/make/g++
 # for the compile, then purge in the SAME layer so the runtime image (FROM build ← FROM deps)
 # doesn't carry the ~200MB toolchain — the built pty.node is all runtime needs.
+# Embeddings run on CPU, so skip onnxruntime's optional CUDA download from GitHub releases.
 RUN --mount=type=cache,id=moss-pnpm,target=/pnpm/store \
   apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
-  && pnpm install --frozen-lockfile \
+  && ONNXRUNTIME_NODE_INSTALL_CUDA=skip pnpm install --frozen-lockfile \
   && apt-get purge -y --auto-remove python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 COPY . .
