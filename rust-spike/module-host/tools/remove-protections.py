@@ -15,6 +15,10 @@ controls = [
     ("file/socket/database import allowlist", "src/runtime.rs", r'ensure!\(\s*port.is_some_and[^;]+;', 'let _ = port;', "boundaries", "no_file_socket_or_database_escape_imports"),
     ("publisher prefix", "src/trust.rs", r'ensure!\(allowed, "The publisher cannot sign this module name"\);', 'let _ = allowed;', "registry", "publisher_cannot_escape_prefix_even_with_valid_signature"),
     ("private destination check", "src/registry.rs", r'pub fn public_ip\(ip: IpAddr\) -> bool \{', 'pub fn public_ip(ip: IpAddr) -> bool { return true;', "registry", "private_addresses_are_not_public_destinations"),
+    ("native cache authentication", "src/compiled.rs", r'hmac::verify\(&self.key\(\), &message, tag\).ok\(\)\?;', 'let _ = tag;', "boundaries", "authenticated_compile_cache_rebuilds_tampered_native_bytes"),
+    ("credential response redaction", "src/credentials.rs", r'sanitize\(&mut value, &fields\);', 'let _ = &fields;', "services", "credential_exchange_and_echo_redaction_use_the_real_guest_and_encrypted_store"),
+    ("one-use tool approval", "src/services.rs", r'self.write\(id, access, &key, &Value::Null\)\?;', 'let _ = &key;', "services", "installed_public_apis_events_tool_grants_and_account_routes_use_the_real_host"),
+
 ]
 environment = dict(os.environ, CARGO_TARGET_DIR=os.environ.get("CARGO_TARGET_DIR", str(Path(tempfile.gettempdir()) / "moss-module-host-target")))
 for name, file, pattern, replacement, suite, test in controls:

@@ -278,3 +278,321 @@ fn credential_exchange_and_echo_redaction_use_the_real_guest_and_encrypted_store
     assert!(call(&host, services, &m, a, "credentials", r).is_err());
     println!("PASS credential broker with a stand-in upstream: real Wasm, encrypted store, form token exchange, redacted echoes, account and destination checks, disconnect");
 }
+
+#[derive(Default)]
+struct ServiceCatalog(std::sync::Mutex<moss_module_host::store::State>);
+impl moss_module_host::store::CatalogStore for ServiceCatalog {
+    fn load(&self) -> Result<moss_module_host::store::State> {
+        Ok(self.0.lock().unwrap().clone())
+    }
+    fn commit(&self, revision: u64, next: &moss_module_host::store::State) -> Result<()> {
+        let mut state = self.0.lock().unwrap();
+        anyhow::ensure!(state.revision == revision, "Stale catalog");
+        *state = next.clone();
+        Ok(())
+    }
+}
+#[test]
+fn installed_public_apis_events_tool_grants_and_account_routes_use_the_real_host() {
+    use moss_module_host::{
+        lifecycle::FileLifecycle, registry::Source, sql::LegacyInventory, store::Installer,
+    };
+    let data = tempfile::tempdir().unwrap();
+    let registry = tempfile::tempdir().unwrap();
+    let keys = common::Keys::new();
+    keys.write(registry.path(), "1.0.0", 1, vec![]);
+    let a = uuid::Uuid::new_v4();
+    let b = uuid::Uuid::new_v4();
+    let access = AccessContext::new(a, "services-integration");
+    let services = Arc::new(
+        ServicePorts::new(
+            data.path(),
+            Arc::new(SecretCipher::connectors(&Default::default()).unwrap()),
+            Arc::new(NoAi),
+            Arc::new(LocalPorts::new(data.path()).unwrap()),
+        )
+        .unwrap(),
+    );
+    let installer = Arc::new(
+        Installer::new(
+            data.path(),
+            Arc::new(ServiceCatalog::default()),
+            Arc::new(FileLifecycle::new(data.path(), [a].into()).unwrap()),
+            Host::new(Limits::default()).unwrap(),
+            services.clone(),
+            "0.1.0".parse().unwrap(),
+            LegacyInventory::default(),
+        )
+        .unwrap(),
+    );
+    services.bind(&installer);
+    let catalog = installer
+        .refresh(
+            &access,
+            Source::Folder(registry.path().into()),
+            &common::Keys::public(&keys.root),
+            &common::Keys::public(&keys.root),
+            "sample-registry",
+        )
+        .unwrap();
+    let mut provider = common::manifest("1.0.0");
+    provider.id = "sample.provider".into();
+    provider
+        .provides
+        .insert("changed".into(), "1.0.0".parse().unwrap());
+    provider
+        .provides
+        .insert("read".into(), "1.0.0".parse().unwrap());
+    provider.tools.insert(
+        "erase".into(),
+        Tool {
+            description: "Erase".into(),
+            risk: "destructive".into(),
+        },
+    );
+    for (port, operations, resources) in [
+        ("events", vec!["publish"], vec!["changed"]),
+        ("tools", vec!["run"], vec!["erase"]),
+    ] {
+        provider.capabilities.push(Capability {
+            port: port.into(),
+            operations: operations.into_iter().map(String::from).collect(),
+            resources: resources.into_iter().map(String::from).collect(),
+            allow_private: false,
+        });
+    }
+    provider.routes =
+        serde_json::from_value(json!([{"method":"POST","path":"/read","signIn":true}])).unwrap();
+    let mut consumer = common::manifest("1.0.0");
+    consumer.id = "sample.consumer".into();
+    consumer
+        .requires
+        .insert(provider.id.clone(), "^1".parse().unwrap());
+    consumer.capabilities.push(Capability {
+        port: "events".into(),
+        operations: ["subscribe".into(), "poll".into()].into(),
+        resources: ["changed".into()].into(),
+        allow_private: false,
+    });
+    consumer.capabilities.push(Capability {
+        port: "api".into(),
+        operations: ["call".into()].into(),
+        resources: [provider.id.clone()].into(),
+        allow_private: false,
+    });
+    for m in [&provider, &consumer] {
+        let mut files = common::files(m);
+        // A real component exporting a pure successful JSON handler for route/tool dispatch.
+        files.insert(
+            "code/module.wasm".into(),
+            wat::parse_str(
+                include_str!("../sample/module.wat")
+                    .replace("i32.const 114 i32.eq", "i32.const 0 i32.eq")
+                    .replace("\"healthy\"", "\"true   \""),
+            )
+            .unwrap(),
+        );
+        let bytes = moss_module_host::archive::pack(&files).unwrap();
+        let digest = moss_module_host::trust::digest(&bytes);
+        installer
+            .import_file(
+                &access,
+                &catalog,
+                &bytes,
+                &common::Keys::sign(&keys.publisher, digest.as_bytes()),
+                "sample",
+                true,
+            )
+            .unwrap();
+    }
+    let host = Host::new(Limits::default()).unwrap();
+    let request = json!({"operation":"call","resource":provider.id,"parameters":{"name":"read"}});
+    assert_eq!(
+        call(
+            &host,
+            services.clone(),
+            &consumer,
+            a,
+            "api",
+            request.clone()
+        )
+        .unwrap(),
+        true
+    );
+    let mut undeclared = consumer.clone();
+    undeclared.requires.clear();
+    assert!(call(&host, services.clone(), &undeclared, a, "api", request).is_err());
+    let subscribe =
+        json!({"operation":"subscribe","resource":"changed","parameters":{"module":provider.id}});
+    call(&host, services.clone(), &consumer, a, "events", subscribe).unwrap();
+    call(
+        &host,
+        services.clone(),
+        &provider,
+        a,
+        "events",
+        json!({"operation":"publish","resource":"changed","parameters":{"count":1}}),
+    )
+    .unwrap();
+    let poll = json!({"operation":"poll","resource":"changed","parameters":{"module":provider.id}});
+    assert_eq!(
+        call(
+            &host,
+            services.clone(),
+            &consumer,
+            a,
+            "events",
+            poll.clone()
+        )
+        .unwrap()[0]["data"],
+        json!({"count":1})
+    );
+    assert!(call(
+        &host,
+        services.clone(),
+        &consumer,
+        b,
+        "events",
+        poll.clone()
+    )
+    .is_err());
+    let tool =
+        json!({"operation":"run","resource":"erase","parameters":{"parameters":{"count":1}}});
+    services
+        .approve_tool(&access, &provider.id, "erase", &json!({"count":1}))
+        .unwrap();
+    assert!(call(&host, services.clone(), &provider, b, "tools", tool.clone()).is_err());
+    assert_eq!(
+        call(&host, services.clone(), &provider, a, "tools", tool.clone()).unwrap(),
+        true
+    );
+    assert!(
+        call(&host, services.clone(), &provider, a, "tools", tool).is_err(),
+        "A grant is consumed once"
+    );
+    assert!(installer
+        .dispatch(access.clone(), "GET", "/api/m/sample.provider/read", "{}")
+        .is_err());
+    assert_eq!(
+        installer
+            .dispatch(access.clone(), "POST", "/api/m/sample.provider/read", "{}")
+            .unwrap()
+            .trim(),
+        "true"
+    );
+    installer.set_enabled(&access, &provider.id, false).unwrap();
+    assert!(installer
+        .dispatch(access.clone(), "POST", "/api/m/sample.provider/read", "{}")
+        .is_err());
+    assert!(call(&host, services.clone(), &consumer, a, "events", poll).is_err());
+    assert_eq!(
+        installer
+            .dispatch(
+                AccessContext::new(b, "other-account"),
+                "POST",
+                "/api/m/sample.provider/read",
+                "{}"
+            )
+            .unwrap()
+            .trim(),
+        "true"
+    );
+    println!("PASS installed Wasm public API/dependency checks, event subscriptions/account boundaries, one-use tool approval, signed-in route declarations and per-account disable");
+}
+
+struct ActorModels;
+#[async_trait::async_trait]
+impl moss_platform_routing::ConfigurationStore for ActorModels {
+    async fn for_actor(
+        &self,
+        actor: moss_platform_contracts::Actor,
+    ) -> std::result::Result<moss_platform_routing::Configuration, moss_platform_contracts::Error>
+    {
+        use moss_platform_routing::{Capability, Configuration, Model, Tier};
+        Ok(Configuration {
+            pinned_model: Some(actor.user_id()),
+            models: vec![Model {
+                id: actor.user_id(),
+                provider_id: actor.user_id(),
+                provider_model_id: "host-selected".into(),
+                capabilities: vec![Capability::Summarization],
+                tier: Tier::Interactive,
+                active: true,
+                provider_active: true,
+                assistant: true,
+                automatic_eligible: true,
+                default_sentinel: false,
+                shared_transcription_eligible: false,
+                voice_endpoint: false,
+                allow_user_override: false,
+                released_at: None,
+                created_at: "2026-11-08".into(),
+            }],
+            ..Default::default()
+        })
+    }
+}
+struct RecordingAi;
+#[async_trait::async_trait]
+impl moss_platform_routing::CapabilityTransport for RecordingAi {
+    async fn generate(
+        &self,
+        actor: moss_platform_contracts::Actor,
+        model: &moss_platform_routing::Model,
+        messages: &[moss_platform_routing::Turn],
+        max: u32,
+    ) -> std::result::Result<String, moss_platform_contracts::Error> {
+        assert_eq!(model.id, actor.user_id());
+        assert_eq!(model.provider_model_id, "host-selected");
+        assert_eq!(messages[0].content, "Summarize this");
+        assert_eq!(max, 16);
+        Ok(actor.user_id().to_string())
+    }
+}
+struct NoEmbeddings;
+#[async_trait::async_trait]
+impl moss_module_host::ai::EmbeddingStore for NoEmbeddings {
+    async fn for_actor(
+        &self,
+        _: moss_platform_contracts::Actor,
+    ) -> Result<moss_module_host::ai::EmbeddingEndpoint> {
+        anyhow::bail!("Not configured")
+    }
+}
+#[test]
+fn wasm_ai_uses_phase2b_router_and_host_actor_model_selection() {
+    let data = tempfile::tempdir().unwrap();
+    let intelligence =
+        moss_module_host::ai::RouterIntelligence::new(ActorModels, RecordingAi, NoEmbeddings)
+            .unwrap();
+    let services = Arc::new(
+        ServicePorts::new(
+            data.path(),
+            Arc::new(SecretCipher::connectors(&Default::default()).unwrap()),
+            Arc::new(intelligence),
+            Arc::new(LocalPorts::new(data.path()).unwrap()),
+        )
+        .unwrap(),
+    );
+    let mut m = common::manifest("1.0.0");
+    m.capabilities.push(Capability {
+        port: "ai".into(),
+        operations: ["generate".into()].into(),
+        resources: ["summarization".into()].into(),
+        allow_private: false,
+    });
+    let host = Host::new(Limits::default()).unwrap();
+    let r = json!({"operation":"generate","resource":"summarization","parameters":{"prompt":"Summarize this","maxOutputTokens":16,"model":"guest-untrusted-choice","actorUserId":uuid::Uuid::new_v4()}});
+    // A guest cannot smuggle an actor even as an ignored provider option.
+    assert!(call(&host, services.clone(), &m, uuid::Uuid::new_v4(), "ai", r).is_err());
+    let r = json!({"operation":"generate","resource":"summarization","parameters":{"prompt":"Summarize this","maxOutputTokens":16,"model":"guest-untrusted-choice"}});
+    assert!(call(&host, services.clone(), &m, uuid::Uuid::new_v4(), "ai", r).is_err());
+    let r = json!({"operation":"generate","resource":"summarization","parameters":{"prompt":"Summarize this","maxOutputTokens":16}});
+    for actor in [uuid::Uuid::new_v4(), uuid::Uuid::new_v4()] {
+        assert_eq!(
+            call(&host, services.clone(), &m, actor, "ai", r.clone()).unwrap()["text"],
+            actor.to_string()
+        );
+    }
+    println!("PASS real Wasm + Phase2b Router: authenticated actor chooses account model, guest model name refused; AI transport is a test stand-in");
+}

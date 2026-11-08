@@ -106,6 +106,20 @@ impl Ports for JobPorts {
                     let id=queue.enqueue(actor(scope),&spec.name,payload,uuid::Uuid::new_v4(),chrono::Utc::now()).await?;
                     Ok(json!({"id":id}))
                 }
+                "schedule"=> {
+                    let queue=Queue::connect(self.producer.expose_secret(),Role::Producer,vec![spec.clone()]).await?;
+                    let payload=json!({"actorUserId":scope.access().actor_user_id(),"moduleId":module_key(&scope.module().id),"manifestHash":manifest_hash(scope.module()),"jobKind":spec.name,"params":request.parameters["params"]});
+                    let id=uuid::Uuid::new_v4();
+                    queue.schedule(actor(scope),id,&spec.name,payload,request.parameters["cron"].as_str().context("Cron required")?,request.parameters["timezone"].as_str().context("Timezone required")?,chrono::Utc::now()).await?;
+                    Ok(json!({"id":id}))
+                }
+                "unschedule"=> {
+                    let id:uuid::Uuid=request.parameters["id"].as_str().context("Schedule id required")?.parse()?;
+                    let cx=DataContext::open(&self.app,scope.access()).await.map_err(|_|anyhow::anyhow!("Cannot open the schedule context"))?;
+                    let changed=cx.db().execute("DELETE FROM moss_queue.schedules WHERE id=$1 AND queue=$2",&[&id,&spec.name]).await?;
+                    cx.commit().await.map_err(|_|anyhow::anyhow!("Cannot commit schedule cancellation"))?;
+                    Ok(json!({"cancelled":changed==1}))
+                }
                 "cancel"=> {
                     let id:uuid::Uuid=request.parameters["id"].as_str().context("Job id required")?.parse()?;
                     let cx=DataContext::open(&self.app,scope.access()).await.map_err(|_|anyhow::anyhow!("Cannot open the job context"))?;

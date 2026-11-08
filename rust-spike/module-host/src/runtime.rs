@@ -337,7 +337,7 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
                 );
             }
         }
-        "jobs" if request.operation == "cancel" => {
+        "jobs" if request.operation == "cancel" || request.operation == "unschedule" => {
             ensure!(
                 request.parameters.as_object().is_some_and(|p| p.len() == 1)
                     && request.parameters["id"]
@@ -351,13 +351,34 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
             );
         }
         "jobs" => {
-            ensure!(request.operation == "enqueue", "Unknown job operation");
+            ensure!(
+                matches!(request.operation.as_str(), "enqueue" | "schedule"),
+                "Unknown job operation"
+            );
+            let parameters = if request.operation == "schedule" {
+                let p = request
+                    .parameters
+                    .as_object()
+                    .context("Schedule parameters required")?;
+                ensure!(
+                    p.len() == 3
+                        && p.get("cron")
+                            .and_then(Value::as_str)
+                            .is_some_and(|s| s.len() <= 128)
+                        && p.get("timezone")
+                            .and_then(Value::as_str)
+                            .is_some_and(|s| s.len() <= 128),
+                    "Schedule requires only cron, timezone and params"
+                );
+                &request.parameters["params"]
+            } else {
+                &request.parameters
+            };
             let schema = manifest
                 .jobs
                 .get(&request.resource)
                 .context("The module does not own this queue")?;
-            let params = request
-                .parameters
+            let params = parameters
                 .as_object()
                 .context("Job parameters must be an object")?;
             ensure!(

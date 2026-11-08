@@ -35,6 +35,13 @@ impl Ports for LocalPorts {
                     .serial
                     .lock()
                     .map_err(|_| anyhow::anyhow!("The module data store is busy"))?;
+                let disk = std::fs::OpenOptions::new()
+                    .create(true)
+                    .truncate(false)
+                    .read(true)
+                    .write(true)
+                    .open(self.root.path().join("kv.lock"))?;
+                disk.lock()?;
                 let mut values: BTreeMap<String, Value> = match account.read("kv.json") {
                     Ok(bytes) => serde_json::from_slice(&bytes)?,
                     Err(vault::VaultError::NotFound(_)) => BTreeMap::new(),

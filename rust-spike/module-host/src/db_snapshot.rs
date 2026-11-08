@@ -22,13 +22,69 @@ fn table_name(table: &str) -> Result<&str> {
     );
     Ok(name)
 }
+async fn external_policies(
+    tx: &tokio_postgres::Transaction<'_>,
+    owned: &[String],
+) -> Result<Vec<Value>> {
+    let mut policies = std::collections::BTreeMap::new();
+    for table in owned {
+        for row in tx.query("SELECT DISTINCT p.schemaname,p.tablename,p.policyname,p.permissive,p.roles::text[],p.cmd,p.qual,p.with_check FROM pg_policy pol JOIN pg_depend d ON d.classid='pg_policy'::regclass AND d.objid=pol.oid JOIN pg_policies p ON p.policyname=pol.polname AND pol.polrelid=to_regclass(format('%I.%I',p.schemaname,p.tablename)) WHERE d.refobjid=$1::text::regclass",&[table]).await? {
+            let schema:String=row.get(0);let name:String=row.get(1);let policy:String=row.get(2);
+            if !owned.contains(&format!("{schema}.{name}")) {
+                policies.insert((schema.clone(),name.clone(),policy.clone()),json!({"table":format!("{}.{}",q(&schema),q(&name)),"name":policy,"permissive":row.get::<_,String>(3),"roles":row.get::<_,Vec<String>>(4),"command":row.get::<_,String>(5),"using":row.get::<_,Option<String>>(6),"check":row.get::<_,Option<String>>(7)}));
+            }
+        }
+    }
+    Ok(policies.into_values().collect())
+}
+fn policy_sql(p: &Value) -> Result<String> {
+    let roles = p["roles"]
+        .as_array()
+        .context("Missing policy roles")?
+        .iter()
+        .map(|r| {
+            r.as_str()
+                .map(|r| if r == "public" { "PUBLIC".into() } else { q(r) })
+                .context("Invalid role")
+        })
+        .collect::<Result<Vec<_>>>()?
+        .join(",");
+    let using = p["using"]
+        .as_str()
+        .map(|s| format!("USING ({s})"))
+        .unwrap_or_default();
+    let check = p["check"]
+        .as_str()
+        .map(|s| format!("WITH CHECK ({s})"))
+        .unwrap_or_default();
+    Ok(format!(
+        "CREATE POLICY {} ON {} AS {} FOR {} TO {roles} {using} {check}",
+        q(p["name"].as_str().context("Missing policy name")?),
+        p["table"].as_str().context("Missing policy table")?,
+        p["permissive"].as_str().context("Missing policy mode")?,
+        p["command"].as_str().context("Missing policy command")?
+    ))
+}
 impl PostgresLifecycle {
     pub(crate) fn snapshot_database(&self, id: &str, snapshot: &str) -> Result<Value> {
         self.runtime.block_on(async {
             let mut client=self.privileged().await?;let tx=client.transaction().await?;
             let schema=format!("moss_snapshot_{}",snapshot.replace('-',""));
             tx.batch_execute(&format!("CREATE SCHEMA {schema}; REVOKE ALL ON SCHEMA {schema} FROM PUBLIC")).await?;
-            let owned:Vec<String>=tx.query("SELECT name FROM moss_modules.owned_tables WHERE module_id=$1 ORDER BY name",&[&id]).await?.iter().map(|r|r.get(0)).collect();
+            let mut owned:Vec<String>=tx.query("SELECT name FROM moss_modules.owned_tables WHERE module_id=$1 ORDER BY name",&[&id]).await?.iter().map(|r|r.get(0)).collect();
+            // Before the first package adoption, old modules have no host ownership rows.
+            // Their release-frozen tables must already be in the recovery snapshot.
+            for table in crate::legacy::tables(id) {
+                if !owned.contains(table) && tx.query_one("SELECT to_regclass($1) IS NOT NULL",&[table]).await?.get::<_,bool>(0) {owned.push(table.clone());}
+            }
+            let external_policies=external_policies(&tx,&owned).await?;
+            let mut inbound=Vec::new();
+            for table in &owned {
+                for row in tx.query("SELECT conrelid::regclass::text,conname,pg_get_constraintdef(oid) FROM pg_constraint WHERE confrelid=$1::text::regclass AND contype='f'",&[table]).await? {
+                    let from:String=row.get(0);
+                    if !owned.contains(&from) {inbound.push(json!({"table":from,"name":row.get::<_,String>(1),"definition":row.get::<_,String>(2)}));}
+                }
+            }
             if !owned.is_empty(){tx.batch_execute(&format!("LOCK TABLE {} IN ACCESS EXCLUSIVE MODE",owned.join(","))).await?;}
             let mut tables=serde_json::Map::new();
             for table in &owned {
@@ -52,7 +108,10 @@ impl PostgresLifecycle {
                 let policies:Vec<Value>=tx.query("SELECT policyname,permissive,roles::text[],cmd,qual,with_check FROM pg_policies WHERE schemaname='app' AND tablename=$1",&[&name]).await?.iter().map(|r|json!({"name":r.get::<_,String>(0),"permissive":r.get::<_,String>(1),"roles":r.get::<_,Vec<String>>(2),"command":r.get::<_,String>(3),"using":r.get::<_,Option<String>>(4),"check":r.get::<_,Option<String>>(5)})).collect();
                 let triggers:Vec<String>=tx.query("SELECT pg_get_triggerdef(oid) FROM pg_trigger WHERE tgrelid=$1::text::regclass AND NOT tgisinternal",&[table]).await?.iter().map(|r|r.get(0)).collect();
                 let grants:Vec<Value>=tx.query("SELECT grantee,privilege_type FROM information_schema.role_table_grants WHERE table_schema='app' AND table_name=$1",&[&name]).await?.iter().map(|r|json!({"role":r.get::<_,String>(0),"privilege":r.get::<_,String>(1)})).collect();
-                tables.insert(table.clone(),json!({"columns":columns,"owner":meta.get::<_,String>(0),"rls":meta.get::<_,bool>(1),"force":meta.get::<_,bool>(2),"sequences":sequences,"foreignKeys":fks,"policies":policies,"triggers":triggers,"grants":grants}));
+                let column_grants:Vec<Value>=tx.query("SELECT grantee,privilege_type,column_name FROM information_schema.column_privileges WHERE table_schema='app' AND table_name=$1",&[&name]).await?.iter().map(|r|json!({"role":r.get::<_,String>(0),"privilege":r.get::<_,String>(1),"column":r.get::<_,String>(2)})).collect();
+                let keys:Vec<Value>=tx.query("SELECT conname,pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid=$1::text::regclass AND contype IN ('p','u','x')",&[table]).await?.iter().map(|r|json!({"name":r.get::<_,String>(0),"definition":r.get::<_,String>(1)})).collect();
+                let indexes:Vec<String>=tx.query("SELECT pg_get_indexdef(indexrelid) FROM pg_index i WHERE indrelid=$1::text::regclass AND NOT EXISTS(SELECT 1 FROM pg_constraint c WHERE c.conindid=i.indexrelid)",&[table]).await?.iter().map(|r|r.get(0)).collect();
+                tables.insert(table.clone(),json!({"columns":columns,"owner":meta.get::<_,String>(0),"rls":meta.get::<_,bool>(1),"force":meta.get::<_,bool>(2),"sequences":sequences,"foreignKeys":fks,"policies":policies,"triggers":triggers,"grants":grants,"columnGrants":column_grants,"keys":keys,"indexes":indexes}));
             }
             let ledger:Vec<Value>=tx.query("SELECT path,checksum FROM moss_modules.migrations WHERE module_id=$1",&[&id]).await?.iter().map(|r|json!({"path":r.get::<_,String>(0),"checksum":r.get::<_,String>(1)})).collect();
             // Capture the historical ledgers too. Recovery only changes versions owned by
@@ -63,7 +122,7 @@ impl PostgresLifecycle {
             let jobs:Vec<Value>=tx.query("SELECT to_jsonb(j) FROM moss_queue.jobs j WHERE payload->>'moduleId'=$1",&[&key]).await?.iter().map(|r|r.get(0)).collect();
             let schedules:Vec<Value>=tx.query("SELECT to_jsonb(s) FROM moss_queue.schedules s WHERE payload->>'moduleId'=$1",&[&key]).await?.iter().map(|r|r.get(0)).collect();
             tx.commit().await?;
-            Ok(json!({"schema":schema,"tables":tables,"ledger":ledger,"core":core,"module":module,"jobs":jobs,"schedules":schedules}))
+            Ok(json!({"schema":schema,"tables":tables,"ledger":ledger,"core":core,"module":module,"jobs":jobs,"schedules":schedules,"inbound":inbound,"externalPolicies":external_policies}))
         })
     }
     pub(crate) fn restore_database(&self, id: &str, snapshot: &str, data: &Value) -> Result<()> {
@@ -72,14 +131,28 @@ impl PostgresLifecycle {
             let tables=data["tables"].as_object().context("Invalid database snapshot")?;
             let schema=data["schema"].as_str().context("Missing snapshot schema")?;
             ensure!(schema==format!("moss_snapshot_{}",snapshot.replace('-',"")),"Invalid snapshot schema");
-            let current:Vec<String>=tx.query("SELECT name FROM moss_modules.owned_tables WHERE module_id=$1",&[&id]).await?.iter().map(|r|r.get(0)).collect();
+            let mut current:Vec<String>=tx.query("SELECT name FROM moss_modules.owned_tables WHERE module_id=$1",&[&id]).await?.iter().map(|r|r.get(0)).collect();
+            for table in tables.keys() {
+                if !current.contains(table) && tx.query_one("SELECT to_regclass($1) IS NOT NULL",&[table]).await?.get::<_,bool>(0){current.push(table.clone());}
+            }
+            for policy in external_policies(&tx,&current).await? {
+                tx.batch_execute(&format!("DROP POLICY {} ON {}",q(policy["name"].as_str().context("Missing policy name")?),policy["table"].as_str().context("Missing policy table")?)).await?;
+            }
+            for table in &current {
+                for row in tx.query("SELECT conrelid::regclass::text,conname FROM pg_constraint WHERE confrelid=$1::text::regclass AND contype='f'",&[table]).await? {
+                    let from:String=row.get(0);let name:String=row.get(1);
+                    if !current.contains(&from) {tx.batch_execute(&format!("ALTER TABLE {from} DROP CONSTRAINT {}",q(&name))).await?;}
+                }
+            }
             if !current.is_empty(){tx.batch_execute(&format!("DROP TABLE {}",current.join(","))).await?;}
             provision_roles(&tx,id).await?;
             for (table,meta) in tables {
                 let name=table_name(table)?;let owner=meta["owner"].as_str().context("Missing table owner")?;
                 ensure!(owner==owner_role(id)||(owner=="jarvis_migration_owner"&&crate::legacy::owns(id,table)),"Snapshot owner mismatch");
                 let columns=meta["columns"].as_str().context("Missing columns")?;
-                tx.batch_execute(&format!("CREATE TABLE {table} (LIKE {schema}.{name} INCLUDING ALL); INSERT INTO {table} ({columns}) OVERRIDING SYSTEM VALUE SELECT {columns} FROM {schema}.{name}; ALTER TABLE {table} OWNER TO {}",q(owner))).await?;
+                tx.batch_execute(&format!("CREATE TABLE {table} (LIKE {schema}.{name} INCLUDING ALL EXCLUDING INDEXES); INSERT INTO {table} ({columns}) OVERRIDING SYSTEM VALUE SELECT {columns} FROM {schema}.{name}; ALTER TABLE {table} OWNER TO {}",q(owner))).await?;
+                for key in meta["keys"].as_array().context("Missing key constraints")? {tx.batch_execute(&format!("ALTER TABLE {table} ADD CONSTRAINT {} {}",q(key["name"].as_str().context("Missing key name")?),key["definition"].as_str().context("Missing key definition")?)).await?;}
+                for index in meta["indexes"].as_array().context("Missing indexes")? {tx.batch_execute(index.as_str().context("Invalid index")?).await?;}
                 for seq in meta["sequences"].as_array().context("Missing sequences")? {
                     let col=seq["column"].as_str().context("Missing sequence column")?;
                     let target=if seq["identity"]=="" {
@@ -93,6 +166,18 @@ impl PostgresLifecycle {
                     tx.query_one("SELECT setval($1::text::regclass,$2,$3)",&[&target,&last,&called]).await?;
                     tx.batch_execute(&format!("GRANT USAGE,SELECT ON SEQUENCE {target} TO {}",crate::database::runtime_role(id))).await?;
                 }
+                for grant in meta["grants"].as_array().context("Missing grants")? {
+                    let privilege=grant["privilege"].as_str().context("Missing privilege")?;ensure!(["SELECT","INSERT","UPDATE","DELETE","TRUNCATE","REFERENCES","TRIGGER","MAINTAIN"].contains(&privilege),"Invalid snapshot privilege");
+                    let role=grant["role"].as_str().context("Missing grantee")?;
+                    tx.batch_execute(&format!("GRANT {privilege} ON {table} TO {}",if role=="PUBLIC"{"PUBLIC".into()}else{q(role)})).await?;
+                }
+                for grant in meta["columnGrants"].as_array().context("Missing column grants")? {
+                    let privilege=grant["privilege"].as_str().context("Missing privilege")?;ensure!(["SELECT","INSERT","UPDATE","REFERENCES"].contains(&privilege),"Invalid column privilege");
+                    let role=grant["role"].as_str().context("Missing grantee")?;
+                    tx.batch_execute(&format!("GRANT {privilege} ({}) ON {table} TO {}",q(grant["column"].as_str().context("Missing column")?),if role=="PUBLIC"{"PUBLIC".into()}else{q(role)})).await?;
+                }
+            }
+            for (table,meta) in tables {
                 for policy in meta["policies"].as_array().context("Missing policies")? {
                     let roles=policy["roles"].as_array().context("Missing policy roles")?.iter().map(|r|r.as_str().map(|r|if r=="public"{"PUBLIC".into()}else{q(r)}).context("Invalid policy role")).collect::<Result<Vec<_>>>()?.join(",");
                     let using=policy["using"].as_str().map(|s|format!("USING ({s})")).unwrap_or_default();let check=policy["check"].as_str().map(|s|format!("WITH CHECK ({s})")).unwrap_or_default();
@@ -100,15 +185,12 @@ impl PostgresLifecycle {
                 }
                 if meta["rls"]==true {tx.batch_execute(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")).await?;}
                 if meta["force"]==true {tx.batch_execute(&format!("ALTER TABLE {table} FORCE ROW LEVEL SECURITY")).await?;}
-                for grant in meta["grants"].as_array().context("Missing grants")? {
-                    let privilege=grant["privilege"].as_str().context("Missing privilege")?;ensure!(["SELECT","INSERT","UPDATE","DELETE","TRUNCATE","REFERENCES","TRIGGER","MAINTAIN"].contains(&privilege),"Invalid snapshot privilege");
-                    let role=grant["role"].as_str().context("Missing grantee")?;
-                    tx.batch_execute(&format!("GRANT {privilege} ON {table} TO {}",if role=="PUBLIC"{"PUBLIC".into()}else{q(role)})).await?;
-                }
-            }
-            for (table,meta) in tables {
                 for key in meta["foreignKeys"].as_array().context("Missing foreign keys")? {tx.batch_execute(&format!("ALTER TABLE {table} ADD CONSTRAINT {} {}",q(key["name"].as_str().context("Missing constraint name")?),key["definition"].as_str().context("Missing constraint definition")?)).await?;}
                 for trigger in meta["triggers"].as_array().context("Missing triggers")? {tx.batch_execute(trigger.as_str().context("Invalid trigger")?).await?;}
+            }
+            for policy in data["externalPolicies"].as_array().context("Missing external policies")? {tx.batch_execute(&policy_sql(policy)?).await?;}
+            for key in data["inbound"].as_array().context("Missing incoming foreign keys")? {
+                tx.batch_execute(&format!("ALTER TABLE {} ADD CONSTRAINT {} {}",key["table"].as_str().context("Missing incoming table")?,q(key["name"].as_str().context("Missing incoming constraint")?),key["definition"].as_str().context("Missing incoming definition")?)).await?;
             }
             let before:Vec<String>=tx.query("SELECT path FROM moss_modules.migrations WHERE module_id=$1",&[&id]).await?.iter().map(|r|r.get(0)).collect();
             for path in before {if data["ledger"].as_array().context("Missing ledger")?.iter().all(|r|r["path"]!=path){let version=crate::legacy::version(&path)?;tx.execute("DELETE FROM app.schema_migrations WHERE version=$1 AND name=$2",&[&version,&&path[4..]]).await?;}}

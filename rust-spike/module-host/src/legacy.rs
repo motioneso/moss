@@ -23,6 +23,19 @@ fn inventory() -> &'static Inventory {
             .expect("compiled migration inventory")
     })
 }
+pub fn has_ledger(module: &str, ledger: &Ledger) -> bool {
+    inventory()
+        .files
+        .iter()
+        .any(|f| f.module == module && &f.ledger == ledger)
+}
+pub fn tables(module: &str) -> &[String] {
+    inventory()
+        .tables
+        .get(module)
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
+}
 pub fn owns(module: &str, table: &str) -> bool {
     inventory()
         .tables

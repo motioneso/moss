@@ -588,7 +588,13 @@ fn c_real_queue_pauses_rebinds_upgrades_and_runs_with_actor() {
     m.id = "sample.jobs".into();
     m.capabilities = vec![Capability {
         port: "jobs".into(),
-        operations: ["enqueue".into(), "cancel".into()].into(),
+        operations: [
+            "enqueue".into(),
+            "cancel".into(),
+            "schedule".into(),
+            "unschedule".into(),
+        ]
+        .into(),
         resources: ["sync".into()].into(),
         allow_private: false,
     }];
@@ -644,6 +650,52 @@ fn c_real_queue_pauses_rebinds_upgrades_and_runs_with_actor() {
     let worker = Secret::new(std::env::var("JS43_WORKER_URL").unwrap());
     assert!(!installer.run_job(&worker).unwrap());
     lifecycle.resume_jobs("sample.jobs").unwrap();
+    installer
+        .set_enabled(&access, "sample.jobs", false)
+        .unwrap();
+    assert!(installer
+        .call("sample.jobs", access.clone(), "route", &enqueue)
+        .is_err());
+    assert!(!installer.run_job(&worker).unwrap());
+    installer
+        .set_enabled(
+            &AccessContext::new(member, "member-choice"),
+            "sample.jobs",
+            true,
+        )
+        .unwrap();
+    assert!(
+        !installer.run_job(&worker).unwrap(),
+        "Another account cannot enable this actor's work"
+    );
+    installer.set_enabled(&access, "sample.jobs", true).unwrap();
+    let schedule=json!({"operation":"schedule","resource":"sync","parameters":{"cron":"0 9 * * *","timezone":"UTC","params":{"count":3}}}).to_string();
+    let scheduled: serde_json::Value = serde_json::from_str(
+        &installer
+            .call("sample.jobs", access.clone(), "route", &schedule)
+            .unwrap(),
+    )
+    .unwrap();
+    let unschedule =
+        json!({"operation":"unschedule","resource":"sync","parameters":{"id":scheduled["id"]}})
+            .to_string();
+    assert_eq!(
+        installer
+            .call(
+                "sample.jobs",
+                AccessContext::new(member, "other"),
+                "route",
+                &unschedule
+            )
+            .unwrap(),
+        r#"{"cancelled":false}"#
+    );
+    assert_eq!(
+        installer
+            .call("sample.jobs", access.clone(), "route", &unschedule)
+            .unwrap(),
+        r#"{"cancelled":true}"#
+    );
     m.version = "1.1.0".parse().unwrap();
     files.insert("moss.module.json".into(), serde_json::to_vec(&m).unwrap());
     install(&files);
@@ -738,6 +790,38 @@ fn d_existing_core_and_module_ledgers_keep_their_hashes() {
         digest: String::new(),
     };
     moss_module_host::sql::check(&package, &LegacyInventory::default()).unwrap();
+    // Adoption snapshots must include legacy tables before the new ownership mirror exists.
+    let adoption = lifecycle.snapshot("tasks").unwrap();
+    let snapshot: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(
+            data.path()
+                .join(format!("modules/snapshots/tasks/{adoption}/database.json")),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(snapshot["tables"].get("app.tasks").is_some());
+    // The saved core rows must be restored too, including before the ownership mirror exists.
+    rt.block_on(async {
+        let (db, conn) =
+            tokio_postgres::connect(&std::env::var("JS43_BOOTSTRAP_URL").unwrap(), NoTls)
+                .await
+                .unwrap();
+        tokio::spawn(async move {
+            let _ = conn.await;
+        });
+        let version =
+            moss_module_host::legacy::version(&package.manifest.database.migrations[0]).unwrap();
+        db.execute(
+            "DELETE FROM app.schema_migrations WHERE version=$1",
+            &[&version],
+        )
+        .await
+        .unwrap();
+    });
+    lifecycle.restore("tasks", &adoption).unwrap();
+    lifecycle.restore("tasks", &adoption).unwrap();
+    lifecycle.discard_snapshot("tasks", &adoption).unwrap();
     lifecycle.migrate(&package, None).unwrap();
     lifecycle.audit(&package).unwrap();
     let first = package.manifest.database.migrations[0].clone();
@@ -759,4 +843,53 @@ fn d_existing_core_and_module_ledgers_keep_their_hashes() {
     lifecycle.audit(&p).unwrap();
     lifecycle.migrate(&p, None).unwrap();
     println!("PASS legacy ledgers: compiled Tasks inventory retains original core checksums, changed bytes fail startup audit, module ledger applies once with original text hash");
+}
+
+#[test]
+#[ignore = "Only through verify-gate and tools/gate.sh"]
+fn e_frozen_meeting_sidecars_project_real_rows_and_restore_force_rls() {
+    use moss_module_host::{archive::Package, manifest::Ledger};
+    assert_eq!(std::env::var("JARVIS_GATE_RUN").as_deref(), Ok("1"));
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+        let (mut db,conn)=tokio_postgres::connect(&std::env::var("JS43_BOOTSTRAP_URL").unwrap(),NoTls).await.unwrap();
+        tokio::spawn(async move {let _=conn.await;});
+        let tx=db.transaction().await.unwrap();
+        // This entire fixture is rolled back, including its DDL. It touches only the gate DB.
+        let tables:Vec<String>=tx.query("SELECT tablename FROM pg_tables WHERE schemaname='app' AND tablename LIKE 'meeting\\_%' ESCAPE '\\'",&[]).await.unwrap().iter().map(|r|format!("app.{}",r.get::<_,String>(0))).collect();
+        if !tables.is_empty(){tx.batch_execute(&format!("DROP TABLE {} CASCADE",tables.join(","))).await.unwrap();}
+        tx.batch_execute("CREATE TABLE app.meeting_records(id uuid PRIMARY KEY,owner_user_id uuid);
+CREATE TABLE app.meeting_transcript_batches(meeting_id uuid,version integer,input_json text,history_sources_json text,history_omitted_sources integer);
+CREATE TABLE app.meeting_history_segments(meeting_id uuid,owner_user_id uuid,segment_key text,revision double precision,start_ms double precision,end_ms double precision,finality text,search_terms text[]);
+CREATE TABLE app.meeting_output_requests(meeting_id uuid,request_key uuid,input_json text,result_json text,history_kind text,history_result_status text,history_result_code text);
+CREATE TABLE app.meeting_output_artifacts(id uuid,meeting_id uuid,version integer,artifact_json text,history_origin text,history_notes_revision integer,history_transcript_revision integer,history_stale boolean,history_overview text);
+CREATE TABLE app.meeting_export_receipts(meeting_id uuid,artifact_version integer,receipt_json text,history_write_status text,history_index_status text,history_updated_at text);
+CREATE TABLE app.meeting_capture_grants(id uuid,state_json text,recorded_duration_ms integer);").await.unwrap();
+        let id=uuid::Uuid::new_v4();let owner=uuid::Uuid::new_v4();let request=uuid::Uuid::new_v4();
+        tx.execute("INSERT INTO app.meeting_records VALUES($1,$2)",&[&id,&owner]).await.unwrap();
+        let input=serde_json::json!({"events":[{"segment":{"segmentId":"one","revision":1,"startMs":0,"endMs":20,"finality":"final","text":"old"}},{"segment":{"segmentId":"one","revision":2,"startMs":0,"endMs":25,"finality":"final","text":"new searchable"}}],"sources":[{"kind":"mic","label":"A"},{"kind":"mic","label":"A"},{"kind":"tab","label":"B"}]}).to_string();
+        tx.execute("INSERT INTO app.meeting_transcript_batches(meeting_id,version,input_json) VALUES($1,1,$2)",&[&id,&input]).await.unwrap();
+        tx.execute("INSERT INTO app.meeting_output_requests(meeting_id,request_key,input_json,result_json) VALUES($1,$2,$3,$4)",&[&id,&request,&r#"{"kind":"generate"}"#,&r#"{"status":"saved","code":"ok"}"#]).await.unwrap();
+        let artifact=serde_json::json!({"origin":"generated","inputs":{"notesRevision":3},"stale":false,"content":{"overview":"  hello\n\u{feff}world\0  "}}).to_string();
+        tx.execute("INSERT INTO app.meeting_output_artifacts(id,meeting_id,version,artifact_json) VALUES($1,$1,1,$2)",&[&id,&artifact]).await.unwrap();
+        tx.execute("INSERT INTO app.meeting_export_receipts(meeting_id,artifact_version,receipt_json) VALUES($1,1,$2)",&[&id,&r#"{"writeStatus":"saved","indexStatus":"queued","updatedAt":"2026-11-08"}"#]).await.unwrap();
+        tx.execute("INSERT INTO app.meeting_capture_grants(id,state_json) VALUES($1,$2)",&[&id,&r#"{"recordedDurationMs":4500.0}"#]).await.unwrap();
+        let mut m=common::manifest("1.0.0");m.id="meetings".into();m.database.ledger=Ledger::CoreLegacy;
+        let mut p=Package{manifest:m,files:Default::default(),digest:String::new()};
+        for name in ["0280_meeting_history.sql","0292_meeting_minimal.sql"] {
+            let path=format!("sql/{name}");p.files.insert(path.clone(),std::fs::read(format!("../../packages/meetings/sql/{name}")).unwrap());
+            moss_module_host::legacy::backfill(&tx,&p,&path).await.unwrap();
+        }
+        let row=tx.query_one("SELECT revision,search_terms FROM app.meeting_history_segments",&[]).await.unwrap();
+        assert_eq!(row.get::<_,f64>(0),2.0);assert_eq!(row.get::<_,Vec<String>>(1),["new","searchable"]);
+        let row=tx.query_one("SELECT history_sources_json,history_omitted_sources FROM app.meeting_transcript_batches",&[]).await.unwrap();
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&row.get::<_,String>(0)).unwrap().as_array().unwrap().len(),2);assert_eq!(row.get::<_,i32>(1),0);
+        let row=tx.query_one("SELECT history_origin,history_notes_revision,history_transcript_revision,history_stale,history_overview FROM app.meeting_output_artifacts",&[]).await.unwrap();
+        assert_eq!(row.get::<_,String>(0),"generated");assert_eq!(row.get::<_,i32>(1),3);assert_eq!(row.get::<_,i32>(2),0);assert!(!row.get::<_,bool>(3));assert_eq!(row.get::<_,String>(4),"hello world");
+        assert_eq!(tx.query_one("SELECT recorded_duration_ms FROM app.meeting_capture_grants",&[]).await.unwrap().get::<_,i32>(0),4500);
+        assert!(tx.query("SELECT relforcerowsecurity FROM pg_class WHERE oid IN ('app.meeting_records'::regclass,'app.meeting_history_segments'::regclass,'app.meeting_capture_grants'::regclass)",&[]).await.unwrap().iter().all(|r|r.get::<_,bool>(0)));
+        let path="sql/0292_meeting_minimal.sql";p.files.get_mut(path).unwrap().push(b' ');
+        assert!(moss_module_host::legacy::backfill(&tx,&p,path).await.is_err());
+        tx.rollback().await.unwrap();
+        println!("PASS frozen backfills: real PostgreSQL latest segments, sources, artifact/request/export/capture projections, forced RLS; altered inventory bytes refused");
+    });
 }
