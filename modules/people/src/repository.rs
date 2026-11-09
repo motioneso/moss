@@ -3,7 +3,7 @@
 //! Canonical-note mutations must be coordinated by the notes service, not exposed directly.
 use moss_module_sdk::{
     query::{Compare, Conflict, Filter, Order, Query},
-    Client, Error, Host, Result,
+    Error, Host, Result,
 };
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -48,7 +48,16 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
             .filter(|order| order.descending)
             .map(|order| order.column.as_str())
             .collect();
-        Client(self.host).query_with_nulls_first(table, &query, &nulls_first)
+        let mut parameters = serde_json::to_value(&query)?;
+        if !nulls_first.is_empty() {
+            parameters["nullsFirst"] = json!(nulls_first);
+        }
+        // The port has already decoded every row into a JSON value. Rebuilding
+        // Vec<Value> through serde walks and reallocates the entire result again.
+        match self.host.call("db", "query", table, parameters)? {
+            Value::Array(rows) => Ok(rows),
+            _ => Err(Error::new("Invalid host response")),
+        }
     }
     /// Page instead of silently truncating at the host's thousand-row cap. The host
     /// transaction keeps a single invocation. Callers supply the legacy ordering;
