@@ -190,6 +190,9 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
     });
     let owner = Uuid::parse_str(oracle["actor"].as_str().unwrap()).unwrap();
     let mut configured = false;
+    let queue_replay = refresh::Replay::new(
+        ["actor", "other", "admin"].map(|key| oracle[key].as_str().unwrap().parse().unwrap()),
+    );
     for case in oracle["cases"].as_array().unwrap() {
         if !configured && case["configured"] == true {
             for (path, content) in oracle["folderSeed"].as_object().unwrap() {
@@ -234,7 +237,7 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         .expect("Compiled route must return a response envelope");
         let reply: Value = serde_json::from_str(&reply).unwrap();
         if case.get("queued").is_some() {
-            refresh::compare(&rt, &bootstrap, &host, &manifest, &ports, &case["queued"]);
+            queue_replay.compare(&rt, &bootstrap, &host, &manifest, &ports, &case["queued"]);
         }
         let actual_people = people_rows(&rt, &bootstrap, owner);
         let expected_people = case["rows"][TABLES[0]].as_array().unwrap();

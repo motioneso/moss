@@ -39,6 +39,9 @@ fn execute(host: &impl Host, request: &RouteRequest) -> Result<Response> {
     if let Some(response) = crate::settings::route(host, request)? {
         return Ok(response);
     }
+    if request.method == "POST" && request.path == "/people/index/refresh" {
+        return crate::index_refresh::refresh(host, &request.body);
+    }
     let repo = Repository::new(host);
     let notes = NotesService::new(host);
     let id = || {

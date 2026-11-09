@@ -95,7 +95,7 @@ create/update/archive/refresh route envelopes. Rename/archive retain the project
 when canonical notes are missing/unavailable; failures after publication still abort and
 compensate. Internal errors return the fixed HTTP error body rather than host details.
 Folder settings, relative directory browsing and legacy body-schema validation are included.
-Index-refresh, ingest nudges and complete HTTP compatibility remain continuation work.
+Manual index refresh is included; ingest nudges and complete HTTP compatibility remain continuation work.
 Scans fail explicitly above two thousand entries or four MiB of text;
 individual files retain the adapter's size bound. This bounded scan is not unlimited-folder
 parity. The manifest declares the packaged Settings screen; real shell reachability remains
@@ -184,7 +184,7 @@ saves retain the legacy 400 folder error and preserve the existing preference. B
 array text; repeated search values use JavaScript array joining. Positive limits above the
 SDK's `u32` page space scan without a limit if they fit PostgreSQL `int8`.
 
-Remaining acceptance: compose the real installed shell and chat; index-refresh/cooldown,
+Remaining acceptance: compose the real installed shell and chat;
 ingest nudges, real source providers and command retention/quotas; broaden HTTP parity
 (including locale-sensitive directory ordering and unusual note-only values); and run the
 real UI on desktop and a second physical device over HTTPS with sign-in, origin and privacy
@@ -214,3 +214,19 @@ canonical record, two refreshes, review candidates and additional relative-direc
 All seeded and newly created note bytes are compared. Only generated frontmatter UUIDs and
 correctly derived candidate hashes use ID normalization; user text and wrong hashes remain
 literal. These are dispatch comparisons, not browser or physical-device evidence.
+
+## Part ten manual indexing checkpoint
+
+`POST /people/index/refresh` accepts the legacy source-reference batch and returns status
+202 with its submitted count. It validates the entire batch, applies Fastify string coercion
+and refuses more than fifty references before publishing any jobs. Each accepted reference
+uses a fresh command UUID and the existing fifteen-minute index delay. Account selection
+comes from the host; request fields cannot choose one. Opaque hashes and versions stay in
+the account's command records rather than the queue payload.
+
+The legacy People queue has the standard pg-boss policy, so repeated references and requests
+remain separate jobs. Retrying an internal command by UUID still deduplicates. A queue
+failure can leave earlier batch entries queued; the response is the safe legacy 500 error.
+The route oracle now uses a real disposable pg-boss queue for manual refresh and compares
+its source metadata with the real Rust queue and command records. This remains package
+dispatch evidence; real application, source-provider and device acceptance are still open.

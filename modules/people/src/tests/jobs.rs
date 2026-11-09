@@ -12,6 +12,7 @@ struct Ports {
     now: RefCell<String>,
     fail_enqueue: RefCell<bool>,
     next_id: Cell<u64>,
+    fail_after: Cell<Option<usize>>,
 }
 impl Host for Ports {
     fn call(&self, port: &str, op: &str, resource: &str, p: Value) -> Result<Value> {
@@ -36,7 +37,10 @@ impl Host for Ports {
                 Ok(json!({"created":created,"value":value}))
             }
             ("jobs", "enqueue-options") => {
-                if self.fail_enqueue.replace(false) {
+                if self.fail_enqueue.replace(false)
+                    || self.fail_after.get() == Some(self.jobs.borrow().len())
+                {
+                    self.fail_after.set(None);
                     return Err(Error::new("Queue unavailable"));
                 }
                 let mut jobs = self.jobs.borrow_mut();
@@ -116,6 +120,20 @@ fn invalid_refreshes_publish_nothing_and_queue_failures_return_safe_errors() {
         json!({"status":500,"body":{"error":"Internal Server Error"}})
     );
     assert!(host.jobs.borrow().is_empty());
+}
+
+#[test]
+fn manual_refresh_keeps_earlier_sends_when_a_later_send_fails() {
+    let host = Ports::default();
+    *host.now.borrow_mut() = "2026-11-08T12:00:00.000Z".into();
+    host.fail_after.set(Some(1));
+    let source = json!({"source":"email","sourceRefHash":"opaque","reason":"refresh"});
+    assert_eq!(
+        refresh(&host, json!({"sourceRefs":[source.clone(), source]})),
+        json!({"status":500,"body":{"error":"Internal Server Error"}})
+    );
+    assert_eq!(host.jobs.borrow().len(), 1);
+    assert_eq!(host.records.borrow().len(), 2);
 }
 fn api(host: &Ports, name: &str, parameters: Value) -> Result<Value> {
     Ok(serde_json::from_str(&moss_people::guest::handle(

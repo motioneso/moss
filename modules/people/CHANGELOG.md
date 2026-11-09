@@ -6,3 +6,6 @@ Rust component and shared-frame People Settings checkpoint. Complete installed p
 
 Retain legacy note-only PATCH list handling and compare configured-folder HTTP edits,
 canonical note bytes and all People tables against the existing implementation.
+
+Restore manual index refresh with the legacy batch validation, fifteen-minute delay and
+standard-queue repeat behavior. Compare real legacy and Rust queues in the route oracle.
