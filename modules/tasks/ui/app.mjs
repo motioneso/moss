@@ -231,7 +231,7 @@ async function editTask(id) {
     status: "todo",
     priority: "",
     effort: "",
-    listId: $("list-filter").value || state.lists[0]?.id || ""
+    listId: filters.defaultListId(state.lists)
   };
   for (const key of Object.keys(defaults))
     $("task-form").elements.namedItem(key).value = task?.[key] ?? defaults[key];

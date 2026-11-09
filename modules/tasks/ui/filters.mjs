@@ -83,6 +83,10 @@ export function taskFilters(changed) {
     );
   }
   return {
+    defaultListId(lists) {
+      // Custom is presentation, never a list identifier in a write request.
+      return lists.find((list) => list.id === $("list-filter").value)?.id ?? lists[0]?.id ?? "";
+    },
     apply(tasks, lists) {
       const result = filterTasks(tasks, {
         lists,

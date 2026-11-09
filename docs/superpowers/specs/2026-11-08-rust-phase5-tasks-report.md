@@ -1158,6 +1158,13 @@ search, description search and subtasks. Source rows must remain unchanged.
 The same comparison failed against the previous package model before the change
 and passes afterward. This is screen-model parity, not full screen acceptance.
 
+Review round one found a custom-selection default leaking into the New task list
+picker. The default now resolves only actual list ids, falling back to the first
+list. A DOM regression check covers multiple solo lists, exclusions, list-control
+focus, combined tags, focus after removing a tag, counts and reset. Clear filters
+is also available in the empty state. These checks do not substitute for the
+signed-package browser check.
+
 Final gate, browser and review receipts are recorded in this task's proof artifact.
 The signed-package browser fixture exercises the real Rust host and account
 boundary, separately from the application shell. At the start of this run the

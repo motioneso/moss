@@ -54,7 +54,10 @@ pub fn render() -> String {
                 </details>
                 <div id="active-tags" class="tasks-actions" aria-label="Active tag filters"></div>
                 <p class="jds-caption">"Tasks can match any selected tag."</p>
-                <div id="empty" hidden><EmptyState title="No tasks here" description="Try another filter or add a task."/></div>
+                <div id="empty" hidden>
+                    <EmptyState title="No tasks here" description="Try another filter or add a task."/>
+                    {action("clear-filters", "Clear filters")}
+                </div>
                 <div id="task-results" aria-live="polite"></div>
             </section>
             <section id="editor" hidden aria-labelledby="editor-heading">
