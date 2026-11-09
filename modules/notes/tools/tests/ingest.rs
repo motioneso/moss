@@ -463,12 +463,20 @@ impl Fixture {
         assert_eq!(response["status"], 200);
         response["body"]["lastSync"].clone()
     }
-    fn status_access(&self, db: &Database, actor: Uuid, owner: Uuid) -> [u64; 3] {
+    fn status_access(&self, db: &Database, actor: Uuid, owner: Uuid, can_delete: bool) -> [u64; 3] {
         self.rt.block_on(async {
             let cx = safety_core::db::DataContext::open(db, &AccessContext::new(actor, "sync-status-privacy")).await.unwrap();
             let read = cx.db().query("SELECT value_json FROM app.preferences WHERE owner_user_id=$1 AND key='notes-last-sync'", &[&owner]).await.unwrap().len();
             let update = cx.db().execute("UPDATE app.preferences SET value_json='{}'::jsonb WHERE owner_user_id=$1 AND key='notes-last-sync'", &[&owner]).await.unwrap();
-            let delete = cx.db().execute("DELETE FROM app.preferences WHERE owner_user_id=$1 AND key='notes-last-sync'", &[&owner]).await.unwrap();
+            let deletion = cx.db().execute("DELETE FROM app.preferences WHERE owner_user_id=$1 AND key='notes-last-sync'", &[&owner]).await;
+            let delete = if can_delete {
+                deletion.unwrap()
+            } else {
+                // Workers have no DELETE grant, even for their own preferences
+                // and even without RLS. Require that stronger boundary too.
+                assert_eq!(deletion.unwrap_err().code(), Some(&tokio_postgres::error::SqlState::INSUFFICIENT_PRIVILEGE));
+                0
+            };
             // Drop rolls back all mutation probes.
             [read as u64, update, delete]
         })
@@ -595,16 +603,18 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
             f.oracle["expected"],
             "Durable sync differs from legacy rows"
         );
-        assert_eq!(f.status_access(&db, actor, actor), [1, 1, 1]);
+        let can_delete = role == "app";
+        let owner_access = [1, 1, u64::from(can_delete)];
+        assert_eq!(f.status_access(&db, actor, actor, can_delete), owner_access);
         for other in [f.actors[1], f.actors[2]] {
-            assert_eq!(f.status_access(&db, other, actor), [0, 0, 0]);
+            assert_eq!(f.status_access(&db, other, actor, can_delete), [0, 0, 0]);
             assert_eq!(f.status(db.clone(), other), Value::Null);
             f.rt.block_on(
                 f.bootstrap
                     .batch_execute("ALTER TABLE app.preferences DISABLE ROW LEVEL SECURITY"),
             )
             .unwrap();
-            let exposed = f.status_access(&db, other, actor);
+            let exposed = f.status_access(&db, other, actor, can_delete);
             // The same compiled route must expose the owner's result without RLS.
             let exposed_route = f.status(db.clone(), other);
             f.rt.block_on(
@@ -612,7 +622,7 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
                     .batch_execute("ALTER TABLE app.preferences ENABLE ROW LEVEL SECURITY"),
             )
             .unwrap();
-            assert_eq!(exposed, [1, 1, 1]);
+            assert_eq!(exposed, owner_access);
             assert!(!exposed_route.is_null());
             assert!(std::panic::catch_unwind(|| assert_eq!(
                 exposed,
@@ -620,7 +630,7 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
                 "sync status privacy fails without RLS"
             ))
             .is_err());
-            assert_eq!(f.status_access(&db, other, actor), [0, 0, 0]);
+            assert_eq!(f.status_access(&db, other, actor, can_delete), [0, 0, 0]);
             assert_eq!(f.status(db.clone(), other), Value::Null);
         }
         // Both reads and mutations must fail without the owner; removing RLS
@@ -767,5 +777,5 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
             }
         });
     }
-    println!("PASS durable compiled sync: saved final outcomes and safe rollback failures, deferred/no-op preservation, status-route and preference RLS removal controls; restart between pages, legacy row parity, UUID-only queue requests, post-commit publication failure retry, both runtime roles; owner/admin read-update-delete assertions fail without RLS and pass restored. Embeddings and queue publication are named stand-ins.");
+    println!("PASS durable compiled sync: saved final outcomes and safe rollback failures, deferred/no-op preservation, status-route and preference RLS removal controls; restart between pages, legacy row parity, UUID-only queue requests, post-commit publication failure retry, both runtime roles. Status read/update privacy fails without RLS and passes restored; app deletion follows RLS, worker deletion stays ungranted. Checkpoint read/update/delete privacy controls cover both roles. Embeddings and queue publication are named stand-ins.");
 }

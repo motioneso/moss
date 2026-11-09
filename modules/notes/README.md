@@ -478,4 +478,6 @@ status service refusal. The disposable ingest gate exercises real compiled sync,
 post-finalization status persistence and reads through the compiled status route
 for app and worker roles. Its owner, other-owner and admin privacy assertions
 are observed failing when preferences RLS is removed and passing after restoration.
+Status read/update controls cover both roles; deletion follows RLS for the app
+role, while the worker's missing DELETE grant must refuse deletion throughout.
 This does not prove installed chat, assembled UI sync or a separate device.

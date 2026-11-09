@@ -1237,10 +1237,12 @@ queue and data-context stand-ins. Its generated vectors cover final, deferred,
 no-op and failed outcomes; a refused status call must leave the real result intact.
 
 The disposable database gate adds compiled-worker persistence, compiled-route
-reads and direct runtime-role read/update/delete privacy probes for the saved
-status. It removes preferences RLS to observe the same privacy assertion fail,
-restores RLS and repeats, for another owner and an unrelated admin under both
-runtime roles. Queue delivery and embeddings remain explicit test stand-ins.
+reads and direct runtime-role privacy probes for the saved status. It removes
+preferences RLS to observe read/update privacy assertions fail, restores RLS and
+repeats, for another owner and an unrelated admin under both runtime roles.
+App-role deletion follows RLS too; worker deletion must remain permission-denied
+even for its owner and with RLS removed, because it has no DELETE grant.
+Queue delivery and embeddings remain explicit test stand-ins.
 Final gate and review results will be recorded in this checkpoint's proof.
 
 ### Still required for acceptance
