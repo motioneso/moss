@@ -991,13 +991,14 @@ Part 18 covered initial positioning; the part 19 checkpoint below adds timezone 
 
 ## JS-142 / part 19: saved timezone positioning checkpoint
 
-Card 525, package 0.19.0, draft PR #4141. Day and Week reset their remembered scroll
-only when the effective saved timezone changes. App map and live regression updated.
-Baseline live assertion failed by 474.033 pixels; the after-fix live run is pending.
-Paused at Ben's CPU-load request on 2026-11-09. No further builds or tests started.
-The full gate passed UI/data, installed reads/settings/drafts, 210 operation cases,
-and failing-first privacy for all five tables; tools/jobs were interrupted (rc 143).
-Repository formatting/file-size and scoped types/lint passed; root types interrupted.
-Claude found no blocker/major on c4a20ef90. This resume-note commit needs review.
-Resume: rerun the full gate, then signed-live, root types, proof and remaining review.
-See README for commands. No new tools installed. Full port/device proof remain open.
+Card 525, package 0.19.0, PR #4141. Day and Week reset their remembered scroll only
+when the effective saved timezone changes; ordinary refreshes retain user scroll.
+The real installed-screen regression changes saved locale and cache rows in the
+throwaway server at desktop and phone widths. Baseline failed by 474.033 pixels.
+Ben paused verification for CPU load, then resumed it on 2026-11-09. Before that
+pause, UI/data, installed reads/settings/drafts, 210 operation cases and all-five-
+table failing-first privacy passed; tools/jobs and root types were interrupted.
+Final acceptance requires a complete gate, after-fix live check, root types,
+review and task Proof artifact; use the artifact for the resumed run's verdicts.
+The first Claude review found no blocker/major. No new tools were installed.
+See README for commands and remaining full-port and physical-device HTTPS work.
