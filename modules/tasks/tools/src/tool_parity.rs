@@ -49,7 +49,9 @@ fn main() -> Result<()> {
         );
         let output = match output {
             Ok(value) => json!({"ok":serde_json::from_str::<Value>(&value)?}),
-            Err(_) => json!({"error":true}),
+            Err(error) => {
+                json!({"error":true,"fuelExhausted":error.chain().any(|cause| cause.to_string().contains("all fuel consumed"))})
+            }
         };
         println!("{output}");
         io::stdout().flush()?;

@@ -3,6 +3,31 @@ use crate::{schema::Schema, schemas};
 
 pub fn input(tool: &str) -> Option<Schema> {
     Some(match tool {
+        "tasks.list" => Schema::object(
+            &[],
+            vec![
+                ("listId", Schema::string()),
+                ("tagId", Schema::string()),
+                (
+                    "status",
+                    Schema::one_of_strings(&["todo", "done", "archived"]),
+                ),
+                (
+                    "priority",
+                    Schema::Integer {
+                        minimum: Some(1),
+                        maximum: Some(5),
+                    },
+                ),
+                ("dueBefore", Schema::string()),
+                ("dueAfter", Schema::string()),
+                ("completedAfter", Schema::string()),
+                (
+                    "quadrant",
+                    Schema::one_of_strings(&["do", "schedule", "delegate", "eliminate"]),
+                ),
+            ],
+        ),
         "tasks.get" | "tasks.activity" => strings(&["taskId"]),
         "tasks.listTags" => strings(&["listId"]),
         "tasks.listLists" => strings(&[]),
@@ -122,5 +147,16 @@ mod tests {
         assert!(!validate(&schema, &json!({"taskId":"x","steps":"raw"})));
         assert!(!validate(&schema, &json!({"taskId":"x","steps":[12]})));
         assert!(!validate(&schema, &json!({"steps":[]})));
+        let schema = input("tasks.list").unwrap();
+        for value in [
+            json!({"priority":"3"}),
+            json!({"priority":0}),
+            json!({"priority":6}),
+            json!({"status":"suggested"}),
+            json!({"quadrant":"other"}),
+            json!({"dueBefore":null}),
+        ] {
+            assert!(!validate(&schema, &value));
+        }
     }
 }

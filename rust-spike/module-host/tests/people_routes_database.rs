@@ -198,6 +198,11 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
             )).unwrap();
             configured = true;
         }
+        if let Some(files) = case["seedFiles"].as_object() {
+            for (path, content) in files {
+                std::fs::write(notes_root.join(path), content.as_str().unwrap()).unwrap();
+            }
+        }
         let method = case["method"].as_str().unwrap();
         let path = case["path"].as_str().unwrap();
         let mut request = dispatch::resolve(&manifest.routes, method, path).unwrap();
@@ -237,6 +242,11 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
             case["body"]
         );
         if let Some(files) = case["files"].as_object() {
+            assert_eq!(
+                normalization::files(&notes_root),
+                files.keys().cloned().collect(),
+                "Canonical file inventory differs after {method} {path}"
+            );
             for (file, content) in files {
                 assert_eq!(
                     normalization::note_bytes(
@@ -271,6 +281,15 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
             );
         }
     }
+    rt.block_on(async {
+        bootstrap
+            .execute(
+                "DELETE FROM app.preferences WHERE owner_user_id=$1 AND key='people-notes-folder'",
+                &[&owner],
+            )
+            .await
+            .unwrap();
+    });
     if let Some(installer) = &installer {
         for (name, parameters) in [
             ("findPeopleByNames", json!({"names":["Canonical renamed"]})),
@@ -344,11 +363,13 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
             "bridge.mjs",
             "guest-bridge.mjs",
         ] {
-            assert!(!installer
+            let asset = installer
                 .ui_asset("people", parts[3], &format!("ui/{file}"), &policy)
-                .unwrap()
-                .body
-                .is_empty());
+                .unwrap();
+            assert!(!asset.body.is_empty(), "Installed UI asset {file}");
+            if file.ends_with(".wasm") {
+                assert!(asset.body.starts_with(b"\0asm"));
+            }
         }
         println!("All four public APIs routed through an installed consumer; other-user/admin lookup denied; installed Settings asset verified (no browser claimed)");
         let request = |actor, method, path, body: Value| {

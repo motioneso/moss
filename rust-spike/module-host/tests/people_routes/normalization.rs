@@ -2,6 +2,27 @@ use super::parity_canon::Canon;
 use moss_people::matching::candidate_signature;
 use serde_json::{json, Value};
 
+pub fn files(root: &std::path::Path) -> std::collections::BTreeSet<String> {
+    fn visit(
+        root: &std::path::Path,
+        directory: &std::path::Path,
+        out: &mut std::collections::BTreeSet<String>,
+    ) {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if entry.file_type().unwrap().is_dir() {
+                visit(root, &path, out);
+            } else {
+                out.insert(path.strip_prefix(root).unwrap().to_str().unwrap().into());
+            }
+        }
+    }
+    let mut out = Default::default();
+    visit(root, root, &mut out);
+    out
+}
+
 // A missing-note candidate hashes a person UUID generated independently by each
 // implementation. Recognize only the correct hash for a person in that run,
 // then compare its canonical ID. Wrong hashes and other signatures stay literal.
@@ -74,6 +95,8 @@ fn comparison_retains_wrong_hashes_user_text_and_line_endings() {
     assert_eq!(note_bytes(&body, &mut canon), body);
     let crlf = text.replace('\n', "\r\n");
     assert_eq!(note_bytes(&crlf, &mut canon), crlf);
+    let mut seeded = Canon::new(chrono::Utc::now(), &[id.to_owned()].into());
+    assert_eq!(note_bytes(&text, &mut seeded), text);
     let hash = candidate_signature("create_person", &[id.into()]);
     let value = json!({"candidate_signature":hash,"candidateSignature":"wrong","body":hash});
     assert_eq!(

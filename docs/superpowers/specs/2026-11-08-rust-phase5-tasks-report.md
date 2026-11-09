@@ -974,3 +974,26 @@ not the authenticated application shell or a second physical device. Further wor
 includes seven endpoints, six tools, recurrence jobs and scheduling, queue policy
 parity, actor timezone/lazy recurrence, People public APIs, policy/feedback, full
 screens/settings, the application join, performance and second-device HTTPS.
+
+## Tasks part 9 checkpoint (JS-81, Card 526)
+
+This bounded continuation adds `tasks.list`: list, tag, status, priority, strict
+due/completion dates and quadrant filters, tags, stable ordering and column order.
+The HTTP route keeps its narrower contract. The app map names the new handler.
+Actor-local lazy recurrence remains unfinished; rows are persisted occurrences.
+The existing ISO parser is reused; free-text and offset-free date parity is incomplete.
+
+The new database check compares the actual component with the TypeScript executor
+on non-recurring rows, including private/admin/shared visibility, date boundaries,
+ordering and tags. The optional thousand-task acceptance probe remains red.
+An RLS removal control targets the synthetic list, exposes its six private rows
+and fails the same hidden-row assertion before restoration. Before implementation,
+the comparison failed against the part 8 component because the handler was absent.
+Final current-build receipts, endpoint results, signed UI and review are in the proof.
+
+No SQL, shared crate, global tool or target is changed. The approved pinned
+wit-bindgen graph and existing scratch toolchain/cache are reused; the tools
+lockfile is refreshed offline without a diff. Seven HTTP endpoints and five tools,
+recurrence/timezone, list-delete locking, queue policies, People, feedback/policies,
+full screens/settings, installed chat, real shell, performance and a second device
+over HTTPS remain unfinished. Part of #4027; release note Category N/A.

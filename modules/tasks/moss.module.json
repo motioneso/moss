@@ -45,7 +45,8 @@
         "tasks.createTag",
         "tasks.renameTag",
         "tasks.deleteTag",
-        "tasks.heartbeatWindow"
+        "tasks.heartbeatWindow",
+        "tasks.list"
       ]
     },
     {
@@ -90,7 +91,7 @@
   "features": [
     {
       "id": "tasks.package-data",
-      "description": "Tasks component with validated task, list, tag, activity, view preference and ordered breakdown routes. Seventeen tool handlers cover five reads and twelve task, list, tag, activity and breakdown actions. Full parity, assistant action policies and background jobs remain unfinished.",
+      "description": "Tasks component with validated task, list, tag, activity, view preference and ordered breakdown routes. Eighteen tool handlers cover six reads and twelve task, list, tag, activity and breakdown actions. Full parity, assistant action policies and background jobs remain unfinished.",
       "errors": [
         {
           "code": "tasks-invalid-input",
@@ -146,6 +147,10 @@
     {
       "id": "tasks.package-heartbeat",
       "description": "Read up to twenty owned open tasks due within a bounded horizon, including overdue tasks, with material revisions and the next time boundary. Shared tasks are excluded and recurrence is never advanced. Background authorization and scheduler integration remain unfinished."
+    },
+    {
+      "id": "tasks.package-filtered-list",
+      "description": "The tasks.list tool filters visible persisted tasks by list, tag, status, priority, strict date/completion boundaries and priority quadrant, preserving updated-time/identifier ordering and tag data. Explicit shares remain visible; private tasks remain hidden from other accounts including admins. Actor-local lazy recurrence and installed chat integration remain unfinished. Correct invalid filter types or date text and retry."
     }
   ],
   "screens": {
@@ -325,6 +330,10 @@
     },
     "tasks.heartbeatWindow": {
       "description": "Read a bounded owner-only overdue/due-soon window and revision without advancing recurrence. Background scheduler integration remains unfinished.",
+      "risk": "read"
+    },
+    "tasks.list": {
+      "description": "List visible persisted tasks with list, tag, status, priority, date, completion and quadrant filters. Actor-local recurrence reconciliation remains unfinished.",
       "risk": "read"
     }
   },

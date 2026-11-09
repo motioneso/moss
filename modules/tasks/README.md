@@ -2,11 +2,11 @@
 
 This is an unfinished Tasks module package. Rust code now compiles into a real
 component and handles basic task, list, tag, activity and view preference routes.
-It also handles seventeen tools: five reads and twelve mutations, with request
+It also handles eighteen tools: six reads and twelve mutations, with request
 schemas enforced inside the guest. It is not a
 complete replacement for Tasks. A package screen now covers list and priority views,
 task editing, subtasks, tags, comments and list creation/renaming. Full screen parity,
-six other chat tools, background
+five other chat tools, background
 jobs, People calls and full endpoint parity remain unfinished.
 
 `src/` uses the guest-safe SDK. `wit/` defines its ABI. Ben approved the pinned
@@ -136,8 +136,8 @@ harness keeps every existing case unchanged and adds the package's breakdown
 cases from `tests/parity/`. Failed comparisons remain failures.
 
 Remaining: seven HTTP endpoints (search interpretation, list
-deletion, focus, at-risk, overdue and both assistant-policy routes); six tools
-(summary, list, focus, at-risk, overdue and deleteList); recurrence jobs and full deferred-queue policy parity, timezone and lazy recurrence contracts, public People linkage, policy
+deletion, focus, at-risk, overdue and both assistant-policy routes); five tools
+(summary, focus, at-risk, overdue and deleteList); recurrence jobs and full deferred-queue policy parity, timezone and lazy recurrence contracts, public People linkage, policy
 and feedback orchestration, full screen/settings parity, real-shell integration,
 performance budgets and second-device HTTPS proof. The legacy HTTP list route
 only applies tag and quadrant filters; the wider filter set belongs to its
@@ -155,3 +155,25 @@ The database gate compares heartbeat results exactly with the TypeScript executo
 and enqueues/claims from a real PostgreSQL queue, then directly invokes the compiled
 handler with the claimed actor. Installed automatic worker dispatch is not proved. Privacy removal controls
 are separate from any claim of complete package or physical-device acceptance.
+
+Part 9 adds the `tasks.list` handler with list, tag, status, priority, due-date,
+completion-date and quadrant filters, stable updated-time/identifier ordering,
+tags and the legacy column order. The HTTP list route retains its narrower filters.
+Date comparisons are strict. The existing ISO date parser is reused; free-text
+dates and process-local offset-free timestamps still differ from JavaScript.
+Rows are persisted occurrences: actor-local lazy recurrence remains unfinished
+on both interactive listing paths, so this handler is not full list parity.
+
+The database gate includes `tools/list-parity.ts`: exact comparisons on synthetic
+non-recurring rows, private/admin/shared visibility, an RLS removal/restoration
+control. These are component
+handler checks, not proof of installed chat dispatch. No timezone, lock, People,
+action-policy, recurrence-worker or application-shell seam is fabricated here.
+Full-shell and second-device HTTPS acceptance remain outstanding.
+
+Large-account acceptance is separate and remains red. Run the same gate with
+`TASKS_LIST_LARGE_ACCOUNT=1` to include a list containing 1,011 tasks. The compiled
+handler exceeds the default host runtime allowance on that probe. The check is not
+truncated, its limits are not raised and its failure must not be reported as parity.
+Tag membership is chunked at the public query limit; quadrant filtering runs in
+the database. Cross-page success and the package speed budget remain unproved.
