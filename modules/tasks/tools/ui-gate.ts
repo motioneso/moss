@@ -158,6 +158,22 @@ try {
       "select count(*)::text as count from app.tasks where title = 'Browser proof task'"
     );
     assert.equal(result.rows[0]?.count, "1", "The real UI must create the proof task exactly once");
+    if (process.env["TASKS_UI_QUICK_PROOF"] === "1") {
+      const rows = await db.query<{ title: string; name: string }>(
+        "select t.title, l.name from app.tasks t join app.task_lists l on l.id=t.list_id where t.title in ('Browser proof task', 'Quick chosen-list task') order by t.title"
+      );
+      assert.deepEqual(rows.rows, [
+        { title: "Browser proof task", name: "Inbox" },
+        { title: "Quick chosen-list task", name: "Second list" }
+      ]);
+      const handoff = await db.query<{ count: string }>(
+        "select count(*)::text as count from app.tasks where title='Details handoff task'"
+      );
+      assert.equal(handoff.rows[0]?.count, "0", "Details must not save the draft");
+      console.log(
+        "PASS browser quick capture: exact task lists, one task each, unsaved Details handoff absent"
+      );
+    }
     if (process.env["TASKS_UI_SUGGESTION_PROOF"] === "1") {
       const assigned = await db.query<{ name: string }>(
         "select g.name from app.tasks t join app.task_tag_assignments a on a.task_id=t.id join app.task_tags g on g.id=a.tag_id where t.title='Browser proof task'"

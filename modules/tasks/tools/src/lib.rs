@@ -47,6 +47,7 @@ pub fn package_files(
         "app.mjs",
         "model.mjs",
         "capture.mjs",
+        "quick-add.mjs",
         "task-tags.mjs",
         "search.mjs",
         "filters.mjs",

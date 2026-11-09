@@ -82,10 +82,15 @@ export function taskFilters(changed, searchIntent = () => null) {
       })
     );
   }
+  function captureListId(lists) {
+    const solo = lists.filter((list) => listStates[list.id] === "solo");
+    return solo.length === 1 ? solo[0].id : undefined;
+  }
   return {
+    captureListId,
     defaultListId(lists) {
-      // Custom is presentation, never a list identifier in a write request.
-      return lists.find((list) => list.id === $("list-filter").value)?.id ?? lists[0]?.id ?? "";
+      // Details falls back to the first list; quick capture lets the route choose Personal.
+      return captureListId(lists) ?? lists[0]?.id ?? "";
     },
     apply(tasks, lists) {
       const result = filterTasks(tasks, {

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add a task by title from the package screen, or carry the title into Details.
+- Keep failed quick-capture titles and refresh acknowledged saves without creating another task.
+
 - Interpret task searches from the package screen, remove individual conditions, and keep ordinary text search usable when AI is unavailable.
 - Compare interpreted filtering with the unchanged legacy screen; retain UTC date behaviour until account timezone support arrives.
 
