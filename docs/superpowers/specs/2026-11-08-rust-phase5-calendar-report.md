@@ -487,19 +487,21 @@ runner now polls from Node with a self-contained browser callback. This correcti
 and the subsequent main rebase happened after both allowed independent reviews;
 the checkpoint needs another review round before Ready. The earlier reviews found
 no blocker or major. Height-only resizing still recenters today and remains a minor
-follow-up. Strict UI Clippy also reports two pre-existing modulo-style lints in the
-time formatter; the guest and host strict Clippy checks pass.
+follow-up. Part 6 merged during final verification. This branch is rebased onto it,
+retains the editable settings and their tests, and adds account naming to that screen.
+The merged settings checkpoint also fixes the earlier time-format Clippy findings.
+The combined package is checked again; earlier receipts prove only their recorded commit.
 
 ### Remaining acceptance work
 
 The part 5 remaining list still applies: the other original HTTP contracts and untested
 errors/defaults; four provider tools and both jobs; preview, authority/approval, apply,
 retry/recovery, follow-through and monitoring; concrete public provider/reference
-adapters; writable automation and external-calendar status; full shell/Today/chat
+adapters; source-behavior controls and external-calendar status; full shell/Today/chat
 composition; old-screen replacement and complete assembled parity-harness acceptance.
 The Day legend still needs the original held-block count note and event-color swatches.
-The current main checkpoint still has read-only Calendar settings. This part does not
-claim to have delivered the separate settings-write work.
+Editable lookahead, prep-task and time-block settings come from the merged part 6
+checkpoint and remain intact. This part does not claim that inherited work as new.
 
 Actual physical second-device sign-in/UI over trusted HTTPS is still unproven. This
 machine has no attached ADB device or configured SSH target, and available tailnet peers
