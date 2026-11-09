@@ -22,6 +22,7 @@ import { chromium } from "@playwright/test";
 import { getMossDatabaseUrls } from "@moss/db";
 import { readHttpOracle } from "./http-oracle.js";
 import { checkStartup } from "./startup-check.js";
+import { checkDetails } from "./details-live.js";
 import { checkOperationStatus } from "./operation-live.js";
 import { checkDayPlanWrites } from "./day-plan-live.js";
 import { DEFAULT_LOCALE_SETTINGS, type CalendarEventDto } from "@moss/shared";
@@ -346,29 +347,40 @@ try {
       title: "Midnight date check",
       starts: `${today}T22:30:00Z`,
       ends: `${nextDay(1)}T00:00:00Z`,
-      metadata: {}
+      metadata: {},
+      location: null
     },
     {
       id: randomUUID(),
       title: "All-day date check",
       starts: `${today}T00:00:00Z`,
       ends: `${nextDay(3)}T00:00:00Z`,
-      metadata: { allDay: true }
+      metadata: { allDay: true },
+      location: null
     },
     {
       id: randomUUID(),
       title: "Held block check",
       starts: `${today}T12:00:00Z`,
       ends: `${today}T13:00:00Z`,
-      metadata: { jarvisCreated: true }
+      metadata: { jarvisCreated: true, attendeeCount: 2 },
+      location: "Room-" + "LongLocation".repeat(30)
     }
   ];
   for (const event of proofEvents) {
     assert.equal(
       (
         await db.query(
-          "INSERT INTO app.calendar_events(id,connector_account_id,owner_user_id,title,starts_at,ends_at,external_id,external_metadata) SELECT $2::uuid,connector_account_id,owner_user_id,$3,$4,$5,$2::text,$6 FROM app.calendar_events WHERE id=$1",
-          [data.event, event.id, event.title, event.starts, event.ends, event.metadata]
+          "INSERT INTO app.calendar_events(id,connector_account_id,owner_user_id,title,starts_at,ends_at,external_id,external_metadata,location) SELECT $2::uuid,connector_account_id,owner_user_id,$3,$4,$5,$2::text,$6,$7 FROM app.calendar_events WHERE id=$1",
+          [
+            data.event,
+            event.id,
+            event.title,
+            event.starts,
+            event.ends,
+            event.metadata,
+            event.location
+          ]
         )
       ).rowCount,
       1
@@ -409,6 +421,7 @@ try {
   };
   await frame.getByRole("dialog").filter({ hasText: "Calendar package check" }).waitFor();
   await screenshotDialog("signed-in-linked-event.png");
+  await checkDetails(tab, local, out, data.event);
   await checkDayPlanWrites(tab, (path, options) => request(path, { ...options, cookie: other }));
   await checkOperationStatus(tab, db, data.actor, (path, options) =>
     request(path, { ...options, cookie: other })

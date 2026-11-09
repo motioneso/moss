@@ -46,3 +46,12 @@ body {
 .calendar-settings-section p {
   margin: 0;
 }
+
+.cal-peek__title,
+.cal-peek__rowmain,
+.cal-peek__rowsub {
+  overflow-wrap: anywhere;
+}
+.cal-peek__row > div {
+  min-width: 0;
+}
