@@ -28,3 +28,7 @@ path = "tests/tools.rs"
 [[bin]]
 name = "calendar-data-parity"
 path = "bin/data-parity.rs"
+
+[[test]]
+name = "jobs"
+path = "tests/jobs.rs"

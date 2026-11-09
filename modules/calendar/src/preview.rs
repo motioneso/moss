@@ -101,9 +101,8 @@ pub fn preview(host: &impl Host, plan_id: &str, body: Value) -> Result<Value> {
     let blocks = plan["blocks"].as_array().cloned().unwrap_or_default();
     let find = |id: &str| blocks.iter().find(|b| b["id"] == id);
     for id in &selected_ids {
-        let block = find(id).ok_or_else(|| {
-            invalid(format!("selected change {id} is not part of this plan"))
-        })?;
+        let block = find(id)
+            .ok_or_else(|| invalid(format!("selected change {id} is not part of this plan")))?;
         if block["pendingChange"].is_null() {
             return Err(invalid(format!(
                 "selected change {id} has no pending change"
@@ -165,12 +164,12 @@ pub fn preview(host: &impl Host, plan_id: &str, body: Value) -> Result<Value> {
             },
         };
         let deadline_risk = match (&task_id, &after) {
-            (Some(_), Some((start, minutes))) => match fact_of(&task_id)
-                .and_then(|fact| fact.due_at.as_deref())
-            {
-                Some(due) => ends_at(start, *minutes)?.as_str() > due,
-                None => false,
-            },
+            (Some(_), Some((start, minutes))) => {
+                match fact_of(&task_id).and_then(|fact| fact.due_at.as_deref()) {
+                    Some(due) => ends_at(start, *minutes)?.as_str() > due,
+                    None => false,
+                }
+            }
             _ => false,
         };
         if eligible {

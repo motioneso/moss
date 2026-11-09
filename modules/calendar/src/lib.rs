@@ -8,6 +8,7 @@ mod display;
 mod draft_tool;
 pub mod events;
 pub mod heartbeat;
+mod jobs;
 pub mod model;
 pub mod plans;
 mod preview;
@@ -67,6 +68,10 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
         }
         .map_err(|e| e.message)?;
         return serde_json::to_string(&result).map_err(|_| "Invalid calendar tool response".into());
+    }
+    if kind == "job" {
+        let result = jobs::handle(host, payload).map_err(|e| e.message)?;
+        return serde_json::to_string(&result).map_err(|_| "Invalid calendar job result".into());
     }
     if kind == "api" {
         let input: Value = serde_json::from_str(payload).map_err(|_| "Invalid calendar request")?;

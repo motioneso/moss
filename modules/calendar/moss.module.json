@@ -10,7 +10,7 @@
   "capabilities": [
     {
       "port": "db",
-      "operations": ["query"],
+      "operations": ["query", "delete"],
       "resources": [
         "app.calendar_events",
         "app.day_plans",
@@ -23,6 +23,11 @@
       "port": "context",
       "operations": ["read", "uuid"],
       "resources": ["call", "new"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue"],
+      "resources": ["calendar-cache-evict-event"]
     },
     {
       "port": "kv",
@@ -281,6 +286,13 @@
     "calendar.dayPlanDraft": {
       "description": "Save evening intent and untimed task additions to the current day-plan draft for dialog review. Does not schedule events.",
       "risk": "write"
+    }
+  },
+  "jobs": {
+    "calendar-cache-evict-event": {
+      "target-item-id": {
+        "kind": "id"
+      }
     }
   },
   "screens": {
