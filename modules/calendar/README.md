@@ -190,3 +190,18 @@ behavior and exhaustive error-message equivalence remain different. Signed-live 
 through the real UI, reloads, checks persisted policy, disconnects the browser for a
 failed save and retries. A phone-width screenshot and same-host LAN check still do
 not prove physical second-device access or production certificate trust.
+
+## Event dates and Day legend (part 8 checkpoint)
+
+Version 0.8.0 keeps all-day exclusive ends and timed local-midnight ends off the next
+day in event details. Default English event-date and toolbar-range wording match the
+production Calendar model. The Day legend shows event swatches and counts today’s
+held blocks; Week has no count note and Month has no event-type legend. These are
+cache presentations, not evidence of provider execution. Native regressions and the
+UI differential harness cover midnight, multi-day, leap-day, year-boundary and
+timezone cases. The signed-live runner checks the rendered details and legend.
+
+At this checkpoint’s start, part 7 remains open as PR 4079. Its assistant-name and
+narrow-week work is not copied into this branch. Full Calendar parity, regional
+formatting beyond default English, the old-screen switch and physical second-device
+HTTPS remain required. The report retains the complete remaining list.

@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use moss_calendar_ui::{
     model::{group, Event},
-    views::{EventDetails, Month, ReadFailure},
+    views::{CalendarLegend, EventDetails, Month, ReadFailure},
 };
 
 #[test]
@@ -48,9 +48,9 @@ fn all_day_details_keep_calendar_dates_and_remove_the_exclusive_end() {
     .unwrap();
     let output = view!{<EventDetails event=event timezone="America/Los_Angeles".to_string() twelve=true on_close=Callback::new(|_|{})/>}.to_html();
     assert!(output.contains("All day"));
-    assert!(output.contains("Nov 8, 2026 – Nov 10, 2026"));
-    assert!(!output.contains("Nov 7, 2026"));
-    assert!(!output.contains("Nov 11, 2026"));
+    assert!(output.contains("Sunday, November 8 – Tuesday, November 10"));
+    assert!(!output.contains("November 7"));
+    assert!(!output.contains("November 11"));
 }
 
 #[test]
@@ -99,5 +99,49 @@ fn event_details_distinguish_rsvp_observation_and_held_blocks() {
         let event: Event = serde_json::from_value(value).unwrap();
         let output = view!{<EventDetails event=event timezone="UTC".to_string() twelve=false on_close=Callback::new(|_|{})/>}.to_html();
         assert!(output.contains(label), "Missing {label}");
+    }
+}
+
+#[test]
+fn midnight_end_does_not_add_a_day_to_event_details() {
+    let event: Event = serde_json::from_value(serde_json::json!({
+        "id":"midnight", "title":"Late meeting", "startsAt":"2026-11-08T22:30:00Z",
+        "endsAt":"2026-11-09T00:00:00Z"
+    }))
+    .unwrap();
+    let output = view!{<EventDetails event=event timezone="UTC".to_string() twelve=false on_close=Callback::new(|_|{})/>}.to_html();
+    assert!(
+        output.contains("Sunday, November 8"),
+        "Missing original date label: {output}"
+    );
+    assert!(
+        !output.contains("November 9") && !output.contains("Nov 9"),
+        "Midnight end adds an extra day: {output}"
+    );
+}
+
+#[test]
+fn legend_only_counts_held_blocks_on_today_in_day_view() {
+    let today = "2026-11-08".parse().unwrap();
+    for (view, day, held, note) in [
+        ("day", today, 1, "1 flexible block today."),
+        ("day", today, 2, "2 flexible blocks today."),
+        ("day", today, 0, ""),
+        ("day", "2026-11-09".parse().unwrap(), 2, ""),
+        ("week", today, 2, ""),
+        ("month", today, 2, ""),
+    ] {
+        let output = view!{<CalendarLegend view=view.to_string() day=day today=today held=held assistant_name="<Helper>".to_string()/>}.to_html();
+        assert_eq!(output.contains("cal-legend__note"), !note.is_empty());
+        if !note.is_empty() {
+            assert!(output.contains(note));
+        }
+        if view == "month" {
+            assert!(!output.contains("cal-legend"));
+        } else {
+            assert!(output.contains("&lt;Helper&gt; holding"));
+            assert!(output.contains("cal-legend__sw--hard"));
+            assert!(output.contains("cal-legend__sw--hold"));
+        }
     }
 }

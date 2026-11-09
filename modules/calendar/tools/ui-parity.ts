@@ -7,9 +7,11 @@ import {
   dtoToViewEvent,
   fmtTime,
   fmtDur,
+  dateRangeLabel,
   groupEventsByDay,
   navigateCursor,
-  packDay
+  packDay,
+  rangeLabel
 } from "../../../apps/web/src/calendar/calendar-model.js";
 import { DEFAULT_LOCALE_SETTINGS, type CalendarEventDto } from "@moss/shared";
 
@@ -41,6 +43,10 @@ for (const date of [
           next: dayKey(navigateCursor(cursor, view, 1)),
           previous: dayKey(navigateCursor(cursor, view, -1))
         }
+      );
+      compare(
+        { operation: "rangeLabel", cursor: date, view, work },
+        rangeLabel(cursor, view, buildWeekDays(cursor, work), DEFAULT_LOCALE_SETTINGS)
       );
     }
   }
@@ -136,3 +142,33 @@ for (const minutes of [-61, -1, 0, 1, 15, 30, 59, 60, 61, 90, 120, 1440]) {
   compare({ operation: "duration", minutes }, fmtDur(minutes));
 }
 console.log("PASS 12 duration comparisons against the production Calendar model");
+
+let dateCount = 0;
+const dateCases = [
+  ...cases.flat().filter((e) => !Number.isNaN(Date.parse(e.endsAt))),
+  event("one day", "2026-11-08T00:00:00Z", "2026-11-09T00:00:00Z", true),
+  event("midnight seconds", "2026-11-08T22:30:00Z", "2026-11-09T00:00:30Z"),
+  event("next minute", "2026-11-08T22:30:00Z", "2026-11-09T00:01:00Z"),
+  event("new year", "2026-12-31T22:30:00Z", "2027-01-01T00:00:00Z"),
+  event("leap day", "2024-02-29T00:00:00Z", "2024-03-02T00:00:00Z", true)
+];
+for (const zone of [
+  "UTC",
+  "America/Los_Angeles",
+  "Europe/London",
+  "Australia/Sydney",
+  "Asia/Kolkata"
+]) {
+  for (const dto of dateCases) {
+    const view = dtoToViewEvent(dto, zone);
+    assert(view);
+    compare(
+      { operation: "dateRange", zone, event: dto },
+      dateRangeLabel(view, { ...DEFAULT_LOCALE_SETTINGS, timezone: zone })
+    );
+    dateCount++;
+  }
+}
+console.log(
+  `PASS ${dateCount} event date-range comparisons and 36 toolbar-range comparisons against production Calendar (default English locale)`
+);
