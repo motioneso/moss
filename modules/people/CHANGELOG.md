@@ -6,9 +6,10 @@ Rust component and shared-frame People Settings checkpoint. Complete installed p
 
 Keep the legacy decimal spelling when a numeric contact value is converted to text, including rounding ties.
 The People component parses incoming JSON numbers with correct binary64 rounding before
-converting contact values to text. The upstream host and listener parsers still need separate
-qualification; the installed replay's test binary enables this parser feature through its
-native People test dependency.
+converting contact values to text. The module host now explicitly enables the same parser
+feature in normal builds. An independent downstream regression exercises raw numeric bodies
+through installed host dispatch without the native People test dependency. Listener and
+installed application qualification remain open.
 
 Retain legacy note-only PATCH list handling and compare configured-folder HTTP edits,
 canonical note bytes and all People tables against the existing implementation.
