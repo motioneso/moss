@@ -161,9 +161,23 @@ fn valid_instance(name: &str) -> bool {
 }
 
 /// Creates a folder only its owner can enter, or checks an existing one is a real folder.
+/// True when this user owns the entry and no one else can write to it. A symlink fails,
+/// because its mode is always writable.
+#[cfg(unix)]
+pub fn mine(meta: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    meta.uid() == unsafe { libc::geteuid() } && meta.mode() & 0o022 == 0
+}
+
+#[cfg(not(unix))]
+pub fn mine(_meta: &std::fs::Metadata) -> bool {
+    true
+}
+
 pub fn private_dir(path: &Path) -> Result<(), String> {
     match std::fs::symlink_metadata(path) {
-        Ok(meta) if meta.is_dir() => Ok(()),
+        Ok(meta) if meta.is_dir() && mine(&meta) => Ok(()),
         Ok(_) => Err("Expected a private folder".into()),
         Err(_) => {
             let mut builder = std::fs::DirBuilder::new();

@@ -194,6 +194,63 @@ async fn running_file_is_trusted_only_when_current_and_private() {
         let file = folder.join(instance::RUNNING_FILE);
         std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o640)).unwrap();
         assert_eq!(local(&folder).await.unwrap_err(), Problem::Unreachable);
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).unwrap();
+        local(&folder).await.unwrap();
+
+        // A folder others can write to is not trusted, even with a private file inside.
+        for writable in [&folder, &dir] {
+            std::fs::set_permissions(writable, std::fs::Permissions::from_mode(0o770)).unwrap();
+            assert_eq!(local(&folder).await.unwrap_err(), Problem::Unreachable);
+            assert!(crate::store::private_dir(writable).is_err());
+            std::fs::set_permissions(writable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        local(&folder).await.unwrap();
     }
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+/// A server that stops while starting is noticed at once, and two callers start it only once.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_server_is_started_once_and_a_stopped_start_fails_fast() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = scratch("start");
+    let install = dir.join("install");
+    crate::store::private_dir(&install).unwrap();
+    let shell = install.join("moss-shell");
+    std::fs::write(
+        &shell,
+        "#!/bin/sh\necho started >> \"$3/starts\"\nsleep 1\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&shell, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let folder = dir.join("default");
+    crate::store::private_dir(&folder).unwrap();
+    std::fs::write(folder.join(NETWORK_FILE), b"{}").unwrap();
+    let starts = || {
+        std::fs::read_to_string(folder.join("starts"))
+            .unwrap_or_default()
+            .lines()
+            .count()
+    };
+
+    let begun = std::time::Instant::now();
+    let (a, b) = tokio::join!(
+        local_or_start(&install, &folder),
+        local_or_start(&install, &folder)
+    );
+    assert_eq!(a.unwrap_err(), Problem::DidNotStart);
+    assert_eq!(b.unwrap_err(), Problem::DidNotStart);
+    assert!(
+        begun.elapsed() < Duration::from_secs(10),
+        "waited out the full start time"
+    );
+    assert_eq!(starts(), 1);
+
+    assert_eq!(
+        local_or_start(&install, &folder).await.unwrap_err(),
+        Problem::DidNotStart
+    );
+    assert_eq!(starts(), 2, "a later try starts it again");
     std::fs::remove_dir_all(dir).unwrap();
 }

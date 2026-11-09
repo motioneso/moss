@@ -2,7 +2,8 @@
 //! needed, or to one on another computer. Everything else runs on the server.
 //!
 //! The app's own screens are served from `moss-app://`. Server pages open in a separate web
-//! view with its own profile and only that server's pinned certificate.
+//! view with its own profile. That view allows the server's pinned certificate and closes any
+//! page load that arrived over a different one (see `trust_on_linux`).
 
 mod reach;
 mod store;
@@ -30,6 +31,9 @@ enum UserEvent {
     ShowServers,
     /// A server page failed to load; check whether the server is still there.
     Check(String),
+    /// A server page arrived over a certificate other than the pinned one. Holds its
+    /// fingerprint, if it had a certificate at all.
+    WrongCertificate(String, Option<String>),
     /// A background result, dropped if the user has acted since it started.
     Later(u64, Box<UserEvent>),
 }
@@ -59,6 +63,8 @@ struct App {
     connect: WebView,
     server: Option<ServerView>,
     current: Option<String>,
+    /// The address and code on the certificate screen, the only pin the user can confirm.
+    shown_pin: Option<(String, String)>,
     turn: u64,
 }
 
@@ -135,6 +141,7 @@ fn main() {
         connect,
         server: None,
         current: None,
+        shown_pin: None,
         turn: 0,
     };
     event_loop.run(move |event, _, control_flow| {
@@ -233,6 +240,20 @@ impl App {
                     self.check(id);
                 }
             }
+            UserEvent::WrongCertificate(id, fingerprint) => {
+                if self.current.as_deref() != Some(id.as_str()) {
+                    return;
+                }
+                self.server = None;
+                let Some(target) = self.store.find(&self.servers, &id) else {
+                    return self.list_servers();
+                };
+                let problem = match fingerprint {
+                    Some(fingerprint) => Problem::CertificateChanged { fingerprint },
+                    None => Problem::Unreachable,
+                };
+                self.show(problem_screen(&target, &problem));
+            }
         }
     }
 
@@ -259,11 +280,26 @@ impl App {
                 "screen":"add", "first": self.servers.last.is_none(), "address": text("address"),
             })),
             "probe" => self.probe(text("address")),
-            "confirm" => self.add_remote(text("address"), text("fingerprint")),
+            "confirm" => {
+                if let Some(pin) = self.confirmed(&text("address"), &text("fingerprint")) {
+                    self.add_remote(text("address"), pin);
+                }
+            }
             "accept-new" => {
                 let id = text("id");
-                if let Some(remote) = self.servers.remotes.iter_mut().find(|r| r.id == id) {
-                    remote.pin = text("fingerprint");
+                let Some(origin) = self
+                    .servers
+                    .remotes
+                    .iter()
+                    .find(|r| r.id == id)
+                    .map(|r| r.origin.clone())
+                else {
+                    return;
+                };
+                if let Some(pin) = self.confirmed(&origin, &text("fingerprint")) {
+                    if let Some(remote) = self.servers.remotes.iter_mut().find(|r| r.id == id) {
+                        remote.pin = pin;
+                    }
                     self.save();
                     self.connect(id);
                 }
@@ -273,6 +309,12 @@ impl App {
             "remove" => self.remove(text("id")),
             _ => {}
         }
+    }
+
+    /// The pin the certificate screen showed for this address, when the page echoes it back.
+    fn confirmed(&mut self, address: &str, fingerprint: &str) -> Option<String> {
+        let (shown_address, shown) = self.shown_pin.take()?;
+        (shown_address == address && shown == fingerprint).then_some(shown)
     }
 
     fn save(&self) {
@@ -289,6 +331,16 @@ impl App {
 
     /// Shows one of the app's own screens, hiding any server page.
     fn show(&mut self, state: Value) {
+        self.shown_pin = match (
+            state["screen"].as_str(),
+            state["address"].as_str(),
+            state["fingerprint"].as_str(),
+        ) {
+            (Some("check"), Some(address), Some(fingerprint)) => {
+                Some((address.to_owned(), fingerprint.to_owned()))
+            }
+            _ => None,
+        };
         if let Some(server) = &self.server {
             let _ = server.view.set_visible(false);
         }
@@ -335,14 +387,15 @@ impl App {
         let Some(target) = self.store.find(&self.servers, &id) else {
             return;
         };
-        let proxy = self.proxy.clone();
+        let (proxy, turn) = (self.proxy.clone(), self.turn);
         self.runtime.spawn(async move {
             let problem = match &target {
                 Target::Local { folder, .. } => reach::local(folder).await.err(),
                 Target::Remote(remote) => reach::hello(&remote.origin, &remote.pin).await.err(),
             };
             if let Some(problem) = problem {
-                let _ = proxy.send_event(UserEvent::Show(problem_screen(&target, &problem)));
+                let screen = UserEvent::Show(problem_screen(&target, &problem));
+                let _ = proxy.send_event(UserEvent::Later(turn, Box::new(screen)));
             }
         });
     }
@@ -391,6 +444,10 @@ impl App {
     }
 
     fn remove(&mut self, id: String) {
+        // Only other computers can be removed; this computer's servers stay listed.
+        if !self.servers.remotes.iter().any(|r| r.id == id) {
+            return self.list_servers();
+        }
         self.servers.remotes.retain(|r| r.id != id);
         if self.servers.last.as_deref() == Some(id.as_str()) {
             self.servers.last = None;
@@ -474,6 +531,9 @@ impl App {
         let view = build(builder, &self.window);
         #[cfg(target_os = "linux")]
         trust_on_linux(&view, opened, self.proxy.clone())?;
+        // Pinned certificates are not wired into the macOS and Windows web views yet.
+        #[cfg(not(target_os = "linux"))]
+        return Err("Server pages need Linux in this build".into());
         view.load_url(&format!("{}/today", opened.origin))
             .map_err(|_| "Cannot load the server")?;
         Ok(ServerView {
@@ -485,8 +545,10 @@ impl App {
     }
 }
 
-/// Allows exactly the pinned certificate for this server's host in its own profile, and
-/// reports failed loads so the app can show why.
+/// Allows the pinned certificate for this server's host in its own profile, and reports failed
+/// loads so the app can show why. WebKit also accepts certificates a public authority signed, so
+/// every committed load is compared with the pin and closed when it differs. The request has
+/// already been sent by then; WebKitGTK has no earlier hook.
 #[cfg(target_os = "linux")]
 fn trust_on_linux(
     view: &WebView,
@@ -511,9 +573,26 @@ fn trust_on_linux(
         false
     });
     let id = opened.id.clone();
+    let tls_failed = proxy.clone();
     webkit.connect_load_failed_with_tls_errors(move |_, _, _, _| {
-        let _ = proxy.send_event(UserEvent::Check(id.clone()));
+        let _ = tls_failed.send_event(UserEvent::Check(id.clone()));
         false
+    });
+    let (id, pinned) = (opened.id.clone(), opened.certificate.clone());
+    webkit.connect_load_changed(move |webkit, event| {
+        use gio::prelude::TlsCertificateExt;
+        if !matches!(event, webkit2gtk::LoadEvent::Committed) {
+            return;
+        }
+        let presented = webkit
+            .tls_info()
+            .and_then(|(certificate, _)| certificate.certificate())
+            .map(|der| der.to_vec());
+        if presented.as_deref() != Some(pinned.as_slice()) {
+            webkit.stop_loading();
+            let fingerprint = presented.map(|der| moss_network::instance::fingerprint(&der));
+            let _ = proxy.send_event(UserEvent::WrongCertificate(id.clone(), fingerprint));
+        }
     });
     Ok(())
 }

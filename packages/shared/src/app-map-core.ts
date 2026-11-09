@@ -898,7 +898,7 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
     id: "rust-app-local-setup",
     runtime: "rust",
     description:
-      "Prepare a Moss instance on this computer first, or press Switch server and add another computer that runs Moss.",
+      "This version of the desktop app cannot set up Moss on this computer yet. Press Switch server and add another computer that runs Moss.",
     path: "moss-app://servers",
     scope: "system"
   },

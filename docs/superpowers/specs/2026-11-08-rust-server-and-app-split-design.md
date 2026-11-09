@@ -171,7 +171,11 @@ name).
 - Native checks (hello) use the pin directly. The window's web engine must accept the same pinned
   certificate:
   - Linux (WebKitGTK): allow exactly that certificate for that host on the server's web context
-    before loading. A different certificate on the same host still fails.
+    before loading. A different self-signed certificate on the same host still fails. WebKit also
+    accepts any certificate a public authority signed, so on every committed page load the app
+    reads the page's certificate and closes the page when it is not the pinned one. By then the
+    request, with its cookie, has already gone. That gap exists only for names a public authority
+    will sign, and WebKitGTK offers no earlier hook.
   - macOS (WKWebView): answer the server-trust challenge by comparing against the pin.
   - Windows (WebView2): answer the server-certificate-error event by comparing against the pin.
 - The window refuses to navigate to any other origin and opens no new windows in v1. Links to

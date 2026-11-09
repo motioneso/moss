@@ -154,9 +154,13 @@ fn parse_args() -> Result<Args, String> {
     Ok(args)
 }
 
-/// The record the connecting app uses to find and trust this server.
-fn running_record(folder: &Path, config: &Config) -> Result<instance::Running, String> {
+/// The record the connecting app uses to find and trust this server. Its origin must use the
+/// port the server is listening on.
+fn running_record(folder: &Path, config: &Config, port: u16) -> Result<instance::Running, String> {
     let origin = config.local_origin().ok_or("No local HTTPS origin")?;
+    if !origin.ends_with(&format!(":{port}")) {
+        return Err("The local HTTPS origin does not use the listening port".into());
+    }
     let pem = std::fs::read(&config.certificate).map_err(|_| "Cannot read the TLS certificate")?;
     Ok(instance::Running {
         instance: folder
@@ -183,15 +187,19 @@ fn main() {
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
     let prepared = runtime.block_on(async {
         let config = Config::read(&args.network)?;
-        let running = match &args.instance {
-            Some(folder) => Some(running_record(folder, &config)?),
-            None => None,
-        };
         let platform = config.platform().await?;
         let acceptor = tls::acceptor(&config.certificate, &config.private_key)?;
         let listener = tokio::net::TcpListener::bind(config.listen)
             .await
             .map_err(|_| "Cannot bind the configured HTTPS listener")?;
+        let port = listener
+            .local_addr()
+            .map_err(|_| "Cannot read the listening port")?
+            .port();
+        let running = match &args.instance {
+            Some(folder) => Some(running_record(folder, &config, port)?),
+            None => None,
+        };
         let network = Network::new(platform.clone(), config, args.network)?;
         let data = Arc::new(Accounts {
             platform,

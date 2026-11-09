@@ -1,7 +1,8 @@
 //! Reaching a server: address checks, certificate pins, hello and the local running file.
 
-use moss_network::instance::{fingerprint, ApiRange, Hello, Running, NETWORK_FILE};
-use std::path::Path;
+use moss_network::instance::{fingerprint, ApiRange, Hello, Running, NETWORK_FILE, RUNNING_FILE};
+use std::path::{Path, PathBuf};
+use std::process::Child;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -107,7 +108,8 @@ pub fn is_loopback_origin(origin: &str) -> bool {
 }
 
 /// Records the leaf certificate and, when pinned, accepts only that exact leaf. The server must
-/// still prove it holds the certificate's key through the normal handshake signature.
+/// still prove it holds the certificate's key through the normal handshake signature. Validity
+/// dates are ignored on purpose: a renewed certificate is a new leaf and is asked about again.
 #[derive(Debug)]
 struct Pin {
     expected: Option<String>,
@@ -296,10 +298,23 @@ fn body_code(body: &[u8]) -> Option<String> {
         .map(str::to_owned)
 }
 
+fn owned(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|m| crate::store::mine(&m))
+}
+
+/// Another user who can write to the instance folder or its parent could point the app at their
+/// own server, or have it start one.
+fn trusted_folder(folder: &Path) -> bool {
+    owned(folder.parent().unwrap_or(folder)) && owned(folder)
+}
+
 /// The local server for an instance folder, if its running file is trustworthy and current.
 pub async fn local(folder: &Path) -> Result<(Running, Vec<u8>), Problem> {
     if !folder.join(NETWORK_FILE).is_file() {
         return Err(Problem::NotSetUp);
+    }
+    if !trusted_folder(folder) || !owned(&folder.join(RUNNING_FILE)) {
+        return Err(Problem::Unreachable);
     }
     let running = Running::read(folder).map_err(|_| Problem::Unreachable)?;
     if !is_loopback_origin(&running.origin) || !alive(running.pid) {
@@ -323,8 +338,22 @@ fn alive(_pid: u32) -> bool {
     true
 }
 
+/// Servers this app started, by instance folder, kept until they exit so they are reaped and a
+/// retry waits for one that is still starting instead of starting another.
+static STARTED: std::sync::Mutex<Vec<(PathBuf, Child)>> = std::sync::Mutex::new(Vec::new());
+
+/// Whether a server this app started for the folder is still running. Reaps those that exited.
+fn still_running(folder: &Path) -> bool {
+    let mut started = STARTED.lock().unwrap_or_else(|e| e.into_inner());
+    started.retain_mut(|(_, child)| matches!(child.try_wait(), Ok(None)));
+    started.iter().any(|(f, _)| f == folder)
+}
+
 /// Starts the instance's server in its own process group, so it keeps running after the app.
-pub fn start_local(install: &Path, folder: &Path) -> Result<(), Problem> {
+fn start_local(install: &Path, folder: &Path) -> Result<(), Problem> {
+    if still_running(folder) {
+        return Ok(());
+    }
     let log = {
         let mut options = std::fs::OpenOptions::new();
         options.create(true).append(true);
@@ -352,20 +381,67 @@ pub fn start_local(install: &Path, folder: &Path) -> Result<(), Problem> {
         use std::os::unix::process::CommandExt;
         command.process_group(0);
     }
-    command.spawn().map(drop).map_err(|_| Problem::DidNotStart)
+    let child = command.spawn().map_err(|_| Problem::DidNotStart)?;
+    STARTED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .push((folder.to_owned(), child));
+    Ok(())
 }
 
-/// Finds the local server, starting it once if it is not running.
+/// Holds the instance's start lock, so two apps on this computer never start it together.
+/// None means another app holds it and is starting the server now.
+fn start_lock(folder: &Path) -> Result<Option<std::fs::File>, Problem> {
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true).truncate(false).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let file = options
+        .open(folder.join("start.lock"))
+        .map_err(|_| Problem::DidNotStart)?;
+    #[cfg(unix)]
+    {
+        use std::os::fd::AsRawFd;
+        // SAFETY: the descriptor is open for the call; flock only reads it.
+        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+            return Ok(None);
+        }
+    }
+    Ok(Some(file))
+}
+
+/// Finds the local server, starting it if no one else is. The lock is released on return.
 pub async fn local_or_start(install: &Path, folder: &Path) -> Result<(Running, Vec<u8>), Problem> {
     match local(folder).await {
         Err(Problem::Unreachable) => {}
         other => return other,
     }
-    start_local(install, folder)?;
+    if !trusted_folder(folder) {
+        return Err(Problem::Unreachable);
+    }
+    let lock = start_lock(folder)?;
+    if lock.is_some() {
+        match local(folder).await {
+            Err(Problem::Unreachable) => start_local(install, folder)?,
+            other => return other,
+        }
+    }
     for _ in 0..80 {
         tokio::time::sleep(Duration::from_millis(250)).await;
         if let Ok(found) = local(folder).await {
             return Ok(found);
+        }
+        let gave_up = match &lock {
+            // The server this app started has stopped, so waiting longer cannot help.
+            Some(_) => !still_running(folder),
+            // The app that was starting it has let go of the lock.
+            None => start_lock(folder)?.is_some(),
+        };
+        if gave_up {
+            return Err(Problem::DidNotStart);
         }
     }
     Err(Problem::DidNotStart)
