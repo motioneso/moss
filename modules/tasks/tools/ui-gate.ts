@@ -158,6 +158,26 @@ try {
       "select count(*)::text as count from app.tasks where title = 'Browser proof task'"
     );
     assert.equal(result.rows[0]?.count, "1", "The real UI must create the proof task exactly once");
+    if (process.env["TASKS_UI_CAPTURE_PROOF"] === "1") {
+      const tags = await db.query<{ name: string }>(
+        "select g.name from app.tasks t join app.task_tag_assignments a on a.task_id=t.id join app.task_tags g on g.id=a.tag_id where t.title='Browser proof task' order by g.name"
+      );
+      assert.deepEqual(tags.rows.map((tag) => tag.name).sort(), ["#literal", "kept", "typed"]);
+      const steps = await db.query<{ title: string; position: number }>(
+        "select s.title, s.position from app.tasks s join app.tasks p on p.id=s.parent_task_id where p.title='Browser proof task' order by s.position"
+      );
+      assert.deepEqual(steps.rows, [
+        { title: "First proof step", position: 0 },
+        { title: "Second proof step", position: 1 }
+      ]);
+      const removed = await db.query<{ count: string }>(
+        "select count(*)::text as count from app.task_tags where name='discarded'"
+      );
+      assert.equal(removed.rows[0]?.count, "0");
+      console.log(
+        "PASS browser new-task capture: exact tags, ordered subtasks, discarded drafts absent and one parent persisted"
+      );
+    }
     if (process.env["TASKS_UI_LIST_DELETE_PROOF"] === "1") {
       const moved = await db.query<{ name: string; tags: string }>(
         "select l.name, (select count(*)::text from app.task_tag_assignments a where a.task_id=t.id) as tags from app.tasks t join app.task_lists l on l.id=t.list_id where t.title='Browser proof task'"

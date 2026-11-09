@@ -10,7 +10,11 @@ trap 'rm -rf "$tasks_build_dir"' EXIT
 modules/tasks/tools/build-component.sh "$tasks_build_dir/module.wasm"
 export TASKS_COMPONENT="$tasks_build_dir/module.wasm"
 cargo +1.95.0 test --locked --offline --manifest-path modules/tasks/tools/Cargo.toml --test component --test metadata --test tool_services
-node --test modules/tasks/ui/*.test.mjs
+cargo +1.95.0 build --locked --offline --manifest-path modules/tasks/tools/Cargo.toml --bin tasks-domain-check
+TASKS_SCREEN_BIN="${CARGO_TARGET_DIR:-$PWD/modules/tasks/tools/target}/debug/tasks-domain-check" \
+  node --test modules/tasks/ui/*.test.mjs
 pnpm exec tsx modules/tasks/tools/view-parity.mjs
+pnpm exec tsx modules/tasks/tools/capture-parity.mjs
 pnpm exec tsx modules/tasks/tools/filter-parity.mjs
+pnpm exec tsx modules/tasks/tools/search-filter-parity.mjs
 pnpm exec tsx modules/tasks/tools/gate.ts

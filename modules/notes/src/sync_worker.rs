@@ -5,10 +5,31 @@ use moss_module_sdk::{
     query::{Filter, Query},
     Client, Error, Host, Result,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 pub const TABLE: &str = "app.notes_sync_checkpoints";
+
+/// Only fixed counts, flags and an opaque child ID may leave a saved page.
+/// This also refuses malformed persisted results before they can reach a job.
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PageResult {
+    ingested: u64,
+    skipped: u64,
+    errors: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    deferred: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    no_op: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    checkpoint_id: Option<String>,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SavedPage {
+    worker_result: PageResult,
+}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -79,12 +100,34 @@ pub fn request(host: &impl Host) -> Result<Value> {
 fn resume(host: &impl Host, input: Resume) -> Result<String> {
     let rows = Client(host).query(
         TABLE,
-        &Query::select(Filter::eq("id", json!(input.checkpoint_id))),
+        // A no-op UPDATE takes a row lock until outer-call finalization and
+        // returns the latest committed state after a competing worker finishes.
+        // Assembly MUST use TransactionalDatabasePorts for this worker.
+        &Query::update(
+            Filter::eq("id", json!(input.checkpoint_id)),
+            [("id".into(), json!(input.checkpoint_id))].into(),
+        ),
     )?;
     let checkpoint = rows
         .first()
         .and_then(|row| row.get("checkpoint"))
         .ok_or_else(unavailable)?;
+    if checkpoint.get("workerResult").is_some() {
+        let saved: SavedPage =
+            serde_json::from_value(checkpoint.clone()).map_err(|_| unavailable())?;
+        let result = saved.worker_result;
+        if result.deferred == Some(true) {
+            let id = result.checkpoint_id.as_deref().ok_or_else(unavailable)?;
+            uuid::Uuid::parse_str(id).map_err(|_| unavailable())?;
+            record(host, json!({"outcome":"deferred"}));
+            let context = host.call("context", "read", "call", json!({}))?;
+            publish(host, id, context["now"].as_str().ok_or_else(unavailable)?)?;
+        } else if result.checkpoint_id.is_some() {
+            return Err(unavailable());
+        }
+        // A replay must not overwrite a newer successful sync status.
+        return Ok(serde_json::to_value(result)?.to_string());
+    }
     let mut result = match crate::sync::checkpoint(host, checkpoint.clone()) {
         Ok(result) => result,
         Err(error) => {
@@ -105,6 +148,19 @@ fn resume(host: &impl Host, input: Resume) -> Result<String> {
         record(host, json!({"outcome":"deferred"}));
         let saved = enqueue(host, next)?;
         result["checkpointId"] = saved["checkpointId"].clone();
+    }
+    let saved = SavedPage {
+        worker_result: serde_json::from_value(result.clone()).map_err(|_| unavailable())?,
+    };
+    let updated = Client(host).query(
+        TABLE,
+        &Query::update(
+            Filter::eq("id", json!(input.checkpoint_id)),
+            [("checkpoint".into(), serde_json::to_value(saved)?)].into(),
+        ),
+    )?;
+    if updated.len() != 1 {
+        return Err(unavailable());
     }
     if result["noOp"] != true && result["deferred"] != true {
         record(

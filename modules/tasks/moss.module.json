@@ -122,11 +122,11 @@
     },
     {
       "id": "tasks.package-screens",
-      "description": "Package screen using the shared UI kit, authored typography and parent bridge: task loading; priority groups (Critical through Someday, then No priority) and four-quadrant grid, each ordered by due date then title; status and text search; list inclusion, show-only and exclusion with counts after status and tags but before search; multiple tag filters matching any selected tag, individually removable; Clear filters resets to open tasks across all lists; create and edit tasks; completion and suggestion review; list creation and renaming; subtasks; tag creation and assignment; activity comments; saved default view. Open Choose lists for list choices; remove tag filters or clear filters to recover hidden tasks. Dates currently display in UTC. Full legacy screen and setting parity is unfinished.",
+      "description": "Package screen using the shared UI kit, authored typography and parent bridge: task loading; priority groups (Critical through Someday, then No priority) and four-quadrant grid, each ordered by due date then title; status and text search; list inclusion, show-only and exclusion with counts after status and tags but before search; multiple tag filters matching any selected tag, individually removable; Clear filters resets to open tasks across all lists; create and edit tasks, including draft tags and editable subtasks before saving a new task, reusing matching list tags; retry acknowledged partial saves without recreating the parent or completed child writes; completion and suggestion review; list creation and renaming; subtasks; tag creation and assignment; activity comments; saved default view. Open Choose lists for list choices; remove tag filters or clear filters to recover hidden tasks. Dates currently display in UTC. Full legacy screen and setting parity is unfinished.",
       "remediations": [
         {
           "id": "reload-tasks",
-          "description": "Retry loading Tasks after checking the connection. Unsaved editor fields are retained on request failure.",
+          "description": "Retry loading Tasks after checking the connection. Unsaved editor fields are retained on request failure. If a new task was created before a tag or subtask write failed, retry Save task to finish; its list and child drafts stay locked during that retry.",
           "path": "/tasks"
         }
       ],
@@ -190,7 +190,7 @@
     },
     {
       "id": "tasks.package-search-interpretation",
-      "description": "Natural-language task search turns a phrase of up to 300 characters into list, tag, status, effort, priority, quadrant and due-date filters using the AI service you chose. Only your own lists and tags are kept in the answer, with a warning for anything unknown. If no AI service is configured the request fails with a clear unavailable message and no search is changed. Dates use UTC until account timezone support arrives."
+      "description": "In Tasks, type a phrase and choose Interpret search or press Enter to turn it into list, tag, status, effort, priority, quadrant and due-date filters using the AI service you chose. Queries are limited to 300 characters. Only your own lists and tags are kept in the answer, with a warning for anything unknown. Status moves to the regular picker; the other interpreted filters can be removed individually. Typing again clears the interpretation. Manual tag filters match any tag; interpreted tag filters require every named tag. Clear filters restores open tasks across all lists. If the AI service is unavailable, a message explains that title and description search still work. Dates use UTC until account timezone support arrives."
     }
   ],
   "screens": {

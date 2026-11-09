@@ -38,8 +38,9 @@ pub fn render() -> String {
                         <select id="tag-filter" class="jds-input"><option value="">"Add tag filter"</option></select>
                     </Field>
                     <Field><FormLabel control_id="search">"Search"</FormLabel>
-                        <input id="search" class="jds-input" type="search" placeholder="Search tasks"/>
+                        <input id="search" class="jds-input" type="search" maxlength="300" placeholder="Search tasks"/>
                     </Field>
+                    <span id="interpret-search"><Button variant=ButtonVariant::Secondary>"Interpret search"</Button></span>
                     <Field><FormLabel control_id="view">"View"</FormLabel>
                         <select id="view" class="jds-input"><option value="priority">"List"</option><option value="matrix">"Grid"</option></select>
                     </Field>
@@ -52,8 +53,11 @@ pub fn render() -> String {
                     <p class="jds-caption">"Include lists, show only selected lists, or hide lists. Counts follow status and tags, before search."</p>
                     <div id="list-selection" class="tasks-fields"></div>
                 </details>
-                <div id="active-tags" class="tasks-actions" aria-label="Active tag filters"></div>
-                <p class="jds-caption">"Tasks can match any selected tag."</p>
+                <div id="active-tags" class="tasks-actions" role="group" aria-label="Active tag filters"></div>
+                <p id="search-warning" role="status" hidden></p>
+                <div id="search-intent" class="tasks-actions" role="group" aria-label="Interpreted search filters"></div>
+                <p class="jds-caption">"Interpret a phrase into filters, or search by title and description. Interpreted dates use UTC."</p>
+                <p class="jds-caption">"Manual tag picks match any selected tag. Interpreted tag filters require every named tag."</p>
                 <div id="empty" hidden>
                     <EmptyState title="No tasks here" description="Try another filter or add a task."/>
                     {action("clear-filters", "Clear filters")}
@@ -92,6 +96,20 @@ pub fn render() -> String {
                         <Field><FormLabel control_id="do-at">"Do date"</FormLabel><input id="do-at" name="doAt" type="date" class="jds-input"/></Field>
                         <Field><FormLabel control_id="repeat">"Repeat"</FormLabel><select id="repeat" name="repeat" class="jds-input"><option value="never">"Never"</option><option value="daily">"Daily"</option><option value="weekly">"Weekly"</option><option value="monthly">"Monthly"</option></select></Field>
                     </div>
+                    <section id="new-task-extras" hidden aria-label="Prepare tags and subtasks">
+                        <h3>"Tags"</h3>
+                        <div id="new-tags" class="tasks-actions"></div>
+                        <div class="tasks-inline">
+                            <Field><FormLabel control_id="new-tag-name">"New task tag"</FormLabel>
+                                <input id="new-tag-name" class="jds-input" maxlength="100" placeholder="Type a tag and press Enter"/>
+                            </Field>
+                            <span id="add-new-tag"><Button variant=ButtonVariant::Secondary>"Add tag"</Button></span>
+                        </div>
+                        <h3>"Subtasks"</h3>
+                        <div id="new-subtasks" class="tasks-fields"></div>
+                        <span id="add-new-subtask"><Button variant=ButtonVariant::Secondary>"Add subtask"</Button></span>
+                        <p id="capture-progress" hidden role="status">"The task was saved. Retry Save task to finish adding its tags and subtasks. The list, tags and subtasks are kept while you retry."</p>
+                    </section>
                     <p id="edit-error" hidden role="alert"></p>
                     <div class="tasks-actions">
                         <Button kind=ButtonType::Submit>"Save task"</Button>

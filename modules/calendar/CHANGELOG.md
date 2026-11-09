@@ -1,5 +1,11 @@
 # Calendar package
 
+## 0.15.0
+
+- Restore the authored event details layout, markers and held-block note on the Rust screen.
+- Keep long event titles and locations inside the panel at phone width.
+- Exercise the installed dialog at desktop and phone widths, including Escape, Close and focus return.
+
 ## 0.14.0
 
 - Read stored day-plan apply progress through the installed API and original URL,

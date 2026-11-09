@@ -7,3 +7,5 @@ pub mod js;
 pub mod migrations;
 pub mod password;
 pub mod secrets;
+#[cfg(windows)]
+pub mod windows_child;

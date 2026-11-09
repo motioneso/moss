@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.7
+
+- Remember successful sync pages and reuse their continuation on retry. Independent workers serialize through the private checkpoint row. Sync activation remains unfinished.
+
 ## 0.1.6
 
 - Save durable sync outcomes after transaction finalization, preserving previous results during continuations and after unlinking. Sync activation remains unfinished.

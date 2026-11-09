@@ -1,3 +1,4 @@
+pub use crate::event_details::EventDetails;
 use crate::model::{self, Event, Segment};
 use chrono::{Datelike, NaiveDate};
 use leptos::prelude::*;
@@ -107,71 +108,6 @@ pub fn TimeGrid(
             }).collect_view()}
         </div></div>
     </div>}
-}
-
-#[component]
-pub fn EventDetails(
-    event: Event,
-    timezone: String,
-    twelve: bool,
-    on_close: Callback<()>,
-    #[prop(default = "Moss".to_string())] assistant_name: String,
-) -> impl IntoView {
-    let zone = model::zone(&timezone).unwrap_or(chrono_tz::UTC);
-    let starts = chrono::DateTime::parse_from_rfc3339(&event.starts_at)
-        .ok()
-        .map(|d| d.with_timezone(&zone));
-    let ends = chrono::DateTime::parse_from_rfc3339(&event.ends_at)
-        .ok()
-        .map(|d| d.with_timezone(&zone));
-    use chrono::Timelike;
-    let time = if event.all_day {
-        "All day".into()
-    } else {
-        match (starts, ends) {
-            (Some(a), Some(b)) => format!(
-                "{} – {} · {}",
-                model::time(a.hour() * 60 + a.minute(), twelve),
-                model::time(b.hour() * 60 + b.minute(), twelve),
-                model::duration(((b - a).num_milliseconds() as f64 / 60000.0 + 0.5).floor() as i64)
-            ),
-            _ => "Time unavailable".into(),
-        }
-    };
-    let dates = model::date_range(&event, zone);
-    let state = if event.is_moss_block {
-        format!("{assistant_name} is holding this")
-    } else if event.unconfirmed {
-        "Needs verification in Outlook".into()
-    } else if matches!(event.status.as_deref(), Some("tentative" | "needsAction")) {
-        "Awaiting RSVP".into()
-    } else {
-        "On your calendar".into()
-    };
-    let detail_status = if event.is_moss_block {
-        format!("{assistant_name} focus block")
-    } else if event.read_only {
-        if event.unconfirmed {
-            "Needs verification".into()
-        } else {
-            "Observed in Outlook".into()
-        }
-    } else if matches!(event.status.as_deref(), Some("tentative" | "needsAction")) {
-        "Pending RSVP".into()
-    } else {
-        "Accepted".into()
-    };
-    view! {<PeekPanel on_close=on_close>
-        <div class="cal-peek__head"><span class="cal-peek__kind">{state}</span></div>
-        <h2 class="cal-peek__title">{event.title}</h2>
-        {event.read_only.then(||view!{<p>"Outlook · Read only. Check or change this event in Outlook."</p>})}
-        <div class="cal-peek__rows"><p>{time}</p><p>{dates}</p><p>{timezone}</p>
-            {event.location.map(|where_|view!{<p>{where_}</p>})}
-            {(event.attendee_count>0.0).then(||view!{<p>{format!("{} {}",event.attendee_count,if event.attendee_count==1.0 {"person"}else{"people"})}</p>})}
-            <p>{detail_status}</p>
-        </div>
-        {event.is_moss_block.then(||view!{<p class="cal-held-banner">{format!("{assistant_name} can move or shorten this block when your day changes. Hard events always come first.")}</p>})}
-    </PeekPanel>}
 }
 
 #[component]

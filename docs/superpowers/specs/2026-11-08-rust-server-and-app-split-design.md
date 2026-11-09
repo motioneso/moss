@@ -432,6 +432,11 @@ It does not mark notifications read or deliver after the app quits. The unsigned
 step packages already-built programs, web assets, a Phase 1 Postgres bundle and the supervisor's
 canonical schema folders; signing, native installers and Windows database supervision remain open.
 
+Slice 6 adds a Windows suspended/windowless child-process and Job Object boundary with native
+qualification tests, as groundwork for the canonical database supervisor. It is not yet wired
+into that supervisor; Windows creation/Stop remain unavailable. The full remaining parity list is
+in [the slice 6 checkpoint report](2026-11-09-rust-server-app-slice6-report.md).
+
 ### 13.3 Proof
 
 - Unit tests: running-file validation (wrong mode, dead process, non-loopback origin, stale

@@ -4,7 +4,7 @@ import { filterTasks } from "./model.mjs";
 const $ = (id) => document.getElementById(id);
 
 // Account data stays in the package frame. These controls only filter loaded rows.
-export function taskFilters(changed) {
+export function taskFilters(changed, searchIntent = () => null) {
   let listStates = {};
   let tagFilter = [];
   $("list-filter").addEventListener("change", () => {
@@ -93,7 +93,8 @@ export function taskFilters(changed) {
         listStates,
         tagFilter,
         status: $("status-filter").value,
-        search: $("search").value
+        search: $("search").value,
+        searchIntent: searchIntent()
       });
       render(lists, result);
       return result.visibleTasks;

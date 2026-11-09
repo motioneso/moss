@@ -1185,3 +1185,147 @@ pinned wit-bindgen graph. The tools lockfile was refreshed offline without a
 byte change. Declared JavaScript dependencies were restored offline inside this
 worktree. No global tool, target or package was installed. Part of #4027;
 release note Category N/A. Workshop and Food are excluded.
+
+## Tasks part 16 checkpoint (JS-117, Card 526)
+
+New task now lets people prepare tags and editable, removable subtasks before
+saving, as the legacy editor does. Tags are normalized to lowercase with one
+leading hash removed; empty subtask drafts are dropped and the others keep their
+order. A tag left in its input is included when Save task is clicked. Drafts stay
+in the editor until saving and use the existing unsaved-changes protection.
+The package app map describes this path and its retry instructions.
+
+Save creates the parent, adds its ordered breakdown and assigns tags through the
+existing public routes. A failed child write keeps the saved parent and receipts
+for acknowledged child writes. Retry resumes pending work instead of creating
+another parent or repeating those completed operations. The list and child drafts
+stay locked during this recovery, while other parent fields remain editable.
+A lost response after a server commit is still ambiguous; this client flow cannot
+guarantee exactly-once writes without a server idempotency contract.
+
+Validation includes retry tests for rejected parent creation, breakdown and tag
+assignment, a draft-control DOM test, and twenty exact comparisons with the
+unchanged legacy tag/subtask cleaning functions, including Unicode and duplicate
+subtask titles. These checks are part of the package gate. They are separate from
+live signed-package browser evidence and do not establish full screen parity.
+Final gate, browser and review results are recorded in the task proof artifact.
+
+The starting checkout was behind current main and was fast-forwarded with Ben's
+approval. At the start, the part 15 PR was still open with CI running, despite the
+continuation brief calling it merged. This slice avoids duplicating its filters.
+
+This remains an unfinished checkpoint. Both assistant-policy routes need the
+public preferences seam. Actor timezone/lazy recurrence, recurrence jobs,
+deferred-queue policy and installed worker dispatch, public People linkage,
+policy/feedback orchestration, remaining screen/settings parity, installed chat,
+real-shell integration and performance acceptance remain. The endpoint adapter's
+queue-observation gap remains. The signed fixture is separate from the real shell.
+A physical second-device check must be reported with its actual coverage; the
+MacBook was offline on the tailnet at the first check in this run.
+
+Tooling reuses the existing scratch Rust 1.95 toolchain, Wasm target and Cargo
+cache, including the approved pinned wit-bindgen graph. The tools lockfile was
+refreshed offline without a byte change. Declared JavaScript dependencies were
+restored offline in this worktree. No global tool, target or package was installed.
+No route, chat tool, job kind, SQL migration or shared host crate changes.
+Workshop and Food are excluded. Part of #4027; release note Category N/A.
+
+Part 16 review round one found a major existing-tag recovery trap: creating a
+name already in the list failed after the parent had been saved and the draft
+locked. Matching tags are now reused through the public list route; a rejected
+creation rechecks that route to handle a concurrent creator. The same pass fixed
+stale list data after abandoning a partial save and focus landing on a locked
+tag input. A controller regression runs against the actual rendered shared-kit
+HTML, with a mocked bridge, and checks partial save, discard, list refresh and
+the next independent New task. Verification also caught a second normalization
+stripping a literal leading hash; committed draft names are now preserved.
+
+The initial full endpoint run matched 84 of 86 cases. The deferred-status request
+fails in the adapter's unbound jobs path, and the actor-timezone end-of-day at-risk
+case differs from UTC. These are remaining port gaps, not passing comparisons.
+The optional signed UI capture check asserts one parent, the exact three tags,
+ordered subtasks and the absence of a removed draft tag in the real database.
+Final independent review and gate receipts belong to the proof artifact.
+
+Part 16 review round two found no major or blocker on the capture changes. A
+minor remains: retrying a completed, repeating task after a partial save resends
+status and recurrence, which can apply completion effects on that retry.
+The final signed-browser run created one parent with both ordered subtasks and
+the exact three expected tags, then confirmed them after reload. Its database
+assertion exposed a proof-check ordering assumption: PostgreSQL collation put
+`kept` before `#literal`. The capture assertion now sorts names in JavaScript
+before comparison; the stored values and product code are unchanged.
+
+Part 15 subsequently merged and was merged into this task branch with Ben’s
+approval. Both filter and capture assets, tests, app-map descriptions and report
+sections are retained. Final review and gate receipts cover their combined state.
+
+## Tasks part 17 checkpoint (JS-121, Card 526)
+
+The package screen now exposes the existing Rust natural-language search route.
+Type a phrase, choose Interpret search or press Enter, and remove individual
+conditions afterward. Status uses the normal picker. Interpreted tags require
+all named tags; manual tag selections retain their any-tag behaviour. List counts
+remain before search. Typing resets the interpretation; Clear filters restores
+open tasks and clears all search, list and tag choices. Provider failures retain
+the phrase and explain that title/description search still works. The package
+app map describes these controls and recovery steps.
+
+The unchanged legacy screen model is the oracle for 1,380 interpreted-filter
+comparisons, including all due kinds, status, effort, priority, quadrant, lists,
+case-insensitive interpreted tags, manual tags and literal residual text. That
+comparison was observed failing against the previous package model and passing
+after this change. Source rows are checked unchanged. Controller tests cover
+warnings, chip removal, keyboard activation, reset and provider failure; another
+test runs the controller against the real shared-kit HTML with a mocked bridge.
+These are UTC screen-model checks, not actor-local date acceptance or live AI
+provider evidence.
+
+A targeted compiled-component database check uses a synthetic provider to capture
+the search vocabulary. It checks that another account and an instance admin see
+no private list/tag names in the prompt and cannot retain foreign list/tag filters
+in the answer. The identical assertion is required to fail with list/tag RLS
+removed and pass after restoration. Its removal probes are restricted to its
+synthetic list, keeping earlier fixtures out of the guest fuel budget.
+
+No route, tool, job kind, SQL migration or shared host crate changes. Both
+assistant-policy routes, actor timezone/lazy recurrence, recurrence jobs,
+deferred-queue policy and installed worker dispatch, public People linkage,
+policy/feedback, remaining screens/settings, installed chat, real-shell integration
+and performance acceptance remain unfinished. The endpoint harness still lacks
+an observer for the module queue. Finishing those gaps exceeds this continuation's
+single-context boundary; this is an unfinished checkpoint, not Phase 5 acceptance.
+Workshop and Food remain excluded. Part of #4027; release note Category N/A.
+
+Tooling reuses the existing Rust 1.95 and Wasm target in scratch and the existing
+Cargo registry caches. The old temporary cache link was dangling, so an existing scratch
+cache supplies the guest and encoder while the standard existing cache supplies
+the native host checks, all offline. The tools lockfile was refreshed offline for
+main's added libc dependency in the shared safety crate. Declared JavaScript
+dependencies were restored offline in this worktree. The approved pinned
+wit-bindgen graph was reused; nothing was installed globally.
+
+The full endpoint run matches 84 of 86 cases. Deferred-status fails because the
+adapter has no bound jobs path, and the actor-timezone end-of-day at-risk case
+differs from UTC. These remain failed comparisons. The new screen-model check
+passes all 1,380 comparisons; another 91 comparisons extract unchanged legacy
+page helper declarations to check status handoff, structured-filter detection,
+chip labels and individual removal. All seventeen screen/controller tests pass
+against the rebuilt shared-kit markup.
+
+Independent review round one found a major gap in the privacy removal control:
+an unrelated panic could count as the expected failure. The control now requires
+the exact private-list-name assertion, after restoring RLS. The same pass clarified
+manual versus interpreted tags, named the filter group for assistive technology,
+disabled interpretation for empty input and added the legacy helper comparisons.
+Final gate, signed UI and review receipts are recorded in the proof artifact.
+The signed fixture is separate from the real application shell and has no live
+AI provider; its unavailable-provider path does not prove successful provider
+composition. The MacBook was offline during this run; no physical second-device
+HTTPS acceptance is claimed.
+
+The refreshed signed-package HTTPS gate passed after a browser-created owner,
+Inbox list and persisted task. Browser checks exercised the real unavailable-provider
+message, description search recovery, Clear filters, disabled empty interpretation
+and task persistence after reload. Desktop and narrow-viewport screenshots are in
+the proof artifact; the narrow viewport is not second-device evidence.

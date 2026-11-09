@@ -258,3 +258,56 @@ installed chat, real-shell integration and performance acceptance. The full
 endpoint harness still needs an observer for the module queue; it currently
 looks only at the earlier native spike queue. Second-device evidence from a
 signed fixture does not prove real-shell integration.
+
+## Part 16: prepare a new task before saving
+
+New task now offers editable, removable subtask drafts and removable tag drafts.
+Tags use the legacy lowercase/hash normalization; blank subtasks are dropped and
+remaining steps keep their order. A tag still in the input is included on Save.
+Matching list tags are reused by name, including a concurrent creator discovered after a rejected creation. These drafts do not write until Save task. Leaving the editor uses the existing
+unsaved-changes warning.
+
+If a child write fails after the parent was created, retry Save task. The screen
+keeps the list and child drafts locked and resumes pending writes using receipts
+for the parent, breakdown and tag assignments. Other parent fields remain editable.
+This avoids repeating acknowledged work; an ambiguous lost server response still
+needs server-side idempotency and is not an exactly-once guarantee.
+
+`node --test modules/tasks/ui/capture.test.mjs` checks retries and draft controls.
+`pnpm exec tsx modules/tasks/tools/capture-parity.mjs` compares draft cleaning with
+the unchanged legacy editor. Both run in the package gate. This adds no route,
+tool, job kind or migration. The remaining port and acceptance gaps listed above
+are still outstanding; this is a screen parity checkpoint.
+
+For the controller regression, build `tasks-domain-check` and set
+`TASKS_SCREEN_BIN` to that binary when running
+`node --test modules/tasks/ui/capture-app.test.mjs`. The package gate does this
+and renders the actual shared-kit page for the test. Its bridge is mocked;
+this is not live UI evidence.
+
+Set `TASKS_UI_CAPTURE_PROOF=1` on the signed UI gate to verify one
+`Browser proof task` with tags `#literal`, `kept` and `typed`, subtasks
+`First proof step` then `Second proof step`, and no `discarded` tag.
+The fixtures are synthetic. This optional check asserts actual persisted rows
+created through the browser, not a mocked bridge.
+
+## Part 17: interpreted search in the package screen
+
+Type a phrase and choose **Interpret search**, or press Enter in Search. The
+screen calls the existing account-scoped Rust route. Status moves to the normal
+picker; other interpreted conditions appear as individually removable filters.
+Interpreted tags require every named tag, while manual tag selections still match
+any selected tag. Counts still follow status and manual tags, before search.
+Typing again clears the interpretation. Clear filters resets all search, list
+and tag choices to open tasks. If interpretation fails, the screen keeps the text
+and explains that ordinary title/description search is available.
+
+Dates use UTC, matching the current route; actor-local days still need the public
+locale seam. `tools/search-filter-parity.mjs` compares the package with the unchanged
+legacy screen over 1,380 combinations, including every due kind, combined manual
+and interpreted filters, and input preservation. DOM tests cover the controller
+and the actual shared-kit markup. Their bridge is mocked, so successful provider
+composition still needs live proof with a configured AI service.
+
+The existing full-port and real-shell acceptance gaps above remain. No new HTTP
+route, tool, job kind, SQL or shared host interface is added by this screen slice.

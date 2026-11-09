@@ -168,3 +168,47 @@ fn legend_only_counts_held_blocks_on_today_in_day_view() {
         }
     }
 }
+
+#[test]
+fn event_details_use_authored_rows_and_held_banner() {
+    let event: Event = serde_json::from_value(serde_json::json!({
+        "id":"meeting", "title":"<Private review>", "startsAt":"2026-11-08T10:00:00Z",
+        "endsAt":"2026-11-08T11:30:00Z", "attendeeCount":2,
+        "location":"<Meeting room>", "isMossBlock":true
+    }))
+    .unwrap();
+    let output = view!{<EventDetails event=event timezone="UTC".to_string() twelve=false assistant_name="Cedar".to_string() on_close=Callback::new(|_|{})/>}.to_html();
+    for class in [
+        "cal-peek__titlewrap",
+        "cal-peek__mark",
+        "cal-peek__kind--block",
+        "cal-peek__dur",
+        "cal-peek__rowsub",
+        "cal-peek__held",
+    ] {
+        assert!(
+            output.contains(class),
+            "Missing authored detail structure: {class}"
+        );
+    }
+    assert_eq!(output.matches("class=\"cal-peek__row\"").count(), 4);
+    assert!(output.contains("&lt;Private review&gt;"));
+    assert!(output.contains("&lt;Meeting room&gt;"));
+    assert!(output.contains("Cedar focus block"));
+    assert!(output.contains("Cedar can move or shorten"));
+}
+
+#[test]
+fn all_day_details_omit_duration_and_absent_optional_rows() {
+    let event: Event = serde_json::from_value(serde_json::json!({
+        "id":"event", "title":"Day off", "startsAt":"2026-11-08T00:00:00Z",
+        "endsAt":"2026-11-09T00:00:00Z", "allDay":true, "location":""
+    }))
+    .unwrap();
+    let output = view!{<EventDetails event=event timezone="UTC".to_string() twelve=false on_close=Callback::new(|_|{})/>}.to_html();
+    assert_eq!(output.matches("class=\"cal-peek__row\"").count(), 2);
+    assert!(output.contains("All day"));
+    assert!(!output.contains("cal-peek__dur"));
+    assert!(!output.contains("cal-peek__held"));
+    assert!(!output.contains("cal-peek__kind--block"));
+}
