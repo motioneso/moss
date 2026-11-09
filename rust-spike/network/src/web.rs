@@ -21,7 +21,6 @@ use safety_core::{
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 use std::{
     net::SocketAddr,
     path::PathBuf,
@@ -32,7 +31,6 @@ use tokio::{
     sync::{Mutex, Semaphore},
     time::timeout,
 };
-use tokio_rustls::rustls::pki_types::{pem::PemObject, CertificateDer};
 
 pub struct Network {
     pub platform: Arc<Platform>,
@@ -72,6 +70,7 @@ pub fn router(network: Arc<Network>, private: Router, web: PathBuf) -> Router {
         .route("/access.js", get(|| async { ([(header::CONTENT_TYPE, "text/javascript")], include_str!("../assets/access.js")) }))
         .route("/moss-start.js", get(|| async { ([(header::CONTENT_TYPE, "text/javascript")], "const app = await import('/app.js'); await app.default({module_or_path:'/app_bg.wasm'});") }))
         .route("/api/setup/status", get(setup_status))
+        .route("/api/hello", get(|| async { Json(crate::instance::hello()) }))
         .route("/settings/sharing", get(|| async { Html(include_str!("../assets/sharing.html")) }))
         .route("/api/network", get(network_status).put(set_sharing))
         .route("/api/network/certificate", get(public_certificate))
@@ -112,6 +111,7 @@ fn public(path: &str) -> bool {
         "/sign-in"
             | "/setup"
             | "/api/setup/status"
+            | "/api/hello"
             | "/api/auth/sign-in/email"
             | "/api/auth/sign-up/email"
             | "/access.js"
@@ -341,15 +341,9 @@ async fn network_status(
     let bytes = tokio::fs::read(&config.certificate)
         .await
         .map_err(|_| ApiError::http(500, "Cannot read the public certificate"))?;
-    let leaf = CertificateDer::pem_slice_iter(&bytes)
-        .next()
-        .ok_or_else(|| ApiError::http(500, "Invalid public certificate"))?
+    let leaf = crate::instance::leaf_der(&bytes)
         .map_err(|_| ApiError::http(500, "Invalid public certificate"))?;
-    let fingerprint = Sha256::digest(leaf.as_ref())
-        .iter()
-        .map(|b| format!("{b:02X}"))
-        .collect::<Vec<_>>()
-        .join(": ");
+    let fingerprint = crate::instance::fingerprint(&leaf);
     Ok(Json(
         json!({"sharing":n.policy.sharing(), "origins":config.origins, "fingerprint":fingerprint}),
     ))
@@ -364,9 +358,7 @@ async fn public_certificate(
     let bytes = tokio::fs::read(&config.certificate)
         .await
         .map_err(|_| ApiError::http(500, "Cannot read the public certificate"))?;
-    let leaf = CertificateDer::pem_slice_iter(&bytes)
-        .next()
-        .ok_or_else(|| ApiError::http(500, "Invalid public certificate"))?
+    let leaf = crate::instance::leaf_der(&bytes)
         .map_err(|_| ApiError::http(500, "Invalid public certificate"))?;
     // Return only the parsed public leaf, even if an operator supplied a combined PEM file.
     Ok((
@@ -377,7 +369,7 @@ async fn public_certificate(
                 "attachment; filename=moss-certificate.cer",
             ),
         ],
-        leaf.as_ref().to_vec(),
+        leaf,
     )
         .into_response())
 }

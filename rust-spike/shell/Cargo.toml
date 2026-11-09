@@ -2,7 +2,7 @@
 # Its own workspace so it never collides with the Phase 2 crates in rust-spike/Cargo.toml.
 [workspace]
 resolver = "2"
-members = ["contract", "ui", "app"]
+members = ["contract", "ui", "app", "connect"]
 
 [workspace.package]
 edition = "2021"
@@ -15,8 +15,11 @@ codegen-units = 1
 panic = "abort"
 strip = true
 
-# The server and desktop shell favour speed over size.
+# The server and desktop app favour speed over size.
 [profile.release.package.moss-shell]
+opt-level = 3
+
+[profile.release.package.moss-app]
 opt-level = 3
 
 [profile.dev.package.scrypt]
