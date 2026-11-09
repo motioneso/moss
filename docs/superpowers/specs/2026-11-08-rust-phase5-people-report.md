@@ -2180,3 +2180,11 @@ eight legacy replay cases. That new regression first returned 400 instead of
 the legacy bodyless route's 200 (`rc=101`). The check now follows Fastify's
 body-parsing method set; GET ignores a supplied body. HEAD/TRACE are also bodyless,
 but are not declared People package routes, so no new route support is claimed.
+
+Package validation caught that a module remediation requires a path, unlike the
+optional path in the core app-map type. The final manifest keeps the recovery
+instruction in the feature text and declares the validation error without an
+unrelated navigation link or remediation reference. The first database gate
+launch on `82c44d8cb` was deliberately stopped while correcting that manifest;
+it is not a passing receipt. Package validation and the gates must use the
+corrected clean commit below.

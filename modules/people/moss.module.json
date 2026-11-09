@@ -171,19 +171,12 @@
     },
     {
       "id": "people.json-body-validation",
-      "description": "On methods that parse a body, People rejects decoded JSON containing __proto__ members or constructor objects with a prototype member, including inside arrays and unknown fields, before schema coercion or host calls. It returns the legacy JSON parser error. GET ignores bodies as before; ordinary constructor and prototype fields and string values remain allowed. This qualifies module dispatch; the shipping listener and installed application remain unverified.",
-      "remediations": [
-        {
-          "id": "people-correct-json",
-          "description": "Remove the forbidden JSON members and send the request again."
-        }
-      ],
+      "description": "On methods that parse a body, People rejects decoded JSON containing __proto__ members or constructor objects with a prototype member, including inside arrays and unknown fields, before schema coercion or host calls. It returns the legacy JSON parser error. Remove the forbidden members and send the request again. GET ignores bodies as before; ordinary constructor and prototype fields and string values remain allowed. This qualifies module dispatch; the shipping listener and installed application remain unverified.",
       "errors": [
         {
           "code": "people-invalid-json-body",
           "class": "validation",
-          "description": "Body is not valid JSON but content-type is set to 'application/json'",
-          "remediationRef": "people-correct-json"
+          "description": "Body is not valid JSON but content-type is set to 'application/json'"
         }
       ]
     }
