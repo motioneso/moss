@@ -46,11 +46,47 @@ export function quadrant(task, now = Date.now()) {
 }
 
 export const quadrants = [
-  ["do", "Do first", "Important and urgent"],
-  ["schedule", "Schedule", "Important, less urgent"],
-  ["delegate", "Delegate", "Urgent, less important"],
-  ["eliminate", "Eliminate", "Less urgent, less important"]
+  ["do", "Do First", "Important & urgent"],
+  ["schedule", "Schedule", "Important, not urgent"],
+  ["delegate", "Delegate", "Urgent, not important"],
+  ["eliminate", "Later", "Neither"]
 ];
 
 // Match the existing persisted preference contract.
 export const viewMode = (value) => (value === "matrix" ? "matrix" : "priority");
+
+// Preserve the legacy screen's priority buckets and due-time/title ordering.
+// Filter creates new arrays: changing a view must not reorder saved state.
+function byDueThenTitle(a, b) {
+  const left = a.dueAt ? Date.parse(a.dueAt) : Number.MAX_SAFE_INTEGER;
+  const right = b.dueAt ? Date.parse(b.dueAt) : Number.MAX_SAFE_INTEGER;
+  return left - right || a.title.localeCompare(b.title);
+}
+
+export const priorities = [
+  [5, "Critical"],
+  [4, "High"],
+  [3, "Medium"],
+  [2, "Low"],
+  [1, "Someday"],
+  [null, "No priority"]
+];
+
+export function taskGroups(tasks, view, now = Date.now()) {
+  if (view === "matrix") {
+    return quadrants.map(([key, title, subtitle]) => ({
+      key,
+      title,
+      subtitle,
+      tasks: tasks.filter((task) => quadrant(task, now) === key).sort(byDueThenTitle)
+    }));
+  }
+  return priorities
+    .map(([key, title]) => ({
+      key,
+      title,
+      subtitle: "",
+      tasks: tasks.filter((task) => task.priority === key).sort(byDueThenTitle)
+    }))
+    .filter((group) => group.tasks.length);
+}

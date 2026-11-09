@@ -91,7 +91,7 @@
     {
       "id": "tasks",
       "label": "Tasks",
-      "description": "View tasks by list or priority, edit tasks, and manage subtasks, tags and comments. Account timezone, People, assistant policies and background jobs remain unfinished.",
+      "description": "View tasks in priority groups or a priority grid, filter by list, edit tasks, and manage subtasks, tags and comments. Account timezone, People, assistant policies and background jobs remain unfinished.",
       "path": "/tasks",
       "icon": "CheckSquare",
       "order": 30
@@ -122,7 +122,7 @@
     },
     {
       "id": "tasks.package-screens",
-      "description": "Package screen using the shared UI kit, authored typography and parent bridge: task loading; list and priority views; status, list, text and tag filters; create and edit tasks; completion and suggestion review; list creation and renaming; subtasks; tag creation and assignment; activity comments; saved default view. Dates currently display in UTC. Full legacy screen and setting parity is unfinished.",
+      "description": "Package screen using the shared UI kit, authored typography and parent bridge: task loading; priority groups (Critical through Someday, then No priority) and four-quadrant grid, each ordered by due date then title; status, list, text and tag filters; create and edit tasks; completion and suggestion review; list creation and renaming; subtasks; tag creation and assignment; activity comments; saved default view. Dates currently display in UTC. Full legacy screen and setting parity is unfinished.",
       "remediations": [
         {
           "id": "reload-tasks",

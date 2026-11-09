@@ -1,6 +1,6 @@
 /* global document, window, Option */
 import { moduleClient } from "./guest-bridge.mjs";
-import { taskFields, visibleTasks, quadrant, quadrants, viewMode } from "./model.mjs";
+import { taskFields, visibleTasks, taskGroups, viewMode } from "./model.mjs";
 import { tagManager } from "./tags.mjs";
 import { listDeletion } from "./delete-list.mjs";
 
@@ -188,13 +188,7 @@ function render() {
   result.replaceChildren();
   result.className = $("view").value === "matrix" ? "tasks-matrix" : "";
   show("empty", tasks.length === 0);
-  const groups =
-    $("view").value === "matrix" ? quadrants : state.lists.map((list) => [list.id, list.name, ""]);
-  for (const [key, title, subtitle] of groups) {
-    const grouped = tasks.filter((task) =>
-      $("view").value === "matrix" ? quadrant(task) === key : task.listId === key
-    );
-    if (!grouped.length && $("view").value === "priority") continue;
+  for (const { title, subtitle, tasks: grouped } of taskGroups(tasks, $("view").value)) {
     const section = text("section", "", "tasks-section");
     const heading = text("h2", `${title} (${grouped.length})`);
     section.append(heading);
