@@ -1306,6 +1306,9 @@ write now saves an empty checkpoint after changing the file, then requests
 post-commit publication carrying only its UUID. Success keeps the legacy response
 and means requested sync, not completed indexing. Package `0.1.8` and the app map
 describe this test-only join without enabling unfinished installed chat or sync.
+The first compiled run exposed an incorrect test expectation for deleting the
+only note: the existing empty-walk guard intentionally retains the index. The
+deletion-cleanup fixture now keeps another note present; the guard is unchanged.
 
 The required adapter order remains transactional database outside deferred queue
 and linked files. Refusal to save a checkpoint before finalization compensates

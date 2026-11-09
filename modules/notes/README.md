@@ -520,6 +520,8 @@ file, the handler inserts an empty owner-scoped checkpoint and defers publicatio
 of a `notes.sync` job carrying only its UUID. The worker can resume that job and
 index the changed file or clean up the deleted note. The legacy success response
 still means sync was requested, rather than completed ingestion.
+Deletion cleanup still requires a nonempty folder walk; deleting the last note
+retains its index under the existing empty-walk safety rule.
 
 Assembly must put `TransactionalDatabasePorts` outside `AfterCommitJobs` and the
 linked-file adapter. A checkpoint-save refusal before finalization rolls back

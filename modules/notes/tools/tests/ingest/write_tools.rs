@@ -68,6 +68,10 @@ fn writes_queue_private_checkpoints_and_resume_real_indexing() {
         let root = parent.join(format!("writes-{role}"));
         std::fs::create_dir(&root).unwrap();
         f.source(actor, json!(root));
+        // Empty walks deliberately retain the index (for example if a linked
+        // mount disappears). Keep one note present so delete tests the real
+        // missing-file sweep rather than contradicting that safety rule.
+        std::fs::write(root.join("present.md"), "Still present.").unwrap();
         // A different account has its own folder; its identical relative path
         // must never resolve to the first owner's note.
         let foreign = parent.join(format!("foreign-{role}"));
