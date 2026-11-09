@@ -7,6 +7,7 @@ import { getMossDatabaseUrls } from "@moss/db";
 import { settingsOracle } from "./settings-oracle.js";
 import { approvalOracle } from "./approval-oracle.js";
 import { exportOracle } from "./export-oracle.js";
+import { searchOracle } from "./search-oracle.js";
 
 if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
 if (!process.env.NOTES_COMPONENT) throw new Error("Build Notes and set NOTES_COMPONENT");
@@ -15,6 +16,7 @@ console.log("Notes guest sha256:", createHash("sha256").update(component).digest
 const folder = await mkdtemp(join(tmpdir(), "moss-notes-guest-"));
 const pinned = join(folder, "notes.wasm");
 const urls = getMossDatabaseUrls();
+let search: Awaited<ReturnType<typeof searchOracle>> | undefined;
 let approval: Awaited<ReturnType<typeof approvalOracle>> | undefined;
 let settings: Awaited<ReturnType<typeof settingsOracle>> | undefined;
 let oracle: Awaited<ReturnType<typeof exportOracle>> | undefined;
@@ -49,6 +51,7 @@ try {
             NOTES_ORACLE: oracle?.path,
             NOTES_SETTINGS_ORACLE: settings?.path,
             NOTES_APPROVAL_ORACLE: approval?.path,
+            NOTES_SEARCH_ORACLE: search?.path,
             JS55_APP_URL: urls.app,
             JS55_WORKER_URL: urls.worker,
             JS55_BOOTSTRAP_URL: urls.bootstrap
@@ -68,8 +71,33 @@ try {
     approval = await approvalOracle();
     process.exitCode = run(["approval"]);
   }
+  if (process.exitCode === 0) {
+    await approval?.cleanup();
+    approval = undefined;
+    search = await searchOracle();
+    process.exitCode = run(["search"]);
+    if (process.exitCode === 0) {
+      const control = spawnSync(
+        "python3",
+        ["modules/notes/tools/search-controls.py", join(folder, "controls")],
+        {
+          stdio: "inherit",
+          env: {
+            ...process.env,
+            NOTES_COMPONENT: pinned,
+            NOTES_SEARCH_ORACLE: search.path,
+            JS55_APP_URL: urls.app,
+            JS55_WORKER_URL: urls.worker,
+            JS55_BOOTSTRAP_URL: urls.bootstrap
+          }
+        }
+      );
+      process.exitCode = control.status ?? 1;
+    }
+  }
 } finally {
   try {
+    await search?.cleanup();
     await approval?.cleanup();
     await settings?.cleanup();
     await oracle?.cleanup();

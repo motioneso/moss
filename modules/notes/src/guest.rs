@@ -27,8 +27,16 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> Result<String> {
     match kind {
         "health" | "install" => Ok("{}".into()),
         "route" => crate::routes::handle(host, payload),
-        #[cfg(feature = "write-tools")]
-        "tool" => crate::write_tools::handle(host, payload),
+        "tool" => {
+            let request: Value = serde_json::from_str(payload)?;
+            if request["tool"] == "notes.search" {
+                return crate::search::handle(host, payload);
+            }
+            #[cfg(feature = "write-tools")]
+            return crate::write_tools::handle(host, payload);
+            #[cfg(not(feature = "write-tools"))]
+            Err(Error::new("Notes tool is not available"))
+        }
         "api" => {
             let request: ApiRequest = serde_json::from_str(payload)?;
             let result: Value = match request {

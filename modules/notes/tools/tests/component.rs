@@ -64,8 +64,8 @@ fn actual_guest_runs_without_wasi_and_archive_is_reproducible() {
     assert!(!package.manifest.accounts.supports_user_disable);
     assert!(package.manifest.navigation.is_empty());
     assert!(
-        package.manifest.tools.is_empty(),
-        "Unfinished chat tools must not be offered"
+        package.manifest.tools.len() == 1 && package.manifest.tools["notes.search"].risk == "read",
+        "Only read-only search is offered; unfinished write tools stay unavailable"
     );
     assert!(
         package.manifest.jobs.is_empty(),

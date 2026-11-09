@@ -4,6 +4,7 @@ pub mod export;
 pub mod guest;
 pub mod identity;
 pub mod routes;
+pub mod search;
 pub mod write_tools;
 
 #[cfg(target_arch = "wasm32")]

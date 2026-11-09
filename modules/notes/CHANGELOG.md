@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.2
+
+- Add read-only search of existing indexed notes, with a core-memory adapter and installed guest comparisons. Query-provider assembly, sync and live chat remain unfinished.
+
 ## 0.1.1
 
 - Add a read-only installed public API for legacy note action details and canonical account-bound source resolution; chat approval and sync execution remain unfinished.

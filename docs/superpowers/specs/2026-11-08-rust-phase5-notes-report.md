@@ -788,3 +788,84 @@ Those are disclosed above and in the adapter notes. The future approval executor
 must use a stable source/content view and recheck after approval. The final review
 and exact gate receipts are attached to the task proof/tracker, not treated as
 complete Phase 5 acceptance.
+
+## Part seven checkpoint — read-only indexed search
+
+This checkpoint includes merged part six (#4074), based on main `6c26f775a`.
+Package version `0.1.2` retains its installed action-details API. The database
+gate cleans the earlier oracle accounts before the approval RLS-removal control,
+then runs the independent search fixtures after approval cleanup.
+
+This continuation uses the brief's bounded checkpoint allowance. It adds the
+fourth tool's read handler and a core-owned search adapter; it does not complete
+the Notes port. The ordinary package now declares `notes.search`, while the three
+write tools remain in their separate, disabled-by-default parity build. No sync
+job or mutation permission is added to the ordinary package.
+
+### What changed
+
+The search guest preserves legacy query trimming, empty-query short-circuiting,
+limit coercion/default/clamp and the exact source path, line range and text
+projection. A corpus executes the actual legacy handler body, including its real
+constants, with a named retrieval stand-in. Malformed/unknown fields are rejected
+more strictly than legacy. Queries are also capped at 64 KiB, and malformed
+chunk line ranges are refused; those bounds are stricter than legacy. Full
+invalid-input/error parity is not claimed.
+
+An additive `memory_search` host adapter handles `vault/index.search` over a
+trusted resource alias. Core memory remains outside Notes' SQL grants. The host
+binds the alias to the Notes source kind, obtains query embeddings from its trusted
+account-aware provider and reads existing memory rows under the authenticated data
+context. SQL keeps the legacy explicit owner predicate, RLS, cosine order, non-null
+embedding filter and result limit. No other module's internals or tables are used.
+The new operation also avoids the linked-folder adapter's `notes.*` namespace so
+both adapters can be composed without intercepting each other's requests.
+
+`QueryEmbeddings` is a trusted assembly interface, not a new model implementation.
+The final app still must connect the actor's configured query model and prefix,
+including local-model and activity-recording parity. The checks use a named
+embedding stand-in; the actual database, legacy retriever/repository, signed
+registry installation, Wasmtime guest and installed tool calls are real. They do
+not prove installed chat, production embedding quality or the assembled shell.
+
+### Verification
+
+The initial native search checks failed because the handler was absent. Their
+current results, compiled/database checks, privacy removal controls and review
+verdict are recorded in this part's proof artifact and checkpoint PR. The README
+contains the commands and the gate still requires both `NOTES_COMPONENT` and
+`NOTES_TOOL_COMPONENT`, built into separate guest target folders. Installer
+metadata uses app credentials even for the worker execution fixture. The gate
+also removes the explicit search owner predicate in a temporary source copy:
+with RLS removed too, the real installed-component privacy assertion must fail,
+then pass after source restoration. The worktree protection remains intact.
+
+The build uses the already approved pinned `wit-bindgen` 0.57.1 dependency from
+scratch Cargo and Rust toolchain folders. Dependencies come from project lockfiles;
+no global tool, unlisted dependency, real installation or live database is changed.
+This part has no new screen. No real UI search, LAN/tailnet or physical second-device
+HTTPS proof is claimed. Complete Notes acceptance remains unverified.
+
+### Remaining work after part seven
+
+1. Implement/assemble the real account-configured query embedding service and join
+   the declared search tool into installed chat and automatic recall. First extend
+   the host tool contract to preserve legacy input/output schemas and the
+   `content: "outside"` / `externalContent: true` untrusted-result classification.
+   The current Rust tool manifest has only description and risk; never join these
+   results to chat as trusted instructions.
+2. Port core ingestion and `notes.sync`: manual and fifteen-minute scheduling,
+   continuation, hundred-chunk budget, unchanged-file detection, deleted-file
+   cleanup, unlink no-op and safe saved errors.
+3. Join create/edit/delete and their approval presentations into installed chat,
+   recheck approved versions and require delete/overwrite confirmation. Enable
+   those tools only with the real sync worker and installed tests.
+4. Complete managed publication/fencing, proposals/receipts, reconciliation,
+   exact-block cleanup, private exports, daily archives and account-export UI.
+5. Finish path/error and all-handler/job differential parity; join Connections
+   into the assembled shell and prove real UI/chat from a separate physical device
+   over HTTPS with sign-in and trusted origins.
+
+The filesystem race, compensation, crash, platform, snapshot/paging and queue
+publication limits from prior checkpoints remain. Do not replace legacy Notes
+with this package yet. This checkpoint is not full parity or release acceptance.

@@ -93,7 +93,7 @@ fn tools_reject_forged_context_and_unknown_fields_before_host_access() {
         json!({"tool":"notes.delete","parameters":{"path":"a.md"},"actorUserId":"other"}),
         json!({"tool":"notes.create","parameters":{"path":"a.md","content":"x","overwrite":"true"}}),
         json!({"tool":"notes.edit","parameters":{"path":"a.md","oldText":"","newText":"x"}}),
-        json!({"tool":"notes.search","parameters":{"query":"private"}}),
+        json!({"tool":"notes.unknown","parameters":{"query":"private"}}),
     ] {
         assert!(handle(&NoCalls, "tool", &request.to_string()).is_err());
     }
