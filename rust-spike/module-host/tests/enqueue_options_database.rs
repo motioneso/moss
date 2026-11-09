@@ -185,8 +185,8 @@ fn delayed_enqueue_preserves_queue_time_key_and_actor() {
             moss_module_host::jobs::manifest_hash(&revised)
         );
     });
-    // Reverting the declaration replaces the slot again. Terminate that connection
-    // while idle: the next send must fail, then an explicit retry may reconnect.
+    // Terminating an idle connection between invocations must not make the next
+    // request fail: each invocation establishes a fresh producer before sending.
     enqueue(
         owner,
         "person-index",
@@ -202,26 +202,12 @@ fn delayed_enqueue_preserves_queue_time_key_and_actor() {
     });
     let retry_key = uuid::Uuid::new_v4();
     let retry = json!({"params":params,"idempotencyKey":retry_key,"availableAt":at});
-    assert!(try_enqueue(
-        manifest.clone(),
-        owner,
-        "person-index",
-        "enqueue-options",
-        retry.clone()
-    )
-    .is_err());
-    runtime.block_on(async {
-        let count: i64 = db
-            .query_one(
-                "SELECT count(*) FROM moss_queue.jobs WHERE idempotency_key=$1",
-                &[&retry_key],
-            )
-            .await
-            .unwrap()
-            .get(0);
-        assert_eq!(count, 0, "A failed send must not be replayed automatically");
-    });
     assert!(enqueue(owner, "person-index", "enqueue-options", retry.clone())["id"].is_string());
     assert!(enqueue(owner, "person-index", "enqueue-options", retry)["id"].is_null());
-    println!("PASS real Wasm → JobPorts → PostgreSQL queue: reused producer, manifest replacement, explicit retry after disconnect, delayed time retained, retries deduplicated, keys scoped to actor and queue, no early claim, legacy immediate enqueue unchanged");
+    // This fixture creates the Rust queue schema. Release it before the People
+    // worker suite creates its own schema in the same disposable gate database.
+    runtime
+        .block_on(db.batch_execute("DROP SCHEMA moss_queue CASCADE"))
+        .unwrap();
+    println!("PASS real Wasm → JobPorts → PostgreSQL queue: invocation-scoped producer, manifest replacement, fresh request after idle disconnect, delayed time retained, retries deduplicated, keys scoped to actor and queue, no early claim, legacy immediate enqueue unchanged");
 }

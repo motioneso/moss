@@ -21,8 +21,8 @@ canonical note bytes and all People tables against the existing implementation.
 Restore manual index refresh with the legacy batch validation, fifteen-minute delay and
 standard-queue repeat behavior. Compare real legacy and Rust queues in the route oracle.
 The installed route replay now requires the normal five-second host budget for all fifty
-references. Delayed sends reuse one manifest-bound producer connection while keeping
-separate actor-scoped transactions. A failed connection is discarded without automatically
-resending; the next explicit attempt reconnects. The report records measured results rather
+references. Delayed sends reuse one producer connection within an invocation while keeping
+separate actor-scoped transactions. A later invocation connects afresh, including after an
+idle disconnect. Failed sends are not automatically repeated. The report records measured results rather
 than a guarantee for every machine. The shipping listener and real UI remain unqualified.
 Failed sends can still leave unsent command records; retention and quotas remain unfinished.

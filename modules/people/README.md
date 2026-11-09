@@ -246,10 +246,13 @@ its source metadata with the real Rust queue and command records. This remains p
 dispatch evidence; real application, source-provider and device acceptance are still open.
 
 The installed route replay now uses the standard five-second host call budget, including
-its fifty-reference request. Delayed sends reuse one producer connection, keyed by the
-complete manifest. Every send still has its own actor-scoped transaction and delay/key.
-A manifest change replaces the cached connection. A failed send discards it without
-an automatic retry; the next explicit attempt reconnects. Immediate jobs and schedules
+its fifty-reference request. Delayed sends reuse one producer connection within a
+host-created invocation, whose actor and manifest are fixed. Every send still has its
+own transaction and delay/key. Immutable command creation avoids a separate pre-read;
+retries keep the original stored delay and reject conflicting commands. Each later
+invocation connects afresh, including after
+an idle disconnect. A failed send discards its handle without an automatic retry.
+Immediate jobs and schedules
 keep their existing path. The standard People gate includes real database checks for
 connection reuse, schema replacement, disconnect recovery and account/queue key isolation.
 See the part-sixteen report for the measured outcome and its limits.

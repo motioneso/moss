@@ -111,7 +111,7 @@ impl Ports for JobPorts {
                 "enqueue-options" => {
                     let options = crate::enqueue_options::parse(&request.parameters)?;
                     let queue = self.delayed_producer.get(
-                        self.producer.expose_secret(), scope.module(),
+                        self.producer.expose_secret(), scope,
                     ).await?;
                     let payload = json!({
                         "actorUserId": scope.access().actor_user_id(),

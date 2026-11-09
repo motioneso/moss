@@ -1763,9 +1763,9 @@ run, not a subtraction that predicts a new request's duration. The probe is remo
 from the delivered source.
 
 The server adapter previously opened and authenticated a new producer connection
-for every delayed send. It now retains one connection for the complete approved
-manifest. Different manifests replace that single slot; concurrent sends retain
-an immutable handle. Each enqueue still uses the existing queue implementation's
+for every delayed send. It now reuses one connection within a host-created invocation,
+whose actor and manifest are fixed. A later invocation connects afresh, including
+when an idle connection was lost between requests. Each enqueue still uses the existing queue implementation's
 separate transaction, transaction-local actor, typed metadata, key and delay.
 Immediate sends and schedules retain their existing path. A failed delayed send
 discards its cached connection; there is no automatic resend with an uncertain
@@ -1782,9 +1782,9 @@ assembled UI.
 
 The installed route replay now uses `Limits::default()` instead of extending it to
 thirty seconds. The standard People gate also includes the real queue adapter
-regression, making ten suites. That regression checks reuse, actor/queue key
-isolation, manifest/schema replacement, an explicitly terminated idle connection,
-refusal to resend automatically and reconnection on an explicit retry.
+regression, making ten suites. That regression checks retention, actor/queue key
+isolation, manifest/schema replacement and a fresh invocation after an explicitly
+terminated idle connection.
 
 Before the fix, the connection-reuse assertion failed with count zero versus one
 (`rc=101`); receipt `task_116_rust_port_phase_5_people_module-20261109-022750-q6hJdB.log`.
@@ -1819,3 +1819,32 @@ This bounded performance/parity checkpoint does not complete the People port:
 
 A passing finite replay under the default budget will qualify that sample, not
 provide a latency guarantee across machines, database outages or concurrent loads.
+
+### Review and integration follow-up
+
+The first independent review found one major documentation gap: the final default-budget
+receipt was still pending. That must be resolved with actual gate results before readiness.
+It also identified four minor limitations. Reuse has since been narrowed to a single
+invocation to avoid a new failure on the first request after an idle disconnect. A failed
+send still conservatively evicts its handle for any queue error, including validation;
+this may cost a reconnect but never automatically repeats a send. Queue transactions
+serialize on their client. The single cache slot can be replaced by an overlapping
+invocation, so concurrent-load performance and concurrent actor switching are not
+qualified. Connection setup holds the slot lock and lacks a strict I/O timeout; no
+stalled-database or DNS deadline guarantee is claimed. These limits are retained below
+the review's required-fix bar rather than broadening this checkpoint into a pool rewrite.
+
+The first expanded gate exposed a test setup collision: the new queue regression left
+its `moss_queue` schema for the later worker suite, which creates its own schema. That
+run (`2lWk8D`, `rc=101`) is not a full-gate success. The queue regression now removes
+only the schema it created, inside the disposable gate database, before later suites.
+
+The intermediate signed replay returned 202 for fifty references in 5060 milliseconds
+under commit `5ba76aac9`. Returning 202 alone did not meet a strict five-second
+wall-clock bound, so that sample is not cited as budget success. The replay now
+also asserts measured elapsed time below the default limit. People command creation
+no longer makes a separate `records.get` before `records.put`: the existing host
+operation atomically returns the original immutable record on a retry. The guest
+still checks its queue and exact command, retains the first stored delay, and
+rejects conflicts. This removes one host/filesystem round trip per fresh command.
+The worker's command read and public interfaces remain unchanged.
