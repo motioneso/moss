@@ -1,6 +1,6 @@
 /** Compare Month presentation with the shipped React screen, not a copied model. */
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { test, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -17,7 +17,7 @@ function presentation(html: string) {
     new RegExp(`<span class="${name}">([\\s\\S]*?)<\\/span>`).exec(markup)?.[1] ?? null;
   return {
     height: /min-height:([^;" ]+)/.exec(html)?.[1],
-    rows: /grid-template-rows:([^;"]+)/.exec(html)?.[1].replaceAll(" ", ""),
+    rows: /grid-template-rows:([^;"]+)/.exec(html)?.[1]?.replaceAll(" ", ""),
     headers: [...html.matchAll(/class="cal-month__dow">([^<]+)/g)].map((m) => m[1]),
     cells: html
       .split(/<div class="cal-mcell(?=[" ])/)
@@ -55,7 +55,7 @@ test("rendered Month dates, rows and chips match production React", () => {
                   startsAt: `${cursor}T${i === 5 ? "23" : "10"}:00:00Z`,
                   endsAt: `${cursor.slice(0, 8)}${String(Number(cursor.slice(8)) + 2).padStart(2, "0")}T11:00:00Z`,
                   allDay: i === 3,
-                  isMossBlock: i === 2,
+                  isMossBlock: i === 0,
                   location: null,
                   status: null,
                   attendeeCount: 0,
@@ -89,7 +89,7 @@ test("rendered Month dates, rows and chips match production React", () => {
                 })
               )
             );
-            const result = spawnSync(binary, {
+            const result: SpawnSyncReturns<string> = spawnSync(binary, {
               input:
                 JSON.stringify({
                   operation: "month",
@@ -104,6 +104,20 @@ test("rendered Month dates, rows and chips match production React", () => {
             assert.equal(result.status, 0, result.stderr);
             const expectedMonth = presentation(expected);
             assert([35, 42].includes(expectedMonth.cells.length));
+            if (populated) {
+              assert(
+                expectedMonth.cells.some((cell) =>
+                  cell.chips.some((chip) => chip.classes?.includes("is-block"))
+                )
+              );
+              assert(
+                expectedMonth.cells.some((cell) => cell.chips.some((chip) => chip.time !== null))
+              );
+              assert(
+                expectedMonth.cells.some((cell) => cell.chips.some((chip) => chip.time === null))
+              );
+              assert(expectedMonth.cells.some((cell) => cell.more !== null));
+            }
             assert.deepEqual(
               presentation(JSON.parse(result.stdout)),
               expectedMonth,
