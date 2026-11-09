@@ -157,7 +157,7 @@ try {
       );
       assert.equal(removed.rows[0]?.count, "0");
       console.log(
-        "PASS browser tag proof: renamed tag stays assigned; deleted tag is absent; task is kept"
+        "PASS browser tag proof: expected assigned tag is present; removed-name tag is absent; task is kept"
       );
     }
   } finally {

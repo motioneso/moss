@@ -67,8 +67,9 @@ async function run(action) {
   try {
     await action();
   } catch {
-    const message =
-      "Could not finish. Check your connection, then try again. Your unsaved changes are kept.";
+    const message = $("tags-editor").hidden
+      ? "Could not finish. Check your connection, then try again. Your unsaved changes are kept."
+      : "Could not save or load these tags. Check the connection and use a name that is unique in this list, then retry. Your unsaved names are kept.";
     $("notice").textContent = message;
     if (!$("editor").hidden) {
       $("edit-error").textContent = message;
@@ -351,6 +352,10 @@ const actions = {
     show("discard-draft", false);
     state.listDrafts.clear();
     $("list-name").value = "";
+    for (const list of state.lists) {
+      const input = $(`rename-${list.id}`);
+      if (input) input.value = list.name;
+    }
     tags.discard();
     if (leave) await leave();
   },

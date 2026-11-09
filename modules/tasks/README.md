@@ -178,7 +178,7 @@ truncated, its limits are not raised and its failure must not be reported as par
 Tag membership is chunked at the public query limit; quadrant filtering runs in
 the database. Cross-page success and the package speed budget remain unproved.
 
-Part 10 completes list tag management in the package screen. Open **Manage lists**
+Part 10 exposes existing tag actions through list tag management in the package screen. Open **Manage lists**
 and choose **Manage tags** for a list to create, rename or delete tags. Deletion
 requires confirmation, removes assignments and keeps tasks. Unsaved tag names
 are protected on return and retained on failed writes. Task details still assigns

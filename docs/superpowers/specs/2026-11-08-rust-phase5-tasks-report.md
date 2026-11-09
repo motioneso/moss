@@ -916,7 +916,7 @@ over HTTPS remain unfinished. Part of #4027; release note Category N/A.
 
 ## Tasks part 10 checkpoint (JS-85, Card 526)
 
-This continuation completes list tag management through the package screen's
+This continuation exposes existing tag actions through the package screen's
 Manage lists path: create, rename and confirmed deletion. Deleting a tag removes
 its assignments and keeps tasks. The task editor continues to assign and unassign
 tags. Unsaved names are protected when returning to lists and retained after
@@ -928,7 +928,12 @@ assertions with the real tag RLS removed and restored. It also checks deletion's
 assignment cleanup and task preservation. The optional signed UI tag check
 verifies browser-created data in the disposable database. These are real host
 transactions and installed package bridge requests, never mocked browser responses.
-Current gate receipts, browser evidence and review findings are in the task proof.
+The legacy interface offered rename/delete through routes and chat tools; this
+package also exposes them in Manage lists. This is not a claim of screen parity.
+The first full endpoint comparison in this continuation matched 69 of 84 cases
+and exited unsuccessfully. Its fifteen failures remain visible; no endpoint
+parity improvement is claimed for this UI checkpoint. Current committed gate
+receipts, browser evidence and review findings are in the task proof.
 
 The work reuses the approved pinned wit-bindgen graph and existing scratch Rust
 and Cargo cache. The tools lockfile was resolved offline before locked gates;

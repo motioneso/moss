@@ -20,6 +20,9 @@ export function tagManager({ api, run, changed, bindForm, focus }) {
   }
   async function refresh() {
     tags = (await api("GET", `/tasks/lists/${list.id}/tags`)).tags;
+    const present = new Set(tags.map((tag) => tag.id));
+    for (const id of drafts.keys()) if (!present.has(id)) drafts.delete(id);
+    $("tags-error").hidden = true;
     render();
   }
   function render() {
@@ -84,7 +87,7 @@ export function tagManager({ api, run, changed, bindForm, focus }) {
             button(`Delete #${tag.name}`, () => {
               deleting = tag.id;
               render();
-              focus($("tag-names").querySelector('[role="group"] button'));
+              focus($("tag-names").querySelector('[role="group"] button:last-child'));
             })
           );
         }
