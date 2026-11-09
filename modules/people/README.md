@@ -242,3 +242,13 @@ enqueue performance is qualified. Thirty seconds is the replay configuration, no
 measured minimum. A failed send leaves its command stored without a queued job; retries
 use fresh IDs and can duplicate earlier work and grow command storage. Retention and
 quotas remain acceptance work.
+
+## Part eleven folder-order checkpoint
+
+Directory browsing now returns folders in the legacy reading order (base
+letter, then accent, then case) instead of raw byte order. The route oracle
+covers folder names whose order differs between the two schemes, and the
+full installed replay and nine-suite gate pass on the recorded commit. The
+authenticated shell still has no installed module composition, so live UI,
+chat and second-device acceptance remain open. Exact receipts are in the
+report.
