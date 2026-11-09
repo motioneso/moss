@@ -41,11 +41,11 @@ impl Host for Ports {
             ("jobs", "enqueue-after-commit", "notes.sync") => {
                 assert_eq!(
                     parameters["params"],
-                    json!({"checkpointId":"00000000-0000-4000-8000-000000000001"})
+                    json!({"checkpoint-id":"00000000-0000-4000-8000-000000000001"})
                 );
                 assert_eq!(
                     parameters["idempotencyKey"],
-                    parameters["params"]["checkpointId"]
+                    parameters["params"]["checkpoint-id"]
                 );
                 assert_eq!(
                     self.checkpoints.borrow().len(),

@@ -104,13 +104,13 @@ fn recovery_discovers_orphan_requests_and_detects_missing_privacy() {
         assert_eq!(jobs.len(), 2, "Completed pages must never be republished");
         let ids: Vec<_> = jobs
             .iter()
-            .map(|job| job["params"]["checkpointId"].clone())
+            .map(|job| job["params"]["checkpoint-id"].clone())
             .collect();
         let (_, again) = recover(&f, &db, actor);
         assert_eq!(
             again
                 .iter()
-                .map(|j| j["params"]["checkpointId"].clone())
+                .map(|j| j["params"]["checkpoint-id"].clone())
                 .collect::<Vec<_>>(),
             ids
         );
@@ -119,7 +119,7 @@ fn recovery_discovers_orphan_requests_and_detects_missing_privacy() {
         f.source(actor, Value::Null);
         let initial = jobs
             .iter()
-            .find(|j| j["params"]["checkpointId"] != json!(checkpoint_id(30)))
+            .find(|j| j["params"]["checkpoint-id"] != json!(checkpoint_id(30)))
             .unwrap();
         let (out, _) = f.durable_call(
             db.clone(),
@@ -135,7 +135,7 @@ fn recovery_discovers_orphan_requests_and_detects_missing_privacy() {
         let (_, remaining) = recover(&f, &db, actor);
         assert_eq!(remaining.len(), 1);
         assert_eq!(
-            remaining[0]["params"]["checkpointId"],
+            remaining[0]["params"]["checkpoint-id"],
             json!(checkpoint_id(30))
         );
     }

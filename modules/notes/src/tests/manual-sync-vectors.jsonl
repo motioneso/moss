@@ -1,0 +1,6 @@
+{"source":null,"expected":{"status":409,"body":{"error":"No notes source configured. Set a path via PUT /api/me/notes-source first."}}}
+{"source":"","expected":{"status":409,"body":{"error":"No notes source configured. Set a path via PUT /api/me/notes-source first."}}}
+{"source":3,"expected":{"status":409,"body":{"error":"No notes source configured. Set a path via PUT /api/me/notes-source first."}}}
+{"source":{},"expected":{"status":409,"body":{"error":"No notes source configured. Set a path via PUT /api/me/notes-source first."}}}
+{"source":"/notes","expected":{"status":202,"body":{"jobId":"ca52403e-9b4a-4ff7-bd53-7590890c563c"}}}
+{"source":" ","expected":{"status":202,"body":{"jobId":"ca52403e-9b4a-4ff7-bd53-7590890c563c"}}}

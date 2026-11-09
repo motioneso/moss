@@ -130,11 +130,11 @@ fn durable_job_refuses_forged_envelopes_before_host_access() {
     }
     let id = "a4230333-65ef-41c4-b244-98b221695ecc";
     for payload in [
-        json!({"queue":"notes.sync","parameters":{"checkpointId":"not-an-id"}}),
-        json!({"queue":"other.sync","parameters":{"checkpointId":id}}),
-        json!({"queue":"notes.sync","actorUserId":id,"parameters":{"checkpointId":id}}),
-        json!({"queue":"notes.sync","parameters":{"checkpointId":id,"filePath":"private"}}),
-        json!({"queue":"notes.sync","parameters":{"checkpointId":id,"actorUserId":id}}),
+        json!({"queue":"notes.sync","parameters":{"checkpoint-id":"not-an-id"}}),
+        json!({"queue":"other.sync","parameters":{"checkpoint-id":id}}),
+        json!({"queue":"notes.sync","actorUserId":id,"parameters":{"checkpoint-id":id}}),
+        json!({"queue":"notes.sync","parameters":{"checkpoint-id":id,"filePath":"private"}}),
+        json!({"queue":"notes.sync","parameters":{"checkpoint-id":id,"actorUserId":id}}),
     ] {
         assert!(handle(&Deny, "job", &payload.to_string()).is_err());
     }
@@ -188,7 +188,7 @@ fn durable_worker_records_only_finished_runs_and_keeps_errors_safe() {
         let result = handle(
             &worker,
             "job",
-            r#"{"queue":"notes.sync","parameters":{"checkpointId":"00000000-0000-4000-8000-000000000001"}}"#,
+            r#"{"queue":"notes.sync","parameters":{"checkpoint-id":"00000000-0000-4000-8000-000000000001"}}"#,
         );
         let expected = &case["expected"];
         let outcome = if let Some(error) = expected["error"].as_str() {
@@ -296,7 +296,7 @@ fn durable_page_replay_reuses_its_result_and_continuation() {
             outcomes: RefCell::new(vec![]),
             ids: RefCell::new(2),
         };
-        let payload = r#"{"queue":"notes.sync","parameters":{"checkpointId":"00000000-0000-4000-8000-000000000001"}}"#;
+        let payload = r#"{"queue":"notes.sync","parameters":{"checkpoint-id":"00000000-0000-4000-8000-000000000001"}}"#;
         let first = handle(&worker, "job", payload).unwrap();
         let core_calls = worker.core.calls.borrow().clone();
         let first_jobs = worker.jobs.borrow().clone();
@@ -346,7 +346,7 @@ fn malformed_saved_pages_are_refused_before_publication() {
         json!({"workerResult":null}),
     ] {
         let error = handle(&Corrupt(saved), "job",
-            r#"{"queue":"notes.sync","parameters":{"checkpointId":"00000000-0000-4000-8000-000000000001"}}"#).unwrap_err();
+            r#"{"queue":"notes.sync","parameters":{"checkpoint-id":"00000000-0000-4000-8000-000000000001"}}"#).unwrap_err();
         assert_eq!(error.message, "Notes sync checkpoint is unavailable");
     }
 }

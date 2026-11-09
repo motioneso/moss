@@ -73,7 +73,7 @@ impl Ports for Services {
                     bail!("Synthetic publication failure")
                 }
                 assert_eq!(r.resource, "notes.sync");
-                let id = &r.parameters["params"]["checkpointId"];
+                let id = &r.parameters["params"]["checkpoint-id"];
                 assert!(Uuid::parse_str(id.as_str().unwrap()).is_ok());
                 assert_eq!(r.parameters["params"].as_object().unwrap().len(), 1);
                 assert_eq!(&r.parameters["idempotencyKey"], id);
@@ -148,7 +148,7 @@ impl Fixture {
         ])).unwrap());
         manifest.jobs.insert(
             "notes.sync".into(),
-            serde_json::from_value(json!({"checkpointId":{"kind":"id"}})).unwrap(),
+            serde_json::from_value(json!({"checkpoint-id":{"kind":"id"}})).unwrap(),
         );
         Self {
             _temp: temp,

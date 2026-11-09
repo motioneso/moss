@@ -43,7 +43,7 @@ impl Host for Recovery {
             ("jobs", "enqueue-after-commit") => {
                 assert_eq!(resource, "notes.sync");
                 assert_eq!(p["params"].as_object().unwrap().len(), 1);
-                assert_eq!(p["params"]["checkpointId"], p["idempotencyKey"]);
+                assert_eq!(p["params"]["checkpoint-id"], p["idempotencyKey"]);
                 self.jobs.borrow_mut().push(p);
                 json!({"deferred":true})
             }
@@ -127,7 +127,7 @@ fn publication_refusal_returns_no_cursor_and_retry_reuses_ids() {
         json!({"scanned":1,"requested":1,"nextCursor":null})
     );
     assert_eq!(
-        host.jobs.borrow()[0]["params"]["checkpointId"],
+        host.jobs.borrow()[0]["params"]["checkpoint-id"],
         host.rows[0]["id"]
     );
 }

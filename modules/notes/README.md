@@ -40,6 +40,35 @@ signatures must cover the exact built artifact rather than an assumed rebuild.
 Registry publishing and real publisher signatures belong to the release process;
 tests use fresh synthetic signing keys.
 
+## Manual sync HTTP checkpoint (part seventeen)
+
+The experimental `write-tools` component now handles `POST /notes/sync`, exposed
+by the installed test package at `/api/m/notes/notes/sync`. An absent, empty or
+non-string saved source returns the legacy 409 response. A configured source
+requests an owner-only durable checkpoint and returns 202 with its opaque
+`jobId`. Body/query fields never select a source, actor or checkpoint. The
+server-read source is saved in the private checkpoint so a later folder change
+cannot retarget the request; queued metadata still contains only its ID. Filesystem
+resolution remains worker work, matching the legacy HTTP prerequisite check.
+
+The server must finish the transaction and deferred publication before sending
+success. The ID names the saved request, rather than a completed indexing job.
+Post-commit publication refusal can leave a recoverable checkpoint even though
+the call fails. The existing experimental recovery API can discover it.
+The ordinary package declares no manual-sync route and keeps returning 404;
+its guest makes no host calls for that route. No Sync now button is enabled.
+
+`tools/manual-sync-parity.ts` refreshes six vectors from the authored legacy
+handler, using named preference/transaction/queue stand-ins. The native regression
+was observed failing before this handler existed. The aggregate database gate
+installs a signed experimental package, dispatches its declared route, verifies
+owner/other-owner/admin separation under both runtime roles, removes preference
+RLS to observe the denial assertion fail, restores it, and resumes the accepted
+request through the real indexing adapter. Queue publication and embeddings are
+still stand-ins. This is not HTTP transport, an assembled Settings/chat screen,
+real configured models, legacy singleton coalescing, recall warmup, automatic
+worker delivery or second-device HTTPS proof. Full Notes acceptance remains open.
+
 ## Disposable database checks
 
 Read `.claude/skills/verify-gate/SKILL.md`. Never run the database tests directly.

@@ -1393,3 +1393,54 @@ assembly, checkpoint retention, managed publication/fencing, proposals/receipts
 and reconciliation, private exports/daily archives, full path/HTTP parity,
 assembled Settings/chat and separate physical-device HTTPS proof. This is a
 checkpoint and must not replace working legacy Notes.
+
+## Part seventeen checkpoint — manual sync HTTP contract
+
+The experimental component now handles `POST /notes/sync`. Its installed test
+package exposes `/api/m/notes/notes/sync`, returning the legacy 409 missing-folder
+message or 202 with the new durable request identity as `jobId`. It reads only
+the calling account's saved preference; body/query account, source and checkpoint
+fields are ignored. The selected source is saved in the private checkpoint,
+keeping the original request bound to that folder without putting a private path
+in queue metadata. A changed folder cannot retarget the pending job. Like the
+legacy route, it leaves filesystem validation to the
+worker. The server must finalize the transaction and publish deferred work before
+sending success. A post-commit publication failure can leave a saved request for
+the existing recovery API. No atomic filesystem/database/queue claim is made.
+
+This keeps Notes a pure SDK client of the server API. It adds no host service,
+core-table access, cross-module query, dependency or applied SQL change. Package
+`0.1.10`, its changelog and app map describe the experimental route. The ordinary
+package still declares no manual route, and its handler returns 404 without host
+access. No manual-sync button, active worker or installed chat writes are enabled.
+
+The native route regression failed first with 404. Six vectors execute the
+actual legacy handler with explicit transaction, preference and queue stand-ins.
+They compare stored-value prerequisites and accepted response shape, including
+ignored caller overrides. Native checks also cover safe lookup/checkpoint/queue
+request failures. The compiled database gate installs a signed experimental
+package, calls its declared route and resumes the resulting checkpoint using the
+real indexing adapter. Other owners and an unrelated admin cannot use an owner's
+source preference or read/update its checkpoint, under both app and worker roles.
+The same source-privacy assertion is required to fail with preference RLS removed,
+then pass after restoration. Queue delivery and document embeddings remain named
+stand-ins. Gate receipts and independent review are recorded in the task proof.
+
+Builds use task-owned scratch Cargo and Rust homes, separate ordinary/write-tools
+guest targets, the declared Rust Wasm target and approved pinned `wit-bindgen`
+0.57.1. Nothing was installed globally. Database checks use `scripts/run-gate.sh`.
+
+Still required: configured query/document embeddings, installed chat search and
+approval consumption/write tools, production manual/scheduled sync and dispatcher,
+legacy singleton request coalescing and recall warmup, automatic recovery timer,
+checkpoint retention, managed publication/fencing, proposals/receipts/reconciliation,
+private exports/daily archives, complete HTTP/path parity, assembled Settings/chat,
+and real use from another physical device over HTTPS. The fixture UI only proves
+folder controls; this checkpoint must not replace working legacy Notes.
+
+The first aggregate run found that the experimental queue parameter
+`checkpointId` was refused by the installer's manifest identifier rule. Queue
+publication now uses `checkpoint-id`; API result identities retain their existing
+shape, and the worker also accepts the earlier experimental job spelling. The
+signed installed gate checks the corrected declaration. The failed run is kept
+in the proof rather than counted as a passing receipt.

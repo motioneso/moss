@@ -109,7 +109,7 @@ fn writes_queue_private_checkpoints_and_resume_real_indexing() {
             );
             assert_eq!(jobs.len(), 1);
             let params = jobs[0]["params"].clone();
-            let id: Uuid = serde_json::from_value(params["checkpointId"].clone()).unwrap();
+            let id: Uuid = serde_json::from_value(params["checkpoint-id"].clone()).unwrap();
             assert_eq!(f.checkpoint_access(&db, actor, id), [1, 1, 1]);
             if tool == "notes.create" {
                 f.rt.block_on(f.bootstrap.batch_execute(
