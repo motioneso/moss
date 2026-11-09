@@ -13,7 +13,7 @@ impl ContextPorts {
 }
 impl Ports for ContextPorts {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
-        if port != "context" {
+        if port != "context" || request.operation == "local-date" {
             return self.next.invoke(scope, port, request);
         }
         crate::runtime::authorize(scope.module(), port, request)?;

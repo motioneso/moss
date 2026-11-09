@@ -19,6 +19,8 @@ use std::sync::Arc;
 use tokio_postgres::{Client as PgClient, NoTls};
 use uuid::Uuid;
 
+#[path = "privacy/account.rs"]
+mod account;
 #[path = "privacy/actions.rs"]
 mod actions;
 #[path = "privacy/heartbeat.rs"]

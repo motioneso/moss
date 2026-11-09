@@ -1,10 +1,10 @@
 //! Bounded summary read. It never advances recurrence.
-//! Days are UTC until the public actor-timezone seam exists.
+//! Calendar days come from the public account-date contract.
 use crate::{
     repository::{Error, Repository, Result},
     rows::Task,
 };
-use chrono::{DateTime, NaiveDate, SecondsFormat, TimeZone, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use moss_module_sdk::Host;
 use serde_json::{json, Value};
 
@@ -21,17 +21,16 @@ const LIMIT: usize = 12;
 fn iso(value: DateTime<Utc>) -> String {
     value.to_rfc3339_opts(SecondsFormat::Millis, true)
 }
-fn due_state(task: &Task, today: NaiveDate) -> &'static str {
+fn due_state(task: &Task, start: DateTime<Utc>, end: DateTime<Utc>) -> &'static str {
     if task.status != "todo" {
         return "inactive";
     }
     match task.due_at {
         None => "undated",
         Some(due) => {
-            let day = due.date_naive();
-            if day < today {
+            if due < start {
                 "overdue"
-            } else if day == today {
+            } else if due < end {
                 "today"
             } else {
                 "upcoming"
@@ -68,9 +67,10 @@ pub fn execute<H: Host + ?Sized>(repo: &Repository<'_, H>, input: &Value) -> Res
         .now()?
         .parse()
         .map_err(|_| Error::Http(500, "Internal server error"))?;
-    let today = now.date_naive();
-    let start = Utc.from_utc_datetime(&today.and_hms_opt(0, 0, 0).expect("midnight"));
-    let end = start + chrono::Duration::days(1);
+    let day = repo.local_day(now, 0)?;
+    let today = day.date;
+    let start = day.start;
+    let end = day.next_start;
     let cmp = |column: &str, op: moss_module_sdk::query::Compare, at: DateTime<Utc>| {
         moss_module_sdk::query::Filter::Compare {
             column: column.into(),
@@ -117,6 +117,12 @@ pub fn execute<H: Host + ?Sized>(repo: &Repository<'_, H>, input: &Value) -> Res
     ];
     query.limit = Some((LIMIT + 1) as u32);
     let rows: Vec<Task> = repo.query(crate::repository::TASKS, &query)?;
+    let mut due_dates = std::collections::BTreeMap::new();
+    for task in &rows {
+        if let Some(due) = task.due_at {
+            due_dates.insert(task.id.as_str(), repo.local_day(due, 0)?.date.to_string());
+        }
+    }
     // Match the legacy bound: at most twelve rows, then drop rows from the
     // end while the plain-text form runs over 4,000 UTF-16 code units.
     let coverage = |count: usize, truncated: bool| {
@@ -139,11 +145,11 @@ pub fn execute<H: Host + ?Sized>(repo: &Repository<'_, H>, input: &Value) -> Res
         };
         let due = match t.due_at {
             None => "No due date".to_string(),
-            Some(due) => {
-                let state = due_state(t, today);
+            Some(_) => {
+                let state = due_state(t, start, end);
                 format!(
                     "Due {}{}",
-                    due.date_naive(),
+                    due_dates.get(t.id.as_str()).expect("resolved due date"),
                     match state {
                         "overdue" => " · Overdue",
                         "today" => " · Due today",
@@ -185,9 +191,10 @@ pub fn execute<H: Host + ?Sized>(repo: &Repository<'_, H>, input: &Value) -> Res
             .collect::<Vec<_>>()
             .join(". ");
         format!(
-            "{} · {} · UTC. {}{}Tasks; retrieved {}. {}",
+            "{} · {} · {}. {}{}Tasks; retrieved {}. {}",
             label(scope),
             today,
+            day.timezone,
             body,
             if rows.is_empty() { "" } else { ". " },
             iso(now),
@@ -204,14 +211,14 @@ pub fn execute<H: Host + ?Sized>(repo: &Repository<'_, H>, input: &Value) -> Res
         .iter()
         .map(|t| {
             json!({"id":t.id,"title":t.title,"status":t.status,"priority":t.priority,
-            "dueAt":t.due_at.map(iso),"dueState":due_state(t, today),
+            "dueAt":t.due_at.map(iso),"dueState":due_state(t, start, end),
             "completedAt":t.completed_at.map(iso),"updatedAt":iso(t.updated_at),
             "recurring":t.recurrence.is_some()})
         })
         .collect();
     let coverage = coverage(items.len(), truncated);
     Ok(json!({"data":{
-        "summary":{"scope":scope,"timeZone":"UTC","localDate":today.to_string(),
+        "summary":{"scope":scope,"timeZone":day.timezone,"localDate":today.to_string(),
         "retrievedAt":iso(now),"truncated":truncated,"items":items},
         "coverage":coverage
     }}))

@@ -1,4 +1,5 @@
 //! Tasks package data core. All effects cross the guest-safe SDK Host interface.
+pub mod account;
 mod breakdown;
 pub mod dates;
 mod delete_list;

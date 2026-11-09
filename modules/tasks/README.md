@@ -1,5 +1,22 @@
 # Tasks component checkpoint
 
+Part 21 adds the two existing assistant-policy API routes and account-local day
+boundaries for focus, at-risk, overdue and bounded summaries. The host supplies
+scoped policy and calendar-day contracts; Tasks never queries core preferences.
+Canonical policy beats the legacy toggle, including `always_confirm`, and a
+legacy opt-out prevents the initial grant. These routes preserve the saved choice;
+the package screen still has no policy switch and installed chat still requires
+one-use approval. The summary's timezone and local date now reflect the saved
+account locale. Missing or invalid zones retain the legacy fallback. Consecutive
+midnights follow DST rather than assuming every day lasts twenty-four hours.
+
+Current remaining work: lazy recurrence advancement, recurrence jobs, full
+deferred-queue policy and installed worker dispatch, public People linkage,
+policy/feedback orchestration, remaining screen/settings parity, interpreted
+search and date editor timezone support, installed chat and summary presentation,
+real application shell integration, performance budgets and physical second-device
+HTTPS proof. Historical checkpoint notes below describe the earlier state.
+
 Part 15 adds list inclusion, show-only and exclusion under **Choose lists**,
 alongside the compact list picker. Tags can be combined (any selected tag
 matches) and removed individually. Counts follow status and tags before search;

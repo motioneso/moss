@@ -56,6 +56,7 @@ mod application_extended;
 pub mod frame;
 pub mod guest_component;
 
+pub mod account_contracts;
 pub mod account_preferences;
 pub mod folder_settings;
 pub mod folder_sync_status;

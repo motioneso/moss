@@ -1,0 +1,248 @@
+[
+  {
+    "name": "tasks policy: fresh account and independent choices",
+    "source": "packages/tasks/src/action-policy.ts and routes.ts",
+    "seed": [],
+    "steps": [
+      {
+        "method": "GET",
+        "path": "/api/tasks/agency-auto-execute",
+        "as": "A",
+        "expect": {
+          "status": 200,
+          "body": {
+            "enabled": true
+          }
+        }
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/tasks/agency-auto-execute",
+        "as": "A",
+        "expect": {
+          "status": 200,
+          "body": {
+            "enabled": false
+          }
+        },
+        "body": {
+          "enabled": false
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/api/tasks/agency-auto-execute",
+        "as": "B",
+        "expect": {
+          "status": 200,
+          "body": {
+            "enabled": true
+          }
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/api/tasks/agency-auto-execute",
+        "as": "admin",
+        "expect": {
+          "status": 200,
+          "body": {
+            "enabled": true
+          }
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/api/tasks/agency-auto-execute",
+        "as": "A",
+        "expect": {
+          "status": 200,
+          "body": {
+            "enabled": false
+          }
+        }
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/tasks/agency-auto-execute",
+        "as": "A",
+        "expect": {
+          "status": 200,
+          "body": {
+            "enabled": true
+          }
+        },
+        "body": {
+          "enabled": true
+        }
+      }
+    ],
+    "rows": ["app.preferences"]
+  },
+  {
+    "name": "tasks policy: legacy opt-out stays off",
+    "source": "packages/tasks/src/action-policy.ts and routes.ts",
+    "seed": [
+      "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES('{{userA}}','tasks.agency_auto_execute','false')"
+    ],
+    "steps": [
+      {
+        "method": "GET",
+        "path": "/api/tasks/agency-auto-execute",
+        "as": "A",
+        "expect": {
+          "status": 200,
+          "body": {
+            "enabled": false
+          }
+        }
+      }
+    ],
+    "rows": ["app.preferences"]
+  },
+  {
+    "name": "tasks policy: canonical always confirm wins over legacy true",
+    "source": "packages/tasks/src/action-policy.ts and routes.ts",
+    "seed": [
+      "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES('{{userA}}','assistant.action_policy.v1.tasks.task_changes','\"always_confirm\"'),('{{userA}}','tasks.agency_auto_execute','true')"
+    ],
+    "steps": [
+      {
+        "method": "GET",
+        "path": "/api/tasks/agency-auto-execute",
+        "as": "A",
+        "expect": {
+          "status": 200,
+          "body": {
+            "enabled": false
+          }
+        }
+      }
+    ],
+    "rows": ["app.preferences"]
+  },
+  {
+    "name": "tasks policy: legacy grant stays on",
+    "source": "packages/tasks/src/action-policy.ts and routes.ts",
+    "seed": [
+      "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES('{{userA}}','tasks.agency_auto_execute','true')"
+    ],
+    "steps": [
+      {
+        "method": "GET",
+        "path": "/api/tasks/agency-auto-execute",
+        "as": "A",
+        "expect": {
+          "status": 200,
+          "body": {
+            "enabled": true
+          }
+        }
+      }
+    ],
+    "rows": ["app.preferences"]
+  },
+  {
+    "name": "tasks policy: HTTP boolean coercion and unknown actor ignored",
+    "source": "packages/tasks/src/action-policy.ts and routes.ts",
+    "seed": [],
+    "steps": [
+      {
+        "method": "PATCH",
+        "path": "/api/tasks/agency-auto-execute",
+        "as": "A",
+        "expect": {
+          "status": 200,
+          "body": {
+            "enabled": false
+          }
+        },
+        "body": {
+          "enabled": "false",
+          "actorUserId": "{{userB}}"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/api/tasks/agency-auto-execute",
+        "as": "B",
+        "expect": {
+          "status": 200,
+          "body": {
+            "enabled": true
+          }
+        }
+      }
+    ],
+    "rows": ["app.preferences"]
+  },
+  {
+    "name": "tasks policy: bad bodies rejected",
+    "source": "packages/tasks/src/action-policy.ts and routes.ts",
+    "seed": [],
+    "steps": [
+      {
+        "method": "PATCH",
+        "path": "/api/tasks/agency-auto-execute",
+        "as": "A",
+        "expect": {
+          "status": 400
+        },
+        "body": {}
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/tasks/agency-auto-execute",
+        "as": "A",
+        "expect": {
+          "status": 400
+        },
+        "body": {
+          "enabled": "invalid"
+        }
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/tasks/agency-auto-execute",
+        "as": "A",
+        "expect": {
+          "status": 200,
+          "body": {
+            "enabled": false
+          }
+        },
+        "body": {
+          "enabled": null
+        }
+      }
+    ],
+    "rows": ["app.preferences"]
+  },
+  {
+    "name": "tasks policy: requires sign in",
+    "source": "packages/tasks/src/action-policy.ts and routes.ts",
+    "seed": [],
+    "steps": [
+      {
+        "method": "GET",
+        "path": "/api/tasks/agency-auto-execute",
+        "as": "anon",
+        "expect": {
+          "status": 401
+        }
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/tasks/agency-auto-execute",
+        "as": "anon",
+        "expect": {
+          "status": 401
+        },
+        "body": {
+          "enabled": true
+        }
+      }
+    ],
+    "rows": ["app.preferences"]
+  }
+]

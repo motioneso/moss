@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Restore the existing task assistant-policy read and write API, preserving canonical choices and legacy opt-outs.
+- Use account-local day boundaries for focus, at-risk, overdue and summary reads, including daylight-saving changes.
+- Compare those reads in UTC and four account timezones. Screen date controls and interpreted search still use UTC; lazy recurrence and installed chat policy remain unfinished.
+
 - Retry activity reads without hiding other task details or losing loaded comments.
 - Post comments with Enter, keep new lines with Shift+Enter, and retain rejected drafts.
 - Refresh acknowledged comments without repeating the post; preserve comment line breaks.

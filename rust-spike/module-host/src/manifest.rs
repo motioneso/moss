@@ -72,6 +72,8 @@ pub struct Manifest {
     pub tools: BTreeMap<String, Tool>,
     #[serde(default)]
     pub install_wide_kv: BTreeSet<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub policy_routes: BTreeMap<String, crate::account_contracts::PolicyRoute>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
@@ -221,6 +223,7 @@ impl Manifest {
             "This module needs a different Moss version"
         );
         let mut ports = BTreeSet::new();
+        crate::account_contracts::validate_routes(self)?;
         for cap in &self.capabilities {
             ensure!(
                 PORTS.contains(&cap.port.as_str()) && ports.insert(&cap.port),
@@ -435,6 +438,21 @@ impl Manifest {
                         serde_json::to_string(c).expect("credential")
                     )
                 })
+                .collect(),
+            "action-policy" if !self.policy_routes.is_empty() => self
+                .policy_routes
+                .iter()
+                .map(|(family, route)| {
+                    format!(
+                        "Policy {family}: {}",
+                        serde_json::to_string(route).expect("policy")
+                    )
+                })
+                .chain(
+                    self.tools
+                        .iter()
+                        .map(|(name, t)| format!("Tool {name}: {}", t.risk)),
+                )
                 .collect(),
             "tools" | "action-policy" => self
                 .tools

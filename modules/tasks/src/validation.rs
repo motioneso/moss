@@ -5,6 +5,10 @@ use moss_module_sdk::RouteRequest;
 
 pub fn request_schema(method: &str, path: &str) -> Option<Schema> {
     match (method, path) {
+        ("PATCH", "/tasks/agency-auto-execute") => Some(Schema::object(
+            &["enabled"],
+            vec![("enabled", Schema::Boolean)],
+        )),
         ("POST", "/tasks") => Some(schemas::create_task()),
         ("PATCH", "/tasks/:id") => Some(schemas::update_task()),
         ("POST", "/tasks/:id/activity") => Some(schemas::add_activity()),
