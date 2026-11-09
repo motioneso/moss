@@ -8,6 +8,8 @@ description = "Phase 1 spike: a bundled Postgres with pgvector, started, migrate
 [[bin]]
 name = "moss-db"
 path = "src/main.rs"
+# The supervisor CLI is Unix-only; Windows currently qualifies the library boundary.
+test = false
 
 [dependencies]
 hex = "0.4"
@@ -18,6 +20,8 @@ postgres-protocol = "0.6"
 rand = "0.8"
 serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.10"
+
+[target.'cfg(unix)'.dependencies]
 signal-hook = "0.3"
 
 [dev-dependencies]

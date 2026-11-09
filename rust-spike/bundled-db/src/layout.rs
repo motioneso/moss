@@ -1,11 +1,14 @@
 //! Where one install keeps its database files. Everything sits under one root that only
 //! this OS user can open.
 
+#[cfg(unix)]
 use std::fs::File;
+#[cfg(unix)]
 use std::io;
 use std::path::{Path, PathBuf};
 
 /// Longest Unix socket path, NUL included: 104 on macOS, 108 on Linux. The smaller wins.
+#[cfg(unix)]
 const SOCKET_PATH_MAX: usize = 104;
 
 #[derive(Debug, Clone)]
@@ -20,10 +23,13 @@ pub struct Layout {
     pub logs: PathBuf,
     /// Held by the one supervisor allowed to run this install.
     pub lock: PathBuf,
+    #[cfg(windows)]
+    windows: std::sync::Arc<windows::Directories>,
 }
 
 impl Layout {
     /// Creates the owner-only folders. `root` may not exist yet.
+    #[cfg(unix)]
     pub fn create(root: &Path) -> io::Result<Layout> {
         private_dir(root)?;
         let layout = Layout::at(root.canonicalize()?)?;
@@ -41,18 +47,21 @@ impl Layout {
     /// Call it before reading the state file or connecting. The folder may sit in a shared
     /// temporary folder under a predictable name, so after a reboot another user could create it
     /// first, with a state file and a socket of their own.
+    #[cfg(unix)]
     pub fn check_run(&self) -> io::Result<()> {
         check_private_dir(&self.run, unsafe { libc::geteuid() })
     }
 
     /// The layout of an install that already exists. Creates and changes nothing.
+    #[cfg(unix)]
     pub fn open(root: &Path) -> io::Result<Layout> {
-        let real = root
-            .canonicalize()
-            .map_err(|e| io::Error::new(e.kind(), format!("no install at {}: {e}", root.display())))?;
+        let real = root.canonicalize().map_err(|e| {
+            io::Error::new(e.kind(), format!("no install at {}: {e}", root.display()))
+        })?;
         Layout::at(real)
     }
 
+    #[cfg(unix)]
     fn at(root: PathBuf) -> io::Result<Layout> {
         Ok(Layout {
             data: root.join("db"),
@@ -81,11 +90,15 @@ impl Layout {
 /// Server processes carry it in their titles, so it tells this install's leftovers apart from
 /// any other install's.
 pub fn cluster_name(data: &Path) -> String {
-    format!("moss-{}", &sha2_hex(data.as_os_str().as_encoded_bytes())[..12])
+    format!(
+        "moss-{}",
+        &sha2_hex(data.as_os_str().as_encoded_bytes())[..12]
+    )
 }
 
 /// `<root>/run`, unless the socket path would be too long for the OS. Then a short owner-only
 /// folder in the per-user runtime folder, named from a hash of the root.
+#[cfg(unix)]
 fn socket_dir(root: &Path) -> io::Result<PathBuf> {
     let preferred = root.join("run");
     if socket_path_fits(&preferred) {
@@ -100,10 +113,13 @@ fn socket_dir(root: &Path) -> io::Result<PathBuf> {
     if socket_path_fits(&short) {
         Ok(short)
     } else {
-        Err(io::Error::other("no folder short enough for the database socket"))
+        Err(io::Error::other(
+            "no folder short enough for the database socket",
+        ))
     }
 }
 
+#[cfg(unix)]
 fn socket_path_fits(dir: &Path) -> bool {
     dir.as_os_str().len() + "/.s.PGSQL.65535".len() < SOCKET_PATH_MAX
 }
@@ -114,20 +130,31 @@ fn sha2_hex(bytes: &[u8]) -> String {
 }
 
 /// A folder only this user can enter. An existing folder is tightened to 0700.
+#[cfg(unix)]
 pub fn private_dir(path: &Path) -> io::Result<()> {
     use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(path)?;
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(path)?;
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
 }
 
 /// `private_dir` for a folder Moss makes itself. An existing one must be a real folder, not a
 /// link, and belong to this user.
+#[cfg(unix)]
 fn owned_private_dir(path: &Path) -> io::Result<()> {
     use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
-    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(path)?;
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(path)?;
     let meta = std::fs::symlink_metadata(path)?;
     if !meta.is_dir() || meta.uid() != unsafe { libc::geteuid() } {
-        return Err(io::Error::other(format!("{} is not a folder that belongs to this user", path.display())));
+        return Err(io::Error::other(format!(
+            "{} is not a folder that belongs to this user",
+            path.display()
+        )));
     }
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
 }
@@ -135,6 +162,7 @@ fn owned_private_dir(path: &Path) -> io::Result<()> {
 /// Fails unless `path` is a real folder owned by `uid` that no one else can open, inside a parent
 /// where no other user can rename it or put another folder in its place. Only the immediate parent
 /// is checked. The folders above it are trusted.
+#[cfg(unix)]
 fn check_private_dir(path: &Path, uid: u32) -> io::Result<()> {
     use std::os::unix::fs::MetadataExt;
 
@@ -161,12 +189,18 @@ fn check_private_dir(path: &Path, uid: u32) -> io::Result<()> {
 }
 
 /// A new file only this user can read or write.
+#[cfg(unix)]
 pub fn private_file(path: &Path) -> io::Result<File> {
     use std::os::unix::fs::OpenOptionsExt;
-    std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(path)
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)
 }
 
 /// Writes `bytes` to `path` through a private temporary file and a rename.
+#[cfg(unix)]
 pub fn write_private(path: &Path, bytes: &[u8]) -> io::Result<()> {
     use std::io::Write;
     let tmp = path.with_extension(format!("tmp.{}", std::process::id()));
@@ -177,7 +211,7 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> io::Result<()> {
     std::fs::rename(&tmp, path)
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 
@@ -273,6 +307,73 @@ mod tests {
         std::fs::create_dir(&root).unwrap();
         std::os::unix::fs::symlink(&elsewhere, root.join("logs")).unwrap();
         let error = Layout::create(&root).unwrap_err();
-        assert!(error.to_string().contains("is not a folder that belongs to this user"), "{error}");
+        assert!(
+            error
+                .to_string()
+                .contains("is not a folder that belongs to this user"),
+            "{error}"
+        );
     }
+}
+
+#[cfg(windows)]
+mod windows;
+
+/// Bounded UTF-8 reads for the supervisor's small metadata and password files.
+fn read_bounded(file: std::fs::File, limit: u64) -> std::io::Result<String> {
+    use std::io::Read;
+    let mut text = String::new();
+    file.take(limit + 1).read_to_string(&mut text)?;
+    if text.len() as u64 > limit {
+        return Err(std::io::Error::other("private file exceeds its size limit"));
+    }
+    Ok(text)
+}
+
+impl Layout {
+    pub(crate) fn read_secret(&self, role: &str) -> std::io::Result<String> {
+        check_secret_name(role)?;
+        #[cfg(unix)]
+        let file = std::fs::File::open(self.secrets.join(role))?;
+        #[cfg(windows)]
+        let file = self.windows.secrets.open_file(std::ffi::OsStr::new(role))?;
+        read_bounded(file, 256)
+    }
+
+    pub(crate) fn create_secret(&self, role: &str) -> std::io::Result<std::fs::File> {
+        check_secret_name(role)?;
+        #[cfg(unix)]
+        {
+            private_file(&self.secrets.join(role))
+        }
+        #[cfg(windows)]
+        {
+            self.windows.secrets.create_file(std::ffi::OsStr::new(role))
+        }
+    }
+
+    #[cfg(unix)]
+    pub fn write_state(&self, bytes: &[u8]) -> std::io::Result<()> {
+        self.check_run()?;
+        write_private(&self.state_file(), bytes)
+    }
+
+    #[cfg(unix)]
+    pub fn read_state(&self) -> std::io::Result<String> {
+        self.check_run()?;
+        read_bounded(std::fs::File::open(self.state_file())?, 65536)
+    }
+}
+
+fn check_secret_name(role: &str) -> std::io::Result<()> {
+    if !crate::RUNTIME_ROLES.contains(&role)
+        && role != crate::SUPERUSER
+        && !["session-signing-secret", "connector-key"].contains(&role)
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "unknown private credential name",
+        ));
+    }
+    Ok(())
 }

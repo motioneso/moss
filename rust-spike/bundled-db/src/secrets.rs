@@ -3,11 +3,10 @@
 
 use std::fmt;
 use std::io::{self, Write};
-use std::path::Path;
 
 use rand::RngCore;
 
-use crate::layout::{private_file, Layout};
+use crate::layout::Layout;
 
 /// A password that never prints. There is no `Display`, and `Debug` hides the value.
 #[derive(Clone)]
@@ -27,27 +26,50 @@ impl fmt::Debug for Secret {
 
 /// Reads the password for `role`, creating a random one the first time.
 pub fn password(layout: &Layout, role: &str) -> io::Result<Secret> {
-    let path = layout.secrets.join(role);
-    match std::fs::read_to_string(&path) {
+    match layout.read_secret(role) {
         Ok(text) => Ok(Secret(text.trim().to_string())),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => create(&path),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => create(layout, role),
         Err(error) => Err(error),
     }
 }
 
 /// Reads the password for `role`, which must already exist.
 pub fn existing(layout: &Layout, role: &str) -> Result<Secret, String> {
-    std::fs::read_to_string(layout.secrets.join(role))
+    layout
+        .read_secret(role)
         .map(|text| Secret(text.trim().to_string()))
         .map_err(|e| format!("password for {role}: {e}"))
 }
 
-fn create(path: &Path) -> io::Result<Secret> {
+fn create(layout: &Layout, role: &str) -> io::Result<Secret> {
     let mut bytes = [0u8; 32];
     rand::rngs::OsRng.fill_bytes(&mut bytes);
     let value = hex::encode(bytes);
-    let mut file = private_file(path)?;
+    let mut file = layout.create_secret(role)?;
     file.write_all(value.as_bytes())?;
     file.sync_all()?;
     Ok(Secret(value))
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_canonical_credentials_survive_reopening_and_refuse_unknown_names() {
+        let temp = tempfile::tempdir().unwrap();
+        let layout = Layout::create(&temp.path().join("install")).unwrap();
+        for name in crate::RUNTIME_ROLES.into_iter().chain([
+            crate::SUPERUSER,
+            "session-signing-secret",
+            "connector-key",
+        ]) {
+            let first = password(&layout, name).unwrap();
+            assert_eq!(first.expose().len(), 64);
+            assert!(first.expose() == existing(&layout, name).unwrap().expose());
+            assert!(first.expose() == password(&layout, name).unwrap().expose());
+        }
+        assert!(password(&layout, "../escape").is_err());
+        assert!(existing(&layout, "unknown").is_err());
+    }
 }

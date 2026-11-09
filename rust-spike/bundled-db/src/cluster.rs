@@ -12,7 +12,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
 
-use crate::layout::{private_file, write_private, Layout};
+use crate::layout::{private_file, Layout};
 use crate::secrets::{self, Secret};
 use crate::{procs, SUPERUSER};
 
@@ -495,7 +495,7 @@ fn write_state(layout: &Layout, pid: i32, endpoint: &Endpoint) -> Result<(), Str
         "endpoint": endpoint.to_json(),
         "started_unix": started,
     });
-    write_private(&layout.state_file(), state.to_string().as_bytes()).map_err(|e| format!("state file: {e}"))
+    layout.write_state(state.to_string().as_bytes()).map_err(|e| format!("state file: {e}"))
 }
 
 /// The running install's state file. The socket folder is checked first, because whoever
@@ -506,7 +506,7 @@ pub fn read_state(layout: &Layout) -> Result<Value, String> {
         Err(error) => return Err(error.to_string()),
         Ok(()) => {}
     }
-    let text = std::fs::read_to_string(layout.state_file()).map_err(|_| "the database is not running".to_string())?;
+    let text = layout.read_state().map_err(|_| "the database is not running".to_string())?;
     serde_json::from_str(&text).map_err(|e| e.to_string())
 }
 

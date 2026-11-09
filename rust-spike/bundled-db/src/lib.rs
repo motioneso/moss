@@ -2,13 +2,14 @@
 //! install: it creates it, starts it, runs the app's migrations, stops it, and recovers it
 //! after a crash. It also reports whether the disk holding the data is encrypted.
 
-#[cfg(not(unix))]
-compile_error!("the Phase 1 spike runs on Linux and macOS; the Windows approach is in the Phase 1 report");
-
+#[cfg(unix)]
 pub mod at_rest;
+#[cfg(unix)]
 pub mod cluster;
 pub mod layout;
+#[cfg(unix)]
 pub mod migrate;
+#[cfg(unix)]
 pub mod procs;
 pub mod secrets;
 

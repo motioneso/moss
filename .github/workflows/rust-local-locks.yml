@@ -56,3 +56,21 @@ jobs:
       - name: Compile the Windows app and check server executable discovery
         if: runner.os == 'Windows'
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app server_program_uses_the_platform_executable_suffix -- --nocapture
+      - name: Build canonical Windows layout tests (supervisor remains Unix only)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p bundled-db --lib --no-run --message-format=json > .rust-locks/layout-build.jsonl
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Exercise canonical Windows layout as a standard user
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./rust-spike/portability/proof/windows-child.ps1 -BuildReport '.rust-locks/layout-build.jsonl' -TestTarget bundled_db -Filter 'layout::windows::tests' -ExpectedSummary 'test result: ok\. 8 passed; 0 failed; 0 ignored'
+      - name: Check canonical Windows layout negative controls
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./rust-spike/bundled-db/proof/windows/layout-negative.ps1
+      - name: Check canonical Unix layout regressions
+        if: runner.os != 'Windows'
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p bundled-db --lib

@@ -1,6 +1,8 @@
 param(
     [string]$BuildReport = '.rust-locks/child-build.jsonl',
     [string]$Filter = 'windows_child',
+    [string]$TestTarget = 'portability',
+    [string]$ExpectedSummary = 'test result: ok\. 8 passed; 0 failed; 1 ignored',
     [switch]$ExpectFailure
 )
 # GitHub's Windows runner is elevated. Exercise the actual test binary as a separate standard
@@ -14,11 +16,11 @@ $state = Join-Path $root '.rust-locks'
 $account = 'moss-child-proof'
 $binary = Get-Content (Join-Path $root $BuildReport) | ForEach-Object {
     $entry = $_ | ConvertFrom-Json
-    if ($entry.reason -eq 'compiler-artifact' -and $entry.target.name -eq 'portability' -and $entry.executable) {
+    if ($entry.reason -eq 'compiler-artifact' -and $entry.target.name -eq $TestTarget -and $entry.executable) {
         $entry.executable
     }
 } | Select-Object -Last 1
-if (-not $binary) { throw 'No compiled portability test binary was reported by Cargo' }
+if (-not $binary) { throw 'No compiled test binary was reported by Cargo' }
 # This random password is used only to create/log on the disposable CI account. Never print it
 # or write it to disk. No project credential is involved.
 $password = ConvertTo-SecureString ([guid]::NewGuid().ToString('N') + 'aA1!') -AsPlainText -Force
@@ -48,7 +50,7 @@ try {
             throw 'Negative control did not produce the expected test failure'
         }
         Write-Output 'Negative control: expected failure observed.'
-    } elseif ($process.ExitCode -ne 0 -or -not (Select-String -Path $out -Pattern 'test result: ok\. 8 passed; 0 failed; 1 ignored')) {
+    } elseif ($process.ExitCode -ne 0 -or -not (Select-String -Path $out -Pattern $ExpectedSummary)) {
         throw "Windows child qualification failed or did not run the complete suite ($($process.ExitCode))"
     }
 } finally {
