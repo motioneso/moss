@@ -28,7 +28,14 @@ let child: ReturnType<typeof spawn> | undefined;
 let exited: Promise<number | null> | undefined;
 try {
   const base = `https://127.0.0.1:${port}`;
-  const origins = [base, `https://localhost:${port}`];
+  // TASKS_UI_LAN_HOSTS (comma-separated addresses) lets a second device on the LAN or
+  // tailnet reach the fixture over HTTPS. Without it the fixture stays on loopback.
+  const lanHosts = (process.env["TASKS_UI_LAN_HOSTS"] ?? "").split(",").filter(Boolean);
+  const origins = [
+    base,
+    `https://localhost:${port}`,
+    ...lanHosts.map((host) => `https://${host}:${port}`)
+  ];
   const urls = getMossDatabaseUrls();
   const binary = join(
     process.env["CARGO_TARGET_DIR"] ?? resolve("modules/tasks/tools/target"),
@@ -48,9 +55,9 @@ try {
   writeFileSync(
     join(out, "network.json"),
     JSON.stringify({
-      listen: `127.0.0.1:${port}`,
+      listen: `${lanHosts.length ? "0.0.0.0" : "127.0.0.1"}:${port}`,
       origins,
-      sharing: false,
+      sharing: lanHosts.length > 0,
       certificate: join(out, "tls/certificate.pem"),
       private_key: join(out, "tls/key.pem"),
       credentials
@@ -107,6 +114,13 @@ try {
     "PASS native HTTPS with certificate verification; sign-in redirect; untrusted host and origin refused"
   );
   writeFileSync(join(out, "url.txt"), base);
+  if (lanHosts.length) {
+    writeFileSync(
+      join(out, "lan-urls.txt"),
+      lanHosts.map((host) => `https://${host}:${port}`).join("\n")
+    );
+    console.log(`Second-device addresses written to ${join(out, "lan-urls.txt")}`);
+  }
   console.log(`Tasks package UI ready: ${base}/setup`);
   console.log(
     `After browser checks, create ${join(out, "finished")} containing checked to finish the gate.`

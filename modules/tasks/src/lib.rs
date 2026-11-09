@@ -12,6 +12,7 @@ pub mod recurrence;
 pub mod repository;
 pub mod routes;
 pub mod rows;
+mod search_interpret;
 mod summary;
 pub mod task_fields;
 pub mod tasks;
