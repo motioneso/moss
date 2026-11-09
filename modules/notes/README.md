@@ -238,3 +238,52 @@ owner predicate. A temporary source copy then removes that predicate and repeats
 the installed-component test with RLS also removed: the compiled search assertion
 must fail, and must pass after restoring the source. The worktree protection is
 never changed. These are distinct protections and distinct assertions.
+
+## Sync coordinator parity checkpoint (part eight)
+
+Version `0.1.3` ports the legacy sync coordinator into the existing **test-only**
+`write-tools` build. Its `job` envelope is
+`{"name":"notes.sync","parameters":{...checkpoint}}`. It is not declared in the
+ordinary package, not reachable through an installed HTTP route, and not scheduled.
+The ordinary component continues to reject it. The native and actual-Wasm tests
+compare the coordinator against 51 executions of the authored legacy worker and
+cleanup helper, including the real error-message sink.
+
+The coordinator preserves the hundred-chunk run budget, file/checkpoint selection,
+resume hashes and managed snapshot keys, progress counts, deferred continuations,
+partial versus total failure, and unlink no-op. Deleted-file selection retains
+walked and resolved paths, only removes missing descendants of the current root,
+and leaves an empty walk alone. Filesystem admission, embedding, per-file indexing,
+transactions and the actual deletion are explicit stand-ins in these checks.
+They do not establish ingestion, managed publication, queue or privacy behavior.
+
+```sh
+pnpm exec tsx modules/notes/tools/sync-parity.ts
+CARGO_TARGET_DIR=/tmp/notes-domain cargo +1.95.0 test --locked --offline --features write-tools --manifest-path modules/notes/src/Cargo.toml --test sync
+NOTES_COMPONENT=/tmp/notes.wasm NOTES_TOOL_COMPONENT=/tmp/notes-tools.wasm CARGO_TARGET_DIR=/tmp/notes-host cargo +1.95.0 test --locked --offline --manifest-path modules/notes/tools/Cargo.toml --test sync -- --nocapture
+```
+
+The draft core adapter calls are confined to the test build's `vault` source
+resource: `index.sync-open`, `index.sync-file`, `index.sync-canonical`,
+`index.sync-indexed`, and `index.sync-remove`. No production adapter or permission
+is added. Before enabling them, core must bind the actor and selected source,
+validate every file independently through VaultContext, fence source/file changes,
+perform per-file indexing and removals atomically under RLS, and preserve managed
+publication admission. `index.sync-remove` must remove only that actor's Notes
+chunks, file links and index row together. Guest-selected paths never authorize it.
+The walk and canonical-path responses are not an authority to bypass those checks.
+
+The synchronous checkpoint envelope/result may contain source/file paths and
+hashes. **Do not enqueue that envelope or continuation as job parameters.** The
+future worker must store checkpoint state under the account and enqueue only its
+opaque ID using the host's typed metadata schema. The coordinator does not publish
+jobs, write last-sync status, run after-sync hooks, reconcile the fifteen-minute
+schedule, or implement the manual sync route. No-op/deferred results must not
+replace saved status. Safe error comparisons cover ordinary `Error` and the
+listed errno/path failures, not arbitrary JavaScript error subclasses.
+
+Run the standard Notes gate with both component paths as before; it now includes
+the compiled sync corpus. The actual SQL/privacy and installed-search checks remain
+separate evidence. Full indexing/sync, approved write execution, assembled Settings
+and chat, and a separate physical-device HTTPS check remain required before Notes
+can replace the working legacy module.
