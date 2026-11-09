@@ -1,0 +1,28 @@
+[package]
+name = "people-host-json-parity"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# A normal downstream build: module-host's dev-dependencies must not supply
+# float_roundtrip. Do not add moss-people or enable JSON features here.
+[workspace]
+
+[[bin]]
+name = "people-host-json-parity"
+path = "main.rs"
+
+[dependencies]
+moss-module-host = { path = "../../../../rust-spike/module-host" }
+access-context = { path = "../../../../rust-spike/access-context" }
+anyhow = "1"
+base64 = "0.22"
+chrono = "0.4"
+ring = "0.17"
+serde_json = "1"
+tempfile = "3"
+uuid = { version = "1", features = ["v4"] }
+wat = "=1.239.0"
+
+[profile.dev]
+debug = 0
