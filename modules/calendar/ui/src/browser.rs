@@ -211,6 +211,7 @@ pub fn Calendar() -> impl IntoView {
     };
     let scroll_position = RwSignal::new(None::<i32>);
     let zone = Memo::new(move |_| state.zone());
+    let assistant_name = Memo::new(move |_| state.assistant_name());
     let twelve = Memo::new(move |_| state.twelve());
     let today = Memo::new(move |_| state.today());
     let cursor = Memo::new(move |_| state.cursor.get().unwrap_or_else(|| today.get()));
@@ -291,7 +292,7 @@ pub fn Calendar() -> impl IntoView {
                 }).collect_view()}
             </div>
         </div></div>
-        {move||(state.view.get()!="month").then(||view!{<div class="cal-legend"><span>"Accepted"</span><span>{format!("{} holding",state.assistant_name())}</span><span>{state.zone().name()}</span></div>})}
+        {move||(state.view.get()!="month").then(||view!{<div class="cal-legend"><span>"Accepted"</span><span>{format!("{} holding",assistant_name.get())}</span><span>{state.zone().name()}</span></div>})}
         {move||(state.view.get()=="week").then(||view!{<p class="cal-scroll-hint jds-caption" id="calendar-scroll-hint">"Scroll sideways to see more days, or choose Day for a closer look."</p>})}
         <div class="cal-notice" aria-live="polite">
             {move||(state.loading.get()!=Refresh::Idle && (state.events.get().is_none() || state.loading.get()==Refresh::Explicit)).then(||view!{<p role="status">{if state.events.get().is_some(){"Refreshing calendar…"}else{"Loading calendar…"}}</p>})}
@@ -311,7 +312,7 @@ pub fn Calendar() -> impl IntoView {
                 }}
             }
         })}</div>
-        {move||peek.get().map(|event|view!{<EventDetails event=event timezone=zone.get().name().into() twelve=twelve.get() assistant_name=state.assistant_name() on_close=Callback::new(move |_|{peek.set(None);restore(&opening.get_value());})/>})}
+        {move||peek.get().map(|event|view!{<EventDetails event=event timezone=zone.get().name().into() twelve=twelve.get() assistant_name=assistant_name.get() on_close=Callback::new(move |_|{peek.set(None);restore(&opening.get_value());})/>})}
     </main>}.into_any()
 }
 
