@@ -645,8 +645,9 @@ stand-ins; these checks do not prove the queue's live delivery or phone use.
 
 ## Folder failure responses (part twenty)
 
-Installed folder selection and browsing now distinguish missing/unresolved paths
-from paths refused by allowed roots. The chooser shows separate guidance for these
+Installed folder selection and browsing now match legacy responses for missing
+paths inside allowed roots and existing paths outside them. Other in-root vault
+policy refusals retain the general message. The chooser shows separate guidance for these
 fixed failures and keeps its generic fallback for other errors. Rejected saves
 keep the current link, entered path and focus. The expanded legacy differential
 uses real empty, missing and other-account paths with an existing link; it compares

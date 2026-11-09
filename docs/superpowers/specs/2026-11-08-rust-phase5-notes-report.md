@@ -1530,9 +1530,10 @@ assembled UI/device proof are claimed. Do not replace working legacy Notes.
 
 ## Part twenty checkpoint — folder failure responses
 
-Folder selection and browsing now distinguish a missing/unresolved path from a
-path refused by the account's allowed roots. These are the fixed legacy error
-responses rather than the previous generic folder error. The chooser shows separate
+Folder selection and browsing now match the legacy error responses for missing
+paths inside allowed roots and existing paths outside them. Other in-root vault
+policy refusals retain the general message. Missing paths outside roots still
+differ because vault admission happens before disk resolution. The chooser shows separate
 guidance, keeps the entered path editable and leaves the current link visible after
 a rejected save. Only these fixed errors select specific guidance; unknown errors
 keep the existing generic fallback. The module still reaches preferences and files
@@ -1562,3 +1563,16 @@ singleton coalescing and recall warmup, recovery scheduling and retention,
 managed publication and reconciliation, private exports/daily archives,
 assembled Settings/chat and physical second-device HTTPS remain continuation
 work. Do not replace working legacy Notes with this package.
+
+Live browser checks exercised the real signed package on the disposable Rust HTTPS
+fixture: link a folder, reject a missing path on save, reject an existing outside
+path on browse, retain the saved link and entered path, then confirm unlink.
+The missing-save input regained focus. The fixture verified the persisted unlink,
+HTTPS certificate, sign-in redirect and untrusted host/origin refusal. This is a
+package fixture on this machine, not the assembled shell or a second device.
+Screenshots and current command receipts are in the task proof artifact.
+
+Independent review prompted narrower claims for missing paths outside roots and
+general guidance for in-root vault policy refusals. The installed Settings test
+also checks real symlink-descendant refusals through both save and browse routes;
+this is a deliberate vault restriction, not legacy symlink parity.

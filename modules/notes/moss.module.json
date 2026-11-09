@@ -95,7 +95,7 @@
         {
           "code": "notes-folder-path-refused",
           "class": "prerequisite",
-          "description": "Missing or unresolved paths and paths refused by the allowed roots have distinct API responses and chooser guidance. A rejected save keeps the entered path editable and leaves the saved folder link unchanged.",
+          "description": "Missing paths inside allowed roots and existing paths outside them have distinct API responses and chooser guidance. Other in-root vault policy refusals retain general guidance; missing paths outside roots still differ from legacy. A rejected save keeps the entered path editable and leaves the saved folder link unchanged.",
           "remediationRef": "notes.correct-folder-path"
         },
         {

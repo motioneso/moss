@@ -2,7 +2,7 @@
 
 ## 0.1.13
 
-- Distinguish missing notes folders from paths outside allowed roots, matching the legacy responses for these cases. The chooser explains the reason and keeps the entered path and current folder link after a rejected save. Existing vault path restrictions still apply.
+- Match legacy responses for missing folders inside allowed roots and existing paths outside them. Missing paths outside roots still differ; vault policy refusals retain general guidance. The chooser explains the reason and keeps the entered path and current folder link after a rejected save. Existing vault path restrictions still apply.
 
 ## 0.1.12
 

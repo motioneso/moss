@@ -187,6 +187,32 @@ fn installed_settings_match_legacy_and_owner_privacy_fails_without_rls() {
         "PASS {} actual legacy Settings handler comparisons through installed guest routes",
         oracle["expected"].as_array().unwrap().len()
     );
+    // The legacy handler follows symlinks; the vault deliberately refuses them.
+    // An in-root policy refusal must not claim that the selection is outside roots.
+    #[cfg(unix)]
+    {
+        let root = Path::new(oracle["roots"][0].as_str().unwrap());
+        let alias = root.join("alias");
+        std::os::unix::fs::symlink(root, &alias).unwrap();
+        let selected = alias.join("Journal").to_string_lossy().into_owned();
+        for (method, route, body) in [
+            ("PUT", "/notes-source".to_owned(), json!({"path":selected})),
+            (
+                "GET",
+                format!("/notes-source/directories?path={selected}"),
+                Value::Null,
+            ),
+        ] {
+            assert_eq!(
+                call(actors[0], method, &route, body),
+                json!({
+                    "status":400,
+                    "body":{"error":"Path is not an available folder within an allowed notes root"}
+                })
+            );
+        }
+        println!("PASS in-root symlink policy refusals retain general guidance");
+    }
     rt.block_on(async {
         bootstrap.execute("DELETE FROM app.preferences WHERE owner_user_id=ANY($1::uuid[])",&[&actors]).await.unwrap();
         bootstrap.execute("INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'notes-source-path',$2)",&[&actors[0],&oracle["roots"][0]]).await.unwrap();
