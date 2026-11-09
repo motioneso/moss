@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Read and save the existing assistant task-change preference under Task settings.
+- Keep the confirmed value after failed refreshes or saves, with independent load retries. Installed chat actions still ask for approval.
+
 - Bind the endpoint differential adapter to the real Rust queue and worker-role compiled Tasks handler.
 - Compare deferred completion, cross-account rejection, archive/reopen and repeated recurring completion with TypeScript, including worker results and saved rows.
 - Run the compiled worker privacy removal control under the real worker database role. Installed worker dispatch and legacy queue policy remain unfinished.

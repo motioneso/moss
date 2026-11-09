@@ -1597,3 +1597,47 @@ separate from the application shell. No attached physical device was available
 through the existing device bridge; online network peers alone are not UI proof.
 Final gate, browser and independent-review receipts are recorded in the task
 proof artifact.
+
+## Tasks part 23 checkpoint (JS-148, Card 526)
+
+**Task settings** now opens inside the installed package screen. It reads and
+saves the existing account-level assistant task-change preference through the
+public bridge and the compiled policy routes. No new API, table, job or host
+contract is introduced. The existing canonical-policy precedence and legacy
+opt-out rules remain in the backend. The app map points to the implemented
+Tasks screen, rather than claiming a separate settings-shell route.
+
+The switch is unavailable until a saved value loads. A failed initial load
+explains that the saved choice is unavailable; a failed refresh or save keeps
+the last confirmed value. Retry loading only reads. A successful save adopts
+the server response without refreshing or hiding tasks. Pending saves disable
+the switch. The screen explicitly says this stores the preference and that
+installed chat actions still ask for approval while automatic-action integration
+is unfinished. The setting does not claim to enable automatic execution today.
+
+The new controller regression uses actual shared-kit screen markup with a
+mocked bridge. It checks independent initial-load failure, retry, persisted
+true/false choices, failed-save rollback, duplicate-save prevention, failed
+refresh recovery and a changed value from another session. These are controller
+checks, not proof of live network failures. Real installed UI and gate receipts
+are recorded separately in the task proof artifact.
+
+This worktree was clean at Phase 0a. After explicit approval it was fast-forwarded
+to remote main, including part 22, before implementation. Existing scratch Rust
+1.95, Wasm target and Cargo caches were reused offline, including the pinned
+wit-bindgen graph approved on 2026-11-08. The tools lockfile was refreshed offline
+without a byte change. Declared JavaScript dependencies were restored offline.
+No global tool, generator, target or new dependency was installed. Workshop and
+Food remain excluded. Part of #4027; release note Category N/A.
+
+This remains a bounded checkpoint, not full Phase 5 acceptance. Remaining:
+lazy recurrence advancement; recurrence jobs; legacy deferred-queue retry and
+retention policy, optional request-key retention and installed worker dispatch;
+public People linkage; policy enforcement and feedback orchestration; remaining
+screen/settings parity and integration into the settings shell; interpreted-search
+and date-editor timezone support; installed chat and summary presentation;
+real application shell integration; performance budgets; and physical second-device
+HTTPS proof. The signed fixture exercises installation, TLS and sign-in but
+remains separate from the application shell. No physical device was attached to
+the existing device bridge during this work; a narrow viewport is not evidence
+of second-device access.

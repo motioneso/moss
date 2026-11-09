@@ -9,8 +9,14 @@ import { findOrCreateTag } from "./task-tags.mjs";
 import { interpretedSearch } from "./search.mjs";
 import { quickCapture } from "./quick-add.mjs";
 import { taskActivity } from "./activity.mjs";
+import { taskSettings } from "./settings.mjs";
 
 const client = moduleClient();
+const settings = taskSettings({
+  api,
+  run,
+  resize: () => void client.resize(document.documentElement.scrollHeight).catch(() => {})
+});
 const $ = (id) => document.getElementById(id);
 const state = {
   tasks: [],
@@ -148,6 +154,7 @@ async function run(action) {
     quick.sync();
     search.sync();
     activity.sync();
+    settings.sync();
     $("tasks-app").removeAttribute("aria-busy");
     state.focusAfter?.focus();
     state.focusAfter = null;

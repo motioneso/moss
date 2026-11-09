@@ -46,6 +46,7 @@ pub fn package_files(
     for name in [
         "app.mjs",
         "activity.mjs",
+        "settings.mjs",
         "model.mjs",
         "capture.mjs",
         "quick-add.mjs",
