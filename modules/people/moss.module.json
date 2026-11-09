@@ -163,7 +163,7 @@
     },
     {
       "id": "people.relative-folder-browse",
-      "description": "Browse directories relative to the selected People folder through the legacy API. Canonically equivalent Unicode spellings compare equally while returned names and paths keep their original spelling. Common base-letter, accent and case ordering is covered by the replay; complete locale-sensitive ordering remains unqualified. The Settings chooser still uses allowed absolute notes roots."
+      "description": "Browse directories relative to the selected People folder through the legacy API. Canonically equivalent Unicode spellings compare equally while returned names and paths keep their original spelling. Comparison preserves multiple accents in canonical order before comparing case. Common base-letter, accent and case ordering is covered by the replay; complete locale-sensitive ordering remains unqualified. The Settings chooser still uses allowed absolute notes roots."
     },
     {
       "id": "people.note-field-compatibility",

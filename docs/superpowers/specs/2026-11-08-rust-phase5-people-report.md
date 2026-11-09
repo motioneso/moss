@@ -2223,3 +2223,50 @@ task's persistent scratch folder, outside the repository and its commits.
 These receipts prove this checkpoint's installed command-line parity and
 privacy checks. The application, chat and physical-device acceptance gaps above
 remain open; this checkpoint does not finish Phase 5.
+
+## People part 19 — multiple-accent folder ordering (JS-138)
+
+Before editing, this task's clean branch was fast-forwarded from Phase 0a to
+`5b69b68dd`, containing the merged part 18 report and implementation (PR 4131).
+The continuation's PR 4066 reference describes an older checkpoint.
+
+The folder comparator lost accents on multiply accented letters: the composed
+letter table collapsed several letters to the same weight, and the decomposed
+path overwrote an earlier accent with the last one. That allowed raw code points
+or case to decide before all accents were compared. The new legacy-generated
+regression failed first on `Ü` versus `ǖ`: Rust returned greater, while the actual
+JavaScript `localeCompare` returned less.
+
+The comparator now derives ordinary letters from canonical decomposition and
+keeps an ordered accent sequence per base letter. The duplicated composed-letter
+table is removed. Non-decomposing special-letter expansions remain explicit; L with middle dot
+keeps its base-letter position with a separately qualified secondary weight. Double acute now sorts between diaeresis and tilde, matching the captured
+legacy comparisons. NFC comparison keys still preserve canonical equivalence;
+returned folder names and paths retain their original spelling.
+
+The directory oracle now records 728 comparisons from the real legacy JavaScript
+runtime, including all pairs of selected single/multiple-accent Latin letters,
+uppercase variants and differently ordered combining marks. The same failing-first
+regression passes with the fix, along with all 34 native People tests. A nested
+folder under `Family/Friends` adds the changed names to the real installed route
+replay, without introducing notes or changing projection counts. App-map metadata,
+the README and changelog describe the bounded correction.
+
+All dependency, compiler and build directories are task-owned scratch. Project
+JavaScript dependencies were restored offline from the lockfile. The approved
+pinned `wit-bindgen =0.57.1` remains the declared dependency; no global generator
+or new third-party package is installed. Build and gate receipts follow after
+completion; they are not implied by the new test fixtures.
+
+### Acceptance still open
+
+This is a behaviour-parity checkpoint, not full Phase 5 acceptance. Complete
+locale collation, shipping-listener parser qualification, ingest nudges, real
+providers, installed scheduling, command retention/quotas and larger/backend-failure
+cases remain open. The shipping shell still needs installed People route/frame
+and chat-tool composition: its router currently exposes shell, Today, desktop
+notices and chat, with static app fallback, rather than an installed module router.
+This task does not add a second server or connect the client directly to a database.
+Authenticated real People UI/chat approval, sign-in/origin/privacy checks and a
+second physical device over HTTPS remain unproved. Fixture dispatch and a static
+Settings asset are not substitutes for those assembled checks.

@@ -126,18 +126,24 @@ pub(crate) fn locale_compare(a: &str, b: &str) -> std::cmp::Ordering {
     let b: String = b.nfc().collect();
     let keys = |s: &str| {
         let mut primary: Vec<(u8, u32)> = Vec::new();
-        let mut secondary: Vec<u32> = Vec::new();
+        let mut secondary: Vec<Vec<u32>> = Vec::new();
         for c in s.chars() {
             let (expansion, rank) = base_expansion(c);
             for (i, base) in expansion.chars().enumerate() {
                 if let Some(rank) = combining_rank(base) {
-                    if let Some(last) = secondary.last_mut() {
-                        *last = rank;
+                    if let Some(accents) = secondary.last_mut() {
+                        // A plain base has no accent weight. Preserve every
+                        // combining mark in canonical order, rather than letting
+                        // a later accent overwrite an earlier one.
+                        if accents == &[0] {
+                            accents.clear();
+                        }
+                        accents.push(rank);
                     }
                     continue;
                 }
                 primary.push(primary_key(base));
-                secondary.push(if i == 0 { rank } else { 0 });
+                secondary.push(vec![if i == 0 { rank } else { 0 }]);
             }
         }
         (primary, secondary)
@@ -177,19 +183,19 @@ fn combining_rank(c: char) -> Option<u32> {
         '\u{30c}' => 6,
         '\u{30a}' => 7,
         '\u{308}' => 8,
-        '\u{303}' => 9,
-        '\u{307}' => 10,
-        '\u{327}' => 11,
-        '\u{328}' => 12,
-        '\u{304}' => 13,
-        '\u{30b}' => 14,
+        '\u{30b}' => 9,
+        '\u{303}' => 10,
+        '\u{307}' => 11,
+        '\u{327}' | '\u{326}' => 12,
+        '\u{328}' => 13,
+        '\u{304}' => 14,
         '\u{300}'..='\u{36f}' => 15,
         _ => return None,
     })
 }
 
 // Returns the base letters a character sorts as, plus its accent rank.
-// Plain letters rank zero and special letter forms rank one.
+// Plain letters rank zero; special forms have explicit secondary weights.
 fn base_expansion(c: char) -> (String, u32) {
     let (expansion, rank) = match c {
         'Æ' | 'æ' => ("ae".to_owned(), 1),
@@ -202,124 +208,15 @@ fn base_expansion(c: char) -> (String, u32) {
         'Ŋ' | 'ŋ' => ("n".to_owned(), 1),
         'ẞ' => ("ss".to_owned(), 1),
         'Đ' | 'đ' => ("d".to_owned(), 1),
-        _ => {
-            let (base, rank) = base_letter(c);
-            // Preserve the established special-letter weights; for other
-            // composed characters compare their canonical base and accents.
-            if base == c && rank == 0 {
-                (c.nfd().collect(), 0)
-            } else {
-                (base.to_string(), rank)
-            }
-        }
+        // L with middle dot has no canonical decomposition. Keep its base
+        // letter ordering, with the legacy secondary weight after accents.
+        'Ŀ' | 'ŀ' => ("l".to_owned(), 16),
+        // Canonical decomposition supplies all accents, including those on
+        // multiply accented letters. Special non-decomposing forms above keep
+        // their established expansion weights.
+        _ => (c.nfd().collect(), 0),
     };
     (expansion, rank)
-}
-
-fn base_letter(c: char) -> (char, u32) {
-    // Accent ranks follow the legacy accent order: acute, grave, breve,
-    // circumflex, caron, ring, diaeresis, tilde, dot, cedilla, ogonek,
-    // macron, then double acute.
-    match c {
-        'À' | 'à' => ('a', 3),
-        'Á' | 'á' => ('a', 2),
-        'Â' | 'â' => ('a', 5),
-        'Ã' | 'ã' => ('a', 9),
-        'Ä' | 'ä' => ('a', 8),
-        'Å' | 'å' => ('a', 7),
-        'Ā' | 'ā' => ('a', 13),
-        'Ă' | 'ă' => ('a', 4),
-        'Ą' | 'ą' => ('a', 12),
-        'Ç' | 'ç' => ('c', 11),
-        'Ć' | 'ć' => ('c', 2),
-        'Ĉ' | 'ĉ' => ('c', 5),
-        'Ċ' | 'ċ' => ('c', 10),
-        'Č' | 'č' => ('c', 6),
-        'È' | 'è' => ('e', 3),
-        'É' | 'é' => ('e', 2),
-        'Ê' | 'ê' => ('e', 5),
-        'Ë' | 'ë' => ('e', 8),
-        'Ē' | 'ē' => ('e', 13),
-        'Ĕ' | 'ĕ' => ('e', 4),
-        'Ė' | 'ė' => ('e', 10),
-        'Ę' | 'ę' => ('e', 12),
-        'Ě' | 'ě' => ('e', 6),
-        'Ì' | 'ì' => ('i', 3),
-        'Í' | 'í' => ('i', 2),
-        'Î' | 'î' => ('i', 5),
-        'Ï' | 'ï' => ('i', 8),
-        'Ī' | 'ī' => ('i', 13),
-        'Ĭ' | 'ĭ' => ('i', 4),
-        'Į' | 'į' => ('i', 12),
-        'İ' => ('i', 10),
-        'Ñ' | 'ñ' => ('n', 9),
-        'Ń' | 'ń' => ('n', 2),
-        'Ň' | 'ň' => ('n', 6),
-        'Ò' | 'ò' => ('o', 3),
-        'Ó' | 'ó' => ('o', 2),
-        'Ô' | 'ô' => ('o', 5),
-        'Õ' | 'õ' => ('o', 9),
-        'Ö' | 'ö' => ('o', 8),
-        'Ō' | 'ō' => ('o', 13),
-        'Ŏ' | 'ŏ' => ('o', 4),
-        'Ő' | 'ő' => ('o', 12),
-        'Ù' | 'ù' => ('u', 3),
-        'Ú' | 'ú' => ('u', 2),
-        'Û' | 'û' => ('u', 5),
-        'Ü' | 'ü' => ('u', 8),
-        'Ū' | 'ū' => ('u', 13),
-        'Ŭ' | 'ŭ' => ('u', 4),
-        'Ů' | 'ů' => ('u', 7),
-        'Ű' | 'ű' => ('u', 14),
-        'Ų' | 'ų' => ('u', 12),
-        'Ý' | 'ý' => ('y', 2),
-        'Ÿ' | 'ÿ' => ('y', 8),
-        'Š' | 'š' => ('s', 6),
-        'Ŝ' | 'ŝ' => ('s', 5),
-        'Ş' | 'ş' => ('s', 11),
-        'Ž' | 'ž' => ('z', 6),
-        'Ź' | 'ź' => ('z', 2),
-        'Ż' | 'ż' => ('z', 10),
-        'Ğ' | 'ğ' => ('g', 4),
-        'Ĝ' | 'ĝ' => ('g', 5),
-        'Ġ' | 'ġ' => ('g', 10),
-        'Ģ' | 'ģ' => ('g', 11),
-        'Ĥ' | 'ĥ' => ('h', 5),
-        'Ĵ' | 'ĵ' => ('j', 5),
-        'Ķ' | 'ķ' => ('k', 11),
-        'Ĺ' | 'ĺ' => ('l', 2),
-        'Ļ' | 'ļ' => ('l', 11),
-        'Ľ' | 'ľ' => ('l', 6),
-        'Ŀ' | 'ŀ' => ('l', 10),
-        'Ŕ' | 'ŕ' => ('r', 2),
-        'Ŗ' | 'ŗ' => ('r', 11),
-        'Ř' | 'ř' => ('r', 6),
-        'Ť' | 'ť' => ('t', 6),
-        'Ţ' | 'ţ' => ('t', 11),
-        'Ď' | 'ď' => ('d', 6),
-        'Ș' | 'ș' => ('s', 11),
-        'Ț' | 'ț' => ('t', 11),
-        'Ĩ' | 'ĩ' => ('i', 9),
-        'Ũ' | 'ũ' => ('u', 9),
-        'Ŷ' | 'ŷ' => ('y', 5),
-        'Ǎ' | 'ǎ' => ('a', 6),
-        'Ǐ' | 'ǐ' => ('i', 6),
-        'Ǒ' | 'ǒ' => ('o', 6),
-        'Ǔ' | 'ǔ' => ('u', 6),
-        'Ǖ' | 'ǖ' | 'Ǘ' | 'ǘ' | 'Ǚ' | 'ǚ' | 'Ǜ' | 'ǜ' => ('u', 8),
-        'Ạ' | 'ạ' | 'Ả' | 'ả' | 'Ấ' | 'ấ' | 'Ầ' | 'ầ' | 'Ẩ' | 'ẩ' | 'Ẫ' | 'ẫ' | 'Ậ' | 'ậ' | 'Ắ'
-        | 'ắ' | 'Ằ' | 'ằ' | 'Ẳ' | 'ẳ' | 'Ẵ' | 'ẵ' | 'Ặ' | 'ặ' => ('a', 15),
-        'Ẹ' | 'ẹ' | 'Ẻ' | 'ẻ' | 'Ẽ' | 'ẽ' | 'Ế' | 'ế' | 'Ề' | 'ề' | 'Ể' | 'ể' | 'Ễ' | 'ễ' | 'Ệ'
-        | 'ệ' => ('e', 15),
-        'Ị' | 'ị' | 'Ỉ' | 'ỉ' => ('i', 15),
-        'Ọ' | 'ọ' | 'Ỏ' | 'ỏ' | 'Ố' | 'ố' | 'Ồ' | 'ồ' | 'Ổ' | 'ổ' | 'Ỗ' | 'ỗ' | 'Ộ' | 'ộ' | 'Ớ'
-        | 'ớ' | 'Ờ' | 'ờ' | 'Ở' | 'ở' | 'Ỡ' | 'ỡ' | 'Ợ' | 'ợ' => ('o', 15),
-        'Ụ' | 'ụ' | 'Ủ' | 'ủ' | 'Ứ' | 'ứ' | 'Ừ' | 'ừ' | 'Ử' | 'ử' | 'Ữ' | 'ữ' | 'Ự' | 'ự' => {
-            ('u', 15)
-        }
-        'Ỳ' | 'ỳ' | 'Ỵ' | 'ỵ' | 'Ỷ' | 'ỷ' | 'Ỹ' | 'ỹ' => ('y', 15),
-        _ => (c, 0),
-    }
 }
 
 #[cfg(test)]
