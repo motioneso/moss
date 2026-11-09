@@ -38,6 +38,8 @@ export async function routesOracle() {
   const root = await mkdtemp(join(tmpdir(), "moss-people-http-folders-"));
   const selected = join(root, "People");
   await mkdir(join(selected, "Family", "Friends"), { recursive: true });
+  for (const name of ["Ü", "ü", "ǖ", "ǘ", "ǚ", "ǜ", "ű", "ũ", "ū", "á̈", "ä́", "Ş", "ș", "Ţ", "ț"])
+    await mkdir(join(selected, "Family", "Friends", name));
   await mkdir(join(selected, "Family", "apple"));
   await mkdir(join(selected, "Family", "Banana"));
   await mkdir(join(selected, "Family", "Ábc"));
@@ -406,6 +408,7 @@ Human text stays.
     await parserCases("PATCH", `/people/${ids.primary}`);
     await run("GET", "/people/notes-directories");
     await run("GET", "/people/notes-directories?path=Family");
+    await run("GET", "/people/notes-directories?path=Family/Friends");
     for (const path of [
       ".",
       "Family/",

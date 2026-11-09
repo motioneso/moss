@@ -2223,3 +2223,94 @@ task's persistent scratch folder, outside the repository and its commits.
 These receipts prove this checkpoint's installed command-line parity and
 privacy checks. The application, chat and physical-device acceptance gaps above
 remain open; this checkpoint does not finish Phase 5.
+
+## People part 19 — multiple-accent folder ordering (JS-138)
+
+Before editing, this task's clean branch was fast-forwarded from Phase 0a to
+`5b69b68dd`, containing the merged part 18 report and implementation (PR 4131).
+The continuation's PR 4066 reference describes an older checkpoint.
+
+The folder comparator lost accents on multiply accented letters: the composed
+letter table collapsed several letters to the same weight, and the decomposed
+path overwrote an earlier accent with the last one. That allowed raw code points
+or case to decide before all accents were compared. The new legacy-generated
+regression failed first on `Ü` versus `ǖ`: Rust returned greater, while the actual
+JavaScript `localeCompare` returned less.
+
+The comparator now derives ordinary letters from canonical decomposition and
+keeps an ordered accent sequence per base letter. The duplicated composed-letter
+table is removed. Non-decomposing special-letter expansions remain explicit; L with middle dot
+keeps its base-letter position with a separately qualified secondary weight. Double acute now sorts between diaeresis and tilde, matching the captured
+legacy comparisons. NFC comparison keys still preserve canonical equivalence;
+returned folder names and paths retain their original spelling.
+
+The directory oracle now records 888 comparisons from the real legacy JavaScript
+runtime, including all pairs of selected single/multiple-accent Latin letters,
+uppercase variants and differently ordered combining marks. The same failing-first
+regression passes with the fix, along with all 34 native People tests. A nested
+folder under `Family/Friends` adds the changed names to the real installed route
+replay, without introducing notes or changing projection counts. App-map metadata,
+the README and changelog describe the bounded correction.
+
+All dependency, compiler and build directories are task-owned scratch. Project
+JavaScript dependencies were restored offline from the lockfile. The approved
+pinned `wit-bindgen =0.57.1` remains the declared dependency; no global generator
+or new third-party package is installed. Build and gate receipts follow after
+completion; they are not implied by the new test fixtures.
+
+### Acceptance still open
+
+This is a behaviour-parity checkpoint, not full Phase 5 acceptance. Complete
+locale collation, shipping-listener parser qualification, ingest nudges, real
+providers, installed scheduling, command retention/quotas and larger/backend-failure
+cases remain open. The shipping shell still needs installed People route/frame
+and chat-tool composition: its router currently exposes shell, Today, desktop
+notices and chat, with static app fallback, rather than an installed module router.
+This task does not add a second server or connect the client directly to a database.
+Authenticated real People UI/chat approval, sign-in/origin/privacy checks and a
+second physical device over HTTPS remain unproved. Fixture dispatch and a static
+Settings asset are not substitutes for those assembled checks.
+
+The first independent Claude review of `50b9d5c63` found no blockers or majors.
+Both minor observations were addressed: documentation now names selected letter
+families, and comma-below has a separate secondary weight from cedilla. The added
+legacy-generated comparison failed first on `Ş` versus `ș` (`rc=101`). The actual
+Node ordering places comma-below after macron, rather than immediately after
+cedilla; the expanded vectors cover that placement and case differences. The
+installed nested-folder fixture also includes both Romanian and cedilla forms.
+
+### Part 19 verification receipts
+
+The full People gate and installed replay both passed against clean commit
+`f3a0dd1a36ab3a55533114355edf9631e5798f89`, with gate input fingerprint
+`sha256:e21d5510a4bfa0146551561e3ba3cf65f22b956304dc5185df7bc3fdf456d576`.
+Both used `scripts/run-gate.sh` and removed their disposable database containers.
+
+- Full People gate: `task_138_rust_port_phase_5_people_module-20261109-085639-5uLMBe.log`,
+  final `rc=0`. Protection-removal controls failed as intended, then the same
+  privacy checks passed with protections restored, under app and worker roles.
+  Seven-table owner/other/admin privacy, Settings privacy, persistence and compiled
+  tools/jobs/notes checks passed. All seven tool handlers matched real legacy
+  execute functions; this is not installed chat-approval proof.
+- Installed replay: `task_138_rust_port_phase_5_people_module-20261109-085715-wRyqbT.log`,
+  final `rc=0`. The signed package was downloaded, installed and reloaded;
+  **219** legacy responses and seven-table snapshots matched. Four public APIs
+  ran through an installed consumer, with other-user/admin lookups denied.
+  Folder save, rejected clears, browsing and traversal refusals passed. The
+  fifty-reference refresh returned **202 in 2,394 ms**, within the unchanged
+  **5,000 ms** deadline. The Settings asset was checked programmatically, not
+  through a browser.
+- An earlier replay launch (`20261109-085516-Zv2s4b`) failed because the component
+  build had not finished writing its output. It is not a passing receipt; the
+  completed-artifact replay above is the successful rerun.
+
+The tested component SHA-256 is
+`735a03082b4904831e143a3cf46a1bb70a096eb9b0fb1298b93d7206516f372a`;
+the package SHA-256 is
+`b0714b8241982a7b772f211c91f54d6fbd28a7e944177d896a25e6f7d43715bb`.
+
+All 34 native People tests, strict Clippy, People Rust formatting, scoped host
+replay-test formatting, all five regenerated legacy fixture sets, scoped oracle
+lint, root lint/typecheck and app-map generation passed. Whole-host Rust formatting
+reports existing formatting in imported parity sources outside this checkpoint;
+those sibling files were not changed. Root formatting and file-size checks passed.

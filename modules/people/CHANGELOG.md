@@ -4,6 +4,10 @@
 
 Rust component and shared-frame People Settings checkpoint. Complete installed parity and physical-device qualification remain open.
 
+Preserve every canonical accent when sorting People folders, including multiple accents
+on one letter, before comparing case. Comparisons for selected letter families and the installed
+folder replay cover this correction; complete locale collation remains unqualified.
+
 Reject forbidden JSON prototype members before schema coercion or host calls, matching
 the legacy parser response even inside unknown fields and note-only lists. Ordinary
 constructor/prototype fields and string values retain their existing behavior.
