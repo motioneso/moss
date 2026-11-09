@@ -48,28 +48,38 @@ impl Host for SyncHost<'_> {
                 result["filePath"] = json!(resolved);
                 Ok(result)
             }
-            "index.sync-canonical" => {
-                let file = p["filePath"].as_str().unwrap();
-                self.calls.borrow_mut().push(json!({"canonical":file}));
-                if let Some(code) = self.case["resolveFailures"][file].as_str() {
-                    return Ok(json!({"error":code}));
+            "index.sync-cleanup" => {
+                let source = p["sourcePath"].as_str().unwrap();
+                let files: Vec<String> = serde_json::from_value(p["walkedPaths"].clone()).unwrap();
+                let mut present: std::collections::BTreeSet<String> =
+                    files.iter().cloned().collect();
+                for file in &files {
+                    self.calls.borrow_mut().push(json!({"canonical":file}));
+                    if self.case["resolveFailures"][file].is_string() {
+                        continue;
+                    }
+                    present.insert(
+                        self.case["resolvedFiles"][file]
+                            .as_str()
+                            .unwrap_or(file)
+                            .into(),
+                    );
                 }
-                Ok(json!({"path":self.case["resolvedFiles"][file].as_str().unwrap_or(file)}))
-            }
-            "index.sync-indexed" => {
                 self.calls.borrow_mut().push(json!({"indexed":true}));
                 if self.case["purgeFailure"] == true {
                     return Ok(json!({"error":"EACCES"}));
                 }
-                Ok(json!({"paths":self.case["indexed"].as_array().cloned().unwrap_or_default()}))
-            }
-            "index.sync-remove" => {
-                let path = &p["filePath"];
-                self.calls.borrow_mut().extend([
-                    json!({"deleteChunks":{"path":path,"kind":"notes"}}),
-                    json!({"replaceLinks":{"path":path,"links":[]}}),
-                    json!({"deleteIndex":{"path":path,"kind":"notes"}}),
-                ]);
+                let prefix = format!("{source}/");
+                for path in self.case["indexed"].as_array().into_iter().flatten() {
+                    let text = path.as_str().unwrap();
+                    if text.starts_with(&prefix) && !present.contains(text) {
+                        self.calls.borrow_mut().extend([
+                            json!({"deleteChunks":{"path":path,"kind":"notes"}}),
+                            json!({"replaceLinks":{"path":path,"links":[]}}),
+                            json!({"deleteIndex":{"path":path,"kind":"notes"}}),
+                        ]);
+                    }
+                }
                 Ok(json!({}))
             }
             _ => panic!("Unexpected sync operation: {operation}"),

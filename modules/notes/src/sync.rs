@@ -4,7 +4,6 @@
 use moss_module_sdk::{Error, Host, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::collections::BTreeSet;
 
 const MAX_CHUNKS: u64 = 100;
 #[derive(Default, Deserialize)]
@@ -205,31 +204,13 @@ fn purge_deleted(host: &impl Host, source: &str, files: &[String]) -> Result<()>
     if files.is_empty() {
         return Ok(());
     }
-    let mut present: BTreeSet<String> = files.iter().cloned().collect();
-    for file in files {
-        if let Ok(value) = call(
-            host,
-            "index.sync-canonical",
-            json!({"sourcePath":source,"filePath":file}),
-        ) {
-            if let Some(path) = value["path"].as_str() {
-                present.insert(path.into());
-            }
-        }
-    }
-    let value = call(host, "index.sync-indexed", json!({"sourcePath":source}))?;
-    let paths: Vec<String> = serde_json::from_value(value["paths"].clone())?;
-    let prefix = format!("{source}/");
-    for path in paths {
-        if path.starts_with(&prefix) && !present.contains(&path) {
-            // Core must atomically remove the actor's Notes chunks, file links and
-            // index row. It must repeat source/account admission, never trust paths.
-            call(
-                host,
-                "index.sync-remove",
-                json!({"sourcePath":source,"filePath":path}),
-            )?;
-        }
-    }
+    // Core rechecks the selected account folder and performs the entire indexed
+    // snapshot + sweep in one transaction. Walked paths only retain rows; they
+    // cannot authorize deletion or replace the host's own filesystem walk.
+    call(
+        host,
+        "index.sync-cleanup",
+        json!({"sourcePath":source,"walkedPaths":files}),
+    )?;
     Ok(())
 }
