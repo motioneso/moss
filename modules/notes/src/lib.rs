@@ -7,6 +7,8 @@ pub mod routes;
 pub mod search;
 #[cfg(feature = "write-tools")]
 pub mod sync;
+#[cfg(feature = "write-tools")]
+pub mod sync_worker;
 pub mod write_tools;
 
 #[cfg(target_arch = "wasm32")]

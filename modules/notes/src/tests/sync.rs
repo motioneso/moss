@@ -119,3 +119,23 @@ fn invalid_core_progress_cannot_expand_the_chunk_budget_or_disclose_errors() {
         );
     }
 }
+
+#[test]
+fn durable_job_refuses_forged_envelopes_before_host_access() {
+    struct Deny;
+    impl moss_module_sdk::Host for Deny {
+        fn call(&self, _: &str, _: &str, _: &str, _: Value) -> moss_module_sdk::Result<Value> {
+            panic!("Invalid durable job reached core")
+        }
+    }
+    let id = "a4230333-65ef-41c4-b244-98b221695ecc";
+    for payload in [
+        json!({"queue":"notes.sync","parameters":{"checkpointId":"not-an-id"}}),
+        json!({"queue":"other.sync","parameters":{"checkpointId":id}}),
+        json!({"queue":"notes.sync","actorUserId":id,"parameters":{"checkpointId":id}}),
+        json!({"queue":"notes.sync","parameters":{"checkpointId":id,"filePath":"private"}}),
+        json!({"queue":"notes.sync","parameters":{"checkpointId":id,"actorUserId":id}}),
+    ] {
+        assert!(handle(&Deny, "job", &payload.to_string()).is_err());
+    }
+}

@@ -208,7 +208,8 @@ fn migrate(repo: &Path, endpoint: &Endpoint, owner: &Secret, summary: &mut Summa
     for folder in FOLDERS {
         folders.push((folder, load_migration_files(&repo.join(folder))?));
     }
-    let all: Vec<MigrationFile> = folders.iter().flat_map(|(_, files)| files.iter().cloned()).collect();
+    let mut all: Vec<MigrationFile> = folders.iter().flat_map(|(_, files)| files.iter().cloned()).collect();
+    all.extend(package_migration_reservations(repo)?);
     assert_unique_versions(&all)?;
 
     let mut client = endpoint.connect("jarvis_migration_owner", owner, APP_DATABASE)?;
@@ -325,4 +326,44 @@ fn empty_backfill(tx: &mut postgres::Transaction<'_>, dir: &Path, sidecar: &str)
 fn quote_ident(name: &str) -> String {
     assert!(name.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_'), "unsafe identifier");
     format!("\"{name}\"")
+}
+
+/// Reserve package SQL versions; execution stays with the restricted installer.
+fn package_migration_reservations(repo: &Path) -> Result<Vec<MigrationFile>, String> {
+    let mut files = Vec::new();
+    let entries = match std::fs::read_dir(repo.join("modules")) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(files),
+        Err(error) => return Err(error.to_string()),
+    };
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let sql = entry.path().join("sql");
+        if sql.is_dir() {
+            files.extend(load_migration_files(&sql)?);
+        }
+    }
+    Ok(files)
+}
+
+#[cfg(test)]
+mod reservation_tests {
+    use super::*;
+
+    #[test]
+    fn package_sql_reserves_versions_without_entering_execution_folders() {
+        let repo = tempfile::tempdir().unwrap();
+        assert!(package_migration_reservations(repo.path()).unwrap().is_empty());
+        let package = repo.path().join("modules/notes/sql");
+        let core = repo.path().join("infra/postgres/migrations");
+        std::fs::create_dir_all(&package).unwrap();
+        std::fs::create_dir_all(&core).unwrap();
+        std::fs::write(package.join("0360_notes.sql"), "SELECT 1;").unwrap();
+        std::fs::write(core.join("0360_collision.sql"), "SELECT 2;").unwrap();
+        let mut files = load_migration_files(&core).unwrap();
+        assert_unique_versions(&files).unwrap();
+        files.extend(package_migration_reservations(repo.path()).unwrap());
+        assert!(assert_unique_versions(&files).unwrap_err().contains("0360"));
+        assert!(!FOLDERS.iter().any(|folder| folder.starts_with("modules/")));
+    }
 }

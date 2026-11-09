@@ -11,6 +11,9 @@ enum ApiRequest {
     Export(Empty),
     #[serde(rename = "prepareNoteAction")]
     Prepare(PrepareRequest),
+    #[cfg(feature = "write-tools")]
+    #[serde(rename = "requestNotesSync")]
+    RequestSync(Empty),
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -28,7 +31,7 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> Result<String> {
         "health" | "install" => Ok("{}".into()),
         "route" => crate::routes::handle(host, payload),
         #[cfg(feature = "write-tools")]
-        "job" => crate::sync::handle(host, payload),
+        "job" => crate::sync_worker::handle(host, payload),
         "tool" => {
             let request: Value = serde_json::from_str(payload)?;
             if request["tool"] == "notes.search" {
@@ -43,6 +46,8 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> Result<String> {
             let request: ApiRequest = serde_json::from_str(payload)?;
             let result: Value = match request {
                 ApiRequest::Export(_) => crate::export::collect(host)?,
+                #[cfg(feature = "write-tools")]
+                ApiRequest::RequestSync(_) => crate::sync_worker::request(host)?,
                 ApiRequest::Prepare(request) => {
                     match crate::write_tools::prepare_json(host, &request.tool, &request.input_json)
                     {

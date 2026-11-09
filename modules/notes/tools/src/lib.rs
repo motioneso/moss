@@ -1,5 +1,5 @@
 //! Build and verification utilities. Never linked into the Notes guest.
-use anyhow::{ensure, Context, Result};
+use anyhow::{ensure, Result};
 use moss_module_host::{legacy, manifest::Manifest, trust};
 use std::{collections::BTreeMap, path::Path};
 
@@ -11,7 +11,12 @@ pub fn manifest() -> Result<Manifest> {
     let mut tables = manifest.database.owned_tables.clone();
     tables.sort();
     ensure!(
-        tables == legacy::tables("notes"),
+        tables == {
+            let mut expected = legacy::tables("notes").to_vec();
+            expected.push("app.notes_sync_checkpoints".into());
+            expected.sort();
+            expected
+        },
         "Notes table inventory changed"
     );
     Ok(manifest)
@@ -25,17 +30,31 @@ pub fn package_files(root: &Path, component: Vec<u8>) -> Result<BTreeMap<String,
         .map(|(_, path)| path)
         .collect();
     ensure!(
-        manifest.database.migrations == expected,
+        manifest.database.migrations == {
+            let mut expected = expected;
+            expected.push("sql/0360_notes_sync_checkpoints.sql".into());
+            expected
+        },
         "Notes migration inventory changed"
     );
     let mut files = BTreeMap::new();
     for path in &manifest.database.migrations {
-        let bytes = std::fs::read(root.join("packages/notes").join(path))?;
-        let frozen = legacy::entry("notes", path).context("Unreviewed Notes migration")?;
-        ensure!(
-            trust::digest(&bytes) == frozen.raw,
-            "Notes migration bytes changed: {path}"
-        );
+        let bytes = if let Some(frozen) = legacy::entry("notes", path) {
+            let bytes = std::fs::read(root.join("packages/notes").join(path))?;
+            ensure!(
+                trust::digest(&bytes) == frozen.raw,
+                "Notes migration bytes changed: {path}"
+            );
+            bytes
+        } else {
+            let bytes = std::fs::read(root.join("modules/notes").join(path))?;
+            ensure!(
+                trust::digest(&bytes)
+                    == "15e85bbf3d2fcc0ba8aced4b5107069ef597dcd6a2cb1282304d082a65d34747",
+                "Notes migration bytes changed: {path}"
+            );
+            bytes
+        };
         files.insert(path.clone(), bytes);
     }
     for (name, path) in [

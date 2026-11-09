@@ -4,7 +4,7 @@
   "name": "Notes",
   "description": "Choose your notes folder, prepare note changes for approval, and search your indexed notes.",
   "publisher": "Moss",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -17,7 +17,8 @@
         "app.notes_destination_bindings",
         "app.notes_recording_contributions",
         "app.notes_contribution_proposals",
-        "app.notes_contribution_operations"
+        "app.notes_contribution_operations",
+        "app.notes_sync_checkpoints"
       ]
     },
     {
@@ -41,12 +42,14 @@
       "app.notes_destination_bindings",
       "app.notes_recording_contributions",
       "app.notes_contribution_proposals",
-      "app.notes_contribution_operations"
+      "app.notes_contribution_operations",
+      "app.notes_sync_checkpoints"
     ],
     "migrations": [
       "sql/0336_notes_managed_source_lifecycle.sql",
       "sql/0337_notes_recording_contributions.sql",
-      "sql/0340_notes_recording_cleanup.sql"
+      "sql/0340_notes_recording_cleanup.sql",
+      "sql/0360_notes_sync_checkpoints.sql"
     ],
     "ledger": "core-legacy"
   },
@@ -87,7 +90,7 @@
     },
     {
       "id": "notes.folder-settings",
-      "description": "Settings → Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. Saved status may be from an earlier installation; this package does not run manual or scheduled sync or write chat tools. It is not a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
+      "description": "Settings \u2192 Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. Saved status may be from an earlier installation; this package does not run manual or scheduled sync or write chat tools. It is not a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
       "errors": [
         {
           "code": "notes-folder-path-refused",
@@ -185,6 +188,10 @@
           "path": "/settings/connections"
         }
       ]
+    },
+    {
+      "id": "notes.sync-checkpoints",
+      "description": "Owner-only durable sync checkpoints keep continuation paths and hashes out of queued job parameters. The write-tools test component can request and resume sync by checkpoint ID. The ordinary package still offers no sync job, schedule or manual sync route. Worker assembly, checkpoint retention and publication recovery remain activation blockers."
     }
   ],
   "screens": {

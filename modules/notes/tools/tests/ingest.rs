@@ -5,14 +5,21 @@
 use access_context::AccessContext;
 use anyhow::Result;
 use moss_module_host::{
+    after_commit_jobs::AfterCommitJobs,
+    context::ContextPorts,
     memory_cleanup::{MemoryCleanupPorts, MemoryCleanupSource},
     memory_ingest::{DocumentEmbeddings, MemoryIngestPorts, MemoryIngestSource},
-    runtime::{CallScope, DenyPorts, Host, Limits},
+    runtime::{CallScope, DenyPorts, Host, Limits, Ports, Request},
+    transactional_database::TransactionalDatabasePorts,
 };
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 use uuid::Uuid;
 
 struct MutatingStub {
@@ -90,10 +97,7 @@ impl Fixture {
             .find(|c| c.port == "vault")
             .unwrap()
             .operations
-            .extend(
-                ["index.sync-open", "index.sync-file", "index.sync-cleanup"]
-                    .map(String::from),
-            );
+            .extend(["index.sync-open", "index.sync-file", "index.sync-cleanup"].map(String::from));
         manifest.capabilities.extend(serde_json::from_value::<Vec<_>>(json!([
             {"port":"context","operations":["read","uuid"],"resources":["call","new"]},
             {"port":"jobs","operations":["enqueue-after-commit","enqueue-options"],"resources":["notes.sync"]}
@@ -123,10 +127,10 @@ impl Fixture {
     }
     fn snapshot(&self) -> Value {
         self.rt
-            .block_on(
-                self.bootstrap
-                    .query_one(self.oracle["snapshotSql"].as_str().unwrap(), &[&self.actors]),
-            )
+            .block_on(self.bootstrap.query_one(
+                self.oracle["snapshotSql"].as_str().unwrap(),
+                &[&self.actors],
+            ))
             .unwrap()
             .get(0)
     }
@@ -143,6 +147,21 @@ impl Fixture {
         parameters: Value,
         embeddings: Arc<dyn DocumentEmbeddings>,
     ) -> Result<String> {
+        let ports = self.ingest_ports(db, embeddings);
+        self.host.call(
+            &self.wasm,
+            self.manifest.clone(),
+            AccessContext::new(actor, "notes-ingest-check"),
+            ports,
+            "job",
+            &json!({"queue":"notes.sync","parameters":parameters}).to_string(),
+        )
+    }
+    fn ingest_ports(
+        &self,
+        db: Database,
+        embeddings: Arc<dyn DocumentEmbeddings>,
+    ) -> Arc<dyn Ports> {
         let parent = PathBuf::from(self.oracle["parent"].as_str().unwrap());
         let roots: BTreeMap<Uuid, Vec<PathBuf>> = self
             .actors
@@ -180,14 +199,7 @@ impl Fixture {
             )
             .unwrap(),
         );
-        self.host.call(
-            &self.wasm,
-            self.manifest.clone(),
-            AccessContext::new(actor, "notes-ingest-check"),
-            ingest,
-            "job",
-            &json!({"queue":"notes.sync","parameters":parameters}).to_string(),
-        )
+        ingest
     }
 }
 
@@ -212,7 +224,10 @@ fn compiled_ingest_matches_legacy_and_skips_unchanged() {
             result =
                 serde_json::from_str(&f.run(db.clone(), actor, continuation).unwrap()).unwrap();
         }
-        assert_ne!(result["deferred"], true, "{role}: continuations did not finish");
+        assert_ne!(
+            result["deferred"], true,
+            "{role}: continuations did not finish"
+        );
         assert_eq!(result["errors"], 0);
         assert_eq!(
             f.snapshot(),
@@ -221,7 +236,10 @@ fn compiled_ingest_matches_legacy_and_skips_unchanged() {
         );
         let second: Value =
             serde_json::from_str(&f.run(db.clone(), actor, json!({})).unwrap()).unwrap();
-        assert_eq!(second["skipped"], 5, "{role}: unchanged files must skip: {second}");
+        assert_eq!(
+            second["skipped"], 5,
+            "{role}: unchanged files must skip: {second}"
+        );
         assert_eq!(f.snapshot(), f.oracle["expected"]);
         // A managed snapshot key is refused for that file, and the refusal
         // leaves the already indexed file untouched.
@@ -245,11 +263,7 @@ fn compiled_ingest_matches_legacy_and_skips_unchanged() {
         assert_eq!(f.snapshot(), f.oracle["expected"]);
         // A request naming a different folder fails at open, before any file.
         assert!(f
-            .run(
-                db.clone(),
-                actor,
-                json!({"sourcePath": f.oracle["parent"]}),
-            )
+            .run(db.clone(), actor, json!({"sourcePath": f.oracle["parent"]}),)
             .is_err());
         // A file changed while its chunks are being embedded is refused, and
         // its previously indexed rows stay in place.
@@ -263,7 +277,9 @@ fn compiled_ingest_matches_legacy_and_skips_unchanged() {
                 db.clone(),
                 actor,
                 json!({"filePath": small.to_string_lossy(), "chunkOffset": 0, "fileHash": ""}),
-                Arc::new(MutatingStub { file: small.clone() }),
+                Arc::new(MutatingStub {
+                    file: small.clone(),
+                }),
             )
             .unwrap(),
         )
@@ -325,4 +341,255 @@ fn compiled_ingest_matches_legacy_and_skips_unchanged() {
         });
     }
     println!("PASS compiled ingestion matches legacy rows for both roles; unchanged files skip; another owner reads no chunks");
+}
+
+struct CapturedQueue {
+    next: Arc<dyn Ports>,
+    jobs: Arc<Mutex<Vec<Value>>>,
+    fail: bool,
+}
+impl Ports for CapturedQueue {
+    fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
+        if port == "jobs" {
+            moss_module_host::runtime::authorize(scope.module(), port, request)?;
+            assert_eq!(request.operation, "enqueue-options");
+            assert_eq!(request.resource, "notes.sync");
+            let params = request.parameters["params"].as_object().unwrap();
+            assert_eq!(params.len(), 1, "Private checkpoint leaked into a job");
+            let id: Uuid = serde_json::from_value(params["checkpointId"].clone()).unwrap();
+            assert_eq!(request.parameters["idempotencyKey"], json!(id));
+            // Real typed queue-schema admission, rather than merely inspecting JSON.
+            let specs = moss_module_host::jobs::specs(scope.module());
+            assert!(specs[0]
+                .params_schema
+                .as_ref()
+                .unwrap()
+                .accepts(&request.parameters["params"]));
+            self.jobs.lock().unwrap().push(request.parameters.clone());
+            anyhow::ensure!(!self.fail, "Synthetic queue publication refusal");
+            return Ok(json!({"id":Uuid::new_v4()}));
+        }
+        self.next.invoke(scope, port, request)
+    }
+    fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
+        self.next.finish_call(scope, success)
+    }
+}
+impl Fixture {
+    fn durable_call(
+        &self,
+        db: Database,
+        actor: Uuid,
+        kind: &str,
+        payload: Value,
+        fail: bool,
+    ) -> (Result<String>, Vec<Value>) {
+        let jobs = Arc::new(Mutex::new(Vec::new()));
+        // A fresh port chain for every call proves checkpoints survive worker restart.
+        let queue = Arc::new(CapturedQueue {
+            next: self.ingest_ports(db.clone(), Arc::new(Stub)),
+            jobs: jobs.clone(),
+            fail,
+        });
+        let ports = Arc::new(
+            TransactionalDatabasePorts::new(
+                db,
+                Arc::new(ContextPorts::new(Arc::new(AfterCommitJobs::new(queue)))),
+            )
+            .unwrap(),
+        );
+        let mut manifest = (*self.manifest).clone();
+        manifest.jobs.insert(
+            "notes.sync".into(),
+            serde_json::from_value(json!({"checkpointId":{"kind":"id"}})).unwrap(),
+        );
+        let result = self.host.call(
+            &self.wasm,
+            Arc::new(manifest),
+            AccessContext::new(actor, "durable-notes-sync"),
+            ports,
+            kind,
+            &payload.to_string(),
+        );
+        let captured = jobs.lock().unwrap().clone();
+        (result, captured)
+    }
+    fn checkpoint_access(&self, db: &Database, actor: Uuid, id: Uuid) -> [u64; 3] {
+        self.rt.block_on(async {
+            let cx = safety_core::db::DataContext::open(
+                db,
+                &AccessContext::new(actor, "checkpoint-privacy"),
+            )
+            .await
+            .unwrap();
+            cx.db()
+                .batch_execute(&format!(
+                    "SET LOCAL ROLE {}",
+                    moss_module_host::database::runtime_role("notes")
+                ))
+                .await
+                .unwrap();
+            let read = cx
+                .db()
+                .query(
+                    "SELECT checkpoint FROM app.notes_sync_checkpoints WHERE id=$1",
+                    &[&id],
+                )
+                .await
+                .unwrap()
+                .len();
+            let update = cx
+                .db()
+                .execute(
+                    "UPDATE app.notes_sync_checkpoints SET checkpoint='{}'::jsonb WHERE id=$1",
+                    &[&id],
+                )
+                .await
+                .unwrap();
+            let delete = cx
+                .db()
+                .execute("DELETE FROM app.notes_sync_checkpoints WHERE id=$1", &[&id])
+                .await
+                .unwrap();
+            // Roll back the mutation probes, even with RLS removed.
+            [read as u64, update, delete]
+        })
+    }
+}
+
+#[test]
+#[ignore = "Only through scripts/run-gate.sh"]
+fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
+    let f = Fixture::open();
+    for role in ["app", "worker"] {
+        let db = f.database(role);
+        let actor = f.actors[0];
+        f.source(actor, f.oracle["root"].clone());
+        let (requested, queued) = f.durable_call(
+            db.clone(),
+            actor,
+            "api",
+            json!({"name":"requestNotesSync","parameters":{}}),
+            false,
+        );
+        let requested: Value = serde_json::from_str(&requested.unwrap()).unwrap();
+        assert_eq!(queued.len(), 1);
+        assert_eq!(
+            requested["checkpointId"],
+            queued[0]["params"]["checkpointId"]
+        );
+        let mut params = queued[0]["params"].clone();
+        let initial: Uuid = serde_json::from_value(requested["checkpointId"].clone()).unwrap();
+        let mut deferred = 0;
+        for _ in 0..8 {
+            for other in [f.actors[1], f.actors[2]] {
+                let (denied, jobs) = f.durable_call(
+                    db.clone(),
+                    other,
+                    "job",
+                    json!({"queue":"notes.sync","parameters":params}),
+                    false,
+                );
+                assert!(
+                    denied.is_err(),
+                    "Another account resumed a private checkpoint"
+                );
+                assert!(jobs.is_empty());
+            }
+            let (out, jobs) = f.durable_call(
+                db.clone(),
+                actor,
+                "job",
+                json!({"queue":"notes.sync","parameters":params}),
+                false,
+            );
+            let out: Value = serde_json::from_str(&out.unwrap()).unwrap();
+            assert!(out.get("continuation").is_none());
+            assert_eq!(out["errors"], 0);
+            if out["deferred"] != true {
+                assert!(jobs.is_empty());
+                break;
+            }
+            deferred += 1;
+            assert_eq!(jobs.len(), 1);
+            params = jobs[0]["params"].clone();
+        }
+        assert!(deferred > 0, "Long-file continuation was never exercised");
+        assert_eq!(
+            f.snapshot(),
+            f.oracle["expected"],
+            "Durable sync differs from legacy rows"
+        );
+        // Both reads and mutations must fail without the owner; removing RLS
+        // must make that exact assertion false, then restoring it must pass.
+        for other in [f.actors[1], f.actors[2]] {
+            assert_eq!(
+                f.checkpoint_access(&db, actor, initial),
+                [1, 1, 1],
+                "Owner positive control failed"
+            );
+            assert_eq!(f.checkpoint_access(&db, other, initial), [0, 0, 0]);
+            f.rt.block_on(f.bootstrap.batch_execute(
+                "ALTER TABLE app.notes_sync_checkpoints DISABLE ROW LEVEL SECURITY",
+            ))
+            .unwrap();
+            let exposed = f.checkpoint_access(&db, other, initial);
+            f.rt.block_on(
+                f.bootstrap.batch_execute(
+                    "ALTER TABLE app.notes_sync_checkpoints ENABLE ROW LEVEL SECURITY",
+                ),
+            )
+            .unwrap();
+            assert_eq!(
+                exposed,
+                [1, 1, 1],
+                "Removal control did not expose all three operations"
+            );
+            assert!(std::panic::catch_unwind(|| assert_eq!(
+                exposed,
+                [0, 0, 0],
+                "checkpoint privacy assertion failed without RLS"
+            ))
+            .is_err());
+            assert_eq!(f.checkpoint_access(&db, other, initial), [0, 0, 0]);
+        }
+        // Queue publication is a named stand-in. Its failure happens AFTER
+        // checkpoint commit, so the captured UUID must still be resumable.
+        let (failed, jobs) = f.durable_call(
+            db.clone(),
+            actor,
+            "api",
+            json!({"name":"requestNotesSync","parameters":{}}),
+            true,
+        );
+        assert!(failed.is_err());
+        assert_eq!(jobs.len(), 1);
+        let (retry, _) = f.durable_call(
+            db.clone(),
+            actor,
+            "job",
+            json!({"queue":"notes.sync","parameters":jobs[0]["params"]}),
+            false,
+        );
+        let retry: Value = serde_json::from_str(&retry.unwrap()).unwrap();
+        assert_eq!(retry["skipped"], 5);
+        assert_eq!(f.snapshot(), f.oracle["expected"]);
+        f.rt.block_on(async {
+            for table in [
+                "memory_chunks",
+                "memory_links",
+                "memory_file_index",
+                "notes_sync_checkpoints",
+            ] {
+                f.bootstrap
+                    .execute(
+                        &format!("DELETE FROM app.{table} WHERE owner_user_id=ANY($1::uuid[])"),
+                        &[&f.actors],
+                    )
+                    .await
+                    .unwrap();
+            }
+        });
+    }
+    println!("PASS durable compiled sync: restart between pages, legacy row parity, UUID-only queue requests, post-commit publication failure retry, both runtime roles; owner/admin read-update-delete assertions fail without RLS and pass restored. Embeddings and queue publication are named stand-ins.");
 }
