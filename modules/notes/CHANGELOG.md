@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.4
+
+- Add the core-owned production file ingestion adapter behind the sync coordinator, with legacy document chunking, unchanged-file skipping and per-page indexing. Assembly, real embedding services, scheduling and write chat remain unavailable.
+
 ## 0.1.3
 
 - Port sync coordinator and deleted-file selection into the test-only component, with actual legacy differential checks. Real indexing, scheduling, saved status and write chat remain unavailable.
