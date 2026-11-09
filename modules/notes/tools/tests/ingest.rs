@@ -625,6 +625,47 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
                 );
                 assert!(denied.is_err(), "Foreign account replayed a completed page");
                 assert!(queued.is_empty());
+                if out["deferred"] != true {
+                    // Exercise that same compiled replay assertion with the
+                    // protecting policy removed, then restore and repeat it.
+                    f.rt.block_on(f.bootstrap.batch_execute(
+                        "ALTER TABLE app.notes_sync_checkpoints DISABLE ROW LEVEL SECURITY",
+                    ))
+                    .unwrap();
+                    let (exposed, exposed_jobs) = f.durable_call(
+                        db.clone(),
+                        other,
+                        "job",
+                        json!({"queue":"notes.sync","parameters":params}),
+                        false,
+                    );
+                    f.rt.block_on(f.bootstrap.batch_execute(
+                        "ALTER TABLE app.notes_sync_checkpoints ENABLE ROW LEVEL SECURITY",
+                    ))
+                    .unwrap();
+                    assert!(exposed_jobs.is_empty());
+                    assert!(
+                        exposed.is_ok(),
+                        "Removal control did not expose the saved result"
+                    );
+                    assert!(std::panic::catch_unwind(|| assert!(
+                        exposed.is_err(),
+                        "Foreign account replayed a completed page"
+                    ))
+                    .is_err());
+                    let (restored, restored_jobs) = f.durable_call(
+                        db.clone(),
+                        other,
+                        "job",
+                        json!({"queue":"notes.sync","parameters":params}),
+                        false,
+                    );
+                    assert!(
+                        restored.is_err(),
+                        "Foreign account replayed a completed page"
+                    );
+                    assert!(restored_jobs.is_empty());
+                }
             }
             if out["deferred"] != true {
                 assert!(jobs.is_empty());

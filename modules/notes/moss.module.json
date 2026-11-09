@@ -195,7 +195,7 @@
     },
     {
       "id": "notes.sync-checkpoints",
-      "description": "Owner-only durable sync checkpoints keep continuation paths and hashes out of queued job parameters. The write-tools test component can request and resume sync by checkpoint ID. Successful pages save a result under a transaction row lock; retries return that result and republish the same continuation ID without repeating ingestion or replacing newer status. The ordinary package still offers no sync job, schedule or manual sync route. Worker assembly, checkpoint retention and publication recovery remain activation blockers."
+      "description": "Owner-only durable sync checkpoints keep continuation paths and hashes out of queued job parameters. The write-tools test component can request and resume sync by checkpoint ID. Successful pages save a result under a transaction row lock; retries return that result and republish the same continuation ID without repeating ingestion. Final and no-op replays keep newer status; failed deferred publication can record a new safe failure. The ordinary package still offers no sync job, schedule or manual sync route. Transactional worker assembly with reserved ingestion connection capacity, checkpoint retention and automatic publication recovery remain activation blockers."
     }
   ],
   "screens": {

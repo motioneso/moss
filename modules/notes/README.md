@@ -497,7 +497,8 @@ saved result instead of repeating ingestion, cleanup or child allocation.
 A deferred replay requests publication of the same child UUID and idempotency key.
 This allows retry of a known parent after post-commit publication failure. A final
 or no-op replay returns the previous result without overwriting newer saved sync
-status. To scan again after files or folder settings change, request a new sync;
+status. Failed deferred publication can record a new safe failure, including on
+replay. To scan again after files or folder settings change, request a new sync;
 redelivery of an old job is deliberately the same page. Existing raw checkpoint
 rows remain readable. Successful rows replace private input with a bounded result;
 no applied migration changes and no new table is required.

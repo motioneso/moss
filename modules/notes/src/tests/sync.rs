@@ -252,6 +252,12 @@ fn durable_page_replay_reuses_its_result_and_continuation() {
         ) -> moss_module_sdk::Result<Value> {
             match (port, op) {
                 ("db", "query") => {
+                    if p["kind"] == "update" {
+                        assert_eq!(
+                            p["filter"],
+                            json!({"type":"compare", "column":"id", "op":"eq", "value":"00000000-0000-4000-8000-000000000001"})
+                        );
+                    }
                     if p["values"].get("checkpoint").is_some() && p["kind"] == "update" {
                         *self.row.borrow_mut() = p["values"]["checkpoint"].clone();
                     }

@@ -1262,11 +1262,14 @@ owner-only checkpoint row. A typed no-op update holds a row lock through the
 outer transaction, so independent invocations of that checkpoint serialize.
 After commit, redelivery returns the saved counts and flags. Deferred pages
 republish their original child ID rather than allocating another continuation.
-Final and no-op replays preserve newer saved sync status. A fresh manual or
+Final and no-op replays preserve newer saved sync status. Failed deferred
+publication can record a new safe failure, including on replay. A fresh manual or
 scheduled tick must request a new checkpoint to notice later file/folder changes.
 
 This uses only the module SDK and the existing transactional server adapter.
-It adds no host code, core-table access, filesystem access or dependency. Existing
+Activation requires transactional worker assembly with connection capacity
+reserved for separate ingestion contexts. It adds no host code, core-table access,
+filesystem access or dependency. Existing
 raw checkpoints are accepted; successful pages replace their private input with
 a typed result containing counts, flags and an optional UUID. Package `0.1.7`,
 its changelog and app map describe the test-only behavior. Applied SQL is unchanged.
