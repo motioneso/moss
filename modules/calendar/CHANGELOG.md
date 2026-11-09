@@ -1,5 +1,12 @@
 # Calendar package
 
+## 0.16.0
+
+- Match timed-event label density: compact events keep their title, taller events show the time, and Day view shows locations when there is room.
+- Restore held-event markers and the held all-day colour using the published Rust UI kit.
+- Compare rendered labels with the production React grid and exercise the installed screen at desktop and phone widths.
+- Full screen cutover, provider execution and physical second-device acceptance remain open.
+
 ## 0.15.0
 
 - Restore the authored event details layout, markers and held-block note on the Rust screen.

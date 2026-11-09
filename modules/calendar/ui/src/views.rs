@@ -70,6 +70,7 @@ pub fn TimeGrid(
             0
         }
     );
+    let dense = days.len() > 3;
     let any_all = days.iter().any(|day| {
         events
             .get(day)
@@ -90,7 +91,7 @@ pub fn TimeGrid(
         <div class="cal-tg__head" style=template.clone()><div class="cal-tg__corner"></div>{headings.into_iter().map(|day|view!{
             <div class=if day==today {"cal-tg__dayhd is-today"} else {"cal-tg__dayhd"}><span class="cal-tg__dow">{day.format("%a").to_string()}</span><span class="cal-tg__dnum">{day.day()}</span></div>
         }).collect_view()}</div>
-        {any_all.then(||view!{<div class="cal-tg__allday" style=template.clone()><div class="cal-tg__allday-lbl">"all-day"</div>{days.iter().map(|day|view!{<div class="cal-tg__allday-cell">{all.get(day).cloned().unwrap_or_default().into_iter().filter(|s|s.event.all_day).map(|s|{let e=s.event;let pick=e.clone();view!{<AllDayChip focus_key=format!("{}:{}",day,e.id) title=e.title on_pick=Callback::new(move |_|on_event.run(pick.clone()))/>}}).collect_view()}</div>}).collect_view()}</div>})}
+        {any_all.then(||view!{<div class="cal-tg__allday" style=template.clone()><div class="cal-tg__allday-lbl">"all-day"</div>{days.iter().map(|day|view!{<div class="cal-tg__allday-cell">{all.get(day).cloned().unwrap_or_default().into_iter().filter(|s|s.event.all_day).map(|s|{let e=s.event;let pick=e.clone();view!{<AllDayChip focus_key=format!("{}:{}",day,e.id) title=e.title block=e.is_moss_block on_pick=Callback::new(move |_|on_event.run(pick.clone()))/>}}).collect_view()}</div>}).collect_view()}</div>})}
         <div class="cal-tg__scroll" node_ref=scroll on:scroll=move |_|{if let Some(el)=scroll.get(){scroll_position.set(Some(el.scroll_top()));}}><div class="cal-tg__body" style=format!("{template};height:1392px")>
             <div class="cal-tg__gutter">{(1..24).map(|h|view!{<span class="cal-tg__hr" style=format!("top:{}px",h*58)>{model::time(h*60,twelve)}</span>}).collect_view()}</div>
             {days.into_iter().map(|day|{
@@ -98,10 +99,12 @@ pub fn TimeGrid(
                 view!{<div class=if day==today {"cal-tg__col is-today"} else {"cal-tg__col"}>
                     {packed.into_iter().map(|s|{
                         let width=100.0/s.columns as f64;
-                        let geometry=format!("top:{}px;height:{}px;left:calc({}% + 2px);width:calc({width}% - 4px)",s.start_min as f64*58.0/60.0,((s.end_min as f64-s.start_min as f64)*58.0/60.0).max(28.0),s.column as f64*width);
+                        let height = ((s.end_min as f64-s.start_min as f64)*58.0/60.0).max(28.0);
+                        let geometry=format!("top:{}px;height:{height}px;left:calc({}% + 2px);width:calc({width}% - 4px)",s.start_min as f64*58.0/60.0,s.column as f64*width);
                         let e=s.event;let pick=e.clone();
                         let tentative=matches!(e.status.as_deref(),Some("tentative"|"needsAction"));
-                        view!{<EventChip focus_key=format!("{}:{}",day,e.id) title=e.title time=model::time(s.start_min,twelve) geometry=geometry block=e.is_moss_block tentative=tentative on_pick=Callback::new(move |_|on_event.run(pick.clone()))/>}
+                        let location = if height >= 58.0 && !dense {e.location.clone().unwrap_or_default()} else {String::new()};
+                        view!{<EventChip focus_key=format!("{}:{}",day,e.id) title=e.title time=model::time(s.start_min,twelve) geometry=geometry block=e.is_moss_block tentative=tentative hide_time=height<44.0 location=location on_pick=Callback::new(move |_|on_event.run(pick.clone()))/>}
                     }).collect_view()}
                     {(day==today).then(||view!{<div class="cal-now" style=move||format!("top:{}px",now_min.get() as f64*58.0/60.0) aria-hidden="true"><span class="cal-now__line"></span><span class="cal-now__dot"></span></div>})}
                 </div>}

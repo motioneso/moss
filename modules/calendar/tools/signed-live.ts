@@ -23,6 +23,7 @@ import { getMossDatabaseUrls } from "@moss/db";
 import { readHttpOracle } from "./http-oracle.js";
 import { checkStartup } from "./startup-check.js";
 import { checkDetails } from "./details-live.js";
+import { checkGrid } from "./grid-live.js";
 import { checkOperationStatus } from "./operation-live.js";
 import { checkDayPlanWrites } from "./day-plan-live.js";
 import { DEFAULT_LOCALE_SETTINGS, type CalendarEventDto } from "@moss/shared";
@@ -365,6 +366,30 @@ try {
       ends: `${today}T13:00:00Z`,
       metadata: { jarvisCreated: true, attendeeCount: 2 },
       location: "Room-" + "LongLocation".repeat(30)
+    },
+    {
+      id: randomUUID(),
+      title: "Short grid check",
+      starts: `${today}T09:00:00Z`,
+      ends: `${today}T09:15:00Z`,
+      metadata: {},
+      location: "Room short"
+    },
+    {
+      id: randomUUID(),
+      title: "Medium grid check",
+      starts: `${today}T10:00:00Z`,
+      ends: `${today}T10:46:00Z`,
+      metadata: {},
+      location: "Room medium"
+    },
+    {
+      id: randomUUID(),
+      title: "Held all-day grid check",
+      starts: `${today}T00:00:00Z`,
+      ends: `${nextDay(1)}T00:00:00Z`,
+      metadata: { allDay: true, jarvisCreated: true },
+      location: null
     }
   ];
   for (const event of proofEvents) {
@@ -422,6 +447,7 @@ try {
   await frame.getByRole("dialog").filter({ hasText: "Calendar package check" }).waitFor();
   await screenshotDialog("signed-in-linked-event.png");
   await checkDetails(tab, local, out, data.event);
+  await checkGrid(tab, local, out, data.event);
   await checkDayPlanWrites(tab, (path, options) => request(path, { ...options, cookie: other }));
   await checkOperationStatus(tab, db, data.actor, (path, options) =>
     request(path, { ...options, cookie: other })
@@ -444,7 +470,7 @@ try {
   }
   await frame
     .locator(".cal-legend__note")
-    .getByText("Cedar is holding 1 flexible block today.", { exact: true })
+    .getByText("Cedar is holding 2 flexible blocks today.", { exact: true })
     .waitFor();
   for (const tone of ["hard", "hold"]) {
     const swatch = frame.locator(`.cal-legend__sw--${tone}`);

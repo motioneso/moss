@@ -8,6 +8,8 @@ pub fn EventChip(
     #[prop(into)] geometry: String,
     #[prop(optional)] block: bool,
     #[prop(optional)] tentative: bool,
+    #[prop(optional)] hide_time: bool,
+    #[prop(optional, into)] location: String,
     on_pick: Callback<()>,
     #[prop(optional, into)] focus_key: String,
 ) -> impl IntoView {
@@ -27,7 +29,12 @@ pub fn EventChip(
         }
     );
     view! {<button type="button" data-cal-focus=focus_key class=format!("cal-ev {variant}") style=style on:click=move |_| on_pick.run(())>
-        <span class="cal-ev__bar"></span><span class="cal-ev__body"><span class="cal-ev__title"><span class="cal-ev__titletext">{title}</span></span><span class="cal-ev__meta">{time}</span></span>
+        <span class="cal-ev__bar"></span><span class="cal-ev__body"><span class="cal-ev__title">
+            {block.then(||view!{<span class="cal-ev__hold"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M3 12h6m6 0h6"/></svg></span>})}
+            <span class="cal-ev__titletext">{title}</span></span>
+            {(!hide_time && !time.is_empty()).then(||view!{<span class="cal-ev__meta">{time}</span>})}
+            {(!location.is_empty()).then(||view!{<span class="cal-ev__where">{location}</span>})}
+        </span>
     </button>}
 }
 #[component]
@@ -46,10 +53,11 @@ pub fn MonthChip(
 #[component]
 pub fn AllDayChip(
     #[prop(into)] title: String,
+    #[prop(optional)] block: bool,
     on_pick: Callback<()>,
     #[prop(optional, into)] focus_key: String,
 ) -> impl IntoView {
-    view! {<button type="button" data-cal-focus=focus_key class="cal-allchip" style="--ev:var(--steel)" on:click=move |_| on_pick.run(())><span class="cal-allchip__dot"></span>{title}</button>}
+    view! {<button type="button" data-cal-focus=focus_key class="cal-allchip" style=if block {"--ev:var(--accent-fg)"} else {"--ev:var(--steel)"} on:click=move |_| on_pick.run(())><span class="cal-allchip__dot"></span>{title}</button>}
 }
 #[component]
 pub fn DayCell(

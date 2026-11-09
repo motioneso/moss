@@ -9,6 +9,7 @@ calendar_ui_target="${CALENDAR_UI_TARGET:-$CARGO_TARGET_DIR/calendar-ui}"
 CARGO_TARGET_DIR="$calendar_ui_target" cargo +1.95.0 test --locked --offline --manifest-path modules/calendar/ui/Cargo.toml
 CARGO_TARGET_DIR="$calendar_ui_target" cargo +1.95.0 build --locked --offline --manifest-path modules/calendar/ui/Cargo.toml --bin calendar-ui-model
 CALENDAR_UI_ORACLE="$calendar_ui_target/debug/calendar-ui-model" pnpm exec tsx modules/calendar/tools/ui-parity.ts
+CALENDAR_UI_ORACLE="$calendar_ui_target/debug/calendar-ui-model" pnpm exec vitest run --config modules/calendar/tools/grid-parity.config.ts
 calendar_guest_target="$CARGO_TARGET_DIR/calendar-guest"
 export CALENDAR_DATA_ORACLE="$calendar_guest_target/debug/calendar-data-parity"
 # Use an already provisioned Rust home when the native installation lacks Wasm.

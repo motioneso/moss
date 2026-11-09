@@ -212,3 +212,36 @@ fn all_day_details_omit_duration_and_absent_optional_rows() {
     assert!(!output.contains("cal-peek__held"));
     assert!(!output.contains("cal-peek__kind--block"));
 }
+
+#[test]
+fn grid_uses_compact_labels_locations_and_held_markers() {
+    use moss_calendar_ui::views::TimeGrid;
+    let day = "2026-11-08".parse().unwrap();
+    let render = |minutes: u32, week: bool, block: bool, all_day: bool| {
+        let event: Event = serde_json::from_value(serde_json::json!({
+            "id":"grid", "title":"Grid meeting", "startsAt":"2026-11-08T10:00:00Z",
+            "endsAt":format!("2026-11-08T{:02}:{:02}:00Z",10+minutes/60,minutes%60),
+            "location":"Room <north>", "isMossBlock":block, "allDay":all_day
+        }))
+        .unwrap();
+        let days = if week {
+            moss_calendar_ui::model::week(day, false)
+        } else {
+            vec![day]
+        };
+        view!{<TimeGrid days=days today=day now_min=Signal::derive(||600) events=group(&[event],chrono_tz::UTC) twelve=false on_event=Callback::new(|_|{}) scroll_position=RwSignal::new(None)/ >}.to_html()
+    };
+    assert!(
+        !render(15, false, false, false).contains("cal-ev__meta"),
+        "Short events must show title only"
+    );
+    assert!(render(46, false, false, false).contains("cal-ev__meta"));
+    assert!(!render(59, false, false, false).contains("cal-ev__where"));
+    let day_html = render(60, false, true, false);
+    assert!(day_html.contains("cal-ev__where"));
+    assert!(day_html.contains("Room &lt;north&gt;"));
+    assert!(day_html.contains("cal-ev__hold"));
+    assert!(!render(60, true, false, false).contains("cal-ev__where"));
+    let all_html = render(60, false, true, true);
+    assert!(all_html.contains("--ev:var(--accent-fg)"));
+}

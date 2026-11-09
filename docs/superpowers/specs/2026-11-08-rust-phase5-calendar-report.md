@@ -880,3 +880,38 @@ behavior and external-calendar status controls; full shell/Today/chat; old-scree
 replacement; complete assembled parity; physical second-device trusted HTTPS.
 Disposable TLS, a same-computer LAN request and a phone-width browser cannot
 establish production certificate trust or physical second-device access.
+
+## JS-124 / part 16: event grid labels checkpoint
+
+Card 525. Package 0.16.0 restores the production timed-event label rules: a title
+only below 44 pixels, a time from 44 pixels, and a location from 58 pixels in Day
+view. Week remains compact. Held timed events show the authored marker and held
+all-day events use the accent colour. The shared published Leptos kit gains
+additive options because a missing primitive must not be forked inside a module.
+No shared host, data, provider or cross-module interface is changed. Calendar
+remains a pure client of the installed server API through the opaque frame bridge.
+
+The new native regression was observed failing on the old implementation because
+a short event still rendered a time row. It passes with the corrected labels,
+escaped location text, held marker and all-day colour. Rendered differential
+comparisons call the real production React CalendarTimeGrid with its saved locale
+provider and the Rust TimeGrid, covering the visibility boundaries, Day/Week,
+both clock formats and accepted/tentative/held states. They compare selected chip
+markup, not the entire screen or pixel layout. The signed-in live runner checks
+real installed chips and detail opening at desktop and phone widths using
+synthetic cache events, without response substitution. Exact fresh check results,
+screenshots and independent review are recorded in the task Proof artifact.
+
+Build outputs and an existing Rust 1.95.0 home with its Wasm target are copied into
+task-local scratch directories. Declared dependencies are restored offline from
+the lockfile. Both shared asset builders write to one scratch directory. No new
+dependency, global tool or wit-bindgen installation is performed.
+
+This remains a bounded screen checkpoint. Still required: concrete public
+Tasks/Briefings/provider adapters and full provenance; complete validation,
+coercion and error parity; four provider tools; day-plan apply job and
+apply/retry/recovery/confirm execution; worker-role cache-evict dispatch; source
+behavior and external-calendar status controls; full shell/Today/chat; old-screen
+replacement; complete assembled parity; physical second-device trusted HTTPS.
+Disposable TLS, same-computer LAN requests and phone-width screenshots do not
+establish physical-device access or production certificate trust.
