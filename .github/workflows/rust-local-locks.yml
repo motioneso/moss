@@ -22,6 +22,10 @@ jobs:
       CARGO_HOME: ${{ github.workspace }}/.rust-locks/cargo
       RUSTUP_HOME: ${{ github.workspace }}/.rust-locks/rustup
       CARGO_TARGET_DIR: ${{ github.workspace }}/.rust-locks/target
+      # Repeated mutation builds must fit alongside the app and toolchain on hosted runners.
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
     steps:
       - uses: actions/checkout@v5
       - name: Provision the declared Rust toolchain
