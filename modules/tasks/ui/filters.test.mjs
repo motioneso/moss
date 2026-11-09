@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 import { JSDOM } from "jsdom";
 import { taskFilters } from "./filters.mjs";
 
@@ -83,6 +85,25 @@ test("custom list choices keep New task on a real list, and reset restores open 
     assert.equal($("active-tags").children.length, 0);
     assert.equal(visible.length, 2);
     assert.equal(filters.defaultListId([]), "");
+    // Read both unchanged legacy JSX expressions, rather than recreating their defaults.
+    const page = readFileSync(
+      new URL("../../../apps/web/src/tasks/tasks-page.tsx", import.meta.url),
+      "utf8"
+    );
+    const quick = page.match(/<TaskCapture\s+defaultListId=\{([^}]+)\}/)[1];
+    const details = page.match(/<TaskDetailsDialog[\s\S]*?defaultListId=\{([^}]+)\}/)[1];
+    for (const home of ["included", "solo", "excluded"]) {
+      for (const work of ["included", "solo", "excluded"]) {
+        select("list-state-home", home);
+        select("list-state-work", work);
+        const soloIds = [home === "solo" ? "home" : null, work === "solo" ? "work" : null].filter(
+          Boolean
+        );
+        const context = { lists, soloIds };
+        assert.equal(filters.captureListId(lists), runInNewContext(quick, context));
+        assert.equal(filters.defaultListId(lists), runInNewContext(details, context));
+      }
+    }
   } finally {
     globalThis.document = previous.document;
     globalThis.Option = previous.Option;

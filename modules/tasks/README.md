@@ -327,3 +327,14 @@ retrying tags or subtasks, preserving a schedule already advanced by the server.
 A lost response after a commit remains ambiguous without server idempotency.
 No route, tool, job kind, SQL or host interface changes. Remaining Phase 5 gaps
 listed in the report are still open; this checkpoint does not claim full parity.
+
+Part 19 adds the legacy title-only quick capture bar. Enter or Add task uses the
+sole Show only list; otherwise the existing route uses or creates Personal.
+Details uses that same sole list, or the first list if none is singled out. Details carries
+the title into an unsaved editor. Failed creates keep the title. If creation was
+acknowledged but refresh fails, Refresh saved task only reloads; it never resends
+the create. An ambiguous lost create response still needs server idempotency.
+The controller regression uses the actual rendered shared-kit markup and a
+mocked bridge; signed-package UI proof is a separate check. Set
+`TASKS_UI_QUICK_PROOF=1` for the interactive gate to verify the two named proof
+tasks and their chosen lists, and that the Details draft was not saved.

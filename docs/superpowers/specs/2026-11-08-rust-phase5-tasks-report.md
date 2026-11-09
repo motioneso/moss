@@ -1377,3 +1377,42 @@ the original tag-creation error. All 24 screen/controller tests pass afterward,
 including default-day reset for a separate capture and failed parent-edit retry.
 The optional signed-UI suggestion check verifies exact persisted assigned tags,
 retention of a literal leading hash and absence of duplicate list tags.
+
+## Tasks part 19 checkpoint (JS-128, Card 526)
+
+The package screen now includes the legacy title-only quick capture bar. Enter or
+Add task sends only the trimmed title and, when exactly one list is set to Show
+only, that list. Otherwise the existing route uses or creates Personal. Details
+carries the title into an unsaved editor, using the sole Show only list or the
+first list. The list defaults are compared with the unchanged legacy page's JSX
+expressions across all nine two-list selection combinations. This also corrects
+Details choosing the first list when a sole Show only list is combined with an
+excluded list.
+
+Blank capture is disabled. Repeated activation is admitted once. A rejected
+create retains the title and an inline retry message. An acknowledged create
+followed by a failed refresh changes the action to Refresh saved task; retrying
+only reads the list, without resending the create. A lost create response remains
+ambiguous without server idempotency. The new real-markup controller regression
+was observed failing against the previous controller and passing afterward. Its
+bridge is mocked, so it is not live installation evidence. The app map, package
+asset inventory and change notes describe the capture and recovery paths.
+
+The branch began at Phase 0a and was fast-forwarded to current origin/main with
+explicit approval. Work stays in Tasks and this report. The existing scratch
+Rust 1.95 toolchain, Wasm target and Cargo caches are reused offline, including
+the previously approved pinned wit-bindgen graph. The tools lockfile was
+refreshed offline with no byte change. Declared JavaScript dependencies were
+restored offline in this worktree; nothing was installed globally. Workshop and
+Food remain excluded. Part of #4027; release note Category N/A.
+
+Both assistant-policy routes still need the core preferences contract. Actor
+timezone/lazy recurrence, recurrence jobs, deferred-queue policy and installed
+worker dispatch, public People linkage, policy/feedback, remaining screens and
+settings, installed chat, real-shell integration and performance acceptance
+remain unfinished. The existing full endpoint harness still has an unbound
+queue adapter. No new route, tool, job kind, migration or shared host interface is
+introduced in this checkpoint. Full Phase 5 parity is not claimed. The signed UI
+fixture remains separate from the real application shell; a narrow viewport is
+not physical second-device acceptance. Final gate, browser and independent review
+receipts belong to the task proof artifact.

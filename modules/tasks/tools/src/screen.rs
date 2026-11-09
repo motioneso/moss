@@ -62,6 +62,16 @@ pub fn render() -> String {
                     <EmptyState title="No tasks here" description="Try another filter or add a task."/>
                     {action("clear-filters", "Clear filters")}
                 </div>
+                <form id="quick-task-form" class="tasks-fields" aria-label="Capture a task">
+                    <div class="tasks-inline">
+                        <Field><FormLabel control_id="quick-title">"Task title"</FormLabel>
+                            <input id="quick-title" class="jds-input" maxlength="500" placeholder="Add a task — type and press Enter…"/>
+                        </Field>
+                        <span id="quick-details"><Button variant=ButtonVariant::Secondary>"Details"</Button></span>
+                        <Button kind=ButtonType::Submit>"Add task"</Button>
+                    </div>
+                    <p id="quick-error" hidden role="alert"></p>
+                </form>
                 <div id="task-results" aria-live="polite"></div>
             </section>
             <section id="editor" hidden aria-labelledby="editor-heading">

@@ -7,6 +7,7 @@ import { listDeletion } from "./delete-list.mjs";
 import { captureDraft } from "./capture.mjs";
 import { findOrCreateTag } from "./task-tags.mjs";
 import { interpretedSearch } from "./search.mjs";
+import { quickCapture } from "./quick-add.mjs";
 
 const client = moduleClient();
 const $ = (id) => document.getElementById(id);
@@ -41,6 +42,17 @@ const search = interpretedSearch({
   }
 });
 const filters = taskFilters(render, search.intent);
+const quick = quickCapture({
+  api,
+  run,
+  load,
+  bindForm,
+  defaultListId: () => filters.captureListId(state.lists),
+  openDetails: (title) => openEditor(null, title),
+  focus: (node) => {
+    state.focusAfter = node;
+  }
+});
 const deleting = listDeletion({
   api,
   lists: () => state.lists,
@@ -122,6 +134,7 @@ async function run(action) {
       if (!controls.includes(node)) node.disabled = false;
     });
     capture.lock();
+    quick.sync();
     search.sync();
     $("tasks-app").removeAttribute("aria-busy");
     state.focusAfter?.focus();
@@ -239,10 +252,10 @@ function leaveEditor(action) {
     state.focusAfter = $("keep-editing").querySelector("button");
   } else return action();
 }
-async function openEditor(id = null) {
-  return leaveEditor(() => editTask(id));
+async function openEditor(id = null, title = "") {
+  return leaveEditor(() => editTask(id, title));
 }
-async function editTask(id) {
+async function editTask(id, title) {
   const task = id ? (await api("GET", `/tasks/${id}`)).task : null;
   if ($("editor").hidden) state.returnFocus = state.actionFocus;
   state.editing = task;
@@ -270,6 +283,7 @@ async function editTask(id) {
   show("task-extras", false);
   for (const name of ["subtask-title", "tag-name", "comment"]) $(name).value = "";
   markSaved();
+  if (!task) $("title").value = title;
   state.focusAfter = $("title");
   if (task) await extras();
   else await capture.loadTags($("task-list").value);
