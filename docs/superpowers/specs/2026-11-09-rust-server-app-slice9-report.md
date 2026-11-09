@@ -28,9 +28,11 @@ process/migration modules remain Unix-only. Windows app creation and Stop stay d
   require the future supervisor/startup lock. No power-loss durability claim is made.
 - Eight native Windows test sources cover layout reuse, two instances, interrupted directory
   setup, missing ancestors, nonprivate children, clone lifetime, state replacement, planted state
-  and credentials, bounds, credential routing and junction rejection. Three negative controls
-  target credential placement, state validation and credential validation. They are configured
-  in the existing standard-user Windows harness; configured tests are not runtime evidence.
+  and credentials, bounds, credential routing and junction rejection. Three negative-control
+  sources are configured to target credential placement, state validation and credential
+  validation, requiring each intended assertion message as well as one failed test. This is
+  test configuration, not a claim that the controls passed. Their actual effectiveness must be
+  established by a successful current workflow, linked from the PR and proof artifact.
 
 Internal groundwork only: there is no new screen, setting, error or remediation exposed in the
 app. Existing app-map entries describing Windows creation/Stop as unavailable remain truthful.
@@ -50,7 +52,9 @@ Postgres supervisor or an installed desktop app.
    including authenticated runner handshake, process identity/recovery, orderly `pg_ctl kill INT`,
    Stop transport and crash-report qualification. Exercise real bundled Windows Postgres under a
    standard account: interrupted initialization, multiple instances, crashes and Stop/start races.
-   Qualify initdb and Postgres access while directory pins are retained. Only then enable Windows
+   Port initdb password-file creation, state deletion, lock and log handles through the pinned
+   boundary; these existing Unix-only supervisor operations are not ported here. Qualify initdb
+   and Postgres access while directory pins are retained. Only then enable Windows
    app creation and Stop. Credential creation still needs the supervisor's serialization.
 2. Background notification delivery after disconnect/quit, saved-server routing, durable
    acknowledgements and the actual server/module-worker reminder scheduler remain unbuilt.

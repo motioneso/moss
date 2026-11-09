@@ -9,6 +9,9 @@ fn canonical_layout_round_trip_and_independent_instances() {
     let first = Layout::create(&first_path).unwrap();
     let second = Layout::create(&temp.path().join("second")).unwrap();
     assert_eq!(first.run, first_path.join("run"));
+    assert_eq!(first.data, first_path.join("db"));
+    assert_eq!(first.secrets, first_path.join("secrets"));
+    assert_eq!(first.logs, first_path.join("logs"));
     for path in [&first.data, &first.run, &first.logs, &first.secrets] {
         assert!(PrivateDirectory::open(path).is_ok());
     }
@@ -99,11 +102,17 @@ fn planted_state_and_password_files_are_refused() {
     let temp = tempfile::tempdir().unwrap();
     let layout = Layout::create(&temp.path().join("install")).unwrap();
     std::fs::write(layout.state_file(), "untrusted").unwrap();
-    assert!(layout.read_state().is_err());
+    assert!(
+        layout.read_state().is_err(),
+        "unvalidated state must be refused"
+    );
     assert!(layout.write_state(b"replacement").is_err());
     assert_eq!(std::fs::read(layout.state_file()).unwrap(), b"untrusted");
     std::fs::write(layout.secrets.join(crate::SUPERUSER), "untrusted").unwrap();
-    assert!(secrets::password(&layout, crate::SUPERUSER).is_err());
+    assert!(
+        secrets::password(&layout, crate::SUPERUSER).is_err(),
+        "unvalidated credential must be refused"
+    );
     assert!(secrets::existing(&layout, crate::SUPERUSER).is_err());
     drop(layout);
 }
@@ -112,6 +121,11 @@ fn planted_state_and_password_files_are_refused() {
 fn canonical_passwords_reopen_without_replacement_and_reject_escape() {
     let temp = tempfile::tempdir().unwrap();
     let layout = Layout::create(&temp.path().join("install")).unwrap();
+    assert_eq!(
+        layout.secrets,
+        layout.root.join("secrets"),
+        "credential directory must be canonical secrets"
+    );
     let password = secrets::password(&layout, crate::SUPERUSER).unwrap();
     assert_eq!(password.expose().len(), 64);
     assert!(

@@ -3,6 +3,7 @@ param(
     [string]$Filter = 'windows_child',
     [string]$TestTarget = 'portability',
     [string]$ExpectedSummary = 'test result: ok\. 8 passed; 0 failed; 1 ignored',
+    [string]$ExpectedFailurePattern = '',
     [switch]$ExpectFailure
 )
 # GitHub's Windows runner is elevated. Exercise the actual test binary as a separate standard
@@ -48,6 +49,9 @@ try {
     if ($ExpectFailure) {
         if ($process.ExitCode -eq 0 -or -not (Select-String -Path $out -Pattern 'test result: FAILED. 0 passed; 1 failed')) {
             throw 'Negative control did not produce the expected test failure'
+        }
+        if ($ExpectedFailurePattern -and -not (Select-String -Path $out -Pattern $ExpectedFailurePattern)) {
+            throw 'Negative control failed outside its intended assertion'
         }
         Write-Output 'Negative control: expected failure observed.'
     } elseif ($process.ExitCode -ne 0 -or -not (Select-String -Path $out -Pattern $ExpectedSummary)) {
