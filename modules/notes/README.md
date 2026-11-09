@@ -69,6 +69,23 @@ still stand-ins. This is not HTTP transport, an assembled Settings/chat screen,
 real configured models, legacy singleton coalescing, recall warmup, automatic
 worker delivery or second-device HTTPS proof. Full Notes acceptance remains open.
 
+## Write-triggered sync folder binding (part eighteen)
+
+Experimental create, edit and delete save the resolved source path in the private
+sync checkpoint, matching the existing manual-sync binding. Pending work refuses
+a different selected folder or an unlinked source before ingestion or cleanup.
+The failed attempt leaves the checkpoint available; reselecting the original
+folder lets that same request resume. Queue metadata contains only its UUID.
+This compares resolved paths through the existing core adapter; it does not detect
+replacement of a folder at the same path or provide an immutable filesystem identity.
+
+The regression first failed against the earlier native handler because it saved
+an empty checkpoint. The compiled disposable database check exercises create,
+edit and delete with folder changes and unlinking, unchanged index assertions,
+restored-source retry, both runtime roles and the existing checkpoint RLS removal
+control. File indexing is real; queue delivery and embeddings are named stand-ins.
+No installed chat, production sync, screen change or second-device proof is claimed.
+
 ## Disposable database checks
 
 Read `.claude/skills/verify-gate/SKILL.md`. Never run the database tests directly.
@@ -134,8 +151,8 @@ in a release package until the core memory/sync worker and approval join exist.
 
 The separate tool-check component uses the same generated ABI and SDK calls with
 extra permissions supplied only by its test manifest. It reads the actor's selected
-folder, compares the current destination and exact file text, then requests sync
-with empty job parameters after the outer call commits. The queued result matches
+folder, compares the current destination and exact file text, then saves a private durable request containing the resolved source folder. After the
+outer call commits, queued metadata carries only that request’s UUID. The tool result matches
 the legacy `{ data: { path, synced: true } }` shape; it means a sync request, not
 completed ingestion. The test queue acknowledges metadata; it does not ingest.
 A refusal before call finalization compensates file writes. A queue publication

@@ -44,6 +44,7 @@ interface Case {
 async function legacy(entry: Case) {
   const files = { ...entry.files };
   let syncs = 0;
+  const syncSources: string[] = [];
   const missing = () => Object.assign(new Error("missing"), { code: "ENOENT" });
   const transpile = (text: string) =>
     ts.transpileModule(text, {
@@ -91,8 +92,9 @@ async function legacy(entry: Case) {
         else files[change.path] = change.content;
       }
     },
-    sync: async (_services: unknown, _actor: unknown, _root: unknown, path: string) => {
+    sync: async (_services: unknown, _actor: unknown, root: string, path: string) => {
       syncs += 1;
+      syncSources.push(root);
       return { data: { path, synced: true } };
     }
   }) as (db: object, input: object, ctx: object) => Promise<unknown>;
@@ -108,7 +110,8 @@ async function legacy(entry: Case) {
     request: { tool: `notes.${entry.tool}`, parameters: entry.parameters },
     expected,
     after: files,
-    syncs
+    syncs,
+    syncSources
   };
 }
 const cases: Case[] = [];
