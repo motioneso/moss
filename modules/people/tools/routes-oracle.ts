@@ -42,7 +42,8 @@ export async function routesOracle() {
   await mkdir(join(selected, "Family", "Banana"));
   await mkdir(join(selected, "Family", "Ábc"));
   await mkdir(join(selected, "Work"));
-  for (const name of ["Banana", "apple", "Ära", "zebra"]) await mkdir(join(selected, name));
+  for (const name of ["Banana", "apple", "Ära", "zebra", "e\u0301cole", "école"])
+    await mkdir(join(selected, name));
   const oldRoots = process.env.MOSS_NOTES_ROOTS;
   process.env.MOSS_NOTES_ROOTS = root;
   let refresh: Awaited<ReturnType<typeof refreshQueue>> | undefined;

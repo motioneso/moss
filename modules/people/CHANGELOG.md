@@ -4,6 +4,10 @@
 
 Rust component and shared-frame People Settings checkpoint. Complete installed parity and physical-device qualification remain open.
 
+Compare canonically equivalent Unicode folder names equally, as the legacy folder browser
+does. Comparison uses NFC keys; the names and paths returned to callers stay unchanged.
+This narrows directory-ordering differences without claiming complete locale collation.
+
 Keep the legacy decimal spelling when a numeric contact value is converted to text, including rounding ties.
 The People component parses incoming JSON numbers with correct binary64 rounding before
 converting contact values to text. The module host now explicitly enables the same parser

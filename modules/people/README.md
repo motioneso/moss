@@ -30,11 +30,18 @@ CARGO_TARGET_DIR=/tmp/moss-people-target cargo +1.95.0 clippy --locked --manifes
 cargo +1.95.0 fmt --manifest-path modules/people/src/Cargo.toml --check
 pnpm exec tsx modules/people/tools/core-vectors.ts > /tmp/moss-people-core-parity.json
 cmp modules/people/src/tests/fixtures/core-parity.json /tmp/moss-people-core-parity.json
+node modules/people/tools/directory-vectors.mjs > /tmp/moss-people-directory-parity.json
+cmp modules/people/src/tests/fixtures/directory-parity.json /tmp/moss-people-directory-parity.json
 node modules/people/tools/number-vectors.mjs > /tmp/moss-people-number-parity.json
 cmp modules/people/src/tests/fixtures/number-parity.json /tmp/moss-people-number-parity.json
 ```
 
 The vector generator runs the current TypeScript matching and note-format implementation.
+The directory oracle records JavaScript `localeCompare` for canonical Unicode equivalents
+and nearby case/order comparisons. The relative folder browser normalizes comparison keys
+to NFC, preserving original names and paths and stable input order for equal keys.
+This is canonical-equivalence coverage, not complete locale collation. The existing
+literal-dollar safeguard for managed-note edits remains unchanged.
 It performs no database work. These fixtures prove only pure domain behavior. Database
 and live checks must go through verify-gate and the real Rust application before full People
 parity can be accepted.

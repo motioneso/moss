@@ -1642,3 +1642,45 @@ libraries were made available locally. Missing locked dependencies for the appro
 `wit-bindgen =0.57.1` generator were fetched into that task-owned Cargo cache.
 JavaScript dependencies came from the existing lockfile with an offline install.
 No global tool or package was installed. No Vikunja card was changed.
+
+## Part fifteen: canonical Unicode folder comparison
+
+The relative People folder browser now treats canonically equivalent Unicode names
+as equal when sorting. For example, `é` and `e` followed by a combining acute accent
+compare equally, matching JavaScript `localeCompare`. The returned folder names and
+paths keep their original spelling. Stable sorting preserves the incoming order of
+equal keys; no folder or saved preference is renamed.
+
+The task branch initially predated the People work. It was fast-forwarded while clean
+to `0b8d143d7`, which contains the merged part-fourteen report (PR 4105), before edits.
+The brief's PR 4066 reference describes older work.
+
+The comparator normalizes its keys to NFC using `unicode-normalization =0.1.26`,
+already declared by the repository's portability crate and present in the module-host
+lockfile. The People lockfile adds that existing package and its existing `tinyvec`
+dependency; no new third-party package version or global tool is introduced. The
+only host changes are the People replay's folder fixture and its native dev-dependency
+lock entry. The module remains a client of host ports, without database or filesystem
+handles. Public APIs, SQL, privacy rules and folder settings are unchanged.
+
+A JavaScript oracle records thirty-two directional comparisons, including composed
+and decomposed Latin, Greek and Hangul, canonical combining-mark reordering and case
+comparisons. Native tests consume those recorded signs. The installed route replay
+adds distinct composed and decomposed directory names to both real filesystem trees
+and compares their full returned names and paths against the legacy handler.
+
+An initial investigation rediscovered the documented dollar-token compatibility
+exception. A trial reproduction failed the existing intentional-safeguard test; all
+trial edits were discarded. Literal dollar tokens continue to protect human note
+text. No legacy replacement-token expansion ships in this checkpoint.
+
+### Verification and acceptance boundary
+
+Verification receipts for this checkpoint are recorded below after the final runs.
+This is a bounded checkpoint: complete locale-sensitive ordering, authenticated server
+composition and raw numeric listener qualification, ingest nudges, real provider
+composition, command retention/quotas, the fifty-reference shipping budget and broader
+backend-failure/large-data coverage remain open. Real UI/chat approvals, sign-in,
+trusted origins, privacy and HTTPS from desktop and a second physical device still
+require proof through the assembled Rust application. No standalone test or rendered
+substitute is offered as that proof.
