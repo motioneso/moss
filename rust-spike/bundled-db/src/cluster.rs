@@ -101,31 +101,8 @@ pub fn db_error(error: &postgres::Error) -> String {
     }
 }
 
-/// Proof that this process is the one supervisor for the install. Dropping it, or the
-/// process dying in any way, releases it.
-pub struct InstallLock {
-    _file: File,
-}
-
-pub fn lock(layout: &Layout) -> Result<InstallLock, String> {
-    let mut options = OpenOptions::new();
-    options.read(true).write(true).create(true).truncate(false);
-    #[cfg(unix)]
-    options.mode(0o600);
-    let mut file = options
-        .open(&layout.lock)
-        .map_err(|e| format!("lock file: {e}"))?;
-    if !portability::file_lock::try_exclusive(&file).map_err(|e| format!("lock file: {e}"))? {
-        let mut holder = String::new();
-        let _ = file.read_to_string(&mut holder);
-        return Err(format!(
-            "another supervisor (pid {}) is already running this install",
-            holder.trim()
-        ));
-    }
-    file.set_len(0).and_then(|_| file.write_all(std::process::id().to_string().as_bytes())).map_err(|e| e.to_string())?;
-    Ok(InstallLock { _file: file })
-}
+// Keep the canonical supervisor entry point while sharing its lock with Windows.
+pub use crate::supervisor_lock::{lock, InstallLock};
 
 /// How long `holder` waits for a new supervisor to write its pid.
 const HOLDER_WAIT: Duration = Duration::from_secs(1);

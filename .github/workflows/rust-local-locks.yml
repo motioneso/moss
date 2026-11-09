@@ -22,6 +22,10 @@ jobs:
       CARGO_HOME: ${{ github.workspace }}/.rust-locks/cargo
       RUSTUP_HOME: ${{ github.workspace }}/.rust-locks/rustup
       CARGO_TARGET_DIR: ${{ github.workspace }}/.rust-locks/target
+      # Repeated mutation builds must fit alongside the app and toolchain on hosted runners.
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
     steps:
       - uses: actions/checkout@v5
       - name: Provision the declared Rust toolchain
@@ -56,7 +60,7 @@ jobs:
       - name: Compile the Windows app and check server executable discovery
         if: runner.os == 'Windows'
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app server_program_uses_the_platform_executable_suffix -- --nocapture
-      - name: Build canonical Windows layout tests (supervisor remains Unix only)
+      - name: Build Windows layout and lock tests (CLI stays Unix only)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -67,10 +71,19 @@ jobs:
         shell: pwsh
         run: |
           ./rust-spike/portability/proof/windows-child.ps1 -BuildReport '.rust-locks/layout-build.jsonl' -TestTarget bundled_db -Filter 'layout::windows::tests' -ExpectedSummary 'test result: ok\. 8 passed; 0 failed; 0 ignored'
+      - name: Exercise pinned Windows supervisor locks as a standard user
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./rust-spike/portability/proof/windows-child.ps1 -BuildReport '.rust-locks/layout-build.jsonl' -TestTarget bundled_db -Filter 'supervisor_lock::tests' -ExpectedSummary 'test result: ok\. 7 passed; 0 failed; 0 ignored'
       - name: Check canonical Windows layout negative controls
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./rust-spike/bundled-db/proof/windows/layout-negative.ps1
+      - name: Check pinned Windows supervisor lock negative controls
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./rust-spike/bundled-db/proof/windows/lock-negative.ps1
       - name: Check canonical Unix layout regressions
         if: runner.os != 'Windows'
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p bundled-db --lib

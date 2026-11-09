@@ -26,6 +26,7 @@ if (-not $binary) { throw 'No compiled test binary was reported by Cargo' }
 # or write it to disk. No project credential is involved.
 $password = ConvertTo-SecureString ([guid]::NewGuid().ToString('N') + 'aA1!') -AsPlainText -Force
 $user = New-LocalUser -Name $account -Password $password -AccountNeverExpires
+$process = $null
 try {
     Add-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-545') -Member $user
     # The standard account needs only this throwaway CI checkout and its temporary files.
@@ -36,10 +37,22 @@ try {
     $credential = [pscredential]::new("$env:COMPUTERNAME\$account", $password)
     $out = Join-Path $state 'windows-child.out'
     $err = Join-Path $state 'windows-child.err'
-    $process = Start-Process -FilePath $binary -ArgumentList @($Filter, '--nocapture', '--test-threads=1') `
-        -Credential $credential -LoadUserProfile -WorkingDirectory $root `
-        -Environment @{ TEMP = $temp; TMP = $temp } `
-        -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
+    # A launch error is not a test failure. Record resource facts without credentials so the
+    # runner's disk error can be distinguished from accumulated profile/launch resources.
+    Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' |
+        Select-Object DeviceID, FreeSpace, Size | ConvertTo-Json -Compress | Write-Output
+    try {
+        $process = Start-Process -FilePath $binary -ArgumentList @($Filter, '--nocapture', '--test-threads=1') `
+            -Credential $credential -LoadUserProfile -WorkingDirectory $root `
+            -Environment @{ TEMP = $temp; TMP = $temp } `
+            -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
+    } catch {
+        $cause = $_.Exception.GetBaseException()
+        Write-Output "Windows proof launch failed; native error code: $($cause.NativeErrorCode)"
+        $profiles = @(Get-CimInstance Win32_UserProfile)
+        Write-Output "Runner profiles: $($profiles.Count); loaded: $(@($profiles | Where-Object Loaded).Count)"
+        throw
+    }
     if (-not $process.WaitForExit(180000)) {
         $process.Kill($true)
         throw 'Windows child qualification exceeded three minutes'
@@ -58,6 +71,31 @@ try {
         throw "Windows child qualification failed or did not run the complete suite ($($process.ExitCode))"
     }
 } finally {
-    & icacls $root /remove:g ('*' + $user.SID.Value) /Q
-    Remove-LocalUser -Name $account
+    try {
+        if ($process) {
+            if (-not $process.HasExited) {
+                $process.Kill($true)
+                if (-not $process.WaitForExit(10000)) { throw 'Proof process did not exit during cleanup' }
+            }
+            $process.Dispose()
+        }
+        # Removing the account does not remove its loaded or on-disk profile. Every invocation
+        # creates a new SID; reclaim only the profile belonging to this invocation's account.
+        for ($attempt = 0; $attempt -lt 20; $attempt++) {
+            $profile = Get-CimInstance Win32_UserProfile -Filter "SID='$($user.SID.Value)'"
+            if (-not $profile -or -not $profile.Loaded) { break }
+            Start-Sleep -Milliseconds 250
+        }
+        if ($profile) {
+            if ($profile.Loaded) { throw 'Proof account profile remained loaded after process exit' }
+            $profile | Remove-CimInstance
+            if (Get-CimInstance Win32_UserProfile -Filter "SID='$($user.SID.Value)'") {
+                throw 'Proof account profile survived cleanup'
+            }
+        }
+        Write-Output 'Proof account profile cleanup verified.'
+    } finally {
+        & icacls $root /remove:g ('*' + $user.SID.Value) /Q
+        Remove-LocalUser -Name $account
+    }
 }

@@ -12,6 +12,7 @@ pub mod migrate;
 #[cfg(unix)]
 pub mod procs;
 pub mod secrets;
+pub mod supervisor_lock;
 
 /// Database the app uses inside the private cluster.
 pub const APP_DATABASE: &str = "moss";
