@@ -8,6 +8,10 @@ Visit nested People notes in the legacy depth-first listing order. Refresh repla
 include valid nested canonical notes, missing IDs and duplicate IDs instead of silently ignoring
 notes without a status field. Existing scan limits and failure refusals remain in place.
 
+Read the host clock once per indexing batch, anchoring its fifteen-minute delay at batch
+start while preserving separate command IDs, queue sends and retry timing. This removes
+forty-nine clock round trips from the maximum batch; the call deadline remains unchanged.
+
 Compare canonically equivalent Unicode folder names equally, as the legacy folder browser
 does. Comparison uses NFC keys; the names and paths returned to callers stay unchanged.
 This narrows directory-ordering differences without claiming complete locale collation.

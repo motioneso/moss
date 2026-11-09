@@ -2,8 +2,8 @@
 
 The Rust checkpoint contains the People core, SDK-backed repository, canonical-note service,
 two job handlers, route envelopes and a packaged Leptos Settings pane. The installed-package
-gate now passes signed registry installation, reload, the enumerated route replay and all
-four public lookup APIs through an installed consumer fixture. The authenticated Rust
+gate exercises signed registry installation, reload, route replay and all four public lookup
+APIs through an installed consumer fixture; the report records the current result. The authenticated Rust
 application still needs to compose that package into its real Settings and chat flows.
 The [delivery report](../../docs/superpowers/specs/2026-11-08-rust-phase5-people-report.md)
 records each delivered slice and the exact remaining continuation work.
@@ -42,6 +42,10 @@ The vector generator runs the current TypeScript matching and note-format implem
 The directory oracle records JavaScript `localeCompare` for canonical Unicode equivalents
 and nearby case/order comparisons. The relative folder browser normalizes comparison keys
 to NFC, preserving original names and paths and stable input order for equal keys.
+Index batches use one host-owned timestamp for their fifteen-minute delay, anchored at
+batch start. Each item still gets its own command record and queue send; retries retain the
+original record's delay. An empty batch performs no clock or queue work.
+
 The note-scan oracle uses the real legacy vault walker on temporary synthetic folders,
 including interleaved root files, sibling/nested folders, Unicode names, ignored extensions
 and a deeply nested note. The guest preserves that depth-first listing order with an

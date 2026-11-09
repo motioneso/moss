@@ -1903,7 +1903,7 @@ without recursive Wasm calls. The shared host still chooses and confines the fol
 the module adds no filesystem access, server dependency or client-side data store.
 
 The new oracle creates real synthetic folders and calls the existing TypeScript
-`listVaultFilesRecursive` through `VaultContextRunner`. Six recorded cases include
+`listVaultFilesRecursive` through `VaultContextRunner`. Eight recorded cases include
 interleaved root files and nested/sibling directories, Unicode names, ignored file
 extensions and a note thirty-two folders deep. The same native regression failed
 before the fix (`rc=101`): Rust returned `root.md`, `B/second.md`, `A/first.md`,
@@ -1988,8 +1988,10 @@ This covers the existing compiled workers, notes, Settings, tools and data rules
 Privacy controls failed with protection removed and passed after restoring it for
 all seven tables, both runtime roles, and owner/other/admin actors. Settings and
 folder-preference privacy also failed without RLS and passed when restored. The
-container was removed. Later commits change test fixtures, the downstream lockfile
-and this report; they do not change the production guest used by this gate.
+container was removed. Followups through `571ca1d7b` changed test fixtures, the
+downstream lockfile and this report. The timestamp optimization below changes
+production guest code and needs its own installed receipt; this earlier gate does
+not qualify that later optimization.
 
 The native People suite passed all thirty tests in a separate task-owned target,
 and strict Clippy passed all native targets. Core, directory, numeric and new
@@ -2038,3 +2040,32 @@ the application/device acceptance above. The nested traversal fix, native bounds
 and full People privacy gate are independently evidenced; they do not substitute
 for that missing full installed result. Final review findings and the proof
 artifact accompany the checkpoint PR.
+
+### Added review round: batch clock and interleaved scan cases
+
+The second review found a major evidence gap: the failed index refresh stopped the
+installed replay before the changed nested-note cases. It also found a minor scan
+fixture gap: every immediate listing placed folders before files. The Assistant
+added one review round before further edits.
+
+Two new real-vault vectors put a file before a sibling folder and another file
+after it (`0.md`, `B/x.md`, `c.md`, and the lowercase equivalent). They distinguish
+the supplied-listing walk from a folders-first walk. The oracle now has eight
+cases; its expected paths still come from the actual legacy walker.
+
+The refresh batch also performed fifty separate host clock reads. New assertions
+failed first on both the HTTP path and public batch API (`rc=101`, fifty reads
+instead of one). Each nonempty batch now reads one host-owned timestamp and uses
+that as its fifteen-minute delay anchor. This intentionally gives all new items
+in the batch the same scheduled time, rather than sampling the clock separately
+for each send. Each item still gets its own fresh ID (for manual refresh), immutable
+command record and queue send. Retry records keep their original scheduled time.
+Empty batches perform no clock work; invalid host time publishes nothing; earlier
+sends remain queued after a later send fails. The maximum batch removes forty-nine
+host clock round trips without widening the shipping call deadline or changing
+request/response shapes, command scoping or queue parameters. The app map and
+changelog describe the batch timestamp anchor.
+
+The updated native suite and strict Clippy pass. New component/package and full
+installed replay receipts will be recorded after completion. The prior failed
+receipts remain valid evidence of the earlier builds, not this optimization.

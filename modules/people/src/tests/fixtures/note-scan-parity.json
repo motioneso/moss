@@ -12,6 +12,28 @@
   {
     "listings": {
       "": [
+        { "name": "0.md", "kind": "file" },
+        { "name": "B", "kind": "directory" },
+        { "name": "c.md", "kind": "file" }
+      ],
+      "B": [{ "name": "x.md", "kind": "file" }]
+    },
+    "expected": ["0.md", "B/x.md", "c.md"]
+  },
+  {
+    "listings": {
+      "": [
+        { "name": "a.md", "kind": "file" },
+        { "name": "b", "kind": "directory" },
+        { "name": "c.md", "kind": "file" }
+      ],
+      "b": [{ "name": "x.md", "kind": "file" }]
+    },
+    "expected": ["a.md", "b/x.md", "c.md"]
+  },
+  {
+    "listings": {
+      "": [
         { "name": "A", "kind": "directory" },
         { "name": "B", "kind": "directory" },
         { "name": "root.md", "kind": "file" }

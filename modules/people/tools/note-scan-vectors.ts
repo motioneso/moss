@@ -10,6 +10,8 @@ const cases = [];
 for (const paths of [
   [],
   ["a.md", "z.md"],
+  ["0.md", "B/x.md", "c.md"],
+  ["a.md", "b/x.md", "c.md"],
   ["A/first.md", "A/Nested/deep.md", "A/z.md", "B/second.md", "root.md"],
   ["Notes/People/名.md", "Notes/People/é.md", "Notes/z.md", "résumé.md"],
   ["A/readme.txt", "B/Upper.MD", "C/valid.md", "image.png"],

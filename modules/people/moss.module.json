@@ -159,7 +159,7 @@
     },
     {
       "id": "people.manual-index-refresh",
-      "description": "Manual indexing accepts up to fifty source references using the standard module call budget and queues each for fifteen minutes later. Repeated requests retain the legacy standard-queue behavior. Invalid batches are rejected before any job is sent. A failure or timeout can leave earlier jobs queued and an unsent command stored. Repeating a request creates separate jobs and more stored commands; check earlier work before retrying. Command cleanup, limits, the installed screen and live source delivery remain unverified."
+      "description": "Manual indexing accepts up to fifty source references using the standard module call budget and queues each for fifteen minutes after the batch's host timestamp. Repeated requests retain the legacy standard-queue behavior. Invalid batches are rejected before any job is sent. A failure or timeout can leave earlier jobs queued and an unsent command stored. Repeating a request creates separate jobs and more stored commands; check earlier work before retrying. Command cleanup, limits, the installed screen and live source delivery remain unverified."
     },
     {
       "id": "people.relative-folder-browse",
