@@ -42,6 +42,7 @@ export async function routesOracle() {
   await mkdir(join(selected, "Family", "Banana"));
   await mkdir(join(selected, "Family", "Ábc"));
   await mkdir(join(selected, "Work"));
+  for (const name of ["Banana", "apple", "Ära", "zebra"]) await mkdir(join(selected, name));
   const oldRoots = process.env.MOSS_NOTES_ROOTS;
   process.env.MOSS_NOTES_ROOTS = root;
   let refresh: Awaited<ReturnType<typeof refreshQueue>> | undefined;
@@ -218,7 +219,20 @@ export async function routesOracle() {
       { status: "unknown" },
       { status: null },
       { aliases: {} },
-      ...[23, 23.5, -0, 1e20, 1e21, 1e-6, 1e-7, Number("9007199254740993")].map((displayName) => ({
+      ...[
+        23,
+        23.5,
+        -0,
+        1e20,
+        1e21,
+        1e-6,
+        1e-7,
+        Number("652282746268236.2"),
+        Number("-245777903432188.62"),
+        Number("9007199254740993"),
+        2 ** -24,
+        -(2 ** -24)
+      ].map((displayName) => ({
         displayName
       })),
       { displayName: null },
@@ -382,6 +396,12 @@ Human text stays.
       { aliases: null },
       { status: "archived" },
       { displayName: "Restored", aliases: null, emails: null, phones: null },
+      {
+        displayName: Number("652282746268236.2"),
+        aliases: [Number("652282746268236.8")],
+        emails: [Number("-245777903432188.62")],
+        phones: [Number("198676698324544.12")]
+      },
       { displayName: "Final note-backed edit" }
     ])
       await run("PATCH", `/people/${ids.primary}`, body);

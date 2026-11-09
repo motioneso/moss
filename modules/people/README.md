@@ -252,3 +252,12 @@ full installed replay and nine-suite gate pass on the recorded commit. The
 authenticated shell still has no installed module composition, so live UI,
 chat and second-device acceptance remain open. Exact receipts are in the
 report.
+
+## Part twelve numeric contact compatibility
+
+Numeric values accepted by the legacy contact schemas keep JavaScript's shortest decimal
+spelling when converted to text, including equal-distance rounding ties. Both projection-only
+name edits and note-backed name/email/phone edits use the same conversion. Native regressions
+cover those ties and notation boundaries; the installed route replay compares replies, all
+seven tables and canonical note bytes against the real legacy handlers. See the part-twelve
+report for the current receipts and the remaining application/device checks.

@@ -1,7 +1,7 @@
 # Rust Phase 5: People & Context
 
 Tasks JS-45 (part one), JS-50 (part two), JS-57 (part three), JS-58 (part four),
-JS-69 (part five) and subsequent continuations through JS-88 (part ten), Card 523.
+JS-69 (part five) and subsequent continuations through JS-100 (part twelve), Card 523.
 Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
 Release note Category: N/A.
 
@@ -1328,3 +1328,105 @@ map's folder-browsing entry describes the reading order.
 
 This is a bounded checkpoint. Full People parity stays open until the
 assembled application and device checks above pass.
+
+## Part twelve: numeric contact text parity (JS-100)
+
+The takeover found two committed folder-order changes and a clean worktree. Before further
+edits, merged main `698432777` was brought into this branch, including the latest part-eleven
+report and its more complete folder comparator. That comparator supersedes the takeover's
+duplicate implementation. The broader root-folder replay cases remain. No sibling source
+was copied. The branch now contains both the earlier `4066` checkpoint and part eleven
+(`4088`); those are different PRs despite the continuation brief's older reference.
+
+Numeric contact values exposed another behavior difference. For an exact binary64 value
+that JavaScript renders as `652282746268236.2`, Rust's shortest Display chooses
+`652282746268236.3`. Both strings round-trip to the same number, but the legacy schema
+coercion chooses the even final decimal digit when the two candidates are equally close.
+This difference affects projection-only display names and note-backed name, email and
+phone values. The shared People conversion now keeps the shortest digit count and uses
+explicit-precision rounding, then applies JavaScript's fixed/scientific notation boundaries.
+No dependency or public API changed. The module still obtains data through server host
+ports, and the Settings client still uses the server API bridge.
+
+Native regressions cover seven exact tie values, signed zero, fixed/scientific boundaries,
+a large integer, the smallest subnormal, the smallest normal and the largest finite value.
+The differential replay adds two projection edits and a note-backed edit exercising all
+four contact fields. Those requests use the real legacy Fastify handlers as the oracle.
+The app-map feature and package change notes describe the decimal spelling.
+
+### Part-twelve verification
+
+- Failing-first native regression: the unchanged conversion returned
+  `652282746268236.3` instead of `652282746268236.2` (`rc=101`).
+- Failing-first signed installed replay `204854-4LkuPQ` failed (`rc=101`)
+  at the same projection-only PATCH response. The old component was rebuilt
+  from the merged comparator source before the numeric fix, then packaged.
+  An earlier launch `204802-7TLPXo` failed setup because packaging raced the
+  component build; it provides no behavior evidence.
+- All twenty-three native People tests, strict People Clippy and Rust
+  formatting pass after the fix. The exact-bit tests also cover seven ties
+  without depending on JSON-parser rounding.
+- The Settings source and generated component were rebuilt with the
+  task-owned caches. Component SHA-256:
+  `0debe213d08dab948eba4b8a0e68868368ef61aea068e883c7848b3835330538`.
+  Package SHA-256:
+  `ff377d0057b20cce0d772555a5e84f06331df782ef668d0d6480da493b9db1e8`
+  (412213 bytes).
+
+- Final signed installed replay `210039-diEk9Z` passed (`rc=0`) on
+  `0a76fd3a9`, with only this report dirty, fingerprint `4b7d9ab2373f`.
+  All 166 route responses, seven-table snapshots and canonical note bytes
+  matched. This includes numeric aliases, emails, phones and names, root and
+  child folder ordering, other-user/admin attempts, installation/reload and
+  all four public APIs through the installed consumer.
+- The fifty-reference request returned 202 in 20381 milliseconds with the
+  explicit 30000-millisecond replay deadline while other checks were running.
+  Earlier after-fix runs `205118-DNjuB8` and `205422-pqOZ0W` also passed all
+  166 cases; their samples were 7635 and 6576 milliseconds. These are samples,
+  not guarantees. The shipping five-second budget remains unqualified.
+- Full nine-suite People gate `205117-EpegLb` passed (`rc=0`, ten integration
+  tests). The seven-table privacy controls failed with protection removed and
+  passed with it restored for both runtime roles, including another account
+  and an administrator. Settings privacy controls also failed then passed.
+  This receipt identifies `1a7b65cc5` with six dirty files, fingerprint
+  `166be18276ef`. It used the same immutable component digest above; the
+  subsequent changes added tests, explicit Number-string fixtures and report
+  text, without changing executable module behavior.
+- Repository lint, full typecheck (including web, tests and external modules),
+  full Prettier check, file-size check, Rust app-map generation, the unchanged
+  pure-vector comparison, scoped formatting and final strict Clippy pass.
+  CI and the full foundation gate were not run.
+
+First independent Claude review of `a0416366d` found no blocker or major and
+identified two minor test gaps: an upward-even tie and numeric aliases. Both
+were addressed in `0a76fd3a9`, with native tests rerun and the final installed
+replay above. See the task proof for the submitted commit's final independent
+review. Only this report changed after the final installed receipt.
+
+### Remaining acceptance
+
+This is a bounded parity checkpoint, not full Phase 5 acceptance. The merged shell's
+`moss-shell` dependency list and route composition still do not include the module host or
+installed Settings frame. Its shell data adapter remains a stub. This task does not build
+a substitute application or connect the module directly to a database from the app.
+
+The remaining work is unchanged: compose People into the authenticated server's Settings
+and chat paths, finish ingest nudges and real source providers, qualify command cleanup
+and quotas and the fifty-reference call budget, broaden backend/large-data/parser parity,
+and prove the real UI and privacy from desktop and a second physical device over HTTPS
+with trusted origins. No real application UI, chat approval flow or second-device check
+is claimed here. Prior package-dispatch and privacy results do not substitute for them.
+
+All build, dependency and toolchain paths used task-owned scratch. The approved pinned
+`wit-bindgen =0.57.1` dependency was reused from that scratch, without a new global install.
+No migration, SQL privacy policy, provider composition or shared shell source was changed.
+
+### Part-twelve second-review fix
+
+The second review round found that at powers of two the binary64 rounding interval is
+asymmetric, so the even-decimal choice could change the represented number (for example
+at 2^-24). `dee1f6760` keeps the shortest spelling in that case. A native test checks every
+finite power of two with both signs, and all twenty-four native People tests pass on that
+commit. The review rounds (two of two) were used before this fix, so the fix commit has
+no independent review of its own. The installed replay and nine-suite gate receipts above
+predate it; the fix touches only the number spelling path.

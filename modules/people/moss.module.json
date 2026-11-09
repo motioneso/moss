@@ -163,7 +163,7 @@
     },
     {
       "id": "people.note-field-compatibility",
-      "description": "Canonical-note edits keep the legacy handling of aliases, emails and phones, including nulls, empty lists and mixed JSON list values. Unusable list values return an error; legacy empty list items may publish unreadable frontmatter before projection fails. Repair the note and retry. Missing notes retain projection-only fallback. Dollar replacement tokens remain literal to protect human text."
+      "description": "Canonical-note edits keep the legacy handling of aliases, emails and phones, including nulls, empty lists and mixed JSON list values. Numeric contact values keep the legacy decimal spelling, including equal-distance rounding ties. Unusable list values return an error; legacy empty list items may publish unreadable frontmatter before projection fails. Repair the note and retry. Missing notes retain projection-only fallback. Dollar replacement tokens remain literal to protect human text."
     }
   ],
   "screens": {
