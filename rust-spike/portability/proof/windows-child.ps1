@@ -6,6 +6,9 @@ param(
 # GitHub's Windows runner is elevated. Exercise the actual test binary as a separate standard
 # local account; do not weaken the product's elevation refusal just to accommodate CI.
 $ErrorActionPreference = 'Stop'
+if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_OS -ne 'Windows') {
+    throw 'This account-creating qualification script is only for disposable Windows GitHub runners'
+}
 $root = (Resolve-Path "$PSScriptRoot/../../..").Path
 $state = Join-Path $root '.rust-locks'
 $account = 'moss-child-proof'
@@ -45,7 +48,10 @@ try {
             throw 'Negative control did not produce the expected test failure'
         }
         Write-Output 'Negative control: expected failure observed.'
-    } elseif ($process.ExitCode -ne 0) { throw "Windows child qualification failed ($($process.ExitCode))" }
+    } elseif ($process.ExitCode -ne 0 -or -not (Select-String -Path $out -Pattern 'test result: ok\. 8 passed; 0 failed; 1 ignored')) {
+        throw "Windows child qualification failed or did not run the complete suite ($($process.ExitCode))"
+    }
 } finally {
+    & icacls $root /remove:g ('*' + $user.SID.Value) /Q
     Remove-LocalUser -Name $account
 }

@@ -3,6 +3,10 @@
 //! Launches one program without a console, suspended until its kill-on-close job owns it.
 //! The job covers descendants too. Dropping `Child` ends that job, unlike std's `Child`.
 //! This is not yet wired into `moss-db`: its ACLs, stop transport and recovery still need a port.
+//!
+//! The supervisor must serialize all process starts, including starts through std::Command.
+//! The temporary inheritable log/NUL duplicates exist until CreateProcess returns. This call's
+//! handle list restricts its child, but cannot restrict a concurrent blanket-inheritance launch.
 
 mod ffi;
 
@@ -166,13 +170,15 @@ pub fn spawn(
         AssignProcessToJobObject(child.job.as_raw_handle(), child.process.as_raw_handle())
     }) {
         // Assignment failed, so closing the job cannot clean up the unassigned process.
-        // It has never run. Terminate and reap it before returning the original failure.
-        check(unsafe { TerminateProcess(child.process.as_raw_handle(), 1) })?;
-        // A bounded reap also prevents a broken OS call from hanging the supervisor forever.
-        if unsafe { WaitForSingleObject(child.process.as_raw_handle(), 30_000) } != WAIT_OBJECT_0 {
-            return Err(io::Error::other(
-                "could not reap an unassigned suspended process",
-            ));
+        // It has never run. Attempt termination and a bounded reap. If Windows refuses cleanup,
+        // preserve both the assignment error and enough identity to diagnose the suspended child.
+        let terminated = unsafe { TerminateProcess(child.process.as_raw_handle(), 1) };
+        let cleanup_error = (terminated == 0).then(io::Error::last_os_error);
+        let wait = if terminated == 0 { 0 } else { 30_000 };
+        if unsafe { WaitForSingleObject(child.process.as_raw_handle(), wait) } != WAIT_OBJECT_0 {
+            return Err(io::Error::other(format!(
+                "assign child {} to job: {error}; suspended-child cleanup failed: {cleanup_error:?}", child.pid
+            )));
         }
         return Err(error);
     }
@@ -291,13 +297,23 @@ fn environment() -> io::Result<Vec<u16>> {
         .collect::<io::Result<_>>()?;
     // Windows expects the environment sorted without regard to case, in Unicode order.
     entries.sort_by(|a, b| {
-        // SAFETY: the slices contain valid UTF-16 units, lengths exclude the terminating NUL.
+        // Sort names only: e.g. ProgramFiles must precede ProgramFiles(x86). Hidden drive
+        // entries start with '='; the separator is the next '=' in those entries.
+        let name_len = |entry: &[u16]| {
+            entry
+                .iter()
+                .enumerate()
+                .skip(1)
+                .find_map(|(i, &unit)| (unit == b'=' as u16).then_some(i))
+                .unwrap_or(entry.len() - 1)
+        };
+        // SAFETY: both name lengths lie inside the NUL-terminated UTF-16 entries.
         let order = unsafe {
             CompareStringOrdinal(
                 a.as_ptr(),
-                (a.len() - 1) as i32,
+                name_len(a) as i32,
                 b.as_ptr(),
-                (b.len() - 1) as i32,
+                name_len(b) as i32,
                 1,
             )
         };

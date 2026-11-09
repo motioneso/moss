@@ -12,11 +12,14 @@ or platform certificate verifier was added.
   the canonical Phase 1 supervisor. It uses Win32 directly, without another crate.
 - The launch path refuses an elevated process token. It creates an unnamed, non-inheritable
   kill-on-close Job Object, creates the executable suspended and without a console, assigns
-  it to that job, then resumes its primary thread. Assignment failure terminates and reaps
-  the still-suspended process. Job assignment/resume errors never return a usable child.
+  it to that job, then resumes its primary thread. Assignment failure attempts termination and
+  a bounded reap of the suspended process, reporting cleanup failure with the child's identity
+  if Windows refuses it. Job assignment/resume errors never return a usable child.
 - The child owns its job and process handles. Dropping the child closes the job; explicit
   force termination acts on that job. Waiting reports the root process's actual exit code.
   This is a backstop, **not** orderly Postgres shutdown: `pg_ctl kill INT` remains to be wired.
+  The supervisor must serialize all process starts, including starts through `std::Command`:
+  a concurrent blanket-inheritance launch could inherit temporary log/NUL handle duplicates.
 - Launch passes an explicit executable path and working directory, quotes CRT arguments,
   supplies NUL input and duplicate output handles through an explicit inheritance list,
   and removes case-insensitive `PG*` environment variables. Only absolute program and working
@@ -27,8 +30,10 @@ or platform certificate verifier was added.
   environment removal and absence of a console. An explicit elevated-run test checks refusal.
 - The lifecycle CI workflow builds the suite on Windows and runs it as a disposable standard
   local account rather than weakening the elevation policy for the elevated hosted runner.
-  Mutation controls remove kill-on-close and the inheritance list, requiring the corresponding
-  tests to fail. A configured workflow alone is not evidence that those tests passed.
+  Mutation controls remove kill-on-close, the inheritance list, PG environment filtering, the
+  console flag and elevation refusal, requiring the corresponding tests to fail. The harness
+  requires the full positive test count and refuses execution outside disposable Windows CI.
+  A configured workflow alone is not evidence that those tests passed.
 
 This is internal groundwork. The module is **not yet called by `moss-db`**, which still refuses
 Windows builds, and the app still refuses Windows local setup and Stop. There is no new screen,
@@ -42,6 +47,7 @@ Linux portability tests and a Windows-target cross-check do not establish native
 Native results, when green, establish this child API's test cases, **not** a working Windows
 Postgres bundle, supervisor, installer or app. No full Windows/macOS app runtime or separate-device
 HTTPS result is claimed by this slice. No browser surface changed.
+Job-assignment failure and refusal of its attempted cleanup have not been exercised at runtime.
 
 ## Left to full section 13 parity
 

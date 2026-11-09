@@ -56,10 +56,33 @@ fn helper() {
             std::thread::sleep(Duration::from_secs(90));
         }
         "environment-owner" => {
+            #[link(name = "kernel32")]
+            extern "system" {
+                fn AllocConsole() -> i32;
+            }
+            // Give the parent a console if it has none, so removing CREATE_NO_WINDOW really
+            // changes the child's attachment rather than inheriting an already-consoleless state.
+            unsafe {
+                AllocConsole();
+            }
             // This helper owns its environment; the parallel test runner's environment is
             // never mutated. Windows variable names are case-insensitive.
             std::env::set_var("pGHOST", "must-not-reach-child");
             std::env::set_var("PGPASSWORD", "synthetic-test-marker");
+            std::env::set_var("MOSSENV", "base");
+            std::env::set_var("MOSSENV(X86)", "extension");
+            let block = environment().unwrap();
+            let entries: Vec<_> = block
+                .split(|&unit| unit == 0)
+                .map(String::from_utf16_lossy)
+                .collect();
+            let position = |prefix: &str| {
+                entries
+                    .iter()
+                    .position(|entry| entry.starts_with(prefix))
+                    .unwrap()
+            };
+            assert!(position("MOSSENV=") < position("MOSSENV(X86)="));
             let log = File::create(path.with_extension("log")).unwrap();
             let mut child = spawn_helper("environment", path, &[], &log, &log);
             assert!(child
@@ -71,17 +94,20 @@ fn helper() {
         "environment" => {
             #[link(name = "kernel32")]
             extern "system" {
-                fn GetConsoleWindow() -> *mut c_void;
+                fn GetConsoleProcessList(processes: *mut u32, count: u32) -> u32;
             }
             let pg: Vec<String> = std::env::vars_os()
                 .filter(|(key, _)| key.to_string_lossy().to_ascii_uppercase().starts_with("PG"))
                 .map(|(key, _)| key.to_string_lossy().to_string())
                 .collect();
             std::fs::write(path, serde_json::to_vec(&pg).unwrap()).unwrap();
-            assert!(
-                unsafe { GetConsoleWindow() }.is_null(),
-                "child must have no console window"
+            let mut console_pid = 0;
+            assert_eq!(
+                unsafe { GetConsoleProcessList(&mut console_pid, 1) },
+                0,
+                "child must not be attached to a console"
             );
+            assert_eq!(io::Error::last_os_error().raw_os_error(), Some(6));
             std::process::exit(0);
         }
         "handle" => {
@@ -301,6 +327,20 @@ fn dropping_child_ends_root_and_descendant_but_leaves_other_jobs_alone() {
         .wait_timeout(Duration::from_secs(15))
         .unwrap()
         .is_some());
+}
+
+#[test]
+fn explicit_kill_ends_the_entire_tree() {
+    let temp = tempfile::tempdir().unwrap();
+    let log = File::create(temp.path().join("out.log")).unwrap();
+    let path = temp.path().join("kill-leaf.pid");
+    let mut child = spawn_helper("tree", &path, &[], &log, &log);
+    let root = process_handle(child.id());
+    let descendant = process_handle(wait_file(&path).parse().unwrap());
+    child.kill().unwrap();
+    assert_exited(&root);
+    assert_exited(&descendant);
+    assert!(!child.wait().unwrap().success());
 }
 
 #[test]
