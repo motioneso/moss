@@ -71,6 +71,7 @@ pub fn seed(f: &Fixture) -> Seeded {
             (foreign_block, Some(foreign_task), "Foreign task", "{\"kind\":\"add\",\"startsAt\":\"2026-11-08T19:00:00Z\",\"durationMinutes\":30}"),
         ];
         for (index, (id, task, title, pending)) in rows.into_iter().enumerate() {
+            let pending: Value = serde_json::from_str(pending).unwrap();
             f.root.execute(
                 "INSERT INTO app.day_plan_blocks(id,plan_id,owner_user_id,kind,title,position,task_id,pending_change) VALUES($1,$2,$3,'focus',$4,$5,$6,$7)",
                 &[&id, &f.plan, &f.a, &title, &(90 + index as i32), &task, &pending],
