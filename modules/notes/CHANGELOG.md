@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.8
+
+- Connect experimental create, edit and delete tools to private durable sync checkpoints. Their queued work now resumes the same worker as manual requests. Installed chat approval and sync activation remain unfinished.
+
 ## 0.1.7
 
 - Remember successful sync pages and reuse their continuation on retry. Independent workers serialize through the private checkpoint row. Sync activation remains unfinished.

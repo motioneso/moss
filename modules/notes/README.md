@@ -511,3 +511,29 @@ This is not automatic outbox recovery: it needs a caller to retry the known pare
 Crash recovery of the initial request, checkpoint retention, sync activation,
 approved installed chat, complete parity and physical second-device HTTPS proof
 remain unfinished. No ordinary-package sync capability is enabled by this change.
+
+## Write requests join durable sync (part fifteen)
+
+Package `0.1.8` connects the experimental create, edit and delete handlers to the
+same private checkpoint request as `requestNotesSync`. After changing a linked
+file, the handler inserts an empty owner-scoped checkpoint and defers publication
+of a `notes.sync` job carrying only its UUID. The worker can resume that job and
+index the changed file or clean up the deleted note. The legacy success response
+still means sync was requested, rather than completed ingestion.
+
+Assembly must put `TransactionalDatabasePorts` outside `AfterCommitJobs` and the
+linked-file adapter. A checkpoint-save refusal before finalization rolls back
+that transaction and compensates file changes. A publication refusal after commit
+leaves the file and checkpoint saved; a caller that knows the ID can resume it.
+There is still no automatic initial-request recovery or durable publication outbox.
+The ordinary package continues to refuse write tools and sync; installed approval
+consumption, chat integration and configured embedding assembly remain unfinished.
+
+The native legacy write corpus now requires checkpoint creation before UUID-only
+queue publication. The disposable compiled ingest gate additionally runs create,
+edit and delete through real files, checkpoint transactions and indexing, tests
+checkpoint-save compensation and post-commit publication retry, and probes the
+new checkpoints as owner, another owner and an unrelated admin under app/worker
+roles. RLS removal controls must expose the otherwise denied read/update/delete
+probes. Queue delivery and embeddings are named stand-ins. These tests are not
+proof of installed chat, a working manual-sync screen or a separate device.

@@ -53,6 +53,7 @@ struct Input<'a> {
     raw: &'a Value,
 }
 impl<'a> Input<'a> {
+    #[cfg(feature = "write-tools")]
     fn parse(request: &'a Request) -> Result<Self> {
         let keys: &[&str] = match request.tool.as_str() {
             "notes.create" => &["path", "content", "overwrite"],
@@ -176,6 +177,7 @@ fn validate_existing(input: &Input<'_>, note: &Value) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "write-tools")]
 pub fn handle(host: &impl Host, payload: &str) -> Result<String> {
     let request: Request =
         serde_json::from_str(payload).map_err(|_| failure(400, "Invalid Notes input"))?;
@@ -194,17 +196,6 @@ pub fn handle(host: &impl Host, payload: &str) -> Result<String> {
         .map_err(|e| failure(409, &e.0))?),
         _ => Value::Null,
     };
-    // Allocate metadata before publication. No path, source text or replacement
-    // enters the queue. The worker must resolve the account's selected source.
-    let id = call(host, "context", "uuid", "new", json!({}))?;
-    let context = call(host, "context", "read", "call", json!({}))?;
-    let id = id["id"]
-        .as_str()
-        .filter(|s| uuid::Uuid::parse_str(s).is_ok())
-        .ok_or_else(|| failure(503, "Notes service is unavailable"))?;
-    let now = context["now"]
-        .as_str()
-        .ok_or_else(|| failure(503, "Notes service is unavailable"))?;
     let operation = if input.tool == "notes.delete" {
         "notes.remove"
     } else {
@@ -216,16 +207,11 @@ pub fn handle(host: &impl Host, payload: &str) -> Result<String> {
         parameters["content"] = content;
     }
     call(host, "vault", operation, "source", parameters)?;
-    let receipt = call(
-        host,
-        "jobs",
-        "enqueue-after-commit",
-        "notes.sync",
-        json!({"params":{},"idempotencyKey":id,"availableAt":now}),
-    )?;
-    if receipt["deferred"] != true {
-        return Err(failure(503, "Notes sync request was not accepted"));
-    }
+    // Persist the same private checkpoint used by manual-sync requests. The
+    // surrounding transaction commits it before the deferred queue publication.
+    // A refusal before finalization compensates the file through LinkedNotesPorts.
+    crate::sync_worker::request(host)
+        .map_err(|_| failure(503, "Notes sync request was not accepted"))?;
     Ok(json!({"data":{"path":path,"synced":true}}).to_string())
 }
 
