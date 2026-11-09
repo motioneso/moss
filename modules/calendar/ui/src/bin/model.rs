@@ -14,6 +14,18 @@ fn main() {
                 model::twelve(v["format"].as_str())
             )),
             "duration" => json!(model::duration(v["minutes"].as_i64().unwrap())),
+            "dateRange" => {
+                let event: Event = serde_json::from_value(v["event"].clone()).unwrap();
+                json!(model::date_range(
+                    &event,
+                    model::zone(v["zone"].as_str().unwrap()).unwrap()
+                ))
+            }
+            "rangeLabel" => json!(model::range_label(
+                v["cursor"].as_str().unwrap().parse().unwrap(),
+                v["view"].as_str().unwrap(),
+                v["work"].as_bool().unwrap_or(false),
+            )),
             "events" => {
                 let events: Vec<Event> = serde_json::from_value(v["events"].clone()).unwrap();
                 let groups =

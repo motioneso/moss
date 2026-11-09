@@ -21,6 +21,8 @@ import pg from "pg";
 import { chromium } from "@playwright/test";
 import { getMossDatabaseUrls } from "@moss/db";
 import { readHttpOracle } from "./http-oracle.js";
+import { DEFAULT_LOCALE_SETTINGS, type CalendarEventDto } from "@moss/shared";
+import { dateRangeLabel, dtoToViewEvent } from "../../../apps/web/src/calendar/calendar-model.js";
 
 assert.equal(process.env.JARVIS_GATE_RUN, "1", "Use verify-gate");
 const out = process.env.CALENDAR_HTTPS_PROOF_DIR;
@@ -183,6 +185,13 @@ try {
   assert(ready, "HTTPS listener startup timed out");
   const data: { actor: string; other: string; event: string; email: string; otherEmail: string } =
     JSON.parse(readFileSync(fixture, "utf8"));
+  // signed_ui seeds this preference. Date fixtures and the production oracle below
+  // must use the same timezone as the installed screen, regardless of host time.
+  const locale = await db.query(
+    "SELECT value_json FROM app.preferences WHERE owner_user_id=$1 AND key='locale'",
+    [data.actor]
+  );
+  assert.equal(locale.rows[0]?.value_json.timezone, "UTC", "Live account timezone");
   const salt = randomBytes(16).toString("hex");
   const hash = `${salt}:${scryptSync(password.normalize("NFKC"), salt, 64, { N: 16384, r: 16, p: 1, maxmem: 128 * 1024 * 1024 }).toString("hex")}`;
   for (const actor of [data.actor, data.other])
@@ -303,6 +312,44 @@ try {
   console.log(
     "PASS HTTPS sign-in, owner reads, foreign-account isolation, trusted origins, opaque static assets and same-machine LAN-address access"
   );
+  // Real synthetic cache rows, read by the installed package. No network interception.
+  const today = new Date().toISOString().slice(0, 10);
+  const nextDay = (days: number) =>
+    new Date(Date.parse(`${today}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
+  const proofEvents = [
+    {
+      id: randomUUID(),
+      title: "Midnight date check",
+      starts: `${today}T22:30:00Z`,
+      ends: `${nextDay(1)}T00:00:00Z`,
+      metadata: {}
+    },
+    {
+      id: randomUUID(),
+      title: "All-day date check",
+      starts: `${today}T00:00:00Z`,
+      ends: `${nextDay(3)}T00:00:00Z`,
+      metadata: { allDay: true }
+    },
+    {
+      id: randomUUID(),
+      title: "Held block check",
+      starts: `${today}T12:00:00Z`,
+      ends: `${today}T13:00:00Z`,
+      metadata: { jarvisCreated: true }
+    }
+  ];
+  for (const event of proofEvents) {
+    assert.equal(
+      (
+        await db.query(
+          "INSERT INTO app.calendar_events(id,connector_account_id,owner_user_id,title,starts_at,ends_at,external_id,external_metadata) SELECT $2::uuid,connector_account_id,owner_user_id,$3,$4,$5,$2::text,$6 FROM app.calendar_events WHERE id=$1",
+          [data.event, event.id, event.title, event.starts, event.ends, event.metadata]
+        )
+      ).rowCount,
+      1
+    );
+  }
   // The task browser is visible in Herdr. Its own session is opened by the task's wrapper.
   const wrapper = "/home/ben/.local/bin/herdr-browser";
   const browserEnv = {
@@ -338,8 +385,51 @@ try {
   await frame.getByRole("dialog").filter({ hasText: "Calendar package check" }).waitFor();
   await screenshotDialog("signed-in-linked-event.png");
   await frame.getByRole("button", { name: "Close", exact: true }).click();
+  for (const [index, event] of proofEvents.slice(0, 2).entries()) {
+    const result = await request(`/api/calendar/events/${event.id}`, { cookie: owner });
+    assert.equal(result.status, 200);
+    const dto = JSON.parse(result.body).event as CalendarEventDto;
+    const projected = dtoToViewEvent(dto, "UTC");
+    assert(projected);
+    const expected = dateRangeLabel(projected, { ...DEFAULT_LOCALE_SETTINGS, timezone: "UTC" });
+    await tab.goto(`${local}/calendar?event=${event.id}`);
+    await frame.getByRole("dialog").filter({ hasText: event.title }).waitFor();
+    await frame.getByRole("dialog").getByText(expected, { exact: true }).waitFor();
+    await screenshotDialog(
+      index === 0 ? "signed-in-midnight-date.png" : "signed-in-all-day-dates.png"
+    );
+    await frame.getByRole("button", { name: "Close", exact: true }).click();
+  }
+  await frame
+    .locator(".cal-legend__note")
+    .getByText("Moss is holding 1 flexible block today.", { exact: true })
+    .waitFor();
+  for (const tone of ["hard", "hold"]) {
+    const swatch = frame.locator(`.cal-legend__sw--${tone}`);
+    const bounds = await swatch.boundingBox();
+    assert(
+      bounds && bounds.width > 0 && bounds.height > 0,
+      "Shared event swatches must be visible"
+    );
+    assert.equal(
+      await swatch.evaluate((el) => getComputedStyle(el).borderLeftStyle),
+      tone === "hold" ? "dashed" : "solid"
+    );
+  }
+  await tab.setViewportSize({ width: 390, height: 844 });
+  assert(await frame.locator(".cal-legend__note").isVisible());
+  await tab.screenshot({ path: join(out, "signed-in-day-legend-phone-width.png") });
+  await frame.getByRole("button", { name: "Previous", exact: true }).click();
+  await frame.locator(".cal-legend__note").waitFor({ state: "detached" });
+  await frame.getByRole("button", { name: "Today", exact: true }).click();
+  await frame.locator(".cal-legend__note").waitFor();
+  await tab.setViewportSize({ width: 1280, height: 860 });
+  console.log(
+    "PASS installed UI midnight/all-day date labels against production, authored swatches and today's held count at desktop and phone width"
+  );
   await frame.getByRole("button", { name: "Month", exact: true }).waitFor();
   await frame.getByRole("button", { name: "Month", exact: true }).click();
+  await frame.locator(".cal-legend").waitFor({ state: "detached" });
   assert.equal(
     await frame.locator(".cal-month__grid").evaluate((el) => getComputedStyle(el).display),
     "grid",
@@ -359,6 +449,7 @@ try {
   await screenshotDialog("signed-in-event.png");
   await frame.getByRole("button", { name: "Close", exact: true }).click();
   await frame.getByRole("button", { name: "Week", exact: true }).click();
+  await frame.locator(".cal-legend__note").waitFor({ state: "detached" });
   await frame.getByRole("button", { name: "Day", exact: true }).click();
   await tab.getByRole("link", { name: "Calendar settings", exact: true }).click();
   await frame.getByLabel("Look ahead", { exact: true }).waitFor();
@@ -460,7 +551,7 @@ try {
   );
   writeFileSync(
     join(out, "result.txt"),
-    "PASS: real Rust HTTPS sign-in, installed Calendar screens, event deep links, live detail refresh/removal, production read-route comparisons, settings save/reload/failure/retry and writeback policy, account isolation, static asset CSP/CORS, origin checks, LAN-address path, failure/retry and sign-out.\nNot proven: physical second device, production TLS trust, full shell/chat, provider writes/jobs and full Calendar parity.\n"
+    "PASS: real Rust HTTPS sign-in, installed Calendar screens, midnight/all-day dates compared with production UI, Day held-block count and shared swatches at desktop/phone width, event deep links, live detail refresh/removal, production read-route comparisons, settings save/reload/failure/retry and writeback policy, account isolation, static asset CSP/CORS, origin checks, LAN-address path, failure/retry and sign-out.\nNot proven: physical second device, production TLS trust, regional formatting beyond default English, full shell/chat, provider writes/jobs and full Calendar parity.\n"
   );
   completed = true;
   if (process.env.CALENDAR_BROWSER_HOLD === "1") {

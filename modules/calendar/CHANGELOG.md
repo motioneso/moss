@@ -1,5 +1,13 @@
 # Calendar package
 
+## 0.8.0
+
+- Keep midnight-ending events on the last covered day in their details.
+- Match default English event-date and toolbar-range wording to the existing screen.
+- Restore event swatches and today’s held-block count in the Day legend.
+- Compare date labels with the production UI model and check the installed HTTPS screen.
+- Full parity, regional formatting, provider execution and second-device trust remain open.
+
 ## 0.6.0
 
 - Save account lookahead, prep-task and time-block choices from Calendar settings.

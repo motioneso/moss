@@ -205,6 +205,12 @@ pub fn Calendar() -> impl IntoView {
     let zone = Memo::new(move |_| state.zone());
     let twelve = Memo::new(move |_| state.twelve());
     let today = Memo::new(move |_| state.today());
+    let held_today = Memo::new(move |_| {
+        model::group(&state.events.get().unwrap_or_default(), zone.get())
+            .get(&today.get())
+            .map(|items| items.iter().filter(|s| s.event.is_moss_block).count())
+            .unwrap_or(0)
+    });
     let cursor = Memo::new(move |_| state.cursor.get().unwrap_or_else(|| today.get()));
     let now = Signal::derive(move || {
         chrono::DateTime::parse_from_rfc3339(state.display.get()["now"].as_str().unwrap_or(""))
@@ -266,7 +272,10 @@ pub fn Calendar() -> impl IntoView {
             <Button variant=ButtonVariant::Quiet disabled=Signal::derive(move||state.saving.get() || !state.initialized.get()) on_click=Callback::new(move |_|{state.cursor.set(Some(model::navigate(state.day(),&state.view.get(),1)));state.persist();})>"Next"</Button></div>
             <h1 class="cal-range">{move||{
                 let day=cursor.get();
-                match state.view.get().as_str(){"month"=>day.format("%B %Y").to_string(),"week"=>{let days=model::week(day,state.work.get());format!("{} – {}",days[0].format("%b %-d"),days.last().unwrap().format("%b %-d, %Y"))},_=>day.format("%a, %B %-d, %Y").to_string()}
+                view! {
+                    {(state.view.get()=="day").then(|| view!{<span class="cal-range__dow">{day.format("%a").to_string()}</span>})}
+                    {model::range_label(day, &state.view.get(), state.work.get())}
+                }
             }}</h1>
         </div><div class="cal-toolbar__right">
             {move||(state.view.get()=="week").then(||view!{<Button variant=ButtonVariant::Secondary disabled=Signal::derive(move||state.saving.get() || !state.initialized.get()) on_click=Callback::new(move |_|{state.work.update(|v|*v=!*v);state.persist();})>{move||if state.work.get(){"Show full week"}else{"Show work week"}}</Button>})}
@@ -276,7 +285,7 @@ pub fn Calendar() -> impl IntoView {
                 }).collect_view()}
             </div>
         </div></div>
-        <div class="cal-legend"><span>"Accepted · Moss holding"</span><span>{move||state.zone().name()}</span></div>
+        {move||view!{<CalendarLegend view=state.view.get() day=cursor.get() today=today.get() held=held_today.get()/>}}
         <div class="cal-notice" aria-live="polite">
             {move||(state.loading.get()!=Refresh::Idle && (state.events.get().is_none() || state.loading.get()==Refresh::Explicit)).then(||view!{<p role="status">{if state.events.get().is_some(){"Refreshing calendar…"}else{"Loading calendar…"}}</p>})}
             {move||state.failed.get().then(||view!{<ReadFailure retained=state.events.get().is_some() on_retry=Callback::new(move |_|state.refresh(true))/>})}

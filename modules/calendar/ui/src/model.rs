@@ -205,7 +205,8 @@ pub fn time(minutes: u32, twelve: bool) -> String {
     }
 }
 
-/// All-day dates are calendar dates, with the provider's exclusive end removed.
+/// Match Calendar's dateRangeLabel: all-day and local-midnight ends are exclusive.
+/// Wording currently uses the default English locale, as the other packaged date labels do.
 pub fn date_range(event: &Event, zone: Tz) -> String {
     let Ok(start) = DateTime::parse_from_rfc3339(&event.starts_at) else {
         return String::new();
@@ -223,18 +224,41 @@ pub fn date_range(event: &Event, zone: Tz) -> String {
             if event.all_day {
                 (e.with_timezone(&Utc).date_naive() - Duration::days(1)).max(first)
             } else {
-                e.with_timezone(&zone).date_naive()
+                let local = e.with_timezone(&zone);
+                let day = local.date_naive();
+                if clock(local) == 0 {
+                    day - Duration::days(1)
+                } else {
+                    day
+                }
             }
         })
-        .unwrap_or(first);
+        .unwrap_or(first)
+        .max(first);
     if first == last {
-        first.format("%A, %B %-d, %Y").to_string()
+        first.format("%A, %B %-d").to_string()
     } else {
         format!(
             "{} – {}",
-            first.format("%b %-d, %Y"),
-            last.format("%b %-d, %Y")
+            first.format("%A, %B %-d"),
+            last.format("%A, %B %-d")
         )
+    }
+}
+
+/// Default English wording from the existing Calendar rangeLabel.
+pub fn range_label(cursor: NaiveDate, view: &str, work: bool) -> String {
+    match view {
+        "day" => cursor.format("%B %-d").to_string(),
+        "week" => {
+            let days = week(cursor, work);
+            format!(
+                "{} – {}",
+                days[0].format("%b %-d"),
+                days.last().unwrap().format("%b %-d")
+            )
+        }
+        _ => cursor.format("%B %Y").to_string(),
     }
 }
 

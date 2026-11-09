@@ -441,3 +441,48 @@ request deadline. The runner now allows extra time for unoptimized Rust password
 verification on loaded development machines. This changes only the proof runner,
 not production password settings or network deadlines. Final receipts, screenshots,
 review disposition and remaining limits are attached to the task Proof artifact.
+
+## JS-91 / part 8: event dates and Day legend checkpoint
+
+Card 525. Work stays in Calendar-owned files in the `~/Jarv1s` task worktree.
+At the start, main contains part 6; part 7 is still open as PR 4079. This continuation
+does not copy that branch's account-name projection or narrow-week positioning.
+The full remaining port exceeds the brief's context bound, so this is another
+bounded checkpoint, not final Calendar acceptance.
+
+Package 0.8.0 corrects event-detail date ranges at midnight and retains all-day exclusive
+ends, compares displayed date and toolbar range wording against the production screen
+model, and restores the Day legend's held-block count and authored event swatches.
+Verification includes the Calendar parity and failing-first privacy gate, plus real
+signed-in installed-package HTTPS UI checks. No provider response is mocked to make a
+screen pass. The module remains a client of the server's installed package API.
+
+The existing task-local Rust 1.95.0/Wasm compiler and lockfile dependencies are reused.
+Build caches are copied to this task's scratch directory before use. No global tool,
+new dependency or wit-bindgen installation is performed. Final receipts and review
+disposition belong in the task Proof artifact against the tested commit.
+
+The midnight-detail regression failed first: a meeting ending at local midnight
+displayed the next calendar day as part of its range. The corrected native rendering
+passes. The UI differential harness adds 90 event-date and 36 toolbar-range comparisons
+against the production TypeScript model, covering midnight (including the existing
+minute-level rule), all-day, multi-day, DST, leap-day and year boundaries in five zones.
+Native legend cases cover singular/plural, zero held blocks, another day, Week, Month
+and escaped assistant-name text. The live runner creates real synthetic cache rows
+and compares the rendered date labels with the production model, then checks shared
+swatches and the Day count at desktop and phone width. These remain scoped checks.
+
+The part 5 acceptance list remains open: remaining HTTP contracts/errors/defaults,
+four provider tools and both jobs, plan preview/approval/apply/recovery/monitoring,
+real public reference/provider adapters, source-behavior controls, external-calendar
+status, full shell/Today/chat composition, old-screen replacement and complete
+assembled parity. Regional date/time formatting beyond the default English locale
+is also not established. A phone-width browser and a same-host LAN request do not
+prove physical second-device access or trusted production HTTPS.
+This task found no attached Android device or configured SSH alias for that check.
+
+The first review's claimed UTC mismatch was rejected: `host/examples/signed_ui.rs`
+already saves the owner's UTC locale before publishing the fixture. The live runner
+now asserts that stored timezone explicitly before creating dated events. Minor
+coverage gaps remain: malformed end-time date labels and regional weekday prefixes
+are not compared by the added date/toolbar oracle. Neither is claimed as proven.

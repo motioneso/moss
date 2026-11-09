@@ -5,6 +5,26 @@ use moss_module_ui::{calendar::*, Button, ButtonVariant, EmptyState};
 use std::collections::BTreeMap;
 
 #[component]
+pub fn CalendarLegend(
+    view: String,
+    day: NaiveDate,
+    today: NaiveDate,
+    held: usize,
+    #[prop(default = "Moss".into())] assistant_name: String,
+) -> impl IntoView {
+    // Use the authored Calendar swatch hooks from the shared kit; no local styling.
+    (view != "month").then(|| view! {
+        <div class="cal-legend">
+            <span class="cal-legend__item"><span aria-hidden="true" class="cal-legend__sw cal-legend__sw--hard"></span>"Accepted"</span>
+            <span class="cal-legend__item"><span aria-hidden="true" class="cal-legend__sw cal-legend__sw--hold"></span>{format!("{assistant_name} holding")}</span>
+            {(view == "day" && day == today && held > 0).then(|| view! {
+                <span class="cal-legend__note">{format!("{assistant_name} is holding {held} flexible block{} today.", if held == 1 {""} else {"s"})}</span>
+            })}
+        </div>
+    })
+}
+
+#[component]
 pub fn Month(
     cursor: NaiveDate,
     today: NaiveDate,
