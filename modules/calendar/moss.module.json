@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -122,6 +122,11 @@
       "method": "PATCH",
       "path": "/display-settings",
       "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/briefing-settings",
+      "signIn": true
     }
   ],
   "provides": {
@@ -193,7 +198,7 @@
     },
     {
       "id": "calendar.screens",
-      "description": "Packaged Rust Day, Week and Month screens with saved views and event links. Details show duration, attendee and status wording, follow successful refreshes, and close when an event disappears. Failed refreshes retain loaded events and explicit retry shows progress. The Calendar web router serves installed frames behind Rust sign-in and HTTPS. Original event and briefing-settings read URLs dispatch through the installed package. External-calendar status, settings edits, provider writes, full shell assembly and second-device acceptance remain open.",
+      "description": "Packaged Rust Day, Week and Month screens with saved views and event links. Details show duration, attendee and status wording, follow successful refreshes, and close when an event disappears. Failed refreshes retain loaded events and explicit retry shows progress. The Calendar web router serves installed frames behind Rust sign-in and HTTPS. Original event and briefing-settings read and settings-write URLs dispatch through the installed package. External-calendar status, provider writes, full shell assembly and second-device acceptance remain open.",
       "errors": [
         {
           "code": "calendar-page-unavailable",
@@ -209,6 +214,17 @@
           "code": "calendar-view-save-failed",
           "class": "transient",
           "description": "The selected view lasts for this visit if its account preference cannot be saved."
+        }
+      ]
+    },
+    {
+      "id": "calendar.briefing-settings",
+      "description": "Edit and reload account lookahead, prep-task and time-block choices. Settings and the time-block writeback policy save together; failed saves retain confirmed values. Auto grants standing permission also honored by the existing app. This Rust screen does not execute provider actions.",
+      "errors": [
+        {
+          "code": "calendar-settings-save-failed",
+          "class": "transient",
+          "description": "Your last confirmed settings remain shown. Check the connection and try the change again."
         }
       ]
     }
@@ -240,7 +256,7 @@
       "id": "calendar.automation",
       "label": "Calendar",
       "path": "/settings/calendar",
-      "description": "Read-only lookahead, prep-task and time-block settings. Editing and provider execution remain unavailable.",
+      "description": "Saved account lookahead, prep-task and time-block choices. Time-block mode also saves the matching writeback permission. Auto grants standing permission also honored by the existing app; Rust action execution and source-behavior controls remain open.",
       "scope": "user"
     }
   ]

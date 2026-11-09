@@ -4,8 +4,8 @@ Part of #4027. This is the package and data foundation, **not the full Calendar 
 The existing TypeScript app stays in place. Version 0.5.0 connects event links at
 `/calendar?event=<id>` through the signed-in Calendar composition, restores duration,
 attendee and status details, refreshes open details and closes a removed event.
-Day, Week and Month screens, saved views and view-only settings are packaged.
-Full shell composition, settings writes, the remaining four chat tools, jobs,
+Day, Week and Month screens, saved views and editable briefing settings are packaged.
+Full shell composition, the source-behavior switch, the remaining four chat tools, jobs,
 provider execution and the assembled HTTP/UI parity gate remain open.
 
 Version 0.2.0 adds `calendar.heartbeatWindow` (owned cache reads) and
@@ -14,9 +14,9 @@ retains recorded placement and requires an actor-scoped public Tasks projection 
 new task references. Neither tool calls a provider. The package advertises only these
 two tools; it does not yet wire them into the authenticated chat gateway.
 
-The guest in `src/` depends only on the SDK and pure Rust libraries. Its six storage routes
+The guest in `src/` depends only on the SDK and pure Rust libraries. Its declared routes
 and five public methods expose cached events, day-plan draft reads/create/save, and legacy
-briefing-settings reads. These are the data layer; the later UI adapter must retain the
+briefing-settings reads and writes. These are the data layer; the later UI adapter must retain the
 existing HTTP request envelopes, default timezone and contextual response projections.
 
 `moss.module.json` declares all five existing Calendar tables, their privacy classification,
@@ -26,8 +26,9 @@ Events retain owner-or-explicit-share rules. Plans, blocks, operations and opera
 retain owner-only rules. A draft cannot overwrite recorded placement.
 
 `host/` is a **trusted host wrapper**, separate from the guest. Use `CalendarPorts::new` in
-`Application::open_extended_with`. It reads only the seven existing Calendar preference keys
-through the authenticated data context, plus the actor's saved locale timezone and clock format.
+`Application::open_extended_with`. It reads and writes the seven existing Calendar preference keys
+through the authenticated data context, plus the fixed writeback-policy key on time-block mode changes.
+It also reads the actor's saved locale timezone and clock format.
 `with_references` accepts actor-scoped public Tasks and
 Briefing projections; no other module's tables are queried here. Without those projections,
 drafts containing task references or a source run fail before committing. The returned task
@@ -163,3 +164,29 @@ Its direct fixture row changes are synthetic cache setup, not provider execution
 Malformed UUID errors, every HTTP method/error, provider-backed paths and full
 Calendar parity remain unproven. Existing privacy fault witnesses still run in
 `gate.sh`; the new read comparisons do not replace those controls.
+
+## Editable briefing settings (part 6)
+
+Version 0.6.0 replaces the read-only summary with account lookahead, prep-task and
+time-block controls. PATCH on both `/api/calendar/briefing-settings` and the installed
+prefix uses the verified package. The trusted wrapper accepts only the seven existing
+setting fields, writes their existing preference keys and updates the fixed Calendar
+writeback-policy key when time-block mode changes. Settings and policy commit together
+only after a successful guest call; errors roll them back. Preference revisions match
+the original repositories. There is no general key or owner override.
+
+The screen saves each choice, reloads confirmed values, retains them after a failed
+save and allows another attempt. Auto grants standing permission to create tasks or calendar blocks without asking.
+The existing app shares these preferences and may act on that permission. This Rust
+version saves the choices without running providers, tasks or jobs; the briefing
+source-behavior switch and old-screen replacement remain open.
+
+The disposable gate compares valid write sequences against the production TypeScript
+handler with its real policy adapter, including stored values and revisions for owner,
+foreign user and administrator. Preferences add their own read/write RLS fault witness
+and failed-guest rollback check. Rust rejects unknown fields and requires typed values. The original Fastify route
+strips extra fields and can coerce string or null lookahead values; that malformed-input
+behavior and exhaustive error-message equivalence remain different. Signed-live additionally saves
+through the real UI, reloads, checks persisted policy, disconnects the browser for a
+failed save and retries. A phone-width screenshot and same-host LAN check still do
+not prove physical second-device access or production certificate trust.

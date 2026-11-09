@@ -37,7 +37,7 @@ pub fn seed(f: &Fixture) {
 }
 
 pub fn compare(app: &Application, f: &Fixture) {
-    let paths = vec![
+    let paths = [
         "/events".to_string(),
         format!("/events/{}", f.event),
         format!("/events/{}", Uuid::new_v4()),

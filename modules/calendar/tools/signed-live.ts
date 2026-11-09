@@ -27,7 +27,7 @@ const out = process.env.CALENDAR_HTTPS_PROOF_DIR;
 assert(out, "Set a scratch CALENDAR_HTTPS_PROOF_DIR");
 mkdirSync(out, { recursive: true, mode: 0o700 });
 const port = Number(
-  execFileSync("devports", ["claim", `js78-https-${process.pid}`], { encoding: "utf8" }).trim()
+  execFileSync("devports", ["claim", `js82-https-${process.pid}`], { encoding: "utf8" }).trim()
 );
 const local = `https://127.0.0.1:${port}`;
 const address = Object.values(networkInterfaces())
@@ -139,7 +139,9 @@ async function request(
         );
       }
     );
-    req.setTimeout(30000, () => req.destroy(new Error("HTTPS deadline")));
+    // Unoptimized Rust scrypt can exceed 30s on a loaded development machine.
+    const deadline = path === "/api/auth/sign-in/email" ? 120000 : 30000;
+    req.setTimeout(deadline, () => req.destroy(new Error(`HTTPS deadline at ${path}`)));
     req.on("error", fail);
     req.end(body);
   });
@@ -241,8 +243,8 @@ try {
         body: { timeBlockMode: "auto" }
       })
     ).status,
-    405,
-    "Read aliases do not expose unfinished settings writes"
+    200,
+    "The original settings URL exposes the installed PATCH route"
   );
   console.log(
     "PASS 16 signed HTTP comparisons against production read routes through both URL prefixes"
@@ -359,7 +361,50 @@ try {
   await frame.getByRole("button", { name: "Week", exact: true }).click();
   await frame.getByRole("button", { name: "Day", exact: true }).click();
   await tab.getByRole("link", { name: "Calendar settings", exact: true }).click();
-  await frame.getByText("These settings are read only.").waitFor();
+  await frame.getByLabel("Look ahead", { exact: true }).waitFor();
+  const saved = frame.getByRole("status").filter({ hasText: "Settings saved." });
+  const saveSetting = async (label: string, value: string) => {
+    const response = tab.waitForResponse(
+      (r) =>
+        r.url().endsWith("/api/m/calendar/briefing-settings") && r.request().method() === "PATCH"
+    );
+    await frame.getByLabel(label, { exact: true }).selectOption(value);
+    assert.equal((await response).status(), 200);
+    await saved.waitFor();
+  };
+  await saveSetting("Look ahead", "0");
+  await saveSetting("Prep tasks", "off");
+  await saveSetting("Time blocks", "suggest");
+  const confirmed = await request("/api/calendar/briefing-settings", { cookie: owner });
+  assert.equal(JSON.parse(confirmed.body).settings.lookaheadDays, 0);
+  assert.equal(JSON.parse(confirmed.body).settings.prepTaskMode, "off");
+  assert.equal(JSON.parse(confirmed.body).settings.timeBlockMode, "suggest");
+  const policy = await db.query(
+    "SELECT value_json FROM app.preferences WHERE owner_user_id=$1 AND key='assistant.action_policy.v1.calendar.calendar_writeback'",
+    [data.actor]
+  );
+  assert.equal(policy.rows[0]?.value_json, "ask_each_time");
+  await tab.reload();
+  await frame.getByLabel("Look ahead", { exact: true }).waitFor();
+  assert.equal(await frame.getByLabel("Look ahead", { exact: true }).inputValue(), "0");
+  assert.equal(await frame.getByLabel("Prep tasks", { exact: true }).inputValue(), "off");
+  assert.equal(await frame.getByLabel("Time blocks", { exact: true }).inputValue(), "suggest");
+  await context.setOffline(true);
+  await frame.getByLabel("Prep tasks", { exact: true }).selectOption("auto");
+  await frame
+    .getByRole("alert")
+    .filter({ hasText: "Could not save calendar briefing settings" })
+    .waitFor({ timeout: 120000 });
+  assert.equal(await frame.getByLabel("Prep tasks", { exact: true }).inputValue(), "off");
+  await context.setOffline(false);
+  await saveSetting("Prep tasks", "auto");
+  await tab.setViewportSize({ width: 390, height: 844 });
+  await tab.screenshot({ path: join(out, "signed-in-settings-phone-width.png") });
+  await tab.setViewportSize({ width: 1280, height: 860 });
+  await tab.screenshot({ path: join(out, "signed-in-settings.png") });
+  console.log(
+    "PASS signed-in UI settings save/reload, stored writeback policy, failed-save retention and retry"
+  );
   await tab.getByRole("link", { name: "Calendar", exact: true }).click();
   await frame
     .getByRole("button", { name: /Calendar package check/ })
@@ -415,7 +460,7 @@ try {
   );
   writeFileSync(
     join(out, "result.txt"),
-    "PASS: real Rust HTTPS sign-in, installed Calendar screens, event deep links, live detail refresh/removal, production read-route comparisons, account isolation, static asset CSP/CORS, origin checks, LAN-address path, failure/retry and sign-out.\nNot proven: physical second device, production TLS trust, full shell/chat, provider writes/jobs and full Calendar parity.\n"
+    "PASS: real Rust HTTPS sign-in, installed Calendar screens, event deep links, live detail refresh/removal, production read-route comparisons, settings save/reload/failure/retry and writeback policy, account isolation, static asset CSP/CORS, origin checks, LAN-address path, failure/retry and sign-out.\nNot proven: physical second device, production TLS trust, full shell/chat, provider writes/jobs and full Calendar parity.\n"
   );
   completed = true;
   if (process.env.CALENDAR_BROWSER_HOLD === "1") {

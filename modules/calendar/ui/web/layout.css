@@ -29,19 +29,20 @@ body {
   margin: auto;
   padding: var(--space-4);
 }
-.calendar-settings dl {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
-}
-.calendar-settings dt,
-.calendar-settings dd {
-  margin: 0;
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
 .calendar-toolbar-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+.calendar-settings-section {
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--space-6) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-5);
+}
+.calendar-settings-section h2,
+.calendar-settings-section p {
+  margin: 0;
 }

@@ -373,3 +373,71 @@ Rust metadata serializes zero as `0.0`, while the TypeScript response uses `0`. 
 comparison now applies JavaScript numeric semantics to both complete JSON bodies;
 array order, fields and nonnumeric values remain compared. The live runner also
 passes its required browser launch flags through the supported environment setting.
+
+## JS-82 / part 6: editable briefing settings
+
+Card 525. Work stays in Calendar-owned files in the `~/Jarv1s` task worktree.
+This checkpoint replaces the read-only settings summary with saved lookahead, prep-task
+and time-block controls. The installed PATCH route will preserve the seven existing
+preference keys and the time-block writeback policy, atomically under the signed-in
+actor. Invalid input must fail before writes, and unsuccessful guest calls must roll
+back the settings transaction. The app map will describe this boundary.
+
+Verification will compare valid write sequences with the production TypeScript route
+and its real policy adapter, exercise foreign-user and administrator isolation with
+RLS removed and restored, and save/reload settings through the real signed-in UI.
+Full provider execution, source-behavior controls, Today/chat shell assembly, old-screen
+replacement, exhaustive error/coercion equivalence and physical second-device trusted
+HTTPS remain outside this bounded checkpoint and required for final acceptance.
+No new global tools or dependencies are planned; builds reuse the existing scratch
+Rust/Wasm toolchain. Proof receipts and review disposition will accompany the checkpoint.
+
+### Delivered settings boundary
+
+Package 0.6.0 exposes the original settings PATCH URL and the installed route.
+Lookahead, prep-task and time-block choices save per account, reload from existing
+preferences, retain confirmed values after failure and allow retry. Time-block mode
+also saves the existing writeback tier in the same transaction. The host validates
+all fields independently of the guest and commits only after successful completion.
+Concurrent account saves can wait for each other without blocking call finalization.
+The screen discloses that Auto grants standing permission honored by the existing
+app, which shares these preferences and may act on them. This Rust version does not
+run a provider or job. The briefing source-behavior switch is still open.
+
+The new PATCH regression failed first with 404 before the route was implemented.
+The disposable oracle adds 33 valid write-response comparisons across owner, foreign
+user and administrator, then compares stored preference values, revisions and policy
+with the production TypeScript repositories. Existing stored modes override legacy
+booleans just as before. A failed-guest witness checks settings and policy rollback.
+The preferences read/write assertions fail with RLS removed and pass after restoration.
+Existing five-table privacy fault witnesses remain required in the same gate.
+
+The builds use the existing scratch Rust 1.95.0/Wasm toolchain and lockfile dependencies.
+No global installation, new package dependency or wit-bindgen installation was needed.
+Builds and proof files live outside the worktree. Final tested-commit receipts and
+independent review disposition are in the task Proof artifact, not inferred from an
+earlier checkpoint. This remains a checkpoint, not full Calendar acceptance.
+
+### Review fixes and proof limits
+
+The settings transaction now has a call-wide timeout, a PostgreSQL statement timeout
+and a bounded commit. A lock-contention regression verifies expiration while the
+account lock is still held, with no saved preferences or permission. Concurrent-save
+fault tests use fresh host-minted scopes with an explicit test budget and always
+release the first transaction before asserting. Integer-valued lookahead inputs are
+stored as integers, and successful refreshes clear old save messages. Existing UI
+clippy warnings in time formatting are resolved without changing its output.
+
+Rust deliberately rejects unknown fields and untyped values. Fastify strips extra
+fields and can coerce string or null lookahead values; exhaustive malformed-input
+parity is still open. The preferences RLS fault witness tests actual SQL reads and
+writes, while installed PATCH comparisons check owner-preservation and rejection
+without removing that host validation. The browser failure probe disconnects before
+the request: database commit failure and a lost response after a committed save are
+not proven. A later refresh reconciles an uncertain save with stored preferences.
+
+The first live run reached the disposable HTTPS listener but exceeded its auth
+request deadline. The runner now allows extra time for unoptimized Rust password
+verification on loaded development machines. This changes only the proof runner,
+not production password settings or network deadlines. Final receipts, screenshots,
+review disposition and remaining limits are attached to the task Proof artifact.

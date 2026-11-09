@@ -4,6 +4,10 @@ mod kv_guard;
 mod read_oracle;
 #[path = "support/registry.rs"]
 mod registry;
+#[path = "support/settings_oracle.rs"]
+mod settings_oracle;
+#[path = "support/settings_scope.rs"]
+mod settings_scope;
 mod support;
 use moss_module_host::{
     application::{Application, Configuration},
@@ -277,5 +281,6 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
             .unwrap()
             .is_some());
     });
+    settings_oracle::verify(&app, &f, &captured);
     println!("PASS signed registry download + install; actual Rust Wasm events/plans/preferences; owner/foreign/admin; revision conflict; rollback; original fifteen ledgers");
 }

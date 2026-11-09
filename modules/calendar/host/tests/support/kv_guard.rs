@@ -26,7 +26,6 @@ pub fn witness(state: &Captured) {
     let guarded = state.guarded.lock().unwrap().clone().unwrap();
     let downstream = state.downstream.lock().unwrap().clone().unwrap();
     for resource in [
-        "calendar.briefing-settings",
         "calendar.chat-context",
         "calendar.task-reference",
         "calendar.briefing-reference",
