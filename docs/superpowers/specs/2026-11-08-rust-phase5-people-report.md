@@ -2278,3 +2278,39 @@ legacy-generated comparison failed first on `Ş` versus `ș` (`rc=101`). The act
 Node ordering places comma-below after macron, rather than immediately after
 cedilla; the expanded vectors cover that placement and case differences. The
 installed nested-folder fixture also includes both Romanian and cedilla forms.
+
+### Part 19 verification receipts
+
+The full People gate and installed replay both passed against clean commit
+`f3a0dd1a36ab3a55533114355edf9631e5798f89`, with gate input fingerprint
+`sha256:e21d5510a4bfa0146551561e3ba3cf65f22b956304dc5185df7bc3fdf456d576`.
+Both used `scripts/run-gate.sh` and removed their disposable database containers.
+
+- Full People gate: `task_138_rust_port_phase_5_people_module-20261109-085639-5uLMBe.log`,
+  final `rc=0`. Protection-removal controls failed as intended, then the same
+  privacy checks passed with protections restored, under app and worker roles.
+  Seven-table owner/other/admin privacy, Settings privacy, persistence and compiled
+  tools/jobs/notes checks passed. All seven tool handlers matched real legacy
+  execute functions; this is not installed chat-approval proof.
+- Installed replay: `task_138_rust_port_phase_5_people_module-20261109-085715-wRyqbT.log`,
+  final `rc=0`. The signed package was downloaded, installed and reloaded;
+  **219** legacy responses and seven-table snapshots matched. Four public APIs
+  ran through an installed consumer, with other-user/admin lookups denied.
+  Folder save, rejected clears, browsing and traversal refusals passed. The
+  fifty-reference refresh returned **202 in 2,394 ms**, within the unchanged
+  **5,000 ms** deadline. The Settings asset was checked programmatically, not
+  through a browser.
+- An earlier replay launch (`20261109-085516-Zv2s4b`) failed because the component
+  build had not finished writing its output. It is not a passing receipt; the
+  completed-artifact replay above is the successful rerun.
+
+The tested component SHA-256 is
+`735a03082b4904831e143a3cf46a1bb70a096eb9b0fb1298b93d7206516f372a`;
+the package SHA-256 is
+`b0714b8241982a7b772f211c91f54d6fbd28a7e944177d896a25e6f7d43715bb`.
+
+All 34 native People tests, strict Clippy, People Rust formatting, scoped host
+replay-test formatting, all five regenerated legacy fixture sets, scoped oracle
+lint, root lint/typecheck and app-map generation passed. Whole-host Rust formatting
+reports existing formatting in imported parity sources outside this checkpoint;
+those sibling files were not changed. Root formatting and file-size checks passed.
