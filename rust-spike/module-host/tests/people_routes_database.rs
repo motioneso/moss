@@ -2,6 +2,8 @@
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
+#[path = "people_routes/normalization.rs"]
+mod normalization;
 #[path = "../../parity/src/canon.rs"]
 #[allow(dead_code)]
 #[rustfmt::skip]
@@ -228,17 +230,30 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         }
         .expect("Compiled route must return a response envelope");
         let reply: Value = serde_json::from_str(&reply).unwrap();
+        let actual_people = people_rows(&rt, &bootstrap, owner);
+        let expected_people = case["rows"][TABLES[0]].as_array().unwrap();
+        let reply = normalization::signatures(&reply, &actual_people, &mut actual);
+        let expected_reply =
+            normalization::signatures(&case["expected"], expected_people, &mut expected);
         assert_eq!(
             actual.value(&reply),
-            expected.value(&case["expected"]),
+            expected.value(&expected_reply),
             "Route response differs: {method} {path}; body={}",
             case["body"]
         );
         if let Some(files) = case["files"].as_object() {
+            assert_eq!(
+                normalization::files(&notes_root),
+                files.keys().cloned().collect(),
+                "Canonical file inventory differs after {method} {path}"
+            );
             for (file, content) in files {
                 assert_eq!(
-                    std::fs::read_to_string(notes_root.join(file)).unwrap(),
-                    content.as_str().unwrap(),
+                    normalization::note_bytes(
+                        &std::fs::read_to_string(notes_root.join(file)).unwrap(),
+                        &mut actual
+                    ),
+                    normalization::note_bytes(content.as_str().unwrap(), &mut expected),
                     "Canonical file differs after {method} {path}: {file}"
                 );
             }
@@ -256,9 +271,12 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
                     .map(|r| r.get(0))
                     .collect()
             });
+            let rows = normalization::signatures(&json!(rows), &actual_people, &mut actual);
+            let expected_rows =
+                normalization::signatures(&case["rows"][table], expected_people, &mut expected);
             assert_eq!(
-                actual.rows(&rows),
-                expected.rows(case["rows"][table].as_array().unwrap()),
+                actual.rows(rows.as_array().unwrap()),
+                expected.rows(expected_rows.as_array().unwrap()),
                 "Rows differ after {method} {path}: {table}"
             );
         }
@@ -439,4 +457,22 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         installed::clear_catalog(database, admin);
     }
     println!("{} legacy route responses and all seven table snapshots matched, including other-user/admin attempts",oracle["cases"].as_array().unwrap().len());
+}
+
+fn people_rows(
+    rt: &tokio::runtime::Runtime,
+    db: &tokio_postgres::Client,
+    owner: Uuid,
+) -> Vec<Value> {
+    rt.block_on(async {
+        db.query(
+            "SELECT to_jsonb(p) FROM app.person_context_people p WHERE owner_user_id=$1",
+            &[&owner],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| row.get(0))
+        .collect()
+    })
 }

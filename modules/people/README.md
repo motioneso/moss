@@ -199,3 +199,18 @@ malformed edits. Note-backed PATCH preserves the legacy untyped contact-list beh
 the typed note-service API and public lookup contracts are unchanged. The baseline guest
 fails this replay; the corrected generated package passes. Broader inputs and live
 application/device acceptance remain open as listed above.
+
+## Part nine worker and refresh checkpoint
+
+The shipping manifest now permits the indexing worker to read its optional provider map.
+The regression runs the compiled guest with that actual manifest, command records and queue;
+it requires a missing provider to finish without changing People rows. The existing broader
+provider fixture still covers indexing signals and publication after commit. Real installed
+provider delivery and scheduler retries remain open.
+
+The configured-folder route oracle also covers successful creation, search/resolve of the
+created person, nested refresh with duplicate IDs, missing IDs and ordinary markdown, a new
+canonical record, two refreshes, review candidates and additional relative-directory cases.
+All seeded and newly created note bytes are compared. Only generated frontmatter UUIDs and
+correctly derived candidate hashes use ID normalization; user text and wrong hashes remain
+literal. These are dispatch comparisons, not browser or physical-device evidence.
