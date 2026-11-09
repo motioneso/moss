@@ -200,12 +200,12 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
             plans::save(host, input)
         }
         ("POST", "/day-plans/:id/preview") => preview::preview(host, &id, request.body),
-        ("GET", "/day-plans/:id/operations/:operationId") => operations::read(
+        ("GET", "/day-plans/:id/operations/:operation_id") => operations::read(
             host,
             &id,
             request
                 .params
-                .get("operationId")
+                .get("operation_id")
                 .map(String::as_str)
                 .unwrap_or(""),
         ),

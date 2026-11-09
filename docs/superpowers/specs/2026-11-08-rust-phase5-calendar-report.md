@@ -835,3 +835,9 @@ last so its synthetic state cannot affect later checks. A page-size concern is n
 a current defect: the host does not impose a smaller limit, and native coverage
 reads through a full page into the next. The inherited chat-policy integration
 remains open alongside the full chat composition.
+
+The assembled package check caught an invalid camel-case template parameter:
+the host deliberately accepts lowercase template names only. Calendar now uses
+`operation_id` internally while preserving the original concrete URL. A focused
+package regression verifies host template acceptance and parameter resolution;
+the shared host is unchanged.

@@ -140,7 +140,7 @@
     },
     {
       "method": "GET",
-      "path": "/day-plans/:id/operations/:operationId",
+      "path": "/day-plans/:id/operations/:operation_id",
       "signIn": true
     }
   ],

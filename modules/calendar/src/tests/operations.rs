@@ -24,8 +24,8 @@ fn read(host: &Scoped, plan: &str, operation: &str) -> Value {
             host,
             "route",
             &json!({
-                "method":"GET", "path":"/day-plans/:id/operations/:operationId",
-                "params":{"id":plan,"operationId":operation}, "query":{}, "body":null
+                "method":"GET", "path":"/day-plans/:id/operations/:operation_id",
+                "params":{"id":plan,"operation_id":operation}, "query":{}, "body":null
             })
             .to_string(),
         )
