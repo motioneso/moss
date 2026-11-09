@@ -81,7 +81,7 @@ pub fn compare(app: &Application, f: &Fixture, seeded: &Seeded) {
             result.status.success(),
             "Production preview oracle failed (database diagnostics omitted)"
         );
-        let expected: Vec<Value> = serde_json::from_slice(&result.stdout).unwrap();
+        let mut expected: Vec<Value> = serde_json::from_slice(&result.stdout).unwrap();
         assert_eq!(expected.len(), cases.len(), "Preview oracle omitted a response");
         for (index, (body, mut expected)) in cases.iter().zip(expected.iter_mut()).enumerate() {
             let raw = app
