@@ -61,6 +61,7 @@ export async function checkDetails(tab: Page, base: string, out: string, event: 
     );
   }
   await tab.setViewportSize({ width: 1280, height: 860 });
+  await tab.frameLocator("#calendar").getByRole("button", { name: "Day", exact: true }).click();
   await tab.goto(`${base}/calendar?event=${event}`);
   await tab.frameLocator("#calendar").getByRole("dialog").waitFor();
 }
