@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Retry activity reads without hiding other task details or losing loaded comments.
+- Post comments with Enter, keep new lines with Shift+Enter, and retain rejected drafts.
+- Refresh acknowledged comments without repeating the post; preserve comment line breaks.
+
 - Add a task by title from the package screen, or carry the title into Details.
 - Keep failed quick-capture titles and refresh acknowledged saves without creating another task.
 

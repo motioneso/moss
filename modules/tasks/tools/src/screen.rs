@@ -146,10 +146,19 @@ pub fn render() -> String {
                             <Button kind=ButtonType::Submit variant=ButtonVariant::Secondary>"Create and assign tag"</Button>
                         </form>
                     </section>
-                    <section aria-labelledby="activity-heading"><h3 id="activity-heading">"Activity"</h3><ol id="activity"></ol>
+                    <section aria-labelledby="activity-heading"><h3 id="activity-heading">"Activity"</h3>
+                        <p id="activity-loading" hidden role="status">"Loading activity…"</p>
+                        <div id="activity-error" hidden role="alert">
+                            <p>"Could not load activity. Any previously loaded comments are still shown."</p>
+                            {action("retry-activity", "Retry activity")}
+                        </div>
+                        <div id="activity-empty" hidden><EmptyState title="No activity yet. Log progress as you go."/></div>
+                        <ol id="activity"></ol>
                         <form id="activity-form" class="tasks-fields">
                             <Field><FormLabel control_id="comment">"Comment"</FormLabel><textarea id="comment" class="jds-input" required rows="3"></textarea></Field>
                             <div><Button kind=ButtonType::Submit variant=ButtonVariant::Secondary>"Add comment"</Button></div>
+                            <p id="comment-error" hidden role="alert">"Could not post your comment. Your text is still here; try again."</p>
+                            <p class="jds-caption">"Enter to post · Shift+Enter for a new line"</p>
                         </form>
                     </section>
                 </div>

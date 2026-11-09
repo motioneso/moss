@@ -8,6 +8,7 @@ import { captureDraft } from "./capture.mjs";
 import { findOrCreateTag } from "./task-tags.mjs";
 import { interpretedSearch } from "./search.mjs";
 import { quickCapture } from "./quick-add.mjs";
+import { taskActivity } from "./activity.mjs";
 
 const client = moduleClient();
 const $ = (id) => document.getElementById(id);
@@ -28,6 +29,16 @@ const capture = captureDraft({
   run,
   text,
   button,
+  focus: (node) => {
+    state.focusAfter = node;
+  }
+});
+const activity = taskActivity({
+  api,
+  run,
+  bindForm,
+  saved: savedExtra,
+  text,
   focus: (node) => {
     state.focusAfter = node;
   }
@@ -136,6 +147,7 @@ async function run(action) {
     capture.lock();
     quick.sync();
     search.sync();
+    activity.sync();
     $("tasks-app").removeAttribute("aria-busy");
     state.focusAfter?.focus();
     state.focusAfter = null;
@@ -260,6 +272,7 @@ async function editTask(id, title) {
   if ($("editor").hidden) state.returnFocus = state.actionFocus;
   state.editing = task;
   state.pendingTag = null;
+  activity.reset(task?.id ?? null);
   $("task-form").reset();
   capture.reset();
   show("new-task-extras", !task);
@@ -298,20 +311,12 @@ function closeEditor() {
 }
 async function extras() {
   const task = state.editing;
-  const [subtasks, tags, activity] = await Promise.all([
+  const [subtasks, tags] = await Promise.all([
     api("GET", `/tasks/${task.id}/subtasks`),
     api("GET", `/tasks/lists/${task.listId}/tags`),
-    api("GET", `/tasks/${task.id}/activity`)
+    activity.load()
   ]);
   $("subtasks").replaceChildren(...subtasks.tasks.map(taskRow));
-  $("activity").replaceChildren(
-    ...activity.activity.map((item) =>
-      text(
-        "li",
-        `${item.body ?? item.activityType} · ${item.createdAt.slice(0, 16).replace("T", " ")} UTC`
-      )
-    )
-  );
   const assigned = new Set(task.tags.map((tag) => tag.id));
   $("task-tags").replaceChildren(
     ...tags.tags.map((tag) =>
@@ -432,9 +437,10 @@ const actions = {
         : "Help me plan my tasks"
     )
 };
-document
-  .querySelectorAll("[data-action]")
-  .forEach((node) => node.addEventListener("click", () => run(actions[node.dataset.action])));
+document.querySelectorAll("[data-action]").forEach((node) => {
+  const action = actions[node.dataset.action];
+  if (action) node.addEventListener("click", () => run(action));
+});
 $("task-list").addEventListener("change", () => {
   if (!state.editing) void run(() => capture.loadTags($("task-list").value));
 });
@@ -496,15 +502,6 @@ submit("tag-form", async () => {
   $("tag-name").value = "";
   savedExtra("tag-name");
   await refreshEditor();
-});
-submit("activity-form", async () => {
-  await api("POST", `/tasks/${state.editing.id}/activity`, {
-    activityType: "comment",
-    body: $("comment").value
-  });
-  $("comment").value = "";
-  savedExtra("comment");
-  await extras();
 });
 submit("list-form", async () => {
   await api("POST", "/tasks/lists", { name: $("list-name").value });

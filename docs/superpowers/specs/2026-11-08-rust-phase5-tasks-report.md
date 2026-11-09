@@ -1416,3 +1416,38 @@ introduced in this checkpoint. Full Phase 5 parity is not claimed. The signed UI
 fixture remains separate from the real application shell; a narrow viewport is
 not physical second-device acceptance. Final gate, browser and independent review
 receipts belong to the task proof artifact.
+
+## Tasks part 20 checkpoint (JS-133, Card 526)
+
+Task details now loads activity independently of tags and subtasks. A failed read
+leaves those controls reachable, offers Retry activity, and keeps any loaded
+comments. An empty history is shown only after a successful empty read. Changing
+tasks clears the previous history. Enter posts a trimmed nonblank comment;
+Shift+Enter keeps a new line. Failed posts retain the draft and explain recovery.
+After an acknowledged post the draft clears; a failed refresh retries only the
+read, without repeating the post. Rendered comments preserve line breaks. The
+module app map and package asset inventory cover the new controller and recovery.
+
+The controller regression runs against actual shared-kit HTML with a mocked
+bridge. It failed against the previous controller because an activity read
+failure hid every detail extra, then passed after this change. All 26 existing
+and new screen/controller tests pass. The signed UI gate has an optional exact
+persistence check for one multiline keyboard comment and one button-posted
+comment; final gate, live browser and independent review receipts are in the
+proof artifact. Mocked failure/retry checks are not live network-failure proof.
+
+This branch started at Phase 0a and was fast-forwarded to current main, including
+part 19, before editing. Existing scratch Rust 1.95, Wasm target and Cargo caches
+are reused offline, including the approved pinned wit-bindgen graph. The tools
+lockfile was refreshed offline without a byte change; declared JavaScript
+dependencies were restored offline. No global tool or package was installed.
+No route, tool, job kind, migration or shared host contract changes. Workshop
+and Food remain excluded. Part of #4027; release note Category N/A.
+
+Both assistant-policy routes still need the core preferences contract. Actor
+timezone/lazy recurrence, recurrence jobs, deferred-queue policy and installed
+worker dispatch, public People linkage, policy/feedback, remaining screens and
+settings, installed chat, real-shell integration and performance acceptance
+remain unfinished. The full endpoint adapter still lacks a bound queue path.
+Full Phase 5 parity is not claimed. The signed fixture is separate from the real
+application shell; a narrow viewport is not physical second-device proof.
