@@ -81,6 +81,7 @@ test(
       );
       await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
       await settled();
+      assert.equal($("interpret-search").querySelector("button").disabled, true);
       const type = (value) => {
         $("search").value = value;
         $("search").dispatchEvent(new dom.window.Event("input"));
@@ -103,6 +104,7 @@ test(
       document.querySelector('[data-action="clear-filters"] button').click();
       await settled();
       assert.equal($("status-filter").value, "todo");
+      assert.equal($("interpret-search").querySelector("button").disabled, true);
       assert.match($("task-results").textContent, /Open example/);
       fail = true;
       type("done important tasks");

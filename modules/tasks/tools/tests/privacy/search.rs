@@ -32,7 +32,7 @@ impl Ports for SearchProvider {
                 assert_eq!(query.kind, moss_module_sdk::query::Kind::Select);
                 // Keep removal probes bounded to this test's synthetic list.
                 query.filter = Filter::And {
-                    filters: vec![query.filter, Filter::eq(column, &self.list)],
+                    filters: vec![query.filter, Filter::eq(column, self.list.as_str())],
                 };
                 request.parameters = serde_json::to_value(query)?;
             }
@@ -99,15 +99,22 @@ fn compiled_search_hides_private_vocabulary_and_rejects_foreign_filters() {
         assert_private(actor);
     }
     f.sql("ALTER TABLE app.task_lists DISABLE ROW LEVEL SECURITY; ALTER TABLE app.task_tags DISABLE ROW LEVEL SECURITY");
-    let failed =
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| assert_private(f.other))).is_err();
+    let failure =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| assert_private(f.other)));
     f.sql("ALTER TABLE app.task_lists ENABLE ROW LEVEL SECURITY; ALTER TABLE app.task_lists FORCE ROW LEVEL SECURITY; ALTER TABLE app.task_tags ENABLE ROW LEVEL SECURITY; ALTER TABLE app.task_tags FORCE ROW LEVEL SECURITY");
-    assert!(
-        failed,
-        "the identical prompt privacy assertion must fail without RLS"
-    );
     // The expected assertion panic held the prompt lock; recover its synthetic contents.
     provider.prompt.clear_poison();
+    let failure =
+        failure.expect_err("the identical prompt privacy assertion must fail without RLS");
+    let message = failure
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| failure.downcast_ref::<String>().map(String::as_str));
+    assert_eq!(
+        message,
+        Some("another account's list name must not reach AI"),
+        "an unrelated route, fuel or lock failure is not a privacy removal proof"
+    );
     for actor in [f.other, f.admin] {
         assert_private(actor);
     }

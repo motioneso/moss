@@ -1,7 +1,11 @@
 // Exercise the package against the unchanged legacy screen, not a second test model.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
+import ts from "typescript";
 import { deriveTaskFilters as legacy } from "../../../apps/web/src/tasks/task-view-model.ts";
 import { filterTasks } from "../ui/model.mjs";
+import { hasSearchIntent, searchChips, removeSearchChip } from "../ui/search.mjs";
 
 const lists = ["home", "work", "empty"].map((id) => ({ id, name: id }));
 const day = (offset) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
@@ -77,3 +81,49 @@ assert.deepEqual(tasks, before);
 console.log(
   `PASS ${checks} exact legacy interpreted-filter comparisons (UTC); source rows unchanged`
 );
+
+// These helpers are private to the legacy page. Extract their unchanged AST
+// nodes instead of importing React or maintaining a copy of their behaviour.
+const names = [
+  "intentForUi",
+  "hasStructuredIntent",
+  "taskSearchChips",
+  "removeSearchIntentChip",
+  "dueIntentLabel"
+];
+const source = ts.createSourceFile(
+  "tasks-page.tsx",
+  readFileSync(new URL("../../../apps/web/src/tasks/tasks-page.tsx", import.meta.url), "utf8"),
+  ts.ScriptTarget.Latest,
+  true,
+  ts.ScriptKind.TSX
+);
+const functions = source.statements.filter(
+  (node) => ts.isFunctionDeclaration(node) && names.includes(node.name?.text)
+);
+assert.equal(functions.length, names.length, "legacy helper coverage must not silently disappear");
+const javascript = ts.transpileModule(
+  functions.map((node) => node.getFullText(source)).join("\n"),
+  { compilerOptions: { target: ts.ScriptTarget.ES2022 } }
+).outputText;
+const legacyUi = runInNewContext(`${javascript}; ({${names.join(",")}})`);
+const plain = (value) => JSON.parse(JSON.stringify(value));
+let helperChecks = 0;
+for (const intent of intents.filter(Boolean)) {
+  const next = { ...intent, status: null };
+  assert.deepEqual(next, plain(legacyUi.intentForUi(intent)));
+  assert.equal(hasSearchIntent(next), legacyUi.hasStructuredIntent(next));
+  assert.deepEqual(
+    searchChips(next, lists),
+    plain(legacyUi.taskSearchChips(next, new Map(lists.map((list) => [list.id, list.name]))))
+  );
+  helperChecks += 3;
+  for (const { key } of searchChips(next, lists)) {
+    assert.deepEqual(
+      removeSearchChip(next, key),
+      plain(legacyUi.removeSearchIntentChip(next, key))
+    );
+    helperChecks++;
+  }
+}
+console.log(`PASS ${helperChecks} exact legacy status/chip helper comparisons`);

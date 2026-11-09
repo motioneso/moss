@@ -121,6 +121,7 @@ async function run(action) {
       if (!controls.includes(node)) node.disabled = false;
     });
     capture.lock();
+    search.sync();
     $("tasks-app").removeAttribute("aria-busy");
     state.focusAfter?.focus();
     state.focusAfter = null;

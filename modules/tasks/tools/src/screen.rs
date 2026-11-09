@@ -53,11 +53,11 @@ pub fn render() -> String {
                     <p class="jds-caption">"Include lists, show only selected lists, or hide lists. Counts follow status and tags, before search."</p>
                     <div id="list-selection" class="tasks-fields"></div>
                 </details>
-                <div id="active-tags" class="tasks-actions" aria-label="Active tag filters"></div>
+                <div id="active-tags" class="tasks-actions" role="group" aria-label="Active tag filters"></div>
                 <p id="search-warning" role="status" hidden></p>
-                <div id="search-intent" class="tasks-actions" aria-label="Interpreted search filters"></div>
+                <div id="search-intent" class="tasks-actions" role="group" aria-label="Interpreted search filters"></div>
                 <p class="jds-caption">"Interpret a phrase into filters, or search by title and description. Interpreted dates use UTC."</p>
-                <p class="jds-caption">"Tasks can match any selected tag."</p>
+                <p class="jds-caption">"Manual tag picks match any selected tag. Interpreted tag filters require every named tag."</p>
                 <div id="empty" hidden>
                     <EmptyState title="No tasks here" description="Try another filter or add a task."/>
                     {action("clear-filters", "Clear filters")}

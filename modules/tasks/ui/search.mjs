@@ -75,6 +75,11 @@ export function removeSearchChip(intent, key) {
 
 export function interpretedSearch({ api, run, changed, focus }) {
   const $ = (id) => document.getElementById(id);
+  const interpretButton = $("interpret-search").querySelector("button") ?? $("interpret-search");
+  function sync() {
+    interpretButton.disabled = !$("search").value.trim();
+  }
+  sync();
   let intent = null;
   let warning = "";
   function clear() {
@@ -112,7 +117,9 @@ export function interpretedSearch({ api, run, changed, focus }) {
   return {
     intent: () => intent,
     clear,
+    sync,
     render(lists) {
+      sync();
       $("search-warning").textContent = warning;
       $("search-warning").hidden = !warning;
       $("search-intent").replaceChildren(

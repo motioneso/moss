@@ -48,6 +48,7 @@ test("interpreted filters apply status, show removable chips, reset on typing an
       await pending;
     };
     $("search").value = "completed important tasks";
+    $("search").dispatchEvent(new dom.window.Event("input"));
     await interpret();
     assert.deepEqual(calls[0], [
       "POST",
@@ -91,6 +92,8 @@ test("interpreted filters apply status, show removable chips, reset on typing an
     assert.equal($("search-warning").hidden, true);
     const count = calls.length;
     $("search").value = "   ";
+    $("search").dispatchEvent(new dom.window.Event("input"));
+    assert.equal($("interpret-search").disabled, true);
     await interpret();
     assert.equal(calls.length, count);
   } finally {

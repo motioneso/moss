@@ -1298,8 +1298,34 @@ single-context boundary; this is an unfinished checkpoint, not Phase 5 acceptanc
 Workshop and Food remain excluded. Part of #4027; release note Category N/A.
 
 Tooling reuses the existing Rust 1.95 and Wasm target in scratch and the existing
-Cargo registry cache. The old temporary cache link was dangling, so the standard
-existing cache was used offline. The tools lockfile was refreshed offline for
+Cargo registry caches. The old temporary cache link was dangling, so an existing scratch
+cache supplies the guest and encoder while the standard existing cache supplies
+the native host checks, all offline. The tools lockfile was refreshed offline for
 main's added libc dependency in the shared safety crate. Declared JavaScript
 dependencies were restored offline in this worktree. The approved pinned
 wit-bindgen graph was reused; nothing was installed globally.
+
+The full endpoint run matches 84 of 86 cases. Deferred-status fails because the
+adapter has no bound jobs path, and the actor-timezone end-of-day at-risk case
+differs from UTC. These remain failed comparisons. The new screen-model check
+passes all 1,380 comparisons; another 91 comparisons extract unchanged legacy
+page helper declarations to check status handoff, structured-filter detection,
+chip labels and individual removal. All seventeen screen/controller tests pass
+against the rebuilt shared-kit markup.
+
+Independent review round one found a major gap in the privacy removal control:
+an unrelated panic could count as the expected failure. The control now requires
+the exact private-list-name assertion, after restoring RLS. The same pass clarified
+manual versus interpreted tags, named the filter group for assistive technology,
+disabled interpretation for empty input and added the legacy helper comparisons.
+Final gate, signed UI and review receipts are recorded in the proof artifact.
+The signed fixture is separate from the real application shell and has no live
+AI provider; its unavailable-provider path does not prove successful provider
+composition. The MacBook was offline during this run; no physical second-device
+HTTPS acceptance is claimed.
+
+The refreshed signed-package HTTPS gate passed after a browser-created owner,
+Inbox list and persisted task. Browser checks exercised the real unavailable-provider
+message, description search recovery, Clear filters, disabled empty interpretation
+and task persistence after reload. Desktop and narrow-viewport screenshots are in
+the proof artifact; the narrow viewport is not second-device evidence.
