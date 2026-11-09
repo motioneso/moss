@@ -19,7 +19,25 @@ describe("app-map integrity and truthfulness", () => {
         new URL("../../rust-spike/network/src/web.rs", import.meta.url),
         "utf8"
       ).matchAll(/\.route\(\s*"([^" ]+)"/g)
-    ].map((match) => match[1])
+    ]
+      .map((match) => match[1])
+      .concat(
+        // The desktop app serves its own screens from moss-app:// links declared in its source.
+        [
+          ...readFileSync(
+            new URL("../../rust-spike/shell/connect/src/main.rs", import.meta.url),
+            "utf8"
+          ).matchAll(/"(moss-app:\/\/[^"]+)"/g)
+        ].map((match) => match[1])
+      )
+  );
+  const rustErrorCodes = new Set(
+    ["../../rust-spike/network/src/web.rs", "../../rust-spike/shell/connect/src/reach.rs"].flatMap(
+      (file) =>
+        [...readFileSync(new URL(file, import.meta.url), "utf8").matchAll(/"([a-z_]+)"/g)].map(
+          (match) => match[1]
+        )
+    )
   );
   const appMap = buildAppMap({
     manifests: getBuiltInModuleManifests(),
@@ -42,12 +60,21 @@ describe("app-map integrity and truthfulness", () => {
       buildId: "test",
       narrative: ""
     });
-    expect(rustMap.screens.map((entry) => entry.id)).toEqual(["rust-sign-in"]);
+    expect(rustMap.screens.map((entry) => entry.id)).toEqual([
+      "rust-sign-in",
+      "rust-desktop-connect"
+    ]);
     expect(rustMap.settings.map((entry) => entry.id)).toEqual(["rust-network-sharing"]);
     for (const entry of [...rustMap.screens, ...rustMap.settings, ...rustMap.remediations]) {
       expect(rustRoutes.has(entry.path ?? "")).toBe(true);
     }
     expect(rustMap.errors.some((entry) => entry.code === "host_refused")).toBe(true);
+    for (const entry of rustMap.errors) {
+      expect(
+        rustErrorCodes.has(entry.code ?? ""),
+        `Rust error "${entry.code}" is not in Rust`
+      ).toBe(true);
+    }
   });
 
   it("keeps Rust-only declarations out of the production TypeScript app map", () => {

@@ -36,6 +36,21 @@ pub enum Problem {
 }
 
 impl Problem {
+    /// The error code the app map declares for this problem.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Problem::NotSetUp => "app_server_not_set_up",
+            Problem::DidNotStart => "app_server_did_not_start",
+            Problem::Unreachable => "app_server_unreachable",
+            Problem::HostRefused => "host_refused",
+            Problem::SharingOff => "origin_or_sharing_refused",
+            Problem::NotMoss => "app_not_a_moss_server",
+            Problem::CertificateChanged { .. } => "app_certificate_changed",
+            Problem::ServerTooOld => "app_server_too_old",
+            Problem::AppTooOld => "app_too_old",
+        }
+    }
+
     pub fn reason(&self) -> &'static str {
         match self {
             Problem::NotSetUp => "Moss isn't set up on this computer yet.",

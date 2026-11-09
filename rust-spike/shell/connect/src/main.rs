@@ -563,14 +563,14 @@ fn server_row(target: &Target, state: &str) -> Value {
 fn problem_screen(target: &Target, problem: &Problem) -> Value {
     let name = target.name();
     let local = matches!(target, Target::Local { .. });
-    match problem {
+    let mut state = match problem {
         Problem::CertificateChanged { fingerprint } => match target {
             Target::Remote(remote) => json!({
                 "screen":"check", "changed": true, "id": remote.id, "name": name,
                 "address": remote.origin, "fingerprint": fingerprint,
             }),
             Target::Local { .. } => {
-                json!({"screen":"problem", "name": name, "reason": Problem::Unreachable.reason(), "retry": true, "local": true})
+                return json!({"screen":"problem", "code": Problem::Unreachable.code(), "name": name, "reason": Problem::Unreachable.reason(), "retry": true, "local": true});
             }
         },
         Problem::ServerTooOld => json!({
@@ -587,7 +587,9 @@ fn problem_screen(target: &Target, problem: &Problem) -> Value {
         _ => {
             json!({"screen":"problem", "name": name, "reason": problem.reason(), "retry": true, "local": local})
         }
-    }
+    };
+    state["code"] = json!(problem.code());
+    state
 }
 
 #[cfg(all(test, target_os = "linux"))]
