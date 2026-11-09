@@ -29,8 +29,13 @@ export async function checkDayPlanWrites(tab: Page, foreign: Request) {
     assert.equal(plan.timeZone, "UTC", "saved fixture timezone");
     assert.equal(plan.revision, 1);
     const alternate = prefix === "/api/calendar" ? "/api/m/calendar" : "/api/calendar";
-    const repeated = await own(`${alternate}/day-plans`, "POST", { date, timeZone: null });
+    const repeated = await own(`${alternate}/day-plans`, "POST", { date });
     assert.equal(repeated.status, 200);
+    assert.equal(
+      (await own(`${prefix}/day-plans`, "POST", { date, timeZone: null })).status,
+      400,
+      "explicit null timezone is rejected like production"
+    );
     assert.equal(
       JSON.parse(repeated.body).plan.id,
       plan.id,

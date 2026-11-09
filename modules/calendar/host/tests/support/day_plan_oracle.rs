@@ -120,6 +120,26 @@ pub fn verify(app: &Application, f: &Fixture) {
             "America/Los_Angeles",
         ),
     ] {
+        for extra in [
+            json!({"timeZone":null}),
+            json!({"sourceRunId":""}),
+            json!({"sourceRunId":"  "}),
+        ] {
+            let mut ts_body = json!({"date":ts_day});
+            let mut rust_body = json!({"date":rust_day});
+            for (key, value) in extra.as_object().unwrap() {
+                ts_body[key] = value.clone();
+                rust_body[key] = value.clone();
+            }
+            let expected = production(
+                &actor,
+                json!([{"method":"POST", "url":"/api/calendar/day-plans", "body":ts_body}]),
+            );
+            let actual = installed(app, f, &actor, "POST", "/day-plans", rust_body);
+            assert_eq!(expected[0]["status"], 400);
+            assert_eq!(actual["status"], expected[0]["status"]);
+            comparisons += 1;
+        }
         // Production sequence needs the created plan id before it can save.
         let created = production(
             &actor,

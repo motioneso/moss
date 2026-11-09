@@ -138,11 +138,16 @@ fn original_day(host: &impl Host, mut value: Value, timezone_required: bool) -> 
     }
     // Full source-run provenance needs a concrete public Briefings adapter.
     // Keep the original create envelope closed for linked runs until then.
-    if original && !timezone_required && object.get("sourceRunId").is_some_and(|id| !id.is_null()) {
-        return Err(Error::new(
-            503,
-            "Calendar source-run creation is unavailable",
-        ));
+    if original && !timezone_required {
+        if let Some(source) = object.get("sourceRunId").filter(|id| !id.is_null()) {
+            if source.as_str().is_none_or(|id| id.trim().is_empty()) {
+                return Err(Error::new(400, "sourceRunId must be an id or null"));
+            }
+            return Err(Error::new(
+                503,
+                "Calendar source-run creation is unavailable",
+            ));
+        }
     }
     if !object.contains_key("localDay") {
         if let Some(date) = object.remove("date") {
@@ -151,8 +156,10 @@ fn original_day(host: &impl Host, mut value: Value, timezone_required: bool) -> 
     } else {
         object.remove("date");
     }
-    if object.get("timeZone").is_none() || object["timeZone"].is_null() {
-        object.remove("timeZone");
+    if object.get("timeZone").is_some_and(Value::is_null) {
+        return Err(Error::new(400, "timeZone must be a valid IANA name"));
+    }
+    if !object.contains_key("timeZone") {
         if timezone_required {
             return Err(Error::new(400, "timeZone must be a valid IANA name"));
         }

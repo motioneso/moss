@@ -649,7 +649,7 @@ This is a bounded checkpoint, not the full Calendar port.
 
 The installed routes accept the original `date` field on creation and draft saves,
 plus the existing package `localDay` field. Ambiguous requests with both are rejected.
-Creation without a timezone, including null, reads the actor's locale and uses the
+Creation without a timezone reads the actor's locale and uses the
 product's America/Los_Angeles fallback. Saves require an explicit timezone. Original
 source-linked creation deliberately returns unavailable pending the public Briefings
 provenance adapter; no other module's tables or provider credentials are read.
@@ -687,3 +687,12 @@ source-run provenance and real public Tasks/Briefings/provider adapters; the fou
 remaining provider tools and both jobs; apply/retry/recovery/confirm and monitoring;
 source-behavior controls and external-calendar status; full shell/Today/chat and the
 old-screen replacement; complete assembled parity; physical second-device HTTPS.
+
+The first independent review found no blocker or major. Its null-timezone and blank
+source-id validation differences are corrected: both now reject with bad request,
+with status comparisons against production. The null-timezone validation test was
+observed failing before correction. Two minor limits are retained explicitly:
+existing `localDay`/public API source-reference behavior is unchanged and does not
+establish full provenance validation; noncanonical timezone spelling and Intl-only
+aliases can differ from production and are outside the proven timezone cases.
+A browser API check is a fetch from a signed-in page, not a day-plan editor interaction.

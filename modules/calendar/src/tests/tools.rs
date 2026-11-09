@@ -165,6 +165,18 @@ fn original_draft_envelopes_reject_ambiguous_or_unsupported_requests_before_host
         (
             "POST",
             "/day-plans",
+            json!({"date":"2026-12-15","timeZone":null}),
+            400,
+        ),
+        (
+            "POST",
+            "/day-plans",
+            json!({"date":"2026-12-15","sourceRunId":"  "}),
+            400,
+        ),
+        (
+            "POST",
+            "/day-plans",
             json!({"date":"2026-12-15","localDay":"2026-12-16"}),
             400,
         ),

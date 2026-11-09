@@ -275,7 +275,7 @@ open; see the canonical Calendar report and the part 9 checkpoint report.
 
 Version 0.11.0 accepts `date` on day-plan reads, creation and draft saves, while retaining
 `localDay` for existing package callers. Supplying both fields is rejected. Creation with
-an omitted or null timezone reads the actor's saved locale, falling back to the product's
+an omitted timezone reads the actor's saved locale, falling back to the product's
 America/Los_Angeles default. Saving requires an explicit timezone and current revision.
 The aliases added in part 10 now accept these original write envelopes. Original-envelope
 creation with a non-null `sourceRunId` returns unavailable until the public provenance
@@ -290,3 +290,12 @@ The live runner writes through browser fetch after real sign-in, checks both URL
 reloads the saved plan and checks revision/foreign-write refusal. No day-plan editor is
 added to the screen in this checkpoint. Enriched plan reads, source-run provenance,
 provider tools/jobs/execution, shell/chat, cutover and physical second-device HTTPS remain open.
+
+The first independent review found no blocker or major. Its null-timezone and blank
+source-id validation differences are corrected: both now reject with bad request,
+with status comparisons against production. The null-timezone validation test was
+observed failing before correction. Two minor limits are retained explicitly:
+existing `localDay`/public API source-reference behavior is unchanged and does not
+establish full provenance validation; noncanonical timezone spelling and Intl-only
+aliases can differ from production and are outside the proven timezone cases.
+A browser API check is a fetch from a signed-in page, not a day-plan editor interaction.
