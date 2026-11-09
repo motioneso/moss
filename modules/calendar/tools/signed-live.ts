@@ -24,6 +24,7 @@ import { readHttpOracle } from "./http-oracle.js";
 import { checkStartup } from "./startup-check.js";
 import { checkDetails } from "./details-live.js";
 import { checkGrid } from "./grid-live.js";
+import { checkGridScroll } from "./scroll-live.js";
 import { checkMonth } from "./month-live.js";
 import { checkOperationStatus } from "./operation-live.js";
 import { checkDayPlanWrites } from "./day-plan-live.js";
@@ -451,6 +452,16 @@ try {
   await checkDetails(tab, local, out, data.event);
   // Keep extra grid fixtures out of the existing Month overflow/detail checks.
   for (const event of proofEvents.slice(3)) await seedProofEvent(event);
+  await checkGridScroll(tab, local, out, async (title) => {
+    await db.query("UPDATE app.calendar_events SET title=$1 WHERE id=$2", [
+      title,
+      proofEvents[3]!.id
+    ]);
+  });
+  await db.query("UPDATE app.calendar_events SET title=$1 WHERE id=$2", [
+    proofEvents[3]!.title,
+    proofEvents[3]!.id
+  ]);
   await checkGrid(tab, local, out, data.event);
   await db.query("DELETE FROM app.calendar_events WHERE id=ANY($1::uuid[])", [
     proofEvents.slice(3).map((event) => event.id)

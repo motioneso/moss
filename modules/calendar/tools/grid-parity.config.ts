@@ -7,6 +7,7 @@ export default {
     ...base.test,
     include: [
       "modules/calendar/tools/grid-parity.test.ts",
+      "modules/calendar/tools/scroll-parity.test.ts",
       "modules/calendar/tools/month-parity.test.ts"
     ],
     // These differential tests launch real Rust processes; allow loaded development hosts.

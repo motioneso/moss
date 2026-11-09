@@ -1,5 +1,12 @@
 # Calendar package
 
+## 0.18.0
+
+- Open Day and Week with the current time centered in the measured visible grid, matching the existing screen.
+- Keep the user's vertical scroll position, including midnight, through changed-data refreshes.
+- Compare the actual production grid's scroll effect across heights and exercise the installed screen at desktop and phone widths.
+- Full cutover, provider execution and physical second-device acceptance remain open.
+
 ## 0.17.0
 
 - Restore Month date highlights, first-of-month labels and equal row sizing with the existing minimum height.
