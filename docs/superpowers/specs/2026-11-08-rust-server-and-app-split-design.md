@@ -393,7 +393,8 @@ The middle line carries the cause from section 10. For a local server the first 
 
 - Operating-system trust for public certificates. It needs a platform verifier library, which
   has not been approved for install.
-- Tray, start at login, notifications.
+- Native tray, start at login and notifications on macOS and Windows; reminder and chat
+  notification delivery on every system. Linux desktop integration is described below.
 - Creating a local server on Windows. The database supervisor is unix only, so the app says
   setting up is not available there yet; a hand-prepared instance folder still works.
 - A real installer. The app expects `moss-db`, `postgres/` and `schema/` next to it (Phase 7
@@ -404,6 +405,20 @@ creating local servers in the app (a "New server here" screen, and "This compute
 default one on first use) through `provision.rs`, which reuses `moss-db` and the network crate's
 certificate maker; Stop for a running local server (also stops its database); and the "Switch
 server" item in the server's own account menu, shown only inside the app.
+
+Slice 3 adds Linux desktop integration through the existing GIO dependency, with no new crates:
+Servers → Desktop settings controls session autostart and opt-in notifications for connections and
+stops, and offers a test notification and Quit app. With a StatusNotifier host, closing hides the
+window, clicking its tray icon restores it, and the tray context action opens Desktop settings.
+Without that host, closing quits the app. If the host disappears, the window is restored so it
+cannot be stranded. Local servers keep running when the app quits. This is desktop-session
+startup, not a system service or a complete installer.
+
+Setup holds its selected listening port until network.json is written and serializes unfinished
+setup cleanup across apps. Stop asks for confirmation, waits for the instance's start lock before
+shutting down, shows progress, and reports failure. A late Stop result cannot replace a newer
+screen. Windows local setup and Stop remain unavailable; macOS and Windows native integration
+and runtime certificate qualification remain outstanding.
 
 ### 13.3 Proof
 

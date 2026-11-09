@@ -5,6 +5,7 @@
 //! view with its own profile. That view allows the server's pinned certificate and closes any
 //! page load that arrived over a different one (see `trust_on_linux`).
 
+mod desktop;
 mod pin;
 mod provision;
 mod reach;
@@ -38,6 +39,17 @@ enum UserEvent {
     Show(Value),
     Open(Opened),
     ShowServers,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    Reveal,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    TrayUnavailable,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    Desktop,
+    Stopped {
+        id: String,
+        turn: u64,
+        result: Result<(), Problem>,
+    },
     Connect(String),
     /// A server page failed to load; check whether the server is still there.
     #[cfg_attr(target_os = "macos", allow(dead_code))]
@@ -77,6 +89,12 @@ struct App {
     /// The address and code on the certificate screen, the only pin the user can confirm.
     shown_pin: Option<(String, String)>,
     turn: u64,
+    screen: String,
+    pending_stop: Option<String>,
+    stopping: Option<String>,
+    preferences: desktop::Preferences,
+    tray: Option<desktop::Tray>,
+    quit: bool,
 }
 
 struct Args {
@@ -102,6 +120,9 @@ fn parse_args() -> Result<Args, String> {
             _ => return Err(format!("unknown option {flag}")),
         }
     }
+    args.data = std::path::absolute(&args.data).map_err(|_| "Cannot resolve the data folder")?;
+    args.install =
+        std::path::absolute(&args.install).map_err(|_| "Cannot resolve the install folder")?;
     Ok(args)
 }
 
@@ -142,6 +163,8 @@ fn main() {
         .with_url(HOME);
     let connect = build(builder, &window);
 
+    let preferences = desktop::Preferences::load(&store).unwrap_or_default();
+    let tray = desktop::tray(proxy.clone());
     let mut app = App {
         store,
         servers,
@@ -154,6 +177,12 @@ fn main() {
         current: None,
         shown_pin: None,
         turn: 0,
+        screen: String::new(),
+        pending_stop: None,
+        stopping: None,
+        preferences,
+        tray,
+        quit: false,
     };
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -161,9 +190,18 @@ fn main() {
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..
-            } => *control_flow = ControlFlow::Exit,
+            } => {
+                if app.tray.is_some() {
+                    app.window.set_visible(false);
+                } else {
+                    *control_flow = ControlFlow::Exit;
+                }
+            }
             Event::UserEvent(event) => app.handle(event),
             _ => {}
+        }
+        if app.quit {
+            *control_flow = ControlFlow::Exit;
         }
     });
 }
@@ -245,7 +283,42 @@ impl App {
             }
             UserEvent::Show(state) => self.show(state),
             UserEvent::Open(opened) => self.open(opened),
-            UserEvent::ShowServers => self.list_servers(),
+            UserEvent::ShowServers => {
+                self.turn += 1;
+                self.list_servers();
+            }
+            UserEvent::TrayUnavailable => {
+                self.tray = None;
+                self.window.set_visible(true);
+            }
+            UserEvent::Reveal => {
+                self.window.set_visible(true);
+                self.window.set_focus();
+            }
+            UserEvent::Desktop => {
+                self.turn += 1;
+                self.window.set_visible(true);
+                self.window.set_focus();
+                self.show_desktop(None);
+            }
+            UserEvent::Stopped { id, turn, result } => {
+                let waiting = self.stopping.as_deref() == Some(&id) && self.screen == "stopping";
+                if self.stopping.as_deref() == Some(&id) {
+                    self.stopping = None;
+                }
+                if self.preferences.notifications && result.is_ok() {
+                    let _ = desktop::notify(
+                        "Moss server stopped",
+                        "The local server and its database have stopped.",
+                    );
+                }
+                if self.turn == turn || waiting {
+                    match result {
+                        Ok(()) => self.list_servers(),
+                        Err(_) => self.show(json!({"screen":"stop-failed", "code":"app_server_stop_failed", "reason":"The server or its database could not be stopped. Open Servers to check its state and try again."})),
+                    }
+                }
+            }
             UserEvent::Connect(id) => self.choose(id),
             UserEvent::Check(id) => {
                 if self.current.as_deref() == Some(id.as_str()) {
@@ -296,7 +369,38 @@ impl App {
             "this-computer" => self.this_computer(),
             "new-server" => self.show(json!({"screen":"create", "name": text("name")})),
             "create" => self.create(text("name")),
-            "stop" => self.stop(text("id")),
+            "stop" => self.confirm_stop(text("id")),
+            "confirm-stop" => {
+                let id = text("id");
+                if self.pending_stop.take().as_deref() == Some(&id) {
+                    self.stop(id);
+                }
+            }
+            "desktop" => self.show_desktop(None),
+            "quit" => self.quit = true,
+            "login" => {
+                let enabled = message["enabled"].as_bool().unwrap_or(false);
+                let result = desktop::set_login(&self.store, &self.install, enabled);
+                self.show_desktop(result.err());
+            }
+            "notifications" => {
+                let old = self.preferences.notifications;
+                self.preferences.notifications =
+                    message["enabled"].as_bool().unwrap_or(false) && cfg!(target_os = "linux");
+                let result = self.preferences.save(&self.store);
+                if result.is_err() {
+                    self.preferences.notifications = old;
+                }
+                self.show_desktop(result.err());
+            }
+            "test-notification" => {
+                let error = if self.preferences.notifications {
+                    desktop::notify("Moss", "Desktop notifications are on.").err()
+                } else {
+                    None
+                };
+                self.show_desktop(error);
+            }
             "another" => self.show(json!({
                 "screen":"add", "first": self.servers.last.is_none(), "address": text("address"),
             })),
@@ -392,8 +496,29 @@ impl App {
         });
     }
 
-    /// Stops a local server and its database, then refreshes the list.
+    fn show_desktop(&mut self, error: Option<String>) {
+        self.current = None;
+        self.show(json!({"screen":"desktop", "tray":self.tray.is_some(),
+            "supported":cfg!(target_os = "linux"), "login":desktop::starts_at_login(&self.store),
+            "notifications":self.preferences.notifications, "code":if error.is_some() { "app_desktop_integration_failed" } else { "" }, "error":error}));
+    }
+
+    fn confirm_stop(&mut self, id: String) {
+        if self.stopping.is_some() {
+            return self.show(json!({"screen":"stopping", "name":"Moss"}));
+        }
+        let Some(target @ Target::Local { .. }) = self.store.find(&self.servers, &id) else {
+            return self.list_servers();
+        };
+        self.current = None;
+        self.show(json!({"screen":"confirm-stop", "id":id, "name":target.name()}));
+    }
+
+    /// Serializes with any in-progress start, then stops the server and its database.
     fn stop(&mut self, id: String) {
+        if self.stopping.is_some() {
+            return;
+        }
         let Some(Target::Local { folder, .. }) = self.store.find(&self.servers, &id) else {
             return self.list_servers();
         };
@@ -401,10 +526,12 @@ impl App {
             self.server = None;
         }
         self.current = None;
-        let (proxy, install) = (self.proxy.clone(), self.install.clone());
+        self.stopping = Some(id.clone());
+        self.show(json!({"screen":"stopping", "name":"Moss"}));
+        let (proxy, install, turn) = (self.proxy.clone(), self.install.clone(), self.turn);
         self.runtime.spawn(async move {
-            let _ = reach::stop_local(&install, &folder).await;
-            let _ = proxy.send_event(UserEvent::ShowServers);
+            let result = reach::stop_local(&install, &folder).await;
+            let _ = proxy.send_event(UserEvent::Stopped { id, turn, result });
         });
     }
 
@@ -416,6 +543,12 @@ impl App {
 
     /// Shows one of the app's own screens, hiding any server page.
     fn show(&mut self, state: Value) {
+        self.screen = state["screen"].as_str().unwrap_or_default().to_owned();
+        self.pending_stop = if state["screen"] == "confirm-stop" {
+            state["id"].as_str().map(str::to_owned)
+        } else {
+            None
+        };
         self.shown_pin = match (
             state["screen"].as_str(),
             state["address"].as_str(),
@@ -437,6 +570,9 @@ impl App {
     }
 
     fn connect(&mut self, id: String) {
+        if self.stopping.as_deref() == Some(&id) {
+            return self.show(json!({"screen":"stopping", "name":"Moss"}));
+        }
         let Some(target) = self.store.find(&self.servers, &id) else {
             return self.list_servers();
         };
@@ -597,6 +733,9 @@ impl App {
             let _ = server.view.set_visible(true);
         }
         self.window.set_title(&format!("Moss · {}", opened.name));
+        if self.preferences.notifications {
+            let _ = desktop::notify("Moss connected", &format!("Connected to {}", opened.name));
+        }
     }
 
     fn server_view(&self, opened: &Opened) -> Result<ServerView, String> {

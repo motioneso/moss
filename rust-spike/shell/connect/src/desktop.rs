@@ -1,0 +1,321 @@
+//! Linux desktop integration through the GIO dependency already used by the web view.
+//! Other systems keep normal close-to-quit behaviour until their native integration ships.
+
+use crate::store::{private_dir, Store};
+use moss_network::config::{private_read, private_write};
+use serde::{Deserialize, Serialize};
+
+#[derive(Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Preferences {
+    pub notifications: bool,
+}
+
+impl Preferences {
+    pub fn load(store: &Store) -> Result<Self, String> {
+        let path = store.data.join("app/desktop.json");
+        if !path.exists() {
+            return Ok(Self::default());
+        }
+        serde_json::from_slice(&private_read(&path)?)
+            .map_err(|_| "Cannot read desktop settings".into())
+    }
+
+    pub fn save(&self, store: &Store) -> Result<(), String> {
+        private_dir(&store.data)?;
+        private_dir(&store.data.join("app"))?;
+        private_write(
+            &store.data.join("app/desktop.json"),
+            &serde_json::to_vec(self).map_err(|_| "Cannot save desktop settings")?,
+        )
+    }
+}
+
+#[cfg(target_os = "linux")]
+mod linux {
+    use super::*;
+    use gio::glib::{variant::ToVariant, Variant};
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+
+    const ITEM: &str = "org.kde.StatusNotifierItem";
+    const XML: &str = r#"<node><interface name="org.kde.StatusNotifierItem">
+      <method name="Activate"><arg type="i" direction="in"/><arg type="i" direction="in"/></method>
+      <method name="SecondaryActivate"><arg type="i" direction="in"/><arg type="i" direction="in"/></method>
+      <method name="ContextMenu"><arg type="i" direction="in"/><arg type="i" direction="in"/></method>
+      <property name="Category" type="s" access="read"/><property name="Id" type="s" access="read"/>
+      <property name="Title" type="s" access="read"/><property name="Status" type="s" access="read"/>
+      <property name="IconName" type="s" access="read"/><property name="ItemIsMenu" type="b" access="read"/>
+    </interface></node>"#;
+
+    pub struct Tray {
+        connection: gio::DBusConnection,
+        registration: Option<gio::RegistrationId>,
+        watcher: Option<gio::SignalSubscriptionId>,
+        host: Option<gio::SignalSubscriptionId>,
+    }
+
+    impl Drop for Tray {
+        fn drop(&mut self) {
+            if let Some(id) = self.host.take() {
+                self.connection.signal_unsubscribe(id);
+            }
+            if let Some(id) = self.watcher.take() {
+                self.connection.signal_unsubscribe(id);
+            }
+            if let Some(id) = self.registration.take() {
+                let _ = self.connection.unregister_object(id);
+            }
+        }
+    }
+
+    pub fn tray(proxy: tao::event_loop::EventLoopProxy<crate::UserEvent>) -> Option<Tray> {
+        let connection = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE).ok()?;
+        // A watcher may exist without any visible tray host. In that case Close must quit.
+        let reply = connection
+            .call_sync(
+                Some("org.kde.StatusNotifierWatcher"),
+                "/StatusNotifierWatcher",
+                "org.freedesktop.DBus.Properties",
+                "Get",
+                Some(
+                    &(
+                        "org.kde.StatusNotifierWatcher",
+                        "IsStatusNotifierHostRegistered",
+                    )
+                        .to_variant(),
+                ),
+                None,
+                gio::DBusCallFlags::NONE,
+                1000,
+                gio::Cancellable::NONE,
+            )
+            .ok()?;
+        if !reply.get::<(Variant,)>()?.0.get::<bool>()? {
+            return None;
+        }
+        let info = gio::DBusNodeInfo::for_xml(XML)
+            .ok()?
+            .lookup_interface(ITEM)?;
+        let events = proxy.clone();
+        let events_host = proxy.clone();
+        let registration = connection
+            .register_object(
+                "/StatusNotifierItem",
+                &info,
+                move |_, _, _, _, method, _, invocation| {
+                    let event = match method {
+                        "Activate" | "SecondaryActivate" => crate::UserEvent::Reveal,
+                        "ContextMenu" => crate::UserEvent::Desktop,
+                        _ => {
+                            invocation.return_dbus_error(
+                                "org.freedesktop.DBus.Error.UnknownMethod",
+                                "Unknown action",
+                            );
+                            return;
+                        }
+                    };
+                    let _ = proxy.send_event(event);
+                    invocation.return_value(None);
+                },
+                |_, _, _, _, property| match property {
+                    "Category" => "ApplicationStatus".to_variant(),
+                    "Id" => "moss".to_variant(),
+                    "Title" => "Moss".to_variant(),
+                    "Status" => "Active".to_variant(),
+                    "IconName" => "applications-office".to_variant(),
+                    "ItemIsMenu" => false.to_variant(),
+                    _ => "".to_variant(),
+                },
+                |_, _, _, _, _, _| false,
+            )
+            .ok()?;
+        let watcher = connection.signal_subscribe(
+            Some("org.freedesktop.DBus"),
+            Some("org.freedesktop.DBus"),
+            Some("NameOwnerChanged"),
+            Some("/org/freedesktop/DBus"),
+            Some("org.kde.StatusNotifierWatcher"),
+            gio::DBusSignalFlags::NONE,
+            move |_, _, _, _, _, parameters| {
+                if parameters
+                    .get::<(String, String, String)>()
+                    .is_some_and(|(_, _, owner)| owner.is_empty())
+                {
+                    let _ = events.send_event(crate::UserEvent::TrayUnavailable);
+                }
+            },
+        );
+        let host = connection.signal_subscribe(
+            Some("org.kde.StatusNotifierWatcher"),
+            Some("org.kde.StatusNotifierWatcher"),
+            Some("StatusNotifierHostUnregistered"),
+            Some("/StatusNotifierWatcher"),
+            None,
+            gio::DBusSignalFlags::NONE,
+            move |_, _, _, _, _, _| {
+                let _ = events_host.send_event(crate::UserEvent::TrayUnavailable);
+            },
+        );
+        let tray = Tray {
+            connection,
+            registration: Some(registration),
+            watcher: Some(watcher),
+            host: Some(host),
+        };
+        // Passing our unique bus name lets the host watch this particular app's lifetime.
+        let name = tray.connection.unique_name()?;
+        tray.connection
+            .call_sync(
+                Some("org.kde.StatusNotifierWatcher"),
+                "/StatusNotifierWatcher",
+                "org.kde.StatusNotifierWatcher",
+                "RegisterStatusNotifierItem",
+                Some(&(name.as_str(),).to_variant()),
+                None,
+                gio::DBusCallFlags::NONE,
+                1000,
+                gio::Cancellable::NONE,
+            )
+            .ok()?;
+        Some(tray)
+    }
+
+    pub fn notify(title: &str, body: &str) -> Result<(), String> {
+        let bus = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE)
+            .map_err(|_| "Desktop notifications are unavailable")?;
+        let hints: HashMap<String, Variant> = HashMap::new();
+        let body = gio::glib::markup_escape_text(body);
+        bus.call_sync(
+            Some("org.freedesktop.Notifications"),
+            "/org/freedesktop/Notifications",
+            "org.freedesktop.Notifications",
+            "Notify",
+            Some(
+                &(
+                    "Moss",
+                    0u32,
+                    "applications-office",
+                    title,
+                    body.as_str(),
+                    Vec::<String>::new(),
+                    hints,
+                    -1i32,
+                )
+                    .to_variant(),
+            ),
+            None,
+            gio::DBusCallFlags::NONE,
+            1000,
+            gio::Cancellable::NONE,
+        )
+        .map_err(|_| "Desktop notifications are unavailable")?;
+        Ok(())
+    }
+
+    fn autostart_file(store: &Store) -> Result<PathBuf, String> {
+        let config = std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|p| PathBuf::from(p).join(".config")))
+            .ok_or("No settings folder")?;
+        // A separate entry for each app data folder; portable installs do not overwrite one another.
+        let id = store
+            .data
+            .to_string_lossy()
+            .bytes()
+            .fold(0xcbf29ce484222325u64, |h, b| {
+                (h ^ u64::from(b)).wrapping_mul(0x100000001b3)
+            });
+        Ok(config.join(format!("autostart/moss-{id:016x}.desktop")))
+    }
+
+    pub fn starts_at_login(store: &Store) -> bool {
+        autostart_file(store).is_ok_and(|p| p.is_file())
+    }
+
+    fn quoted(path: &Path) -> Result<String, String> {
+        let text = path.to_str().ok_or("The install path is not valid text")?;
+        if text.contains(['\n', '\r']) {
+            return Err("The install path contains a line break".into());
+        }
+        Ok(format!(
+            "\"{}\"",
+            text.replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('`', "\\`")
+                .replace('$', "\\$")
+                .replace('%', "%%")
+        ))
+    }
+
+    pub fn set_login(store: &Store, install: &Path, enabled: bool) -> Result<(), String> {
+        let path = autostart_file(store)?;
+        if !enabled {
+            return match std::fs::remove_file(path) {
+                Ok(()) => Ok(()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(_) => Err("Cannot turn off start at login".into()),
+            };
+        }
+        std::fs::create_dir_all(path.parent().ok_or("No settings folder")?)
+            .map_err(|_| "Cannot create login settings")?;
+        let exe = quoted(&std::env::current_exe().map_err(|_| "Cannot find this app")?)?;
+        let data = quoted(&store.data)?;
+        let install = quoted(install)?;
+        let entry = gio::glib::KeyFile::new();
+        entry.set_string("Desktop Entry", "Type", "Application");
+        entry.set_string("Desktop Entry", "Name", "Moss");
+        entry.set_string(
+            "Desktop Entry",
+            "Exec",
+            &format!("{exe} --data {data} --install {install}"),
+        );
+        entry.set_boolean("Desktop Entry", "Terminal", false);
+        entry.set_boolean("Desktop Entry", "X-GNOME-Autostart-enabled", true);
+        let entry = entry.to_data();
+        private_write(&path, entry.as_bytes())
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub use linux::*;
+
+#[cfg(not(target_os = "linux"))]
+mod unsupported {
+    use super::*;
+    use std::path::Path;
+    pub struct Tray;
+    pub fn tray(_: tao::event_loop::EventLoopProxy<crate::UserEvent>) -> Option<Tray> {
+        None
+    }
+    pub fn starts_at_login(_: &Store) -> bool {
+        false
+    }
+    pub fn set_login(_: &Store, _: &Path, _: bool) -> Result<(), String> {
+        Err("Desktop integration is not available on this system yet".into())
+    }
+    pub fn notify(_: &str, _: &str) -> Result<(), String> {
+        Err("Desktop notifications are not available on this system yet".into())
+    }
+}
+#[cfg(not(target_os = "linux"))]
+pub use unsupported::*;
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn notification_preferences_default_off_and_persist() {
+        let root = std::env::temp_dir().join(format!("moss-desktop-{}", uuid::Uuid::new_v4()));
+        let store = Store::new(root.clone());
+        assert!(!Preferences::load(&store).unwrap().notifications);
+        Preferences {
+            notifications: true,
+        }
+        .save(&store)
+        .unwrap();
+        assert!(Preferences::load(&store).unwrap().notifications);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+}

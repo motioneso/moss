@@ -86,6 +86,9 @@ pub fn create_instance(store: &Store, install: &Path, name: &str) -> Result<(), 
     let folder = store.instance_folder(name);
     private_dir(&store.data).map_err(|_| Failure::Other)?;
     private_dir(&store.servers_dir()).map_err(|_| Failure::Other)?;
+    // Keep cleanup and setup exclusive across app processes, including different names.
+    // Otherwise one setup can delete another's unfinished folder.
+    let _setup = setup_lock(&store.servers_dir())?;
     // A folder with no network file is a setup that was interrupted. Clear it and start over.
     if folder.exists() {
         if folder.join(NETWORK_FILE).exists() {
@@ -103,6 +106,28 @@ pub fn create_instance(store: &Store, install: &Path, name: &str) -> Result<(), 
     made
 }
 
+fn setup_lock(servers: &Path) -> Result<std::fs::File, Failure> {
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true).truncate(false).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let file = options
+        .open(servers.join("setup.lock"))
+        .map_err(|_| Failure::Other)?;
+    #[cfg(unix)]
+    {
+        use std::os::fd::AsRawFd;
+        // SAFETY: file owns the descriptor; dropping it releases the advisory lock.
+        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) } != 0 {
+            return Err(Failure::Other);
+        }
+    }
+    Ok(file)
+}
+
 fn make_private_folder(path: &Path) -> Result<(), Failure> {
     #[allow(unused_mut)]
     let mut builder = std::fs::DirBuilder::new();
@@ -118,7 +143,8 @@ fn make_private_folder(path: &Path) -> Result<(), Failure> {
 }
 
 fn prepare(store: &Store, install: &Path, folder: &Path) -> Result<(), Failure> {
-    let port = free_port(store).ok_or(Failure::Other)?;
+    // Keep the listener alive until network.json commits the port to this instance.
+    let (port, _reservation) = free_port(store).ok_or(Failure::Other)?;
     let origins = vec![
         format!("https://localhost:{port}"),
         format!("https://127.0.0.1:{port}"),
@@ -148,7 +174,7 @@ fn prepare(store: &Store, install: &Path, folder: &Path) -> Result<(), Failure> 
 }
 
 /// The first port at or above `FIRST_PORT` that no instance uses and nothing is listening on.
-fn free_port(store: &Store) -> Option<u16> {
+fn free_port(store: &Store) -> Option<(u16, std::net::TcpListener)> {
     let taken: Vec<u16> = std::fs::read_dir(store.servers_dir())
         .into_iter()
         .flatten()
@@ -156,9 +182,13 @@ fn free_port(store: &Store) -> Option<u16> {
         .filter_map(|e| Config::read(&e.path().join(NETWORK_FILE)).ok())
         .map(|c| c.listen.port())
         .collect();
-    (FIRST_PORT..FIRST_PORT + 400).find(|port| {
-        !taken.contains(port) && std::net::TcpListener::bind(("0.0.0.0", *port)).is_ok()
-    })
+    (FIRST_PORT..FIRST_PORT + 400)
+        .filter(|port| !taken.contains(port))
+        .find_map(|port| {
+            std::net::TcpListener::bind(("0.0.0.0", port))
+                .ok()
+                .map(|listener| (port, listener))
+        })
 }
 
 /// Database supervisors this app started, kept so they are reaped when they exit.
