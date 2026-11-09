@@ -104,6 +104,7 @@ pub fn create_instance(store: &Store, install: &Path, name: &str) -> Result<(), 
 }
 
 fn make_private_folder(path: &Path) -> Result<(), Failure> {
+    #[allow(unused_mut)]
     let mut builder = std::fs::DirBuilder::new();
     #[cfg(unix)]
     {
