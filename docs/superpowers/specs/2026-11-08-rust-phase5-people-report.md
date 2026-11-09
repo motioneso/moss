@@ -1771,9 +1771,10 @@ Immediate sends and schedules retain their existing path. A failed delayed send
 discards its cached connection; there is no automatic resend with an uncertain
 commit outcome. The next explicit attempt reconnects.
 
-This is a small host-adapter correction: a pure client module cannot remove server
-connection setup through its SDK. The People guest, public interfaces, SQL, privacy
-policies and packaged UI source are unchanged. No database or filesystem handle was
+The host-adapter correction removes server connection setup that a pure client
+module cannot remove through its SDK. The People guest also avoids a redundant
+command pre-read, as described below. Public interfaces, SQL, privacy policies
+and packaged UI source are unchanged. No database or filesystem handle was
 added to the module or app. The manifest's manual-refresh declaration and current
 README/change notes describe the normal call budget without advertising an
 assembled UI.
@@ -1791,8 +1792,7 @@ Before the fix, the connection-reuse assertion failed with count zero versus one
 That first gate began before test formatting and the regression commit, so its
 launch fingerprint is not claimed as the final committed test bytes. The separate
 route failure above reproduces the user-visible deadline failure on the committed
-regression. Final protected results and measured timings are recorded below after
-the gates complete.
+regression. Final protected results and measured timings are recorded below.
 
 All Cargo, Rustup and target caches belong to this task's scratch directory. The
 pinned compiler and existing dependency cache were copied there. The already
@@ -1823,7 +1823,8 @@ provide a latency guarantee across machines, database outages or concurrent load
 ### Review and integration follow-up
 
 The first independent review found one major documentation gap: the final default-budget
-receipt was still pending. That must be resolved with actual gate results before readiness.
+receipt was still pending. The final measured sample and gate outcomes below resolve that
+evidence gap; they do not establish a general latency guarantee.
 It also identified four minor limitations. Reuse has since been narrowed to a single
 invocation to avoid a new failure on the first request after an idle disconnect. A failed
 send still conservatively evicts its handle for any queue error, including validation;
@@ -1848,3 +1849,39 @@ operation atomically returns the original immutable record on a retry. The guest
 still checks its queue and exact command, retains the first stored delay, and
 rejects conflicts. This removes one host/filesystem round trip per fresh command.
 The worker's command read and public interfaces remain unchanged.
+
+### Final checkpoint evidence
+
+The final generated component and signed package were built from production/test
+commit `70abda14106c8bf79fe4062f478008ee4f372826`. Both final gates started
+with a clean tree and fingerprint
+`sha256:5eb4dda45578141b2d400c4b4121d70dbabc66ec8effa57d5e97478d586abe20`.
+This later report-only commit records those receipts; it is not claimed to share
+their launch fingerprint.
+
+- Component SHA-256: `28701b6222f1ce25e232939ec9dbd4821f6697b78e15d03f481c01dd20746da6`.
+- Signed package SHA-256: `7a83b02929ad675748ec83791baa3f9fbe7d8f11d4f30b332a355fcc34864dc8`.
+- The installed fifty-reference refresh returned **202 in 3748 milliseconds**,
+  with the configured deadline and strict elapsed assertion both at 5000 milliseconds.
+  This is one measured sample in the disposable gate environment.
+- Installed route gate: `task_116_rust_port_phase_5_people_module-20261109-025903-UZAkQg.log`,
+  `rc=0`; disposable database/container removed. All 170 legacy route responses
+  and seven table snapshots matched. All four public APIs passed through an
+  installed consumer; installed Settings assets and folder persistence/refusals
+  passed. The downstream JSON consumer and bridge test passed as well.
+- Full People gate: `task_116_rust_port_phase_5_people_module-20261109-025902-m7hs3Q.log`,
+  `rc=0`; all ten suites and eleven selected tests passed, and its disposable
+  database/container was removed. This includes queue recovery/deduplication,
+  compiled ABI/read/tool/worker/note parity, persistence, Settings and the
+  failing-first privacy matrix. Both app and worker privacy controls fail with
+  protection removed and pass when restored, including other-user/admin attempts.
+- Regenerated core, directory and numeric parity vectors match their committed
+  fixtures exactly. Native People tests: 26 passed. Strict Clippy passed for all People targets and
+  the host library plus queue regression. Scoped Rust formatting, TypeScript lint,
+  app-map generation and documentation formatting passed. The repository's lint,
+  typecheck, format and size checks all returned zero; scoped checks cover the
+  subsequent source/document edits.
+
+The full People port remains **incomplete** for the acceptance items listed above.
+No real application screen, authenticated chat flow or second-device HTTPS path
+was exercised by these command-line checks.
