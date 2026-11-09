@@ -1,3 +1,4 @@
+import { readdir, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -39,7 +40,26 @@ const allMigrationDirectories = [migrationsDirectory, ...getBuiltInSqlMigrationD
 const allMigrationFiles = (
   await Promise.all(allMigrationDirectories.map((dir) => loadMigrationFiles(dir)))
 ).flat();
-assertUniqueMigrationVersions(allMigrationFiles);
+// Reserve package-owned SQL numbers without running them as the core owner.
+// Only the restricted package installer may execute these migrations.
+const packageMigrationFiles = (
+  await Promise.all(
+    (await readdir(join(root, "modules"), { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map(async (entry) => {
+        const directory = join(root, "modules", entry.name, "sql");
+        const exists = await stat(directory).then(
+          (info) => info.isDirectory(),
+          (error: NodeJS.ErrnoException) => {
+            if (error.code === "ENOENT") return false;
+            throw error;
+          }
+        );
+        return exists ? loadMigrationFiles(directory) : [];
+      })
+  )
+).flat();
+assertUniqueMigrationVersions([...allMigrationFiles, ...packageMigrationFiles]);
 
 const migrationResults = [
   await runSqlMigrations({

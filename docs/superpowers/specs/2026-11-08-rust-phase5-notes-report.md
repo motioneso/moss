@@ -1157,6 +1157,9 @@ its own slice. Remaining-work item 3 above still stands as written.
 The Notes package now has its own owner-only sync checkpoint table in new SQL.
 It preserves the original six tables and all three legacy migration files.
 Package version `0.1.5` includes the new migration and a truthful app-map entry.
+The shared host adds the module runtime role membership to worker credentials
+as well as app credentials, with inheritance disabled. This lets queue workers
+explicitly select the same restricted module role for new package-owned tables.
 The module remains a pure SDK client of the server API; it accesses no memory
 or People tables directly and opens no files or network connections itself.
 
@@ -1166,6 +1169,11 @@ outer database transaction commits. A worker reads it by opaque ID, calls the
 existing coordinator, and stores each deferred continuation the same way. Paths,
 file hashes and snapshot keys stay in the account-scoped database row. Queued
 parameters and worker results carry the ID instead of the private continuation.
+
+The repository collision scan, base/PR checks and both startup migrators now
+reserve SQL versions under `modules/*/sql` as well as the legacy folders. They
+validate without executing package SQL as the core owner. Planted collisions
+cover this boundary. The new migration also has a pinned package-builder hash.
 
 ### Verification approach
 

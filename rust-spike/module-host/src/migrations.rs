@@ -288,6 +288,6 @@ pub(crate) async fn provision_roles(tx: &tokio_postgres::Transaction<'_>, id: &s
             "A module role can bypass row security"
         );
     }
-    tx.batch_execute(&format!("GRANT USAGE, CREATE ON SCHEMA app TO {owner}; GRANT REFERENCES(id) ON app.users TO {owner}; GRANT USAGE ON SCHEMA app TO {runtime}; GRANT EXECUTE ON FUNCTION app.current_actor_user_id() TO {runtime}; GRANT {runtime} TO jarvis_app_runtime WITH INHERIT FALSE")).await?;
+    tx.batch_execute(&format!("GRANT USAGE, CREATE ON SCHEMA app TO {owner}; GRANT REFERENCES(id) ON app.users TO {owner}; GRANT USAGE ON SCHEMA app TO {runtime}; GRANT EXECUTE ON FUNCTION app.current_actor_user_id() TO {runtime}; GRANT {runtime} TO jarvis_app_runtime, jarvis_worker_runtime WITH INHERIT FALSE")).await?;
     Ok(())
 }

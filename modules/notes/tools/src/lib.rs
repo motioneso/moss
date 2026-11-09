@@ -47,7 +47,13 @@ pub fn package_files(root: &Path, component: Vec<u8>) -> Result<BTreeMap<String,
             );
             bytes
         } else {
-            std::fs::read(root.join("modules/notes").join(path))?
+            let bytes = std::fs::read(root.join("modules/notes").join(path))?;
+            ensure!(
+                trust::digest(&bytes)
+                    == "15e85bbf3d2fcc0ba8aced4b5107069ef597dcd6a2cb1282304d082a65d34747",
+                "Notes migration bytes changed: {path}"
+            );
+            bytes
         };
         files.insert(path.clone(), bytes);
     }

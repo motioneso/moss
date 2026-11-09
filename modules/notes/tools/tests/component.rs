@@ -1,10 +1,25 @@
 use access_context::AccessContext;
 use moss_module_host::{
     archive::{pack, Package},
-    runtime::{DenyPorts, Host, Limits},
+    runtime::{CallScope, DenyPorts, Host, Limits, Ports, Request},
     trust,
 };
-use std::{path::Path, sync::Arc};
+use std::{
+    path::Path,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+};
+
+#[derive(Default)]
+struct CountingPorts(AtomicUsize);
+impl Ports for CountingPorts {
+    fn invoke(&self, _: &CallScope, _: &str, _: &Request) -> anyhow::Result<serde_json::Value> {
+        self.0.fetch_add(1, Ordering::SeqCst);
+        Ok(serde_json::json!({"rows":[], "affectedRows":1}))
+    }
+}
 
 #[test]
 fn actual_guest_runs_without_wasi_and_archive_is_reproducible() {
@@ -29,17 +44,23 @@ fn actual_guest_runs_without_wasi_and_archive_is_reproducible() {
             "{}"
         );
     }
+    let sync_ports = Arc::new(CountingPorts::default());
     assert!(
         host.call(
             &wasm,
             manifest.clone(),
             AccessContext::new(uuid::Uuid::new_v4(), "ordinary-sync-unavailable"),
-            Arc::new(DenyPorts),
+            sync_ports.clone(),
             "api",
             r#"{"name":"requestNotesSync","parameters":{}}"#
         )
         .is_err(),
         "Unassembled sync request API must stay unavailable"
+    );
+    assert_eq!(
+        sync_ports.0.load(Ordering::SeqCst),
+        0,
+        "Ordinary sync must refuse before invoking any host service"
     );
     let unavailable = host
         .call(
