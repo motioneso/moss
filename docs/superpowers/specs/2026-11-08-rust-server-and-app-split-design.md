@@ -391,12 +391,19 @@ The middle line carries the cause from section 10. For a local server the first 
 
 ### 13.2 Not in the first slice
 
-- macOS and Windows certificate handling (section 6.3 says how).
-- Operating-system trust for public certificates.
-- Creating instances in the app, Stop, tray, start at login, notifications.
-- The "Switch server" item in the server's own account menu (the link works when typed).
-- Creating the local database. "This computer" needs an instance folder that already holds
-  `network.json` (Phase 1 and 7 create it). Without one the app says Moss isn't set up here yet.
+- Operating-system trust for public certificates. It needs a platform verifier library, which
+  has not been approved for install.
+- Tray, start at login, notifications.
+- Creating a local server on Windows. The database supervisor is unix only, so the app says
+  setting up is not available there yet; a hand-prepared instance folder still works.
+- A real installer. The app expects `moss-db`, `postgres/` and `schema/` next to it (Phase 7
+  ships them); without them creating a server says the copy came without its database.
+
+Built in slice 2: pinned-certificate handling in the macOS and Windows web views (section 6.3);
+creating local servers in the app (a "New server here" screen, and "This computer" creates the
+default one on first use) through `provision.rs`, which reuses `moss-db` and the network crate's
+certificate maker; Stop for a running local server (also stops its database); and the "Switch
+server" item in the server's own account menu, shown only inside the app.
 
 ### 13.3 Proof
 

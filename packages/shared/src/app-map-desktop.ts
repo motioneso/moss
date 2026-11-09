@@ -12,7 +12,7 @@ export const DESKTOP_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     runtime: "rust",
     label: "Rust Moss desktop app - choose and connect to a server",
     description:
-      "The Moss desktop app opens the server it used last. On first run it asks This computer or Another computer. This computer starts the local Moss server in the background if it is not running; the server keeps running after the window closes. Another computer takes an HTTPS address from that computer's Sharing screen, shows its certificate code, and saves the server only after It matches is pressed. A saved server whose certificate later changes shows the new code to compare again. Each saved server has its own sign-in. The Servers list (also at moss-app://servers) shows each server as Running, Not running, Reachable or Can't reach, with Open and Remove. When a server cannot be reached the app names the reason and tries again with growing waits. The app reaches other computers only when their sharing is on.",
+      "The Moss desktop app opens the server it used last. On first run it asks This computer or Another computer. This computer sets up its first local server on the spot (a short Setting up screen while the private database and secure address are made) and starts it in the background if it is not running; the server keeps running after the window closes. Another computer takes an HTTPS address from that computer's Sharing screen, shows its certificate code, and saves the server only after It matches is pressed. A saved server whose certificate later changes shows the new code to compare again. Each saved server has its own sign-in. The Servers list (also at moss-app://servers) shows each server as Running, Not running, Reachable or Can't reach, with Open, Stop (a running server on this computer, which also stops its database), Remove (other computers) and New server here, which asks for a name and makes another local server. Inside any server, the account menu at the bottom of the side bar has Switch server, which returns to this list. When a server cannot be reached the app names the reason and tries again with growing waits. The app reaches other computers only when their sharing is on.",
     path: "moss-app://localhost/index.html",
     scope: "user"
   }
@@ -93,7 +93,7 @@ export const DESKTOP_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] 
     id: "rust-app-local-setup",
     runtime: "rust",
     description:
-      "This version of the desktop app cannot set up Moss on this computer yet. Press Switch server and add another computer that runs Moss.",
+      "The desktop app could not set up a server on this computer, and the screen says why: the copy of Moss came without its database, the OpenSSL program is missing, the database did not start (its log is in the server's folder), or this system is not supported yet. Fix what it names and try again, or press Switch server and add another computer that runs Moss.",
     path: "moss-app://servers",
     scope: "system"
   }
