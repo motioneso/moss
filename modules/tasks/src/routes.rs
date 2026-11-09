@@ -75,6 +75,30 @@ fn dispatch<H: Host + ?Sized>(repo: &Repository<'_, H>, r: &RouteRequest) -> Res
             status = 201;
             json!({"task":task_json(repo,repo.create_task(&input)?)?})
         }
+        ("GET", "/tasks/focus") => {
+            let today = repo
+                .now()?
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .map_err(|_| Error::Http(500, "Internal server error"))?
+                .date_naive();
+            json!({"tasks":tasks_json(repo,crate::drift::focus(repo,today)?)?,"signals":[]})
+        }
+        ("GET", "/tasks/at-risk") => {
+            let today = repo
+                .now()?
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .map_err(|_| Error::Http(500, "Internal server error"))?
+                .date_naive();
+            json!({"tasks":tasks_json(repo,crate::drift::at_risk(repo,today)?)?})
+        }
+        ("GET", "/tasks/overdue") => {
+            let today = repo
+                .now()?
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .map_err(|_| Error::Http(500, "Internal server error"))?
+                .date_naive();
+            json!({"tasks":tasks_json(repo,crate::drift::overdue(repo,today)?)?})
+        }
         ("GET", "/tasks/:id") => {
             let task = repo
                 .task(param(r, "id")?)?

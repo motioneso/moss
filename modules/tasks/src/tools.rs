@@ -25,6 +25,26 @@ pub fn handle<H: Host + ?Sized>(host: &H, request: ToolRequest) -> Result<Value>
     let repo = Repository::new(host);
     Ok(match request.tool.as_str() {
         "tasks.list" => return crate::list::execute(&repo, &input),
+        "tasks.summary" => return crate::summary::execute(&repo, &input),
+        "tasks.focus" | "tasks.atRisk" | "tasks.overdue" => {
+            let today: chrono::NaiveDate = repo
+                .now()?
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .map_err(|_| Error::Http(500, "Internal server error"))?
+                .date_naive();
+            let rows = match request.tool.as_str() {
+                "tasks.focus" => crate::drift::focus(&repo, today)?,
+                "tasks.atRisk" => crate::drift::at_risk(&repo, today)?,
+                _ => crate::drift::overdue(&repo, today)?,
+            };
+            let items = rows
+                .into_iter()
+                .map(|task| task_json(&repo, task))
+                .collect::<Result<Vec<_>>>()?;
+            return Ok(
+                json!({"data":{"items":items},"columnOrder":["id","title","status","dueAt","priority"]}),
+            );
+        }
         "tasks.heartbeatWindow" => return crate::heartbeat::execute(&repo, &input),
         "tasks.listLists" => {
             json!({"data":{"items":repo.lists()?.iter().map(|v|v.dto()).collect::<Vec<_>>()}})

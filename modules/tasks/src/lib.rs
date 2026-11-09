@@ -2,6 +2,7 @@
 mod breakdown;
 pub mod dates;
 mod delete_list;
+mod drift;
 mod heartbeat;
 mod jobs;
 mod list;
@@ -11,6 +12,7 @@ pub mod recurrence;
 pub mod repository;
 pub mod routes;
 pub mod rows;
+mod summary;
 pub mod task_fields;
 pub mod tasks;
 mod tool_fields;

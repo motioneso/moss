@@ -17,10 +17,10 @@ fn package_owns_every_existing_tasks_table() {
         );
     }
     assert_eq!(m.database.owned_tables.len(), 6);
-    assert_eq!(m.tools.len(), 19);
+    assert_eq!(m.tools.len(), 23);
     assert_eq!(
         m.tools.values().filter(|tool| tool.risk == "read").count(),
-        6
+        10
     );
     assert_eq!(
         m.tools.values().filter(|tool| tool.risk == "write").count(),

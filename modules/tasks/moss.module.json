@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "tasks",
   "name": "Tasks",
-  "description": "Tasks component with package screens for lists, priority views, task editing, subtasks, tags and activity. Full legacy parity remains unfinished.",
+  "description": "Tasks component with package screens for lists, priority views, task editing, subtasks, tags, activity, focus, at-risk, overdue and summary reads. Full legacy parity remains unfinished.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -47,7 +47,11 @@
         "tasks.deleteTag",
         "tasks.heartbeatWindow",
         "tasks.list",
-        "tasks.deleteList"
+        "tasks.deleteList",
+        "tasks.summary",
+        "tasks.focus",
+        "tasks.atRisk",
+        "tasks.overdue"
       ]
     },
     {
@@ -174,6 +178,10 @@
           "path": "/tasks"
         }
       ]
+    },
+    {
+      "id": "tasks.package-drift",
+      "description": "Focus, at-risk and overdue routes and tools, plus a bounded twelve-row summary tool, read persisted tasks in the signed-in account scope. Private tasks stay hidden from other accounts including admins. Focus returns no external readiness signals in the package, so no readiness cap is applied. Days use UTC and recurring series are not advanced until the public actor-timezone seam exists."
     }
   ],
   "screens": {
@@ -188,6 +196,21 @@
     {
       "method": "GET",
       "path": "/tasks",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/focus",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/at-risk",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/overdue",
       "signIn": true
     },
     {
@@ -297,7 +320,7 @@
       "risk": "read"
     },
     "tasks.listLists": {
-      "description": "List the account’s task lists.",
+      "description": "List the account\u2019s task lists.",
       "risk": "read"
     },
     "tasks.listTags": {
@@ -305,7 +328,7 @@
       "risk": "read"
     },
     "tasks.activity": {
-      "description": "Read a task’s activity.",
+      "description": "Read a task\u2019s activity.",
       "risk": "read"
     },
     "tasks.create": {
@@ -367,6 +390,22 @@
     "tasks.deleteList": {
       "description": "Delete an owned task list, optionally moving its tasks to another owned list. The last list is kept; a nonempty list requires a destination.",
       "risk": "write"
+    },
+    "tasks.summary": {
+      "description": "Read a bounded summary of today, overdue, upcoming, undated, completed or all tasks. Persisted occurrences only; days are UTC until the actor-timezone seam exists.",
+      "risk": "read"
+    },
+    "tasks.focus": {
+      "description": "Get ranked overdue and at-risk tasks. Persisted occurrences only; days are UTC until the actor-timezone seam exists.",
+      "risk": "read"
+    },
+    "tasks.atRisk": {
+      "description": "Get tasks at risk of slipping (priority 3+, due within two days or do-date past, no completed subtask).",
+      "risk": "read"
+    },
+    "tasks.overdue": {
+      "description": "Get overdue open tasks, most overdue first.",
+      "risk": "read"
     }
   },
   "jobs": {
