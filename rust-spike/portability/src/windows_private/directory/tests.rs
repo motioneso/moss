@@ -71,6 +71,8 @@ fn refuses_aliases_and_child_path_escapes() {
         "trailing.",
         "trailing ",
         "NUL",
+        "NUL .txt",
+        "CON .json",
         "COM1.txt",
         "LPT¹",
         "bad\0name",
@@ -93,6 +95,7 @@ fn refuses_junction_at_each_depth_without_touching_target() {
     let real = temp.path().join("real");
     let root = PrivateDirectory::create(&real).unwrap();
     let child = root.create_directory(OsStr::new("child")).unwrap();
+    let deeper = child.create_directory(OsStr::new("deeper")).unwrap();
     let link = temp.path().join("junction");
     let output = std::process::Command::new("cmd.exe")
         .args(["/d", "/c", "mklink", "/J"])
@@ -107,8 +110,10 @@ fn refuses_junction_at_each_depth_without_touching_target() {
     );
     assert!(PrivateDirectory::open(&link).is_err());
     assert!(PrivateDirectory::open(&link.join("child")).is_err());
+    assert!(PrivateDirectory::open(&link.join("child/deeper")).is_err());
     assert!(PrivateDirectory::create(&link.join("new")).is_err());
     assert!(!real.join("new").exists());
+    drop(deeper);
     drop(child);
     drop(root);
     std::fs::remove_dir(&link).unwrap();
@@ -121,7 +126,8 @@ fn state_replacement_preserves_old_state_on_failure_and_rejects_nonprivate_targe
     let name = OsStr::new("state.json");
     root.replace_file(name, b"old").unwrap();
     let mut reader = root.open_file(name).unwrap();
-    assert!(root.replace_file(name, b"new").is_err());
+    let error = root.replace_file(name, b"new").unwrap_err();
+    assert!(matches!(error.raw_os_error(), Some(5 | 32)), "{error}");
     let mut old = String::new();
     reader.read_to_string(&mut old).unwrap();
     assert_eq!(old, "old");
@@ -171,4 +177,32 @@ fn ancestor_with_existing_write_handle_is_refused() {
         .unwrap();
     assert!(PrivateDirectory::create(&ancestor.join("private")).is_err());
     assert!(!ancestor.join("private").exists());
+}
+
+#[test]
+fn ancestor_delete_handles_are_refused_even_after_parent_value_drops() {
+    fn delete_handle(path: &Path) -> io::Result<File> {
+        OpenOptions::new()
+            .access_mode(0x10000) // DELETE, not a rename of the whole subtree.
+            .share_mode(7)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+            .open(path)
+    }
+    fn assert_pinned(path: &Path) {
+        let error = delete_handle(path).unwrap_err();
+        assert_eq!(error.raw_os_error(), Some(32), "{error}");
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let ancestor = temp.path().join("shared ancestor");
+    std::fs::create_dir(&ancestor).unwrap();
+    let root = PrivateDirectory::create(&ancestor.join("private")).unwrap();
+    let child = root.create_directory(OsStr::new("child")).unwrap();
+    assert_pinned(&ancestor);
+    assert_pinned(temp.path());
+    drop(root);
+    assert_pinned(&ancestor);
+    assert_pinned(temp.path());
+    drop(child);
+    drop(delete_handle(&ancestor).unwrap());
+    drop(delete_handle(temp.path()).unwrap());
 }

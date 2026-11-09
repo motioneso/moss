@@ -23,13 +23,13 @@ assemble or enable Windows server creation or Stop.
 - State replacement validates an existing destination with slice 7's file policy, writes and
   flushes an exclusively created private temporary in the same pinned directory, then renames
   it over the named state. An open reader can refuse the rename; failure preserves old state.
-  Writers must use the supervisor/startup lock; this API does not acquire it. A crash may leave
-  private temporary files, which are never adopted as state. Power-loss durability of the
+  Writers must use the supervisor/startup lock; this API does not acquire it. A crash may leave private temporary files; failed post-creation validation may leave an empty
+  temporary. Neither is ever adopted as state. Power-loss durability of the
   directory rename is not claimed.
 - Native test sources cover spaces/Unicode, ancestor lifetime, junctions at multiple depths,
-  conflicting write handles, alias/escape rejection, state replacement and failure, and stale
+  conflicting write/delete handles (including after parent values drop), alias/escape rejection, state replacement and failure, and stale
   temporary files. The standard-user Windows harness includes these tests. Negative controls
-  remove ancestor write-sharing refusal, reparse rejection, child-name checking and destination
+  remove ancestor write/delete-sharing refusal, parent retention, reparse rejection, child-name checking and destination
   validation, and require their corresponding tests to fail. Configured tests are not passing
   runtime evidence until the current workflow completes.
 

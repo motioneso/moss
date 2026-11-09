@@ -6,8 +6,8 @@ impl PrivateDirectory {
     /// holding an old no-delete-sharing handle cause replacement to fail, preserving it.
     /// Callers must serialize writers with the supervisor/startup lock. This is not a
     /// database transaction or a promise that a power loss cannot lose the rename.
-    /// A process crash before rename may leave a private `.moss-state-*.tmp` file; opening
-    /// state never consumes those files. Recovery must only use the named state file.
+    /// A crash may leave a private `.moss-state-*.tmp`; failed post-creation validation can
+    /// leave an empty temporary. Opening state never consumes those files. Recovery must only use the named state file.
     pub fn replace_file(&self, name: &OsStr, bytes: &[u8]) -> io::Result<()> {
         let target = self.child_path(name)?;
         match open_file(&target) {

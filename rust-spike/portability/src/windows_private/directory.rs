@@ -166,6 +166,7 @@ fn check_name(name: &OsStr) -> io::Result<()> {
         .split('.')
         .next()
         .unwrap_or("")
+        .trim_end_matches(' ')
         .to_ascii_uppercase();
     if matches!(
         stem.as_str(),
@@ -191,6 +192,8 @@ fn invalid_name() -> io::Error {
 }
 
 fn open_ancestor(path: &Path) -> io::Result<File> {
+    // Keep a data-access right: metadata-only handles do not enforce the sharing policy.
+    // Deny write sharing too, so another handle cannot turn an ancestor into a reparse point.
     let file = OpenOptions::new()
         .access_mode(FILE_READ_ATTRIBUTES | FILE_LIST_DIRECTORY)
         .share_mode(FILE_SHARE_READ)

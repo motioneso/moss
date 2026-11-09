@@ -10,6 +10,9 @@ $mutations = @(
     @{ before = 'compare_acl(dacl, expected_acl)'; after = 'Ok(())'; test = 'rejects_broader_missing_duplicate_and_inherited_acl_entries' },
     @{ before = '|| (!directory && info.links != 1)'; after = ''; test = 'rejects_hard_links_and_wrong_object_types' },
     @{ file = 'directory.rs'; before = '.share_mode(FILE_SHARE_READ)'; after = '.share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)'; test = 'ancestor_with_existing_write_handle_is_refused' },
+    @{ file = 'directory.rs'; before = 'FILE_READ_ATTRIBUTES | FILE_LIST_DIRECTORY'; after = 'FILE_READ_ATTRIBUTES'; test = 'ancestor_delete_handles_are_refused_even_after_parent_value_drops' },
+    @{ file = 'directory.rs'; before = '.share_mode(FILE_SHARE_READ)'; after = '.share_mode(FILE_SHARE_READ | 4)'; test = 'ancestor_delete_handles_are_refused_even_after_parent_value_drops' },
+    @{ file = 'directory.rs'; before = '_parent: Some(self._pin.clone())'; after = '_parent: None'; test = 'ancestor_delete_handles_are_refused_even_after_parent_value_drops' },
     @{ file = 'directory.rs'; before = 'info.attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0'; after = 'false'; test = 'refuses_junction_at_each_depth_without_touching_target' },
     @{ file = 'directory.rs'; before = 'check_name(name)?;'; after = 'let _ = name;'; test = 'refuses_aliases_and_child_path_escapes' },
     @{ file = 'directory/state.rs'; before = 'Err(error) => return Err(error),'; after = 'Err(_) => (),'; test = 'state_replacement_preserves_old_state_on_failure_and_rejects_nonprivate_target' }
