@@ -20,7 +20,7 @@ const NOTES: Record<string, string> = {
     "---\ntitle: Alpha\n---\n# Alpha\n\nSee [[Other Note|label]] and [[Plain]].\n\n## Two\n\nBody two text.\n",
   "nested/b.md": `# Long\n\n${"A long paragraph sentence with enough words to split. ".repeat(80)}\n`,
   "c.md": "Small plain note.\n",
-  "edge.md": "\uFEFF# Edge\n\n[[]] [[|x]] [[a|b]c]] [[x] text [[y]]\n",
+  "edge.md": "\uFEFF# Edge\n\n[[]] [[|x]] [[a|b]c]] [[a|]] [[x] text [[y]]\n",
   // More chunks than one sync run's hundred-chunk budget, so the compiled
   // coordinator must defer and resume to finish this file.
   "long.md": Array.from(

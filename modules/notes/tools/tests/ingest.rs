@@ -15,6 +15,24 @@ use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 use uuid::Uuid;
 
+struct MutatingStub {
+    file: PathBuf,
+}
+impl DocumentEmbeddings for MutatingStub {
+    fn model_name(&self) -> &str {
+        "stub"
+    }
+    fn model_version(&self) -> &str {
+        "0"
+    }
+    fn embed_document(&self, scope: &CallScope, text: &str) -> Result<Vec<f64>> {
+        if text.contains("Small plain note") {
+            std::fs::write(&self.file, "Changed while embedding.\n").unwrap();
+        }
+        Stub.embed_document(scope, text)
+    }
+}
+
 struct Stub;
 impl DocumentEmbeddings for Stub {
     fn model_name(&self) -> &str {
@@ -116,6 +134,15 @@ impl Fixture {
         self.rt.block_on(self.bootstrap.execute("INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'notes-source-path',$2) ON CONFLICT(owner_user_id,key) DO UPDATE SET value_json=EXCLUDED.value_json", &[&actor, &value])).unwrap();
     }
     fn run(&self, db: Database, actor: Uuid, parameters: Value) -> Result<String> {
+        self.run_emb(db, actor, parameters, Arc::new(Stub))
+    }
+    fn run_emb(
+        &self,
+        db: Database,
+        actor: Uuid,
+        parameters: Value,
+        embeddings: Arc<dyn DocumentEmbeddings>,
+    ) -> Result<String> {
         let parent = PathBuf::from(self.oracle["parent"].as_str().unwrap());
         let roots: BTreeMap<Uuid, Vec<PathBuf>> = self
             .actors
@@ -140,7 +167,7 @@ impl Fixture {
         let ingest = Arc::new(
             MemoryIngestPorts::new(
                 db,
-                Arc::new(Stub),
+                embeddings,
                 BTreeMap::from([(
                     ("notes".into(), "source".into()),
                     MemoryIngestSource {
@@ -216,6 +243,49 @@ fn compiled_ingest_matches_legacy_and_skips_unchanged() {
         .unwrap();
         assert_eq!(refused["errors"], 1, "{role}: {refused}");
         assert_eq!(f.snapshot(), f.oracle["expected"]);
+        // A request naming a different folder fails at open, before any file.
+        assert!(f
+            .run(
+                db.clone(),
+                actor,
+                json!({"sourcePath": f.oracle["parent"]}),
+            )
+            .is_err());
+        // A file changed while its chunks are being embedded is refused, and
+        // its previously indexed rows stay in place.
+        let small = PathBuf::from(f.oracle["root"].as_str().unwrap()).join("c.md");
+        let changed: Value = serde_json::from_str(
+            &f.run_emb(
+                db.clone(),
+                actor,
+                json!({"filePath": small.to_string_lossy(), "chunkOffset": 0, "fileHash": ""}),
+                Arc::new(MutatingStub { file: small.clone() }),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        std::fs::write(&small, "Small plain note.\n").unwrap();
+        assert_eq!(changed["errors"], 1, "{role}: {changed}");
+        assert_eq!(f.snapshot(), f.oracle["expected"]);
+        // Positive control for the privacy checks below: the owner does read
+        // their own ingested chunks through the same direct query.
+        f.rt.block_on(async {
+            let cx = safety_core::db::DataContext::open(
+                &db,
+                &AccessContext::new(actor, "notes-ingest-owner"),
+            )
+            .await
+            .unwrap();
+            let rows = cx
+                .db()
+                .query(
+                    "SELECT text FROM app.memory_chunks WHERE owner_user_id=$1",
+                    &[&actor],
+                )
+                .await
+                .unwrap();
+            assert!(!rows.is_empty(), "owner read no ingested chunks");
+        });
         // Direct database checks: another owner and an unrelated instance
         // admin each read none of the first owner's chunks.
         for other in [f.actors[1], f.actors[2]] {

@@ -84,19 +84,19 @@ struct Chunk {
     line_end: i64,
 }
 
-/// JavaScript trim also removes the byte-order mark. Rust trim does not.
+/// JavaScript trim also removes the byte-order mark, and keeps U+0085,
+/// which Rust treats as whitespace. Match the JavaScript set.
 fn trim_js(text: &str) -> &str {
-    text.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
+    text.trim_matches(|c: char| (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}')
 }
 
 /// Port of the legacy document parser. Its size budget counts UTF-16 units,
 /// matching the JavaScript string length the original code used.
 fn parse_document(content: &str) -> (Vec<String>, Vec<Chunk>) {
-    let (frontmatter, body) = match frontmatter_end(content) {
-        Some((fm, end)) => (fm, &content[end..]),
-        None => ("", content),
+    let body = match frontmatter_end(content) {
+        Some((_, end)) => &content[end..],
+        None => content,
     };
-    let _ = frontmatter;
     // Match the legacy wiki-link pattern, including its retry at the next
     // character after a failed match at an opening bracket pair.
     let mut links = Vec::new();
@@ -115,7 +115,8 @@ fn parse_document(content: &str) -> (Vec<String>, Vec<Chunk>) {
                 while k < chars.len() && chars[k].1 != ']' {
                     k += 1;
                 }
-                k + 1 < chars.len() && chars[k].1 == ']' && chars[k + 1].1 == ']'
+                // The legacy pattern needs at least one character after the bar.
+                k > j + 1 && k + 1 < chars.len() && chars[k].1 == ']' && chars[k + 1].1 == ']'
             } else {
                 !target.is_empty()
                     && j + 1 < chars.len()
@@ -192,6 +193,10 @@ fn frontmatter_end(content: &str) -> Option<(&str, usize)> {
             return Some((fm, content.len() - tail.len()));
         }
         if let Some(tail) = after.strip_prefix('\n') {
+            return Some((fm, content.len() - tail.len()));
+        }
+        // The legacy trailing pattern also swallows a lone carriage return.
+        if let Some(tail) = after.strip_prefix('\r') {
             return Some((fm, content.len() - tail.len()));
         }
         Some((fm, content.len() - after.len()))
@@ -316,17 +321,17 @@ impl MemoryIngestPorts {
         &self,
         scope: &CallScope,
         source: &MemoryIngestSource,
-        lock: bool,
     ) -> Result<Option<(String, VaultContext)>> {
         let cx = DataContext::open_bounded(&self.database, scope.access(), scope.remaining())
             .await
             .map_err(|_| anyhow::anyhow!("Memory data unavailable"))?;
-        let sql = if lock {
-            "SELECT value_json FROM app.preferences WHERE key=$1 AND owner_user_id=app.current_actor_user_id() FOR SHARE"
-        } else {
-            "SELECT value_json FROM app.preferences WHERE key=$1 AND owner_user_id=app.current_actor_user_id()"
-        };
-        let row = cx.db().query_opt(sql, &[&source.preference_key]).await?;
+        let row = cx
+            .db()
+            .query_opt(
+                "SELECT value_json FROM app.preferences WHERE key=$1 AND owner_user_id=app.current_actor_user_id()",
+                &[&source.preference_key],
+            )
+            .await?;
         let saved = row.and_then(|row| {
             let value: Value = row.get(0);
             value.as_str().filter(|s| !s.is_empty()).map(str::to_string)
@@ -361,7 +366,7 @@ impl MemoryIngestPorts {
                 // The saved folder is the only source this adapter ingests.
                 // A coordinator override must name that same folder, so a
                 // mismatched request fails here instead of failing every file.
-                let resolved = self.saved_source(scope, &source, false).await?;
+                let resolved = self.saved_source(scope, &source).await?;
                 let Some((configured, folder)) = resolved else {
                     if input.source_path.as_deref().is_some_and(|p| !p.is_empty()) {
                         anyhow::bail!("Note source is outside the saved folder");
@@ -416,7 +421,7 @@ impl MemoryIngestPorts {
         // Read and embed outside the write transaction, then recheck the file.
         let prepared = self.runtime.block_on(async {
             tokio::time::timeout(scope.remaining(), async {
-                let Some((_, folder)) = self.saved_source(scope, &source, false).await? else {
+                let Some((_, folder)) = self.saved_source(scope, &source).await? else {
                     anyhow::bail!("Notes source is not configured");
                 };
                 let root = folder
@@ -454,18 +459,30 @@ impl MemoryIngestPorts {
             let row = cx
                 .db()
                 .query_opt(
-                    "SELECT file_hash, embed_model_name FROM app.memory_file_index WHERE owner_user_id=app.current_actor_user_id() AND source_kind=$1 AND source_path=$2",
+                    "SELECT file_hash, embed_model_name, managed_snapshot FROM app.memory_file_index WHERE owner_user_id=app.current_actor_user_id() AND source_kind=$1 AND source_path=$2",
                     &[&source.source_kind, &input.file_path],
                 )
                 .await?;
             cx.commit_bounded(scope.remaining())
                 .await
                 .map_err(|_| anyhow::anyhow!("Memory commit failed"))?;
-            Ok::<_, anyhow::Error>(row.map(|row| (row.get::<_, String>(0), row.get::<_, String>(1))))
+            Ok::<_, anyhow::Error>(row.map(|row| {
+                (
+                    row.get::<_, String>(0),
+                    row.get::<_, String>(1),
+                    row.get::<_, Option<Value>>(2),
+                )
+            }))
         })?;
         if offset == 0 {
-            if let Some((hash, model)) = &existing {
-                if *hash == file_hash && *model == self.embeddings.model_name() {
+            if let Some((hash, model, snapshot)) = &existing {
+                // Legacy also requires the saved snapshot key to match the
+                // current one, which is always none here. A managed row is
+                // therefore read again instead of skipped.
+                if *hash == file_hash
+                    && *model == self.embeddings.model_name()
+                    && snapshot.is_none()
+                {
                     return Ok(json!({"status": "skipped", "chunksProcessed": 0}));
                 }
             }
@@ -619,7 +636,7 @@ mod tests {
         assert_eq!(chunks[1].text, "## Two\n\nBody two.");
         assert_eq!((chunks[1].line_start, chunks[1].line_end), (8, 10));
         // Failed matches retry at the next character, as the legacy pattern does.
-        let (links, _) = parse_document("[[]] [[|x]] [[a|b]c]] [[x] text [[y]]");
+        let (links, _) = parse_document("[[]] [[|x]] [[a|b]c]] [[a|]] [[x] text [[y]]");
         assert_eq!(links, vec!["y"]);
         // A byte-order mark is trimmed the way JavaScript trim trims it.
         let (_, chunks) = parse_document("\u{feff}# Hi\n\nText.\n");
