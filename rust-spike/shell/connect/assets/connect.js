@@ -198,7 +198,8 @@ const screens = {
 window.moss = {
   show(state) {
     stopRetry();
-    if (state.screen !== "problem") retryDelay = 2;
+    // A retry passes through "connecting", so only other screens reset the growing wait.
+    if (state.screen !== "problem" && state.screen !== "connecting") retryDelay = 2;
     root.replaceChildren(...screens[state.screen](state));
     document.body.dataset.screen = state.screen;
     document.body.dataset.problem = state.code ?? "";
