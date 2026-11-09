@@ -1326,6 +1326,11 @@ by indexing and deleted-file cleanup, checkpoint INSERT refusal, publication ret
 and owner/other-owner/admin checkpoint privacy under both runtime roles, including
 RLS removal and restoration controls. Queue delivery and embeddings remain named
 stand-ins; final receipts belong in this task's proof artifact.
+The full gate passed its database suites, archive, screen and sync corpus, then
+caught an outdated empty-parameter job declaration in the standalone compiled
+write fixture. Its test-only declaration now admits the checkpoint UUID; all five
+compiled write tests pass separately. The aggregate run ended red before that
+fixture correction, and the final correction needs an additional review round.
 
 Builds use approved pinned `wit-bindgen` 0.57.1 and task-owned scratch Cargo/Rust
 homes, with separate ordinary and write-tools guest targets. Nothing was installed

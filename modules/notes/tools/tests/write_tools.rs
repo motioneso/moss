@@ -146,7 +146,10 @@ impl Fixture {
             {"port":"jobs","operations":["enqueue-after-commit","enqueue-options"],"resources":["notes.sync"]},
             {"port":"context","operations":["uuid","read"],"resources":["new","call"]}
         ])).unwrap());
-        manifest.jobs.insert("notes.sync".into(), BTreeMap::new());
+        manifest.jobs.insert(
+            "notes.sync".into(),
+            serde_json::from_value(json!({"checkpointId":{"kind":"id"}})).unwrap(),
+        );
         Self {
             _temp: temp,
             wasm: std::fs::read(std::env::var_os("NOTES_TOOL_COMPONENT").unwrap()).unwrap(),
