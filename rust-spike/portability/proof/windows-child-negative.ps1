@@ -21,12 +21,12 @@ $mutations = @(
     @{
         before = '.filter(|(key, _)| !key.to_string_lossy().to_ascii_uppercase().starts_with("PG"))'
         after = '.filter(|_| true)'
-        test = 'database_environment_is_removed_and_no_console_is_created'
+        test = 'database_environment_is_removed_and_console_is_windowless'
     },
     @{
         before = '| CREATE_NO_WINDOW'
         after = ''
-        test = 'database_environment_is_removed_and_no_console_is_created'
+        test = 'database_environment_is_removed_and_console_is_windowless'
     },
     @{
         before = 'require_standard_user()?;'

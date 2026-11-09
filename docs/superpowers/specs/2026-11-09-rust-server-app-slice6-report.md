@@ -11,7 +11,7 @@ or platform certificate verifier was added.
 - A Windows child-process ownership boundary in the existing portability crate, intended for
   the canonical Phase 1 supervisor. It uses Win32 directly, without another crate.
 - The launch path refuses an elevated process token. It creates an unnamed, non-inheritable
-  kill-on-close Job Object, creates the executable suspended and without a console, assigns
+  kill-on-close Job Object, creates the executable suspended and without a console window, assigns
   it to that job, then resumes its primary thread. Assignment failure attempts termination and
   a bounded reap of the suspended process, reporting cleanup failure with the child's identity
   if Windows refuses it. Job assignment/resume errors never return a usable child.
@@ -27,7 +27,10 @@ or platform certificate verifier was added.
 - Native tests cover root/descendant termination on drop and forced owner exit, independent
   jobs, a real executable path with spaces/non-ASCII, arguments with quotes/backslashes/empty
   strings, output routing, exit codes, launch errors, unrelated inheritable handles, PG
-  environment removal and absence of a console. An explicit elevated-run test checks refusal.
+  environment removal and a private console without a window. An explicit elevated-run test
+  checks refusal. The console test gives the parent a console first, so removing the windowless
+  flag must change the child's attachment. Tests that mix this API with `std::Command` must run
+  serially, as the CI harness does with `--test-threads=1`.
 - The lifecycle CI workflow builds the suite on Windows and runs it as a disposable standard
   local account rather than weakening the elevation policy for the elevated hosted runner.
   Mutation controls remove kill-on-close, the inheritance list, PG environment filtering, the

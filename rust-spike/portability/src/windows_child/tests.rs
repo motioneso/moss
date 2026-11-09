@@ -59,12 +59,15 @@ fn helper() {
             #[link(name = "kernel32")]
             extern "system" {
                 fn AllocConsole() -> i32;
+                fn GetConsoleProcessList(processes: *mut u32, count: u32) -> u32;
             }
             // Give the parent a console if it has none, so removing CREATE_NO_WINDOW really
             // changes the child's attachment rather than inheriting an already-consoleless state.
             unsafe {
                 AllocConsole();
             }
+            let mut parent_console_pid = 0;
+            assert!(unsafe { GetConsoleProcessList(&mut parent_console_pid, 1) } > 0);
             // This helper owns its environment; the parallel test runner's environment is
             // never mutated. Windows variable names are case-insensitive.
             std::env::set_var("pGHOST", "must-not-reach-child");
@@ -85,16 +88,21 @@ fn helper() {
             assert!(position("MOSSENV=") < position("MOSSENV(X86)="));
             let log = File::create(path.with_extension("log")).unwrap();
             let mut child = spawn_helper("environment", path, &[], &log, &log);
-            assert!(child
+            let status = child
                 .wait_timeout(Duration::from_secs(15))
                 .unwrap()
-                .unwrap()
-                .success());
+                .unwrap();
+            assert!(
+                status.success(),
+                "windowless child failed ({status}): {}",
+                std::fs::read_to_string(path.with_extension("log")).unwrap()
+            );
         }
         "environment" => {
             #[link(name = "kernel32")]
             extern "system" {
                 fn GetConsoleProcessList(processes: *mut u32, count: u32) -> u32;
+                fn GetConsoleWindow() -> *mut c_void;
             }
             let pg: Vec<String> = std::env::vars_os()
                 .filter(|(key, _)| key.to_string_lossy().to_ascii_uppercase().starts_with("PG"))
@@ -104,10 +112,14 @@ fn helper() {
             let mut console_pid = 0;
             assert_eq!(
                 unsafe { GetConsoleProcessList(&mut console_pid, 1) },
-                0,
-                "child must not be attached to a console"
+                1,
+                "child must have its own private console"
             );
-            assert_eq!(io::Error::last_os_error().raw_os_error(), Some(6));
+            assert_eq!(console_pid, std::process::id());
+            assert!(
+                unsafe { GetConsoleWindow() }.is_null(),
+                "child console must have no window"
+            );
             std::process::exit(0);
         }
         "handle" => {
@@ -133,7 +145,7 @@ fn helper() {
 }
 
 #[test]
-fn database_environment_is_removed_and_no_console_is_created() {
+fn database_environment_is_removed_and_console_is_windowless() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("environment.json");
     let mut helper = Command::new(std::env::current_exe().unwrap())

@@ -1,6 +1,6 @@
 //! Windows database-process ownership, for the canonical bundled database supervisor.
 //!
-//! Launches one program without a console, suspended until its kill-on-close job owns it.
+//! Launches one program without a console window, suspended until its kill-on-close job owns it.
 //! The job covers descendants too. Dropping `Child` ends that job, unlike std's `Child`.
 //! This is not yet wired into `moss-db`: its ACLs, stop transport and recovery still need a port.
 //!
