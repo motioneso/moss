@@ -74,3 +74,24 @@ fn package_preserves_all_fifteen_applied_sql_files() {
         );
     }
 }
+
+#[test]
+fn operation_route_uses_supported_host_template_parameters() {
+    let manifest = moss_calendar_host::package::manifest().unwrap();
+    let route = manifest
+        .routes
+        .iter()
+        .find(|r| r.path.contains("/operations/"))
+        .unwrap();
+    assert!(moss_module_host::dispatch::template_path(&route.path));
+    let request = moss_module_host::dispatch::resolve(
+        &manifest.routes,
+        "GET",
+        "/day-plans/plan/operations/operation",
+    )
+    .unwrap();
+    assert_eq!(
+        request.params.get("operation_id").map(String::as_str),
+        Some("operation")
+    );
+}

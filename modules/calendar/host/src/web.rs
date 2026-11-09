@@ -97,6 +97,10 @@ pub fn router(
         .route("/api/calendar/day-plans", post(dispatch))
         .route("/api/calendar/day-plans/{id}/draft", patch(dispatch))
         .route("/api/calendar/day-plans/{id}/preview", post(dispatch))
+        .route(
+            "/api/calendar/day-plans/{id}/operations/{operationId}",
+            get(dispatch),
+        )
         .route("/api/m/calendar/{*path}", any(dispatch))
         .with_state(state);
     Ok(moss_network::web::router(network, private, shared).merge(assets))
