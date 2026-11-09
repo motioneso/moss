@@ -85,16 +85,38 @@ fn resume(host: &impl Host, input: Resume) -> Result<String> {
         .first()
         .and_then(|row| row.get("checkpoint"))
         .ok_or_else(unavailable)?;
-    let payload = json!({"queue":"notes.sync","parameters":checkpoint});
-    let mut result: Value =
-        serde_json::from_str(&crate::sync::handle(host, &payload.to_string())?)?;
+    let mut result = match crate::sync::checkpoint(host, checkpoint.clone()) {
+        Ok(result) => result,
+        Err(error) => {
+            record(
+                host,
+                json!({"outcome":"failed","lastError":error.message()}),
+            );
+            return Err(error.into());
+        }
+    };
     if let Some(next) = result
         .as_object_mut()
         .and_then(|result| result.remove("continuation"))
     {
+        // Record a deferred attempt so a later publication refusal can be shown,
+        // while successful continuation pages leave the previous stats alone.
+        record(host, json!({"outcome":"deferred"}));
         let saved = enqueue(host, next)?;
         result["checkpointId"] = saved["checkpointId"].clone();
     }
+    if result["noOp"] != true && result["deferred"] != true {
+        record(
+            host,
+            json!({"outcome":"completed","ingested":result["ingested"],"skipped":result["skipped"],"errors":result["errors"]}),
+        );
+    }
     // The raw coordinator result never leaves this worker with private paths.
     Ok(result.to_string())
+}
+
+/// The host persists after transaction finalization, including failed calls.
+/// Like legacy, a status-write failure never changes the real sync result.
+fn record(host: &impl Host, outcome: Value) {
+    let _ = host.call("vault", "folder.record-sync", "source", outcome);
 }

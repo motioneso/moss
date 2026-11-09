@@ -103,15 +103,29 @@ fn safe_error(code: Option<&str>) -> String {
     };
     format!("notes sync failed: {sentence}")
 }
-fn service_error() -> Error {
-    Error::new(safe_error(None))
+/// Only this module constructs sink-safe failures, from fixed text and counts.
+/// Backend and deserialization error messages never enter this type.
+pub(crate) struct SyncFailure(String);
+impl SyncFailure {
+    pub(crate) fn message(&self) -> &str {
+        &self.0
+    }
 }
-fn call(host: &impl Host, operation: &str, parameters: Value) -> Result<Value> {
+impl From<SyncFailure> for Error {
+    fn from(error: SyncFailure) -> Self {
+        Error::new(error.0)
+    }
+}
+type SyncResult<T> = std::result::Result<T, SyncFailure>;
+fn service_error() -> SyncFailure {
+    SyncFailure(safe_error(None))
+}
+fn call(host: &impl Host, operation: &str, parameters: Value) -> SyncResult<Value> {
     let value = host
         .call("vault", operation, "source", parameters)
         .map_err(|_| service_error())?;
     if value.get("error").is_some() {
-        return Err(Error::new(safe_error(value["error"].as_str())));
+        return Err(SyncFailure(safe_error(value["error"].as_str())));
     }
     Ok(value)
 }
@@ -123,7 +137,15 @@ pub fn handle(host: &impl Host, payload: &str) -> Result<String> {
     }
     Ok(run(host, job.parameters)?.to_string())
 }
-fn run(host: &impl Host, input: Parameters) -> Result<Value> {
+/// Durable worker entry: malformed persisted state is a fixed safe failure too.
+pub(crate) fn checkpoint(host: &impl Host, value: Value) -> SyncResult<Value> {
+    let parameters: Parameters = serde_json::from_value(value).map_err(|_| service_error())?;
+    if parameters.chunk_offset > (1u64 << 53) - 1 {
+        return Err(service_error());
+    }
+    run(host, parameters)
+}
+fn run(host: &impl Host, input: Parameters) -> SyncResult<Value> {
     let open: Open = serde_json::from_value(call(
         host,
         "index.sync-open",
@@ -164,7 +186,7 @@ fn run(host: &impl Host, input: Parameters) -> Result<Value> {
             Ok(value) => serde_json::from_value::<Progress>(value).ok(),
             Err(error) => {
                 counts.errors += 1;
-                last_error = error.message;
+                last_error = error.0;
                 continue;
             }
         };
@@ -190,7 +212,7 @@ fn run(host: &impl Host, input: Parameters) -> Result<Value> {
     }
     purge_deleted(host, &resolved_source, &open.files)?;
     if counts.ingested == 0 && counts.skipped == 0 && counts.errors > 0 {
-        return Err(Error::new(format!(
+        return Err(SyncFailure(format!(
             "notes sync: all {} file(s) failed; last error: {last_error}",
             counts.errors
         )));
@@ -200,7 +222,7 @@ fn run(host: &impl Host, input: Parameters) -> Result<Value> {
 
 /// Preserve the source-of-truth walk, including entries whose realpath/read failed.
 /// An empty walk may mean an unmounted folder and must leave the index untouched.
-fn purge_deleted(host: &impl Host, source: &str, files: &[String]) -> Result<()> {
+fn purge_deleted(host: &impl Host, source: &str, files: &[String]) -> SyncResult<()> {
     if files.is_empty() {
         return Ok(());
     }
