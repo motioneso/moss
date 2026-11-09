@@ -5,6 +5,8 @@ pub mod guest;
 pub mod identity;
 pub mod routes;
 pub mod search;
+#[cfg(feature = "write-tools")]
+pub mod sync;
 pub mod write_tools;
 
 #[cfg(target_arch = "wasm32")]

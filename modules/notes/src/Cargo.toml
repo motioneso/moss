@@ -45,3 +45,8 @@ path = "tests/approval_api.rs"
 name = "write_tools"
 path = "tests/write_tools.rs"
 required-features = ["write-tools"]
+
+[[test]]
+name = "sync"
+path = "tests/sync.rs"
+required-features = ["write-tools"]

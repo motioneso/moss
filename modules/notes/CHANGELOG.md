@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.3
+
+- Port sync coordinator and deleted-file selection into the test-only component, with actual legacy differential checks. Real indexing, scheduling, saved status and write chat remain unavailable.
+
 ## 0.1.2
 
 - Add read-only search of existing indexed notes, with a core-memory adapter and installed guest comparisons. Query-provider assembly, sync and live chat remain unfinished.
