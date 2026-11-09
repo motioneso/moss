@@ -231,7 +231,11 @@ export async function routesOracle() {
         Number("-245777903432188.62"),
         Number("9007199254740993"),
         2 ** -24,
-        -(2 ** -24)
+        -(2 ** -24),
+        // Component-parser regression. The host test binary also enables
+        // float_roundtrip via its native People dev-dependency; this does not
+        // qualify the shipping host/listener's upstream JSON parsing.
+        Number("2.3050789863520357e+299")
       ].map((displayName) => ({
         displayName
       })),
@@ -401,6 +405,12 @@ Human text stays.
         aliases: [Number("652282746268236.8")],
         emails: [Number("-245777903432188.62")],
         phones: [Number("198676698324544.12")]
+      },
+      {
+        displayName: Number("2.3050789863520357e+299"),
+        aliases: [Number("2.3050789863520357e+299")],
+        emails: [Number("2.3050789863520357e+299")],
+        phones: [Number("2.3050789863520357e+299")]
       },
       { displayName: "Final note-backed edit" }
     ])

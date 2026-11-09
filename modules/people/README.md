@@ -19,12 +19,19 @@ fixtures still exercise a native test driver; those are separate persistence evi
 
 From `~/Jarv1s`:
 
+For all builds and gates, set `CARGO_HOME`, `RUSTUP_HOME` and `CARGO_TARGET_DIR` to
+task-owned scratch directories with the pinned toolchain and declared dependencies available.
+The target paths below are examples; choose paths owned by the current task. Shared caches
+have disappeared during previous runs.
+
 ```sh
 CARGO_TARGET_DIR=/tmp/moss-people-target cargo +1.95.0 test --locked --manifest-path modules/people/src/Cargo.toml
 CARGO_TARGET_DIR=/tmp/moss-people-target cargo +1.95.0 clippy --locked --manifest-path modules/people/src/Cargo.toml --all-targets -- -D warnings
 cargo +1.95.0 fmt --manifest-path modules/people/src/Cargo.toml --check
 pnpm exec tsx modules/people/tools/core-vectors.ts > /tmp/moss-people-core-parity.json
 cmp modules/people/src/tests/fixtures/core-parity.json /tmp/moss-people-core-parity.json
+node modules/people/tools/number-vectors.mjs > /tmp/moss-people-number-parity.json
+cmp modules/people/src/tests/fixtures/number-parity.json /tmp/moss-people-number-parity.json
 ```
 
 The vector generator runs the current TypeScript matching and note-format implementation.
@@ -261,3 +268,19 @@ name edits and note-backed name/email/phone edits use the same conversion. Nativ
 cover those ties and notation boundaries; the installed route replay compares replies, all
 seven tables and canonical note bytes against the real legacy handlers. See the part-twelve
 report for the current receipts and the remaining application/device checks.
+
+## Part thirteen JSON number parsing
+
+The component enables correctly rounded binary64 parsing in its existing JSON dependency.
+This prevents a numeric contact input from changing before the legacy text conversion runs.
+The deterministic JavaScript oracle covers 283 literals, including underflow, subnormals,
+rounding boundaries and seeded finite values. The route replay includes projection-only and
+note-backed edits with a parser-sensitive input, comparing both replies and stored note bytes.
+This qualifies the component parser, not an unassembled server's request parser or real UI.
+The replay's host test binary enables the same JSON feature through its native People
+dev-dependency (Cargo feature unification). A normal host build does not declare it.
+`dispatch_extended` parses the raw body before calling the component, so upstream parser
+qualification is a prerequisite to full network parity. The component cannot recover a
+number already rounded incorrectly by its caller. The feature applies to all component
+JSON numbers, including provider confidence values, not only contact text.
+The remaining application, provider, ingest, retention and device work listed above stays open.

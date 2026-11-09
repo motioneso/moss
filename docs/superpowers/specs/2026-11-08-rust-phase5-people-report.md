@@ -1,7 +1,7 @@
 # Rust Phase 5: People & Context
 
 Tasks JS-45 (part one), JS-50 (part two), JS-57 (part three), JS-58 (part four),
-JS-69 (part five) and subsequent continuations through JS-100 (part twelve), Card 523.
+JS-69 (part five) and subsequent continuations through JS-104 (part thirteen), Card 523.
 Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
 Release note Category: N/A.
 
@@ -1430,3 +1430,107 @@ finite power of two with both signs, and all twenty-four native People tests pas
 commit. The review rounds (two of two) were used before this fix, so the fix commit has
 no independent review of its own. The installed replay and nine-suite gate receipts above
 predate it; the fix touches only the number spelling path.
+
+## Part thirteen: component JSON number parsing (JS-104)
+
+Before editing, the clean task branch was advanced from Phase 0a to merged main
+`4921b55b5`, including the complete part-twelve report and its final power-of-two
+correction. No sibling worktree source was copied. The brief's reference to PR 4066
+predates these later checkpoints; the source report was used as the baseline.
+
+The broader numeric comparison found a separate issue before text formatting: the default
+JSON parser can round a decimal input to the wrong binary64 value. The failing native
+example reads `2.3050789863520357e+299` as `2.3050789863520353e+299`. The component now
+opts into `float_roundtrip` in its existing `serde_json` dependency. There is no new
+package, lockfile version, public API, SQL migration or privacy policy. This applies to
+all component JSON numbers, including provider confidence values, as well as numeric
+contact text. The app map and package notes describe the component scope.
+
+A deterministic JavaScript oracle records 283 decimal literals and their `String(JSON.parse(input))`
+results, including underflow, subnormals, rounding boundaries, signed values and seeded
+finite binary64 values. Native tests consume those literal strings rather than constructing
+already-rounded Rust numbers. The route oracle adds projection-only and note-backed edits
+with the parser-sensitive input and compares the replies, all seven tables and note bytes.
+
+### Part-thirteen verification
+
+- Native failing-first test returned `rc=101` at the large-number example above.
+  All twenty-five native People tests pass after the feature change, including all 283
+  parser vectors and the existing finite-power-of-two checks.
+- Signed installed baseline replay `222138-QM8S4G` failed (`rc=101`) at an existing
+  power-of-two PATCH case before reaching the new large-number case: it returned
+  `5.960464477539064e-8` instead of the legacy `5.960464477539063e-8`.
+  Its immutable component was compiled before enabling the parser feature; the test
+  host itself used the corrected feature through the native test dependency.
+- Corrected signed installed replay `222517-fXmYGB` passed (`rc=0`) on clean
+  `d4bb7393c`, fingerprint `3e8c3dc8d0ec`. It reports **170 legacy route responses**
+  and all seven table snapshots matched, including other-user/admin attempts,
+  canonical note bytes, signed download/install/reload and all four public APIs through
+  the installed consumer fixture. This is the actual replay count, superseding earlier
+  counts in progress notes.
+- The fifty-reference request returned 202 in 6349 milliseconds with the explicit
+  thirty-second replay deadline. This sample does not qualify the shipping five-second
+  deadline, a performance guarantee or safe retries after partial enqueue.
+- Full nine-suite People gate `222214-hrQAG3` passed (`rc=0`, ten integration tests)
+  on clean `c3ab8d2ac`, fingerprint `746ab0b1d073`. It used the same corrected
+  immutable component as the final replay. The seven-table privacy controls failed
+  with protection removed and passed with it restored for both runtime roles,
+  including another account and an administrator. Settings privacy controls also
+  failed then passed. The later commit narrowed documentation and a replay comment;
+  it did not change executable component behavior.
+- Strict People Clippy, scoped Rust formatting, regenerated core and numeric vectors,
+  Rust app-map generation and final scoped ESLint/Prettier checks pass. Repository lint
+  and full typecheck, full Prettier and file-size checks pass. A scratch static wrapper
+  subsequently failed at a mistyped app-map script path; the correct
+  `scripts/build-app-map.ts --rust` command and both vector comparisons were run
+  successfully in the separate final scoped check. No full foundation gate or CI run
+  is claimed.
+- The Settings assets were rebuilt from this checkout. Corrected component SHA-256:
+  `5e3ac6201cb863c067fe0a865fd51412a9b797442eef551f4daa1387f156440b`.
+  Corrected package SHA-256:
+  `a882ad6bd896150dc6cd54ff83cda4e8c39ac7b9fdac41207a9333220efe2503`
+  (427040 bytes).
+
+All Cargo, Rustup and build caches used task-owned scratch. The already approved pinned
+`wit-bindgen =0.57.1` dependency was built from those copied dependency caches. Declared
+JavaScript dependencies were installed from the lockfile offline in this worktree. No tool,
+package or toolchain was installed globally. Build caches are removed at closeout.
+
+### Review findings and proof boundary
+
+The first independent Claude review correctly identified an upstream parser limitation and
+over-broad package wording. The manifest, change notes and README now explicitly limit
+this correction to the component. `module-host`'s `dispatch_extended` parses raw bodies
+before invoking it; a normal host build does not explicitly enable `float_roundtrip`.
+The replay's native `moss-people` dev-dependency unifies that feature into the **test host**.
+Consequently the passing replay qualifies the installed component with that test-host
+configuration, not the normal host or network listener's JSON parsing. The replay cases
+are retained for that stated purpose. Upstream qualification remains required before
+claiming end-to-end numeric parity; a component cannot recover an input its caller already
+rounded incorrectly. No shared host source was changed in this People-owned slice.
+
+The review's minor scope note is recorded above: the feature affects all component numbers,
+not only contacts. Its minor stale-fixture receipt was regenerated from the committed
+283-tuple oracle and compared byte for byte. The final commit's independent review is
+recorded on the task and in its proof; this report does not pre-claim that verdict.
+
+### Remaining acceptance work
+
+This is a bounded behavior-parity checkpoint. Completing the following work would exceed
+this task's single-context boundary, so it remains explicit rather than treating library
+checks as full Phase 5 acceptance:
+
+1. Qualify upstream JSON parsing in a normal host/listener build without the People native
+   test dependency's feature unification. Preserve correct rounding before dispatching to
+   the component, and exercise raw numeric request bodies through the shipping listener.
+2. Compose the installed People frame and chat tools into the authenticated Rust server.
+   The current shell router has shell/Today/chat routes but no module host or Settings
+   frame composition. It uses stub account data unless its optional runner is configured;
+   neither path currently supplies the People screen. The module remains a pure client
+   of the server API; no app-side database connection was added.
+3. Finish ingest nudges, real provider composition, command cleanup/quotas and the
+   fifty-reference shipping budget. Broaden backend-failure, large-data and parser-error
+   coverage beyond the enumerated replay.
+4. Prove the installed People screen and chat approval flow through the real app, with
+   sign-in, trusted origins, privacy and HTTPS from desktop and a second physical device.
+   No substitute UI, browser render or physical-device result is claimed by this checkpoint.
