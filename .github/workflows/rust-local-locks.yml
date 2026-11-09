@@ -1,0 +1,27 @@
+name: Rust local lifecycle locks
+on:
+  pull_request:
+    paths:
+      - "rust-spike/portability/**"
+      - "rust-spike/Cargo.lock"
+      - ".github/workflows/rust-local-locks.yml"
+permissions:
+  contents: read
+jobs:
+  locks:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      CARGO_HOME: ${{ runner.temp }}/moss-locks-cargo
+      RUSTUP_HOME: ${{ runner.temp }}/moss-locks-rustup
+      CARGO_TARGET_DIR: ${{ runner.temp }}/moss-locks-target
+    steps:
+      - uses: actions/checkout@v5
+      - name: Provision the declared Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Check process contention, readable state and crash release
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p portability file_lock -- --nocapture
