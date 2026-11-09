@@ -51,7 +51,7 @@ export async function largeDataOracle(
   });
   try {
     const cases: { kind: string; request: unknown; expected: unknown; count: number }[] = [];
-    for (const limit of [999, 1000, 1001, 1005, 1006, undefined]) {
+    for (const limit of [100, 250, 500, 999, 1000, 1001, 1005, 1006, undefined]) {
       const query = limit === undefined ? {} : { limit: String(limit) };
       for (const links of [false, true]) {
         const path = links ? `/people/${ids[0]}/links` : "/people";

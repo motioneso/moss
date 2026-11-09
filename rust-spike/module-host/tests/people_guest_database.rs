@@ -9,7 +9,7 @@ use moss_module_host::{
     transactional_database::TransactionalDatabasePorts,
 };
 use moss_people::repository::TABLES;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -92,7 +92,7 @@ fn compiled_people_read_apis_match_typescript_on_real_database() {
     if std::env::var("JS139_PEOPLE_PAGING_PROBE").as_deref() == Ok("1") {
         let paging_actor = Uuid::parse_str(oracle["paging"]["actor"].as_str().unwrap()).unwrap();
         let paging_cases = oracle["paging"]["cases"].as_array().unwrap();
-        assert_eq!(paging_cases.len(), 15, "Keep every paging boundary case");
+        assert_eq!(paging_cases.len(), 21, "Keep every paging boundary case");
         for case in paging_cases {
             let kind = case["kind"].as_str().unwrap();
             let reply = host
@@ -124,9 +124,13 @@ fn compiled_people_read_apis_match_typescript_on_real_database() {
                 case["request"],
                 case["count"]
             );
+            println!(
+                "PASS People resource probe: {} ({} rows)",
+                case["request"], case["count"]
+            );
         }
         println!(
-            "PASS People paging: 15 legacy reads at 999/1000/1001/1005/1006/unlimited, exact-page termination, 1005 aliases and emails including a duplicate; default host limits unchanged"
+            "PASS People paging: 21 legacy reads at 100/250/500/999/1000/1001/1005/1006/unlimited, exact-page termination, 1005 aliases and emails including a duplicate; default host limits unchanged"
         );
     }
     // A background job authenticates through the worker pool, not the app pool.
@@ -169,13 +173,11 @@ fn compiled_people_read_apis_match_typescript_on_real_database() {
         bootstrap
     });
     for reader in [other, admin] {
-        assert!(
-            run(
-                reader,
-                &json!({"name":"getPerson","parameters":{"personId":oracle["personId"]}})
-            )
-            .is_err()
-        );
+        assert!(run(
+            reader,
+            &json!({"name":"getPerson","parameters":{"personId":oracle["personId"]}})
+        )
+        .is_err());
         assert_eq!(
             run(
                 reader,
