@@ -2,11 +2,11 @@
 
 This is an unfinished Tasks module package. Rust code now compiles into a real
 component and handles basic task, list, tag, activity and view preference routes.
-It also handles eighteen tools: six reads and twelve mutations, with request
+It also handles nineteen tools: six reads and thirteen mutations, with request
 schemas enforced inside the guest. It is not a
 complete replacement for Tasks. A package screen now covers list and priority views,
-task editing, subtasks, tags, comments and list creation/renaming. Full screen parity,
-five other chat tools, background
+task editing, subtasks, tags, comments and list creation, renaming and confirmed deletion. Full screen parity,
+four other chat tools, background
 jobs, People calls and full endpoint parity remain unfinished.
 
 `src/` uses the guest-safe SDK. `wit/` defines its ABI. Ben approved the pinned
@@ -75,7 +75,7 @@ The script builds both servers, claims and releases ports, and writes
 cases and TypeScript server unchanged. Expected failures from unported routes,
 tools and jobs are reported as failures; this script is not an installed package
 or live UI proof. The endpoint harness does not compare tools; the database gate
-separately compares the twelve mutation handlers with the TypeScript executors,
+separately compares the thirteen mutation handlers with the TypeScript executors,
 including set-value fields, cascades, recurrence and selected rejected operations.
 It also checks persisted task effects and tags dropped by list moves; it does not
 claim exhaustive input/error-message parity. Empty titles remain rejected by the
@@ -135,9 +135,9 @@ Only generated identifiers and clock timestamps are canonicalized. The endpoint
 harness keeps every existing case unchanged and adds the package's breakdown
 cases from `tests/parity/`. Failed comparisons remain failures.
 
-Remaining: seven HTTP endpoints (search interpretation, list
-deletion, focus, at-risk, overdue and both assistant-policy routes); five tools
-(summary, focus, at-risk, overdue and deleteList); recurrence jobs and full deferred-queue policy parity, timezone and lazy recurrence contracts, public People linkage, policy
+Remaining after part 11: six HTTP endpoints (search interpretation, focus,
+at-risk, overdue and both assistant-policy routes); four tools
+(summary, focus, at-risk and overdue); recurrence jobs and full deferred-queue policy parity, timezone and lazy recurrence contracts, public People linkage, policy
 and feedback orchestration, full screen/settings parity, real-shell integration,
 performance budgets and second-device HTTPS proof. The legacy HTTP list route
 only applies tag and quadrant filters; the wider filter set belongs to its
@@ -187,3 +187,16 @@ claimed; the seven endpoints, five tools and other acceptance gaps above remain.
 Set `TASKS_UI_TAG_PROOF=1` for the signed UI gate to additionally verify that
 `Browser proof task` retains exactly `Kept proof tag`, with `Removed proof tag`
 absent after browser deletion. These fixture names are synthetic.
+
+Part 11 adds list deletion through Manage lists, the DELETE route and
+`tasks.deleteList`. A nonempty list needs a different owned destination; tasks
+and subtasks move together and tags outside the destination are removed. The
+last list is kept. Package deletion requests lock the actor's existing lists
+through identifier-preserving updates in stable order, then count again; no
+SQL migration or private host contract is added. These row locks replace the
+legacy advisory lock within package requests; mixed legacy/Rust writers are not
+a supported cutover mode. Privacy and lock-removal controls execute the compiled
+component against disposable PostgreSQL. Set `TASKS_UI_LIST_DELETE_PROOF=1` for
+the signed UI fixture to verify that `Browser proof task` moves from
+`Removed proof list` to `Kept proof list` with its old tag assignments removed.
+Six HTTP endpoints and four tools remain; earlier acceptance gaps still apply.

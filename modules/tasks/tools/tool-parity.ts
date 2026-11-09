@@ -44,7 +44,8 @@ const handlers: Record<string, ToolExecute> = {
   "tasks.renameList": legacy.taskRenameListExecute,
   "tasks.createTag": legacy.taskCreateTagExecute,
   "tasks.renameTag": legacy.taskRenameTagExecute,
-  "tasks.deleteTag": legacy.taskDeleteTagExecute
+  "tasks.deleteTag": legacy.taskDeleteTagExecute,
+  "tasks.deleteList": legacy.taskDeleteListExecute
 };
 const ids: Record<string, Map<string, string>> = { ts: new Map(), rs: new Map() };
 function canonical(value: unknown, side: string, key = ""): unknown {
@@ -291,6 +292,63 @@ try {
   await compare("delete tag", "tasks.deleteTag", (s) => ({
     listId: id(s, "list", "list"),
     tagId: id(s, "tag", "tag")
+  }));
+  for (const [name, input] of [
+    ["missing list deletion", () => ({ listId: missing })],
+    [
+      "foreign list deletion",
+      (s: string) => ({ listId: id(s === "ts" ? "rs" : "ts", "list", "list") })
+    ],
+    [
+      "self reassignment",
+      (s: string) => ({ listId: id(s, "list", "list"), reassignToListId: id(s, "list", "list") })
+    ],
+    ["nonempty list deletion", (s: string) => ({ listId: id(s, "list", "list") })],
+    [
+      "missing destination",
+      (s: string) => ({ listId: id(s, "list", "list"), reassignToListId: missing })
+    ],
+    [
+      "foreign destination",
+      (s: string) => ({
+        listId: id(s, "list", "list"),
+        reassignToListId: id(s === "ts" ? "rs" : "ts", "list", "list")
+      })
+    ]
+  ] as const)
+    await compare(name, "tasks.deleteList", input, true);
+  await compare("tag before list deletion", "tasks.createTag", (s) => ({
+    listId: id(s, "list", "list"),
+    name: "Removed with list"
+  }));
+  await compare("assignment before list deletion", "tasks.assignTag", (s) => ({
+    taskId: id(s, "recurring", "task"),
+    tagId: id(s, "tag before list deletion", "tag")
+  }));
+  await compare("delete list with reassignment", "tasks.deleteList", (s) => ({
+    listId: id(s, "list", "list"),
+    reassignToListId: id(s, "other list", "list")
+  }));
+  for (const side of ["ts", "rs"] as const) {
+    const rows = await bootstrap.query(
+      "SELECT (SELECT count(*)::int FROM app.task_tags WHERE list_id=$1) AS tags, (SELECT count(*)::int FROM app.task_tag_assignments a JOIN app.tasks t ON t.id=a.task_id WHERE t.owner_user_id=$2) AS assignments",
+      [id(side, "list", "list"), actors[side]]
+    );
+    assert.deepEqual(
+      rows.rows[0],
+      { tags: 0, assignments: 0 },
+      `${side}: list deletion cleans up tags`
+    );
+  }
+  await compare(
+    "last list deletion",
+    "tasks.deleteList",
+    (s) => ({ listId: id(s, "other list", "list") }),
+    true
+  );
+  await compare("empty list", "tasks.createList", () => ({ name: "Empty deletion" }));
+  await compare("delete empty list", "tasks.deleteList", (s) => ({
+    listId: id(s, "empty list", "list")
   }));
   // Compare persisted rows too: cascades, dropped tags and generated occurrences
   // are not all returned by a mutation. Only IDs and wall-clock stamps normalize.

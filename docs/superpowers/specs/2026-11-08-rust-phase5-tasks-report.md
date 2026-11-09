@@ -946,3 +946,42 @@ feedback/action policy, remaining screens/settings, installed chat, real applica
 shell, performance and physical second-device HTTPS acceptance. The signed UI
 fixture is loopback-only and separate from the application shell. This is an
 unfinished checkpoint, not completion of Phase 5. Part of #4027; Category N/A.
+
+## Tasks part 11 checkpoint (JS-89, Card 526)
+
+Manage lists now offers confirmed deletion and an optional owned destination.
+The DELETE list route and `tasks.deleteList` use the same transaction: a nonempty
+list requires a destination, every task and subtask is moved, assignments outside
+the destination are removed, and the source list is deleted. The last list stays.
+The package app map names the controls, restrictions and recovery path.
+
+Package deletion requests lock the actor's existing lists in identifier order
+using identifier-preserving updates, then count again. The public typed query
+port has no advisory-lock operation. Stored list fields and timestamps stay the
+same; this implements serialization between package requests. Concurrent mixed
+legacy/Rust writers are not a supported or proven cutover mode.
+
+New compiled-component checks exercise deletion as the owner, another account
+and an admin. The same private-list assertions must fail with real list RLS
+removed and pass after restoration, through both the route and tool. A concurrent
+delete check removes only row locking, requires both deletions to succeed and the
+last-list assertion to fail, then restores locking and requires one conflict.
+A failure after tag removal must roll back tasks, assignments and list records.
+The tool comparison now also checks rejection order, reassignment, tag cleanup,
+empty deletion and the last-list guard against the TypeScript executor.
+
+Final gate outcomes and live evidence are recorded below before this checkpoint
+is handed back. This continuation reuses the approved pinned wit-bindgen graph,
+existing scratch Rust toolchain/Cargo cache and declared offline JavaScript
+lockfile dependencies. The tools lockfile was refreshed offline without a diff.
+No global tool, package or compiler target was installed; no shared crate or SQL
+migration changed.
+
+Six HTTP endpoints and four tools remain: search interpretation, focus, at-risk,
+overdue and both assistant-policy routes; summary, focus, at-risk and overdue
+tools. Actor-local dates/lazy recurrence, recurrence jobs, queue policy/worker
+parity, public People linkage, feedback/action policy, remaining screens/settings,
+installed chat, real application shell, performance and physical second-device
+HTTPS acceptance remain unfinished. The signed UI fixture is loopback-only and
+separate from the application shell. This is an unfinished checkpoint, not Phase 5
+acceptance. Part of #4027; release note Category N/A.

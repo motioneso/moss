@@ -11,6 +11,7 @@ pub fn request_schema(method: &str, path: &str) -> Option<Schema> {
         ("POST", "/tasks/:id/breakdown") => Some(schemas::breakdown()),
         ("POST", "/tasks/:id/deferred-status") => Some(schemas::deferred_status()),
         ("POST", "/tasks/:id/tags") => Some(schemas::assign_tag()),
+        ("DELETE", "/tasks/lists/:list_id") => Some(schemas::delete_list()),
         ("PATCH", "/tasks/preferences") => Some(schemas::update_preferences()),
         ("POST", "/tasks/lists" | "/tasks/lists/:list_id/tags")
         | ("PATCH", "/tasks/lists/:list_id" | "/tasks/lists/:list_id/tags/:tag_id") => {
