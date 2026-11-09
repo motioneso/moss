@@ -4,7 +4,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 const source = fs.readFileSync(new URL("../connect/assets/notices.js", import.meta.url), "utf8");
 
-async function client() {
+async function client(storage = new Map(), initial = {}) {
   let tick;
   const sent = [];
   const state = {
@@ -12,11 +12,24 @@ async function client() {
     events: ["old"],
     messages: [{ id: "old", role: "assistant" }],
     status: 200,
-    focused: false
+    focused: false,
+    storageFails: false,
+    now: 0,
+    ...initial
   };
+  const window = { ipc: { postMessage: (s) => sent.push(JSON.parse(s)) } };
   const context = {
+    crypto: { getRandomValues: (values) => values.map(() => Math.floor(Math.random() * 2 ** 32)) },
+    Date: { now: () => state.now },
     document: { hidden: false, hasFocus: () => state.focused },
-    window: { ipc: { postMessage: (s) => sent.push(JSON.parse(s)) } },
+    localStorage: {
+      getItem: (key) => storage.get(key) ?? null,
+      setItem: (key, value) => {
+        if (state.storageFails) throw new Error("Storage unavailable");
+        storage.set(key, value);
+      }
+    },
+    window,
     fetch: async (path) => ({
       ok: state.status === 200,
       status: state.status,
@@ -31,21 +44,59 @@ async function client() {
   };
   vm.runInNewContext(source, context);
   await new Promise(setImmediate);
-  return { state, sent, tick };
+  return {
+    state,
+    sent,
+    tick: async (elapsed = 5000) => {
+      state.now += elapsed;
+      await tick();
+    },
+    ack: (message) => window.mossNoticeAck(message.receipt)
+  };
 }
 
-test("initial unread items are quiet; new reminders and replies notify once", async () => {
-  const { state, sent, tick } = await client();
+const kinds = (sent) => sent.map((message) => message.notice);
+
+test("initial unread items are quiet; accepted reminders and replies notify once", async () => {
+  const { state, sent, tick, ack } = await client();
   assert.deepEqual(sent, []);
   state.events.push("new");
   state.messages.push({ id: "new", role: "assistant" });
   await tick();
-  assert.deepEqual(sent, [{ notice: "reminder" }, { notice: "chat" }]);
+  assert.deepEqual(kinds(sent), ["reminder", "chat"]);
+  sent.forEach(ack);
   await tick();
   assert.equal(sent.length, 2);
 });
 
-test("focus suppresses banners; switching accounts and signing out reset baselines", async () => {
+test("missing native acceptance retries instead of losing the new notice", async () => {
+  const { state, sent, tick, ack } = await client();
+  state.events.push("retry");
+  await tick();
+  await tick();
+  assert.deepEqual(kinds(sent), ["reminder", "reminder"]);
+  ack(sent[0]); // An expired attempt cannot acknowledge a newer attempt.
+  await tick(10000);
+  assert.equal(sent.length, 3);
+  ack(sent[2]);
+  await tick();
+  assert.equal(sent.length, 3);
+});
+
+test("pending and accepted receipts survive a fresh document in the same profile", async () => {
+  const storage = new Map();
+  const first = await client(storage);
+  first.state.events.push("pending");
+  await first.tick();
+  const second = await client(storage, { events: ["old", "pending", "while-away"] });
+  assert.deepEqual(kinds(second.sent), ["reminder"]);
+  second.ack(second.sent[0]);
+  const third = await client(storage, { events: ["old", "pending", "while-away"] });
+  assert.deepEqual(third.sent, []);
+  assert(![...storage.values()].join().includes("receipt")); // No document tokens are saved.
+});
+
+test("focus consumes notices without banners; receipts do not mark bell items read", async () => {
   const { state, sent, tick } = await client();
   state.focused = true;
   state.events.push("focused");
@@ -53,15 +104,120 @@ test("focus suppresses banners; switching accounts and signing out reset baselin
   state.focused = false;
   await tick();
   assert.equal(sent.length, 0);
-  state.account = "second";
-  state.events = ["other"];
-  state.messages = [{ id: "other", role: "assistant" }];
+  assert.deepEqual(state.events, ["old", "focused"]);
+});
+
+test("accounts and server profiles have independent baselines and receipts", async () => {
+  const storage = new Map();
+  const first = await client(storage);
+  first.state.events.push("pending");
+  await first.tick();
+  first.state.account = "second";
+  first.state.events = ["other"];
+  await first.tick();
+  first.ack(first.sent[0]); // Late acknowledgement from the previous account is ignored.
+  first.state.events.push("new-other");
+  await first.tick();
+  first.ack(first.sent[1]);
+  first.state.account = "first";
+  first.state.events = ["old", "pending"];
+  await first.tick();
+  assert.equal(first.sent.length, 3);
+  const separateServer = await client(new Map(), { events: ["old", "pending"] });
+  assert.equal(separateServer.sent.length, 0);
+});
+
+test("sign-out invalidates in-flight acceptance but preserves pending receipts", async () => {
+  const { state, sent, tick, ack } = await client();
+  state.events.push("pending");
   await tick();
-  assert.equal(sent.length, 0);
   state.status = 401;
   await tick();
+  ack(sent[0]);
   state.status = 200;
-  state.events.push("while-signed-out");
+  await tick();
+  assert.equal(sent.length, 2);
+  ack(sent[1]);
+  await tick();
+  assert.equal(sent.length, 2);
+});
+
+test("storage failures never advance delivery; failed acceptance writes retry", async () => {
+  const { state, sent, tick, ack } = await client();
+  state.events.push("retry");
+  state.storageFails = true;
   await tick();
   assert.equal(sent.length, 0);
+  state.storageFails = false;
+  await tick();
+  state.storageFails = true;
+  ack(sent[0]);
+  state.storageFails = false;
+  await tick();
+  assert.equal(sent.length, 2);
+  ack(sent[1]);
+  await tick();
+  assert.equal(sent.length, 2);
+});
+
+test("read or removed notifications are not retried, and old chat history stays quiet", async () => {
+  const first = await client();
+  first.state.events.push("pending");
+  await first.tick();
+  first.state.events = ["old"];
+  await first.tick();
+  assert.equal(first.sent.length, 1);
+  const history = Array.from({ length: 1200 }, (_, id) => ({ id: String(id), role: "assistant" }));
+  const second = await client(new Map(), { messages: history });
+  await second.tick();
+  assert.equal(second.sent.length, 0);
+  second.state.messages.push({ id: "new", role: "assistant" });
+  await second.tick();
+  assert.deepEqual(kinds(second.sent), ["chat"]);
+});
+
+test("malformed saved receipts are retained and do not produce an alert flood", async () => {
+  const storage = new Map([["moss.desktop.receipts.v1:first", "broken"]]);
+  const { sent, tick } = await client(storage);
+  await tick();
+  assert.equal(sent.length, 0);
+  assert.equal(storage.get("moss.desktop.receipts.v1:first"), "broken");
+});
+
+test("a still-unread ID stays known when recent history fills up", async () => {
+  const known = Array.from({ length: 1000 }, (_, id) => String(id));
+  const storage = new Map([
+    [
+      "moss.desktop.receipts.v1:first",
+      JSON.stringify({
+        reminder: { known, pending: [] },
+        chat: { known: null, pending: [] }
+      })
+    ]
+  ]);
+  const { sent, tick, ack } = await client(storage, { events: ["0", "999", "new"] });
+  assert.deepEqual(kinds(sent), ["reminder"]);
+  ack(sent[0]);
+  await tick();
+  assert.equal(sent.length, 1);
+});
+
+test("missing acceptance backs off retries to at most once a minute", async () => {
+  const { state, sent, tick } = await client();
+  state.events.push("pending");
+  await tick();
+  await tick();
+  assert.equal(sent.length, 2);
+  await tick();
+  assert.equal(sent.length, 2);
+  await tick();
+  assert.equal(sent.length, 3);
+  await tick(20000);
+  assert.equal(sent.length, 4);
+  await tick(40000);
+  assert.equal(sent.length, 5);
+  await tick(55000);
+  assert.equal(sent.length, 5);
+  await tick();
+  assert.equal(sent.length, 6);
 });

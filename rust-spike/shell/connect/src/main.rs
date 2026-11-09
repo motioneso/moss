@@ -39,6 +39,7 @@ enum UserEvent {
     Notice {
         server: String,
         kind: String,
+        receipt: String,
     },
     Show(Value),
     Open(Opened),
@@ -276,25 +277,40 @@ fn asset(web: &std::path::Path, request: Request<Vec<u8>>) -> Response<Cow<'stat
 impl App {
     fn handle(&mut self, event: UserEvent) {
         match event {
-            UserEvent::Notice { server, kind } => {
-                if self.preferences.notifications
-                    && self.current.as_ref() == Some(&server)
-                    && self.server.as_ref().is_some_and(|view| view.id == server)
-                {
-                    let (slot, title, body) = match kind.as_str() {
-                        "chat" => (0, "Moss chat", "A new reply is ready in Moss."),
-                        "reminder" => (
-                            1,
-                            "Moss notification",
-                            "A new notification is waiting in Moss.",
-                        ),
-                        _ => return,
-                    };
+            UserEvent::Notice {
+                server,
+                kind,
+                receipt,
+            } => {
+                if self.current.as_ref() != Some(&server) {
+                    return;
+                }
+                let Some(view) = self.server.as_ref().filter(|view| view.id == server) else {
+                    return;
+                };
+                let (slot, title, body) = match kind.as_str() {
+                    "chat" => (0, "Moss chat", "A new reply is ready in Moss."),
+                    "reminder" => (
+                        1,
+                        "Moss notification",
+                        "A new notification is waiting in Moss.",
+                    ),
+                    _ => return,
+                };
+                if self.preferences.notifications {
                     if self.last_notice[slot].is_some_and(|last| last.elapsed().as_secs() < 3) {
+                        return; // No receipt: the next poll retries this batch.
+                    }
+                    if desktop::notify(title, body).is_err() {
                         return;
                     }
                     self.last_notice[slot] = Some(std::time::Instant::now());
-                    let _ = desktop::notify(title, body);
+                }
+                // JSON encoding keeps the opaque document token out of executable source.
+                if let Ok(token) = serde_json::to_string(&receipt) {
+                    let _ = view
+                        .view
+                        .evaluate_script(&format!("window.mossNoticeAck?.({token});"));
                 }
             }
             UserEvent::Ipc(body) => {
@@ -788,11 +804,16 @@ impl App {
                         .is_ok_and(|u| u.origin().ascii_serialization() == origin)
                     {
                         if let Ok(message) = serde_json::from_str::<Value>(request.body()) {
-                            if let Some(kind @ ("chat" | "reminder")) = message["notice"].as_str() {
-                                let _ = proxy.send_event(UserEvent::Notice {
-                                    server: server.clone(),
-                                    kind: kind.into(),
-                                });
+                            if let (Some(kind @ ("chat" | "reminder")), Some(receipt)) =
+                                (message["notice"].as_str(), message["receipt"].as_str())
+                            {
+                                if receipt.len() <= 128 {
+                                    let _ = proxy.send_event(UserEvent::Notice {
+                                        server: server.clone(),
+                                        kind: kind.into(),
+                                        receipt: receipt.into(),
+                                    });
+                                }
                             }
                         }
                     }

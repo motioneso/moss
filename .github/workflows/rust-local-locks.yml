@@ -5,6 +5,7 @@ on:
       - "rust-spike/portability/**"
       - "rust-spike/bundled-db/**"
       - "rust-spike/shell/connect/**"
+      - "rust-spike/shell/tools/test-notices.mjs"
       - "rust-spike/Cargo.lock"
       - "rust-spike/shell/Cargo.lock"
       - ".github/workflows/rust-local-locks.yml"
@@ -28,6 +29,8 @@ jobs:
       CARGO_PROFILE_TEST_DEBUG: "0"
     steps:
       - uses: actions/checkout@v5
+      - name: Check connected notification receipt protocol
+        run: node --test rust-spike/shell/tools/test-notices.mjs
       - name: Provision the declared Rust toolchain
         run: rustup toolchain install 1.95.0 --profile minimal
       - name: Check process contention, readable state and crash release
