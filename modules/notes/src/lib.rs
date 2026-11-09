@@ -8,6 +8,8 @@ pub mod search;
 #[cfg(feature = "write-tools")]
 pub mod sync;
 #[cfg(feature = "write-tools")]
+mod sync_recovery;
+#[cfg(feature = "write-tools")]
 pub mod sync_worker;
 pub mod write_tools;
 

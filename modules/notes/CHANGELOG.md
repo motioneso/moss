@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.9
+
+- Experimental sync recovery discovers saved unpublished requests in private, bounded pages without knowing their IDs. Completed pages are skipped; queue identities are reused. Ordinary sync remains unavailable.
+
 ## 0.1.8
 
 - Connect experimental create, edit and delete tools to private durable sync checkpoints. Their queued work now resumes the same worker as manual requests. Installed chat approval and sync activation remain unfinished.

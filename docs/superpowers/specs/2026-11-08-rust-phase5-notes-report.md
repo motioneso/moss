@@ -1346,3 +1346,45 @@ fencing, proposals/receipts/reconciliation, private exports and daily archives,
 full path/HTTP parity, assembled Settings/chat and a separate physical device over
 HTTPS remain. A fixture browser check cannot establish those claims, and this
 checkpoint must not replace a working legacy Notes installation.
+
+## Part sixteen checkpoint — discover unpublished sync requests
+
+The experimental sync component can now discover saved requests after a failed
+first queue publication without a caller knowing their checkpoint IDs. Its
+`recoverNotesSync` API scans the authenticated owner's private checkpoint rows
+in UUID order, at most 25 per call, and requests publication of unfinished rows.
+Completed pages are skipped; their unfinished children are independently
+discoverable. The result contains only counts and a next UUID cursor. No caller
+can select another account or a source path. Notes remains a pure SDK client of
+the server API. No host additions, new dependencies or applied SQL changes were
+needed. Package `0.1.9`, its changelog and app map describe this experimental seam.
+
+The future trusted server timer must follow a cursor only after successful
+finalization, retry a failed page from its previous cursor, and periodically
+restart the scan to catch new lower UUIDs. Partial post-commit publication can
+occur before an error; retries use the same queue idempotency identities.
+A racing worker may finish after recovery reads its input. Its saved result
+prevents repeat ingestion. This recovers missing publication, not exhausted
+jobs: the existing queue keeps the same idempotency identity for completed/failed
+jobs. No automatic timer, retention policy or full outbox service is claimed.
+
+The native recovery regression failed on the earlier guest because the API was
+unavailable. New tests check bounded pages, cursor traversal, safe output,
+completed-page skipping, stable retry identities and invalid-input refusal.
+The compiled disposable database gate checks discovery after refused first
+publication, recovery across newly opened adapters, and real no-op worker resume.
+It exercises other-owner and unrelated-admin denial for both runtime roles,
+removes checkpoint RLS to expose the otherwise denied rows and publications,
+then restores the same denial. Queue publication and embeddings are named
+stand-ins. Final receipts and independent review belong in this task's proof.
+
+Builds use task-owned scratch Cargo/Rust homes, separate ordinary/write-tools
+targets, the declared Rust Wasm target and approved pinned `wit-bindgen` 0.57.1.
+Nothing was installed globally. Database checks run through `scripts/run-gate.sh`.
+
+Still unfinished: installed chat search and approval consumption/write tools,
+configured embeddings and active manual/scheduled sync, automatic recovery timer
+assembly, checkpoint retention, managed publication/fencing, proposals/receipts
+and reconciliation, private exports/daily archives, full path/HTTP parity,
+assembled Settings/chat and separate physical-device HTTPS proof. This is a
+checkpoint and must not replace working legacy Notes.
