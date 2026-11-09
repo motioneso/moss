@@ -196,7 +196,7 @@ fn compiled_list_move_failure_rolls_back_assignment_removal() {
 #[derive(Default)]
 struct ProtectedOverlap {
     leader: Option<Uuid>,
-    attempted: bool,
+    attempted: std::collections::BTreeSet<Uuid>,
     committed: bool,
     counts: Vec<usize>,
 }
@@ -237,14 +237,8 @@ impl Ports for DeleteRace {
             if !self.remove_locks {
                 let (state, ready) = &self.protected;
                 let mut state = state.lock().unwrap();
-                match state.leader {
-                    None => state.leader = Some(scope.call_id()),
-                    Some(leader) if leader != scope.call_id() => {
-                        state.attempted = true;
-                        ready.notify_all();
-                    }
-                    _ => {}
-                }
+                state.attempted.insert(scope.call_id());
+                ready.notify_all();
                 drop(state);
             }
             let output = if self.remove_locks {
@@ -260,6 +254,12 @@ impl Ports for DeleteRace {
             } else {
                 self.next.invoke(scope, port, r)?
             };
+            if !self.remove_locks && !output.as_array().unwrap().is_empty() {
+                // The first port request can be scheduled behind the second.
+                // The leader is the request that actually acquired a row lock.
+                let mut state = self.protected.0.lock().unwrap();
+                state.leader.get_or_insert(scope.call_id());
+            }
             self.unlocked.lock().unwrap().insert(scope.call_id());
             return Ok(output);
         }
@@ -275,12 +275,12 @@ impl Ports for DeleteRace {
                     assert_eq!(output.as_array().unwrap().len(), 2);
                     let (next, _) = ready
                         .wait_timeout_while(state, std::time::Duration::from_secs(5), |s| {
-                            !s.attempted
+                            !s.attempted.iter().any(|id| *id != scope.call_id())
                         })
                         .unwrap();
                     state = next;
                     assert!(
-                        state.attempted,
+                        state.attempted.iter().any(|id| *id != scope.call_id()),
                         "Second deletion must send its lock request"
                     );
                     drop(state);
@@ -319,7 +319,7 @@ impl Ports for DeleteRace {
         self.next.finish_call(scope, success)?;
         if !self.remove_locks {
             let (state, ready) = &self.protected;
-            let mut state = state.lock().unwrap();
+            let mut state = state.lock().unwrap_or_else(|poison| poison.into_inner());
             if state.leader == Some(scope.call_id()) {
                 state.committed = success;
                 ready.notify_all();
