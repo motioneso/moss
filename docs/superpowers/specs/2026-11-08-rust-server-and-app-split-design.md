@@ -437,6 +437,11 @@ qualification tests, as groundwork for the canonical database supervisor. It is 
 into that supervisor; Windows creation/Stop remain unavailable. The full remaining parity list is
 in [the slice 6 checkpoint report](2026-11-09-rust-server-app-slice6-report.md).
 
+Slice 7 adds Windows protected private-object creation and handle-based validation as further
+supervisor groundwork. It does not resolve trusted ancestors or wire the supervisor; creation/Stop
+remain unavailable. See [the slice 7 checkpoint report](2026-11-09-rust-server-app-slice7-report.md)
+for the current implementation and proof gaps.
+
 ### 13.3 Proof
 
 - Unit tests: running-file validation (wrong mode, dead process, non-loopback origin, stale

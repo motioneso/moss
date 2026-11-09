@@ -9,3 +9,5 @@ pub mod password;
 pub mod secrets;
 #[cfg(windows)]
 pub mod windows_child;
+#[cfg(windows)]
+pub mod windows_private;
