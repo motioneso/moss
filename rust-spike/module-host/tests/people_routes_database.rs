@@ -49,6 +49,9 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
     let notes = tempfile::tempdir().unwrap();
     let notes_root = notes.path().join("People");
     std::fs::create_dir_all(notes_root.join("Family/Friends")).unwrap();
+    std::fs::create_dir_all(notes_root.join("Family/apple")).unwrap();
+    std::fs::create_dir_all(notes_root.join("Family/Banana")).unwrap();
+    std::fs::create_dir_all(notes_root.join("Family/Ábc")).unwrap();
     std::fs::create_dir_all(notes_root.join("Work")).unwrap();
     let roots = ["actor", "other", "admin"]
         .into_iter()
@@ -449,7 +452,7 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
                 "/people/notes-directories?path=Family",
                 Value::Null
             ),
-            json!({"status":200,"body":{"path":"Family","directories":[{"name":"Friends","path":"Family/Friends"}]}})
+            json!({"status":200,"body":{"path":"Family","directories":[{"name":"Ábc","path":"Family/Ábc"},{"name":"apple","path":"Family/apple"},{"name":"Banana","path":"Family/Banana"},{"name":"Friends","path":"Family/Friends"}]}})
         );
         assert_eq!(
             request(
