@@ -1420,3 +1420,13 @@ is claimed here. Prior package-dispatch and privacy results do not substitute fo
 All build, dependency and toolchain paths used task-owned scratch. The approved pinned
 `wit-bindgen =0.57.1` dependency was reused from that scratch, without a new global install.
 No migration, SQL privacy policy, provider composition or shared shell source was changed.
+
+### Part-twelve second-review fix
+
+The second review round found that at powers of two the binary64 rounding interval is
+asymmetric, so the even-decimal choice could change the represented number (for example
+at 2^-24). `dee1f6760` keeps the shortest spelling in that case. A native test checks every
+finite power of two with both signs, and all twenty-four native People tests pass on that
+commit. The review rounds (two of two) were used before this fix, so the fix commit has
+no independent review of its own. The installed replay and nine-suite gate receipts above
+predate it; the fix touches only the number spelling path.
