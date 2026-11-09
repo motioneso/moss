@@ -34,8 +34,8 @@ pub fn render() -> String {
                             <option value="suggested">"Suggested"</option><option value="archived">"Archived"</option>
                         </select>
                     </Field>
-                    <Field><FormLabel control_id="tag-filter">"Tag"</FormLabel>
-                        <select id="tag-filter" class="jds-input"><option value="">"All tags"</option></select>
+                    <Field><FormLabel control_id="tag-filter">"Tags"</FormLabel>
+                        <select id="tag-filter" class="jds-input"><option value="">"Add tag filter"</option></select>
                     </Field>
                     <Field><FormLabel control_id="search">"Search"</FormLabel>
                         <input id="search" class="jds-input" type="search" placeholder="Search tasks"/>
@@ -45,8 +45,19 @@ pub fn render() -> String {
                     </Field>
                     {action("new", "New task")}
                     {action("manage-lists", "Manage lists")}
+                    {action("clear-filters", "Clear filters")}
                 </div>
-                <div id="empty" hidden><EmptyState title="No tasks here" description="Try another filter or add a task."/></div>
+                <details id="list-options">
+                    <summary>"Choose lists"</summary>
+                    <p class="jds-caption">"Include lists, show only selected lists, or hide lists. Counts follow status and tags, before search."</p>
+                    <div id="list-selection" class="tasks-fields"></div>
+                </details>
+                <div id="active-tags" class="tasks-actions" aria-label="Active tag filters"></div>
+                <p class="jds-caption">"Tasks can match any selected tag."</p>
+                <div id="empty" hidden>
+                    <EmptyState title="No tasks here" description="Try another filter or add a task."/>
+                    {action("clear-filters", "Clear filters")}
+                </div>
                 <div id="task-results" aria-live="polite"></div>
             </section>
             <section id="editor" hidden aria-labelledby="editor-heading">

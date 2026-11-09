@@ -1139,6 +1139,53 @@ signed-package fixture is separate from the real application shell; physical
 second-device checks must be reported with their exact coverage in the proof.
 Part of #4027; release note Category N/A. Workshop and Food are excluded.
 
+## Tasks part 15 checkpoint (JS-114, Card 526)
+
+The package screen now supports the legacy list selection rules: include lists,
+show only one or more lists, or hide lists. The compact picker selects one list
+or all lists; **Choose lists** exposes combinations and shows the current choice.
+Tag filters can be combined and removed individually. A task matching any selected
+tag remains visible. List counts follow status and tags, before list selection
+and text search. **Clear filters** returns to open tasks across all lists and
+clears tags and search. Existing List/Grid grouping and saved view remain intact.
+The package manifest describes these controls and how to recover hidden tasks.
+
+`tools/filter-parity.mjs` compares visible tasks, list counts, total count,
+available tags and solo list ids with the unchanged legacy screen model over
+800 combinations. These include every status, multiple solo/excluded lists,
+an empty or stale list, multiple tags, missing tags, case-insensitive title
+search, description search and subtasks. Source rows must remain unchanged.
+The same comparison failed against the previous package model before the change
+and passes afterward. This is screen-model parity, not full screen acceptance.
+
+Review round one found a custom-selection default leaking into the New task list
+picker. The default now resolves only actual list ids, falling back to the first
+list. A DOM regression check covers multiple solo lists, exclusions, list-control
+focus, combined tags, focus after removing a tag, counts and reset. Clear filters
+is also available in the empty state. These checks do not substitute for the
+signed-package browser check.
+
+Final gate, browser and review receipts are recorded in this task's proof artifact.
+The signed-package browser fixture exercises the real Rust host and account
+boundary, separately from the application shell. At the start of this run the
+MacBook was offline on the tailnet, so earlier second-device evidence is not
+reused as proof of this work.
+
+No route, chat tool, job kind, SQL migration or host interface changes in this
+checkpoint. Both assistant-policy routes still need the public preferences seam.
+Actor timezone/lazy recurrence, recurrence jobs, deferred-queue policy and installed
+worker dispatch, public People linkage, policy/feedback orchestration, remaining
+screen/settings parity, installed chat, real-shell integration and performance
+budgets remain unfinished. The endpoint adapter's queue-observation gap remains.
+Physical second-device HTTPS acceptance must be reported with its actual coverage,
+not inferred from a local phone viewport. Full Phase 5 parity is not claimed.
+
+Tooling uses existing Rust 1.95 and Wasm target caches, including the approved
+pinned wit-bindgen graph. The tools lockfile was refreshed offline without a
+byte change. Declared JavaScript dependencies were restored offline inside this
+worktree. No global tool, target or package was installed. Part of #4027;
+release note Category N/A. Workshop and Food are excluded.
+
 ## Tasks part 16 checkpoint (JS-117, Card 526)
 
 New task now lets people prepare tags and editable, removable subtasks before
@@ -1207,5 +1254,8 @@ The final signed-browser run created one parent with both ordered subtasks and
 the exact three expected tags, then confirmed them after reload. Its database
 assertion exposed a proof-check ordering assumption: PostgreSQL collation put
 `kept` before `#literal`. The capture assertion now sorts names in JavaScript
-before comparison; the stored values and product code are unchanged. This
-proof-check fix needs an additional review round before the checkpoint is ready.
+before comparison; the stored values and product code are unchanged.
+
+Part 15 subsequently merged and was merged into this task branch with Ben’s
+approval. Both filter and capture assets, tests, app-map descriptions and report
+sections are retained. Final review and gate receipts cover their combined state.

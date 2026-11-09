@@ -776,3 +776,78 @@ the adapter's visibility obligation and the error-path difference explicit. A fu
 adapter must demonstrate that another account's private task cannot be summarized,
 with a failing-first installed privacy check. The installed comparisons below use
 owner-scoped stand-ins and do not discharge that production-adapter requirement.
+
+## JS-112 / part 14: saved operation status checkpoint
+
+Card 525. Package 0.14.0 adds the original read-only apply operation status route
+through the installed API and the Calendar web composition's original URL alias.
+A plan id and operation id must identify the same visible apply batch. The
+response retains selected item order, stored item results, pending/completed
+status and access-denied guidance. Stored result extensions are rejected like
+the original HTTP response schema. Legacy array snapshots and current snapshots
+with explicit intent are supported. No provider action, queue change or plan
+mutation is performed. This is a bounded checkpoint, not final Calendar acceptance.
+
+The native route regressions were observed failing against the previous
+implementation (missing route: success returned not found, malformed ids were
+not validated). The same tests pass after the change. Additional native cases
+cover empty batches, nonbatch headers, unreadable snapshots/results, multiple
+item pages and result-schema rejection. Installed-Wasm comparisons call the real
+production TypeScript route on the same disposable database for owner, unrelated
+user and administrator; both snapshot formats, pending/unknown/failed/applied
+results, denial guidance, wrong plan, absent operation and malformed ids are
+covered. Framework-generated malformed-id and response-serialization error bodies
+are excluded; their status codes are compared. Other validation/coercion/error cases remain unproven.
+
+The installed privacy witness reads the same operation as another account before,
+with the two operation tables' row security disabled in the disposable fixture,
+and after restoration. It must observe the privacy violation without protection
+and refusal again after restoration. The full gate also retains the original
+failing-first foreign read/write witnesses on all five Calendar tables. Production
+SQL and privacy rules are unchanged.
+
+The signed-in HTTPS runner loads the real installed Calendar screen and then
+reads synthetic stored operation rows from that page through both URL prefixes.
+It checks pending/completed status, denial guidance, result-schema rejection and foreign
+and wrong-plan refusal. These are browser API requests, not interactions with a
+new status screen. Direct fixture rows model saved progress; they do not establish
+provider execution. Exact fresh checks, review and commit are recorded in the
+task Proof artifact.
+
+Builds reuse copied build caches and provision Rust 1.95.0 with the declared
+Wasm target in this task's own scratch Rust home. The earlier scratch homes
+proved incomplete or were removed before they could be copied. Dependencies are restored
+offline from the declared lockfile in this worktree. Both shared asset bundles go
+into one scratch directory. No new dependency, global tool or wit-bindgen installation
+is performed. A same-machine LAN request, disposable TLS certificate and phone-width
+browser are not a physical second device or production certificate trust.
+
+Remaining: concrete public Tasks/Briefings/provider adapters and full provenance;
+complete validation/coercion/error parity; four provider tools; day-plan apply job
+and apply/retry/recovery/confirm execution; worker-role cache-evict dispatch; source
+behavior and external-calendar status controls; full shell/Today/chat; old-screen
+replacement; complete assembled parity; physical second-device trusted HTTPS.
+
+The first independent review found no blocker or major. Its app-map mismatch is
+corrected by describing the original plain HTTP errors without inventing a new
+response code; the selection lookup now uses a map, and the operation oracle runs
+last so its synthetic state cannot affect later checks. A page-size concern is not
+a current defect: the host does not impose a smaller limit, and native coverage
+reads through a full page into the next. The inherited chat-policy integration
+remains open alongside the full chat composition.
+
+The assembled package check caught an invalid camel-case template parameter:
+the host deliberately accepts lowercase template names only. Calendar now uses
+`operation_id` internally while preserving the original concrete URL. A focused
+package regression verifies host template acceptance and parameter resolution;
+the shared host is unchanged.
+
+The first full part-14 gate found a real mismatch: Rust stripped extra stored
+result fields, while Fastify's `anyOf` serializer rejects them with HTTP 500.
+A focused probe through the original DTO parser and response schema confirmed
+this. A new native regression failed before the correction and passes after it;
+Rust now rejects extra fields and invalid optional result fields. The installed
+matrix includes both a valid denial and the extension rejection (210 comparisons).
+Exact fresh rerun outcomes belong in the Proof artifact; earlier partial runs
+are not passing full-gate evidence. Strict host Clippy also reports a pre-existing
+`useless_vec` in the unchanged day-plan oracle; allowing only that lint passes.

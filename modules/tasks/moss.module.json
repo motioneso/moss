@@ -91,7 +91,7 @@
     {
       "id": "tasks",
       "label": "Tasks",
-      "description": "View tasks in priority groups or a priority grid, filter by list, edit tasks, and manage subtasks, tags and comments. Account timezone, People, assistant policies and background jobs remain unfinished.",
+      "description": "View tasks in priority groups or a priority grid, include, show only or hide lists, combine tag filters, edit tasks, and manage subtasks, tags and comments. Account timezone, People, assistant policies and background jobs remain unfinished.",
       "path": "/tasks",
       "icon": "CheckSquare",
       "order": 30
@@ -122,7 +122,7 @@
     },
     {
       "id": "tasks.package-screens",
-      "description": "Package screen using the shared UI kit, authored typography and parent bridge: task loading; priority groups (Critical through Someday, then No priority) and four-quadrant grid, each ordered by due date then title; status, list, text and tag filters; create and edit tasks, including draft tags and editable subtasks before saving a new task, reusing matching list tags; retry acknowledged partial saves without recreating the parent or completed child writes; completion and suggestion review; list creation and renaming; subtasks; tag creation and assignment; activity comments; saved default view. Dates currently display in UTC. Full legacy screen and setting parity is unfinished.",
+      "description": "Package screen using the shared UI kit, authored typography and parent bridge: task loading; priority groups (Critical through Someday, then No priority) and four-quadrant grid, each ordered by due date then title; status and text search; list inclusion, show-only and exclusion with counts after status and tags but before search; multiple tag filters matching any selected tag, individually removable; Clear filters resets to open tasks across all lists; create and edit tasks, including draft tags and editable subtasks before saving a new task, reusing matching list tags; retry acknowledged partial saves without recreating the parent or completed child writes; completion and suggestion review; list creation and renaming; subtasks; tag creation and assignment; activity comments; saved default view. Open Choose lists for list choices; remove tag filters or clear filters to recover hidden tasks. Dates currently display in UTC. Full legacy screen and setting parity is unfinished.",
       "remediations": [
         {
           "id": "reload-tasks",

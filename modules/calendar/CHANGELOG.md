@@ -1,5 +1,13 @@
 # Calendar package
 
+## 0.14.0
+
+- Read stored day-plan apply progress through the installed API and original URL,
+  preserving item order, pending/completed status, results and denial guidance.
+- Compare real installed responses with production and exercise the retained
+  owner-only rules with a failing-first installed privacy witness.
+- Provider execution, full screen cutover and physical second-device proof remain open.
+
 ## 0.13.0
 
 - Return the original saved day-plan response with live task and source-run summaries beside the unchanged plan.

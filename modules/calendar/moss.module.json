@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -136,6 +136,11 @@
     {
       "method": "PATCH",
       "path": "/briefing-settings",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/day-plans/:id/operations/:operation_id",
       "signIn": true
     }
   ],
@@ -281,6 +286,10 @@
           "description": "Calendar could not start. Use Reload page above to retry. If Opening Calendar takes too long, use the same control."
         }
       ]
+    },
+    {
+      "id": "calendar.saved_day_plan_operation_status",
+      "description": "Read saved apply progress through the installed API and original Calendar URL. Preserves selected item order, pending or completed status and access-denied guidance. Owner-only stored operations remain private. Reading never runs a provider action; apply, retry, recovery and confirmation execution remain unavailable. Invalid ids are rejected, missing operations return not found, and unreadable stored batches return an error. Read the current account’s plan and operation ids before retrying."
     }
   ],
   "tools": {

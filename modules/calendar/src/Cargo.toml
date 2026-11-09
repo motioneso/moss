@@ -32,3 +32,7 @@ path = "bin/data-parity.rs"
 [[test]]
 name = "jobs"
 path = "tests/jobs.rs"
+
+[[test]]
+name = "operations"
+path = "tests/operations.rs"
