@@ -270,3 +270,25 @@ async fn stop_waits_for_a_connect_that_holds_the_start_lock() {
     assert!(stop_local(&dir, &dir).await.is_err());
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+/// An unresponsive server is not evidence that it is safe to stop its database.
+#[cfg(unix)]
+#[tokio::test]
+async fn stop_refuses_to_stop_the_database_without_a_reachable_server() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = scratch("stop-unreachable");
+    std::fs::write(dir.join(NETWORK_FILE), b"{}").unwrap();
+    let install = dir.join("install");
+    crate::store::private_dir(&install).unwrap();
+    crate::store::private_dir(&dir.join(crate::provision::DATABASE_FOLDER)).unwrap();
+    let supervisor = install.join("moss-db");
+    std::fs::write(&supervisor, "#!/bin/sh\ntouch \"$3/stopped\"\n").unwrap();
+    std::fs::set_permissions(&supervisor, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let result = stop_local(&install, &dir).await;
+    assert_eq!(result, Err(Problem::Unreachable));
+    assert!(!dir
+        .join(crate::provision::DATABASE_FOLDER)
+        .join("stopped")
+        .exists());
+    std::fs::remove_dir_all(dir).unwrap();
+}

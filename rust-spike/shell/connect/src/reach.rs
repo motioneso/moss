@@ -474,18 +474,8 @@ pub async fn stop_local(install: &Path, folder: &Path) -> Result<(), Problem> {
     })
     .await
     .map_err(|_| Problem::Unreachable)??;
-    let running = match local(folder).await {
-        Ok((running, _)) => running,
-        Err(Problem::Unreachable) => {
-            // The server may have failed during startup. Still stop its private database.
-            let (i, f) = (install.to_owned(), folder.to_owned());
-            return tokio::task::spawn_blocking(move || crate::provision::stop_database(&i, &f))
-                .await
-                .map_err(|_| Problem::Unreachable)?
-                .map_err(|_| Problem::Unreachable);
-        }
-        Err(problem) => return Err(problem),
-    };
+    // Unreachable is not proof of death: leave the database alone if hello cannot answer.
+    let (running, _) = local(folder).await?;
     #[cfg(unix)]
     {
         if running.pid == 0 || running.pid > i32::MAX as u32 {

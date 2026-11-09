@@ -52,10 +52,14 @@ mod linux {
         connection: gio::DBusConnection,
         registration: Option<gio::RegistrationId>,
         watcher: Option<gio::SignalSubscriptionId>,
+        host: Option<gio::SignalSubscriptionId>,
     }
 
     impl Drop for Tray {
         fn drop(&mut self) {
+            if let Some(id) = self.host.take() {
+                self.connection.signal_unsubscribe(id);
+            }
             if let Some(id) = self.watcher.take() {
                 self.connection.signal_unsubscribe(id);
             }
@@ -67,10 +71,34 @@ mod linux {
 
     pub fn tray(proxy: tao::event_loop::EventLoopProxy<crate::UserEvent>) -> Option<Tray> {
         let connection = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE).ok()?;
+        // A watcher may exist without any visible tray host. In that case Close must quit.
+        let reply = connection
+            .call_sync(
+                Some("org.kde.StatusNotifierWatcher"),
+                "/StatusNotifierWatcher",
+                "org.freedesktop.DBus.Properties",
+                "Get",
+                Some(
+                    &(
+                        "org.kde.StatusNotifierWatcher",
+                        "IsStatusNotifierHostRegistered",
+                    )
+                        .to_variant(),
+                ),
+                None,
+                gio::DBusCallFlags::NONE,
+                1000,
+                gio::Cancellable::NONE,
+            )
+            .ok()?;
+        if !reply.get::<(Variant,)>()?.0.get::<bool>()? {
+            return None;
+        }
         let info = gio::DBusNodeInfo::for_xml(XML)
             .ok()?
             .lookup_interface(ITEM)?;
         let events = proxy.clone();
+        let events_host = proxy.clone();
         let registration = connection
             .register_object(
                 "/StatusNotifierItem",
@@ -118,10 +146,22 @@ mod linux {
                 }
             },
         );
+        let host = connection.signal_subscribe(
+            Some("org.kde.StatusNotifierWatcher"),
+            Some("org.kde.StatusNotifierWatcher"),
+            Some("StatusNotifierHostUnregistered"),
+            Some("/StatusNotifierWatcher"),
+            None,
+            gio::DBusSignalFlags::NONE,
+            move |_, _, _, _, _, _| {
+                let _ = events_host.send_event(crate::UserEvent::TrayUnavailable);
+            },
+        );
         let tray = Tray {
             connection,
             registration: Some(registration),
             watcher: Some(watcher),
+            host: Some(host),
         };
         // Passing our unique bus name lets the host watch this particular app's lifetime.
         let name = tray.connection.unique_name()?;

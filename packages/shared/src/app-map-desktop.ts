@@ -25,7 +25,7 @@ export const DESKTOP_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     label: "Rust Moss desktop settings",
     description:
       "From Servers, open Desktop settings. On Linux, Start Moss at login adds this app and its selected data folder to the desktop session's autostart list; turn it off there to remove it. Desktop notifications are off by default and can be allowed for server connections and stops, with Send test notification to check the desktop service. Reminder and chat events are not connected yet. When a StatusNotifier tray host is available, closing the window hides it and the tray icon reopens it; the tray's context action opens Desktop settings. Quit app exits while servers keep running. Without a tray host closing quits the app. macOS and Windows desktop integration is not available in this build. If a setting cannot be saved or notifications are unavailable, this screen reports it and allows retry.",
-    path: "moss-app://localhost/index.html#desktop",
+    path: "moss-app://localhost/index.html",
     scope: "user"
   }
 ];
@@ -106,7 +106,7 @@ export const DESKTOP_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] 
     runtime: "rust",
     description:
       "Open Servers, Desktop settings. Retry the named action after checking folder permissions or the desktop notification service. If no tray host is available, closing the window quits the app; local servers keep running.",
-    path: "moss-app://localhost/index.html#desktop",
+    path: "moss-app://localhost/index.html",
     scope: "user"
   },
   {

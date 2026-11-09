@@ -32,11 +32,14 @@ describe("app-map integrity and truthfulness", () => {
       )
   );
   const rustErrorCodes = new Set(
-    ["../../rust-spike/network/src/web.rs", "../../rust-spike/shell/connect/src/reach.rs"].flatMap(
-      (file) =>
-        [...readFileSync(new URL(file, import.meta.url), "utf8").matchAll(/"([a-z_]+)"/g)].map(
-          (match) => match[1]
-        )
+    [
+      "../../rust-spike/network/src/web.rs",
+      "../../rust-spike/shell/connect/src/reach.rs",
+      "../../rust-spike/shell/connect/src/main.rs"
+    ].flatMap((file) =>
+      [...readFileSync(new URL(file, import.meta.url), "utf8").matchAll(/"([a-z_]+)"/g)].map(
+        (match) => match[1]
+      )
     )
   );
   const appMap = buildAppMap({
@@ -64,7 +67,10 @@ describe("app-map integrity and truthfulness", () => {
       "rust-sign-in",
       "rust-desktop-connect"
     ]);
-    expect(rustMap.settings.map((entry) => entry.id)).toEqual(["rust-network-sharing"]);
+    expect(rustMap.settings.map((entry) => entry.id)).toEqual([
+      "rust-desktop-settings",
+      "rust-network-sharing"
+    ]);
     for (const entry of [...rustMap.screens, ...rustMap.settings, ...rustMap.remediations]) {
       expect(rustRoutes.has(entry.path ?? "")).toBe(true);
     }
