@@ -2422,3 +2422,38 @@ against their tested commits in [checkpoint PR 4139](https://github.com/motiones
 and its proof artifact. They are separate from the known-red large-account probe;
 no passing receipt from part 19 is reused for this continuation. The checkpoint
 remains a diagnostic and handoff, not completed People acceptance.
+
+## Part 21 — reduce list response copies (checkpoint)
+
+Before editing, this branch was fast-forwarded to `f236a599d`, including merged
+part 20 (PR 4139). This slice changes only People and its parity fixtures. The
+module remains a client of shared server ports, with no database connection.
+
+The resource diagnostic now starts at 100, 250 and 500 rows before the existing
+paging boundaries (21 cases total). Baseline `a270b9d67` fails even the first
+100-person read with the default fuel limit. A scratch-only LTO experiment also
+fails there and is not shipped. Moving decoded database rows alone is insufficient.
+Moving the list rows into the final response envelope as well makes the exact
+100-person legacy comparison pass at `bdb0b424b`. Query parameters, owner filtering,
+public interfaces and all host limits remain unchanged. The ordinary People gate
+now includes that regression on an account with 1,005 people.
+
+The full diagnostic remains red: clean run `20261109-154105-3Tbzm0` prints
+`PASS People resource probe GET /people limit 100 (100 rows)`, then traps on the
+100-link response. Larger cases are not reached. Baseline failing-first receipt:
+`20261109-152859-wnv99v` at `a270b9d67`, exit 101. Neither receipt proves complete
+large-account parity. Arbitrary query plans, tied ordering and concurrent writes
+also remain unqualified. App-map remediation now mentions large-read limits.
+
+Builds use task-owned Cargo, rustup and target directories. Existing toolchains
+and declared dependency caches were copied to scratch; missing lockfile packages
+and declared Wasm targets were fetched there. Approved `wit-bindgen =0.57.1` is a
+local project dependency. No global tool or new third-party dependency was added.
+
+The shipping Rust shell still lacks installed People route/frame composition.
+Real Settings/chat acceptance, sign-in/origin/privacy acceptance and a second
+physical device over HTTPS remain unproved. Other remaining work is unchanged:
+complete locale ordering, listener parser qualification, ingest nudges, providers,
+installed scheduling, retention/quotas and broader backend failure handling.
+This is a partial checkpoint, not completed Phase 5 acceptance. Final ordinary,
+privacy and installed replay results are recorded below and in the checkpoint PR.
