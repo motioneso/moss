@@ -211,6 +211,13 @@
           "description": "The plan changed since it was read, or a selected change is not part of this plan. Read the current plan before previewing again.",
           "remediationRef": "calendar-read-draft"
         }
+      ],
+      "remediations": [
+        {
+          "id": "calendar-read-draft",
+          "description": "Read the current draft before retrying. Check the public task adapter for task-linked edits.",
+          "path": "/settings/modules"
+        }
       ]
     },
     {

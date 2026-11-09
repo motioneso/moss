@@ -1,5 +1,13 @@
 # Calendar package
 
+## 0.10.0
+
+- Preview selected day-plan changes before applying: before and after times, task eligibility, deadline risk and overlaps between selected changes.
+- Task facts arrive through the public task-reference link; a missing or foreign task reads as unavailable and is never distinguished.
+- No provider source context exists in this host yet, so calendar availability reports unavailable instead of claiming time is free.
+- The original day-plan read, create, draft and preview URLs dispatch through the installed package.
+- Provider tools and jobs, execution, full shell and physical second-device trusted HTTPS remain open.
+
 ## 0.9.0
 
 - Show a loading message before Calendar and settings start.
