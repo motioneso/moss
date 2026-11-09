@@ -441,3 +441,31 @@ request deadline. The runner now allows extra time for unoptimized Rust password
 verification on loaded development machines. This changes only the proof runner,
 not production password settings or network deadlines. Final receipts, screenshots,
 review disposition and remaining limits are attached to the task Proof artifact.
+
+## JS-91 / part 8: event dates and Day legend checkpoint
+
+Card 525. Work stays in Calendar-owned files in the `~/Jarv1s` task worktree.
+At the start, main contains part 6; part 7 is still open as PR 4079. This continuation
+does not copy that branch's account-name projection or narrow-week positioning.
+The full remaining port exceeds the brief's context bound, so this is another
+bounded checkpoint, not final Calendar acceptance.
+
+Planned work: correct event-detail date ranges at midnight and retain all-day exclusive
+ends; compare displayed date and toolbar range wording against the production screen
+model; restore the Day legend's held-block count and the authored event swatches.
+Verification includes the Calendar parity and failing-first privacy gate, plus real
+signed-in installed-package HTTPS UI checks. No provider response is mocked to make a
+screen pass. The module remains a client of the server's installed package API.
+
+The existing task-local Rust 1.95.0/Wasm compiler and lockfile dependencies are reused.
+Build caches are copied to this task's scratch directory before use. No global tool,
+new dependency or wit-bindgen installation is planned. Final receipts and review
+disposition belong in the task Proof artifact against the tested commit.
+
+The part 5 acceptance list remains open: remaining HTTP contracts/errors/defaults,
+four provider tools and both jobs, plan preview/approval/apply/recovery/monitoring,
+real public reference/provider adapters, source-behavior controls, external-calendar
+status, full shell/Today/chat composition, old-screen replacement and complete
+assembled parity. Regional date/time formatting beyond the default English locale
+is also not established. A phone-width browser and a same-host LAN request do not
+prove physical second-device access or trusted production HTTPS.
