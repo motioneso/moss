@@ -245,3 +245,21 @@ fn grid_uses_compact_labels_locations_and_held_markers() {
     let all_html = render(60, false, true, true);
     assert!(all_html.contains("--ev:var(--accent-fg)"));
 }
+
+#[test]
+fn month_restores_authored_date_markers_and_row_geometry() {
+    for (date, rows) in [("2026-02-01", 5), ("2026-11-08", 5), ("2026-05-01", 6)] {
+        let day = date.parse().unwrap();
+        let output = view! {<Month cursor=day today=day events=Default::default() twelve=false on_day=Callback::new(|_|{}) on_event=Callback::new(|_|{})/>}.to_html();
+        assert!(
+            output.contains("class=\"n\""),
+            "Authored today number hook is missing"
+        );
+        assert!(
+            output.contains("class=\"mo\""),
+            "First-of-month label is missing"
+        );
+        assert!(output.contains(&format!("min-height:{}px", 42 + rows * 112)));
+        assert!(output.contains(&format!("grid-template-rows:repeat({rows},1fr)")));
+    }
+}

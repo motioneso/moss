@@ -47,7 +47,7 @@ pub fn MonthChip(
 ) -> impl IntoView {
     view! {<button type="button" data-cal-focus=focus_key class=if block {"cal-mchip is-block"} else {"cal-mchip"}
         style=if block {"--ev:var(--accent-fg)"} else {"--ev:var(--steel)"} on:click=move |_| on_pick.run(())>
-        <span class="cal-mchip__dot"></span><span class="cal-mchip__t">{time}</span><span class="cal-mchip__title">{title}</span>
+        <span class="cal-mchip__dot"></span>{(!time.is_empty()).then(||view!{<span class="cal-mchip__t">{time}</span>})}<span class="cal-mchip__title">{title}</span>
     </button>}
 }
 #[component]
@@ -62,6 +62,7 @@ pub fn AllDayChip(
 #[component]
 pub fn DayCell(
     #[prop(into)] label: String,
+    #[prop(optional, into)] month_label: String,
     #[prop(optional)] today: bool,
     #[prop(optional)] outside: bool,
     on_pick: Callback<()>,
@@ -73,7 +74,7 @@ pub fn DayCell(
         if today { " is-today" } else { "" },
         if outside { " is-out" } else { "" }
     );
-    view! {<div class=class><button type="button" data-cal-focus=focus_key class="cal-mcell__date" on:click=move |_| on_pick.run(())><span class="cal-mcell__dnum">{label}</span></button><div class="cal-mcell__evs">{children()}</div></div>}
+    view! {<div class=class><button type="button" data-cal-focus=focus_key class="cal-mcell__date" on:click=move |_| on_pick.run(())><span class="n">{label}</span>{(!month_label.is_empty()).then(||view!{<span class="mo">{month_label}</span>})}</button><div class="cal-mcell__evs">{children()}</div></div>}
 }
 
 /// Uses the browser's modal focus containment, inert background, Escape dismissal and

@@ -5,7 +5,10 @@ export default {
   ...base,
   test: {
     ...base.test,
-    include: ["modules/calendar/tools/grid-parity.test.ts"],
+    include: [
+      "modules/calendar/tools/grid-parity.test.ts",
+      "modules/calendar/tools/month-parity.test.ts"
+    ],
     setupFiles: []
   }
 };
