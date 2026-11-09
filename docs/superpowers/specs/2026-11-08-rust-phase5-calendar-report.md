@@ -767,3 +767,12 @@ builders target one scratch directory. No global tool, new dependency or
 wit-bindgen installation is performed. Disposable test TLS, a same-computer LAN
 request and phone-width screenshots do not establish physical-device access or
 production certificate trust.
+
+The first independent review found no blocker or major. Two minor limits are retained:
+lookup failures are reported as unavailable beside a readable saved plan, whereas
+production throws and fails the request; and visibility through concrete public
+reference adapters (including explicit shares) is not yet verified. The README makes
+the adapter's visibility obligation and the error-path difference explicit. A future
+adapter must demonstrate that another account's private task cannot be summarized,
+with a failing-first installed privacy check. The installed comparisons below use
+owner-scoped stand-ins and do not discharge that production-adapter requirement.

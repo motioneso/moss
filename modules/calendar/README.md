@@ -319,10 +319,16 @@ priorities, corrections, commitments and blocks. Missing, malformed or unavailab
 public reference projections leave the stored plan intact and report that
 reference as unavailable. Public `getPlan` and create/save responses stay unchanged.
 
-The trusted `References` composition owns actor visibility, including explicit
-shares. Its task projection supplies `id`, `title`, `status`, `dueAt`, `doAt` and
+The trusted `References` composition must enforce actor visibility, including
+explicit shares; concrete production adapters are not verified in this checkpoint. Its task projection supplies `id`, `title`, `status`, `dueAt`, `doAt` and
 `effort`; its run projection supplies `id`, `briefingType`, `status` and `createdAt`.
 Additional fields are not forwarded. Read-only source summaries do not authorize
 source-linked creation, which still requires the full public provenance adapter.
 The disposable comparison uses explicit public-interface stand-ins; real Tasks and
 Briefings adapters, the day-plan editor and full Calendar acceptance remain open.
+
+One error-path difference is retained: production fails a saved read when a public
+lookup throws; this package returns the saved plan with that reference marked
+unavailable. Null references, missing adapters and lookup faults all use that flag.
+It describes what this read could resolve, not proof that the referenced record was
+deleted. Exact public-adapter error parity remains open.
