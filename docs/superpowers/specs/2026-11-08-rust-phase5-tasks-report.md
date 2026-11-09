@@ -1034,3 +1034,21 @@ routes (blocked on AI and preferences ports), recurrence jobs, deferred-queue
 policy parity, actor timezone and lazy recurrence, public People linkage,
 policy and feedback orchestration, full screen and settings parity, real-shell
 integration, performance budgets and second-device HTTPS proof.
+
+Part 12 validation so far: the database gate passes on the first part 12
+commit, including 30 exact drift and summary comparisons and the scoped
+privacy removal control. The full endpoint comparison matches 84 of 85 cases,
+up from 76 of 84 in part 11; the only failure is the deferred-status job case,
+whose endpoint adapter still cannot observe the module queue (the part 8
+limit). The signed-install browser check passes: a new owner created a list
+through Manage lists, created `Browser proof task`, and saw it in the task
+list. That fixture binds loopback only, so access from a second physical
+device over LAN or tailnet HTTPS is still not proven; a direct request to the
+machine's LAN address got no answer from the fixture.
+
+Independent review round one found no blockers and four major issues, all
+fixed in a follow-up commit: the summary now drops rows from the end when its
+plain-text form exceeds the legacy 4,000-unit bound; the at-risk
+finished-subtask check and the three new routes now batch their lookups;
+the parity script gained long-title, twelve-row and day-boundary cases; and
+the focus sort compares due times in milliseconds.
