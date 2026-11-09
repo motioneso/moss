@@ -13,6 +13,7 @@ import { notesOracle } from "./people-notes-oracle.js";
 import { mutationOracle } from "./people-mutation-oracle.js";
 import { toolsOracle } from "./people-tools-oracle.js";
 import { jobsOracle } from "./people-jobs-oracle.js";
+import { largeDataOracle } from "../../../modules/people/tools/large-data-oracle.js";
 
 export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise<void> }> {
   if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
@@ -23,13 +24,14 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
   const actor = randomUUID();
   const toolActor = randomUUID();
   const jobActor = randomUUID();
+  const pagingActor = randomUUID();
   const person = randomUUID();
   const archived = randomUUID();
   const path = join(folder, "expected.json");
   const cleanup = async (): Promise<void> => {
     try {
       await bootstrap.query("DELETE FROM app.users WHERE id=ANY($1::uuid[])", [
-        [actor, toolActor, jobActor]
+        [actor, toolActor, jobActor, pagingActor]
       ]);
     } finally {
       await Promise.allSettled([
@@ -222,6 +224,10 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
     }
     const tools = await toolsOracle(bootstrap, runner, toolActor);
     const jobs = await jobsOracle(bootstrap, runner, jobActor);
+    const paging =
+      process.env.JS139_PEOPLE_PAGING_PROBE === "1"
+        ? await largeDataOracle(bootstrap, runner, pagingActor)
+        : undefined;
     await writeFile(
       path,
       JSON.stringify({
@@ -229,6 +235,7 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
         personId: person,
         cases,
         guestCases,
+        paging,
         rows,
         projection,
         projectionRow: projectionRow.row,

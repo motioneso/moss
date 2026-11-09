@@ -5,6 +5,18 @@ two job handlers, route envelopes and a packaged Leptos Settings pane. The insta
 gate exercises signed registry installation, reload, route replay and all four public lookup
 APIs through an installed consumer fixture; the report records the current result. The authenticated Rust
 application still needs to compose that package into its real Settings and chat flows.
+An optional large-account diagnostic compares 1,005 people, aliases, emails and links
+against real legacy handlers and public functions. It is **currently red**: the first
+999-person list response exhausts the default Wasm fuel budget while decoding database
+JSON, before paging is reached. It does not establish large-account parity. The normal
+People gate retains its existing bounded fixtures; it does not run this explicit probe.
+With the task-owned build environment and generated component prepared as below, reproduce
+through verify-gate:
+
+```sh
+JS50_PEOPLE_COMPONENT=/tmp/moss-people-component.wasm scripts/run-gate.sh start --gate modules/people/tools/large-data-gate.sh
+```
+
 The [delivery report](../../docs/superpowers/specs/2026-11-08-rust-phase5-people-report.md)
 records each delivered slice and the exact remaining continuation work.
 

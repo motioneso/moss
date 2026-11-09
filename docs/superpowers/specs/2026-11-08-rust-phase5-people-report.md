@@ -2314,3 +2314,111 @@ replay-test formatting, all five regenerated legacy fixture sets, scoped oracle
 lint, root lint/typecheck and app-map generation passed. Whole-host Rust formatting
 reports existing formatting in imported parity sources outside this checkpoint;
 those sibling files were not changed. Root formatting and file-size checks passed.
+
+## People part 20 — large-account diagnostic checkpoint (JS-139)
+
+The task branch initially contained only Phase 0a. Before editing it was
+fast-forwarded to `35ef498b1`, including the merged part 19 report and code.
+The continuation's PR 4066 reference is an older installed-package checkpoint.
+
+This continuation adds a reproducible **failing** large-account parity probe.
+It does not qualify large-account reads or complete Phase 5. A separate synthetic
+account contains 1,005 people, aliases, email identities and links. Fifteen
+comparisons target People/link limits of 999, 1,000, 1,001, 1,005, 1,006 and no
+limit, public name/email lookup, and an unbounded filtered query with exactly
+1,000 links (requiring an empty terminal page). A rejected email identity
+repeats an active email without violating the existing partial unique index.
+Real legacy Fastify handlers supply route responses; real public functions
+supply API responses. The compiled guest reads the same committed rows through
+production transactional database ports. Email results compare complete
+multisets because legacy has no ordering guarantee; other responses compare
+exactly. The probe asserts all fifteen cases are present.
+
+### Observed gap and reproduction
+
+The first 999-person list response exhausts the host's default **10,000,000
+Wasm fuel** while parsing the database JSON in `generated_component::Ports::call`.
+The legacy handler returns all 999 people. The guest never reaches the second
+page, so none of the fifteen large-account comparisons is qualified as passing.
+Memory, message, fuel and five-second limits are unchanged. The trace fails
+inside the initial JSON decode, before the SDK's later value conversion; merely
+removing that redundant conversion would not fix this observed failure.
+
+The dedicated `modules/people/tools/large-data-gate.sh` enables
+`JS139_PEOPLE_PAGING_PROBE=1` and selects the compiled database suite. Run it
+through `scripts/run-gate.sh` with the normal generated component and task-owned
+build environment, as documented in the module README. It intentionally remains
+red until the resource gap is fixed. The ordinary full People gate keeps its
+previous bounded checks and does not enable this diagnostic. A green ordinary
+gate is not a green large-account parity receipt.
+
+A scratch control that deliberately stopped repository reads after the first
+thousand rows also exhausted fuel on the first 999-person case, before its
+planted truncation was reached. This is **not** a successful truncation-control
+proof. Both initial gate attempts had first failed on fixture SQL using text
+expressions for enum columns; explicit casts fixed that setup error before the
+fuel failure was observed.
+
+No runtime behavior, public API, migration or product metadata is changed.
+The existing app-map declarations therefore remain unchanged. The next parity
+step is to process these real responses within the existing host budgets;
+shared-port projection or transport changes would require coordinated host
+work and are not implemented here. Arbitrary query plans, tied sort keys,
+three-page populations and concurrent writes remain unqualified too.
+
+Builds use task-owned Cargo, rustup and target directories. The pinned compiler
+and existing dependency caches were copied into task scratch; missing packages
+were fetched from project lockfiles. Both declared Wasm standard-library targets
+were installed only into scratch. Approved `wit-bindgen =0.57.1` remains a local
+project dependency; no global generator or new third-party package was installed.
+
+Remaining acceptance also includes complete locale ordering and shipping HTTP
+parser qualification, ingest nudges, real providers, installed scheduling,
+command retention/quotas and broader backend failures. The real Rust shell still
+needs installed People route/frame and chat-tool composition. Authenticated real
+UI/chat approval, sign-in/origin/privacy acceptance and a second physical device
+over HTTPS remain unproved. This checkpoint adds no server or direct database
+connection to the module.
+
+The first independent Claude review of `8ff7c4753` raised a major concern about
+pre-existing unordered name/alias paging, explicitly without a reproduction.
+That rating is rejected for this test-only checkpoint: source behavior is
+unchanged, and unconditional ID ordering changes established legacy alias tie
+behavior. This remains a known limit, not a claim that arbitrary query plans or
+concurrent writes preserve paging. Concrete count and duplicate-fixture minors
+are addressed, along with an exact-page case. All remain probe coverage, not
+passing large-account evidence.
+
+### Part 20 verification receipts
+
+The clean-commit diagnostic failure was observed at
+`3499bbc68dc9b9c594b9cdec63c6427915320835`, input fingerprint
+`sha256:7832e5794daffa6239eaeb56fecbc8a2049375fe44a678e349e543fb471c1757`.
+Normal component run `20261109-105122-qNH5r4` ended `rc=101` at the first
+999-person request with `wasm trap: all fuel consumed by WebAssembly`.
+Scratch truncation control `20261109-105146-S8YFKU` ended `rc=101` at the
+same earlier decode. Both disposable gate containers were removed.
+The earlier fixture-setup failures were `104449-KJCvic` and `104540-Jvqzsb`;
+neither is parity or control evidence.
+
+Installed replay `20261109-104533-plGjY8` on `a55381f0d` passed the standalone
+283-number JSON check and UI bridge, and downloaded, installed and reloaded the
+signed package. It then failed the fifty-reference refresh: status 500 after
+6,437 ms against the unchanged 5,000 ms deadline (`rc=101`). This is not a
+passing route-replay receipt. The runtime and replay test are unchanged from
+the branch base. Heavy machine load was observed, but its causal contribution
+is not proved; final checks run serially to reduce this task's own contention.
+
+The component SHA-256 is
+`94f3432357dca23e5b55184d013bec38152b80f6ec59b96384e01ea9f51e172f`;
+the package SHA-256 is
+`1508a5617586e4505b2c886eb7bb2250b2543e5f49d481b91b1f676b83dd1b97`.
+All 34 native People tests and strict native Clippy passed earlier in this
+checkpoint; module runtime code was not changed. Scoped lint, formatting and
+shell syntax checks cover the new diagnostic files.
+
+Final ordinary-gate, installed-replay and repository-check outcomes are recorded
+against their tested commits in [checkpoint PR 4139](https://github.com/motioneso/moss/pull/4139)
+and its proof artifact. They are separate from the known-red large-account probe;
+no passing receipt from part 19 is reused for this continuation. The checkpoint
+remains a diagnostic and handoff, not completed People acceptance.
