@@ -742,7 +742,10 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
         );
         assert!(failed.is_err());
         let failure_status = f.status(db.clone(), actor);
-        assert_eq!(failure_status["lastError"], "notes sync failed (Error)");
+        assert_eq!(
+            failure_status["lastError"],
+            "path is not within the linked notes source"
+        );
         assert_eq!(failure_status["ingested"], 0);
         assert!(!failure_status.to_string().contains("private-marker"));
         assert_ne!(failure_status["at"], Value::Null);
