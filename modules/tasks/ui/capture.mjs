@@ -1,4 +1,5 @@
 /* global document */
+import { tagSuggestions } from "./task-tags.mjs";
 export const normalizeTagName = (value) => value.trim().replace(/^#/, "").toLowerCase();
 export const cleanSubtasks = (values) => values.map((value) => value.trim()).filter(Boolean);
 
@@ -16,6 +17,7 @@ export function newTaskSave(api) {
         const result = await api("POST", "/tasks", fields);
         progress = {
           task: result.task,
+          fields: structuredClone(fields),
           steps: cleanSubtasks(draft.steps),
           // Draft tags were normalized when committed in the editor.
           tags: [...new Set(draft.tags.filter(Boolean))],
@@ -24,12 +26,20 @@ export function newTaskSave(api) {
           assigned: new Set()
         };
       } else {
-        // The saved list anchors pending tag writes. The controller locks its picker.
-        const result = await api("PATCH", `/tasks/${progress.task.id}`, {
-          ...fields,
-          listId: progress.task.listId
-        });
-        progress.task = result.task;
+        // Compare with acknowledged input, not the returned task: completing a
+        // recurring task can advance its schedule server-side. Replaying the old
+        // status/schedule during a child retry would undo that advance.
+        const changes = Object.fromEntries(
+          Object.entries(fields).filter(
+            ([key, value]) =>
+              key !== "listId" && JSON.stringify(value) !== JSON.stringify(progress.fields[key])
+          )
+        );
+        if (Object.keys(changes).length) {
+          const result = await api("PATCH", `/tasks/${progress.task.id}`, changes);
+          progress.task = result.task;
+          Object.assign(progress.fields, structuredClone(changes));
+        }
       }
       const p = progress;
       if (p.steps.length && !p.subtasksDone) {
@@ -72,6 +82,8 @@ export function captureDraft({ api, run, text, button, focus }) {
   const save = newTaskSave(api);
   let steps = [];
   let tags = [];
+  let available = [];
+  let firstSaveDay = null;
   function lock() {
     const locked = save.started();
     $("task-list").disabled = locked;
@@ -81,6 +93,34 @@ export function captureDraft({ api, run, text, button, focus }) {
       .forEach((node) => {
         node.disabled = locked;
       });
+  }
+  function renderSuggestions() {
+    const target = $("new-tag-suggestions");
+    target.replaceChildren(
+      ...tagSuggestions(available, tags).map((tag) =>
+        button(`Add #${tag.name}`, () => {
+          // Existing names are values, not uncommitted input to normalize again.
+          const name = tag.name.toLowerCase();
+          if (!tags.includes(name)) tags.push(name);
+          render();
+          focus($("new-tag-name"));
+        })
+      )
+    );
+    lock();
+  }
+  async function loadTags(listId) {
+    available = [];
+    renderSuggestions();
+    const warning = $("new-tags-error");
+    warning.hidden = true;
+    if (!listId) return;
+    try {
+      available = (await api("GET", `/tasks/lists/${listId}/tags`)).tags;
+    } catch {
+      warning.hidden = false;
+    }
+    renderSuggestions();
   }
   function render() {
     $("new-subtasks").replaceChildren(
@@ -113,6 +153,7 @@ export function captureDraft({ api, run, text, button, focus }) {
         })
       )
     );
+    renderSuggestions();
     lock();
   }
   function addTag({ moveFocus = true } = {}) {
@@ -143,11 +184,16 @@ export function captureDraft({ api, run, text, button, focus }) {
   });
   return {
     lock,
+    loadTags,
+    today: () => (firstSaveDay ??= new Date().toISOString().slice(0, 10)),
     started: save.started,
     snapshot: () => JSON.stringify({ steps, tags }),
     reset() {
       steps = [];
       tags = [];
+      available = [];
+      firstSaveDay = null;
+      $("new-tags-error").hidden = true;
       save.reset();
       $("new-tag-name").value = "";
       render();

@@ -158,6 +158,23 @@ try {
       "select count(*)::text as count from app.tasks where title = 'Browser proof task'"
     );
     assert.equal(result.rows[0]?.count, "1", "The real UI must create the proof task exactly once");
+    if (process.env["TASKS_UI_SUGGESTION_PROOF"] === "1") {
+      const assigned = await db.query<{ name: string }>(
+        "select g.name from app.tasks t join app.task_tag_assignments a on a.task_id=t.id join app.task_tags g on g.id=a.tag_id where t.title='Browser proof task'"
+      );
+      assert.deepEqual(assigned.rows.map((tag) => tag.name).sort(), ["#literal", "WORK"]);
+      const available = await db.query<{ name: string }>(
+        "select g.name from app.task_tags g join app.task_lists l on l.id=g.list_id join app.tasks t on t.list_id=l.id where t.title='Browser proof task'"
+      );
+      assert.deepEqual(
+        available.rows.map((tag) => tag.name).sort(),
+        ["#literal", "WORK"],
+        "suggested and typed tags reuse existing list tags"
+      );
+      console.log(
+        "PASS browser tag suggestions: stored hash preserved; typed existing tag reused; no duplicate list tag created"
+      );
+    }
     if (process.env["TASKS_UI_CAPTURE_PROOF"] === "1") {
       const tags = await db.query<{ name: string }>(
         "select g.name from app.tasks t join app.task_tag_assignments a on a.task_id=t.id join app.task_tags g on g.id=a.tag_id where t.title='Browser proof task' order by g.name"

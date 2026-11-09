@@ -46,6 +46,7 @@ test(
           parents.push(task);
           return { task };
         }
+        if (path === "/tasks/lists/list/tags") return { tags: [] };
         if (path.endsWith("/breakdown")) throw new Error("transient child failure");
         throw new Error(`Unexpected request: ${method} ${path}`);
       }
