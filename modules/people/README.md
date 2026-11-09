@@ -213,10 +213,11 @@ saves retain the legacy 400 folder error and preserve the existing preference. B
 array text; repeated search values use JavaScript array joining. Positive limits above the
 SDK's `u32` page space scan without a limit if they fit PostgreSQL `int8`.
 
-Decoded JSON bodies with `__proto__` members or `constructor` objects containing a
+On methods that parse a body, decoded JSON with `__proto__` members or `constructor` objects containing a
 `prototype` member receive the legacy JSON-parser 400 before schema coercion or host
 calls, including inside arrays and unknown note-only fields. Similar ordinary field names
-and string values remain allowed. Raw HTTP parser qualification still belongs to the
+and string values remain allowed. GET ignores supplied bodies, as in the legacy server.
+Raw HTTP parser qualification still belongs to the
 shipping listener; this check is at the module dispatch boundary.
 
 Remaining acceptance: compose the real installed shell and chat;

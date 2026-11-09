@@ -235,6 +235,8 @@ export async function routesOracle() {
       }
     };
     await run("GET", "/people");
+    // Fastify does not parse GET bodies, even if a JSON content type is supplied.
+    for (const body of forbiddenBodies) await run("GET", "/people", body);
     await parserCases("POST", "/people");
     await parserCases("PUT", "/people/notes-settings");
     await parserCases("POST", `/people/${ids.primary}/archive`);

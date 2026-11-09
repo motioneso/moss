@@ -61,7 +61,11 @@ fn schema(method: &str, path: &str) -> Option<Kind> {
 pub fn validate(request: &mut RouteRequest) -> Option<Response> {
     // Fastify's secure-json-parse examines the decoded body before Ajv,
     // including unknown members, arrays and routes with no body schema.
-    if forbidden_keys(&request.body) {
+    let parses_body = matches!(
+        request.method.as_str(),
+        "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS"
+    );
+    if parses_body && forbidden_keys(&request.body) {
         return Some(Response::new(
             400,
             json!({

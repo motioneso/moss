@@ -14,6 +14,36 @@ impl Host for Preferences {
 }
 
 #[test]
+fn get_ignores_json_bodies_like_the_legacy_bodyless_route() {
+    struct ReadOnly;
+    impl Host for ReadOnly {
+        fn call(&self, port: &str, operation: &str, resource: &str, _: Value) -> Result<Value> {
+            assert_eq!(
+                (port, operation, resource),
+                ("db", "query", "app.person_context_people")
+            );
+            Ok(json!([]))
+        }
+    }
+    let reply = moss_people::guest::handle(
+        &ReadOnly,
+        "route",
+        &json!({
+            "method":"GET","path":"/people","params":{},"query":{},
+            "body":{"__proto__":null}
+        })
+        .to_string(),
+    )
+    .unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(&reply).unwrap(),
+        json!({
+            "status":200,"body":{"people":[]}
+        })
+    );
+}
+
+#[test]
 fn forbidden_json_keys_are_rejected_before_schema_coercion_or_host_effects() {
     struct NoEffects;
     impl Host for NoEffects {

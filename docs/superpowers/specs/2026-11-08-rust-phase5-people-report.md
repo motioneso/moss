@@ -2116,7 +2116,7 @@ The continuation brief's PR 4066 reference points to an earlier People slice;
 the current report, rather than that number, supplied the starting state.
 
 This checkpoint closes the documented decoded-body rejection gap. People now
-checks the complete decoded JSON body before schema coercion or host calls,
+checks the complete decoded JSON body on methods that parse it, before schema coercion or host calls,
 including arrays, unknown fields, note-only contact lists and routes without a
 body schema. An own `__proto__` member or a `constructor` object with an own
 `prototype` member returns the existing Fastify JSON-parser 400 text. Ordinary
@@ -2140,9 +2140,9 @@ test passed with the previous folder retained. The weakened copy was never
 packaged or committed. This is a dispatch side-effect control, not a new RLS
 claim; the real database privacy matrix remains separately required.
 
-The route oracle adds thirty-two actual Fastify parser refusals and eight
-ordinary-field controls. It checks the parser's exact expected status/body and
-compares all seven tables after every case. Eight rejected note-backed PATCH
+The route oracle adds cases for thirty-two Fastify parser refusals, eight
+ordinary-field controls and eight GET-body controls. It will check the parser's
+exact expected status/body and compare all seven tables after every case. Eight rejected note-backed PATCH
 cases also retain canonical file-byte snapshots. The installed replay and
 database privacy receipts for this checkpoint will be recorded below after
 they complete; a fixture addition by itself is not passing installed evidence.
@@ -2171,3 +2171,12 @@ The module continues to call only SDK/server ports; it does not own a server or
 database connection. The earlier stale thirty-second replay-budget description
 in the public contract was corrected to the current strict five-second test and
 part 17 receipt; no deadline or assertion was widened.
+
+The first independent Claude review of `b2caba52f` found no blockers or majors.
+Its three minor observations were addressed: gate receipts remain pending rather
+than presented as observed, the API remediation no longer links to an unrelated
+Settings page, and GET body behavior now has a failing-first regression and
+eight legacy replay cases. That new regression first returned 400 instead of
+the legacy bodyless route's 200 (`rc=101`). The check now follows Fastify's
+body-parsing method set; GET ignores a supplied body. HEAD/TRACE are also bodyless,
+but are not declared People package routes, so no new route support is claimed.

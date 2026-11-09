@@ -206,10 +206,11 @@ its exact elapsed time and limitations are in the delivery report. This is not a
 guarantee under other host load. The network listener, ingest nudges and real provider
 composition remain unqualified.
 
-The People route-value boundary rejects decoded JSON bodies with an own `__proto__` member
+On methods that parse a body, the People route-value boundary rejects decoded JSON with an own `__proto__` member
 or a `constructor` object with an own `prototype` member, matching Fastify's parser error.
 It checks arrays and unknown fields before schema validation/coercion, including note-only
 lists and routes without a body schema. No host service runs for these rejected bodies.
+GET bodies are ignored, matching Fastify's bodyless-method handling.
 Plain `constructor`/`prototype` members, differently cased names and string values retain
 their ordinary behavior. This is decoded-body dispatch parity, not qualification of the
 shipping listener's raw HTTP parser (malformed JSON, content types, size limits and empty
