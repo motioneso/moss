@@ -38,6 +38,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./rust-spike/portability/proof/windows-child.ps1
+      - name: Exercise private files and two-account Windows access denial
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./rust-spike/portability/proof/windows-private.ps1
       - name: Check Windows elevation refusal
         if: runner.os == 'Windows'
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p portability --lib windows_child::tests::elevated_launch_is_refused -- --ignored --exact --nocapture
@@ -45,6 +49,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./rust-spike/portability/proof/windows-child-negative.ps1
+      - name: Check Windows private-file negative controls
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./rust-spike/portability/proof/windows-private-negative.ps1
       - name: Compile the Windows app and check server executable discovery
         if: runner.os == 'Windows'
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app server_program_uses_the_platform_executable_suffix -- --nocapture
