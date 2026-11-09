@@ -290,3 +290,24 @@ Set `TASKS_UI_CAPTURE_PROOF=1` on the signed UI gate to verify one
 `First proof step` then `Second proof step`, and no `discarded` tag.
 The fixtures are synthetic. This optional check asserts actual persisted rows
 created through the browser, not a mocked bridge.
+
+## Part 17: interpreted search in the package screen
+
+Type a phrase and choose **Interpret search**, or press Enter in Search. The
+screen calls the existing account-scoped Rust route. Status moves to the normal
+picker; other interpreted conditions appear as individually removable filters.
+Interpreted tags require every named tag, while manual tag selections still match
+any selected tag. Counts still follow status and manual tags, before search.
+Typing again clears the interpretation. Clear filters resets all search, list
+and tag choices to open tasks. If interpretation fails, the screen keeps the text
+and explains that ordinary title/description search is available.
+
+Dates use UTC, matching the current route; actor-local days still need the public
+locale seam. `tools/search-filter-parity.mjs` compares the package with the unchanged
+legacy screen over 1,380 combinations, including every due kind, combined manual
+and interpreted filters, and input preservation. DOM tests cover the controller
+and the actual shared-kit markup. Their bridge is mocked, so successful provider
+composition still needs live proof with a configured AI service.
+
+The existing full-port and real-shell acceptance gaps above remain. No new HTTP
+route, tool, job kind, SQL or shared host interface is added by this screen slice.

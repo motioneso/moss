@@ -1,3 +1,5 @@
+import { matchesSearchIntent } from "./search.mjs";
+
 // Keep unchanged timestamps and recurrence rules byte-for-byte on unrelated edits.
 // Date controls currently use UTC until the public actor-locale contract exists.
 export function taskFields(form, previous = null, today = new Date().toISOString().slice(0, 10)) {
@@ -29,9 +31,9 @@ export function taskFields(form, previous = null, today = new Date().toISOString
 
 export function filterTasks(
   tasks,
-  { lists = [], listStates = {}, status = "todo", tagFilter = [], search = "" }
+  { lists = [], listStates = {}, status = "todo", tagFilter = [], search = "", searchIntent = null }
 ) {
-  const needle = search.trim().toLowerCase();
+  const needle = (searchIntent ? (searchIntent.text ?? "") : search).trim().toLowerCase();
   const soloIds = lists.filter((list) => listStates[list.id] === "solo").map((list) => list.id);
   const listCounts = Object.fromEntries(lists.map((list) => [list.id, 0]));
   const allTags = new Set();
@@ -51,6 +53,7 @@ export function filterTasks(
       !task.description?.toLowerCase().includes(needle)
     )
       continue;
+    if (searchIntent && !matchesSearchIntent(task, searchIntent, quadrant(task))) continue;
     visible.push(task);
   }
   return {

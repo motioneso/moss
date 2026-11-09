@@ -1259,3 +1259,47 @@ before comparison; the stored values and product code are unchanged.
 Part 15 subsequently merged and was merged into this task branch with Ben’s
 approval. Both filter and capture assets, tests, app-map descriptions and report
 sections are retained. Final review and gate receipts cover their combined state.
+
+## Tasks part 17 checkpoint (JS-121, Card 526)
+
+The package screen now exposes the existing Rust natural-language search route.
+Type a phrase, choose Interpret search or press Enter, and remove individual
+conditions afterward. Status uses the normal picker. Interpreted tags require
+all named tags; manual tag selections retain their any-tag behaviour. List counts
+remain before search. Typing resets the interpretation; Clear filters restores
+open tasks and clears all search, list and tag choices. Provider failures retain
+the phrase and explain that title/description search still works. The package
+app map describes these controls and recovery steps.
+
+The unchanged legacy screen model is the oracle for 1,380 interpreted-filter
+comparisons, including all due kinds, status, effort, priority, quadrant, lists,
+case-insensitive interpreted tags, manual tags and literal residual text. That
+comparison was observed failing against the previous package model and passing
+after this change. Source rows are checked unchanged. Controller tests cover
+warnings, chip removal, keyboard activation, reset and provider failure; another
+test runs the controller against the real shared-kit HTML with a mocked bridge.
+These are UTC screen-model checks, not actor-local date acceptance or live AI
+provider evidence.
+
+A targeted compiled-component database check uses a synthetic provider to capture
+the search vocabulary. It checks that another account and an instance admin see
+no private list/tag names in the prompt and cannot retain foreign list/tag filters
+in the answer. The identical assertion is required to fail with list/tag RLS
+removed and pass after restoration. Its removal probes are restricted to its
+synthetic list, keeping earlier fixtures out of the guest fuel budget.
+
+No route, tool, job kind, SQL migration or shared host crate changes. Both
+assistant-policy routes, actor timezone/lazy recurrence, recurrence jobs,
+deferred-queue policy and installed worker dispatch, public People linkage,
+policy/feedback, remaining screens/settings, installed chat, real-shell integration
+and performance acceptance remain unfinished. The endpoint harness still lacks
+an observer for the module queue. Finishing those gaps exceeds this continuation's
+single-context boundary; this is an unfinished checkpoint, not Phase 5 acceptance.
+Workshop and Food remain excluded. Part of #4027; release note Category N/A.
+
+Tooling reuses the existing Rust 1.95 and Wasm target in scratch and the existing
+Cargo registry cache. The old temporary cache link was dangling, so the standard
+existing cache was used offline. The tools lockfile was refreshed offline for
+main's added libc dependency in the shared safety crate. Declared JavaScript
+dependencies were restored offline in this worktree. The approved pinned
+wit-bindgen graph was reused; nothing was installed globally.

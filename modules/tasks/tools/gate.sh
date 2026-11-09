@@ -16,4 +16,5 @@ TASKS_SCREEN_BIN="${CARGO_TARGET_DIR:-$PWD/modules/tasks/tools/target}/debug/tas
 pnpm exec tsx modules/tasks/tools/view-parity.mjs
 pnpm exec tsx modules/tasks/tools/capture-parity.mjs
 pnpm exec tsx modules/tasks/tools/filter-parity.mjs
+pnpm exec tsx modules/tasks/tools/search-filter-parity.mjs
 pnpm exec tsx modules/tasks/tools/gate.ts

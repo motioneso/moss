@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Interpret task searches from the package screen, remove individual conditions, and keep ordinary text search usable when AI is unavailable.
+- Compare interpreted filtering with the unchanged legacy screen; retain UTC date behaviour until account timezone support arrives.
+
 - Include, show only or hide lists, combine tag filters, and clear filters in the package screen.
 - Show per-list counts after status and tags, before search; compare the filter model with the legacy screen over 800 combinations.
 

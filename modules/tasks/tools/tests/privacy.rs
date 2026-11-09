@@ -29,6 +29,8 @@ mod jobs;
 mod lists;
 #[path = "privacy/owner_lookup.rs"]
 mod owner_lookup;
+#[path = "privacy/search.rs"]
+mod search;
 #[path = "privacy/tags.rs"]
 mod tags;
 

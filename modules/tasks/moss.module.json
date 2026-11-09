@@ -190,7 +190,7 @@
     },
     {
       "id": "tasks.package-search-interpretation",
-      "description": "Natural-language task search turns a phrase of up to 300 characters into list, tag, status, effort, priority, quadrant and due-date filters using the AI service you chose. Only your own lists and tags are kept in the answer, with a warning for anything unknown. If no AI service is configured the request fails with a clear unavailable message and no search is changed. Dates use UTC until account timezone support arrives."
+      "description": "In Tasks, type a phrase and choose Interpret search or press Enter to turn it into list, tag, status, effort, priority, quadrant and due-date filters using the AI service you chose. Queries are limited to 300 characters. Only your own lists and tags are kept in the answer, with a warning for anything unknown. Status moves to the regular picker; the other interpreted filters can be removed individually. Typing again clears the interpretation. Manual tag filters match any tag; interpreted tag filters require every named tag. Clear filters restores open tasks across all lists. If the AI service is unavailable, a message explains that title and description search still work. Dates use UTC until account timezone support arrives."
     }
   ],
   "screens": {
