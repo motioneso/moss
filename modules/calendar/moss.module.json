@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -198,7 +198,7 @@
     },
     {
       "id": "calendar.screens",
-      "description": "Packaged Rust Day, Week and Month screens with saved views and event links. Calendar labels, held-event details and settings use the account assistant name. Week view explains sideways scrolling and brings today into view on navigation and resize while preserving user scroll during ordinary refreshes. The Day legend counts today’s held blocks and shows the authored event swatches. Default English date labels retain exclusive all-day and midnight ends. Details show duration, attendee and status wording, follow successful refreshes, and close when an event disappears. Failed refreshes retain loaded events and explicit retry shows progress. The Calendar web router serves installed frames behind Rust sign-in and HTTPS. Original event and briefing-settings read and settings-write URLs dispatch through the installed package. External-calendar status, provider writes, full shell assembly and second-device acceptance remain open.",
+      "description": "Packaged Rust Day, Week and Month screens with saved views and event links. Calendar labels, held-event details and settings use the account assistant name. Week view explains sideways scrolling and brings today into view on navigation and resize while preserving user scroll during ordinary refreshes. The Day legend counts today’s held blocks and shows the authored event swatches. Default English date labels retain exclusive all-day and midnight ends. Details show duration, attendee and status wording, follow successful refreshes, and close when an event disappears. Failed refreshes retain loaded events and explicit retry shows progress. The Calendar web router serves installed frames behind Rust sign-in and HTTPS. Original event and briefing-settings read and settings-write URLs dispatch through the installed package. External-calendar status, provider writes, full shell assembly and second-device acceptance remain open. A visible startup message remains until the screen mounts. Reload page in the parent retries the current screen and preserves an event link when one is present.",
       "errors": [
         {
           "code": "calendar-page-unavailable",
@@ -214,17 +214,27 @@
           "code": "calendar-view-save-failed",
           "class": "transient",
           "description": "The selected view lasts for this visit if its account preference cannot be saved."
+        },
+        {
+          "code": "calendar-startup-failed",
+          "class": "transient",
+          "description": "Calendar could not start. Use Reload page above to retry. If Opening Calendar takes too long, use the same control."
         }
       ]
     },
     {
       "id": "calendar.briefing-settings",
-      "description": "Edit and reload account lookahead, prep-task and time-block choices. Settings and the time-block writeback policy save together; failed saves retain confirmed values. Auto grants standing permission also honored by the existing app. This Rust screen does not execute provider actions.",
+      "description": "Edit and reload account lookahead, prep-task and time-block choices. Settings and the time-block writeback policy save together; failed saves retain confirmed values. Auto grants standing permission also honored by the existing app. This Rust screen does not execute provider actions. A visible startup message remains until the screen mounts. Reload page in the parent retries the current screen and preserves an event link when one is present.",
       "errors": [
         {
           "code": "calendar-settings-save-failed",
           "class": "transient",
           "description": "Your last confirmed settings remain shown. Check the connection and try the change again."
+        },
+        {
+          "code": "calendar-startup-failed",
+          "class": "transient",
+          "description": "Calendar could not start. Use Reload page above to retry. If Opening Calendar takes too long, use the same control."
         }
       ]
     }

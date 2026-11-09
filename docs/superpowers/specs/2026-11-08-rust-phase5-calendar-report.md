@@ -565,3 +565,26 @@ the pre-integration commit; this conflict resolution needs a fresh review receip
 Only quick checks are rerun for this requested integration. Earlier full gate and HTTPS
 receipts remain proof of their recorded commit, not of the combined merge commit.
 The full acceptance and physical second-device limitations above remain open.
+
+## JS-93 / part 9: installed startup recovery checkpoint
+
+Card 525. Package 0.9.0 adds loading and failure guidance to the packaged Calendar
+and settings screens, plus a parent **Reload page** control that keeps the current
+screen and event query. The module remains an API client. Implementation, proof
+approach and the unchanged final acceptance list are recorded in
+[the part 9 report](2026-11-08-rust-calendar-js93-report.md).
+
+A failing-first live check interrupted the actual old bundle's Wasm request and
+observed no startup fallback. The same installed-screen checker verifies recovery
+after Wasm, generated-JavaScript, boot-script and settings-bridge download faults.
+It removes each fault, uses the parent reload and checks the real screen and event
+link. Desktop and phone-width screenshots are evidence from the disposable Rust
+HTTPS/sign-in fixture, not a physical second device or production trust. Final
+receipts and independent review belong in the task Proof artifact.
+
+The full Calendar port exceeds this continuation's context bound. This is a clean
+checkpoint, not final Calendar acceptance; the remaining provider/tools/jobs,
+public adapters, execution/recovery, shell/Today/chat, old-screen replacement,
+complete assembled parity and physical-device HTTPS work remain required. Builds
+reuse the existing Rust/Wasm scratch toolchain and lockfiles, with no new dependency,
+global tool or wit-bindgen installation.
