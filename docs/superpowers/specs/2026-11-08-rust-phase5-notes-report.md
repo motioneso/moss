@@ -1014,7 +1014,9 @@ with the authored legacy cleanup using real files, MemoryRepository and transact
 Only per-file ingestion and the job-opening walk are stand-ins. It includes both
 runtime roles, two owners and an unrelated administrator. Privacy-removal controls,
 a late final-table delete refusal and source/input admission exercise isolation
-and rollback rather than asserting them from the code alone. Final gate receipts,
+and rollback rather than asserting them from the code alone. Scratch controls
+also remove the source-prefix and empty-host-walk protections and require the
+compiled persistence assertions to fail. Final gate receipts,
 review and browser results are recorded in the checkpoint proof and PR.
 
 The build uses pinned, approved `wit-bindgen` 0.57.1 and dependencies already in
@@ -1029,3 +1031,22 @@ reconciliation, exact-block cleanup, private exports/daily archives, account exp
 all-handler HTTP parity, assembled Settings/chat and physical second-device HTTPS
 acceptance remain open. The cleanup adapter alone does not enable Notes sync or
 make this package a replacement for working legacy Notes.
+
+### Part nine review follow-ups
+
+The first independent Claude review found no adapter code defect and required
+passing cleanup/browser evidence before acceptance. It also identified missing
+empty-host-walk coverage and overbroad corpus wording. The tests now exercise the
+real empty-host-walk branch, seed an additional absent indexed path, retain
+unindexed chunks, and remove the source/empty guards in scratch controls.
+Canonical alias cleanup in the older corpus is now a stand-in; the real adapter
+walks regular files and does not resolve guest-provided canonical aliases.
+
+Generic safe errors currently replace legacy errno-specific cleanup failures.
+The ordinary package remains disabled for sync, so installed saved-error parity
+is still an activation blocker. Synchronous disk calls may stall while holding the
+source row lock and a pooled connection; an async timer cannot interrupt that
+filesystem call. Invalid UTF-8 names refuse the whole walk, stricter than legacy.
+These are explicit worker-design limits alongside the size bounds. No exhaustive
+platform, power-loss, external-editor race or physical second-device proof is
+claimed by the cleanup tests.

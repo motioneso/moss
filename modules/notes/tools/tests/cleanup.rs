@@ -252,6 +252,22 @@ fn compiled_cleanup_matches_legacy_and_rolls_back_the_whole_sweep() {
         assert!(f
             .cleanup(db.clone(), actor, f.root(), f.walked(), None, true)
             .is_err());
+        let empty = f.oracle["empty"].as_str().unwrap();
+        f.source(actor, json!(empty));
+        f.cleanup(
+            db.clone(),
+            actor,
+            empty,
+            vec![format!("{empty}/gone.md")],
+            None,
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            f.snapshot(),
+            f.oracle["baseline"],
+            "An empty host walk must retain the index"
+        );
         f.source(actor, json!(f.root()));
         assert!(f
             .cleanup(db.clone(), actor, f.root(), f.walked(), None, false)

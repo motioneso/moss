@@ -288,8 +288,10 @@ The open response preserves the configured `sourcePath` for continuations and
 separately returns canonical `resolvedSourcePath` for file operations and cleanup.
 Other operations receive that canonical root as `sourcePath`. Failures use
 `{error: string}` with an errno or `OUTSIDE`; other values produce a generic safe
-error. A missing walk is permitted for an unlinked source. Canonical alias vectors
-compare coordinator behavior, not real adapter symlink support.
+error. A missing walk is permitted for an unlinked source. Canonical alias vectors now exercise the cleanup stand-in behind the single
+request; they do not prove actual adapter alias handling. The real rewalk uses
+regular files under the resolved root and does not follow symlinks, matching the
+legacy walk admission. Full alias/path parity remains open.
 
 ## Atomic cleanup checkpoint (part nine)
 
@@ -324,7 +326,13 @@ sweep. Large-folder pagination is still required before activation. Symlinks are
 not followed. Existing vault ancestor-swap and platform limits remain; folder locks
 do not fence external editors, and no atomic filesystem/database snapshot is
 claimed. Sharing the folder lock with future ingestion must be designed at assembly
-rather than holding a conflicting linked-file lock through this call.
+rather than holding a conflicting linked-file lock through this call. The
+synchronous filesystem walk can pin the source row lock and a pooled connection
+while a disk call stalls; the timer cannot interrupt that call. Non-UTF-8 names
+refuse the sweep, which is stricter than legacy. Production activation needs a
+bounded worker design for these cases. Adapter errors currently become the generic
+safe sync error; the stand-in errno vectors do not establish installed saved-error
+parity. A typed safe-error channel is still required.
 
 The standard Notes gate now runs `cleanup-gate.ts`. It executes the actual legacy
 `purgeDeletedNotes` body with the real MemoryRepository, transactions and synthetic
@@ -335,7 +343,8 @@ unlink, stale source, missing allowed roots and omitted walk paths are checked.
 Direct cross-account read/delete assertions fail when each table's RLS is removed,
 then pass restored. A scratch source copy removes the explicit owner predicates;
 the compiled privacy assertion must fail with memory RLS removed too, and pass
-when the source is restored. These are compiled tool-boundary checks, not installed
+when the source is restored. Source-boundary and empty-host-walk removals must
+also fail their compiled persistence assertions. These are compiled tool-boundary checks, not installed
 chat, HTTP parity or working ingestion.
 
 The synchronous checkpoint envelope/result may contain source/file paths and

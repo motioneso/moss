@@ -17,10 +17,12 @@ command = ["cargo", "+1.95.0", "test", "--locked", "--offline", "--manifest-path
            "--", "--ignored", "--nocapture", "--test-threads=1"]
 
 
-def run(source, name):
+def run(source, name, test="cleanup_privacy_detects_removed_rls_and_owner_predicates"):
+    args = command.copy()
+    args[args.index("cleanup_privacy_detects_removed_rls_and_owner_predicates")] = test
     path = logs / (name + ".log")
     with path.open("w") as output:
-        result = subprocess.run(command, cwd=source, stdout=output, stderr=subprocess.STDOUT, check=False)
+        result = subprocess.run(args, cwd=source, stdout=output, stderr=subprocess.STDOUT, check=False)
     return result.returncode, path.read_text()
 
 
@@ -37,7 +39,17 @@ with tempfile.TemporaryDirectory(prefix="notes-cleanup-source-") as folder:
     code, output = run(isolated, "owner-predicates-removed")
     assert code != 0 and "cleanup owner predicate failed under removed RLS" in output and "1 failed;" in output, output
     print("PASS removed cleanup owner predicates + RLS: compiled privacy assertion failed", flush=True)
+    for name, anchor, replacement, marker in [
+        ("cleanup-source-boundary", "AND left(source_path,char_length($2::text))=$2", "AND $2::text IS NOT NULL", "Legacy cleanup row mismatch"),
+        ("cleanup-empty-walk", "if present.is_empty() {", "if false {", "An empty host walk must retain the index"),
+    ]:
+        assert original.count(anchor) == 1, f"Control anchor changed: {name}"
+        path.write_text(original.replace(anchor, replacement))
+        code, output = run(isolated, name, "compiled_cleanup_matches_legacy_and_rolls_back_the_whole_sweep")
+        assert code != 0 and marker in output and "1 failed;" in output, output
+        print(f"PASS removed {name}: compiled cleanup assertion failed", flush=True)
     path.write_text(original)
-    code, output = run(isolated, "owner-predicates-restored")
-    assert code == 0 and "1 passed;" in output, output
-    print("PASS restored cleanup owner predicates: compiled privacy assertions pass", flush=True)
+    for test in ["cleanup_privacy_detects_removed_rls_and_owner_predicates", "compiled_cleanup_matches_legacy_and_rolls_back_the_whole_sweep"]:
+        code, output = run(isolated, f"restored-{test}", test)
+        assert code == 0 and "1 passed;" in output, output
+    print("PASS restored cleanup guards: compiled privacy, parity and rollback assertions pass", flush=True)

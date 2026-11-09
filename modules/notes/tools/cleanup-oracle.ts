@@ -63,7 +63,9 @@ export async function cleanupOracle() {
         join(root, "UPPER.MD"),
         `${root}-other/keep.md`,
         join(folder, "other", "keep.md"),
-        root
+        root,
+        join(empty, "gone.md"),
+        join(empty, "other.md")
       ]) {
         for (const kind of ["notes", "vault"]) {
           chunks.push({ owner: actor, kind, path: file, text: `Private fixture ${i} ${kind}` });
@@ -72,6 +74,13 @@ export async function cleanupOracle() {
         links.push({ owner: actor, from: file, to: "/keep-target.md" });
       }
       links.push({ owner: actor, from: "/incoming.md", to: join(root, "gone-a.md") });
+      chunks.push({
+        owner: actor,
+        kind: "notes",
+        path: join(root, "no-index.md"),
+        text: "Unindexed chunk"
+      });
+      links.push({ owner: actor, from: join(root, "no-index.md"), to: "/keep-target.md" });
     }
     async function reset() {
       for (const table of ["memory_chunks", "memory_links", "memory_file_index"])
