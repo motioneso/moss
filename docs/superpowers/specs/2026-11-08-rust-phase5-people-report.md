@@ -2032,7 +2032,7 @@ SQL and reloaded, but the fifty-reference request returned status 500 after
 dependent-API comparisons. Its container was removed. The unchanged strict limit
 was not weakened and no further identical rerun was attempted.
 
-The full installed parity run is therefore **not passing**. This checkpoint does
+At that point the full installed parity run was **not passing**. That receipt did
 not requalify the previous checkpoint's batch-budget claim on this machine.
 Whether the deadline misses are solely contention or expose another performance
 problem was not established. Request-budget qualification remains open alongside
@@ -2066,6 +2066,44 @@ host clock round trips without widening the shipping call deadline or changing
 request/response shapes, command scoping or queue parameters. The app map and
 changelog describe the batch timestamp anchor.
 
-The updated native suite and strict Clippy pass. New component/package and full
-installed replay receipts will be recorded after completion. The prior failed
-receipts remain valid evidence of the earlier builds, not this optimization.
+The updated native suite passed all thirty tests, including the new scan vectors,
+empty batches, invalid time, original retry delays and partial sends. Strict Clippy,
+Rust formatting, scoped TypeScript lint/format, app-map generation and file-size
+checks passed. The regenerated eight scan vectors match the committed fixture.
+Earlier root lint/type/format checks are recorded above; no additional dependency
+or tool was installed for this followup.
+
+The rebuilt generated component and package passed the full installed replay:
+`task_127_rust_port_phase_5_people_module-20261109-063524-h6iVVI.log`, `rc=0`.
+It launched on clean commit `63f817478af3c88cfd17f6b6644438b17bd8e0c9`, fingerprint
+`sha256:4358d040e72d42e815b046c0a69f5b52e985d01cc17d15c4197d79f43992545d`.
+
+- Component SHA-256: `5c677ac2b29e59b8830311bf2eedd982adb8bde4722ad6a5ea35b79e6c3a70a6`.
+- Package SHA-256: `eab2033d4a525311237e533169203d4eef54a1ced0a2f7a399cd3727e3a3f87f`.
+- The normal downstream JSON consumer passed 283 numeric vectors and three invalid
+  bodies, and the real frame bridge test passed.
+- The package was downloaded from a temporary signed registry, installed with the
+  legacy SQL and reloaded. Its fifty-reference request returned 202 in 2290 ms,
+  below the unchanged 5000-ms deadline and strict elapsed assertion.
+- Both nested refresh assertions reported seven discovered notes, three projected,
+  one ignored and four review candidates. All 170 legacy route responses and
+  seven-table snapshots matched, including the corrected nested cases and
+  other-user/admin attempts.
+- All four public APIs passed through the installed consumer, including denied
+  cross-account/admin lookups. Installed folder save/browse/rejected-clear checks
+  and the packaged Settings asset passed. These remain fixture/dispatch evidence,
+  not a browser or shipping authenticated application proof.
+- The gate removed its disposable database container after success.
+
+A real `uptime` sample during this run reported load averages 23.96, 37.07 and
+48.34 on a machine reporting sixteen CPUs; the earlier failing run was observed
+near eighty by the reviewer. The clock optimization removes measured extra calls,
+but changing host load also affects elapsed time. This one successful run does not
+establish a latency guarantee under other load or prove the whole speedup came
+from this change. The earlier failed receipts remain in the record. The passing
+full replay resolves the second review's missing compiled-note comparisons; the
+additional final review and its exact verdict accompany the PR and proof artifact.
+
+The full People port still lacks the server/application, ingest and real-device
+acceptance listed above. No UI screenshot, sign-in, approval or HTTPS device
+result is added by this passing command-line replay.
