@@ -50,25 +50,47 @@ fn item_result(value: &Value) -> Result<Value> {
         }
         _ => false,
     };
-    if valid {
-        // Match the original HTTP response schema; stored extension fields are
-        // not part of the status contract.
-        let mut output = serde_json::Map::new();
-        for key in [
-            "status",
-            "reason",
-            "providerEventId",
-            "startsAt",
-            "durationMinutes",
-            "calendarMirror",
-            "blockMirror",
-            "removed",
-        ] {
-            if let Some(field) = value.get(key) {
-                output.insert(key.into(), field.clone());
-            }
-        }
-        Ok(Value::Object(output))
+    // Fastify validates the result's anyOf branch before serialization. Unknown
+    // fields and invalid optional fields reject the response rather than strip.
+    let schema_valid = value.as_object().is_some_and(|fields| {
+        fields.iter().all(|(key, field)| match key.as_str() {
+            "status" => true, // Checked by the stored-result parser above.
+            "reason" => matches!(
+                field.as_str(),
+                Some(
+                    "task-unavailable"
+                        | "task-ineligible"
+                        | "block-changed"
+                        | "access-denied"
+                        | "facts-unavailable"
+                        | "conflict"
+                        | "provider-rejected"
+                        | "provenance-mismatch"
+                        | "has-attendees"
+                        | "mixed-batch"
+                        | "unknown"
+                )
+            ),
+            "providerEventId" | "startsAt" => field.is_null() || field.is_string(),
+            "durationMinutes" => field.is_null() || field.is_number(),
+            "calendarMirror" => matches!(
+                field.as_str(),
+                Some(
+                    "written"
+                        | "skipped-rls"
+                        | "skipped-error"
+                        | "not-checked"
+                        | "not-cached"
+                        | "evicted"
+                )
+            ),
+            "blockMirror" => matches!(field.as_str(), Some("mirrored" | "mismatch-preserved")),
+            "removed" => field.is_boolean(),
+            _ => false,
+        })
+    });
+    if valid && schema_valid {
+        Ok(value.clone())
     } else {
         Err(unreadable())
     }

@@ -56,8 +56,7 @@ export async function checkOperationStatus(
     item,
     {
       status: "failed",
-      reason: "access-denied",
-      internalDetail: "must not return"
+      reason: "access-denied"
     }
   ]);
   for (const prefix of ["/api/calendar", "/api/m/calendar"]) {
@@ -78,7 +77,14 @@ export async function checkOperationStatus(
       denial: { code: "day_plan_denied", remediationRef: "calendar.automatic_planning_policy" }
     });
   }
+  await db.query("UPDATE app.day_plan_operation_items SET result=result || $2::jsonb WHERE id=$1", [
+    item,
+    { internalDetail: "must not return" }
+  ]);
+  for (const prefix of ["/api/calendar", "/api/m/calendar"]) {
+    assert.equal((await own(`${prefix}/day-plans/${plan.id}/operations/${operation}`)).status, 500);
+  }
   console.log(
-    "PASS signed-in browser operation status across both URL prefixes: pending, completed, denial, hidden foreign and wrong-plan reads; synthetic stored rows, no provider execution"
+    "PASS signed-in browser operation status across both URL prefixes: pending, completed, denial, schema rejection, hidden foreign and wrong-plan reads; synthetic stored rows, no provider execution"
   );
 }

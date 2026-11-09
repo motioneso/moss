@@ -70,6 +70,10 @@ pub fn verify(app: &Application, f: &Fixture) {
         ("unknown", json!({"status":"unknown","reason":"unknown"})),
         (
             "failed",
+            json!({"status":"failed","reason":"access-denied"}),
+        ),
+        (
+            "failed",
             json!({"status":"failed","reason":"access-denied","internalDetail":"must not return"}),
         ),
         (
@@ -102,8 +106,8 @@ pub fn verify(app: &Application, f: &Fixture) {
                         actual["status"], expected["status"],
                         "operation status at {path}"
                     );
-                    // Fastify's malformed-id validation body is framework-owned.
-                    if expected["status"] != 400 {
+                    // Fastify validation and response-serialization bodies are framework-owned.
+                    if expected["status"] != 400 && expected["status"] != 500 {
                         numeric(&mut actual);
                         numeric(&mut expected);
                         assert_eq!(actual, expected, "operation response at {path}");
@@ -128,6 +132,6 @@ pub fn verify(app: &Application, f: &Fixture) {
     assert_eq!(installed(app, f, f.admin, &path)["status"], 404);
     println!("RED/GREEN installed operation privacy: foreign read sees saved status without RLS and is hidden after restoration");
     println!(
-        "PASS {comparisons} installed operation HTTP comparisons (malformed-id bodies excluded)"
+        "PASS {comparisons} installed operation HTTP comparisons (framework 400/500 bodies excluded)"
     );
 }

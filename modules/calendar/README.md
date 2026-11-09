@@ -339,7 +339,8 @@ Version 0.14.0 reads a saved apply operation at
 `GET /api/m/calendar/day-plans/:id/operations/:operationId`, with the matching
 original `/api/calendar/` URL. It returns selected item order, pending/completed
 status, stored results and access-denied guidance without contacting a provider
-or changing the plan. The original owner-only operation policies are retained.
+or changing the plan. Invalid stored result extensions are rejected like the original HTTP schema.
+The original owner-only operation policies are retained.
 Native regressions, installed comparisons with the production TypeScript route,
 and an installed read with row security removed/restored cover this addition.
 The signed-in browser runner reads synthetic stored operation rows through both
@@ -349,5 +350,7 @@ screen or evidence that provider execution works.
 The remaining acceptance list in the calendar report still applies. In particular,
 apply/retry/recovery/confirm, actual worker dispatch, concrete public adapters,
 full shell/chat and old-screen replacement, complete parity and a physical second
-device over trusted HTTPS are unfinished. This continuation adds the already declared Wasm target to a task-local Rust home
+device over trusted HTTPS are unfinished.
+
+This continuation adds the already declared Wasm target to a task-local Rust home
 and installs no global tool or new dependency and does not change the module's client/server boundary.

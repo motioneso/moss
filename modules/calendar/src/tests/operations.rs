@@ -52,7 +52,7 @@ fn status_preserves_selection_order_and_reports_denial_without_writing() {
                 item(
                     "second",
                     "unknown",
-                    json!({"status":"unknown","reason":"timeout"})
+                    json!({"status":"unknown","reason":"unknown"})
                 )
             ]),
         ]),
@@ -132,8 +132,8 @@ fn unreadable_snapshot_and_result_do_not_return_partial_status() {
     assert_eq!(read(&host, PLAN, OP)["status"], 500);
 }
 #[test]
-fn all_pages_are_read_and_internal_result_fields_are_not_returned() {
-    let result = json!({"status":"failed","reason":"access-denied","privateDetail":"omit"});
+fn all_pages_are_read() {
+    let result = json!({"status":"failed","reason":"access-denied"});
     let rows: Vec<Value> = (0..1000)
         .map(|i| item(&i.to_string(), "pending", Value::Null))
         .collect();
@@ -148,8 +148,22 @@ fn all_pages_are_read_and_internal_result_fields_are_not_returned() {
     assert_eq!(out["status"], 200);
     let items = out["body"]["items"].as_array().unwrap();
     assert_eq!(items.len(), 1001);
-    assert!(items.last().unwrap()["result"]
-        .get("privateDetail")
-        .is_none());
     assert!(host.rows.borrow().is_empty());
+}
+
+#[test]
+fn response_schema_rejects_result_extensions_and_unknown_reasons() {
+    for result in [
+        json!({"status":"failed","reason":"access-denied","privateDetail":"reject"}),
+        json!({"status":"unknown","reason":"timeout"}),
+        json!({"status":"failed","reason":"access-denied","removed":"yes"}),
+    ] {
+        let host = Scoped {
+            rows: RefCell::new(vec![
+                json!([{"id":OP,"plan_id":PLAN,"kind":"apply","selection_snapshot":[]}]),
+                json!([item("block", "failed", result)]),
+            ]),
+        };
+        assert_eq!(read(&host, PLAN, OP)["status"], 500);
+    }
 }

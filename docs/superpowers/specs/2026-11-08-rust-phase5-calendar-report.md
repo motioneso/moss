@@ -783,7 +783,7 @@ Card 525. Package 0.14.0 adds the original read-only apply operation status rout
 through the installed API and the Calendar web composition's original URL alias.
 A plan id and operation id must identify the same visible apply batch. The
 response retains selected item order, stored item results, pending/completed
-status and access-denied guidance. Stored result extensions are omitted like
+status and access-denied guidance. Stored result extensions are rejected like
 the original HTTP response schema. Legacy array snapshots and current snapshots
 with explicit intent are supported. No provider action, queue change or plan
 mutation is performed. This is a bounded checkpoint, not final Calendar acceptance.
@@ -792,12 +792,12 @@ The native route regressions were observed failing against the previous
 implementation (missing route: success returned not found, malformed ids were
 not validated). The same tests pass after the change. Additional native cases
 cover empty batches, nonbatch headers, unreadable snapshots/results, multiple
-item pages and result-field filtering. Installed-Wasm comparisons call the real
+item pages and result-schema rejection. Installed-Wasm comparisons call the real
 production TypeScript route on the same disposable database for owner, unrelated
 user and administrator; both snapshot formats, pending/unknown/failed/applied
 results, denial guidance, wrong plan, absent operation and malformed ids are
-covered. Malformed-id response bodies are excluded because production validation
-is framework-owned. Other validation/coercion/error cases remain unproven.
+covered. Framework-generated malformed-id and response-serialization error bodies
+are excluded; their status codes are compared. Other validation/coercion/error cases remain unproven.
 
 The installed privacy witness reads the same operation as another account before,
 with the two operation tables' row security disabled in the disposable fixture,
@@ -808,7 +808,7 @@ SQL and privacy rules are unchanged.
 
 The signed-in HTTPS runner loads the real installed Calendar screen and then
 reads synthetic stored operation rows from that page through both URL prefixes.
-It checks pending/completed status, denial guidance, result filtering and foreign
+It checks pending/completed status, denial guidance, result-schema rejection and foreign
 and wrong-plan refusal. These are browser API requests, not interactions with a
 new status screen. Direct fixture rows model saved progress; they do not establish
 provider execution. Exact fresh checks, review and commit are recorded in the
@@ -841,3 +841,13 @@ the host deliberately accepts lowercase template names only. Calendar now uses
 `operation_id` internally while preserving the original concrete URL. A focused
 package regression verifies host template acceptance and parameter resolution;
 the shared host is unchanged.
+
+The first full part-14 gate found a real mismatch: Rust stripped extra stored
+result fields, while Fastify's `anyOf` serializer rejects them with HTTP 500.
+A focused probe through the original DTO parser and response schema confirmed
+this. A new native regression failed before the correction and passes after it;
+Rust now rejects extra fields and invalid optional result fields. The installed
+matrix includes both a valid denial and the extension rejection (210 comparisons).
+Exact fresh rerun outcomes belong in the Proof artifact; earlier partial runs
+are not passing full-gate evidence. Strict host Clippy also reports a pre-existing
+`useless_vec` in the unchanged day-plan oracle; allowing only that lint passes.
