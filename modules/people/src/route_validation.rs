@@ -178,32 +178,87 @@ fn check(
     }
 }
 
-// JS first rounds JSON numbers to binary64 and uses scientific notation outside
-// [1e-6, 1e21). Rust Display supplies shortest digits; retain JS exponent spelling.
+// JS first rounds JSON numbers to binary64. Both languages choose a shortest
+// round-tripping decimal, but Display breaks equal-distance ties upwards while
+// JS chooses an even last digit. Format with explicit precision to get that
+// tie rule, retaining the shortest digit count and JS's notation thresholds.
 pub(crate) fn number_text(number: &serde_json::Number) -> std::string::String {
     let n = number.as_f64().unwrap_or(0.0);
     if n == 0.0 {
         return "0".into();
     }
-    let raw = n.abs().to_string();
-    let decimal = raw.find('.').unwrap_or(raw.len());
-    let mut digits: std::string::String = raw.chars().filter(char::is_ascii_digit).collect();
-    let first = digits.find(|c| c != '0').unwrap_or(0);
-    let exponent = decimal as i32 - first as i32 - 1;
-    digits = digits[first..].trim_end_matches('0').to_owned();
+    let shortest = n.abs().to_string();
+    let significant: std::string::String = shortest
+        .chars()
+        .filter(char::is_ascii_digit)
+        .skip_while(|c| *c == '0')
+        .collect();
+    let precision = significant.trim_end_matches('0').len() - 1;
+    let rounded = format!("{:.*e}", precision, n.abs());
+    // Finite nonzero f64 formatting always produces a mantissa and exponent.
+    let (mantissa, exponent) = rounded.split_once('e').unwrap();
+    let exponent: i32 = exponent.parse().unwrap();
+    let digits = mantissa.replace('.', "");
     let sign = if n < 0.0 { "-" } else { "" };
     if !(-6..21).contains(&exponent) {
-        let tail = if digits.len() > 1 {
-            format!(".{}", &digits[1..])
-        } else {
-            std::string::String::new()
-        };
         format!(
-            "{sign}{}{tail}e{}{exponent}",
-            &digits[..1],
+            "{sign}{mantissa}e{}{exponent}",
             if exponent >= 0 { "+" } else { "" }
         )
+    } else if exponent < 0 {
+        format!("{sign}0.{}{digits}", "0".repeat((-exponent - 1) as usize))
     } else {
-        format!("{sign}{raw}")
+        let point = exponent as usize + 1;
+        if point >= digits.len() {
+            format!("{sign}{digits}{}", "0".repeat(point - digits.len()))
+        } else {
+            format!("{sign}{}.{}", &digits[..point], &digits[point..])
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::number_text;
+    use serde_json::Number;
+
+    #[test]
+    fn numeric_contact_values_keep_javascript_notation_boundaries() {
+        for (value, expected) in [
+            (0.0, "0"),
+            (-0.0, "0"),
+            (1.25, "1.25"),
+            (-1.25, "-1.25"),
+            (1e-6, "0.000001"),
+            (1e-7, "1e-7"),
+            (-1e-7, "-1e-7"),
+            (1e20, "100000000000000000000"),
+            (1e21, "1e+21"),
+            (1.0000000000000001e18, "1000000000000000100"),
+            (f64::from_bits(1), "5e-324"),
+            (f64::MIN_POSITIVE, "2.2250738585072014e-308"),
+            (f64::MAX, "1.7976931348623157e+308"),
+        ] {
+            assert_eq!(number_text(&Number::from_f64(value).unwrap()), expected);
+        }
+    }
+
+    #[test]
+    fn numeric_contact_values_use_javascript_even_decimal_ties() {
+        // JavaScript String(Number) for these exact binary64 values. Rust's
+        // shortest Display instead chooses the upper decimal at an equal tie.
+        for (bits, expected) in [
+            (0x430289fb4b135262, "652282746268236.2"),
+            (0xc2ebf11414163f94, "-245777903432188.62"),
+            (0x42e69640c0ebc804, "198676698324544.12"),
+            (0x4304fa2c4355d902, "738070943677216.2"),
+            (0x4311bacfa086eefd, "1247618879568831.2"),
+            (0xc315dd1777ca3159, "-1538516843662422.2"),
+        ] {
+            assert_eq!(
+                number_text(&Number::from_f64(f64::from_bits(bits)).unwrap()),
+                expected
+            );
+        }
     }
 }

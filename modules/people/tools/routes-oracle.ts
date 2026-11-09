@@ -219,7 +219,18 @@ export async function routesOracle() {
       { status: "unknown" },
       { status: null },
       { aliases: {} },
-      ...[23, 23.5, -0, 1e20, 1e21, 1e-6, 1e-7, Number("9007199254740993")].map((displayName) => ({
+      ...[
+        23,
+        23.5,
+        -0,
+        1e20,
+        1e21,
+        1e-6,
+        1e-7,
+        Number("652282746268236.2"),
+        Number("-245777903432188.62"),
+        Number("9007199254740993")
+      ].map((displayName) => ({
         displayName
       })),
       { displayName: null },
@@ -383,6 +394,11 @@ Human text stays.
       { aliases: null },
       { status: "archived" },
       { displayName: "Restored", aliases: null, emails: null, phones: null },
+      {
+        displayName: Number("652282746268236.2"),
+        emails: [Number("-245777903432188.62")],
+        phones: [Number("198676698324544.12")]
+      },
       { displayName: "Final note-backed edit" }
     ])
       await run("PATCH", `/people/${ids.primary}`, body);
