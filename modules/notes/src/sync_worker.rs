@@ -95,9 +95,29 @@ pub(crate) fn publish(host: &impl Host, id: &str, now: &str) -> Result<()> {
     Ok(())
 }
 
-/// Trusted future manual-sync/chat join. It accepts no source, actor or content.
+/// Read the authenticated account's saved source, matching the legacy manual
+/// request. Filesystem resolution remains worker work. Never accept a caller path.
+pub(crate) fn selected_source(host: &impl Host) -> Result<Option<String>> {
+    let source: moss_module_sdk::Response = serde_json::from_value(
+        host.call("vault", "folder.get", "source", json!({}))
+            .map_err(|_| unavailable())?,
+    )
+    .map_err(|_| unavailable())?;
+    if source.status != 200 {
+        return Err(unavailable());
+    }
+    Ok(source
+        .body
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned))
+}
+
+/// Trusted future sync/chat join. It accepts no source, actor or content.
 pub fn request(host: &impl Host) -> Result<Value> {
-    enqueue(host, json!({}))
+    let source =
+        selected_source(host)?.ok_or_else(|| Error::new("Notes source is not configured"))?;
+    request_source(host, &source)
 }
 
 /// Preserve the HTTP handler's server-read source in private durable state,

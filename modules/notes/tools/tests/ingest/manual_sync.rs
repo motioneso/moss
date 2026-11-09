@@ -10,6 +10,16 @@ use safety_core::secret::Secret;
 #[test]
 #[ignore = "Only through scripts/run-gate.sh"]
 fn installed_manual_sync_keeps_requests_private_and_resumes_indexing() {
+    installed_sync(false);
+}
+
+#[test]
+#[ignore = "Only through scripts/run-gate.sh"]
+fn installed_api_sync_keeps_requests_private_and_bound_to_the_source() {
+    installed_sync(true);
+}
+
+fn installed_sync(api: bool) {
     let f = Fixture::open();
     let owner = f.actors[0];
     let admin = AccessContext::new(f.actors[2], "notes-manual-install");
@@ -30,6 +40,9 @@ fn installed_manual_sync_keeps_requests_private_and_resumes_indexing() {
         f.source(owner, f.oracle["root"].clone());
         let (ports, jobs) = f.durable_ports(db.clone(), false);
         let mut manifest = f.durable_manifest();
+        manifest
+            .provides
+            .insert("requestNotesSync".into(), "1.0.0".parse().unwrap());
         manifest.routes.push(
             serde_json::from_value(json!({
                 "method":"POST","path":"/notes/sync","signIn":true
@@ -74,22 +87,42 @@ fn installed_manual_sync_keeps_requests_private_and_resumes_indexing() {
         installer
             .install(&admin, &source, &keys.artifact, true)
             .unwrap();
-        let call = |actor| -> Value {
-            serde_json::from_str(
-                &installer
-                    .dispatch_extended(
-                        AccessContext::new(actor, "notes-manual-route"),
-                        "POST",
-                        "/api/m/notes/notes/sync",
-                        &json!({"actorUserId":owner,"sourcePath":f.oracle["root"]}).to_string(),
+        let call = |actor| -> Option<Value> {
+            let access = AccessContext::new(actor, "notes-manual-route");
+            if api {
+                installer
+                    .call(
+                        "notes",
+                        access,
+                        "api",
+                        r#"{"name":"requestNotesSync","parameters":{}}"#,
+                    )
+                    .ok()
+                    .map(|out| serde_json::from_str(&out).unwrap())
+            } else {
+                Some(
+                    serde_json::from_str(
+                        &installer
+                            .dispatch_extended(
+                                access,
+                                "POST",
+                                "/api/m/notes/notes/sync",
+                                &json!({"actorUserId":owner,"sourcePath":f.oracle["root"]})
+                                    .to_string(),
+                            )
+                            .unwrap(),
                     )
                     .unwrap(),
-            )
-            .unwrap()
+                )
+            }
         };
-        let denied = json!({"status":409,"body":{
-            "error":"No notes source configured. Set a path via PUT /api/me/notes-source first."
-        }});
+        let denied = if api {
+            None
+        } else {
+            Some(json!({"status":409,"body":{
+                "error":"No notes source configured. Set a path via PUT /api/me/notes-source first."
+            }}))
+        };
         let private = || {
             for outsider in [f.actors[1], f.actors[2]] {
                 let before = jobs.lock().unwrap().len();
@@ -108,10 +141,14 @@ fn installed_manual_sync_keeps_requests_private_and_resumes_indexing() {
         let exposed: Vec<_> = [f.actors[1], f.actors[2]].into_iter().map(call).collect();
         f.rt.block_on(f.bootstrap.batch_execute("ALTER TABLE app.preferences ENABLE ROW LEVEL SECURITY; ALTER TABLE app.preferences FORCE ROW LEVEL SECURITY")).unwrap();
         for response in exposed {
-            assert_eq!(
-                response["status"], 202,
-                "Removed RLS must expose the source"
-            );
+            let value = response
+                .as_ref()
+                .expect("Removed RLS must expose the source");
+            assert!(if api {
+                value["checkpointId"].is_string()
+            } else {
+                value["status"] == 202
+            });
             let failed = std::panic::catch_unwind(|| assert_eq!(response, denied));
             assert!(
                 failed.is_err(),
@@ -120,10 +157,19 @@ fn installed_manual_sync_keeps_requests_private_and_resumes_indexing() {
         }
         private();
         jobs.lock().unwrap().clear();
-        let out = call(owner);
-        assert_eq!(out["status"], 202);
-        let id: Uuid = serde_json::from_value(out["body"]["jobId"].clone()).unwrap();
+        let out = call(owner).unwrap();
+        let id: Uuid = if api {
+            serde_json::from_value(out["checkpointId"].clone()).unwrap()
+        } else {
+            assert_eq!(out["status"], 202);
+            serde_json::from_value(out["body"]["jobId"].clone()).unwrap()
+        };
         assert_eq!(jobs.lock().unwrap().len(), 1);
+        let saved: Value = f.rt.block_on(f.bootstrap.query_one(
+            "SELECT checkpoint FROM app.notes_sync_checkpoints WHERE id=$1 AND owner_user_id=$2",
+            &[&id, &owner],
+        )).unwrap().get(0);
+        assert_eq!(saved, json!({"sourcePath":f.oracle["root"]}));
         let params = jobs.lock().unwrap()[0]["params"].clone();
         assert_eq!(params, json!({"checkpoint-id":id}));
         assert_eq!(f.checkpoint_access(&db, owner, id), [1, 1, 1]);
@@ -134,9 +180,10 @@ fn installed_manual_sync_keeps_requests_private_and_resumes_indexing() {
         // job envelope above contains only its ID. Changing the preference must
         // refuse this request rather than silently indexing the new folder.
         let changed = PathBuf::from(f.oracle["parent"].as_str().unwrap())
-            .join(format!("manual-changed-{role}"));
+            .join(format!("manual-changed-{role}-{api}"));
         std::fs::create_dir(&changed).unwrap();
         f.source(owner, json!(changed));
+        let before = f.snapshot();
         let (retargeted, _) = f.durable_call(
             db.clone(),
             owner,
@@ -148,6 +195,20 @@ fn installed_manual_sync_keeps_requests_private_and_resumes_indexing() {
             retargeted.is_err(),
             "Pending request followed the changed folder"
         );
+        assert_eq!(f.snapshot(), before, "Refused request changed the index");
+        f.source(owner, Value::Null);
+        let (unlinked, _) = f.durable_call(
+            db.clone(),
+            owner,
+            "job",
+            json!({"queue":"notes.sync","parameters":params}),
+            false,
+        );
+        assert!(
+            unlinked.is_err(),
+            "Pending request accepted an unlinked source"
+        );
+        assert_eq!(f.snapshot(), before, "Unlinked request changed the index");
         f.source(owner, f.oracle["root"].clone());
         let (resumed, _) = f.durable_call(
             db,
@@ -161,5 +222,5 @@ fn installed_manual_sync_keeps_requests_private_and_resumes_indexing() {
             0
         );
     }
-    println!("PASS installed manual-sync route for app/worker, owner/other-owner/admin, preference RLS removal control and real worker resume; queue/embeddings are stand-ins");
+    println!("PASS installed sync (API={api}) for app/worker, owner/other-owner/admin, preference RLS removal control, folder switch/unlink refusal and real worker retry; queue/embeddings are stand-ins");
 }

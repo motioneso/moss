@@ -40,6 +40,10 @@ fn recovery_discovers_orphan_requests_and_detects_missing_privacy() {
     let actor = f.actors[0];
     for role in ["app", "worker"] {
         let db = f.database(role);
+        let source = PathBuf::from(f.oracle["parent"].as_str().unwrap())
+            .join(format!("recovery-source-{role}"));
+        std::fs::create_dir(&source).unwrap();
+        f.source(actor, json!(source));
         f.rt.block_on(f.bootstrap.execute(
             "DELETE FROM app.notes_sync_checkpoints WHERE owner_user_id=ANY($1::uuid[])",
             &[&f.actors],
@@ -47,7 +51,7 @@ fn recovery_discovers_orphan_requests_and_detects_missing_privacy() {
         .unwrap();
         // Simulate first-request post-commit publication loss, then discard its
         // captured ID. Recovery must discover it from the calling owner's table.
-        let (failed, _) = f.durable_call(
+        let (failed, publication) = f.durable_call(
             db.clone(),
             actor,
             "api",
@@ -55,6 +59,7 @@ fn recovery_discovers_orphan_requests_and_detects_missing_privacy() {
             true,
         );
         assert!(failed.is_err());
+        assert_eq!(publication.len(), 1, "Must fail after checkpoint commit");
         for n in 1..=30 {
             let id = checkpoint_id(n);
             let checkpoint = if n == 30 {
@@ -114,13 +119,22 @@ fn recovery_discovers_orphan_requests_and_detects_missing_privacy() {
                 .collect::<Vec<_>>(),
             ids
         );
-        // Resume the newly discovered empty initial request through fresh real
-        // adapters. No source produces the existing saved no-op result.
+        // The discovered request retains its original source even across lost
+        // publication. Unlinking must refuse it, then restoring allows retry.
         f.source(actor, Value::Null);
         let initial = jobs
             .iter()
             .find(|j| j["params"]["checkpoint-id"] != json!(checkpoint_id(30)))
             .unwrap();
+        let (unlinked, _) = f.durable_call(
+            db.clone(),
+            actor,
+            "job",
+            json!({"queue":"notes.sync","parameters":initial["params"]}),
+            false,
+        );
+        assert!(unlinked.is_err());
+        f.source(actor, json!(source));
         let (out, _) = f.durable_call(
             db.clone(),
             actor,
@@ -129,8 +143,8 @@ fn recovery_discovers_orphan_requests_and_detects_missing_privacy() {
             false,
         );
         assert_eq!(
-            serde_json::from_str::<Value>(&out.unwrap()).unwrap()["noOp"],
-            true
+            serde_json::from_str::<Value>(&out.unwrap()).unwrap(),
+            json!({"ingested":0,"skipped":0,"errors":0})
         );
         let (_, remaining) = recover(&f, &db, actor);
         assert_eq!(remaining.len(), 1);

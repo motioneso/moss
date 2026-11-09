@@ -906,12 +906,18 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
 
         let before_noop = f.status(db.clone(), actor);
         f.source(actor, Value::Null);
-        let fresh = f.request_params(db.clone(), actor);
+        // Previously saved empty checkpoints remain unbound. New API requests
+        // now refuse an unlinked source, so seed the historical shape directly.
+        let legacy = Uuid::new_v4();
+        f.rt.block_on(f.bootstrap.execute(
+            "INSERT INTO app.notes_sync_checkpoints(id,owner_user_id,checkpoint) VALUES($1,$2,'{}'::jsonb)",
+            &[&legacy, &actor],
+        )).unwrap();
         let (noop, _) = f.durable_call(
             db.clone(),
             actor,
             "job",
-            json!({"queue":"notes.sync","parameters":fresh}),
+            json!({"queue":"notes.sync","parameters":{"checkpoint-id":legacy}}),
             false,
         );
         assert_eq!(

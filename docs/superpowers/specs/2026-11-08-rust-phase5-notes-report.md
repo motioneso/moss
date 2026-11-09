@@ -1483,3 +1483,47 @@ proposals/receipts/reconciliation, private exports/daily archives, full HTTP/pat
 parity, assembled Settings/chat and physical second-device HTTPS proof. This work
 changes no screen and does not establish those live paths. Do not replace working
 legacy Notes with this checkpoint.
+
+## Part nineteen checkpoint — bind API sync requests to their source
+
+The experimental `requestNotesSync` API now saves the calling account's selected
+source in its private checkpoint, matching manual sync. Previously this entry
+saved an empty checkpoint: a later folder change could redirect pending work, and
+unlinking could produce a successful no-op. A shared module helper now reads the
+account-bound server preference for both entry points. Missing, empty or non-string
+sources refuse the API before creating a checkpoint or requesting publication.
+The API accepts only empty parameters; callers cannot choose an account, source
+or checkpoint. Filesystem resolution remains worker work, as with the legacy
+manual request. Queue metadata still carries only the checkpoint UUID.
+
+A changed or unlinked source refuses a new pending API request before indexing or
+cleanup. Restoring the original folder allows the same request to resume. This
+uses the existing worker path comparison, not immutable filesystem identity.
+Previously saved empty checkpoints retain their earlier unbound semantics; no
+saved data or applied SQL is changed. Notes remains a pure server API client.
+No shared-host additions, new dependencies or runtime permissions are introduced.
+Package `0.1.12`, its changelog and app map describe this experimental behavior.
+
+The native regression was observed failing on the earlier handler because it
+saved `{}` rather than the source. Native checks also cover unlinked/malformed
+preferences, rejected caller overrides and safe lookup failure. The signed
+installed-component database test covers API and manual entry points, app and
+worker roles, other-owner/admin refusal, and preference RLS removal controls.
+It checks the private saved source, UUID-only queue parameters, unchanged index
+on folder-switch/unlink refusal, and real indexing after restoring the source.
+Queue delivery and embeddings are named stand-ins. Final gate receipts and the
+independent review are recorded in this task's proof artifact.
+
+Builds use task-owned scratch Cargo and Rust homes, separate ordinary/write-tools
+Wasm target folders, the declared Wasm target and approved pinned `wit-bindgen`
+0.57.1. Only lockfile dependencies and the declared target were prepared in
+scratch storage; nothing was installed globally. JavaScript dependencies were
+restored from the existing lockfile. Database checks use `scripts/run-gate.sh`.
+
+This remains a bounded checkpoint. Configured embeddings, installed chat search
+and approval consumption/write tools, production manual/scheduled sync and worker
+dispatch, singleton coalescing and recall warmup, automatic recovery timer,
+checkpoint retention, managed publication/fencing, proposals/receipts/reconciliation,
+private exports/daily archives, full HTTP/path parity, assembled Settings/chat and
+physical second-device HTTPS proof remain unfinished. No screen changes or live
+assembled UI/device proof are claimed. Do not replace working legacy Notes.
