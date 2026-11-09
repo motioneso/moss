@@ -130,8 +130,16 @@ pub fn compare(app: &Application, f: &Fixture, seeded: &Seeded) {
             json!({"expectedRevision":1,"selectedChangeBlockIds":[seeded.plain_block],"extra":1}),
             true,
         ),
-        (url.clone(), json!({"expectedRevision":1,"selectedChangeBlockIds":[f.block]}), true),
-        (url.clone(), json!({"expectedRevision":1,"selectedChangeBlockIds":[missing]}), true),
+        (
+            url.clone(),
+            json!({"expectedRevision":1,"selectedChangeBlockIds":[f.block]}),
+            true,
+        ),
+        (
+            url.clone(),
+            json!({"expectedRevision":1,"selectedChangeBlockIds":[missing]}),
+            true,
+        ),
         (
             url.clone(),
             json!({"expectedRevision":0,"selectedChangeBlockIds":[seeded.plain_block]}),
@@ -173,7 +181,11 @@ pub fn compare(app: &Application, f: &Fixture, seeded: &Seeded) {
             "Production preview oracle failed (database diagnostics omitted)"
         );
         let mut expected: Vec<Value> = serde_json::from_slice(&result.stdout).unwrap();
-        assert_eq!(expected.len(), cases.len(), "Preview oracle omitted a response");
+        assert_eq!(
+            expected.len(),
+            cases.len(),
+            "Preview oracle omitted a response"
+        );
         for (index, ((path, body, compare_body), expected)) in
             cases.iter().zip(expected.iter_mut()).enumerate()
         {

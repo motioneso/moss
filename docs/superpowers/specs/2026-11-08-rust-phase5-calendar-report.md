@@ -696,3 +696,32 @@ existing `localDay`/public API source-reference behavior is unchanged and does n
 establish full provenance validation; noncanonical timezone spelling and Intl-only
 aliases can differ from production and are outside the proven timezone cases.
 A browser API check is a fetch from a signed-in page, not a day-plan editor interaction.
+
+## JS-102 / part 12: cache-evict job checkpoint
+
+Package 0.12.0 ports the production `calendar.cache-evict-event` queue worker
+as the `calendar-cache-evict-event` job. The account comes from the host's
+queue envelope. The guest reads the event with the scoped query and deletes it
+through the same typed query only when visible, so a foreign user or an
+administrator gets `{"evicted":false}` and the owner's row survives. Queue
+retry options use host defaults; the production values (two retries, ten
+second delay, five minute retention) are not yet declarable.
+
+Evidence: three native guest tests written failing first (visible event,
+invisible event never deleted, unknown queue and extra fields rejected before
+any host call) and one database-backed installed test through the disposable
+gate. A first attempt used the untyped delete operation and failed against the
+real host, which is why the guest uses the typed query. Production deletes on
+the worker database role (SQL 0113); the installed test cannot open the host on
+that role (no catalog access), so the disposable database gives the app role an
+simpler owner-only delete rule. Production also requires the event's connector account to belong to the actor and be a calendar account (SQL 0113); the stand-in omits that condition. Real worker-role dispatch by the host job
+runner is therefore not proven here. The Wasm target for the
+1.95.0 compiler was added to a scratch Rust home (`CALENDAR_RUSTUP_HOME`); no
+global install, no new dependency, no wit-bindgen.
+The jobs capability (enqueue) is declared in the manifest to match the Tasks package pattern; nothing in Calendar enqueues this job yet, and the capability is to be dropped or used when the day-plan apply flow lands.
+
+Still open: the four provider tools, the day-plan apply job and its
+apply/retry/recovery/confirm flows, concrete public provider adapters,
+source-behavior controls, full shell/Today/chat composition, old-screen
+replacement, complete assembled parity and a physical second device over
+trusted HTTPS.

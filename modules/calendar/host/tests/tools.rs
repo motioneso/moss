@@ -352,3 +352,45 @@ fn installed_tools_match_production_typescript_and_keep_drafts_untimed() {
     );
     println!("PASS real signed Calendar Wasm tools against production TypeScript: success values and rejection/rollback outcomes for owned heartbeat, shared-event exclusion, freshness, cap, Unicode revision, private drafts, conflicts, untimed additions and timing keys. Host sanitizes errors; messages/statuses are not compared. Public Tasks lookup is a test stand-in; no UI/provider/device claim.");
 }
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn installed_cache_evict_job_removes_only_the_actors_own_event() {
+    let t = Installed::new();
+    let f = &t.f;
+    // Production runs this job on the worker role, which alone holds DELETE (SQL 0113).
+    // This disposable database gives the app role the simpler owner-only delete rule (production also requires a calendar connector account, SQL 0113) so
+    // the guest's own visibility check and the database rule are both exercised. Real
+    // worker-role dispatch belongs to the host job runner and is not proven here.
+    f.rt.block_on(f.root.batch_execute(
+        "GRANT DELETE ON app.calendar_events TO jarvis_app_runtime;
+         CREATE POLICY calendar_events_delete_standin ON app.calendar_events FOR DELETE
+         TO jarvis_app_runtime USING (owner_user_id = app.current_actor_user_id())",
+    ))
+    .unwrap();
+    let job = |actor: Uuid| {
+        let payload =
+            json!({"queue":"calendar-cache-evict-event","parameters":{"target-item-id":f.event}});
+        t.app
+            .installer
+            .call("calendar", f.access(actor), "job", &payload.to_string())
+            .map(|out| serde_json::from_str::<Value>(&out).unwrap())
+    };
+    let count = || {
+        f.rt.block_on(f.root.query_one(
+            "SELECT count(*) FROM app.calendar_events WHERE id=$1",
+            &[&f.event],
+        ))
+        .unwrap()
+        .get::<_, i64>(0)
+    };
+    // Another user and an administrator cannot evict, or even detect, the owner's event.
+    for actor in [f.b, f.admin] {
+        assert_eq!(job(actor).unwrap(), json!({"evicted":false}));
+        assert_eq!(count(), 1, "a foreign job removed private data");
+    }
+    assert_eq!(job(f.a).unwrap(), json!({"evicted":true}));
+    assert_eq!(count(), 0);
+    assert_eq!(job(f.a).unwrap(), json!({"evicted":false}));
+    println!("PASS installed Calendar cache-evict job: owner removes own event; other user and administrator cannot; repeat is a no-op");
+}

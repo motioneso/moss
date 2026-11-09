@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -23,6 +23,11 @@
       "port": "context",
       "operations": ["read", "uuid"],
       "resources": ["call", "new"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue"],
+      "resources": ["calendar-cache-evict-event"]
     },
     {
       "port": "kv",
@@ -231,6 +236,11 @@
       ]
     },
     {
+      "id": "calendar.cache_eviction",
+      "description": "A background job removes one cached calendar event for the account that queued it. An event the account cannot see is left untouched and reported as not removed, so one account can never remove or detect another account's event.",
+      "errors": []
+    },
+    {
       "id": "calendar.screens",
       "description": "Packaged Rust Day, Week and Month screens with saved views and event links. Calendar labels, held-event details and settings use the account assistant name. Week view explains sideways scrolling and brings today into view on navigation and resize while preserving user scroll during ordinary refreshes. The Day legend counts today’s held blocks and shows the authored event swatches. Default English date labels retain exclusive all-day and midnight ends. Details show duration, attendee and status wording, follow successful refreshes, and close when an event disappears. Failed refreshes retain loaded events and explicit retry shows progress. The Calendar web router serves installed frames behind Rust sign-in and HTTPS. Original event and briefing-settings read and settings-write URLs dispatch through the installed package. External-calendar status, provider writes, full shell assembly and second-device acceptance remain open. A visible startup message remains until the screen mounts. Reload page in the parent retries the current screen and preserves an event link when one is present.",
       "errors": [
@@ -281,6 +291,13 @@
     "calendar.dayPlanDraft": {
       "description": "Save evening intent and untimed task additions to the current day-plan draft for dialog review. Does not schedule events.",
       "risk": "write"
+    }
+  },
+  "jobs": {
+    "calendar-cache-evict-event": {
+      "target-item-id": {
+        "kind": "id"
+      }
     }
   },
   "screens": {
