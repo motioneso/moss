@@ -229,7 +229,9 @@ export async function routesOracle() {
         1e-7,
         Number("652282746268236.2"),
         Number("-245777903432188.62"),
-        Number("9007199254740993")
+        Number("9007199254740993"),
+        2 ** -24,
+        -(2 ** -24)
       ].map((displayName) => ({
         displayName
       })),

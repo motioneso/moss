@@ -194,7 +194,13 @@ pub(crate) fn number_text(number: &serde_json::Number) -> std::string::String {
         .skip_while(|c| *c == '0')
         .collect();
     let precision = significant.trim_end_matches('0').len() - 1;
-    let rounded = format!("{:.*e}", precision, n.abs());
+    let mut rounded = format!("{:.*e}", precision, n.abs());
+    // At powers of two the binary64 rounding interval is asymmetric. The
+    // equally near even decimal can fall outside it; retain Display's valid
+    // shortest candidate instead of changing the represented number.
+    if rounded.parse::<f64>().ok() != Some(n.abs()) {
+        rounded = format!("{:e}", n.abs());
+    }
     // Finite nonzero f64 formatting always produces a mantissa and exponent.
     let (mantissa, exponent) = rounded.split_once('e').unwrap();
     let exponent: i32 = exponent.parse().unwrap();
@@ -235,11 +241,28 @@ mod tests {
             (1e20, "100000000000000000000"),
             (1e21, "1e+21"),
             (1.0000000000000001e18, "1000000000000000100"),
+            (2.0f64.powi(-24), "5.960464477539063e-8"),
+            (-2.0f64.powi(-24), "-5.960464477539063e-8"),
             (f64::from_bits(1), "5e-324"),
             (f64::MIN_POSITIVE, "2.2250738585072014e-308"),
             (f64::MAX, "1.7976931348623157e+308"),
         ] {
             assert_eq!(number_text(&Number::from_f64(value).unwrap()), expected);
+        }
+    }
+
+    #[test]
+    fn every_finite_power_of_two_keeps_its_numeric_value() {
+        for exponent in -1074..=1023 {
+            let bits = if exponent < -1022 {
+                1u64 << (exponent + 1074)
+            } else {
+                ((exponent + 1023) as u64) << 52
+            };
+            for value in [f64::from_bits(bits), -f64::from_bits(bits)] {
+                let text = number_text(&Number::from_f64(value).unwrap());
+                assert_eq!(text.parse::<f64>().unwrap(), value, "{exponent}: {text}");
+            }
         }
     }
 
