@@ -38,8 +38,9 @@ pub fn render() -> String {
                         <select id="tag-filter" class="jds-input"><option value="">"Add tag filter"</option></select>
                     </Field>
                     <Field><FormLabel control_id="search">"Search"</FormLabel>
-                        <input id="search" class="jds-input" type="search" placeholder="Search tasks"/>
+                        <input id="search" class="jds-input" type="search" maxlength="300" placeholder="Search tasks"/>
                     </Field>
+                    <span id="interpret-search"><Button variant=ButtonVariant::Secondary>"Interpret search"</Button></span>
                     <Field><FormLabel control_id="view">"View"</FormLabel>
                         <select id="view" class="jds-input"><option value="priority">"List"</option><option value="matrix">"Grid"</option></select>
                     </Field>
@@ -52,8 +53,11 @@ pub fn render() -> String {
                     <p class="jds-caption">"Include lists, show only selected lists, or hide lists. Counts follow status and tags, before search."</p>
                     <div id="list-selection" class="tasks-fields"></div>
                 </details>
-                <div id="active-tags" class="tasks-actions" aria-label="Active tag filters"></div>
-                <p class="jds-caption">"Tasks can match any selected tag."</p>
+                <div id="active-tags" class="tasks-actions" role="group" aria-label="Active tag filters"></div>
+                <p id="search-warning" role="status" hidden></p>
+                <div id="search-intent" class="tasks-actions" role="group" aria-label="Interpreted search filters"></div>
+                <p class="jds-caption">"Interpret a phrase into filters, or search by title and description. Interpreted dates use UTC."</p>
+                <p class="jds-caption">"Manual tag picks match any selected tag. Interpreted tag filters require every named tag."</p>
                 <div id="empty" hidden>
                     <EmptyState title="No tasks here" description="Try another filter or add a task."/>
                     {action("clear-filters", "Clear filters")}

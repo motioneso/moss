@@ -5,6 +5,7 @@ import { taskFilters } from "./filters.mjs";
 import { tagManager } from "./tags.mjs";
 import { listDeletion } from "./delete-list.mjs";
 import { captureDraft } from "./capture.mjs";
+import { interpretedSearch } from "./search.mjs";
 
 const client = moduleClient();
 const $ = (id) => document.getElementById(id);
@@ -30,7 +31,15 @@ const capture = captureDraft({
   }
 });
 const labels = { todo: "Open", done: "Done", suggested: "Suggested", archived: "Archived" };
-const filters = taskFilters(render);
+const search = interpretedSearch({
+  api,
+  run,
+  changed: render,
+  focus: (node) => {
+    state.focusAfter = node;
+  }
+});
+const filters = taskFilters(render, search.intent);
 const deleting = listDeletion({
   api,
   lists: () => state.lists,
@@ -112,6 +121,7 @@ async function run(action) {
       if (!controls.includes(node)) node.disabled = false;
     });
     capture.lock();
+    search.sync();
     $("tasks-app").removeAttribute("aria-busy");
     state.focusAfter?.focus();
     state.focusAfter = null;
@@ -183,6 +193,7 @@ function taskRow(task) {
 }
 function render() {
   const tasks = filters.apply(state.tasks, state.lists);
+  search.render(state.lists);
   const result = $("task-results");
   result.replaceChildren();
   result.className = $("view").value === "matrix" ? "tasks-matrix" : "";
@@ -353,7 +364,10 @@ function manageLists() {
   state.focusAfter = $("list-name");
 }
 const actions = {
-  "clear-filters": () => filters.clear(),
+  "clear-filters": () => {
+    search.clear();
+    filters.clear();
+  },
   "confirm-delete-list": () => deleting.confirm(),
   "keep-list": () => deleting.close(),
   reload: load,
@@ -404,7 +418,7 @@ const actions = {
 document
   .querySelectorAll("[data-action]")
   .forEach((node) => node.addEventListener("click", () => run(actions[node.dataset.action])));
-for (const id of ["status-filter", "search"]) $(id).addEventListener("input", render);
+$("status-filter").addEventListener("input", render);
 $("list-options").addEventListener("toggle", () => {
   void client.resize(document.documentElement.scrollHeight).catch(() => {});
 });
