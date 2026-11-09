@@ -88,3 +88,7 @@
     grid-column: 2;
   }
 }
+
+.tasks-comment-text {
+  white-space: pre-wrap;
+}

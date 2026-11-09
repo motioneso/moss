@@ -338,3 +338,21 @@ The controller regression uses the actual rendered shared-kit markup and a
 mocked bridge; signed-package UI proof is a separate check. Set
 `TASKS_UI_QUICK_PROOF=1` for the interactive gate to verify the two named proof
 tasks and their chosen lists, and that the Details draft was not saved.
+
+## Part 20: activity recovery and keyboard posting
+
+Task details loads activity independently of tags and subtasks. A failed activity
+read offers **Retry activity**, keeps previously loaded comments, and does not
+claim the history is empty. A rejected post keeps the comment text. Enter posts
+a trimmed nonblank comment; Shift+Enter keeps a new line. After an acknowledged
+post, a failed refresh retries only the read. Comments retain their line breaks.
+Switching tasks clears the previous task's activity. The app map describes the
+controls and recovery. No route, tool, job, migration or shared host changes.
+
+The real-markup controller regression uses a mocked bridge and runs in the
+package gate. It was observed failing before this change. Set
+`TASKS_UI_ACTIVITY_PROOF=1` for the signed UI gate, post the multiline comment
+`First proof line` / `Second proof line` with Enter and `Button proof comment`
+with the button on `Browser proof task`, then finish the gate. The gate asserts
+both exact comment bodies are stored once each. This fixture remains separate
+from the application shell; the full-port and second-device gaps above remain.

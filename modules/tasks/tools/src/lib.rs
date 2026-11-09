@@ -45,6 +45,7 @@ pub fn package_files(
     files.insert("ui/index.html".into(), screen::render().into_bytes());
     for name in [
         "app.mjs",
+        "activity.mjs",
         "model.mjs",
         "capture.mjs",
         "quick-add.mjs",

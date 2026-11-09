@@ -158,6 +158,18 @@ try {
       "select count(*)::text as count from app.tasks where title = 'Browser proof task'"
     );
     assert.equal(result.rows[0]?.count, "1", "The real UI must create the proof task exactly once");
+    if (process.env["TASKS_UI_ACTIVITY_PROOF"] === "1") {
+      const comments = await db.query<{ body: string }>(
+        "select a.body from app.task_activity a join app.tasks t on t.id=a.task_id where t.title='Browser proof task' and a.activity_type='comment' order by a.created_at, a.id"
+      );
+      assert.deepEqual(
+        comments.rows.map((entry) => entry.body),
+        ["First proof line\nSecond proof line", "Button proof comment"]
+      );
+      console.log(
+        "PASS browser activity: exact multiline keyboard comment and button comment persisted once each"
+      );
+    }
     if (process.env["TASKS_UI_QUICK_PROOF"] === "1") {
       const rows = await db.query<{ title: string; name: string }>(
         "select t.title, l.name from app.tasks t join app.task_lists l on l.id=t.list_id where t.title in ('Browser proof task', 'Quick chosen-list task') order by t.title"
