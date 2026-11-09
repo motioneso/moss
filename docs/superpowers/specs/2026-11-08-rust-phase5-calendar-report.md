@@ -480,3 +480,9 @@ assembled parity. Regional date/time formatting beyond the default English local
 is also not established. A phone-width browser and a same-host LAN request do not
 prove physical second-device access or trusted production HTTPS.
 This task found no attached Android device or configured SSH alias for that check.
+
+The first review's claimed UTC mismatch was rejected: `host/examples/signed_ui.rs`
+already saves the owner's UTC locale before publishing the fixture. The live runner
+now asserts that stored timezone explicitly before creating dated events. Minor
+coverage gaps remain: malformed end-time date labels and regional weekday prefixes
+are not compared by the added date/toolbar oracle. Neither is claimed as proven.

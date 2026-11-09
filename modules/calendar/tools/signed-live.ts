@@ -185,6 +185,13 @@ try {
   assert(ready, "HTTPS listener startup timed out");
   const data: { actor: string; other: string; event: string; email: string; otherEmail: string } =
     JSON.parse(readFileSync(fixture, "utf8"));
+  // signed_ui seeds this preference. Date fixtures and the production oracle below
+  // must use the same timezone as the installed screen, regardless of host time.
+  const locale = await db.query(
+    "SELECT value_json FROM app.preferences WHERE owner_user_id=$1 AND key='locale'",
+    [data.actor]
+  );
+  assert.equal(locale.rows[0]?.value_json.timezone, "UTC", "Live account timezone");
   const salt = randomBytes(16).toString("hex");
   const hash = `${salt}:${scryptSync(password.normalize("NFKC"), salt, 64, { N: 16384, r: 16, p: 1, maxmem: 128 * 1024 * 1024 }).toString("hex")}`;
   for (const actor of [data.actor, data.other])
