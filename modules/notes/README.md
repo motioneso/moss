@@ -526,8 +526,11 @@ linked-file adapter. A checkpoint-save refusal before finalization rolls back
 that transaction and compensates file changes. A publication refusal after commit
 leaves the file and checkpoint saved; a caller that knows the ID can resume it.
 There is still no automatic initial-request recovery or durable publication outbox.
+The failed tool response does not return that ID; retrying create can report that
+the note already exists after the first file was saved.
 The ordinary package continues to refuse write tools and sync; installed approval
 consumption, chat integration and configured embedding assembly remain unfinished.
+Activation also requires manifest grants for file mutation and sync.
 
 The native legacy write corpus now requires checkpoint creation before UUID-only
 queue publication. The disposable compiled ingest gate additionally runs create,

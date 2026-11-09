@@ -1311,7 +1311,9 @@ The required adapter order remains transactional database outside deferred queue
 and linked files. Refusal to save a checkpoint before finalization compensates
 new files, overwrites, edits and deletions. Refused publication after commit leaves
 the saved file and checkpoint resumable by known ID. It does not provide a durable
-outbox, discovery of orphan initial requests or automatic crash recovery. The guest
+outbox, discovery of orphan initial requests or automatic crash recovery. The
+failed tool response does not return the checkpoint ID; blindly retrying create
+can return an existing-file conflict even though the first file was saved. The guest
 remains a pure SDK client and gains no host, filesystem or cross-module table access.
 
 The native regression was observed failing because writes queued an empty object.
@@ -1325,11 +1327,12 @@ stand-ins; final receipts belong in this task's proof artifact.
 Builds use approved pinned `wit-bindgen` 0.57.1 and task-owned scratch Cargo/Rust
 homes, with separate ordinary and write-tools guest targets. Nothing was installed
 globally. The Notes-tools and module-host lockfiles needed the already-declared
-safety-core `libc` dependency added for locked builds against current main; no new
+portability `libc` dependency added for locked builds against current main; no new
 dependency or version was introduced. Database checks use `scripts/run-gate.sh`.
 
 Full Notes acceptance is still unfinished: installed approval consumption and chat
-writes/search, configured embeddings, active manual/scheduled sync and dispatcher,
+writes/search, manifest grants for file mutation and sync, configured embeddings,
+active manual/scheduled sync and dispatcher,
 automatic publication recovery and checkpoint retention, managed publication and
 fencing, proposals/receipts/reconciliation, private exports and daily archives,
 full path/HTTP parity, assembled Settings/chat and a separate physical device over
