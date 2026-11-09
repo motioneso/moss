@@ -1259,3 +1259,63 @@ The package with the revised app-map wording is SHA-256
 `2c7b2004e` with six dirty follow-up files, fingerprint `b1c0992033d3`; the only
 changes after that receipt finish this report. The final follow-up commit is pushed but unreviewed because both allowed rounds
 have been used. No Ready or full acceptance claim is made.
+
+## Part eleven: folder reading order and the full parity run (JS-94)
+
+Before editing, this branch was advanced from Phase 0a to merged main `1c63fa2f4`,
+which contains the part-ten report. No sibling worktree source was copied.
+
+The legacy directory listing sorts folder names with JavaScript
+`localeCompare`. The Rust route sorted by raw bytes, so capitalised and
+accented names landed in a different order. The route now compares base
+letter first, then accent, then case, with punctuation before digits and
+digits before letters. A native test pins the reference order for fourteen
+names. The route oracle creates `apple`, `Banana` and `Ábc` folders whose
+order differs between the two schemes, and the installed replay compares
+that listing against the real legacy handlers. The first full run failed at
+exactly that listing because the replay's own folder copy and expected
+answer still held only the old folders. Both now match the oracle. The app
+map's folder-browsing entry describes the reading order.
+
+### Part-eleven verification
+
+- Installed replay `194006-pL8Vge` passed (`rc=0`) on clean `572725bac`:
+  all 163 legacy route responses and all seven table snapshots matched,
+  including the new folder order, other-user and administrator attempts,
+  signed installation and reload, and all four consumer APIs. The
+  fifty-reference request returned 202 in 5870 ms under the replay's
+  explicit thirty-second deadline. The default five-second budget remains
+  unqualified, as recorded in part ten.
+- Nine-suite People gate `194450-Zbb9SH` passed (`rc=0`) on the same clean
+  commit: ten integration tests across all nine suites, including the
+  failing-first privacy matrix for both runtime roles. Controls fail with
+  protection removed and pass with it restored.
+- Twenty native People tests pass, including the new ordering test. Strict
+  People Clippy, scoped Rust formatting, repository lint, full typecheck,
+  Prettier, file-size check, pure-vector comparison and Rust app-map
+  generation pass.
+- Component SHA-256:
+  `0c50c839db97e5017962e015a081c421b594fa9a944d29595299e5bb74746056`.
+- Gate-tested package SHA-256:
+  `3f945e53cdcc8eac70a26c4cef4df337465f19504d86253d2dcf31c9ad709cd2`.
+  The final package differs only by the app-map wording above:
+  `6b55c130a4c73b296ee69c4f317e0d5c3d41e56fed3c98f5d31b9abe552f1652`
+  (409236 bytes).
+- Builds and caches stayed in task-owned scratch. No global install. The
+  approved pinned `wit-bindgen =0.57.1` remains a declared dependency.
+
+### Remaining acceptance work
+
+1. Compose People into the authenticated Rust shell. The shell still serves
+   Today and chat with its stub data contract and has no installed module
+   frame composition, so there is no real People screen to exercise yet.
+   This blocks the live UI, chat approval and second-device HTTPS checks.
+   Library dispatch and retrieved assets do not substitute for that proof.
+2. Finish ingest nudges, real source-provider composition and command
+   retention/quotas. Qualify the fifty-reference call budget in the real
+   host before exposing manual refresh through its listener.
+3. Broaden HTTP parity beyond the enumerated replay, including backend
+   failures, larger datasets, extreme numbers and JSON parser rejections.
+
+This is a bounded checkpoint. Full People parity stays open until the
+assembled application and device checks above pass.
