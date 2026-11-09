@@ -1378,6 +1378,11 @@ removes checkpoint RLS to expose the otherwise denied rows and publications,
 then restores the same denial. Queue publication and embeddings are named
 stand-ins. Final receipts and independent review belong in this task's proof.
 
+The first aggregate run exposed invalid synthetic UUIDs in the new recovery
+fixture: the real queue schema correctly refused versionless IDs. The fixture now
+uses RFC4122 version-four IDs. Final focused compiled receipts, and the initial
+aggregate failure, are recorded separately in the proof artifact.
+
 Builds use task-owned scratch Cargo/Rust homes, separate ordinary/write-tools
 targets, the declared Rust Wasm target and approved pinned `wit-bindgen` 0.57.1.
 Nothing was installed globally. Database checks run through `scripts/run-gate.sh`.

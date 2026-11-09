@@ -2,6 +2,11 @@
 //! Real Wasm + database; publication and document embeddings are named stand-ins.
 use super::*;
 
+// The production queue admits RFC4122 UUIDs with a supported version.
+fn checkpoint_id(n: u128) -> Uuid {
+    Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0000 | n)
+}
+
 fn recover(f: &Fixture, db: &Database, actor: Uuid) -> (usize, Vec<Value>) {
     let mut cursor = Value::Null;
     let mut scanned = 0;
@@ -51,7 +56,7 @@ fn recovery_discovers_orphan_requests_and_detects_missing_privacy() {
         );
         assert!(failed.is_err());
         for n in 1..=30 {
-            let id = Uuid::from_u128(n);
+            let id = checkpoint_id(n);
             let checkpoint = if n == 30 {
                 json!({"filePath":"/private/continuation.md","expectedFileHash":"private"})
             } else {
@@ -114,7 +119,7 @@ fn recovery_discovers_orphan_requests_and_detects_missing_privacy() {
         f.source(actor, Value::Null);
         let initial = jobs
             .iter()
-            .find(|j| j["params"]["checkpointId"] != json!(Uuid::from_u128(30)))
+            .find(|j| j["params"]["checkpointId"] != json!(checkpoint_id(30)))
             .unwrap();
         let (out, _) = f.durable_call(
             db.clone(),
@@ -131,7 +136,7 @@ fn recovery_discovers_orphan_requests_and_detects_missing_privacy() {
         assert_eq!(remaining.len(), 1);
         assert_eq!(
             remaining[0]["params"]["checkpointId"],
-            json!(Uuid::from_u128(30))
+            json!(checkpoint_id(30))
         );
     }
     println!("PASS compiled recovery: orphan discovery, bounded cursor pages, stable UUID-only publication, completed-page skip, both runtime roles, other-owner/admin denial, RLS-removal exposure and restored denial; queue and embeddings are stand-ins");
