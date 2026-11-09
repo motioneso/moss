@@ -56,6 +56,8 @@ pub struct FileInformation {
 
 #[link(name = "kernel32")]
 extern "system" {
+    pub fn GetDriveTypeW(root: *const u16) -> u32;
+    pub fn MoveFileExW(source: *const u16, destination: *const u16, flags: u32) -> i32;
     pub fn GetCurrentProcess() -> *mut c_void;
     pub fn LocalFree(memory: *mut c_void) -> *mut c_void;
     pub fn CreateDirectoryW(path: *const u16, attributes: *const SecurityAttributes) -> i32;

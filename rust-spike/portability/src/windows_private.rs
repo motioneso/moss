@@ -7,8 +7,10 @@
 //! This is an object boundary, NOT a safe path resolver: callers must independently establish a
 //! trusted parent and ancestors before use, and retain the returned directory handles while
 //! accessing children. Intermediate path components may otherwise follow junctions. There is no
-//! recursive creation, secret persistence, or supervisor integration here yet.
+//! recursive creation or supervisor integration in these primitives. The `directory` module
+//! layers pinned ancestors and private state replacement on top; it is not yet in the supervisor.
 
+pub mod directory;
 mod ffi;
 use ffi::*;
 use std::ffi::c_void;

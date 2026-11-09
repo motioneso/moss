@@ -442,6 +442,11 @@ supervisor groundwork. It does not resolve trusted ancestors or wire the supervi
 remain unavailable. See [the slice 7 checkpoint report](2026-11-09-rust-server-app-slice7-report.md)
 for the current implementation and proof gaps.
 
+Slice 8 adds a pinned Windows ancestor/private-directory boundary and same-directory private state
+replacement, with native qualification tests. It is not yet integrated into the canonical layout
+or supervisor; Windows creation/Stop stay disabled. See [the slice 8 checkpoint report](2026-11-09-rust-server-app-slice8-report.md)
+for the current implementation and proof gaps.
+
 ### 13.3 Proof
 
 - Unit tests: running-file validation (wrong mode, dead process, non-loopback origin, stale

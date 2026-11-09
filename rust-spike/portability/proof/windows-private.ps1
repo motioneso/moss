@@ -20,7 +20,7 @@ function Invoke-Proof([int]$Account, [string]$Test, [bool]$Ignored = $false) {
     $out = Join-Path $state "private-$Account.out"
     $err = Join-Path $state "private-$Account.err"
     $arguments = @($Test, '--nocapture', '--test-threads=1')
-    $expected = 'test result: ok\. 6 passed; 0 failed; 3 ignored'
+    $expected = 'test result: ok\. 14 passed; 0 failed; 3 ignored'
     if ($Ignored) { $arguments += @('--ignored', '--exact'); $expected = 'test result: ok\. 1 passed; 0 failed' }
     $process = Start-Process -FilePath $binary -ArgumentList $arguments -Credential $credentials[$Account] `
         -LoadUserProfile -WorkingDirectory $root -Environment @{ TEMP = $fixture; TMP = $fixture; MOSS_PRIVATE_PROOF = $fixture } `
