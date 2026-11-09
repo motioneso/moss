@@ -34,6 +34,7 @@ impl Host for ComponentHost {
             "db" => moss::module::db::call(&request),
             "context" => moss::module::context::call(&request),
             "ai" => moss::module::ai::call(&request),
+            "action-policy" => moss::module::action_policy::call(&request),
             "jobs" => moss::module::jobs::call(&request),
             _ => return Err(Error::new("Unsupported Tasks host port")),
         }

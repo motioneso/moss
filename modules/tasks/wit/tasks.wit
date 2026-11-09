@@ -3,6 +3,7 @@ package moss:module@1.0.0;
 interface db { call: func(request: string) -> result<string, string>; }
 interface context { call: func(request: string) -> result<string, string>; }
 interface ai { call: func(request: string) -> result<string, string>; }
+interface action-policy { call: func(request: string) -> result<string, string>; }
 interface jobs { call: func(request: string) -> result<string, string>; }
 
 world tasks {
@@ -10,5 +11,6 @@ world tasks {
   import context;
   import ai;
   import jobs;
+  import action-policy;
   export handle: func(kind: string, payload: string) -> result<string, string>;
 }

@@ -1451,3 +1451,71 @@ settings, installed chat, real-shell integration and performance acceptance
 remain unfinished. The full endpoint adapter still lacks a bound queue path.
 Full Phase 5 parity is not claimed. The signed fixture is separate from the real
 application shell; a narrow viewport is not physical second-device proof.
+
+## Tasks part 21 checkpoint (JS-137, Card 526)
+
+The two existing `agency-auto-execute` API routes now run in the compiled Tasks
+package. They retain the account's canonical policy and legacy boolean in the
+existing preference rows. Canonical values always win, legacy opt-outs prevent
+the initial grant, and writes update both keys together. `always_confirm` remains
+stored and reads as disabled through the older boolean API. HTTP validation keeps
+the existing coercions and removes undeclared body fields.
+
+Focus, at-risk and overdue reads now use the account's persisted timezone.
+Bounded summaries use that timezone for selection, due labels and reported local
+date. Missing or invalid timezone preferences retain `America/Los_Angeles`.
+Calendar offsets use consecutive local midnights, including twenty-three- and
+twenty-five-hour days. These reads still use persisted occurrences; they do not
+advance recurring series.
+
+Ben approved two narrow shared host contracts for this checkpoint. The separate
+host commit adds declared policy families and account-local dates inside the
+existing invocation transaction. Policy keys come from the installed module ID
+and declared family, with an optional legacy suffix under that same module ID.
+Neither contract accepts an actor or an arbitrary preference key. Account RLS,
+module capability checks, invocation rollback and deadlines remain in the path.
+Install and upgrade permission metadata includes the policy declarations. Existing
+one-use tool approval is unchanged. No sibling module, SQL migration, ownership
+ledger or stored task schema is changed.
+
+Host checks exercise actual Wasm imports and disposable PostgreSQL: policy
+precedence, dual writes, legacy opt-out, trapped-call rollback, invalid and forged
+requests, account privacy removal/restoration controls, and spring/fall DST
+boundaries. The compiled Tasks route test checks the exact legacy keys and
+account choices, including another member and an admin. Its policy-read privacy
+assertion is required to fail with preference RLS removed and pass after it is
+restored. The existing task read/write removal controls remain in the package gate.
+Endpoint cases add policy defaults, legacy opt-out, canonical precedence,
+independent accounts, HTTP coercions, rejected bodies and sign-in requirements.
+The drift/summary differential expands from UTC to four account timezones;
+retrieval timestamps alone are normalized, not local dates.
+
+Existing scratch Rust 1.95, Wasm target and Cargo caches were reused offline,
+including the pinned wit-bindgen graph approved on 2026-11-08. The tools lockfile
+was refreshed offline without a byte change. Declared JavaScript dependencies
+were restored offline in this worktree. Nothing was installed globally. Workshop
+and Food remain excluded. Part of #4027; release note Category N/A.
+
+This is a bounded checkpoint under the continuation's context limit, not full
+Phase 5 acceptance. Remaining: lazy recurrence advancement; recurrence jobs;
+full deferred-queue policy and installed worker dispatch; public People linkage;
+policy/feedback orchestration; remaining screens/settings, including the policy
+switch; interpreted-search and date-editor timezone support; installed chat and
+summary presentation; real application shell integration; performance budgets;
+and physical second-device HTTPS proof. The full endpoint adapter still lacks a
+bound queue path and an observer for the module queue. The signed UI fixture uses
+the real install, TLS and sign-in paths but is separate from the real application
+shell. A narrow viewport does not establish physical second-device proof.
+
+The full endpoint differential run finished with **92 of 93 cases matching**
+(the unchanged historical suite plus seven new policy cases). All seven policy
+cases pass. The prior drift-day mismatch is resolved; the remaining failure is
+`smoke: deferred status job marks the task done`, where the disposable component
+adapter still has no queue binding and returns an error. It is retained as a
+failure, not excluded or counted as passing. The host account-contract gate
+passes both tests, including preservation of a valid lowercase saved timezone.
+The signed fixture passed certificate verification, sign-in redirect, rejected
+untrusted host/origin checks, owner setup and a browser-created task persisted
+exactly once. Its browser and server were stopped afterward. This proves the
+fixture's installed package path, not the application shell or a second device.
+Final package/static gates and independent review receipts are in the task proof.

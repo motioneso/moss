@@ -1,6 +1,5 @@
 // Compare compiled focus/at-risk/overdue/summary reads with today's executors.
-// Actors are seeded with a UTC locale so the old code and the package use the
-// same day boundary; actor-local zones still need the public timezone seam.
+// Compare UTC plus account-local zones through the public host date contract.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -51,10 +50,7 @@ function scrub(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(scrub);
   if (value && typeof value === "object")
     return Object.fromEntries(
-      Object.entries(value).map(([k, v]) => [
-        k,
-        k === "retrievedAt" ? "<time>" : k === "localDate" ? "<day>" : scrub(v)
-      ])
+      Object.entries(value).map(([k, v]) => [k, k === "retrievedAt" ? "<time>" : scrub(v)])
     );
   return value;
 }
@@ -127,37 +123,58 @@ try {
     "tasks.overdue": taskOverdueExecute as never
   };
   let checks = 0;
-  for (const actor of [owner, other, admin])
-    for (const [tool, execute] of Object.entries(tools)) {
-      const expected = await runner.withDataContext(
-        { actorUserId: actor, requestId: "drift-parity" },
-        (db) => execute(db as never, {} as never, ctx(actor) as never)
-      );
-      assert.deepEqual(scrub(await compiled(actor, tool, {})), scrub(expected), `${tool} ${actor}`);
-      checks++;
-    }
-  for (const actor of [owner, other, admin])
-    for (const scope of [
-      "today",
-      "overdue",
-      "upcoming",
-      "undated",
-      "completed",
-      "all",
-      undefined
-    ]) {
-      const input = scope === undefined ? {} : { scope };
-      const expected = await runner.withDataContext(
-        { actorUserId: actor, requestId: "drift-parity" },
-        (db) => taskSummaryExecute(db, input, ctx(actor))
-      );
-      assert.deepEqual(
-        scrub(await compiled(actor, "tasks.summary", input)),
-        scrub(expected),
-        `summary ${scope} ${actor}`
-      );
-      checks++;
-    }
+  async function compare(actors: string[]) {
+    for (const actor of actors)
+      for (const [tool, execute] of Object.entries(tools)) {
+        const expected = await runner.withDataContext(
+          { actorUserId: actor, requestId: "drift-parity" },
+          (db) => execute(db as never, {} as never, ctx(actor) as never)
+        );
+        assert.deepEqual(
+          scrub(await compiled(actor, tool, {})),
+          scrub(expected),
+          `${tool} ${actor}`
+        );
+        checks++;
+      }
+    for (const actor of actors)
+      for (const scope of [
+        "today",
+        "overdue",
+        "upcoming",
+        "undated",
+        "completed",
+        "all",
+        undefined
+      ]) {
+        const input = scope === undefined ? {} : { scope };
+        const expected = await runner.withDataContext(
+          { actorUserId: actor, requestId: "drift-parity" },
+          (db) => taskSummaryExecute(db, input, ctx(actor))
+        );
+        assert.deepEqual(
+          scrub(await compiled(actor, "tasks.summary", input)),
+          scrub(expected),
+          `summary ${scope} ${actor}`
+        );
+        checks++;
+      }
+  }
+  await compare([owner, other, admin]);
+  // Include both sides of the UTC date line and fractional offsets. Boundary
+  // rows remain identical; only each actor's persisted locale changes.
+  for (const timezone of [
+    "America/Los_Angeles",
+    "asia/tokyo",
+    "Pacific/Kiritimati",
+    "Asia/Kathmandu"
+  ]) {
+    await bootstrap.query(
+      "UPDATE app.preferences SET value_json=$2 WHERE owner_user_id=$1 AND key='locale'",
+      [owner, { timezone }]
+    );
+    await compare([owner]);
+  }
   // Privacy: removing RLS must expose the owner's rows and fail the hidden check.
   const hidden = (out: { data: { items: unknown[] } }) =>
     assert.deepEqual(out.data.items, [], "Private drift rows must be hidden");

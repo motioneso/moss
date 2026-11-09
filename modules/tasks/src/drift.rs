@@ -1,12 +1,11 @@
 //! Focus, at-risk and overdue reads over persisted rows.
-//! Matching stays in the database so large accounts do not load every task
-//! into the guest. Actor-local day boundaries and lazy recurrence still need
-//! the public timezone seam, so days are UTC and rows are never advanced.
+//! Matching stays in the database. Calendar boundaries come from the public
+//! account-date contract; lazy recurrence remains a separate orchestration step.
 use crate::{
     repository::{and, order, Repository, Result, TASKS},
     rows::Task,
 };
-use chrono::{DateTime, Duration, SecondsFormat, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use moss_module_sdk::{
     query::{Compare, Filter},
     Host,
@@ -15,12 +14,6 @@ use serde_json::json;
 
 fn iso(value: DateTime<Utc>) -> String {
     value.to_rfc3339_opts(SecondsFormat::Millis, true)
-}
-fn start_of_day(now: DateTime<Utc>) -> DateTime<Utc> {
-    now.date_naive()
-        .and_hms_opt(0, 0, 0)
-        .expect("midnight")
-        .and_utc()
 }
 fn compare(column: &str, op: Compare, value: DateTime<Utc>) -> Filter {
     Filter::Compare {
@@ -34,11 +27,12 @@ pub fn overdue<H: Host + ?Sized>(
     repo: &Repository<'_, H>,
     now: DateTime<Utc>,
 ) -> Result<Vec<Task>> {
+    let start = repo.local_day(now, 0)?.start;
     repo.all(
         TASKS,
         and(vec![
             Filter::eq("status", "todo"),
-            compare("due_at", Compare::Lt, start_of_day(now)),
+            compare("due_at", Compare::Lt, start),
         ]),
         vec![order("due_at", false), order("id", false)],
     )
@@ -48,7 +42,8 @@ pub fn at_risk<H: Host + ?Sized>(
     repo: &Repository<'_, H>,
     now: DateTime<Utc>,
 ) -> Result<Vec<Task>> {
-    let start = start_of_day(now);
+    let start = repo.local_day(now, 0)?.start;
+    let end = repo.local_day(now, 3)?.start;
     let mut rows: Vec<Task> = repo.all(
         TASKS,
         and(vec![
@@ -60,7 +55,7 @@ pub fn at_risk<H: Host + ?Sized>(
             },
             Filter::Or {
                 filters: vec![
-                    compare("due_at", Compare::Lt, start + Duration::days(3)),
+                    compare("due_at", Compare::Lt, end),
                     compare("do_at", Compare::Lt, start),
                 ],
             },

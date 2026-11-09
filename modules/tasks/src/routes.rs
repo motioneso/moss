@@ -46,6 +46,12 @@ fn dispatch<H: Host + ?Sized>(
 ) -> Result<Response> {
     let mut status = 200;
     let body = match (r.method.as_str(), r.path.as_str()) {
+        ("GET", "/tasks/agency-auto-execute") => repo.policy(None)?,
+        ("PATCH", "/tasks/agency-auto-execute") => repo.policy(Some(
+            r.body["enabled"]
+                .as_bool()
+                .ok_or(Error::Http(400, "enabled must be boolean"))?,
+        ))?,
         ("GET", "/tasks") => {
             let quadrant = parse::optional_string(r.query.get("quadrant"), "quadrant")?;
             if quadrant

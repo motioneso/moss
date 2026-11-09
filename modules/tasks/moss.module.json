@@ -22,8 +22,8 @@
     },
     {
       "port": "context",
-      "operations": ["read", "uuid"],
-      "resources": ["call", "new"]
+      "operations": ["read", "uuid", "local-date"],
+      "resources": ["call", "new", "account"]
     },
     {
       "port": "tools",
@@ -63,6 +63,11 @@
       "port": "jobs",
       "operations": ["enqueue"],
       "resources": ["tasks-deferred-status"]
+    },
+    {
+      "port": "action-policy",
+      "operations": ["route-read", "route-write"],
+      "resources": ["task_changes"]
     }
   ],
   "database": {
@@ -186,11 +191,15 @@
     },
     {
       "id": "tasks.package-drift",
-      "description": "Focus, at-risk and overdue routes and tools, plus a bounded twelve-row summary tool, read persisted tasks in the signed-in account scope. Private tasks stay hidden from other accounts including admins. Focus returns no external readiness signals in the package, so no readiness cap is applied. Days use UTC and recurring series are not advanced until the public actor-timezone seam exists."
+      "description": "Focus, at-risk and overdue routes and tools, plus a bounded twelve-row summary tool, read persisted tasks in the signed-in account scope. Private tasks stay hidden from other accounts including admins. Focus returns no external readiness signals in the package, so no readiness cap is applied. Day boundaries and summary due labels use your saved account timezone, with the existing fallback when none is valid. Day boundaries follow daylight-saving changes. Recurring series are not advanced by these reads yet."
     },
     {
       "id": "tasks.package-search-interpretation",
       "description": "In Tasks, type a phrase and choose Interpret search or press Enter to turn it into list, tag, status, effort, priority, quadrant and due-date filters using the AI service you chose. Queries are limited to 300 characters. Only your own lists and tags are kept in the answer, with a warning for anything unknown. Status moves to the regular picker; the other interpreted filters can be removed individually. Typing again clears the interpretation. Manual tag filters match any tag; interpreted tag filters require every named tag. Clear filters restores open tasks across all lists. If the AI service is unavailable, a message explains that title and description search still work. Dates use UTC until account timezone support arrives."
+    },
+    {
+      "id": "tasks.account_policy_routes",
+      "description": "Read or change the account\u2019s task-change assistant preference through the existing agency-auto-execute API. Canonical policy takes precedence over the older toggle; legacy opt-outs are preserved. These API routes preserve the setting; the package screen does not expose a switch yet, and installed chat actions still require one-use approval."
     }
   ],
   "screens": {
@@ -326,6 +335,16 @@
       "method": "DELETE",
       "path": "/tasks/lists/:list_id",
       "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/agency-auto-execute",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/tasks/agency-auto-execute",
+      "signIn": true
     }
   ],
   "tools": {
@@ -406,11 +425,11 @@
       "risk": "write"
     },
     "tasks.summary": {
-      "description": "Read a bounded summary of today, overdue, upcoming, undated, completed or all tasks. Persisted occurrences only; days are UTC until the actor-timezone seam exists.",
+      "description": "Read a bounded summary of today, overdue, upcoming, undated, completed or all tasks. Persisted occurrences only; days use your saved account timezone. Lazy recurring-series advancement is unfinished.",
       "risk": "read"
     },
     "tasks.focus": {
-      "description": "Get ranked overdue and at-risk tasks. Persisted occurrences only; days are UTC until the actor-timezone seam exists.",
+      "description": "Get ranked overdue and at-risk tasks. Persisted occurrences only; days use your saved account timezone. Lazy recurring-series advancement is unfinished.",
       "risk": "read"
     },
     "tasks.atRisk": {
@@ -431,6 +450,12 @@
         "kind": "choice",
         "choices": ["todo", "suggested", "done", "archived"]
       }
+    }
+  },
+  "policyRoutes": {
+    "task_changes": {
+      "legacyBoolean": "agency_auto_execute",
+      "installTier": "trusted_auto"
     }
   }
 }
