@@ -6,6 +6,8 @@ import ts from "typescript";
 
 interface Entry {
   source?: string | null;
+  resolvedSource?: string;
+  openFailure?: "preferences" | "embeddings" | "roots" | "realpath" | "outside" | "walk";
   files: string[];
   payload?: Record<string, unknown>;
   results?: Record<string, unknown>;
@@ -62,6 +64,10 @@ function failure(code: string): Error {
 async function legacy(entry: Entry) {
   const calls: unknown[] = [];
   const payload = entry.payload ?? {};
+  const source =
+    typeof payload["sourcePath"] === "string" && payload["sourcePath"]
+      ? payload["sourcePath"]
+      : entry.source;
   const execute = runInNewContext(script, {
     Error,
     NOTES_SOURCE_KIND: "notes",
@@ -69,9 +75,12 @@ async function legacy(entry: Entry) {
     NOTES_SYNC_MAX_CHUNKS_PER_RUN: 100,
     NotesSyncFailure,
     toAccessContext: () => ({}),
-    resolveNotesRoots: () => ["/notes"],
+    resolveNotesRoots: () => (entry.openFailure === "roots" ? [] : ["/notes"]),
     realpath: async (path: string) => {
-      if (path !== "/notes") {
+      if (path === source) {
+        if (entry.openFailure === "realpath") throw failure("EACCES");
+        return entry.openFailure === "outside" ? "/elsewhere" : (entry.resolvedSource ?? path);
+      } else {
         calls.push({ canonical: path });
         const code = entry.resolveFailures?.[path];
         if (code) throw failure(code);
@@ -94,7 +103,11 @@ async function legacy(entry: Entry) {
         calls.push({ deleteIndex: { path, kind } });
       }
     },
-    collectMarkdownFiles: async () => entry.files,
+    collectMarkdownFiles: async (root: string) => {
+      if (entry.openFailure === "walk") throw failure("EACCES");
+      if (root !== (entry.resolvedSource ?? source)) throw new Error("Wrong walk root");
+      return entry.files;
+    },
     resolveAndValidateNoteFile: async (_root: string, file: string) => {
       const code = entry.resolveFailures?.[file];
       if (code) throw failure(code);
@@ -135,12 +148,19 @@ async function legacy(entry: Entry) {
       ok: await execute(
         { data: { actorUserId: "test-actor", ...payload } },
         { withDataContext: async (_access: unknown, work: (db: object) => unknown) => work({}) },
-        async () => ({}),
-        { get: async () => entry.source ?? null }
+        async () => {
+          if (entry.openFailure === "embeddings") throw new Error("private embedding error");
+          return {};
+        },
+        {
+          get: async () => {
+            if (entry.openFailure === "preferences") throw new Error("private preference error");
+            return entry.source ?? null;
+          }
+        }
       )
     };
   } catch (error) {
-    if (!(error instanceof NotesSyncFailure) && !("code" in Object(error))) throw error;
     expected = { error: error instanceof NotesSyncFailure ? error.message : safe(error) };
   }
   return { ...entry, payload, expected, calls };
@@ -168,6 +188,53 @@ const cases: Entry[] = [
     results: Object.fromEntries(files.map((f) => [f, { status: "skipped", chunksProcessed: 0 }]))
   }
 ];
+for (const openFailure of [
+  "preferences",
+  "embeddings",
+  "roots",
+  "realpath",
+  "outside",
+  "walk"
+] as const) {
+  cases.push({ source: "/notes", files, openFailure });
+}
+cases.push({
+  source: "/notes",
+  files,
+  failures: {
+    [files[0]!]: "ENOENT",
+    [files[1]!]: "EIO",
+    [files[2]!]: "EPERM"
+  }
+});
+for (const source of ["/alias", "/notes/"]) {
+  cases.push(
+    {
+      source,
+      resolvedSource: "/notes",
+      files,
+      indexed: [...files, "/notes/gone.md", "/notes/also-gone.md", "/alias/keep.md"]
+    },
+    {
+      source,
+      resolvedSource: "/notes",
+      files,
+      results: { [files[0]!]: { status: "ingested", chunksProcessed: 100 } }
+    },
+    {
+      source,
+      resolvedSource: "/notes",
+      files,
+      results: {
+        [files[0]!]: {
+          status: "ingested",
+          chunksProcessed: 100,
+          continuation: { chunkOffset: 100, fileHash: "hash", snapshotKey: "snapshot" }
+        }
+      }
+    }
+  );
+}
 for (const processed of [0, 1, 49, 99, 100]) {
   cases.push({
     source: "/notes",

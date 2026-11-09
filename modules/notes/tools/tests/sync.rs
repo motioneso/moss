@@ -4,11 +4,12 @@
 mod support;
 use access_context::AccessContext;
 use anyhow::{ensure, Result};
-use moss_module_host::runtime::{authorize, CallScope, DenyPorts, Host, Limits, Ports, Request};
+use moss_module_host::runtime::{authorize, CallScope, Host, Limits, Ports, Request};
 use moss_module_sdk::Host as SdkHost;
 use serde_json::{json, Value};
 use std::{
     cell::RefCell,
+    sync::atomic::{AtomicUsize, Ordering},
     sync::{Arc, Mutex},
 };
 use uuid::Uuid;
@@ -24,9 +25,11 @@ struct CoreStandIn {
     case: Value,
     calls: Mutex<Vec<Value>>,
     actor: Uuid,
+    invocations: AtomicUsize,
 }
 impl Ports for CoreStandIn {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
+        self.invocations.fetch_add(1, Ordering::SeqCst);
         authorize(scope.module(), port, request)?;
         ensure!(
             scope.access().actor_user_id() == self.actor,
@@ -78,6 +81,7 @@ fn actual_wasm_sync_coordinator_matches_legacy_without_wasi() {
             case: case.clone(),
             calls: Mutex::new(vec![]),
             actor,
+            invocations: AtomicUsize::new(0),
         });
         let result = host.call(
             &wasm,
@@ -85,7 +89,7 @@ fn actual_wasm_sync_coordinator_matches_legacy_without_wasi() {
             AccessContext::new(actor, "notes-sync-parity"),
             ports.clone(),
             "job",
-            &json!({"name":"notes.sync","parameters":case["payload"]}).to_string(),
+            &json!({"queue":"notes.sync","parameters":case["payload"]}).to_string(),
         );
         match &case["expected"]["ok"] {
             expected if !expected.is_null() => {
@@ -113,14 +117,23 @@ fn actual_wasm_sync_coordinator_matches_legacy_without_wasi() {
         .unwrap()
         .operations
         .contains(*op)));
+    // Supply the permissive checkpoint manifest and a working core too: a leaked
+    // handler would succeed and touch a port, so refusal cannot be vacuous.
+    let ordinary_ports = Arc::new(CoreStandIn {
+        case: json!({"source":null,"files":[],"payload":{}}),
+        calls: Mutex::new(vec![]),
+        actor,
+        invocations: AtomicUsize::new(0),
+    });
     assert!(host
         .call(
             &ordinary,
-            ordinary_manifest,
+            manifest,
             AccessContext::new(actor, "notes-sync-disabled"),
-            Arc::new(DenyPorts),
+            ordinary_ports.clone(),
             "job",
-            r#"{"name":"notes.sync","parameters":{}}"#
+            r#"{"queue":"notes.sync","parameters":{}}"#
         )
         .is_err());
+    assert_eq!(ordinary_ports.invocations.load(Ordering::SeqCst), 0);
 }

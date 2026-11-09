@@ -20,13 +20,15 @@ struct Parameters {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Job {
-    name: String,
+    queue: String,
     parameters: Parameters,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Open {
     source_path: Option<String>,
+    resolved_source_path: Option<String>,
+    #[serde(default)]
     files: Vec<String>,
 }
 #[derive(Deserialize)]
@@ -117,7 +119,7 @@ fn call(host: &impl Host, operation: &str, parameters: Value) -> Result<Value> {
 
 pub fn handle(host: &impl Host, payload: &str) -> Result<String> {
     let job: Job = serde_json::from_str(payload)?;
-    if job.name != "notes.sync" || job.parameters.chunk_offset > (1u64 << 53) - 1 {
+    if job.queue != "notes.sync" || job.parameters.chunk_offset > (1u64 << 53) - 1 {
         return Err(Error::new("Invalid Notes sync checkpoint"));
     }
     Ok(run(host, job.parameters)?.to_string())
@@ -127,13 +129,18 @@ fn run(host: &impl Host, input: Parameters) -> Result<Value> {
         host,
         "index.sync-open",
         json!({"sourcePath":input.source_path}),
-    )?)?;
+    )?)
+    .map_err(|_| service_error())?;
     let mut counts = Counts::default();
     let Some(source) = open.source_path.filter(|s| !s.is_empty()) else {
         let mut result = counts.value();
         result["noOp"] = json!(true);
         return Ok(result);
     };
+    let resolved_source = open
+        .resolved_source_path
+        .filter(|s| !s.is_empty())
+        .ok_or_else(service_error)?;
     let start = input
         .file_path
         .as_ref()
@@ -145,7 +152,7 @@ fn run(host: &impl Host, input: Parameters) -> Result<Value> {
         if budget == 0 {
             return Ok(counts.deferred(&source, file, 0, "", None));
         }
-        let mut parameters = json!({"sourcePath":source,"filePath":file,"chunkOffset":if index == start {input.chunk_offset} else {0},"chunkLimit":budget});
+        let mut parameters = json!({"sourcePath":resolved_source,"filePath":file,"chunkOffset":if index == start {input.chunk_offset} else {0},"chunkLimit":budget});
         if index == start {
             if let Some(hash) = &input.file_hash {
                 parameters["expectedFileHash"] = json!(hash);
@@ -182,7 +189,7 @@ fn run(host: &impl Host, input: Parameters) -> Result<Value> {
             Status::Skipped => counts.skipped += 1,
         }
     }
-    purge_deleted(host, &source, &open.files)?;
+    purge_deleted(host, &resolved_source, &open.files)?;
     if counts.ingested == 0 && counts.skipped == 0 && counts.errors > 0 {
         return Err(Error::new(format!(
             "notes sync: all {} file(s) failed; last error: {last_error}",

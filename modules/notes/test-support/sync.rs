@@ -17,7 +17,15 @@ impl Host for SyncHost<'_> {
                     .as_str()
                     .filter(|s| !s.is_empty())
                     .or_else(|| self.case["source"].as_str().filter(|s| !s.is_empty()));
-                Ok(json!({"sourcePath":source,"files":self.case["files"]}))
+                if let Some(stage) = self.case["openFailure"].as_str() {
+                    return Ok(json!({"error":if stage == "walk" { "EACCES" } else { "Error" }}));
+                }
+                if source.is_none() {
+                    return Ok(json!({"sourcePath":null}));
+                }
+                Ok(json!({"sourcePath":source,
+                    "resolvedSourcePath":self.case["resolvedSource"].as_str().or(source),
+                    "files":self.case["files"]}))
             }
             "index.sync-file" => {
                 assert_eq!(p["sourcePath"], "/notes");

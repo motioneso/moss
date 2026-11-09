@@ -15,7 +15,7 @@ fn sync_matches_actual_legacy_coordinator() {
             case: &case,
             calls: RefCell::new(vec![]),
         };
-        let payload = json!({"name":"notes.sync","parameters":case["payload"]}).to_string();
+        let payload = json!({"queue":"notes.sync","parameters":case["payload"]}).to_string();
         let out = match handle(&host, "job", &payload) {
             Ok(out) => json!({"ok":serde_json::from_str::<Value>(&out).unwrap()}),
             Err(error) => json!({"error":error.message}),
@@ -34,12 +34,13 @@ fn invalid_job_inputs_are_refused_before_core_access() {
         }
     }
     for payload in [
-        json!({"name":"other.sync","parameters":{}}),
-        json!({"name":"notes.sync","parameters":{"actorUserId":"other"}}),
-        json!({"name":"notes.sync","parameters":{"chunkOffset":-1}}),
-        json!({"name":"notes.sync","parameters":{"chunkOffset":9007199254740992u64}}),
-        json!({"name":"notes.sync","parameters":{"chunkOffset":1.5}}),
-        json!({"name":"notes.sync","parameters":{"sourceKind":"vault"}}),
+        json!({"queue":"other.sync","parameters":{}}),
+        json!({"name":"notes.sync","parameters":{}}),
+        json!({"queue":"notes.sync","parameters":{"actorUserId":"other"}}),
+        json!({"queue":"notes.sync","parameters":{"chunkOffset":-1}}),
+        json!({"queue":"notes.sync","parameters":{"chunkOffset":9007199254740992u64}}),
+        json!({"queue":"notes.sync","parameters":{"chunkOffset":1.5}}),
+        json!({"queue":"notes.sync","parameters":{"sourceKind":"vault"}}),
     ] {
         assert!(handle(&Deny, "job", &payload.to_string()).is_err());
     }
@@ -57,7 +58,9 @@ fn invalid_core_progress_cannot_expand_the_chunk_budget_or_disclose_errors() {
             _: Value,
         ) -> moss_module_sdk::Result<Value> {
             Ok(match operation {
-                "index.sync-open" => json!({"sourcePath":"/notes","files":["/notes/a.md"]}),
+                "index.sync-open" => {
+                    json!({"sourcePath":"/notes","resolvedSourcePath":"/notes","files":["/notes/a.md"]})
+                }
                 "index.sync-file" => self.0.clone(),
                 "index.sync-canonical" => json!({"path":"/notes/a.md"}),
                 "index.sync-indexed" => json!({"paths":[]}),
@@ -75,7 +78,7 @@ fn invalid_core_progress_cannot_expand_the_chunk_budget_or_disclose_errors() {
         let error = handle(
             &BadCore(value),
             "job",
-            r#"{"name":"notes.sync","parameters":{}}"#,
+            r#"{"queue":"notes.sync","parameters":{}}"#,
         )
         .unwrap_err();
         assert_eq!(

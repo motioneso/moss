@@ -243,10 +243,11 @@ never changed. These are distinct protections and distinct assertions.
 
 Version `0.1.3` ports the legacy sync coordinator into the existing **test-only**
 `write-tools` build. Its `job` envelope is
-`{"name":"notes.sync","parameters":{...checkpoint}}`. It is not declared in the
+`{"queue":"notes.sync","parameters":{...checkpoint}}`, matching the host's local
+job dispatch envelope. It is not declared in the
 ordinary package, not reachable through an installed HTTP route, and not scheduled.
 The ordinary component continues to reject it. The native and actual-Wasm tests
-compare the coordinator against 51 executions of the authored legacy worker and
+compare the coordinator against 64 executions of the authored legacy worker and
 cleanup helper, including the real error-message sink.
 
 The coordinator preserves the hundred-chunk run budget, file/checkpoint selection,
@@ -261,7 +262,14 @@ They do not establish ingestion, managed publication, queue or privacy behavior.
 pnpm exec tsx modules/notes/tools/sync-parity.ts
 CARGO_TARGET_DIR=/tmp/notes-domain cargo +1.95.0 test --locked --offline --features write-tools --manifest-path modules/notes/src/Cargo.toml --test sync
 NOTES_COMPONENT=/tmp/notes.wasm NOTES_TOOL_COMPONENT=/tmp/notes-tools.wasm CARGO_TARGET_DIR=/tmp/notes-host cargo +1.95.0 test --locked --offline --manifest-path modules/notes/tools/Cargo.toml --test sync -- --nocapture
+CARGO_TARGET_DIR=/tmp/notes-domain python3 modules/notes/tools/sync-controls.py /tmp/notes-sync-controls
 ```
+
+Regenerate the committed JSONL corpus with the first command when the legacy
+worker changes; generation is manual. The controls remove five protections from
+a scratch copy (unlink no-op, empty walk retention, cleanup source boundary,
+chunk budget and unknown-error redaction), require each assertion to fail, then
+require the restored source to pass. They never edit the source worktree.
 
 The draft core adapter calls are confined to the test build's `vault` source
 resource: `index.sync-open`, `index.sync-file`, `index.sync-canonical`,
@@ -273,6 +281,31 @@ publication admission. `index.sync-remove` must remove only that actor's Notes
 chunks, file links and index row together. Guest-selected paths never authorize it.
 The walk and canonical-path responses are not an authority to bypass those checks.
 
+The draft synchronous boundary shapes are:
+
+| Operation              | Parameters                                                                                 | Successful response                                                                                                   |
+| ---------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `index.sync-open`      | `{sourcePath: string \| null}` override, otherwise saved preference                        | `{sourcePath: string, resolvedSourcePath: string, files: string[]}`; unlinked: `{sourcePath: null}`                   |
+| `index.sync-file`      | `{sourcePath, filePath, chunkOffset, chunkLimit, expectedFileHash?, expectedSnapshotKey?}` | `{status: "ingested" \| "skipped", chunksProcessed, filePath?, continuation?: {chunkOffset, fileHash, snapshotKey?}}` |
+| `index.sync-canonical` | `{sourcePath, filePath}`                                                                   | `{path: string}`                                                                                                      |
+| `index.sync-indexed`   | `{sourcePath}`                                                                             | `{paths: string[]}`                                                                                                   |
+| `index.sync-remove`    | `{sourcePath, filePath}`                                                                   | `{}`                                                                                                                  |
+
+The open response preserves the configured `sourcePath` for continuations and
+separately returns the canonical `resolvedSourcePath` for file operations and
+cleanup. The walk must use that canonical root. Other operations receive it as
+`sourcePath`. This separation is compared against legacy with alias and trailing
+slash vectors; it does not prove real adapter symlink support. Failures use
+`{error: string}` with an errno or `OUTSIDE`; other values produce the generic
+safe error. Malformed opening replies are also reduced to that generic error.
+No raw error message is used. A missing walk is permitted for an unlinked source.
+
+Transaction equivalence is **not** established: legacy lists and purges all
+deleted files in one data-context transaction, whereas these draft calls list
+then remove each path independently. Production must provide a single transaction
+for the entire cleanup sweep, including its indexed-path snapshot; per-file
+atomic deletion alone is insufficient. None of these stand-ins persist data.
+
 The synchronous checkpoint envelope/result may contain source/file paths and
 hashes. **Do not enqueue that envelope or continuation as job parameters.** The
 future worker must store checkpoint state under the account and enqueue only its
@@ -281,6 +314,11 @@ jobs, write last-sync status, run after-sync hooks, reconcile the fifteen-minute
 schedule, or implement the manual sync route. No-op/deferred results must not
 replace saved status. Safe error comparisons cover ordinary `Error` and the
 listed errno/path failures, not arbitrary JavaScript error subclasses.
+The host currently scrubs guest errors, so installed saved-error parity requires
+a typed safe-error channel. Its default whole-call limits are five seconds and
+ten million fuel units. A real folder scan/ingestion must fit a bounded resumable
+worker design; this synchronous test coordinator is not evidence that a whole
+folder fits those limits.
 
 Run the standard Notes gate with both component paths as before; it now includes
 the compiled sync corpus. The actual SQL/privacy and installed-search checks remain
