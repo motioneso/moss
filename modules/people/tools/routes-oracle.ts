@@ -163,9 +163,11 @@ export async function routesOracle() {
           result.discovered !== 7 ||
           result.projected !== 3 ||
           result.ignored !== 1 ||
-          result.candidates < 2
+          // Missing ID, duplicate pair, and three existing records without notes.
+          result.candidates !== 5
         )
-          throw new Error("Nested refresh must project notes and review missing/duplicate IDs");
+          throw new Error(`Nested refresh coverage mismatch: ${JSON.stringify(result)}`);
+        console.log("Nested People refresh coverage:", JSON.stringify(result));
       }
       if (configured && method === "POST" && path === "/people") {
         if (response.statusCode !== 200) throw new Error("Configured People creation must succeed");

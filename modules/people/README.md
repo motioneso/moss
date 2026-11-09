@@ -120,7 +120,10 @@ Folder settings, relative directory browsing and legacy body-schema validation a
 Manual index refresh is included; ingest nudges and complete HTTP compatibility remain continuation work.
 Scans fail explicitly above two thousand entries or four MiB of text;
 individual files retain the adapter's size bound. This bounded scan is not unlimited-folder
-parity. The manifest declares the packaged Settings screen; real shell reachability remains
+parity. The shared adapter also refuses relative note paths over 1024 UTF-8 bytes and
+non-UTF-8 filenames. Its byte-sorted immediate listings are the guest's traversal input;
+the oracle records that host ordering separately from the real legacy walk.
+The manifest declares the packaged Settings screen; real shell reachability remains
 unqualified.
 
 The additional route-envelope differential gate uses the real legacy Fastify handlers,

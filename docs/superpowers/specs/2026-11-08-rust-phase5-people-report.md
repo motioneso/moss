@@ -1923,6 +1923,26 @@ duplicate-ID notes, plus real block-list aliases and emails. The oracle explicit
 requires projections and review candidates instead of accepting that silent loss
 of coverage. The module app map, README and changelog describe the delivered scan.
 
+The first independent review found no blocker or major issue and four minor points.
+Its ordering suggestion is addressed by explicitly byte-sorting the host-shaped
+oracle listings; the expected walk still comes from the real legacy vault. New
+checks reject malformed listings through the SDK's fixed `Invalid host response`
+error before reads or projections. The README now also records the existing host
+refusals for non-UTF-8 names and relative paths over 1024 UTF-8 bytes.
+The review suggested exactly two refresh candidates, but the earlier replay steps
+also create three records without canonical notes. The strengthened assertion
+therefore requires all five candidates rather than accepting a lower bound.
+
+The first installed gate stopped before replay because the downstream JSON test's
+lockfile lacked the newly merged host's existing `libc` dependency edge. Its failed
+receipt is `task_127_rust_port_phase_5_people_module-20261109-054801-gnvA7g.log`,
+`rc=101`; the disposable container was removed. Refreshing that single lockfile
+edge adds no new dependency. This failed run is not parity evidence.
+The reviewer also reported a native trait-identity compile failure while sharing
+the host target. A fresh task-owned native target passed; subsequent native tests
+and Clippy use that separate target. The exact cause of the reviewer's failure
+was not established.
+
 ### Build and acceptance limits
 
 All Cargo, Rustup and target caches belong to this task's scratch directory.

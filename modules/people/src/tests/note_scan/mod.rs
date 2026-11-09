@@ -126,3 +126,23 @@ fn failed_nested_scans_never_start_projection() {
         "People note changed during refresh"
     );
 }
+
+#[test]
+fn malformed_listings_are_refused_before_projection() {
+    for entries in [
+        Value::Null,
+        json!({}),
+        json!([{"name":"bad.md","kind":"unknown"}]),
+        json!([{"kind":"file"}]),
+    ] {
+        let scan = Scan {
+            listings: json!({"": entries}),
+            ..Scan::default()
+        };
+        assert_eq!(
+            NotesService::new(&scan).refresh().unwrap_err().message,
+            "Invalid host response"
+        );
+        assert!(scan.reads.borrow().is_empty());
+    }
+}

@@ -25,13 +25,15 @@ for (const paths of [
     const list = async (path: string) => {
       const entries = await readdir(join(root, path), { withFileTypes: true });
       // The shared linked-notes host admits directories and lowercase .md files.
-      listings[path] = entries.flatMap((entry) =>
-        entry.isDirectory()
-          ? [{ name: entry.name, kind: "directory" }]
-          : entry.isFile() && entry.name.endsWith(".md")
-            ? [{ name: entry.name, kind: "file" }]
-            : []
-      );
+      listings[path] = entries
+        .flatMap((entry) =>
+          entry.isDirectory()
+            ? [{ name: entry.name, kind: "directory" }]
+            : entry.isFile() && entry.name.endsWith(".md")
+              ? [{ name: entry.name, kind: "file" }]
+              : []
+        )
+        .sort((a, b) => Buffer.compare(Buffer.from(a.name), Buffer.from(b.name)));
       for (const entry of entries)
         if (entry.isDirectory()) await list(path ? `${path}/${entry.name}` : entry.name);
     };
