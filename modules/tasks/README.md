@@ -1,5 +1,12 @@
 # Tasks component checkpoint
 
+Part 15 adds list inclusion, show-only and exclusion under **Choose lists**,
+alongside the compact list picker. Tags can be combined (any selected tag
+matches) and removed individually. Counts follow status and tags before search;
+**Clear filters** returns to open tasks across all lists. The screen model is
+compared exactly with the existing screen over 800 combinations, including
+counts, available tags and selected lists. This adds no route, tool or host seam.
+
 This is an unfinished Tasks module package. Rust code now compiles into a real
 component and handles basic task, list, tag, activity and view preference routes.
 It also handles twenty-three tools: ten reads and thirteen mutations, with request

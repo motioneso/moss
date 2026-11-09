@@ -46,6 +46,7 @@ pub fn package_files(
     for name in [
         "app.mjs",
         "model.mjs",
+        "filters.mjs",
         "tags.mjs",
         "delete-list.mjs",
         "tasks.css",
