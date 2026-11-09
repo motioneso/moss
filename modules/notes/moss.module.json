@@ -4,7 +4,7 @@
   "name": "Notes",
   "description": "Choose your notes folder, prepare note changes for approval, and search your indexed notes.",
   "publisher": "Moss",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -152,6 +152,17 @@
         {
           "id": "notes.retry-action-details",
           "description": "Check the connection and prepare the action again before approving it.",
+          "path": "/settings/connections"
+        }
+      ]
+    },
+    {
+      "id": "notes.sync-ingest",
+      "description": "The host provides core-owned Notes file ingestion (folder walk, legacy document chunking, configured document embeddings, unchanged-file skipping and per-page atomic indexing) behind the sync coordinator's vault ports, plus atomic deleted-note cleanup. Assembly must connect MemoryIngestPorts and MemoryCleanupPorts with the same account-specific roots and notes-source-path preference as folder settings, and supply the account's configured document embedding model. Managed publication snapshots are refused until that join exists. The ordinary package still declares no sync job, schedule, manual sync route or write chat tools, so scheduled and manual sync are not available in the app yet.",
+      "remediations": [
+        {
+          "id": "notes.configure-ingest",
+          "description": "Ask the host administrator to connect core memory ingestion and the configured document embedding service, and link an allowed notes folder.",
           "path": "/settings/connections"
         }
       ]

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add focus, at-risk and overdue routes and tools, plus a bounded twelve-row summary tool.
+- Compare compiled drift and summary results with the TypeScript executors and check privacy with row-level security removed and restored.
+- Days use UTC and recurring series are not advanced until the public actor-timezone seam exists.
+
 - Delete lists through confirmed package-screen actions, HTTP and the assistant handler, optionally keeping tasks in another owned list.
 - Preserve the final list across concurrent package deletion requests; check compiled privacy and lock-removal controls.
 

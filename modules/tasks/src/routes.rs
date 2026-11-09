@@ -22,6 +22,13 @@ fn task_json<H: Host + ?Sized>(repo: &Repository<'_, H>, task: Task) -> Result<V
 fn tasks_json<H: Host + ?Sized>(repo: &Repository<'_, H>, tasks: Vec<Task>) -> Result<Vec<Value>> {
     tasks.into_iter().map(|t| task_json(repo, t)).collect()
 }
+fn drift_json<H: Host + ?Sized>(repo: &Repository<'_, H>, tasks: &[Task]) -> Result<Vec<Value>> {
+    let tags = crate::list::tags_for_tasks(repo, tasks)?;
+    Ok(tasks
+        .iter()
+        .map(|t| t.dto(tags.get(&t.id).map(Vec::as_slice).unwrap_or_default()))
+        .collect())
+}
 fn param<'a>(request: &'a RouteRequest, name: &str) -> Result<&'a str> {
     request
         .params
@@ -74,6 +81,27 @@ fn dispatch<H: Host + ?Sized>(repo: &Repository<'_, H>, r: &RouteRequest) -> Res
             let input = parse::parse_create_task(&r.body)?;
             status = 201;
             json!({"task":task_json(repo,repo.create_task(&input)?)?})
+        }
+        ("GET", "/tasks/focus") => {
+            let now = repo
+                .now()?
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .map_err(|_| Error::Http(500, "Internal server error"))?;
+            json!({"tasks":drift_json(repo,&crate::drift::focus(repo,now)?)?,"signals":[]})
+        }
+        ("GET", "/tasks/at-risk") => {
+            let now = repo
+                .now()?
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .map_err(|_| Error::Http(500, "Internal server error"))?;
+            json!({"tasks":drift_json(repo,&crate::drift::at_risk(repo,now)?)?})
+        }
+        ("GET", "/tasks/overdue") => {
+            let now = repo
+                .now()?
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .map_err(|_| Error::Http(500, "Internal server error"))?;
+            json!({"tasks":drift_json(repo,&crate::drift::overdue(repo,now)?)?})
         }
         ("GET", "/tasks/:id") => {
             let task = repo

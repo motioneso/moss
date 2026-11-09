@@ -53,6 +53,9 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
     std::fs::create_dir_all(notes_root.join("Family/Banana")).unwrap();
     std::fs::create_dir_all(notes_root.join("Family/Ábc")).unwrap();
     std::fs::create_dir_all(notes_root.join("Work")).unwrap();
+    for name in ["Banana", "apple", "Ära", "zebra"] {
+        std::fs::create_dir_all(notes_root.join(name)).unwrap();
+    }
     let roots = ["actor", "other", "admin"]
         .into_iter()
         .map(|key| {
@@ -443,7 +446,7 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         );
         assert_eq!(
             request(owner, "GET", "/people/notes-directories", Value::Null),
-            json!({"status":200,"body":{"path":null,"directories":[{"name":"Family","path":"Family"},{"name":"Work","path":"Work"}]}})
+            json!({"status":200,"body":{"path":null,"directories":[{"name":"apple","path":"apple"},{"name":"Ära","path":"Ära"},{"name":"Banana","path":"Banana"},{"name":"Family","path":"Family"},{"name":"Work","path":"Work"},{"name":"zebra","path":"zebra"}]}})
         );
         assert_eq!(
             request(

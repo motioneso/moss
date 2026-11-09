@@ -58,7 +58,6 @@ pub mod guest_component;
 
 pub mod account_preferences;
 pub mod folder_settings;
-pub mod memory_search;
 pub mod memory_cleanup;
 pub mod memory_ingest;
-pub mod memory_parser;
+pub mod memory_search;

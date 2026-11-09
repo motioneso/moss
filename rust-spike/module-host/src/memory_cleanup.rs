@@ -13,7 +13,7 @@ use std::{
 use uuid::Uuid;
 use vault::{AllowedRoots, EntryKind, VaultContext};
 
-pub(crate) const MAX_ENTRIES: usize = 10_000;
+const MAX_ENTRIES: usize = 10_000;
 
 pub struct MemoryCleanupSource {
     pub source_kind: String,
@@ -114,7 +114,7 @@ impl MemoryCleanupPorts {
     }
 }
 
-pub(crate) fn walk(folder: &VaultContext, scope: &CallScope) -> Result<BTreeSet<String>> {
+fn walk(folder: &VaultContext, scope: &CallScope) -> Result<BTreeSet<String>> {
     let mut directories = vec![String::new()];
     let mut present = BTreeSet::new();
     let mut count = 0;

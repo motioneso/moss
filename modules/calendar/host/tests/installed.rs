@@ -1,3 +1,5 @@
+#[path = "support/day_plan_oracle.rs"]
+mod day_plan_oracle;
 #[path = "support/kv_guard.rs"]
 mod kv_guard;
 #[path = "support/preview_oracle.rs"]
@@ -131,6 +133,7 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
     }
     read_oracle::compare(&app, &f);
     preview_oracle::compare(&app, &f, &preview_seeded);
+    day_plan_oracle::verify(&app, &f);
     let settings = call(f.a, "GET", "/briefing-settings", Value::Null);
     assert_eq!(settings["body"]["settings"]["prepTaskMode"], "auto");
     let display = call(f.a, "GET", "/display-settings", Value::Null);

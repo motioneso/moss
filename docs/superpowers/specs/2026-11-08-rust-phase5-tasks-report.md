@@ -997,3 +997,58 @@ tools. Actor-local dates/lazy recurrence, recurrence jobs, queue policy/worker
 parity, public People linkage, feedback/action policy, remaining screens/settings,
 installed chat, real shell, performance and physical second-device HTTPS remain
 unfinished. This is a checkpoint, not Phase 5 acceptance. Part of #4027; Category N/A.
+
+## Tasks part 12 checkpoint (JS-97, Card 526)
+
+This continuation adds the focus, at-risk and overdue routes and tools, and the
+bounded summary tool, inside `modules/tasks/`. It remains an unfinished Tasks
+replacement. Workshop and Food are excluded. Part of #4027; release note
+Category N/A.
+
+The three drift reads run over persisted rows in the signed-in account scope.
+Overdue means open and due before today. At-risk means open, priority at least
+three, due within two days or with a passed do-date, and no completed subtask.
+Focus is the deduplicated union, ordered by priority, due time and effort.
+The summary tool returns at most twelve rows for today, overdue, upcoming,
+undated, completed or all scopes, with due-state labels and an honest coverage
+line. Twenty-three tools are now declared: ten reads and thirteen mutations.
+The app map names the new reads through the package feature list.
+
+Day boundaries use UTC and these reads never advance recurring series. The
+guest still has no public actor-timezone seam, so actor-local day behaviour
+and lazy recurrence remain unfinished, as in earlier checkpoints. Focus
+returns no external readiness signals, so the legacy readiness cap never
+applies in the package. Search interpretation needs an AI provider port and
+both assistant-policy routes need a core preferences port; those three
+endpoints are left unported rather than answered with invented data.
+
+The database gate gains `tools/drift-parity.ts`. It compares the compiled
+focus, at-risk, overdue and summary results exactly with the current
+TypeScript executors on synthetic non-recurring rows, for the owner, another
+account and an instance admin. Its actors carry a UTC locale, so both sides
+use the same day boundary. The same private overdue rows appear when Tasks
+row-level security is removed and are hidden again after restoration.
+
+Remaining after part 12: search interpretation and both assistant-policy
+routes (blocked on AI and preferences ports), recurrence jobs, deferred-queue
+policy parity, actor timezone and lazy recurrence, public People linkage,
+policy and feedback orchestration, full screen and settings parity, real-shell
+integration, performance budgets and second-device HTTPS proof.
+
+Part 12 validation so far: the database gate passes on the first part 12
+commit, including 30 exact drift and summary comparisons and the scoped
+privacy removal control. The full endpoint comparison matches 84 of 85 cases,
+up from 76 of 84 in part 11; the only failure is the deferred-status job case,
+whose endpoint adapter still cannot observe the module queue (the part 8
+limit). The signed-install browser check passes: a new owner created a list
+through Manage lists, created `Browser proof task`, and saw it in the task
+list. That fixture binds loopback only, so access from a second physical
+device over LAN or tailnet HTTPS is still not proven; a direct request to the
+machine's LAN address got no answer from the fixture.
+
+Independent review round one found no blockers and four major issues, all
+fixed in a follow-up commit: the summary now drops rows from the end when its
+plain-text form exceeds the legacy 4,000-unit bound; the at-risk
+finished-subtask check and the three new routes now batch their lookups;
+the parity script gained long-title, twelve-row and day-boundary cases; and
+the focus sort compares due times in milliseconds.

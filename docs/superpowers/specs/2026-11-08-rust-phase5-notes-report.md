@@ -1051,14 +1051,101 @@ These are explicit worker-design limits alongside the size bounds. No exhaustive
 platform, power-loss, external-editor race or physical second-device proof is
 claimed by the cleanup tests.
 
-## Part eleven checkpoint — parser and file-indexing adapter
+## Part ten checkpoint — production file ingestion
 
-Adds a legacy-compatible Rust note parser (423 real-oracle vectors; failing controls
-observed) and an unwired `MemoryIngestPorts` host adapter for `index.sync-open` and
-`index.sync-file`. See "Part eleven" in `modules/notes/README.md` for limits.
+This continuation starts from merged part nine (#4083). It implements the
+coordinator's two remaining core operations for real. `MemoryIngestPorts`
+handles `index.sync-open` and `index.sync-file` behind the same trusted
+(module, resource) binding the cleanup adapter uses. The Notes guest stays a
+pure client of the server API. Core memory tables stay outside its grants.
 
-Still open: wire the adapter and a real embedding service in assembly; database and
-privacy gate for ingestion (two owners, admin, RLS removal control); managed publication;
-queue dispatch, schedule and manual sync route; last-sync status; installed chat tool
-join with approval; private export, daily archives; full HTTP parity; live Rust-instance
-proof and second-device HTTPS proof. No `wit-bindgen` change this part (0.57.1 pinned).
+Open reads the account's saved `notes-source-path` preference, refuses a
+coordinator override that names a different folder, opens the folder
+through VaultContext under the account's allowed roots, and returns the
+configured path, the canonical root and a name-sorted Markdown walk capped
+at ten thousand visited entries. The sorted order is a deliberate
+deterministic difference from the legacy operating-system directory order.
+
+Sync-file first reads and embeds outside any write transaction. Its write
+transaction then locks the saved source row and the folder, reads one file
+with a 16 MiB bound, and hashes it with SHA-256. A file whose saved hash and
+model name match is skipped before any embedding work. Otherwise the legacy
+document parser runs in Rust (frontmatter, `## ` sections, paragraph, line
+and character splitting at 2000 UTF-16 units, wiki links), the requested
+chunk window is embedded through the trusted account-configured
+`DocumentEmbeddings` service, and that window is written in one
+account-scoped transaction. A long file is written over several such pages,
+with links and the file index written on the final page, so search can see
+a partly indexed long file until the continuation runs. The file is
+re-read inside the write transaction, so a change during embedding refuses
+the write. Continuations carry chunk offset and file hash. A requested
+managed snapshot key is refused, because managed publication and fencing
+are still not connected. That refusal is an activation blocker for managed
+sources, not a silent drop.
+
+Package version `0.1.4` declares this host capability in the app map. The
+ordinary package still declares no sync job, schedule, manual sync route or
+write chat tools. Nothing a person can see changes in this checkpoint.
+
+### Verification
+
+The standard Notes gate now also runs `ingest-gate.ts`. Its oracle executes
+the real legacy ingest function, repository, stub embedding provider and
+vault context on five synthetic notes, including one longer than a single
+run's chunk budget and one with a byte-order mark and odd wiki-link shapes,
+saves those rows, clears them, and the Rust test runs the compiled sync
+guest through the real ingestion and cleanup adapters for both runtime
+roles. It compares every saved chunk row including a hash of its
+embedding, plus link and index rows, follows deferred continuations to
+completion, and requires a snapshot-key request to be refused without
+changing the indexed file. A second run must skip all five unchanged files.
+Another owner and an unrelated admin must each read none of the first
+owner's chunks through a direct database check. The stub provider is a
+named stand-in whose vectors the Rust test reproduces from the same hash
+rule, so no real model quality is claimed.
+
+The first full gate run passed with exit code 0 on commit `c7f8a0927`,
+input fingerprint `6e2a84e74a0b`. That run predates the review fixes in this
+checkpoint. The final gate receipt and both review rounds are recorded on
+the task card and in the checkpoint pull request.
+
+### Remaining acceptance work
+
+1. Connect the real account-configured document/query embedding services and
+   join `notes.search` into installed chat with the legacy schemas and
+   outside-content classification.
+2. Enable installed write tools with approval consumption and version
+   rechecks, then declare them and the sync job in the package.
+3. Add durable continuation storage, last-sync status writes, the manual
+   sync route and the fifteen-minute schedule. Never put checkpoint paths
+   or hashes in queue parameters.
+4. Port managed publication and fencing, proposals and receipts, crash
+   reconciliation, exact-block cleanup, private note exports, daily chat
+   archives and the account-export screen join.
+5. Finish path, error and handler parity, join Connections into the
+   assembled shell, and prove the real UI and chat from a separate physical
+   device over HTTPS. No such device proof is claimed here.
+
+## Part eleven checkpoint — parser vector parity
+
+### What changed
+
+- 423 input and output pairs are generated from the legacy parser by
+  `rust-spike/module-host/tests/data/memory-parser-parity.ts` and stored in
+  `memory-parser-vectors.jsonl`. A host test runs the Rust parser against
+  every row.
+- The run found one real difference. The legacy parser starts a new section
+  at a "## " heading after any line break its regex counts (LF, CR, U+2028,
+  U+2029). The Rust parser only split after LF. It now matches.
+- One vector with a lone UTF-16 surrogate (a note cut in the middle of an
+  emoji) cannot be written as JSON, so it is not in the set. Rust strings
+  cannot hold a lone surrogate, so that input never reaches the parser.
+
+### Not done in this part
+
+Wiring the ingest adapter into host assembly, queue dispatch for the sync
+job, the manual sync route and last-sync status writes. The sync job cannot
+carry file paths or hashes (queue parameters only allow ids, flags, counts
+and choices), so it needs a durable, account-bound checkpoint table with a
+new migration, row-level privacy tests and a package version bump. That is
+its own slice. Remaining-work item 3 above still stands as written.
