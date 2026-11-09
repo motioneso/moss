@@ -156,10 +156,7 @@ const screens = {
     return [back("Servers", { do: "servers" }), heading("New server on this computer"), form];
   },
 
-  "setting-up": (s) => [
-    heading(s.name),
-    muted("Setting up. The first start can take a minute.")
-  ],
+  "setting-up": (s) => [heading(s.name), muted("Setting up. The first start can take a minute.")],
 
   connecting: (s) => [heading(s.name), muted("Connecting…")],
 
