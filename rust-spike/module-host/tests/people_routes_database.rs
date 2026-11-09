@@ -4,6 +4,8 @@ mod common;
 mod installed;
 #[path = "people_routes/normalization.rs"]
 mod normalization;
+#[path = "people_routes/refresh.rs"]
+mod refresh;
 #[path = "../../parity/src/canon.rs"]
 #[allow(dead_code)]
 #[rustfmt::skip]
@@ -102,11 +104,14 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
                         .collect(),
                 },
             )]),
-            Arc::new(ContextPorts::new(services.clone())),
+            Arc::new(ContextPorts::new(refresh::ports(
+                database.clone(),
+                services.clone(),
+            ))),
         )
         .unwrap(),
     );
-    let ports = Arc::new(
+    let ports: Arc<dyn moss_module_host::runtime::Ports> = Arc::new(
         TransactionalDatabasePorts::new(
             database.clone(),
             Arc::new(LinkedNotesPorts::new(Arc::new(folders), preferences)),
@@ -147,6 +152,8 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         Uuid::parse_str(oracle["admin"].as_str().unwrap()).unwrap(),
         "people-install",
     );
+    rt.block_on(bootstrap.batch_execute(moss_platform_jobs::MIGRATION))
+        .unwrap();
     let registry = tempfile::tempdir().unwrap();
     let installer = std::env::var_os("JS73_PEOPLE_PACKAGE").map(|_| {
         rt.block_on(async {
@@ -156,10 +163,6 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
                 .unwrap();
             bootstrap
                 .batch_execute(moss_module_host::migrations::MIGRATION)
-                .await
-                .unwrap();
-            bootstrap
-                .batch_execute(moss_platform_jobs::MIGRATION)
                 .await
                 .unwrap();
             bootstrap
@@ -230,6 +233,9 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         }
         .expect("Compiled route must return a response envelope");
         let reply: Value = serde_json::from_str(&reply).unwrap();
+        if case.get("queued").is_some() {
+            refresh::compare(&rt, &bootstrap, &host, &manifest, &ports, &case["queued"]);
+        }
         let actual_people = people_rows(&rt, &bootstrap, owner);
         let expected_people = case["rows"][TABLES[0]].as_array().unwrap();
         let reply = normalization::signatures(&reply, &actual_people, &mut actual);

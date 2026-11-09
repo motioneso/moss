@@ -10,6 +10,7 @@ import { createDatabase, DataContextRunner, getMossDatabaseUrls } from "@moss/db
 import { registerPeopleRoutes } from "../../../packages/people/src/routes.js";
 import { setMossErrorHandler } from "../../../apps/api/src/error-handling.js";
 import { formatPeopleNote } from "../../../packages/people/src/notes-format.js";
+import { refreshCases, refreshQueue } from "./refresh-oracle.js";
 
 export const peopleTables = [
   "app.person_context_people",
@@ -40,12 +41,16 @@ export async function routesOracle() {
   await mkdir(join(selected, "Work"));
   const oldRoots = process.env.MOSS_NOTES_ROOTS;
   process.env.MOSS_NOTES_ROOTS = root;
+  let refresh: Awaited<ReturnType<typeof refreshQueue>> | undefined;
   const apps = actors.map((actorUserId) => {
     const app = Fastify();
     registerPeopleRoutes(app, {
       resolveAccessContext: async () => ({ actorUserId, requestId: "people-route-oracle" }),
       dataContext: new DataContextRunner(database),
-      vaultRunner: new VaultContextRunner(join(root, "private"))
+      vaultRunner: new VaultContextRunner(join(root, "private")),
+      get boss() {
+        return refresh?.boss;
+      }
     });
     setMossErrorHandler(app);
     return app;
@@ -60,7 +65,8 @@ export async function routesOracle() {
       await Promise.allSettled([
         bootstrap.end(),
         database.destroy(),
-        ...apps.map((a) => a.close())
+        ...apps.map((a) => a.close()),
+        refresh?.boss.stop()
       ]);
     }
   };
@@ -101,6 +107,7 @@ export async function routesOracle() {
   };
   try {
     await bootstrap.connect();
+    refresh = await refreshQueue(urls.bootstrap, bootstrap);
     for (const [index, id] of actors.entries()) {
       await bootstrap.query(
         "INSERT INTO app.users(id,email,name,is_instance_admin) VALUES($1,$2,'Route fixture',$3)",
@@ -121,6 +128,7 @@ export async function routesOracle() {
       seedFiles?: Record<string, string>;
       expected: unknown;
       rows: Record<string, unknown>;
+      queued?: unknown[];
     }[] = [];
     const run = async (
       method: "GET" | "POST" | "PATCH" | "PUT",
@@ -172,10 +180,12 @@ export async function routesOracle() {
             }
           : {}),
         expected: { status: response.statusCode, body: expected },
-        rows
+        rows,
+        ...(path === "/people/index/refresh" ? { queued: await refresh!.snapshot() } : {})
       });
     };
     await run("GET", "/people");
+    await refreshCases(run);
     // These are real Fastify/Ajv responses, including coercion and error order.
     for (const method of ["POST", "PATCH", "PUT"] as const) {
       const path =

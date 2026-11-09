@@ -231,7 +231,7 @@ pub fn services(data: &Path) -> Arc<moss_module_host::services::ServicePorts> {
             data,
             Arc::new(safety_core::secret::SecretCipher::connectors(&Default::default()).unwrap()),
             Arc::new(NoAi),
-            Arc::new(moss_module_host::runtime::DenyPorts),
+            Arc::new(moss_module_host::local::LocalPorts::new(data).unwrap()),
         )
         .unwrap(),
     )
