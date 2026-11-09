@@ -2141,11 +2141,11 @@ packaged or committed. This is a dispatch side-effect control, not a new RLS
 claim; the real database privacy matrix remains separately required.
 
 The route oracle adds cases for thirty-two Fastify parser refusals, eight
-ordinary-field controls and eight GET-body controls. It will check the parser's
-exact expected status/body and compare all seven tables after every case. Eight rejected note-backed PATCH
+ordinary-field controls and eight GET-body controls. The completed installed replay checked the parser's
+exact expected status/body and compared all seven tables after every case. Eight rejected note-backed PATCH
 cases also retain canonical file-byte snapshots. The installed replay and
-database privacy receipts for this checkpoint will be recorded below after
-they complete; a fixture addition by itself is not passing installed evidence.
+database privacy receipts for this checkpoint are recorded below; the fixture
+addition alone was not treated as passing installed evidence.
 
 ### Build setup and acceptance boundary
 
@@ -2188,3 +2188,38 @@ unrelated navigation link or remediation reference. The first database gate
 launch on `82c44d8cb` was deliberately stopped while correcting that manifest;
 it is not a passing receipt. Package validation and the gates must use the
 corrected clean commit below.
+
+### Final clean receipts (2026-11-09)
+
+Both database gates used `scripts/run-gate.sh` on clean `8a8be3602`, with
+task-owned `CARGO_HOME`, `RUSTUP_HOME` and `CARGO_TARGET_DIR` and two build jobs.
+The first full People/privacy gate ended `rc=0` (07:40:02 launch, 07:53 receipt;
+input fingerprint `sha256:8c12aeffde406efb5d22f7d10173567a2e3252f7d26e1304b07d19e2314fd874`).
+All seven tables under both runtime roles passed protection-removal failing
+controls followed by restored owner/other-user/admin checks. Two earlier launches
+were deliberately canceled (`rc=143`): one for invalid app-map metadata, another
+for dirty inputs. Neither is counted as passing.
+
+The full installed route replay launched at 07:53:10 and ended at 07:58:02 with
+`FINAL rc=0`. All **218** legacy route responses and all seven table snapshots
+matched, including other-user/admin attempts and the new JSON/GET controls.
+The installed fifty-reference request returned 202 in **1,141 ms** against the
+unchanged **5,000 ms** deadline. All four public APIs ran through an installed
+consumer; other-user/admin lookup was denied. Installed folder save, invalid
+root-array and empty-folder refusal without clearing, relative root/child
+browsing and traversal refusal passed. The installed Settings asset was checked
+programmatically; this was not a browser test.
+
+The replay used component SHA-256
+`be155b142792816091bdbbe5383187d7d269cba0acbe92a3be3e47851426e1b8`
+and package SHA-256
+`e505adf3c56f6f5ecebc5b451dc7a79f8a76cf4ce3fa7b971d41cb56383933ca`.
+Native tests (34), strict Clippy, Rust formatting, all four regenerated legacy
+fixture sets, root lint, formatting, typecheck (including web and external
+modules), app-map generation and file-size checks passed. Final scoped oracle
+lint also passed. The command logs and reboot resume note are retained in the
+task's persistent scratch folder, outside the repository and its commits.
+
+These receipts prove this checkpoint's installed command-line parity and
+privacy checks. The application, chat and physical-device acceptance gaps above
+remain open; this checkpoint does not finish Phase 5.
