@@ -982,4 +982,9 @@ behavior and external-calendar status controls; full shell/Today/chat; old-scree
 replacement; complete assembled parity; physical second-device trusted HTTPS.
 A disposable certificate, same-computer LAN request or phone-width browser does
 not establish physical-device access or production certificate trust.
+The live run also reproduced Month overflow clicks being intercepted by the next
+row. Its minimum row height now reserves room for the date, three chips and the
+extra-events button. This deliberately exceeds the legacy minimum; the rendered
+comparison still checks other Month structure and labels against production.
+The live runner checks the entire overflow button fits its event list before clicking.
 Re-centering after a saved timezone change remains open; this slice covers initial positioning.

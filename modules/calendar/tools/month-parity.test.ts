@@ -118,9 +118,13 @@ test("rendered Month dates, rows and chips match production React", () => {
               );
               assert(expectedMonth.cells.some((cell) => cell.more !== null));
             }
+            const { height: rustMinimum, ...actualMonth } = presentation(JSON.parse(result.stdout));
+            const { height: productionMinimum, ...expectedPresentation } = expectedMonth;
+            // Rust deliberately reserves more room so three chips and More remain clickable.
+            assert(parseFloat(rustMinimum ?? "0") >= parseFloat(productionMinimum ?? "0"));
             assert.deepEqual(
-              presentation(JSON.parse(result.stdout)),
-              expectedMonth,
+              actualMonth,
+              expectedPresentation,
               JSON.stringify({ cursor, zone, twelve, populated })
             );
             client.clear();

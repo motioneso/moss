@@ -419,5 +419,8 @@ and phone widths and checks retained scroll after a synthetic cached event
 changes on the disposable server. It does not substitute API responses.
 Full cutover, provider tools/jobs/execution, full shell/chat, complete parity and
 physical second-device trusted HTTPS remain open as listed in the phase report.
+Month now reserves more minimum row height than the existing screen so three
+event chips and the extra-events button stay inside their clipping container.
+The live check verifies the whole overflow control fits before clicking it.
 Re-centering after a saved timezone change remains open. Browser clamping at
 controlled day-boundary times is not covered by the DOM comparison.
