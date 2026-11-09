@@ -14,11 +14,13 @@ async function client(storage = new Map(), initial = {}) {
     status: 200,
     focused: false,
     storageFails: false,
+    now: 0,
     ...initial
   };
   const window = { ipc: { postMessage: (s) => sent.push(JSON.parse(s)) } };
   const context = {
-    crypto: { randomUUID: () => Math.random().toString() },
+    crypto: { getRandomValues: (values) => values.map(() => Math.floor(Math.random() * 2 ** 32)) },
+    Date: { now: () => state.now },
     document: { hidden: false, hasFocus: () => state.focused },
     localStorage: {
       getItem: (key) => storage.get(key) ?? null,
@@ -42,7 +44,15 @@ async function client(storage = new Map(), initial = {}) {
   };
   vm.runInNewContext(source, context);
   await new Promise(setImmediate);
-  return { state, sent, tick, ack: (message) => window.mossNoticeAck(message.receipt) };
+  return {
+    state,
+    sent,
+    tick: async (elapsed = 5000) => {
+      state.now += elapsed;
+      await tick();
+    },
+    ack: (message) => window.mossNoticeAck(message.receipt)
+  };
 }
 
 const kinds = (sent) => sent.map((message) => message.notice);
@@ -66,7 +76,7 @@ test("missing native acceptance retries instead of losing the new notice", async
   await tick();
   assert.deepEqual(kinds(sent), ["reminder", "reminder"]);
   ack(sent[0]); // An expired attempt cannot acknowledge a newer attempt.
-  await tick();
+  await tick(10000);
   assert.equal(sent.length, 3);
   ack(sent[2]);
   await tick();
@@ -172,4 +182,42 @@ test("malformed saved receipts are retained and do not produce an alert flood", 
   await tick();
   assert.equal(sent.length, 0);
   assert.equal(storage.get("moss.desktop.receipts.v1:first"), "broken");
+});
+
+test("a still-unread ID stays known when recent history fills up", async () => {
+  const known = Array.from({ length: 1000 }, (_, id) => String(id));
+  const storage = new Map([
+    [
+      "moss.desktop.receipts.v1:first",
+      JSON.stringify({
+        reminder: { known, pending: [] },
+        chat: { known: null, pending: [] }
+      })
+    ]
+  ]);
+  const { sent, tick, ack } = await client(storage, { events: ["0", "999", "new"] });
+  assert.deepEqual(kinds(sent), ["reminder"]);
+  ack(sent[0]);
+  await tick();
+  assert.equal(sent.length, 1);
+});
+
+test("missing acceptance backs off retries to at most once a minute", async () => {
+  const { state, sent, tick } = await client();
+  state.events.push("pending");
+  await tick();
+  await tick();
+  assert.equal(sent.length, 2);
+  await tick();
+  assert.equal(sent.length, 2);
+  await tick();
+  assert.equal(sent.length, 3);
+  await tick(20000);
+  assert.equal(sent.length, 4);
+  await tick(40000);
+  assert.equal(sent.length, 5);
+  await tick(55000);
+  assert.equal(sent.length, 5);
+  await tick();
+  assert.equal(sent.length, 6);
 });

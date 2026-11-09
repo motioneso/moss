@@ -1,8 +1,8 @@
-/* global crypto, document, localStorage, window */
+/* global document, window */
 // Runs in each server's persisted web profile, using that profile's signed-in session.
 (() => {
   const prefix = "moss.desktop.receipts.v1:";
-  const documentId = crypto.randomUUID();
+  const documentId = Array.from(crypto.getRandomValues(new Uint32Array(4))).join("-");
   let account = null;
   let busy = false;
   let sequence = 0;
@@ -23,7 +23,7 @@
   };
   const save = (actor, record) => localStorage.setItem(prefix + actor, JSON.stringify(record));
 
-  // Native replies only after the desktop notification API accepts the banner (or the user
+  // Native replies only after the notification backend reports success (or the user
   // has disabled banners). This is an at-least-once receipt, not proof the person read it.
   window.mossNoticeAck = (token) => {
     const delivery = inflight.get(token);
@@ -51,15 +51,25 @@
     }
     // Bound receipts to the recent history and the current unread page. Pending delivery
     // only matters while an item remains visible in the server's current result.
-    channel.known = [...new Set([...known, ...next])].slice(-1000);
+    const present = new Set(next);
+    channel.known = [...[...known].filter((id) => !present.has(id)), ...next].slice(-1000);
     channel.pending = next.filter((id) => pending.has(id));
     const quiet = !document.hidden && document.hasFocus();
     if (quiet) channel.pending = [];
     save(account, record); // Never send before the pending batch is durable.
     if (!channel.pending.length) return;
+    const previous = [...inflight.values()].find((delivery) => delivery.kind === kind);
+    if (previous && Date.now() < previous.retryAt) return;
     for (const [token, delivery] of inflight) if (delivery.kind === kind) inflight.delete(token);
+    const attempts = (previous?.attempts || 0) + 1;
     const token = `${documentId}:${++sequence}`;
-    inflight.set(token, { account, kind, ids: channel.pending });
+    inflight.set(token, {
+      account,
+      kind,
+      ids: channel.pending,
+      attempts,
+      retryAt: Date.now() + Math.min(60000, 5000 * 2 ** Math.min(attempts - 1, 4))
+    });
     window.ipc.postMessage(JSON.stringify({ notice: kind, receipt: token }));
   };
 
