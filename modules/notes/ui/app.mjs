@@ -2,6 +2,17 @@
 import { moduleClient } from "./guest-bridge.mjs";
 const client = moduleClient();
 const $ = (id) => document.getElementById(id);
+// Only fixed path failures become guidance; never display arbitrary backend text.
+const pathFailures = new Map([
+  [
+    "Path does not exist or cannot be resolved",
+    "That folder couldn't be found or opened. Check the path and permissions."
+  ],
+  [
+    "Path is not within an allowed notes root",
+    "That folder is outside your allowed notes folders. Choose an allowed folder."
+  ]
+]);
 let known = false;
 let busy = false;
 let linked = null;
@@ -27,6 +38,7 @@ async function request(method, path, body) {
   if (reply.status >= 400) {
     const error = new Error("Notes request failed");
     error.status = reply.status;
+    if (reply.status === 400) error.folderMessage = pathFailures.get(reply.body?.error);
     throw error;
   }
   return reply.body;
@@ -101,7 +113,8 @@ async function list(path) {
     $("browse-error").textContent =
       error.status === 503
         ? "No allowed folders are available. Ask the server administrator to configure notes folders for your account."
-        : "Couldn't open that folder. Choose an allowed folder, or check its path and permissions.";
+        : error.folderMessage ||
+          "Couldn't open that folder. Choose an allowed folder, or check its path and permissions.";
   }
 }
 async function save(path) {
@@ -122,7 +135,8 @@ async function save(path) {
       $("browse-error").textContent =
         error.status === 503
           ? "No allowed folders are available. Ask the server administrator to configure notes folders for your account."
-          : "Couldn't link that folder. Choose an allowed folder, or check its path and permissions.";
+          : error.folderMessage ||
+            "Couldn't link that folder. Choose an allowed folder, or check its path and permissions.";
       $("notice").textContent = "Folder was not changed.";
       focusAfter = $("folder-path");
       return;

@@ -1527,3 +1527,38 @@ checkpoint retention, managed publication/fencing, proposals/receipts/reconcilia
 private exports/daily archives, full HTTP/path parity, assembled Settings/chat and
 physical second-device HTTPS proof remain unfinished. No screen changes or live
 assembled UI/device proof are claimed. Do not replace working legacy Notes.
+
+## Part twenty checkpoint — folder failure responses
+
+Folder selection and browsing now distinguish a missing/unresolved path from a
+path refused by the account's allowed roots. These are the fixed legacy error
+responses rather than the previous generic folder error. The chooser shows separate
+guidance, keeps the entered path editable and leaves the current link visible after
+a rejected save. Only these fixed errors select specific guidance; unknown errors
+keep the existing generic fallback. The module still reaches preferences and files
+only through server ports. No database or runtime permission
+changes are introduced. The package version, changelog and app map describe the
+updated responses.
+
+The differential gate adds real empty, missing and other-account folder paths
+while retaining an existing saved source. Its 60 cases compare responses, saved
+source and preference revision after every request, so a matching error alone is
+insufficient.
+The same installed-package regression failed against the prior host response.
+The existing preference RLS-removal control must expose the owner's source and
+then restore the denial. Final checks and the independent review are recorded
+in this task's proof artifact.
+
+Builds use task-owned scratch Cargo/Rust homes, separate ordinary and write-tools
+Wasm target folders, the declared Wasm target and approved pinned `wit-bindgen`
+0.57.1. Nothing is installed globally. Database tests use `scripts/run-gate.sh`.
+
+This is a bounded parity checkpoint. The vault still refuses symlink descendants,
+relative paths and traversal; the legacy handler can differ on these inputs and
+on missing paths outside allowed roots and non-directory sources. Locale-sensitive
+directory ordering and other invalid-input HTTP parity remain unfinished. Configured embeddings,
+installed chat approval/write execution, production sync and worker dispatch,
+singleton coalescing and recall warmup, recovery scheduling and retention,
+managed publication and reconciliation, private exports/daily archives,
+assembled Settings/chat and physical second-device HTTPS remain continuation
+work. Do not replace working legacy Notes with this package.

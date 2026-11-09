@@ -121,12 +121,10 @@ impl FolderSettingsPorts {
         let selected = PathBuf::from(text);
         let folder = match VaultContext::at_allowed_root(scope.access(), &selected, &allowed) {
             Ok(folder) => folder,
-            Err(_) => {
-                return Ok(error(
-                    400,
-                    "Path is not an available folder within an allowed notes root",
-                ))
+            Err(vault::VaultError::Escape(_)) => {
+                return Ok(error(400, "Path is not within an allowed notes root"))
             }
+            Err(_) => return Ok(error(400, "Path does not exist or cannot be resolved")),
         };
         if request.operation == "folder.set" {
             return self.save(scope, &config.path_key, path);

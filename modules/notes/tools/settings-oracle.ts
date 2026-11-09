@@ -101,7 +101,26 @@ export async function settingsOracle() {
           body: { path: null }
         },
         { method: "PUT", route: "/notes-source", source: roots[index]!, status: null, body: null },
-        { method: "PUT", route: "/notes-source", source: roots[index]!, status: null, body: {} }
+        { method: "PUT", route: "/notes-source", source: roots[index]!, status: null, body: {} },
+        // Keep an existing link while checking errors: a rejected selection must
+        // not silently unlink it. Use real filesystem paths, not error stand-ins.
+        ...["", join(roots[index]!, "missing"), roots[(index + 1) % roots.length]!].flatMap(
+          (path) => [
+            {
+              method: "PUT",
+              route: "/notes-source",
+              source: roots[index]!,
+              status: null,
+              body: { path }
+            },
+            {
+              method: "GET",
+              route: `/notes-source/directories?path=${encodeURIComponent(path)}`,
+              source: roots[index]!,
+              status: null
+            }
+          ]
+        )
       ];
       for (const entry of variants) {
         await db.query("DELETE FROM app.preferences WHERE owner_user_id=$1", [id]);
@@ -119,10 +138,16 @@ export async function settingsOracle() {
           url: `/api/me${entry.route}`,
           ...("body" in entry && entry.body !== null ? { payload: entry.body } : {})
         });
+        const saved = await db.query(
+          "SELECT value_json,revision FROM app.preferences WHERE owner_user_id=$1 AND key='notes-source-path'",
+          [id]
+        );
         expected.push({
           actor: id,
           ...entry,
-          expected: { status: reply.statusCode, body: reply.json() }
+          expected: { status: reply.statusCode, body: reply.json() },
+          savedSource: saved.rows[0]?.value_json ?? null,
+          savedRevision: saved.rows[0]?.revision
         });
       }
     }

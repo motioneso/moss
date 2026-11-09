@@ -166,6 +166,22 @@ fn installed_settings_match_legacy_and_owner_privacy_fails_without_rls() {
             "{} {}",
             case["method"], case["route"]
         );
+        let saved = rt
+            .block_on(bootstrap.query_one(
+                "SELECT value_json,revision FROM app.preferences WHERE owner_user_id=$1 AND key='notes-source-path'",
+                &[&actor],
+            ))
+            .unwrap();
+        assert_eq!(
+            saved.get::<_, Value>(0),
+            case["savedSource"],
+            "Saved source differs: {case}"
+        );
+        assert_eq!(
+            json!(saved.get::<_, i32>(1)),
+            case["savedRevision"],
+            "Source revision differs: {case}"
+        );
     }
     println!(
         "PASS {} actual legacy Settings handler comparisons through installed guest routes",
