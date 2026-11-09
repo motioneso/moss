@@ -17,7 +17,12 @@ const pairs = [
   ["e\u0301clair", "fable"],
   ["École", "e\u0301cole"],
   ["cafe\u0301", "café"],
-  ["Zebra", "apple"]
+  ["Zebra", "apple"],
+  ["Άλφα", "Αλφα"],
+  ["Α\u0301λφα", "Αλφα"],
+  ["Ήτα", "Αλφα"],
+  ["Η\u0301τα", "Αλφα"],
+  ["\u1102\u1161", "가"]
 ];
 const cases = pairs.flatMap(([a, b]) => [
   { a, b, expected: Math.sign(a.localeCompare(b)) },

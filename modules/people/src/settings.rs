@@ -128,14 +128,14 @@ pub(crate) fn locale_compare(a: &str, b: &str) -> std::cmp::Ordering {
         let mut primary: Vec<(u8, u32)> = Vec::new();
         let mut secondary: Vec<u32> = Vec::new();
         for c in s.chars() {
-            if let Some(rank) = combining_rank(c) {
-                if let Some(last) = secondary.last_mut() {
-                    *last = rank;
-                }
-                continue;
-            }
             let (expansion, rank) = base_expansion(c);
             for (i, base) in expansion.chars().enumerate() {
+                if let Some(rank) = combining_rank(base) {
+                    if let Some(last) = secondary.last_mut() {
+                        *last = rank;
+                    }
+                    continue;
+                }
                 primary.push(primary_key(base));
                 secondary.push(if i == 0 { rank } else { 0 });
             }
@@ -204,7 +204,13 @@ fn base_expansion(c: char) -> (String, u32) {
         'Đ' | 'đ' => ("d".to_owned(), 1),
         _ => {
             let (base, rank) = base_letter(c);
-            (base.to_string(), rank)
+            // Preserve the established special-letter weights; for other
+            // composed characters compare their canonical base and accents.
+            if base == c && rank == 0 {
+                (c.nfd().collect(), 0)
+            } else {
+                (base.to_string(), rank)
+            }
         }
     };
     (expansion, rank)

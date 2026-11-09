@@ -53,7 +53,7 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
     std::fs::create_dir_all(notes_root.join("Family/Banana")).unwrap();
     std::fs::create_dir_all(notes_root.join("Family/Ábc")).unwrap();
     std::fs::create_dir_all(notes_root.join("Work")).unwrap();
-    for name in ["Banana", "apple", "Ära", "zebra", "e\u{0301}cole", "école"] {
+    for name in ["Banana", "apple", "Ära", "zebra", "\u{1102}\u{1161}", "가"] {
         std::fs::create_dir_all(notes_root.join(name)).unwrap();
     }
     let roots = ["actor", "other", "admin"]

@@ -1663,11 +1663,15 @@ only host changes are the People replay's folder fixture and its native dev-depe
 lock entry. The module remains a client of host ports, without database or filesystem
 handles. Public APIs, SQL, privacy rules and folder settings are unchanged.
 
-A JavaScript oracle records thirty-two directional comparisons, including composed
+A JavaScript oracle records forty-two directional comparisons, including composed
 and decomposed Latin, Greek and Hangul, canonical combining-mark reordering and case
-comparisons. Native tests consume those recorded signs. The installed route replay
-adds distinct composed and decomposed directory names to both real filesystem trees
-and compares their full returned names and paths against the legacy handler.
+comparisons. Native tests consume those recorded signs. Unrecognized composed letters
+are decomposed into their base and accents for comparison, retaining the existing
+special-letter weights. This avoids regressing decomposed Greek ordering. The installed
+route replay adds decomposed `나` and composed `가` names to both real filesystem trees
+and compares their order and exact returned paths against the legacy handler. These
+names have distinct collation keys; equal-key comparisons are checked by native vectors
+without relying on two independent filesystems to return tied names in the same order.
 
 An initial investigation rediscovered the documented dollar-token compatibility
 exception. A trial reproduction failed the existing intentional-safeguard test; all
@@ -1684,3 +1688,14 @@ backend-failure/large-data coverage remain open. Real UI/chat approvals, sign-in
 trusted origins, privacy and HTTPS from desktop and a second physical device still
 require proof through the assembled Rust application. No standalone test or rendered
 substitute is offered as that proof.
+
+### Independent review follow-up
+
+The first review identified a Greek ordering regression from composing a character
+outside the existing accent table. The fallback decomposition and four added Greek
+comparisons address it. Its major tied-directory replay concern was not reproduced
+on this Linux/Node runtime: a fresh `readdir` probe returned UTF-8 byte order, matching
+the host, despite scrambled creation order. The replay nevertheless now uses distinct
+Hangul collation keys to avoid relying on cross-filesystem tie order. Native vectors
+retain canonical equality coverage. The stale pre-manifest host build was restarted;
+only final successful builds and gates may be cited as verification.

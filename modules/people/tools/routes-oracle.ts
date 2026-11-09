@@ -42,7 +42,7 @@ export async function routesOracle() {
   await mkdir(join(selected, "Family", "Banana"));
   await mkdir(join(selected, "Family", "Ábc"));
   await mkdir(join(selected, "Work"));
-  for (const name of ["Banana", "apple", "Ära", "zebra", "e\u0301cole", "école"])
+  for (const name of ["Banana", "apple", "Ära", "zebra", "\u1102\u1161", "가"])
     await mkdir(join(selected, name));
   const oldRoots = process.env.MOSS_NOTES_ROOTS;
   process.env.MOSS_NOTES_ROOTS = root;

@@ -30,5 +30,15 @@
   { "a": "café", "b": "café", "expected": 0 },
   { "a": "café", "b": "café", "expected": 0 },
   { "a": "Zebra", "b": "apple", "expected": 1 },
-  { "a": "apple", "b": "Zebra", "expected": -1 }
+  { "a": "apple", "b": "Zebra", "expected": -1 },
+  { "a": "Άλφα", "b": "Αλφα", "expected": 1 },
+  { "a": "Αλφα", "b": "Άλφα", "expected": -1 },
+  { "a": "Άλφα", "b": "Αλφα", "expected": 1 },
+  { "a": "Αλφα", "b": "Άλφα", "expected": -1 },
+  { "a": "Ήτα", "b": "Αλφα", "expected": 1 },
+  { "a": "Αλφα", "b": "Ήτα", "expected": -1 },
+  { "a": "Ήτα", "b": "Αλφα", "expected": 1 },
+  { "a": "Αλφα", "b": "Ήτα", "expected": -1 },
+  { "a": "나", "b": "가", "expected": 1 },
+  { "a": "가", "b": "나", "expected": -1 }
 ]
