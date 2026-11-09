@@ -28,6 +28,18 @@ pub struct Layout {
 }
 
 impl Layout {
+    #[cfg(unix)]
+    pub(crate) fn open_supervisor_lock(&self) -> std::io::Result<std::fs::File> {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .open(&self.lock)
+    }
+
     /// Creates the owner-only folders. `root` may not exist yet.
     #[cfg(unix)]
     pub fn create(root: &Path) -> io::Result<Layout> {

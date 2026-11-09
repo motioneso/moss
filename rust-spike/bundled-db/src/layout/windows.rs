@@ -27,6 +27,29 @@ impl fmt::Debug for Directories {
 }
 
 impl Layout {
+    pub(crate) fn open_supervisor_lock(&self) -> io::Result<std::fs::File> {
+        let root = &self.windows._root;
+        if self.lock != root.path().join("moss-db.lock") {
+            return Err(io::Error::other("lock path differs from the pinned layout"));
+        }
+        let name = OsStr::new("moss-db.lock");
+        match root.open_file(name) {
+            Ok(file) => Ok(file),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                match root.create_file(name) {
+                    Ok(file) => Ok(file),
+                    // Another starter can create the file first. Reopen with validation;
+                    // never truncate, repair its ACL or adopt an unvalidated handle.
+                    Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                        root.open_file(name)
+                    }
+                    Err(error) => Err(error),
+                }
+            }
+            Err(error) => Err(error),
+        }
+    }
+
     /// Create or resume a private layout. Existing ACLs are checked, never repaired.
     /// Partial setup can be resumed; a missing *ancestor* is still an error.
     pub fn create(path: &Path) -> io::Result<Self> {
@@ -90,8 +113,8 @@ impl Layout {
         Ok(())
     }
 
-    /// Writers must hold the supervisor/startup lock. This API does not acquire it.
-    pub fn write_state(&self, bytes: &[u8]) -> io::Result<()> {
+    /// Used through InstallLock so external writers cannot bypass supervisor serialization.
+    pub(crate) fn write_state(&self, bytes: &[u8]) -> io::Result<()> {
         self.check_run()?;
         self.windows
             .run
