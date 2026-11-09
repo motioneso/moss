@@ -203,11 +203,9 @@ const screens = {
             ? button("Send test notification", "secondary", () => post({ do: "test-notification" }))
             : ""
         )
-      : muted(
-          "Tray, start at login and desktop notifications are available on Linux only in this build."
-        ),
+      : muted("Desktop integration is unavailable on this system."),
     muted(
-      "Notifications report server connections and stops. Reminder and chat notifications are not connected yet."
+      "Notifications report server connections and stops. While connected, new reminders and chat replies appear when the server page is in the background. Notification text stays in Moss."
     ),
     button("Quit app", "quiet", () => post({ do: "quit" }))
   ],

@@ -36,6 +36,10 @@ const SERVERS_LINK: &str = "moss-app://servers";
 
 enum UserEvent {
     Ipc(String),
+    Notice {
+        server: String,
+        kind: String,
+    },
     Show(Value),
     Open(Opened),
     ShowServers,
@@ -270,6 +274,19 @@ fn asset(web: &std::path::Path, request: Request<Vec<u8>>) -> Response<Cow<'stat
 impl App {
     fn handle(&mut self, event: UserEvent) {
         match event {
+            UserEvent::Notice { server, kind } => {
+                if self.preferences.notifications
+                    && self.current.as_ref() == Some(&server)
+                    && self.server.as_ref().is_some_and(|view| view.id == server)
+                {
+                    let (title, body) = match kind.as_str() {
+                        "chat" => ("Moss chat", "A new reply is ready in Moss."),
+                        "reminder" => ("Moss reminder", "A new notification is waiting in Moss."),
+                        _ => return,
+                    };
+                    let _ = desktop::notify(title, body);
+                }
+            }
             UserEvent::Ipc(body) => {
                 if let Ok(message) = serde_json::from_str::<Value>(&body) {
                     self.turn += 1;
@@ -499,7 +516,7 @@ impl App {
     fn show_desktop(&mut self, error: Option<String>) {
         self.current = None;
         self.show(json!({"screen":"desktop", "tray":self.tray.is_some(),
-            "supported":cfg!(target_os = "linux"), "login":desktop::starts_at_login(&self.store),
+            "supported":cfg!(any(target_os = "linux", target_os = "macos", windows)), "login":desktop::starts_at_login(&self.store),
             "notifications":self.preferences.notifications, "code":if error.is_some() { "app_desktop_integration_failed" } else { "" }, "error":error}));
     }
 
@@ -752,7 +769,27 @@ impl App {
                 url == origin || url.starts_with(&format!("{origin}/"))
             })
             .with_new_window_req_handler(|_, _| NewWindowResponse::Deny)
-            .with_initialization_script("window.mossApp = true;");
+            .with_ipc_handler({
+                let proxy = self.proxy.clone();
+                let server = opened.id.clone();
+                let origin = opened.origin.clone();
+                move |request: Request<String>| {
+                    if url::Url::parse(&request.uri().to_string())
+                        .is_ok_and(|u| u.origin().ascii_serialization() == origin)
+                    {
+                        if let Ok(message) = serde_json::from_str::<Value>(request.body()) {
+                            if let Some(kind @ ("chat" | "reminder")) = message["notice"].as_str() {
+                                let _ = proxy.send_event(UserEvent::Notice {
+                                    server: server.clone(),
+                                    kind: kind.into(),
+                                });
+                            }
+                        }
+                    }
+                }
+            })
+            .with_initialization_script("window.mossApp = true;")
+            .with_initialization_script(include_str!("../assets/notices.js"));
         let view = build(builder, &self.window);
         #[cfg(target_os = "linux")]
         trust_linux::install(&view, opened, self.proxy.clone())?;

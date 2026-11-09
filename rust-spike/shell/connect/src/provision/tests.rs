@@ -106,3 +106,28 @@ fn concurrent_setups_reserve_different_ports() {
     assert_ne!(first, second, "unfinished setups must not share a port");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// The staged install supplies real PostgreSQL, schema and supervisor binaries. Run through
+/// verify-gate with MOSS_CLEAN_INSTALL and MOSS_CLEAN_DATA pointing at task-owned folders.
+#[cfg(unix)]
+#[test]
+#[ignore = "requires a staged install and verify-gate"]
+fn staged_install_provisions_fresh_local_databases() {
+    assert_eq!(std::env::var("JARVIS_GATE_RUN").as_deref(), Ok("1"));
+    let install = PathBuf::from(std::env::var_os("MOSS_CLEAN_INSTALL").expect("staged install"));
+    let data = PathBuf::from(std::env::var_os("MOSS_CLEAN_DATA").expect("clean data folder"));
+    assert!(
+        !data.exists(),
+        "proof must start without an instance folder"
+    );
+    let store = Store::new(data);
+    for name in ["default", "second"] {
+        create_instance(&store, &install, name).expect("real clean-install provision");
+        let folder = store.instance_folder(name);
+        assert!(Config::read(&folder.join(NETWORK_FILE)).is_ok());
+        assert!(folder.join("database/db/PG_VERSION").is_file());
+        assert!(supervisor_running(&install, &folder.join(DATABASE_FOLDER)));
+    }
+    println!("PROVISION_PASS: two fresh instances, real bundled PostgreSQL, schema applied, supervisors ready");
+    // The live proof reuses these instances, then stops and deletes them in its cleanup.
+}
