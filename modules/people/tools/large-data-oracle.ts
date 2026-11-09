@@ -27,8 +27,8 @@ export async function largeDataOracle(
   await bootstrap.query(
     `INSERT INTO app.person_context_identities(owner_user_id,person_id,identity_kind,source_kind,
        normalized_value,display_value,status,first_seen_at,last_seen_at,created_at,updated_at)
-     SELECT $1,id,kind,'manual',value,value,
-       CASE WHEN kind='email_address' AND n=1005 THEN 'rejected' ELSE 'active' END,
+     SELECT $1,id,kind::app.person_context_identity_kind,'manual',value,value,
+       (CASE WHEN kind='email_address' AND n=1005 THEN 'rejected' ELSE 'active' END)::app.person_context_identity_status,
        '2020-01-01Z','2020-01-01Z','2020-01-01Z','2020-01-01Z'
      FROM unnest($2::uuid[]) WITH ORDINALITY AS input(id,n)
      CROSS JOIN LATERAL (VALUES ('alias','Paging alias'),
@@ -38,7 +38,7 @@ export async function largeDataOracle(
   await bootstrap.query(
     `INSERT INTO app.person_context_links(owner_user_id,person_id,source_kind,source_ref,source_ref_hash,
        link_kind,occurred_at,created_at,updated_at)
-     SELECT $1,$2,CASE WHEN n<=1000 THEN 'manual' ELSE 'note' END,'paging-'||n,'paging-hash-'||n,'related',
+     SELECT $1,$2,(CASE WHEN n<=1000 THEN 'manual' ELSE 'note' END)::app.person_context_source_kind,'paging-'||n,'paging-hash-'||n,'related',
        '2020-01-01Z'::timestamptz+n*INTERVAL '1 second','2020-01-01Z','2020-01-01Z'
      FROM generate_series(1,1005) n`,
     [actor, ids[0]]
