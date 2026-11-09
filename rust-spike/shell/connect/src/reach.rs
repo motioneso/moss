@@ -465,6 +465,9 @@ pub async fn stop_local(install: &Path, folder: &Path) -> Result<(), Problem> {
     let (running, _) = local(folder).await?;
     #[cfg(unix)]
     {
+        if running.pid == 0 || running.pid > i32::MAX as u32 {
+            return Err(Problem::Unreachable);
+        }
         // SAFETY: plain signal to a process whose certificate answered for this folder just now.
         if unsafe { libc::kill(running.pid as i32, libc::SIGTERM) } != 0 {
             return Err(Problem::Unreachable);

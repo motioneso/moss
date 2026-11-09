@@ -1,5 +1,13 @@
 use super::*;
 
+/// A store whose folders exist and are private, whatever the shell's umask is.
+fn store_in(dir: &Path) -> Store {
+    let store = Store::new(dir.join("data"));
+    private_dir(&store.data).unwrap();
+    private_dir(&store.servers_dir()).unwrap();
+    store
+}
+
 fn scratch() -> PathBuf {
     let dir = std::env::temp_dir().join(format!("moss-provision-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
@@ -36,11 +44,28 @@ fn an_existing_instance_is_never_overwritten() {
     let dir = scratch();
     std::fs::write(dir.join("moss-db"), "").unwrap();
     std::fs::create_dir(dir.join("postgres")).unwrap();
-    let store = Store::new(dir.join("data"));
+    let store = store_in(&dir);
     std::fs::create_dir_all(store.instance_folder("work")).unwrap();
-    std::fs::write(store.instance_folder("work").join("keep"), "x").unwrap();
+    std::fs::write(store.instance_folder("work").join(NETWORK_FILE), "x").unwrap();
     assert_eq!(create_instance(&store, &dir, "work"), Err(Failure::Exists));
-    assert!(store.instance_folder("work").join("keep").is_file());
+    assert!(store.instance_folder("work").join(NETWORK_FILE).is_file());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[cfg(unix)]
+#[test]
+fn an_interrupted_setup_is_cleared_and_retried() {
+    let dir = scratch();
+    std::fs::write(dir.join("moss-db"), "").unwrap();
+    std::fs::create_dir(dir.join("postgres")).unwrap();
+    let store = store_in(&dir);
+    let half = store.instance_folder("work");
+    std::fs::create_dir_all(&half).unwrap();
+    std::fs::write(half.join("leftover"), "x").unwrap();
+    // The retry gets past the Exists check, clears the leftovers, and fails later on the
+    // missing OpenSSL or database, not with Exists.
+    assert_ne!(create_instance(&store, &dir, "work"), Err(Failure::Exists));
+    assert!(!half.join("leftover").exists());
     let _ = std::fs::remove_dir_all(dir);
 }
 

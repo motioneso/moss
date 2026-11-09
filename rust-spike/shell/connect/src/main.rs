@@ -347,7 +347,12 @@ impl App {
     /// Opens this computer's default server, setting it up first when it does not exist yet.
     fn this_computer(&mut self) {
         let id = store::local_id("default");
-        if self.store.find(&self.servers, &id).is_some() {
+        let set_up = self
+            .store
+            .targets(&self.servers)
+            .iter()
+            .any(|t| t.id() == id);
+        if set_up {
             return self.choose(id);
         }
         self.create("default".into());

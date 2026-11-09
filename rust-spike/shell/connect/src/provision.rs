@@ -84,18 +84,36 @@ pub fn create_instance(store: &Store, install: &Path, name: &str) -> Result<(), 
         return Err(Failure::NoDatabaseProgram);
     }
     let folder = store.instance_folder(name);
-    if folder.exists() {
-        return Err(Failure::Exists);
-    }
     private_dir(&store.data).map_err(|_| Failure::Other)?;
     private_dir(&store.servers_dir()).map_err(|_| Failure::Other)?;
-    private_dir(&folder).map_err(|_| Failure::Other)?;
+    // A folder with no network file is a setup that was interrupted. Clear it and start over.
+    if folder.exists() {
+        if folder.join(NETWORK_FILE).exists() {
+            return Err(Failure::Exists);
+        }
+        stop_database(install, &folder).map_err(|_| Failure::DatabaseFailed)?;
+        std::fs::remove_dir_all(&folder).map_err(|_| Failure::Other)?;
+    }
+    // An exclusive create, so two setups of one name cannot both proceed.
+    make_private_folder(&folder)?;
     let made = prepare(store, install, &folder);
-    if made.is_err() {
-        let _ = stop_database(install, &folder);
+    if made.is_err() && stop_database(install, &folder).is_ok() {
         let _ = std::fs::remove_dir_all(&folder);
     }
     made
+}
+
+fn make_private_folder(path: &Path) -> Result<(), Failure> {
+    let mut builder = std::fs::DirBuilder::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder.create(path).map_err(|e| match e.kind() {
+        std::io::ErrorKind::AlreadyExists => Failure::Exists,
+        _ => Failure::Other,
+    })
 }
 
 fn prepare(store: &Store, install: &Path, folder: &Path) -> Result<(), Failure> {
