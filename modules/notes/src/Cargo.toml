@@ -50,3 +50,8 @@ required-features = ["write-tools"]
 name = "sync"
 path = "tests/sync.rs"
 required-features = ["write-tools"]
+
+[[test]]
+name = "manual_sync"
+path = "tests/manual_sync.rs"
+required-features = ["write-tools"]

@@ -26,8 +26,12 @@ use uuid::Uuid;
 
 #[path = "ingest/write_tools.rs"]
 mod durable_writes;
+#[path = "ingest/manual_sync.rs"]
+mod manual_sync;
 #[path = "ingest/recovery.rs"]
 mod recovery;
+#[path = "support/mod.rs"]
+mod support;
 
 struct MutatingStub {
     file: PathBuf,
@@ -391,14 +395,7 @@ impl Ports for CapturedQueue {
     }
 }
 impl Fixture {
-    fn durable_call(
-        &self,
-        db: Database,
-        actor: Uuid,
-        kind: &str,
-        payload: Value,
-        fail: bool,
-    ) -> (Result<String>, Vec<Value>) {
+    fn durable_ports(&self, db: Database, fail: bool) -> (Arc<dyn Ports>, Arc<Mutex<Vec<Value>>>) {
         let jobs = Arc::new(Mutex::new(Vec::new()));
         // A fresh port chain for every call proves checkpoints survive worker restart.
         let queue = Arc::new(CapturedQueue {
@@ -423,6 +420,9 @@ impl Fixture {
             )
             .unwrap(),
         );
+        (ports, jobs)
+    }
+    fn durable_manifest(&self) -> moss_module_host::manifest::Manifest {
         let mut manifest = (*self.manifest).clone();
         manifest
             .capabilities
@@ -435,9 +435,20 @@ impl Fixture {
             "notes.sync".into(),
             serde_json::from_value(json!({"checkpointId":{"kind":"id"}})).unwrap(),
         );
+        manifest
+    }
+    fn durable_call(
+        &self,
+        db: Database,
+        actor: Uuid,
+        kind: &str,
+        payload: Value,
+        fail: bool,
+    ) -> (Result<String>, Vec<Value>) {
+        let (ports, jobs) = self.durable_ports(db, fail);
         let result = self.host.call(
             &self.wasm,
-            Arc::new(manifest),
+            Arc::new(self.durable_manifest()),
             AccessContext::new(actor, "durable-notes-sync"),
             ports,
             kind,

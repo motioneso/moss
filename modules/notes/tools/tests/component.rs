@@ -73,6 +73,21 @@ fn actual_guest_runs_without_wasi_and_archive_is_reproducible() {
         )
         .is_err());
     assert_eq!(sync_ports.0.load(Ordering::SeqCst), 0);
+    let manual = host
+        .call(
+            &wasm,
+            manifest.clone(),
+            AccessContext::new(uuid::Uuid::new_v4(), "ordinary-manual-sync-unavailable"),
+            sync_ports.clone(),
+            "route",
+            r#"{"method":"POST","path":"/notes/sync"}"#,
+        )
+        .unwrap();
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&manual).unwrap(),
+        serde_json::json!({"status":404,"body":{"error":"Not Found"}})
+    );
+    assert_eq!(sync_ports.0.load(Ordering::SeqCst), 0);
     let unavailable = host
         .call(
             &wasm,

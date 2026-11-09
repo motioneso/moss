@@ -9,6 +9,13 @@ pub fn handle(host: &impl Host, payload: &str) -> Result<String> {
     Ok(serde_json::to_string(&response)?)
 }
 fn execute(host: &impl Host, request: &RouteRequest) -> Result<Response> {
+    #[cfg(feature = "write-tools")]
+    if request.method == "POST" && request.path == "/notes/sync" {
+        // Keep the legacy stored-preference check. Resolving or walking files is
+        // worker work; caller-supplied source/account fields are never forwarded.
+        return Ok(manual_sync(host)
+            .unwrap_or_else(|_| Response::new(500, json!({"error":"Internal server error"}))));
+    }
     let (operation, parameters) = match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/notes-source") => ("folder.get", json!({})),
         ("GET", "/notes-last-sync") => ("folder.status", json!({})),
@@ -53,6 +60,27 @@ fn execute(host: &impl Host, request: &RouteRequest) -> Result<Response> {
         }
     }
     Ok(response)
+}
+
+#[cfg(feature = "write-tools")]
+fn manual_sync(host: &impl Host) -> Result<Response> {
+    let source: Response =
+        serde_json::from_value(host.call("vault", "folder.get", "source", json!({}))?)?;
+    if source.status != 200 {
+        return Err(moss_module_sdk::Error::new("Notes source lookup failed"));
+    }
+    if source.body.as_str().is_none_or(str::is_empty) {
+        return Ok(Response::new(
+            409,
+            json!({
+                "error":"No notes source configured. Set a path via PUT /api/me/notes-source first."
+            }),
+        ));
+    }
+    let saved = crate::sync_worker::request(host)?;
+    // This is the durable request identity, not a claim of completed indexing.
+    // Outer finalization must commit and publish before returning HTTP success.
+    Ok(Response::new(202, json!({"jobId":saved["checkpointId"]})))
 }
 fn number(raw: &Value, key: &str) -> Value {
     raw.get(key)

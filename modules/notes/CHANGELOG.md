@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.10
+
+- Add the experimental manual sync HTTP handler, preserving the missing-folder response and returning a durable request ID. Installed routing and account privacy are checked with the compiled component. Ordinary manual sync remains unavailable.
+
 ## 0.1.9
 
 - Experimental sync recovery discovers saved unpublished requests in private, bounded pages without knowing their IDs. Completed pages are skipped; queue identities are reused. Ordinary sync remains unavailable.

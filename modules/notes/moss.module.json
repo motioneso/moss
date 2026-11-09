@@ -4,7 +4,7 @@
   "name": "Notes",
   "description": "Choose your notes folder, prepare note changes for approval, and search your indexed notes.",
   "publisher": "Moss",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -188,6 +188,10 @@
           "path": "/settings/connections"
         }
       ]
+    },
+    {
+      "id": "notes.manual-sync-request",
+      "description": "The experimental write-tools component handles POST /notes/sync with the legacy missing-folder response and an accepted durable request ID. It uses only the calling account's saved folder preference; request body and query fields cannot choose another account or source. The surrounding server must commit and publish before returning success. The ordinary package does not declare this route or enable manual sync; installed experimental routing is a test checkpoint, not an assembled app feature. Configured embeddings, worker dispatch, recall preparation and legacy singleton coalescing still need assembly."
     },
     {
       "id": "notes.sync-outcomes",

@@ -26,7 +26,8 @@ impl Registry {
         )
         .unwrap();
         let public = STANDARD.encode(key.public_key().as_ref());
-        let manifest = moss_notes_checks::manifest().unwrap();
+        let manifest: moss_module_host::manifest::Manifest =
+            serde_json::from_slice(&files["moss.module.json"]).unwrap();
         let bytes = pack(files).unwrap();
         let digest = trust::digest(&bytes);
         let artifact = Artifact {
