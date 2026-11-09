@@ -336,7 +336,7 @@ try {
     assert.equal(
       (
         await db.query(
-          "INSERT INTO app.calendar_events(id,connector_account_id,owner_user_id,title,starts_at,ends_at,external_id,external_metadata) SELECT $2,connector_account_id,owner_user_id,$3,$4,$5,$2::text,$6 FROM app.calendar_events WHERE id=$1",
+          "INSERT INTO app.calendar_events(id,connector_account_id,owner_user_id,title,starts_at,ends_at,external_id,external_metadata) SELECT $2::uuid,connector_account_id,owner_user_id,$3,$4,$5,$2::text,$6 FROM app.calendar_events WHERE id=$1",
           [data.event, event.id, event.title, event.starts, event.ends, event.metadata]
         )
       ).rowCount,
