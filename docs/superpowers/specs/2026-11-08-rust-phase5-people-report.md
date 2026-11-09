@@ -1279,28 +1279,32 @@ map's folder-browsing entry describes the reading order.
 
 ### Part-eleven verification
 
-- Installed replay `194006-pL8Vge` passed (`rc=0`) on clean `572725bac`:
-  all 163 legacy route responses and all seven table snapshots matched,
-  including the new folder order, other-user and administrator attempts,
-  signed installation and reload, and all four consumer APIs. The
-  fifty-reference request returned 202 in 5870 ms under the replay's
-  explicit thirty-second deadline. The default five-second budget remains
-  unqualified, as recorded in part ten.
-- Nine-suite People gate `194450-Zbb9SH` passed (`rc=0`) on the same clean
-  commit: ten integration tests across all nine suites, including the
-  failing-first privacy matrix for both runtime roles. Controls fail with
-  protection removed and pass with it restored.
-- Twenty native People tests pass, including the new ordering test. Strict
-  People Clippy, scoped Rust formatting, repository lint, full typecheck,
-  Prettier, file-size check, pure-vector comparison and Rust app-map
-  generation pass.
+- First review found the first ordering pass still differed from the
+  legacy order for punctuation, special letters such as `ø`, `æ`, `œ`
+  and `ß`, distinct accents, and separate accent marks. The comparator
+  now follows the legacy collation order for punctuation, expands or
+  places special letters as the legacy order does, compares accents by
+  kind, and treats separate accent marks as accents. Twelve further
+  native cases pin those pairs against the legacy results.
+- Installed replay `200554-LZ4xRx` passed (`rc=0`) on clean merged
+  `72030a7ca`: all 163 legacy route responses and all seven table
+  snapshots matched, including the new folder order, other-user and
+  administrator attempts, signed installation and reload, and all four
+  consumer APIs. The fifty-reference timing remains as recorded in part
+  ten; the default five-second budget stays unqualified.
+- Nine-suite People gate `201039-jiKrUU` passed (`rc=0`) on the same
+  clean commit: ten integration tests across all nine suites, including
+  the failing-first privacy matrix for both runtime roles. Controls fail
+  with protection removed and pass with it restored.
+- Twenty-one native People tests pass, including both ordering tests.
+  Strict People Clippy, scoped Rust formatting, repository lint, full
+  typecheck, Prettier, file-size check, pure-vector comparison and Rust
+  app-map generation pass.
 - Component SHA-256:
-  `0c50c839db97e5017962e015a081c421b594fa9a944d29595299e5bb74746056`.
+  `244190bfac2347e8b432cdf996e4f0edd89b23739b3099ab48381740eefa6764`.
 - Gate-tested package SHA-256:
-  `3f945e53cdcc8eac70a26c4cef4df337465f19504d86253d2dcf31c9ad709cd2`.
-  The final package differs only by the app-map wording above:
-  `6b55c130a4c73b296ee69c4f317e0d5c3d41e56fed3c98f5d31b9abe552f1652`
-  (409236 bytes).
+  `9e078cdb30d772b62648585b80099c7636bd23270015075e70e6c4a798290419`
+  (406466 bytes).
 - Builds and caches stayed in task-owned scratch. No global install. The
   approved pinned `wit-bindgen =0.57.1` remains a declared dependency.
 
