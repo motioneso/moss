@@ -1,3 +1,4 @@
+/* global document, window */
 // The app's own screens. Actions go to the app through window.ipc; the app answers by
 // calling window.moss.show(state).
 "use strict";
