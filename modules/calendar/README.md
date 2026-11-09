@@ -309,3 +309,20 @@ only when that account can see it, so another user or an administrator gets
 `{"evicted":false}` and the row stays. The privacy rule has a failing-first
 native test plus a database-backed installed test. The day-plan apply job
 still needs the provider execution flows and stays open.
+
+## Saved-plan read summaries (part 13)
+
+Version 0.13.0 returns the original HTTP saved-read envelope: the stored plan,
+current task summaries, unavailable task IDs, a source-run summary and its
+availability flag. It resolves each task once in first-seen order across
+priorities, corrections, commitments and blocks. Missing, malformed or unavailable
+public reference projections leave the stored plan intact and report that
+reference as unavailable. Public `getPlan` and create/save responses stay unchanged.
+
+The trusted `References` composition owns actor visibility, including explicit
+shares. Its task projection supplies `id`, `title`, `status`, `dueAt`, `doAt` and
+`effort`; its run projection supplies `id`, `briefingType`, `status` and `createdAt`.
+Additional fields are not forwarded. Read-only source summaries do not authorize
+source-linked creation, which still requires the full public provenance adapter.
+The disposable comparison uses explicit public-interface stand-ins; real Tasks and
+Briefings adapters, the day-plan editor and full Calendar acceptance remain open.

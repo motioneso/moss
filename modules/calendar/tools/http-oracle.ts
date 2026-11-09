@@ -4,9 +4,30 @@ import Fastify from "fastify";
 import { PreferencesRepository } from "@moss/structured-state";
 import { LOCALE_PREFERENCE_KEY, resolveEffectiveLocale } from "@moss/shared";
 import { AiRepository } from "../../../packages/ai/src/repository.js";
-import { createDatabase, DataContextRunner, getMossDatabaseUrls, type Task } from "@moss/db";
+import {
+  createDatabase,
+  DataContextRunner,
+  getMossDatabaseUrls,
+  type Task,
+  type BriefingRun
+} from "@moss/db";
 import { registerCalendarRoutes } from "../../../packages/calendar/src/routes.js";
 import { DayPlanRepository } from "../../../packages/calendar/src/day-plan-repository.js";
+
+export type ReferenceTask = {
+  ownerUserId: string;
+  status: string;
+  dueAt: string | null;
+  title?: string;
+  doAt?: string | null;
+  effort?: Task["effort"];
+};
+export type ReferenceRun = {
+  ownerUserId: string;
+  briefingType: BriefingRun["briefing_type"];
+  status: BriefingRun["status"];
+  createdAt: string;
+};
 
 export async function readHttpOracle(actor: string, paths: readonly string[]) {
   return httpOracle(
@@ -22,7 +43,8 @@ export async function httpOracle(
     url: string;
     body?: Record<string, unknown>;
   }[],
-  tasks?: Readonly<Record<string, { ownerUserId: string; status: string; dueAt: string | null }>>
+  tasks?: Readonly<Record<string, ReferenceTask>>,
+  runs?: Readonly<Record<string, ReferenceRun>>
 ) {
   assert.equal(process.env.JARVIS_GATE_RUN, "1", "Use verify-gate");
   const db = createDatabase({ connectionString: getMossDatabaseUrls().app, maxConnections: 1 });
@@ -42,15 +64,15 @@ export async function httpOracle(
               owner_user_id: actor,
               list_id: taskId,
               parent_task_id: null,
-              title: "Synthetic preview task",
+              title: task.title ?? "Synthetic preview task",
               description: null,
               status: task.status === "done" || task.status === "archived" ? task.status : "todo",
               priority: null,
               position: 0,
               due_at: task.dueAt === null ? null : new Date(task.dueAt),
-              do_at: null,
+              do_at: task.doAt ? new Date(task.doAt) : null,
               completed_at: null,
-              effort: null,
+              effort: task.effort ?? null,
               source: "fixture",
               source_ref: null,
               external_key: null,
@@ -69,9 +91,23 @@ export async function httpOracle(
         throw new Error("Task projections are outside this HTTP oracle");
       }
     }),
-    // Source-run and task enrichment are outside these scoped comparisons.
+    // Explicit public-interface stand-ins; no other module's tables are queried.
     findSourceRun: async () => undefined,
-    findRun: async () => undefined,
+    findRun: async (_scopedDb, id) => {
+      const run = runs?.[id];
+      if (!run || run.ownerUserId !== actor) return undefined;
+      return {
+        id,
+        owner_user_id: run.ownerUserId,
+        briefing_type: run.briefingType,
+        status: run.status,
+        created_at: new Date(run.createdAt),
+        definition_id: id,
+        run_kind: "manual",
+        summary_text: "Synthetic source",
+        source_metadata: {}
+      };
+    },
     resolveTimeZone: async (access) => {
       const locale = await dataContext.withDataContext(access, (scopedDb) =>
         new PreferencesRepository().get(scopedDb, LOCALE_PREFERENCE_KEY)

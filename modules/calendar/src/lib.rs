@@ -12,6 +12,7 @@ mod jobs;
 pub mod model;
 pub mod plans;
 mod preview;
+mod saved_read;
 pub mod settings;
 
 #[derive(Debug)]
@@ -185,7 +186,7 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
         ("GET", "/events/:id") => api(host, "getEvent", json!({"id":id})),
         ("GET", "/day-plan") => {
             let query = original_day(host, json!(request.query), false)?;
-            plans::get_for_day(host, serde_json::from_value(query)?)
+            saved_read::read(host, serde_json::from_value(query)?)
         }
         ("POST", "/day-plans") => {
             let body = original_day(host, request.body, false)?;

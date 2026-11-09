@@ -253,3 +253,129 @@ fn original_day_read_uses_account_timezone_or_the_product_default() {
         assert!(response["body"]["plan"].is_null());
     }
 }
+
+struct SavedRead {
+    visible: bool,
+    calls: std::cell::RefCell<Vec<String>>,
+}
+impl Host for SavedRead {
+    fn call(&self, port: &str, op: &str, resource: &str, body: Value) -> Result<Value> {
+        self.calls.borrow_mut().push(resource.into());
+        assert!(matches!((port, op), ("db", "query") | ("kv", "get")));
+        match resource {
+            "app.day_plans" if self.visible => Ok(json!([{
+                "id":"plan","local_day":"2026-11-08","time_zone":"UTC","revision":1,
+                "source_run_id":"run", "evening_intent":{
+                    "priorityTaskIds":["visible","missing"],
+                    "corrections":[{"taskId":"visible","note":"Keep","source":"actor"}],
+                    "commitments":[{"taskId":"shared","decision":"commit"}]
+                }
+            }])),
+            "app.day_plans" => Ok(json!([])),
+            "app.day_plan_blocks" => Ok(
+                json!([{"id":"block","kind":"task","task_id":"missing","title":"Stored title","position":0}]),
+            ),
+            "calendar.task-reference" => Ok(json!({"task": match body["id"].as_str().unwrap() {
+                "visible" | "shared" => json!({"id":body["id"],"ownerUserId":"public-interface-owner","title":"Live title","status":"todo","dueAt":null,"doAt":null,"effort":null,"privateExtra":"must not be forwarded"}),
+                _ => Value::Null,
+            }})),
+            "calendar.briefing-reference" => Ok(
+                json!({"run":{"id":"run","briefingType":"evening","status":"complete","createdAt":"2026-11-08T00:00:00.000Z","privateExtra":"must not be forwarded"}}),
+            ),
+            _ => panic!("unexpected read {resource}"),
+        }
+    }
+}
+fn saved_read(host: &impl Host) -> Value {
+    let reply: Value = serde_json::from_str(
+        &handle(
+            host,
+            "route",
+            &json!({
+                "method":"GET","path":"/day-plan","params":{},
+                "query":{"date":"2026-11-08","timeZone":"UTC"},"body":null
+            })
+            .to_string(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(reply["status"], 200, "{reply}");
+    reply["body"].clone()
+}
+#[test]
+fn saved_plan_read_projects_references_in_first_seen_order_without_changing_plan() {
+    let host = SavedRead {
+        visible: true,
+        calls: Default::default(),
+    };
+    let out = saved_read(&host);
+    assert_eq!(out["unavailableTaskIds"], json!(["missing"]));
+    assert_eq!(
+        out["tasks"],
+        json!([
+            {"id":"visible","title":"Live title","status":"todo","dueAt":null,"doAt":null,"effort":null},
+            {"id":"shared","title":"Live title","status":"todo","dueAt":null,"doAt":null,"effort":null}
+        ])
+    );
+    assert_eq!(
+        out["sourceRun"],
+        json!({"id":"run","briefingType":"evening","status":"complete","createdAt":"2026-11-08T00:00:00.000Z"})
+    );
+    assert_eq!(out["sourceRunUnavailable"], false);
+    assert_eq!(out["plan"]["blocks"][0]["title"], "Stored title");
+    assert_eq!(
+        host.calls
+            .borrow()
+            .iter()
+            .filter(|r| r.as_str() == "calendar.task-reference")
+            .count(),
+        3
+    );
+}
+#[test]
+fn absent_or_foreign_plan_does_not_resolve_any_references() {
+    let host = SavedRead {
+        visible: false,
+        calls: Default::default(),
+    };
+    assert_eq!(
+        saved_read(&host),
+        json!({"plan":null,"tasks":[],"unavailableTaskIds":[],"sourceRun":null,"sourceRunUnavailable":false})
+    );
+    assert_eq!(*host.calls.borrow(), vec!["app.day_plans"]);
+}
+
+#[test]
+fn unavailable_and_mismatched_public_references_keep_the_stored_plan_readable() {
+    struct Unavailable(bool);
+    impl Host for Unavailable {
+        fn call(&self, port: &str, op: &str, resource: &str, body: Value) -> Result<Value> {
+            if port == "kv" {
+                if self.0 {
+                    return Err(moss_module_sdk::Error::new("adapter unavailable"));
+                }
+                return Ok(json!({
+                    "task":{"id":"different","title":"Wrong task","status":"todo"},
+                    "run":{"id":"different","briefingType":"evening","status":"succeeded","createdAt":"2026-11-08T00:00:00.000Z"}
+                }));
+            }
+            SavedRead {
+                visible: true,
+                calls: Default::default(),
+            }
+            .call(port, op, resource, body)
+        }
+    }
+    for failure in [true, false] {
+        let out = saved_read(&Unavailable(failure));
+        assert_eq!(
+            out["unavailableTaskIds"],
+            json!(["visible", "missing", "shared"])
+        );
+        assert_eq!(out["tasks"], json!([]));
+        assert_eq!(out["sourceRun"], Value::Null);
+        assert_eq!(out["sourceRunUnavailable"], true);
+        assert_eq!(out["plan"]["blocks"][0]["title"], "Stored title");
+    }
+}

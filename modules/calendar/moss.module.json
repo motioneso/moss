@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -189,7 +189,7 @@
     },
     {
       "id": "calendar.day_plan_draft",
-      "description": "HTTP draft creation and saves accept the original date field through the installed API and Calendar web router. Creation without a timezone uses the saved account timezone or the product default. Original source-run creation remains unavailable until its public provenance adapter is ready. Draft reads still lack the original enriched task/source summaries. The package tool saves intent and untimed task additions to today or tomorrow in the saved account timezone. It is not yet connected to signed-in chat. Drafts require the current revision and public task reference adapter. Provider writes and dialog execution are not shipped in this checkpoint.",
+      "description": "HTTP draft creation and saves accept the original date field through the installed API and Calendar web router. Creation without a timezone uses the saved account timezone or the product default. Original source-run creation remains unavailable until its public provenance adapter is ready. Saved HTTP reads include live task/source summaries from scoped public reference adapters, with unavailable references reported beside the unchanged plan. Concrete production adapters remain open. The package tool saves intent and untimed task additions to today or tomorrow in the saved account timezone. It is not yet connected to signed-in chat. Drafts require the current revision and public task reference adapter. Provider writes and dialog execution are not shipped in this checkpoint.",
       "errors": [
         {
           "code": "draft-source-unavailable",

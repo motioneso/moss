@@ -68,6 +68,29 @@ export async function checkDayPlanWrites(tab: Page, foreign: Request) {
       draft,
       "failed writes leave the saved draft unchanged"
     );
+    assert.deepEqual(
+      JSON.parse(read.body),
+      {
+        plan: draft,
+        tasks: [],
+        unavailableTaskIds: [],
+        sourceRun: null,
+        sourceRunUnavailable: false
+      },
+      "saved read includes the original summary envelope"
+    );
+    const hidden = await foreign(`${prefix}/day-plan?date=${date}&timeZone=UTC`, {
+      method: "GET",
+      body: undefined
+    });
+    assert.equal(hidden.status, 200);
+    assert.deepEqual(JSON.parse(hidden.body), {
+      plan: null,
+      tasks: [],
+      unavailableTaskIds: [],
+      sourceRun: null,
+      sourceRunUnavailable: false
+    });
     assert.equal(
       (await own(`${prefix}/day-plans`, "POST", { date, sourceRunId: "unavailable" })).status,
       503,
@@ -75,6 +98,6 @@ export async function checkDayPlanWrites(tab: Page, foreign: Request) {
     );
   }
   console.log(
-    "PASS browser day-plan create/save across both URL prefixes, timezone, repeated create, revision conflict and foreign-write refusal"
+    "PASS browser day-plan create/save across both URL prefixes, timezone, repeated create, revision conflict foreign-write refusal and complete saved-read envelopes"
   );
 }

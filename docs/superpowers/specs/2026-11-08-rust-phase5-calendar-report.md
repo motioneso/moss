@@ -725,3 +725,45 @@ apply/retry/recovery/confirm flows, concrete public provider adapters,
 source-behavior controls, full shell/Today/chat composition, old-screen
 replacement, complete assembled parity and a physical second device over
 trusted HTTPS.
+
+## JS-107 / part 13: saved-plan read summaries checkpoint
+
+Card 525. Package 0.13.0 fills the original saved HTTP read envelope through the
+installed Calendar API and existing URL aliases. It keeps the saved plan unchanged,
+deduplicates references in first-seen order and projects live task/source summaries
+through the existing scoped public-reference interface. No other module tables,
+provider credentials or host internals are accessed by the guest. Only summary
+fields are returned; unavailable adapters, missing references, mismatched IDs and
+malformed summaries report unavailable beside the saved plan. The trusted public
+adapter owns visibility, so an explicitly shared task may be summarized on a read.
+This does not extend the existing owner-only task rule on draft edits or previews.
+
+The native regression was observed failing before implementation: the saved read
+omitted `unavailableTaskIds`. The same regression now checks ordered, deduplicated
+summaries, unchanged saved titles and removal of extra projection fields. Separate
+cases cover an absent plan and failed/mismatched reference projections. The full
+Calendar gate retains its existing failing-first five-table privacy witnesses and
+compares the installed Wasm response against production TypeScript on the same
+throwaway database for owner, unrelated user, administrator, missing day and
+present/missing source references. Task/run projections in that comparison are
+explicit stand-ins, not proof of concrete production adapters or sharing adapters.
+The signed-in live runner checks complete saved-read envelopes through both URL
+prefixes after exercising the real installed Calendar screen. These requests are
+browser API calls, not interactions with a day-plan editor.
+
+This is a bounded checkpoint, not final Calendar acceptance. Remaining: concrete
+public Tasks/Briefings/provider adapters and full provenance; complete validation,
+coercion and error parity; four provider tools; day-plan apply job and
+apply/retry/recovery/confirm execution; worker-role cache-evict dispatch; source
+behavior and external-calendar status controls; full shell/Today/chat; old-screen
+replacement; complete assembled parity; physical second-device trusted HTTPS.
+The full port exceeds this continuation's one-context bound. Exact fresh check
+receipts and independent review are recorded in the task Proof artifact.
+
+Builds reuse the existing scratch Rust home with Rust 1.95.0 and its Wasm target,
+and copy existing build caches into this task's scratch folder. Project dependencies
+are restored offline from the declared lockfile in this worktree. Both shared asset
+builders target one scratch directory. No global tool, new dependency or
+wit-bindgen installation is performed. Disposable test TLS, a same-computer LAN
+request and phone-width screenshots do not establish physical-device access or
+production certificate trust.
