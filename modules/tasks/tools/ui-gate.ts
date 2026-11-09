@@ -162,10 +162,7 @@ try {
       const tags = await db.query<{ name: string }>(
         "select g.name from app.tasks t join app.task_tag_assignments a on a.task_id=t.id join app.task_tags g on g.id=a.tag_id where t.title='Browser proof task' order by g.name"
       );
-      assert.deepEqual(
-        tags.rows.map((tag) => tag.name),
-        ["#literal", "kept", "typed"]
-      );
+      assert.deepEqual(tags.rows.map((tag) => tag.name).sort(), ["#literal", "kept", "typed"]);
       const steps = await db.query<{ title: string; position: number }>(
         "select s.title, s.position from app.tasks s join app.tasks p on p.id=s.parent_task_id where p.title='Browser proof task' order by s.position"
       );

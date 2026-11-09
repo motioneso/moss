@@ -1199,3 +1199,13 @@ case differs from UTC. These are remaining port gaps, not passing comparisons.
 The optional signed UI capture check asserts one parent, the exact three tags,
 ordered subtasks and the absence of a removed draft tag in the real database.
 Final independent review and gate receipts belong to the proof artifact.
+
+Part 16 review round two found no major or blocker on the capture changes. A
+minor remains: retrying a completed, repeating task after a partial save resends
+status and recurrence, which can apply completion effects on that retry.
+The final signed-browser run created one parent with both ordered subtasks and
+the exact three expected tags, then confirmed them after reload. Its database
+assertion exposed a proof-check ordering assumption: PostgreSQL collation put
+`kept` before `#literal`. The capture assertion now sorts names in JavaScript
+before comparison; the stored values and product code are unchanged. This
+proof-check fix needs an additional review round before the checkpoint is ready.
