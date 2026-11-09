@@ -160,7 +160,6 @@ fn valid_instance(name: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
-/// Creates a folder only its owner can enter, or checks an existing one is a real folder.
 /// True when this user owns the entry and no one else can write to it. A symlink fails,
 /// because its mode is always writable.
 #[cfg(unix)]
@@ -175,6 +174,7 @@ pub fn mine(_meta: &std::fs::Metadata) -> bool {
     true
 }
 
+/// Creates a folder only its owner can enter, or checks an existing one is a real folder.
 pub fn private_dir(path: &Path) -> Result<(), String> {
     match std::fs::symlink_metadata(path) {
         Ok(meta) if meta.is_dir() && mine(&meta) => Ok(()),

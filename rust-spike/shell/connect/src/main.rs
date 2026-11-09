@@ -241,18 +241,24 @@ impl App {
                 }
             }
             UserEvent::WrongCertificate(id, fingerprint) => {
-                if self.current.as_deref() != Some(id.as_str()) {
+                // Only the page on screen counts; the Servers list keeps the page but clears current.
+                let showing = self.current.as_deref() == Some(id.as_str())
+                    && self.server.as_ref().is_some_and(|s| s.id == id);
+                if !showing {
                     return;
                 }
+                // No certificate means an error page, so the native check reports why.
+                let Some(fingerprint) = fingerprint else {
+                    return self.check(id);
+                };
                 self.server = None;
                 let Some(target) = self.store.find(&self.servers, &id) else {
                     return self.list_servers();
                 };
-                let problem = match fingerprint {
-                    Some(fingerprint) => Problem::CertificateChanged { fingerprint },
-                    None => Problem::Unreachable,
-                };
-                self.show(problem_screen(&target, &problem));
+                self.show(problem_screen(
+                    &target,
+                    &Problem::CertificateChanged { fingerprint },
+                ));
             }
         }
     }
@@ -548,7 +554,8 @@ impl App {
 /// Allows the pinned certificate for this server's host in its own profile, and reports failed
 /// loads so the app can show why. WebKit also accepts certificates a public authority signed, so
 /// every committed load is compared with the pin and closed when it differs. The request has
-/// already been sent by then; WebKitGTK has no earlier hook.
+/// already been sent by then; WebKitGTK has no earlier hook. Only page loads are checked, so later
+/// fetch and WebSocket connections from a loaded page are not.
 #[cfg(target_os = "linux")]
 fn trust_on_linux(
     view: &WebView,
@@ -649,7 +656,7 @@ fn problem_screen(target: &Target, problem: &Problem) -> Value {
                 "address": remote.origin, "fingerprint": fingerprint,
             }),
             Target::Local { .. } => {
-                return json!({"screen":"problem", "code": Problem::Unreachable.code(), "name": name, "reason": Problem::Unreachable.reason(), "retry": true, "local": true});
+                return json!({"screen":"problem", "code": Problem::Unreachable.code(), "name": name, "reason": Problem::Unreachable.reason(), "retry": false, "local": true});
             }
         },
         Problem::ServerTooOld => json!({

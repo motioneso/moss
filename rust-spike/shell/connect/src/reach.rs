@@ -441,7 +441,8 @@ pub async fn local_or_start(install: &Path, folder: &Path) -> Result<(Running, V
             None => start_lock(folder)?.is_some(),
         };
         if gave_up {
-            return Err(Problem::DidNotStart);
+            // The other app may have let go just after its server came up.
+            return local(folder).await.map_err(|_| Problem::DidNotStart);
         }
     }
     Err(Problem::DidNotStart)

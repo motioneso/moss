@@ -59,6 +59,9 @@ normal, first-class way to use Moss.
   credentials.
 - Every file is owner-only, using the existing private read and write rules (mode 0600, regular
   file, size cap).
+- The data folder, `servers/` and each instance folder must belong to this user with no group or
+  world write (0700 or 0755). The app refuses a folder made with a 0002 umask (0775). The setup
+  that creates them (Phases 1 and 7) must set the mode.
 
 ### 3.2 The running file
 
@@ -92,6 +95,9 @@ owner-only, the app trusts the local server's certificate without asking the use
 - On open, the app looks for the last-used server. If that is a local instance with no valid
   running file, the app starts it: `moss-shell serve --instance <folder> --web <install>/web`, in
   its own process group so it survives the app closing.
+- One app run starts an instance at most once, and a start lock in the instance folder keeps two
+  apps from starting it together. An app that quits mid-start leaves no record, so a relaunch may
+  start a second server, which then fails to bind.
 - The app waits up to 20 seconds for a valid running file and a good hello (section 8), then shows
   the server.
 - The server keeps running after the window closes. Phase 7 adds start-at-login, a tray item and
@@ -174,8 +180,10 @@ name).
     before loading. A different self-signed certificate on the same host still fails. WebKit also
     accepts any certificate a public authority signed, so on every committed page load the app
     reads the page's certificate and closes the page when it is not the pinned one. By then the
-    request, with its cookie, has already gone. That gap exists only for names a public authority
-    will sign, and WebKitGTK offers no earlier hook.
+    request, with its cookie, has already gone. The check runs only when a page loads. Requests a
+    loaded page makes later (fetch, WebSocket) on new connections are not re-checked, but every
+    open and retry runs the native hello against the pin first. These gaps exist only for names
+    a public authority will sign, and WebKitGTK offers no earlier hook.
   - macOS (WKWebView): answer the server-trust challenge by comparing against the pin.
   - Windows (WebView2): answer the server-certificate-error event by comparing against the pin.
 - The window refuses to navigate to any other origin and opens no new windows in v1. Links to
