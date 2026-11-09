@@ -3,7 +3,10 @@ on:
   pull_request:
     paths:
       - "rust-spike/portability/**"
+      - "rust-spike/bundled-db/**"
+      - "rust-spike/shell/connect/**"
       - "rust-spike/Cargo.lock"
+      - "rust-spike/shell/Cargo.lock"
       - ".github/workflows/rust-local-locks.yml"
 permissions:
   contents: read
@@ -25,3 +28,6 @@ jobs:
         run: rustup toolchain install 1.95.0 --profile minimal
       - name: Check process contention, readable state and crash release
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p portability file_lock -- --nocapture
+      - name: Compile the Windows app and check server executable discovery
+        if: runner.os == 'Windows'
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app server_program_uses_the_platform_executable_suffix -- --nocapture

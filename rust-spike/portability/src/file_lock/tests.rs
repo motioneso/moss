@@ -41,6 +41,14 @@ fn subprocess() {
         "exclusive-free" => assert!(try_exclusive(&file).unwrap()),
         "shared-free" => assert!(try_shared(&file).unwrap()),
         "hold" | "wait" => {
+            if std::env::var(CHILD_MODE).unwrap() == "wait" {
+                assert!(
+                    !try_exclusive(&file).unwrap(),
+                    "waiter must see a held lock"
+                );
+                println!("WAITING_FOR_LOCK");
+                std::io::stdout().flush().unwrap();
+            }
             exclusive(&file).unwrap();
             println!("LOCK_ACQUIRED");
             std::io::stdout().flush().unwrap();
@@ -94,7 +102,13 @@ fn process_death_releases_lock_and_wakes_waiter() {
     let mut lines = BufReader::new(owner.stdout.take().unwrap()).lines();
     assert!(lines.any(|line| line.unwrap() == "LOCK_ACQUIRED"));
     check(&path, "exclusive-busy");
-    let mut waiter = child(&path, "wait").stdout(Stdio::null()).spawn().unwrap();
+    let mut waiter = child(&path, "wait").stdout(Stdio::piped()).spawn().unwrap();
+    let mut waiting = BufReader::new(waiter.stdout.take().unwrap()).lines();
+    assert!(waiting.any(|line| line.unwrap() == "WAITING_FOR_LOCK"));
+    assert!(
+        waiter.try_wait().unwrap().is_none(),
+        "waiter exited while owner still holds the lock"
+    );
     owner.kill().unwrap();
     owner.wait().unwrap();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
