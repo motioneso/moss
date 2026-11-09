@@ -621,6 +621,15 @@ conflict, unknown field, missing block, block without a pending change
 and invalid revision cases, with full body comparison on success. The
 existing five-table privacy fault witnesses stay in the same gate.
 
+Two minor review differences are accepted for this checkpoint. The
+malformed-id cases compare status only, because the production side
+answers those with a framework validation body that is not a stable
+comparison target. The preview treats a task owned by another account
+as unavailable even when that task is view-shared with the actor; the
+production read can see a view-shared task. Which rule shared tasks
+follow must be settled when the real public Tasks adapter lands in
+this host, since no production reference adapter exists here yet.
+
 This is another bounded checkpoint, not final Calendar acceptance. The
 remaining acceptance list is unchanged: four provider tools and both
 jobs, apply/retry/recovery/confirm execution, concrete public provider
