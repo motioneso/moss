@@ -1,7 +1,7 @@
 # Rust sign-in and network boundary
 
-JS-44, Card 520, part of #4027. The shell now requires this HTTPS boundary in browser and desktop
-mode. There is no plaintext or unsigned-in runner mode.
+JS-44, Card 520, part of #4027. The server requires this HTTPS boundary for browsers, phones and
+the desktop app. There is no plaintext or unsigned-in runner mode.
 
 Build with the repo's Rust toolchain:
 

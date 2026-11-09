@@ -62,7 +62,8 @@ pub fn parse_origin(input: &str) -> Result<String, &'static str> {
     } else {
         format!("https://{input}")
     };
-    let url = url::Url::parse(&with_scheme).map_err(|_| "Enter an address like https://192.168.1.20:5201")?;
+    let url = url::Url::parse(&with_scheme)
+        .map_err(|_| "Enter an address like https://192.168.1.20:5201")?;
     if url.scheme() != "https" {
         return Err("Moss addresses start with https://");
     }
@@ -123,7 +124,12 @@ impl ServerCertVerifier for Pin {
         cert: &CertificateDer<'_>,
         dss: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        verify_tls12_signature(message, cert, dss, &self.provider.signature_verification_algorithms)
+        verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
     }
 
     fn verify_tls13_signature(
@@ -132,7 +138,12 @@ impl ServerCertVerifier for Pin {
         cert: &CertificateDer<'_>,
         dss: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        verify_tls13_signature(message, cert, dss, &self.provider.signature_verification_algorithms)
+        verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
     }
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
@@ -147,7 +158,11 @@ type Tls = tokio_rustls::client::TlsStream<TcpStream>;
 /// Opens TLS to an origin. `Err(Some(der))` means the certificate did not match the pin.
 async fn open(origin: &str, pin: Option<&str>) -> Result<(Tls, Vec<u8>), Result<Vec<u8>, Problem>> {
     let url = url::Url::parse(origin).map_err(|_| Err(Problem::NotMoss))?;
-    let host = url.host_str().ok_or(Err(Problem::NotMoss))?.trim_matches(['[', ']']).to_owned();
+    let host = url
+        .host_str()
+        .ok_or(Err(Problem::NotMoss))?
+        .trim_matches(['[', ']'])
+        .to_owned();
     let port = url.port_or_known_default().ok_or(Err(Problem::NotMoss))?;
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let seen = Arc::new(Mutex::new(None));
@@ -164,11 +179,18 @@ async fn open(origin: &str, pin: Option<&str>) -> Result<(Tls, Vec<u8>), Result<
         .with_no_client_auth();
     config.alpn_protocols = vec![b"http/1.1".to_vec()];
     let name = ServerName::try_from(host.clone()).map_err(|_| Err(Problem::NotMoss))?;
-    let tcp = timeout(Duration::from_secs(5), TcpStream::connect((host.as_str(), port)))
-        .await
-        .map_err(|_| Err(Problem::Unreachable))?
-        .map_err(|_| Err(Problem::Unreachable))?;
-    let handshake = timeout(Duration::from_secs(5), TlsConnector::from(Arc::new(config)).connect(name, tcp)).await;
+    let tcp = timeout(
+        Duration::from_secs(5),
+        TcpStream::connect((host.as_str(), port)),
+    )
+    .await
+    .map_err(|_| Err(Problem::Unreachable))?
+    .map_err(|_| Err(Problem::Unreachable))?;
+    let handshake = timeout(
+        Duration::from_secs(5),
+        TlsConnector::from(Arc::new(config)).connect(name, tcp),
+    )
+    .await;
     let leaf = seen.lock().expect("pin lock").clone();
     match (handshake, leaf) {
         (Ok(Ok(stream)), Some(der)) => Ok((stream, der)),
@@ -296,7 +318,9 @@ pub fn start_local(install: &Path, folder: &Path) -> Result<(), Problem> {
             use std::os::unix::fs::OpenOptionsExt;
             options.mode(0o600);
         }
-        options.open(folder.join("server.log")).map_err(|_| Problem::DidNotStart)?
+        options
+            .open(folder.join("server.log"))
+            .map_err(|_| Problem::DidNotStart)?
     };
     let mut command = std::process::Command::new(install.join("moss-shell"));
     command

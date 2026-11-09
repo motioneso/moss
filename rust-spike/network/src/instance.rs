@@ -140,7 +140,10 @@ mod tests {
         running.write(&dir).unwrap();
         assert_eq!(Running::read(&dir).unwrap(), running);
         Running::remove_if_ours(&dir);
-        assert!(dir.join(RUNNING_FILE).exists(), "another server's file was removed");
+        assert!(
+            dir.join(RUNNING_FILE).exists(),
+            "another server's file was removed"
+        );
         running.pid = std::process::id();
         running.write(&dir).unwrap();
         Running::remove_if_ours(&dir);

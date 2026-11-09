@@ -68,7 +68,7 @@ The server writes `running.json` after it binds its listener and removes it on a
 {
   "instance": "default",
   "origin": "https://127.0.0.1:5201",
-  "fingerprint": "AB:12:…",
+  "fingerprint": "AB: 12: …",
   "pid": 41237,
   "version": "0.1.0",
   "api": { "current": 1, "oldest": 1 }
@@ -383,6 +383,8 @@ The middle line carries the cause from section 10. For a local server the first 
 - Operating-system trust for public certificates.
 - Creating instances in the app, Stop, tray, start at login, notifications.
 - The "Switch server" item in the server's own account menu (the link works when typed).
+- Creating the local database. "This computer" needs an instance folder that already holds
+  `network.json` (Phase 1 and 7 create it). Without one the app says Moss isn't set up here yet.
 
 ### 13.3 Proof
 

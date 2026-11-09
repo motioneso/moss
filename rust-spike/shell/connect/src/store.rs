@@ -124,7 +124,13 @@ impl Store {
     pub fn profile(&self, id: &str) -> Result<PathBuf, String> {
         let name: String = id
             .chars()
-            .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect();
         let profiles = self.app_dir().join("profiles");
         private_dir(&self.data)?;
