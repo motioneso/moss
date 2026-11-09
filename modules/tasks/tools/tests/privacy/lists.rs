@@ -411,7 +411,7 @@ fn compiled_list_deletion_moves_a_thousand_tagged_tasks() {
     );
     let tag = tag["body"]["tag"]["id"].as_str().unwrap();
     f.sql(&format!(
-        "INSERT INTO app.tasks(owner_user_id,list_id,title) SELECT '{}'::uuid,'{}'::uuid,'Large task ' || n FROM generate_series(1,1011) n; INSERT INTO app.task_tag_assignments(task_id,tag_id) SELECT id,'{}'::uuid FROM app.tasks WHERE list_id='{}'::uuid",
+        "INSERT INTO app.tasks(id,owner_user_id,list_id,title) SELECT gen_random_uuid(),'{}'::uuid,'{}'::uuid,'Large task ' || n FROM generate_series(1,1011) n; INSERT INTO app.task_tag_assignments(task_id,tag_id) SELECT id,'{}'::uuid FROM app.tasks WHERE list_id='{}'::uuid",
         f.owner, source, tag, source,
     ));
     let response = f.route(
