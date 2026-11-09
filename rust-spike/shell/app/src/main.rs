@@ -70,6 +70,7 @@ fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
             "/api/today",
             get(|State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>| async move { Json::<TodayView>(d.for_actor(&access).today()) }),
         )
+        .route("/api/desktop/notices", get(desktop_notices))
         .route(
             "/api/chat/thread",
             get(|State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>| async move { Json::<ChatThread>(d.for_actor(&access).chat_thread()) }),
@@ -94,6 +95,29 @@ fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
                 .fallback((move |uri: Uri| app_page(uri, index.clone())).into_service()),
         )
         .with_state(data)
+}
+
+/// Only identities leave this endpoint; desktop banners contain no reminder text.
+/// Use the same actor-scoped transaction as every other account route, including admins.
+async fn desktop_notices(
+    State(data): State<Arc<Accounts>>,
+    Extension(access): Extension<AccessContext>,
+) -> Result<impl IntoResponse, safety_core::error::ApiError> {
+    let cx = safety_core::db::DataContext::open(&data.platform.app, &access).await?;
+    let rows = cx.db().query(
+        "SELECT n.id::text FROM app.notifications n
+         WHERE n.recipient_user_id = $1 AND NOT EXISTS
+           (SELECT 1 FROM app.notification_reads r WHERE r.notification_id = n.id AND r.user_id = $1)
+         ORDER BY n.updated_at DESC, n.id DESC LIMIT 100", &[&access.actor_user_id()]
+    ).await?;
+    let events: Vec<String> = rows.iter().map(|row| row.get(0)).collect();
+    cx.commit().await?;
+    Ok((
+        [(axum::http::header::CACHE_CONTROL, "no-store")],
+        Json(serde_json::json!({
+            "account": access.actor_user_id(), "events": events,
+        })),
+    ))
 }
 
 async fn app_page(uri: Uri, index: PathBuf) -> Response {

@@ -393,8 +393,9 @@ The middle line carries the cause from section 10. For a local server the first 
 
 - Operating-system trust for public certificates. It needs a platform verifier library, which
   has not been approved for install.
-- Native tray, start at login and notifications on macOS and Windows; reminder and chat
-  notification delivery on every system. Linux desktop integration is described below.
+- Native runtime qualification of macOS and Windows desktop integration and full background
+  notification delivery after disconnecting or quitting. Slice 4 adds native API backends and
+  checks for new reminders and replies while a server page is connected, described below.
 - Creating a local server on Windows. The database supervisor is unix only, so the app says
   setting up is not available there yet; a hand-prepared instance folder still works.
 - A real installer. The app expects `moss-db`, `postgres/` and `schema/` next to it (Phase 7
@@ -417,8 +418,19 @@ startup, not a system service or a complete installer.
 Setup holds its selected listening port until network.json is written and serializes unfinished
 setup cleanup across apps. Stop asks for confirmation, waits for the instance's start lock before
 shutting down, shows progress, and reports failure. A late Stop result cannot replace a newer
-screen. Windows local setup and Stop remain unavailable; macOS and Windows native integration
-and runtime certificate qualification remain outstanding.
+screen. Windows local setup and Stop remain unavailable; macOS and Windows runtime desktop integration
+and certificate qualification remain outstanding.
+
+Slice 4 adds native API backends without new third-party crates: Windows notification-area icon,
+current-user Run key and notification balloons; macOS AppKit status menu, per-data-folder
+LaunchAgent and native notifications. The backends pass independent Rust checks for their real
+targets. Full app cross-builds still require MinGW GCC and an Apple compiler/SDK, and native
+runtime delivery is unqualified. On every system, opt-in generic banners cover new unread
+notifications and chat replies while the connected server page is in the background. Polling uses
+that web profile's session, baselines existing items quietly, and checks every five seconds.
+It does not mark notifications read or deliver after the app quits. The unsigned Linux staging
+step packages already-built programs, web assets, a Phase 1 Postgres bundle and the supervisor's
+canonical schema folders; signing, native installers and Windows database supervision remain open.
 
 ### 13.3 Proof
 

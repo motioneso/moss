@@ -1,5 +1,4 @@
-//! Linux desktop integration through the GIO dependency already used by the web view.
-//! Other systems keep normal close-to-quit behaviour until their native integration ships.
+//! Native desktop integration using existing dependencies and operating-system APIs.
 
 use crate::store::{private_dir, Store};
 use moss_network::config::{private_read, private_write};
@@ -280,26 +279,54 @@ mod linux {
 #[cfg(target_os = "linux")]
 pub use linux::*;
 
-#[cfg(not(target_os = "linux"))]
-mod unsupported {
+#[cfg(windows)]
+mod windows;
+
+#[cfg(target_os = "macos")]
+mod macos;
+
+#[cfg(any(windows, target_os = "macos"))]
+mod native {
+    #[cfg(target_os = "macos")]
+    use super::macos as os;
+    #[cfg(windows)]
+    use super::windows as os;
     use super::*;
+    pub use os::{notify, Tray};
     use std::path::Path;
-    pub struct Tray;
-    pub fn tray(_: tao::event_loop::EventLoopProxy<crate::UserEvent>) -> Option<Tray> {
-        None
+    pub fn tray(proxy: tao::event_loop::EventLoopProxy<crate::UserEvent>) -> Option<Tray> {
+        os::tray(move |action| {
+            let _ = proxy.send_event(match action {
+                identity::Action::Settings => crate::UserEvent::Desktop,
+                identity::Action::Unavailable => crate::UserEvent::TrayUnavailable,
+                identity::Action::Reveal => crate::UserEvent::Reveal,
+            });
+        })
     }
-    pub fn starts_at_login(_: &Store) -> bool {
-        false
+    pub fn starts_at_login(store: &Store) -> bool {
+        os::starts_at_login(&store.data)
     }
-    pub fn set_login(_: &Store, _: &Path, _: bool) -> Result<(), String> {
-        Err("Desktop integration is not available on this system yet".into())
-    }
-    pub fn notify(_: &str, _: &str) -> Result<(), String> {
-        Err("Desktop notifications are not available on this system yet".into())
+    pub fn set_login(store: &Store, install: &Path, enabled: bool) -> Result<(), String> {
+        #[cfg(windows)]
+        {
+            os::set_login(&store.data, install, enabled)
+        }
+        #[cfg(target_os = "macos")]
+        {
+            os::set_login(
+                &store.data,
+                install,
+                enabled,
+                moss_network::config::private_write,
+            )
+        }
     }
 }
-#[cfg(not(target_os = "linux"))]
-pub use unsupported::*;
+#[cfg(any(windows, target_os = "macos"))]
+pub use native::*;
+
+#[cfg(any(windows, target_os = "macos"))]
+mod identity;
 
 #[cfg(all(test, target_os = "linux"))]
 mod tests {

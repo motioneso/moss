@@ -63,3 +63,21 @@ Today still reads explicitly labelled sample data. With `--runner <runner-state-
 uses the Phase 3 runner for the signed-in account; otherwise it shows sample replies. The shell
 name comes from the signed-in person's database record. Every route and app file is wrapped by
 `moss-network`, and each actor gets separate shell/chat state.
+
+## Stage an unsigned Linux install
+
+Build `moss-db` from `rust-spike/bundled-db` and put it alongside the two programs in
+`dist/`. Build the PostgreSQL bundle with the existing Phase 1
+`rust-spike/bundled-db/proof/linux/build-pg.sh`. Then stage into a new folder:
+
+```bash
+python3 rust-spike/shell/tools/stage-install.py \
+  --dist "$CARGO_TARGET_DIR/dist" --postgres /path/to/phase1/postgres --out /path/to/new/install
+/path/to/new/install/moss-app --data /path/to/new/data --install /path/to/new/install
+```
+
+The stage includes the canonical supervisor schema and a hash inventory. This is a per-user
+Linux staging step; it does not close shared-library packaging, signing or update/uninstall
+work. On first use, This computer reuses the database supervisor to provision its local server.
+The live provision test is ignored by default and must run through `scripts/run-gate.sh`, with
+`MOSS_CLEAN_INSTALL` pointing at the stage and `MOSS_CLEAN_DATA` at a new scratch folder.

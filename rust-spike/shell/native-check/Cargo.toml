@@ -1,0 +1,12 @@
+[package]
+name = "moss-desktop-native-check"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Compile the actual native API implementations without the server's TLS C build dependencies.
+[workspace]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString"] }
