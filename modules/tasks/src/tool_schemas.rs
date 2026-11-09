@@ -28,6 +28,21 @@ pub fn input(tool: &str) -> Option<Schema> {
                 ),
             ],
         ),
+        "tasks.focus" | "tasks.atRisk" | "tasks.overdue" => Schema::object(&[], vec![]),
+        "tasks.summary" => Schema::object(
+            &[],
+            vec![(
+                "scope",
+                Schema::one_of_strings(&[
+                    "today",
+                    "overdue",
+                    "upcoming",
+                    "undated",
+                    "completed",
+                    "all",
+                ]),
+            )],
+        ),
         "tasks.get" | "tasks.activity" => strings(&["taskId"]),
         "tasks.listTags" => strings(&["listId"]),
         "tasks.listLists" => strings(&[]),

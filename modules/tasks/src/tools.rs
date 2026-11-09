@@ -25,6 +25,26 @@ pub fn handle<H: Host + ?Sized>(host: &H, request: ToolRequest) -> Result<Value>
     let repo = Repository::new(host);
     Ok(match request.tool.as_str() {
         "tasks.list" => return crate::list::execute(&repo, &input),
+        "tasks.summary" => return crate::summary::execute(&repo, &input),
+        "tasks.focus" | "tasks.atRisk" | "tasks.overdue" => {
+            let now = repo
+                .now()?
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .map_err(|_| Error::Http(500, "Internal server error"))?;
+            let rows = match request.tool.as_str() {
+                "tasks.focus" => crate::drift::focus(&repo, now)?,
+                "tasks.atRisk" => crate::drift::at_risk(&repo, now)?,
+                _ => crate::drift::overdue(&repo, now)?,
+            };
+            let tags = crate::list::tags_for_tasks(&repo, &rows)?;
+            let items = rows
+                .iter()
+                .map(|task| task.dto(tags.get(&task.id).map(Vec::as_slice).unwrap_or_default()))
+                .collect::<Vec<_>>();
+            return Ok(
+                json!({"data":{"items":items},"columnOrder":["id","title","status","dueAt","priority"]}),
+            );
+        }
         "tasks.heartbeatWindow" => return crate::heartbeat::execute(&repo, &input),
         "tasks.listLists" => {
             json!({"data":{"items":repo.lists()?.iter().map(|v|v.dto()).collect::<Vec<_>>()}})

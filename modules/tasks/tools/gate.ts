@@ -44,6 +44,11 @@ const list = spawnSync("pnpm", ["exec", "tsx", "modules/tasks/tools/list-parity.
   env: process.env
 });
 if (list.status !== 0) process.exit(list.status ?? 1);
+const drift = spawnSync("pnpm", ["exec", "tsx", "modules/tasks/tools/drift-parity.ts"], {
+  stdio: "inherit",
+  env: process.env
+});
+if (drift.status !== 0) process.exit(drift.status ?? 1);
 const appMap = spawnSync("pnpm", ["build:app-map"], {
   stdio: "inherit",
   env: process.env

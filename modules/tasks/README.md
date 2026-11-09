@@ -2,11 +2,11 @@
 
 This is an unfinished Tasks module package. Rust code now compiles into a real
 component and handles basic task, list, tag, activity and view preference routes.
-It also handles nineteen tools: six reads and thirteen mutations, with request
+It also handles twenty-three tools: ten reads and thirteen mutations, with request
 schemas enforced inside the guest. It is not a
 complete replacement for Tasks. A package screen now covers list and priority views,
 task editing, subtasks, tags, comments and list creation, renaming and confirmed deletion. Full screen parity,
-four other chat tools, background
+background
 jobs, People calls and full endpoint parity remain unfinished.
 
 `src/` uses the guest-safe SDK. `wit/` defines its ABI. Ben approved the pinned
@@ -142,6 +142,19 @@ and feedback orchestration, full screen/settings parity, real-shell integration,
 performance budgets and second-device HTTPS proof. The legacy HTTP list route
 only applies tag and quadrant filters; the wider filter set belongs to its
 repository/tool contract and must not be silently added to that HTTP route.
+
+Part 12 adds the focus, at-risk and overdue routes and tools, and the bounded
+`tasks.summary` tool (six scopes, at most twelve rows). Twenty-three tools are
+declared: ten reads and thirteen mutations. Focus returns an empty signal list
+because the package has no external readiness source, so no readiness cap is
+applied. Day boundaries use UTC and recurring series are never advanced by
+these reads; actor-local days still need the public timezone seam. Search
+interpretation needs an AI provider port and both assistant-policy routes need
+a preferences port, so those three endpoints remain unported rather than faked.
+The database gate includes `tools/drift-parity.ts`: exact comparisons with the
+TypeScript executors for synthetic non-recurring rows under a UTC locale,
+private/admin visibility, and an RLS removal/restoration control scoped to
+these reads.
 
 Part 8 adds `tasks.heartbeatWindow`: bounded owner-only open/due tasks, UTF-16
 material revisions and time boundaries, without writes or lazy recurrence. The

@@ -151,7 +151,7 @@ fn quadrant_filter(selected: &str, now: DateTime<Utc>) -> Filter {
 
 // Chunk membership filters to the public query limit. Fetch tags in database
 // collation order rather than doing two host calls per returned task.
-fn tags_for_tasks<H: Host + ?Sized>(
+pub(crate) fn tags_for_tasks<H: Host + ?Sized>(
     repo: &Repository<'_, H>,
     tasks: &[Task],
 ) -> Result<BTreeMap<String, Vec<Tag>>> {
