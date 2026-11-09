@@ -358,6 +358,16 @@ fn installed_tools_match_production_typescript_and_keep_drafts_untimed() {
 fn installed_cache_evict_job_removes_only_the_actors_own_event() {
     let t = Installed::new();
     let f = &t.f;
+    // Production runs this job on the worker role, which alone holds DELETE (SQL 0113).
+    // This disposable database gives the app role the same owner-scoped delete rule so
+    // the guest's own visibility check and the database rule are both exercised. Real
+    // worker-role dispatch belongs to the host job runner and is not proven here.
+    f.rt.block_on(f.root.batch_execute(
+        "GRANT DELETE ON app.calendar_events TO jarvis_app_runtime;
+         CREATE POLICY calendar_events_delete_standin ON app.calendar_events FOR DELETE
+         TO jarvis_app_runtime USING (owner_user_id = app.current_actor_user_id())",
+    ))
+    .unwrap();
     let job = |actor: Uuid| {
         let payload =
             json!({"queue":"calendar-cache-evict-event","parameters":{"target-item-id":f.event}});

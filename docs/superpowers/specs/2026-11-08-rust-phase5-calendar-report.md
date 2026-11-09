@@ -711,7 +711,11 @@ Evidence: three native guest tests written failing first (visible event,
 invisible event never deleted, unknown queue and extra fields rejected before
 any host call) and one database-backed installed test through the disposable
 gate. A first attempt used the untyped delete operation and failed against the
-real host, which is why the guest uses the typed query. The Wasm target for the
+real host, which is why the guest uses the typed query. Production deletes on
+the worker database role (SQL 0113); the installed test cannot open the host on
+that role (no catalog access), so the disposable database gives the app role an
+equivalent owner-scoped delete rule. Real worker-role dispatch by the host job
+runner is therefore not proven here. The Wasm target for the
 1.95.0 compiler was added to a scratch Rust home (`CALENDAR_RUSTUP_HOME`); no
 global install, no new dependency, no wit-bindgen.
 
