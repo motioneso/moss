@@ -1254,3 +1254,42 @@ proposals/receipts/reconciliation, private exports and daily archives, full path
 and HTTP parity, the assembled Settings/chat join and real use from another
 physical device over HTTPS remain unfinished. This checkpoint is not complete
 Notes parity and must not replace a working legacy Notes installation.
+
+## Part fourteen checkpoint — repeatable sync page delivery
+
+A successful durable test-worker page now remembers its result in the existing
+owner-only checkpoint row. A typed no-op update holds a row lock through the
+outer transaction, so independent invocations of that checkpoint serialize.
+After commit, redelivery returns the saved counts and flags. Deferred pages
+republish their original child ID rather than allocating another continuation.
+Final and no-op replays preserve newer saved sync status. A fresh manual or
+scheduled tick must request a new checkpoint to notice later file/folder changes.
+
+This uses only the module SDK and the existing transactional server adapter.
+It adds no host code, core-table access, filesystem access or dependency. Existing
+raw checkpoints are accepted; successful pages replace their private input with
+a typed result containing counts, flags and an optional UUID. Package `0.1.7`,
+its changelog and app map describe the test-only behavior. Applied SQL is unchanged.
+
+The new native regression failed on the earlier worker because a replay recorded
+completion again; the fixed test checks every successful legacy corpus case for
+stable output, no repeated core calls and the same child publication. Malformed
+saved results cannot pass private text or a non-UUID child to the queue. The
+compiled database gate retries pages after reopening adapters and changing the
+source to an unavailable path, compares legacy persisted rows, races independent
+workers on one checkpoint, and retries the same parent after publication refusal.
+Owner/other-owner/admin probes and RLS removal controls remain in that gate for
+both runtime roles. Embeddings and queue delivery remain named stand-ins.
+Final gate receipts and independent review are recorded in the task proof and PR.
+
+Builds use task-owned scratch Cargo and Rust homes, approved pinned `wit-bindgen`
+0.57.1 and separate ordinary/write-tools guest targets. Nothing is installed
+globally. Database checks run only through `scripts/run-gate.sh`.
+
+This is recovery by explicit retry of a known parent, not an automatic outbox.
+Initial-request discovery after a crash, retention/deduplication across distinct
+sync requests, real configured embedding assembly, active manual/scheduled sync,
+approved installed chat tools, managed publication/fencing, proposals/receipts,
+reconciliation, exports/archives, full HTTP/path parity, the assembled shell and
+physical second-device HTTPS proof remain unfinished. This checkpoint must not
+replace working legacy Notes.

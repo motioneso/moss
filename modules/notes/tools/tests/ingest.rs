@@ -132,7 +132,7 @@ impl Fixture {
             ("JS55_WORKER_URL", RuntimeRole::Worker)
         };
         self.rt
-            .block_on(Database::connect(&std::env::var(url).unwrap(), 2, role))
+            .block_on(Database::connect(&std::env::var(url).unwrap(), 4, role))
             .unwrap()
     }
     fn snapshot(&self) -> Value {
@@ -432,6 +432,18 @@ impl Fixture {
         let captured = jobs.lock().unwrap().clone();
         (result, captured)
     }
+    fn request_params(&self, db: Database, actor: Uuid) -> Value {
+        let (result, jobs) = self.durable_call(
+            db,
+            actor,
+            "api",
+            json!({"name":"requestNotesSync","parameters":{}}),
+            false,
+        );
+        result.unwrap();
+        assert_eq!(jobs.len(), 1);
+        jobs[0]["params"].clone()
+    }
     fn status(&self, db: Database, actor: Uuid) -> Value {
         let ports = Arc::new(
             FolderSettingsPorts::new(
@@ -578,6 +590,42 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
             let out: Value = serde_json::from_str(&out.unwrap()).unwrap();
             assert!(out.get("continuation").is_none());
             assert_eq!(out["errors"], 0);
+            // Replay the exact page after reopening every adapter. A changed
+            // source would fail if ingestion ran again instead of returning the
+            // saved result. A continuation must republish its original UUID.
+            let before_replay = f.status(db.clone(), actor);
+            let rows_before = f.snapshot();
+            f.source(actor, json!("/unavailable-for-replayed-page"));
+            let (replay, replay_jobs) = f.durable_call(
+                db.clone(),
+                actor,
+                "job",
+                json!({"queue":"notes.sync","parameters":params}),
+                false,
+            );
+            f.source(actor, f.oracle["root"].clone());
+            assert_eq!(
+                serde_json::from_str::<Value>(&replay.unwrap()).unwrap(),
+                out
+            );
+            assert_eq!(f.snapshot(), rows_before);
+            assert_eq!(f.status(db.clone(), actor), before_replay);
+            assert_eq!(replay_jobs.len(), jobs.len());
+            for (replayed, original) in replay_jobs.iter().zip(&jobs) {
+                assert_eq!(replayed["params"], original["params"]);
+                assert_eq!(replayed["idempotencyKey"], original["idempotencyKey"]);
+            }
+            for other in [f.actors[1], f.actors[2]] {
+                let (denied, queued) = f.durable_call(
+                    db.clone(),
+                    other,
+                    "job",
+                    json!({"queue":"notes.sync","parameters":params}),
+                    false,
+                );
+                assert!(denied.is_err(), "Foreign account replayed a completed page");
+                assert!(queued.is_empty());
+            }
             if out["deferred"] != true {
                 assert!(jobs.is_empty());
                 let status = f.status(db.clone(), actor);
@@ -633,6 +681,53 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
             assert_eq!(f.status_access(&db, other, actor, can_delete), [0, 0, 0]);
             assert_eq!(f.status(db.clone(), other), Value::Null);
         }
+        // Two independent host calls receive the same durable job together.
+        // They must return the same page and child UUID, including when the
+        // second invocation waits for the first transaction's row lock.
+        f.rt.block_on(f.bootstrap.execute("DELETE FROM app.memory_file_index WHERE owner_user_id=$1 AND source_path LIKE '%/long.md'", &[&actor])).unwrap();
+        let concurrent_params = f.request_params(db.clone(), actor);
+        let barrier = std::sync::Barrier::new(2);
+        let attempts = std::thread::scope(|scope| {
+            let run = || {
+                barrier.wait();
+                f.durable_call(
+                    db.clone(),
+                    actor,
+                    "job",
+                    json!({"queue":"notes.sync","parameters":concurrent_params}),
+                    false,
+                )
+            };
+            let one = scope.spawn(run);
+            let two = scope.spawn(run);
+            [one.join().unwrap(), two.join().unwrap()]
+        });
+        let [(one, one_jobs), (two, two_jobs)] = attempts;
+        let one: Value = serde_json::from_str(&one.unwrap()).unwrap();
+        let two: Value = serde_json::from_str(&two.unwrap()).unwrap();
+        assert_eq!(one, two, "Concurrent delivery reran a sync page");
+        assert_eq!(one["deferred"], true);
+        assert_eq!(one_jobs.len(), 1);
+        assert_eq!(two_jobs.len(), 1);
+        assert_eq!(one_jobs[0]["params"], two_jobs[0]["params"]);
+        // Finish that page chain so the later status/refusal tests keep their
+        // legacy unchanged-file fixture.
+        let mut pending = one_jobs[0]["params"].clone();
+        for _ in 0..8 {
+            let (result, jobs) = f.durable_call(
+                db.clone(),
+                actor,
+                "job",
+                json!({"queue":"notes.sync","parameters":pending}),
+                false,
+            );
+            let result: Value = serde_json::from_str(&result.unwrap()).unwrap();
+            if result["deferred"] != true {
+                break;
+            }
+            pending = jobs[0]["params"].clone();
+        }
+        assert_eq!(f.snapshot(), f.oracle["expected"]);
         // Both reads and mutations must fail without the owner; removing RLS
         // must make that exact assertion false, then restoring it must pass.
         for other in [f.actors[1], f.actors[2]] {
@@ -689,13 +784,14 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
         assert_eq!(f.snapshot(), f.oracle["expected"]);
         // A real database refusal in the separate diagnostic transaction must
         // leave the worker's successful result and the prior status intact.
+        let fresh = f.request_params(db.clone(), actor);
         let before_refusal = f.status(db.clone(), actor);
         f.rt.block_on(f.bootstrap.batch_execute("ALTER TABLE app.preferences ADD CONSTRAINT js113_refuse_status CHECK (key <> 'notes-last-sync') NOT VALID")).unwrap();
         let (accepted, _) = f.durable_call(
             db.clone(),
             actor,
             "job",
-            json!({"queue":"notes.sync","parameters":jobs[0]["params"]}),
+            json!({"queue":"notes.sync","parameters":fresh}),
             false,
         );
         f.rt.block_on(
@@ -711,24 +807,45 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
         // Force a real long-file continuation, then refuse publication after
         // its checkpoint commits. It must save only a fixed generic error.
         f.rt.block_on(f.bootstrap.execute("DELETE FROM app.memory_file_index WHERE owner_user_id=$1 AND source_path LIKE '%/long.md'", &[&actor])).unwrap();
+        let publication_params = f.request_params(db.clone(), actor);
         let (publication_failed, deferred_jobs) = f.durable_call(
             db.clone(),
             actor,
             "job",
-            json!({"queue":"notes.sync","parameters":jobs[0]["params"]}),
+            json!({"queue":"notes.sync","parameters":publication_params}),
             true,
         );
         assert!(publication_failed.is_err());
         assert_eq!(deferred_jobs.len(), 1);
         let publication_status = f.status(db.clone(), actor);
         assert_eq!(publication_status["lastError"], "notes sync failed (Error)");
+        // The parent committed before publication failed. Retrying it must
+        // republish the saved child, not ingest another page or mint an ID.
+        f.source(actor, json!("/unavailable-for-replayed-page"));
+        let (recovered, recovered_jobs) = f.durable_call(
+            db.clone(),
+            actor,
+            "job",
+            json!({"queue":"notes.sync","parameters":publication_params}),
+            false,
+        );
+        let recovered: Value = serde_json::from_str(&recovered.unwrap()).unwrap();
+        assert_eq!(
+            recovered["checkpointId"],
+            deferred_jobs[0]["params"]["checkpointId"]
+        );
+        assert_eq!(recovered_jobs.len(), 1);
+        assert_eq!(recovered_jobs[0]["params"], deferred_jobs[0]["params"]);
+        assert_eq!(f.status(db.clone(), actor), publication_status);
+
         let before_noop = f.status(db.clone(), actor);
         f.source(actor, Value::Null);
+        let fresh = f.request_params(db.clone(), actor);
         let (noop, _) = f.durable_call(
             db.clone(),
             actor,
             "job",
-            json!({"queue":"notes.sync","parameters":jobs[0]["params"]}),
+            json!({"queue":"notes.sync","parameters":fresh}),
             false,
         );
         assert_eq!(
@@ -743,11 +860,12 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
         // An invalid saved source fails in core. The diagnostic survives the
         // failed outer transaction and is visible through the compiled route.
         f.source(actor, json!("/not-an-allowed-notes-folder/private-marker"));
+        let fresh = f.request_params(db.clone(), actor);
         let (failed, _) = f.durable_call(
             db.clone(),
             actor,
             "job",
-            json!({"queue":"notes.sync","parameters":jobs[0]["params"]}),
+            json!({"queue":"notes.sync","parameters":fresh}),
             false,
         );
         assert!(failed.is_err());

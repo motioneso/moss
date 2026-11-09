@@ -481,3 +481,32 @@ are observed failing when preferences RLS is removed and passing after restorati
 Status read/update controls cover both roles; deletion follows RLS for the app
 role, while the worker's missing DELETE grant must refuse deletion throughout.
 This does not prove installed chat, assembled UI sync or a separate device.
+
+## Successful page replay (part fourteen)
+
+Package version `0.1.7` saves a successful test-worker page's counts and optional
+child checkpoint ID in its existing private checkpoint row. The worker first
+uses a typed no-op update to lock that row until the outer call commits or rolls
+back. Assembly must use `TransactionalDatabasePorts`; a nontransactional database
+adapter cannot provide this serialization. Assembly must also bound worker
+concurrency and reserve pool capacity for the ingestion adapter's separate data
+contexts; waiting checkpoint transactions occupy connections. The concurrency
+fixture uses four connections for two workers. An independent worker then reads the
+saved result instead of repeating ingestion, cleanup or child allocation.
+
+A deferred replay requests publication of the same child UUID and idempotency key.
+This allows retry of a known parent after post-commit publication failure. A final
+or no-op replay returns the previous result without overwriting newer saved sync
+status. To scan again after files or folder settings change, request a new sync;
+redelivery of an old job is deliberately the same page. Existing raw checkpoint
+rows remain readable. Successful rows replace private input with a bounded result;
+no applied migration changes and no new table is required.
+
+Native tests observe the retry regression failing before implementation. The
+compiled database gate checks reopen/replay, concurrent delivery, stable child IDs,
+publication-failure retry, unchanged legacy rows and owner/admin privacy with RLS
+removal controls. Queue publication and embeddings are still named stand-ins.
+This is not automatic outbox recovery: it needs a caller to retry the known parent.
+Crash recovery of the initial request, checkpoint retention, sync activation,
+approved installed chat, complete parity and physical second-device HTTPS proof
+remain unfinished. No ordinary-package sync capability is enabled by this change.

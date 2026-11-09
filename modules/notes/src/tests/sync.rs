@@ -157,10 +157,10 @@ fn durable_worker_records_only_finished_runs_and_keeps_errors_safe() {
             p: Value,
         ) -> moss_module_sdk::Result<Value> {
             match (port, op) {
-                ("db", "query") if p["kind"] == "select" => {
+                ("db", "query") if p["kind"] == "select" || p["values"].get("id").is_some() => {
                     Ok(json!([{"checkpoint":self.core.case["payload"]}]))
                 }
-                ("db", "query") => Ok(json!([])),
+                ("db", "query") => Ok(json!([{}])),
                 ("context", "read") => Ok(json!({"now":"2026-11-09T12:00:00.000Z"})),
                 ("context", "uuid") => Ok(json!({"id":"00000000-0000-4000-8000-000000000002"})),
                 ("jobs", "enqueue-after-commit") => Ok(json!({"deferred":true})),
@@ -228,5 +228,119 @@ fn durable_worker_records_only_finished_runs_and_keeps_errors_safe() {
             }
         };
         assert_eq!(*worker.outcomes.borrow(), vec![outcome], "{case}");
+    }
+}
+
+/// The same durable page may be redelivered after the worker restarts or after
+/// after-commit publication fails. Core operations must not run a second time.
+#[test]
+fn durable_page_replay_reuses_its_result_and_continuation() {
+    struct Worker<'a> {
+        core: SyncHost<'a>,
+        row: RefCell<Value>,
+        jobs: RefCell<Vec<Value>>,
+        outcomes: RefCell<Vec<Value>>,
+        ids: RefCell<u32>,
+    }
+    impl moss_module_sdk::Host for Worker<'_> {
+        fn call(
+            &self,
+            port: &str,
+            op: &str,
+            resource: &str,
+            p: Value,
+        ) -> moss_module_sdk::Result<Value> {
+            match (port, op) {
+                ("db", "query") => {
+                    if p["values"].get("checkpoint").is_some() && p["kind"] == "update" {
+                        *self.row.borrow_mut() = p["values"]["checkpoint"].clone();
+                    }
+                    Ok(json!([{"checkpoint":*self.row.borrow()}]))
+                }
+                ("context", "read") => Ok(json!({"now":"2026-11-09T12:00:00.000Z"})),
+                ("context", "uuid") => {
+                    *self.ids.borrow_mut() += 1;
+                    Ok(json!({"id":format!("00000000-0000-4000-8000-{:012}", *self.ids.borrow())}))
+                }
+                ("jobs", "enqueue-after-commit") => {
+                    self.jobs.borrow_mut().push(p);
+                    Ok(json!({"deferred":true}))
+                }
+                ("vault", "folder.record-sync") => {
+                    self.outcomes.borrow_mut().push(p);
+                    Ok(json!({}))
+                }
+                _ => self.core.call(port, op, resource, p),
+            }
+        }
+    }
+    let mut count = 0;
+    for line in include_str!("sync-vectors.jsonl").lines() {
+        let case: Value = serde_json::from_str(line).unwrap();
+        if case["expected"].get("ok").is_none() {
+            continue;
+        }
+        let worker = Worker {
+            core: SyncHost {
+                case: &case,
+                calls: RefCell::new(vec![]),
+            },
+            row: RefCell::new(case["payload"].clone()),
+            jobs: RefCell::new(vec![]),
+            outcomes: RefCell::new(vec![]),
+            ids: RefCell::new(2),
+        };
+        let payload = r#"{"queue":"notes.sync","parameters":{"checkpointId":"00000000-0000-4000-8000-000000000001"}}"#;
+        let first = handle(&worker, "job", payload).unwrap();
+        let core_calls = worker.core.calls.borrow().clone();
+        let first_jobs = worker.jobs.borrow().clone();
+        let first_outcomes = worker.outcomes.borrow().clone();
+        worker.jobs.borrow_mut().clear();
+        let second = handle(&worker, "job", payload).unwrap();
+        assert_eq!(
+            second, first,
+            "Replay changed the saved page result: {case}"
+        );
+        assert_eq!(
+            *worker.core.calls.borrow(),
+            core_calls,
+            "Replay reran core I/O: {case}"
+        );
+        assert_eq!(
+            *worker.jobs.borrow(),
+            first_jobs,
+            "Replay created a new continuation: {case}"
+        );
+        // Deferred retries register publication failures, but completed/no-op
+        // retries must leave any newer saved outcome alone.
+        if case["expected"]["ok"]["deferred"] != true {
+            assert_eq!(*worker.outcomes.borrow(), first_outcomes);
+        }
+        assert_eq!(*worker.ids.borrow(), 2 + u32::from(!first_jobs.is_empty()));
+        count += 1;
+    }
+    assert!(count > 20);
+}
+
+#[test]
+fn malformed_saved_pages_are_refused_before_publication() {
+    struct Corrupt(Value);
+    impl moss_module_sdk::Host for Corrupt {
+        fn call(&self, port: &str, _: &str, _: &str, _: Value) -> moss_module_sdk::Result<Value> {
+            assert_eq!(port, "db", "Corrupt saved result reached core or queue");
+            Ok(json!([{"checkpoint": self.0}]))
+        }
+    }
+    for saved in [
+        json!({"workerResult":{"ingested":0,"skipped":0,"errors":0,"path":"private-marker"}}),
+        json!({"workerResult":{"ingested":0,"skipped":0,"errors":0,"deferred":true,"checkpointId":"private-marker"}}),
+        json!({"workerResult":{"ingested":0,"skipped":0,"errors":0,"deferred":true}}),
+        json!({"workerResult":{"ingested":0,"skipped":0,"errors":0,"checkpointId":"00000000-0000-4000-8000-000000000001"}}),
+        json!({"workerResult":{"ingested":-1,"skipped":0,"errors":0}}),
+        json!({"workerResult":null}),
+    ] {
+        let error = handle(&Corrupt(saved), "job",
+            r#"{"queue":"notes.sync","parameters":{"checkpointId":"00000000-0000-4000-8000-000000000001"}}"#).unwrap_err();
+        assert_eq!(error.message, "Notes sync checkpoint is unavailable");
     }
 }
