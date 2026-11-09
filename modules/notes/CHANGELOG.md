@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.6
+
+- Save durable sync outcomes after transaction finalization, preserving previous results during continuations and after unlinking. Sync activation remains unfinished.
+
 ## 0.1.5
 
 - Store private sync continuations in an owner-only package table. The test worker resumes by opaque ID and queues no paths or hashes. Production sync activation remains unfinished.

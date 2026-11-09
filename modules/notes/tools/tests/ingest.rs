@@ -7,6 +7,8 @@ use anyhow::Result;
 use moss_module_host::{
     after_commit_jobs::AfterCommitJobs,
     context::ContextPorts,
+    folder_settings::{FolderSetting, FolderSettingsPorts},
+    folder_sync_status::FolderSyncStatusPorts,
     memory_cleanup::{MemoryCleanupPorts, MemoryCleanupSource},
     memory_ingest::{DocumentEmbeddings, MemoryIngestPorts, MemoryIngestSource},
     runtime::{CallScope, DenyPorts, Host, Limits, Ports, Request},
@@ -97,7 +99,15 @@ impl Fixture {
             .find(|c| c.port == "vault")
             .unwrap()
             .operations
-            .extend(["index.sync-open", "index.sync-file", "index.sync-cleanup"].map(String::from));
+            .extend(
+                [
+                    "index.sync-open",
+                    "index.sync-file",
+                    "index.sync-cleanup",
+                    "folder.record-sync",
+                ]
+                .map(String::from),
+            );
         manifest.capabilities.extend(serde_json::from_value::<Vec<_>>(json!([
             {"port":"context","operations":["read","uuid"],"resources":["call","new"]},
             {"port":"jobs","operations":["enqueue-after-commit","enqueue-options"],"resources":["notes.sync"]}
@@ -393,8 +403,16 @@ impl Fixture {
         });
         let ports = Arc::new(
             TransactionalDatabasePorts::new(
-                db,
+                db.clone(),
                 Arc::new(ContextPorts::new(Arc::new(AfterCommitJobs::new(queue)))),
+            )
+            .unwrap(),
+        );
+        let ports = Arc::new(
+            FolderSyncStatusPorts::new(
+                db,
+                BTreeMap::from([(("notes".into(), "source".into()), "notes-last-sync".into())]),
+                ports,
             )
             .unwrap(),
         );
@@ -413,6 +431,55 @@ impl Fixture {
         );
         let captured = jobs.lock().unwrap().clone();
         (result, captured)
+    }
+    fn status(&self, db: Database, actor: Uuid) -> Value {
+        let ports = Arc::new(
+            FolderSettingsPorts::new(
+                db,
+                BTreeMap::from([(
+                    ("notes".into(), "source".into()),
+                    FolderSetting {
+                        path_key: "notes-source-path".into(),
+                        status_key: "notes-last-sync".into(),
+                        roots: BTreeMap::new(),
+                    },
+                )]),
+                Arc::new(DenyPorts),
+            )
+            .unwrap(),
+        );
+        let response = self
+            .host
+            .call(
+                &self.wasm,
+                self.manifest.clone(),
+                AccessContext::new(actor, "read-sync-status"),
+                ports,
+                "route",
+                &json!({"method":"GET","path":"/notes-last-sync"}).to_string(),
+            )
+            .unwrap();
+        let response: Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(response["status"], 200);
+        response["body"]["lastSync"].clone()
+    }
+    fn status_access(&self, db: &Database, actor: Uuid, owner: Uuid, can_delete: bool) -> [u64; 3] {
+        self.rt.block_on(async {
+            let cx = safety_core::db::DataContext::open(db, &AccessContext::new(actor, "sync-status-privacy")).await.unwrap();
+            let read = cx.db().query("SELECT value_json FROM app.preferences WHERE owner_user_id=$1 AND key='notes-last-sync'", &[&owner]).await.unwrap().len();
+            let update = cx.db().execute("UPDATE app.preferences SET value_json='{}'::jsonb WHERE owner_user_id=$1 AND key='notes-last-sync'", &[&owner]).await.unwrap();
+            let deletion = cx.db().execute("DELETE FROM app.preferences WHERE owner_user_id=$1 AND key='notes-last-sync'", &[&owner]).await;
+            let delete = if can_delete {
+                deletion.unwrap()
+            } else {
+                // Workers have no DELETE grant, even for their own preferences
+                // and even without RLS. Require that stronger boundary too.
+                assert_eq!(deletion.unwrap_err().code(), Some(&tokio_postgres::error::SqlState::INSUFFICIENT_PRIVILEGE));
+                0
+            };
+            // Drop rolls back all mutation probes.
+            [read as u64, update, delete]
+        })
     }
     fn checkpoint_access(&self, db: &Database, actor: Uuid, id: Uuid) -> [u64; 3] {
         self.rt.block_on(async {
@@ -478,6 +545,10 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
             requested["checkpointId"],
             queued[0]["params"]["checkpointId"]
         );
+        // Seed an earlier result; deferred pages and rejected foreign checkpoints
+        // must preserve it until the final page finishes.
+        let previous = json!({"at":"2026-11-08T12:00:00.000Z","ingested":9,"skipped":8,"errors":7});
+        f.rt.block_on(f.bootstrap.execute("INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'notes-last-sync',$2) ON CONFLICT(owner_user_id,key) DO UPDATE SET value_json=EXCLUDED.value_json", &[&actor, &previous])).unwrap();
         let mut params = queued[0]["params"].clone();
         let initial: Uuid = serde_json::from_value(requested["checkpointId"].clone()).unwrap();
         let mut deferred = 0;
@@ -495,6 +566,7 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
                     "Another account resumed a private checkpoint"
                 );
                 assert!(jobs.is_empty());
+                assert_eq!(f.status(db.clone(), other), Value::Null);
             }
             let (out, jobs) = f.durable_call(
                 db.clone(),
@@ -508,8 +580,19 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
             assert_eq!(out["errors"], 0);
             if out["deferred"] != true {
                 assert!(jobs.is_empty());
+                let status = f.status(db.clone(), actor);
+                assert!(status["at"].as_str().unwrap() > "2026-11-08T12:00:00.000Z");
+                assert_eq!(status["ingested"], out["ingested"]);
+                assert_eq!(status["skipped"], out["skipped"]);
+                assert_eq!(status["errors"], out["errors"]);
+                assert!(status.get("lastError").is_none());
                 break;
             }
+            assert_eq!(
+                f.status(db.clone(), actor),
+                previous,
+                "Deferred page replaced previous stats"
+            );
             deferred += 1;
             assert_eq!(jobs.len(), 1);
             params = jobs[0]["params"].clone();
@@ -520,6 +603,36 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
             f.oracle["expected"],
             "Durable sync differs from legacy rows"
         );
+        let can_delete = role == "app";
+        let owner_access = [1, 1, u64::from(can_delete)];
+        assert_eq!(f.status_access(&db, actor, actor, can_delete), owner_access);
+        for other in [f.actors[1], f.actors[2]] {
+            assert_eq!(f.status_access(&db, other, actor, can_delete), [0, 0, 0]);
+            assert_eq!(f.status(db.clone(), other), Value::Null);
+            f.rt.block_on(
+                f.bootstrap
+                    .batch_execute("ALTER TABLE app.preferences DISABLE ROW LEVEL SECURITY"),
+            )
+            .unwrap();
+            let exposed = f.status_access(&db, other, actor, can_delete);
+            // The same compiled route must expose the owner's result without RLS.
+            let exposed_route = f.status(db.clone(), other);
+            f.rt.block_on(
+                f.bootstrap
+                    .batch_execute("ALTER TABLE app.preferences ENABLE ROW LEVEL SECURITY"),
+            )
+            .unwrap();
+            assert_eq!(exposed, owner_access);
+            assert!(!exposed_route.is_null());
+            assert!(std::panic::catch_unwind(|| assert_eq!(
+                exposed,
+                [0, 0, 0],
+                "sync status privacy fails without RLS"
+            ))
+            .is_err());
+            assert_eq!(f.status_access(&db, other, actor, can_delete), [0, 0, 0]);
+            assert_eq!(f.status(db.clone(), other), Value::Null);
+        }
         // Both reads and mutations must fail without the owner; removing RLS
         // must make that exact assertion false, then restoring it must pass.
         for other in [f.actors[1], f.actors[2]] {
@@ -574,6 +687,79 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
         let retry: Value = serde_json::from_str(&retry.unwrap()).unwrap();
         assert_eq!(retry["skipped"], 5);
         assert_eq!(f.snapshot(), f.oracle["expected"]);
+        // A real database refusal in the separate diagnostic transaction must
+        // leave the worker's successful result and the prior status intact.
+        let before_refusal = f.status(db.clone(), actor);
+        f.rt.block_on(f.bootstrap.batch_execute("ALTER TABLE app.preferences ADD CONSTRAINT js113_refuse_status CHECK (key <> 'notes-last-sync') NOT VALID")).unwrap();
+        let (accepted, _) = f.durable_call(
+            db.clone(),
+            actor,
+            "job",
+            json!({"queue":"notes.sync","parameters":jobs[0]["params"]}),
+            false,
+        );
+        f.rt.block_on(
+            f.bootstrap
+                .batch_execute("ALTER TABLE app.preferences DROP CONSTRAINT js113_refuse_status"),
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(&accepted.unwrap()).unwrap()["skipped"],
+            5
+        );
+        assert_eq!(f.status(db.clone(), actor), before_refusal);
+        // Force a real long-file continuation, then refuse publication after
+        // its checkpoint commits. It must save only a fixed generic error.
+        f.rt.block_on(f.bootstrap.execute("DELETE FROM app.memory_file_index WHERE owner_user_id=$1 AND source_path LIKE '%/long.md'", &[&actor])).unwrap();
+        let (publication_failed, deferred_jobs) = f.durable_call(
+            db.clone(),
+            actor,
+            "job",
+            json!({"queue":"notes.sync","parameters":jobs[0]["params"]}),
+            true,
+        );
+        assert!(publication_failed.is_err());
+        assert_eq!(deferred_jobs.len(), 1);
+        let publication_status = f.status(db.clone(), actor);
+        assert_eq!(publication_status["lastError"], "notes sync failed (Error)");
+        let before_noop = f.status(db.clone(), actor);
+        f.source(actor, Value::Null);
+        let (noop, _) = f.durable_call(
+            db.clone(),
+            actor,
+            "job",
+            json!({"queue":"notes.sync","parameters":jobs[0]["params"]}),
+            false,
+        );
+        assert_eq!(
+            serde_json::from_str::<Value>(&noop.unwrap()).unwrap()["noOp"],
+            true
+        );
+        assert_eq!(
+            f.status(db.clone(), actor),
+            before_noop,
+            "Unlink tick replaced real stats"
+        );
+        // An invalid saved source fails in core. The diagnostic survives the
+        // failed outer transaction and is visible through the compiled route.
+        f.source(actor, json!("/not-an-allowed-notes-folder/private-marker"));
+        let (failed, _) = f.durable_call(
+            db.clone(),
+            actor,
+            "job",
+            json!({"queue":"notes.sync","parameters":jobs[0]["params"]}),
+            false,
+        );
+        assert!(failed.is_err());
+        let failure_status = f.status(db.clone(), actor);
+        assert_eq!(
+            failure_status["lastError"],
+            "path is not within the linked notes source"
+        );
+        assert_eq!(failure_status["ingested"], 0);
+        assert!(!failure_status.to_string().contains("private-marker"));
+        assert_ne!(failure_status["at"], Value::Null);
+        f.rt.block_on(f.bootstrap.execute("DELETE FROM app.preferences WHERE key='notes-last-sync' AND owner_user_id=ANY($1::uuid[])", &[&f.actors])).unwrap();
         f.rt.block_on(async {
             for table in [
                 "memory_chunks",
@@ -591,5 +777,5 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
             }
         });
     }
-    println!("PASS durable compiled sync: restart between pages, legacy row parity, UUID-only queue requests, post-commit publication failure retry, both runtime roles; owner/admin read-update-delete assertions fail without RLS and pass restored. Embeddings and queue publication are named stand-ins.");
+    println!("PASS durable compiled sync: saved final outcomes and safe rollback failures, deferred/no-op preservation, status-route and preference RLS removal controls; restart between pages, legacy row parity, UUID-only queue requests, post-commit publication failure retry, both runtime roles. Status read/update privacy fails without RLS and passes restored; app deletion follows RLS, worker deletion stays ungranted. Checkpoint read/update/delete privacy controls cover both roles. Embeddings and queue publication are named stand-ins.");
 }

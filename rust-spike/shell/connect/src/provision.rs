@@ -117,14 +117,7 @@ fn setup_lock(servers: &Path) -> Result<std::fs::File, Failure> {
     let file = options
         .open(servers.join("setup.lock"))
         .map_err(|_| Failure::Other)?;
-    #[cfg(unix)]
-    {
-        use std::os::fd::AsRawFd;
-        // SAFETY: file owns the descriptor; dropping it releases the advisory lock.
-        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) } != 0 {
-            return Err(Failure::Other);
-        }
-    }
+    portability::file_lock::exclusive(&file).map_err(|_| Failure::Other)?;
     Ok(file)
 }
 

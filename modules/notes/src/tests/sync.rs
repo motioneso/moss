@@ -139,3 +139,94 @@ fn durable_job_refuses_forged_envelopes_before_host_access() {
         assert!(handle(&Deny, "job", &payload.to_string()).is_err());
     }
 }
+
+/// Durable worker wraps the coordinator, while core I/O remains the same named
+/// stand-in used by the legacy corpus. Outcome persistence is checked in the DB gate.
+#[test]
+fn durable_worker_records_only_finished_runs_and_keeps_errors_safe() {
+    struct Worker<'a> {
+        core: SyncHost<'a>,
+        outcomes: RefCell<Vec<Value>>,
+    }
+    impl moss_module_sdk::Host for Worker<'_> {
+        fn call(
+            &self,
+            port: &str,
+            op: &str,
+            resource: &str,
+            p: Value,
+        ) -> moss_module_sdk::Result<Value> {
+            match (port, op) {
+                ("db", "query") if p["kind"] == "select" => {
+                    Ok(json!([{"checkpoint":self.core.case["payload"]}]))
+                }
+                ("db", "query") => Ok(json!([])),
+                ("context", "read") => Ok(json!({"now":"2026-11-09T12:00:00.000Z"})),
+                ("context", "uuid") => Ok(json!({"id":"00000000-0000-4000-8000-000000000002"})),
+                ("jobs", "enqueue-after-commit") => Ok(json!({"deferred":true})),
+                ("vault", "folder.record-sync") => {
+                    self.outcomes.borrow_mut().push(p);
+                    // Legacy status writes are best effort: failure must not mask
+                    // successful ingestion or replace the coordinator error.
+                    Err(moss_module_sdk::Error::new(
+                        "private status backend failure",
+                    ))
+                }
+                _ => self.core.call(port, op, resource, p),
+            }
+        }
+    }
+    for line in include_str!("sync-vectors.jsonl").lines() {
+        let case: Value = serde_json::from_str(line).unwrap();
+        let worker = Worker {
+            core: SyncHost {
+                case: &case,
+                calls: RefCell::new(vec![]),
+            },
+            outcomes: RefCell::new(vec![]),
+        };
+        let result = handle(
+            &worker,
+            "job",
+            r#"{"queue":"notes.sync","parameters":{"checkpointId":"00000000-0000-4000-8000-000000000001"}}"#,
+        );
+        let expected = &case["expected"];
+        let outcome = if let Some(error) = expected["error"].as_str() {
+            assert_eq!(result.unwrap_err().message, error);
+            {
+                assert_eq!(
+                    case["lastSync"],
+                    json!({"ingested":0,"skipped":0,"errors":0,"lastError":error})
+                );
+                json!({"outcome":"failed","lastError":case["lastSync"]["lastError"]})
+            }
+        } else {
+            let mut expected_result = expected["ok"].clone();
+            if expected_result.get("continuation").is_some() {
+                expected_result
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("continuation");
+                expected_result["checkpointId"] = json!("00000000-0000-4000-8000-000000000002");
+            }
+            assert_eq!(
+                serde_json::from_str::<Value>(&result.unwrap()).unwrap(),
+                expected_result
+            );
+            if expected["ok"]["noOp"] == true {
+                assert!(case["lastSync"].is_null());
+                assert!(
+                    worker.outcomes.borrow().is_empty(),
+                    "No-op replaced saved stats"
+                );
+                continue;
+            } else if expected["ok"]["deferred"] == true {
+                assert!(case["lastSync"].is_null());
+                json!({"outcome":"deferred"})
+            } else {
+                json!({"outcome":"completed","ingested":case["lastSync"]["ingested"],"skipped":case["lastSync"]["skipped"],"errors":case["lastSync"]["errors"]})
+            }
+        };
+        assert_eq!(*worker.outcomes.borrow(), vec![outcome], "{case}");
+    }
+}

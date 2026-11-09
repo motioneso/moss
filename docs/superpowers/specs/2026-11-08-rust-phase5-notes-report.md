@@ -1203,3 +1203,54 @@ approved installed chat writes, managed publication and fencing, exports and
 archives, full HTTP parity, assembled Settings/chat and a separate physical
 device over HTTPS remain acceptance work. The fixture browser check cannot
 prove that separate-device acceptance.
+
+## Part thirteen checkpoint — saved sync results
+
+### What changed
+
+The durable test worker now saves final sync counts and safe failures to the
+existing last-sync preference. A continuation page or a tick after unlinking
+keeps the previous result. Counts describe the final worker page, matching
+legacy behavior; they are not totals accumulated across continuation pages.
+
+The new additive `FolderSyncStatusPorts` adapter belongs outside the database
+transaction and deferred queue adapters. It waits for downstream finalization,
+then writes under the calling account in a fresh transaction. Failed publication
+uses a generic safe failure. Status writes are best effort and never replace
+the actual sync result. A deadline, process crash, missing capability or missing
+adapter can leave the old result. No durable diagnostic delivery is claimed.
+The module remains a pure SDK client of the server API. It gains no direct core
+table, filesystem or network access. Original SQL remains unchanged.
+
+The package version and app map describe this checkpoint without advertising a
+manual sync button, schedule or installed chat writes. The ordinary package
+still cannot run sync. Approved `wit-bindgen` 0.57.1 and declared dependencies
+were built with task-owned scratch Cargo and Rust homes; nothing was installed
+globally. Guest builds use separate ordinary and write-tools target folders.
+
+### Verification
+
+The new native regression was observed failing before implementation because
+no final outcome was recorded. The legacy oracle now runs the actual worker
+wrapper and status writer as well as the coordinator, with named coordinator,
+queue and data-context stand-ins. Its generated vectors cover final, deferred,
+no-op and failed outcomes; a refused status call must leave the real result intact.
+
+The disposable database gate adds compiled-worker persistence, compiled-route
+reads and direct runtime-role privacy probes for the saved status. It removes
+preferences RLS to observe read/update privacy assertions fail, restores RLS and
+repeats, for another owner and an unrelated admin under both runtime roles.
+App-role deletion follows RLS too; worker deletion must remain permission-denied
+even for its owner and with RLS removed, because it has no DELETE grant.
+Queue delivery and embeddings remain explicit test stand-ins.
+Final gate and review results will be recorded in this checkpoint's proof.
+
+### Still required for acceptance
+
+Real configured embedding assembly, installed chat search and approved writes,
+sync worker activation and dispatch, manual and scheduled sync, outbox recovery
+and checkpoint retention/deduplication, managed publication and fencing,
+proposals/receipts/reconciliation, private exports and daily archives, full path
+and HTTP parity, the assembled Settings/chat join and real use from another
+physical device over HTTPS remain unfinished. This checkpoint is not complete
+Notes parity and must not replace a working legacy Notes installation.

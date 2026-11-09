@@ -366,7 +366,7 @@ fn start_local(install: &Path, folder: &Path) -> Result<(), Problem> {
             .open(folder.join("server.log"))
             .map_err(|_| Problem::DidNotStart)?
     };
-    let mut command = std::process::Command::new(install.join("moss-shell"));
+    let mut command = std::process::Command::new(server_program(install));
     command
         .arg("serve")
         .arg("--instance")
@@ -402,15 +402,13 @@ fn start_lock(folder: &Path) -> Result<Option<std::fs::File>, Problem> {
     let file = options
         .open(folder.join("start.lock"))
         .map_err(|_| Problem::DidNotStart)?;
-    #[cfg(unix)]
-    {
-        use std::os::fd::AsRawFd;
-        // SAFETY: the descriptor is open for the call; flock only reads it.
-        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
-            return Ok(None);
-        }
-    }
-    Ok(Some(file))
+    portability::file_lock::try_exclusive(&file)
+        .map(|acquired| acquired.then_some(file))
+        .map_err(|_| Problem::DidNotStart)
+}
+
+fn server_program(install: &Path) -> PathBuf {
+    install.join(format!("moss-shell{}", std::env::consts::EXE_SUFFIX))
 }
 
 /// Finds the local server, starting it if no one else is. The lock is released on return.

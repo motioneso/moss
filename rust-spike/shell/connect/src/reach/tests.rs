@@ -4,6 +4,36 @@ use moss_network::instance::{self, leaf_der};
 use serde_json::json;
 use std::path::PathBuf;
 
+#[test]
+fn local_start_lock_serializes_independent_app_handles() {
+    let dir = scratch("start-lock");
+    let first = start_lock(&dir).unwrap().expect("first app owns start");
+    assert!(start_lock(&dir).unwrap().is_none());
+    drop(first);
+    assert!(start_lock(&dir).unwrap().is_some());
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn local_start_lock_errors_are_not_reported_as_a_busy_app() {
+    let dir = scratch("bad-lock");
+    std::fs::create_dir(dir.join("start.lock")).unwrap();
+    assert_eq!(start_lock(&dir).unwrap_err(), Problem::DidNotStart);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn server_program_uses_the_platform_executable_suffix() {
+    let install = Path::new("installation with spaces");
+    let program = server_program(install);
+    assert_eq!(program.parent(), Some(install));
+    assert_eq!(program.file_stem().unwrap(), "moss-shell");
+    #[cfg(windows)]
+    assert_eq!(program.extension().unwrap(), "exe");
+    #[cfg(unix)]
+    assert!(program.extension().is_none());
+}
+
 fn scratch(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("moss-app-{tag}-{}", uuid::Uuid::new_v4()));
     crate::store::private_dir(&dir).unwrap();

@@ -3,6 +3,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::net::TcpListener;
+#[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -107,15 +108,14 @@ pub struct InstallLock {
 }
 
 pub fn lock(layout: &Layout) -> Result<InstallLock, String> {
-    let mut file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .mode(0o600)
+    let mut options = OpenOptions::new();
+    options.read(true).write(true).create(true).truncate(false);
+    #[cfg(unix)]
+    options.mode(0o600);
+    let mut file = options
         .open(&layout.lock)
         .map_err(|e| format!("lock file: {e}"))?;
-    if !try_flock(&file, libc::LOCK_EX)? {
+    if !portability::file_lock::try_exclusive(&file).map_err(|e| format!("lock file: {e}"))? {
         let mut holder = String::new();
         let _ = file.read_to_string(&mut holder);
         return Err(format!(
@@ -144,7 +144,7 @@ pub fn holder(layout: &Layout) -> Result<Option<i32>, String> {
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(format!("lock file: {error}")),
         };
-        if try_flock(&file, libc::LOCK_SH)? {
+        if portability::file_lock::try_shared(&file).map_err(|e| format!("lock file: {e}"))? {
             return Ok(None);
         }
         let text = std::fs::read_to_string(&layout.lock).map_err(|e| format!("lock file: {e}"))?;
@@ -156,20 +156,6 @@ pub fn holder(layout: &Layout) -> Result<Option<i32>, String> {
             }
             _ => std::thread::sleep(Duration::from_millis(20)),
         }
-    }
-}
-
-/// `Ok(false)` when another process holds a conflicting lock.
-fn try_flock(file: &File, kind: i32) -> Result<bool, String> {
-    use std::os::fd::AsRawFd;
-    if unsafe { libc::flock(file.as_raw_fd(), kind | libc::LOCK_NB) } == 0 {
-        return Ok(true);
-    }
-    let error = io::Error::last_os_error();
-    if error.raw_os_error() == Some(libc::EWOULDBLOCK) {
-        Ok(false)
-    } else {
-        Err(format!("lock file: {error}"))
     }
 }
 
@@ -581,6 +567,18 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
         dir
+    }
+
+    #[test]
+    fn supervisor_lock_keeps_its_pid_readable_and_releases_on_drop() {
+        let dir = private_tempdir();
+        let layout = Layout::create(&dir.path().join("install")).unwrap();
+        let first = lock(&layout).unwrap();
+        assert_eq!(std::fs::read_to_string(&layout.lock).unwrap(), std::process::id().to_string());
+        assert!(lock(&layout).is_err());
+        drop(first);
+        assert_eq!(holder(&layout).unwrap(), None);
+        assert!(lock(&layout).is_ok());
     }
 
     const PLANTED: &str = r#"{"endpoint":{"socket_dir":"/someone/else","port":5432}}"#;

@@ -2,8 +2,11 @@
 
 ## Unreleased
 
+- Include, show only or hide lists, combine tag filters, and clear filters in the package screen.
+- Show per-list counts after status and tags, before search; compare the filter model with the legacy screen over 800 combinations.
+
 - Group List view by priority, highest first, with unprioritised tasks last.
-- Order List and Grid groups by due date then title, using the existing grid labels.
+- Order List and Grid groups by due date then title, using the legacy grid labels.
 - Use Critical and Someday in the task editor and compare view grouping with the legacy screen.
 
 - Add focus, at-risk and overdue routes and tools, plus a bounded twelve-row summary tool.
