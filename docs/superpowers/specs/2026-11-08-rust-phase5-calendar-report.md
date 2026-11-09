@@ -639,3 +639,51 @@ parity and a physical second device over trusted HTTPS. Builds reuse the
 existing task-local Rust 1.95.0/Wasm scratch toolchain (`CALENDAR_RUSTUP_HOME`
 pointing at a home that carries the Wasm target) and lockfiles. No global
 tool, new dependency or wit-bindgen installation was performed.
+
+## JS-99 / part 11: original draft request parity checkpoint
+
+Card 525. This continuation recovered uncommitted day-plan work, then integrated the
+merged part 10 preview checkpoint from main. Work stays in Calendar-owned files in
+the `~/Jarv1s` task worktree. Package 0.11.0 remains a pure client of the server API.
+This is a bounded checkpoint, not the full Calendar port.
+
+The installed routes accept the original `date` field on creation and draft saves,
+plus the existing package `localDay` field. Ambiguous requests with both are rejected.
+Creation without a timezone, including null, reads the actor's locale and uses the
+product's America/Los_Angeles fallback. Saves require an explicit timezone. Original
+source-linked creation deliberately returns unavailable pending the public Briefings
+provenance adapter; no other module's tables or provider credentials are read.
+The existing part 10 HTTP aliases and preview route remain in place. The app map
+records the expanded write support and the source/enriched-read limitations.
+
+The failing-first installed check used the baseline package and the production
+TypeScript create route on the same disposable database: production returned success,
+while installed Rust returned bad request for the original date envelope. The
+inherited adapter's UTC fallback was also corrected before keeping it. The expanded
+oracle uses real production handlers/repositories, two account timezone preferences
+and the no-preference default; successful create, save and repeated-create responses
+compare in full after normalizing generated ids and the separate fixture dates.
+Stale-revision and foreign/admin rejection statuses are compared; rejection wording
+and exhaustive malformed-input equivalence are not established. Foreign reads and
+unchanged owner drafts are checked separately. Existing failing-first five-table
+privacy witnesses remain required by the scoped gate.
+
+Verification uses `scripts/run-gate.sh` for the full Calendar gate and signed-in live
+runner. The live check sends real browser requests through both URL prefixes after
+sign-in and loading the installed Calendar screen, then checks saved values, repeated
+creation, stale revisions and a different signed-in account's refused write. It does
+not add or prove a day-plan editor. The existing screen/settings/startup checks run
+alongside it. Exact command outcomes, final tested commit and review disposition are
+recorded in the task Proof artifact rather than borrowed from prior parts.
+
+Builds reuse the existing Rust 1.95.0/Wasm toolchain and declared lockfiles, with build
+caches copied into this task's scratch directory. Both shared asset generators target
+one scratch folder. No global tool, new dependency or wit-bindgen installation is
+performed. The disposable certificate, same-machine LAN request and phone viewport
+do not prove physical second-device access or trusted production HTTPS.
+
+Remaining: enriched plan read responses; complete validation/coercion/error parity;
+source-run provenance and real public Tasks/Briefings/provider adapters; the four
+remaining provider tools and both jobs; apply/retry/recovery/confirm and monitoring;
+source-behavior controls and external-calendar status; full shell/Today/chat and the
+old-screen replacement; complete assembled parity; physical second-device HTTPS.

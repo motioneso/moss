@@ -189,7 +189,7 @@ pub fn verify(app: &Application, f: &Fixture) {
         assert_eq!(expected[1]["status"], 409);
         assert_eq!(actual[1]["status"], 409);
         comparisons += 1;
-        for (mut want, mut got) in expected
+        for (mut want, got) in expected
             .into_iter()
             .zip(actual.iter_mut())
             .enumerate()

@@ -231,6 +231,7 @@ fn original_day_read_uses_account_timezone_or_the_product_default() {
     for (stored, zone) in [
         (Value::Null, "America/Los_Angeles"),
         (json!("invalid"), "America/Los_Angeles"),
+        (json!(" Pacific/Auckland "), "America/Los_Angeles"),
         (json!("Pacific/Auckland"), "Pacific/Auckland"),
     ] {
         let response: Value = serde_json::from_str(&handle(&Locale(stored, zone), "route", &json!({

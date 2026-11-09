@@ -22,6 +22,7 @@ import { chromium } from "@playwright/test";
 import { getMossDatabaseUrls } from "@moss/db";
 import { readHttpOracle } from "./http-oracle.js";
 import { checkStartup } from "./startup-check.js";
+import { checkDayPlanWrites } from "./day-plan-live.js";
 import { DEFAULT_LOCALE_SETTINGS, type CalendarEventDto } from "@moss/shared";
 import { dateRangeLabel, dtoToViewEvent } from "../../../apps/web/src/calendar/calendar-model.js";
 
@@ -407,6 +408,7 @@ try {
   };
   await frame.getByRole("dialog").filter({ hasText: "Calendar package check" }).waitFor();
   await screenshotDialog("signed-in-linked-event.png");
+  await checkDayPlanWrites(tab, (path, options) => request(path, { ...options, cookie: other }));
   await frame.getByRole("button", { name: "Close", exact: true }).click();
   for (const [index, event] of proofEvents.slice(0, 2).entries()) {
     const result = await request(`/api/calendar/events/${event.id}`, { cookie: owner });

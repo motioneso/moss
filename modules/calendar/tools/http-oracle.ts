@@ -4,7 +4,7 @@ import Fastify from "fastify";
 import { PreferencesRepository } from "@moss/structured-state";
 import { LOCALE_PREFERENCE_KEY, resolveEffectiveLocale } from "@moss/shared";
 import { AiRepository } from "../../../packages/ai/src/repository.js";
-import { createDatabase, DataContextRunner, getMossDatabaseUrls } from "@moss/db";
+import { createDatabase, DataContextRunner, getMossDatabaseUrls, type Task } from "@moss/db";
 import { registerCalendarRoutes } from "../../../packages/calendar/src/routes.js";
 import { DayPlanRepository } from "../../../packages/calendar/src/day-plan-repository.js";
 
@@ -34,10 +34,32 @@ export async function httpOracle(
     // mirroring the actor-scoped public Tasks projection.
     ...(tasks
       ? {
-          findTask: async (_scopedDb: unknown, taskId: string) => {
+          findTask: async (_scopedDb: unknown, taskId: string): Promise<Task | undefined> => {
             const task = tasks[taskId];
             if (!task || task.ownerUserId !== actor) return undefined;
-            return { status: task.status, due_at: task.dueAt };
+            return {
+              id: taskId,
+              owner_user_id: actor,
+              list_id: taskId,
+              parent_task_id: null,
+              title: "Synthetic preview task",
+              description: null,
+              status: task.status === "done" || task.status === "archived" ? task.status : "todo",
+              priority: null,
+              position: 0,
+              due_at: task.dueAt === null ? null : new Date(task.dueAt),
+              do_at: null,
+              completed_at: null,
+              effort: null,
+              source: "fixture",
+              source_ref: null,
+              external_key: null,
+              recurrence: null,
+              recurrence_series_id: null,
+              suggestion_metadata: null,
+              created_at: new Date("2026-11-08T00:00:00Z"),
+              updated_at: new Date("2026-11-08T00:00:00Z")
+            };
           }
         }
       : {}),

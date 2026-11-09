@@ -159,7 +159,6 @@ fn original_day(host: &impl Host, mut value: Value, timezone_required: bool) -> 
         let locale = host.call("kv", "get", "calendar.chat-context", json!({}))?;
         let zone = locale["timezone"]
             .as_str()
-            .map(str::trim)
             .filter(|zone| zone.len() <= 100 && zone.parse::<chrono_tz::Tz>().is_ok())
             .unwrap_or("America/Los_Angeles");
         object.insert("timeZone".into(), json!(zone));

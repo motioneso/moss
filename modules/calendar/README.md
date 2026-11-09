@@ -37,7 +37,7 @@ Briefing projections; no other module's tables are queried here. Without those p
 drafts containing task references or a source run fail before committing. The returned task
 shape is `{task:{id,ownerUserId}}`; the briefing shape is `{run:{id,ownerUserId}}`. The later
 composition must provide real public adapters and validate full source-run provenance before
-exposing the original HTTP create route. These projections use the declared read-only host
+allowing source-linked creation through the original HTTP envelope. These projections use the declared read-only host
 resources `calendar.task-reference` and `calendar.briefing-reference`, accepting only an `id`.
 They are host-injected public-interface projections, not installed-package API dispatch.
 No People data is read by this slice.
@@ -270,3 +270,23 @@ responses or account identity. The existing gate, parity comparisons and privacy
 fault witnesses remain required. Full provider/tools/jobs parity, full shell/chat,
 old-screen replacement and a physical second device over trusted HTTPS remain
 open; see the canonical Calendar report and the part 9 checkpoint report.
+
+## Original draft HTTP envelopes (part 11 checkpoint)
+
+Version 0.11.0 accepts `date` on day-plan reads, creation and draft saves, while retaining
+`localDay` for existing package callers. Supplying both fields is rejected. Creation with
+an omitted or null timezone reads the actor's saved locale, falling back to the product's
+America/Los_Angeles default. Saving requires an explicit timezone and current revision.
+The aliases added in part 10 now accept these original write envelopes. Original-envelope
+creation with a non-null `sourceRunId` returns unavailable until the public provenance
+adapter is ready. Existing internal `localDay`/public API contracts are retained.
+
+The installed oracle compares create, repeated create, focus-block and intent saves, stale
+revisions and foreign/admin write refusal with production handlers and repositories.
+It uses two saved account zones and the no-preference default. Generated plan/block ids
+and the different fixture dates are normalized; successful values otherwise compare in
+full. Rejection bodies, coercion edge cases and exhaustive validation parity are unproven.
+The live runner writes through browser fetch after real sign-in, checks both URL prefixes,
+reloads the saved plan and checks revision/foreign-write refusal. No day-plan editor is
+added to the screen in this checkpoint. Enriched plan reads, source-run provenance,
+provider tools/jobs/execution, shell/chat, cutover and physical second-device HTTPS remain open.
