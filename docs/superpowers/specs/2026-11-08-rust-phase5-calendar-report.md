@@ -814,9 +814,9 @@ new status screen. Direct fixture rows model saved progress; they do not establi
 provider execution. Exact fresh checks, review and commit are recorded in the
 task Proof artifact.
 
-Builds copy the existing Rust 1.95.0 home and build caches into this task's
-scratch directories. The declared Wasm target is added to that task-local Rust home
-after the first two gate attempts found incomplete scratch targets. Dependencies are restored
+Builds reuse copied build caches and provision Rust 1.95.0 with the declared
+Wasm target in this task's own scratch Rust home. The earlier scratch homes
+proved incomplete or were removed before they could be copied. Dependencies are restored
 offline from the declared lockfile in this worktree. Both shared asset bundles go
 into one scratch directory. No new dependency, global tool or wit-bindgen installation
 is performed. A same-machine LAN request, disposable TLS certificate and phone-width
