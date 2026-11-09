@@ -118,7 +118,7 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         )
         .unwrap(),
     );
-    let manifest = Arc::new(
+    let manifest = refresh::manifest(
         serde_json::from_str::<moss_module_host::manifest::Manifest>(include_str!(
             "../../../modules/people/moss.module.json"
         ))

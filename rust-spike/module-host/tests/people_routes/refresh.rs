@@ -10,6 +10,16 @@ use safety_core::{db::Database, secret::Secret};
 use serde_json::{json, Value};
 use std::sync::Arc;
 
+pub fn manifest(mut manifest: Manifest) -> Arc<Manifest> {
+    // Deliberately remove account scoping for the failing-first control. This
+    // test-only switch never reaches a package or production host assembly.
+    if std::env::var("JS88_PEOPLE_UNSCOPED_COMMANDS").as_deref() == Ok("1") {
+        assert!(std::env::var_os("JS73_PEOPLE_PACKAGE").is_none());
+        manifest.install_wide_kv.insert("people-commands".into());
+    }
+    Arc::new(manifest)
+}
+
 pub fn ports(database: Database, next: Arc<dyn Ports>) -> Arc<dyn Ports> {
     Arc::new(
         JobPorts::new(
