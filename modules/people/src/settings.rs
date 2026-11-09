@@ -103,8 +103,12 @@ fn directories(host: &impl Host, request: &RouteRequest) -> Result<Response> {
         .filter_map(|entry| entry["name"].as_str())
         .map(|name| json!({"name":name,"path":if relative.is_empty(){name.to_owned()}else{format!("{relative}/{name}")}}))
         .collect();
-    directories
-        .sort_by(|a, b| locale_compare(a["name"].as_str().unwrap_or(""), b["name"].as_str().unwrap_or("")));
+    directories.sort_by(|a, b| {
+        locale_compare(
+            a["name"].as_str().unwrap_or(""),
+            b["name"].as_str().unwrap_or(""),
+        )
+    });
     Ok(Response::new(
         200,
         json!({"path":if path.is_empty(){None}else{Some(path)},"directories":directories}),
@@ -205,8 +209,8 @@ mod tests {
         assert_eq!(
             names,
             [
-                "_x", "10x", "2x", "a10", "a2", "Ábc", "abd", "apple", "Apple", "apple2",
-                "Banana", "éclair", "zebra", "Zebra"
+                "_x", "10x", "2x", "a10", "a2", "Ábc", "abd", "apple", "Apple", "apple2", "Banana",
+                "éclair", "zebra", "Zebra"
             ]
         );
         assert_eq!(locale_compare("Family", "Work"), Ordering::Less);
