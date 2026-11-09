@@ -69,9 +69,9 @@ fn read(host: &impl Host, id: &str) -> Result<Option<Record>> {
     }
 }
 fn store(host: &impl Host, queue: &str, id: &str, command: Value) -> Result<Record> {
-    if let Some(old) = read(host, id)? {
-        return same(old, queue, &command);
-    }
+    // records.put atomically returns the original immutable value on a retry.
+    // A separate read would add a host/filesystem round trip to every fresh job.
+    // same() below still refuses conflicting commands and keeps the first delay.
     let now = host.call("context", "read", "call", json!({}))?["now"]
         .as_str()
         .ok_or_else(|| Error::new("Missing job time"))?

@@ -245,17 +245,21 @@ The route oracle now uses a real disposable pg-boss queue for manual refresh and
 its source metadata with the real Rust queue and command records. This remains package
 dispatch evidence; real application, source-provider and device acceptance are still open.
 
-The installed functional replay uses an explicit thirty-second host call budget. The
-fifty-reference request failed with the default five-second budget on this test machine
-and passed with the larger budget, with no package change. Real host composition still
-needs to qualify that budget or improve the sequential enqueue path. This checkpoint
-qualifies functional behavior with that configuration, not default-budget performance.
+The installed route replay now uses the standard five-second host call budget, including
+its fifty-reference request. Delayed sends reuse one producer connection within a
+host-created invocation, whose actor and manifest are fixed. Every send still has its
+own transaction and delay/key. Immutable command creation avoids a separate pre-read;
+retries keep the original stored delay and reject conflicting commands. Each later
+invocation connects afresh, including after
+an idle disconnect. A failed send discards its handle without an automatic retry.
+Immediate jobs and schedules
+keep their existing path. The standard People gate includes real database checks for
+connection reuse, schema replacement, disconnect recovery and account/queue key isolation.
+See the part-sixteen report for the measured outcome and its limits.
 
-Do not expose manual refresh through the shipping listener until its host budget or
-enqueue performance is qualified. Thirty seconds is the replay configuration, not a
-measured minimum. A failed send leaves its command stored without a queued job; retries
-use fresh IDs and can duplicate earlier work and grow command storage. Retention and
-quotas remain acceptance work.
+A failed send can leave its command stored without a queued job; new manual requests
+use fresh IDs and can duplicate earlier work and grow command storage. Retention,
+quotas and shipping listener composition remain acceptance work.
 
 ## Part eleven folder-order checkpoint
 

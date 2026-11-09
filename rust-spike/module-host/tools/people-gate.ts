@@ -17,6 +17,7 @@ console.log(
   createHash("sha256").update(component).digest("hex")
 );
 const suites = [
+  "enqueue_options_database",
   "people_privacy",
   "people_settings_database",
   "people_persistence",

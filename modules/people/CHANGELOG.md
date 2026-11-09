@@ -20,9 +20,9 @@ canonical note bytes and all People tables against the existing implementation.
 
 Restore manual index refresh with the legacy batch validation, fifteen-minute delay and
 standard-queue repeat behavior. Compare real legacy and Rust queues in the route oracle.
-The fifty-reference request fails with the host's default five-second deadline on the test
-machine and leaves a partial batch queued. Functional replay passes with an explicit
-thirty-second budget; that is not a measured minimum or shipping-budget qualification.
-Do not expose this route through the shipping application until its call budget or enqueue
-performance is qualified. Failed sends can also leave unsent command records; retention
-and quotas remain unfinished.
+The installed route replay now requires the normal five-second host budget for all fifty
+references. Delayed sends reuse one producer connection within an invocation while keeping
+separate actor-scoped transactions. A later invocation connects afresh, including after an
+idle disconnect. Failed sends are not automatically repeated. The report records measured results rather
+than a guarantee for every machine. The shipping listener and real UI remain unqualified.
+Failed sends can still leave unsent command records; retention and quotas remain unfinished.

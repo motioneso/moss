@@ -187,13 +187,9 @@ pub fn reopen(
             )
             .unwrap(),
         ),
-        // Functional replay includes fifty sequential real queue sends. Keep its
-        // budget explicit; this does not qualify the default five-second limit.
-        Host::new(Limits {
-            deadline: std::time::Duration::from_secs(30),
-            ..Limits::default()
-        })
-        .unwrap(),
+        // The installed replay must meet the shipping invocation budget, including
+        // the largest accepted manual refresh batch.
+        Host::new(Limits::default()).unwrap(),
         ports,
         "0.1.0".parse().unwrap(),
         LegacyInventory::default(),

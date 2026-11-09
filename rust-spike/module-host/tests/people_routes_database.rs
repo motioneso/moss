@@ -250,9 +250,14 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
                 .as_array()
                 .is_some_and(|items| items.len() == 50)
         {
+            let elapsed = started.elapsed();
             println!(
-                "People fifty-reference installed request: status={}, elapsed_ms={}, configured_deadline_ms=30000",
-                reply["status"], started.elapsed().as_millis()
+                "People fifty-reference installed request: status={}, elapsed_ms={}, configured_deadline_ms=5000",
+                reply["status"], elapsed.as_millis()
+            );
+            assert!(
+                elapsed < Limits::default().deadline,
+                "The maximum refresh batch must finish within the shipping wall-clock budget"
             );
         }
         let actual_people = people_rows(&rt, &bootstrap, owner);
