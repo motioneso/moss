@@ -167,6 +167,11 @@ Every install is the same program and the same build. Two settings differ by hos
 
 The separation mode, not the word "desktop" or "server", decides how strong the privacy guarantee is. A Linux server that cannot switch users is in one-OS-user mode and gets the same rules and notice as a laptop.
 
+> **Amended 2026-11-08 (JS-90).** Every install has two programs, a server and a connecting app.
+> Reach applies to the server only. The app listens on nothing, connects to this computer through
+> loopback, and connects to another computer through that server's Home network or Internet reach.
+> See `docs/superpowers/specs/2026-11-08-rust-server-and-app-split-design.md`.
+
 ### Restrictions every one-OS-user install must apply
 
 1. **Privacy rules on every query.** Every request, job and agent tool call runs under the `NOBYPASSRLS` runtime roles with the actor set per transaction, exactly as on every other install. Nothing about one-OS-user mode relaxes RLS.
