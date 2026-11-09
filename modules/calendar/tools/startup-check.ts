@@ -4,11 +4,16 @@ import { join } from "node:path";
 import type { Page } from "@playwright/test";
 
 export async function checkStartup(tab: Page, base: string, out: string, event: string) {
+  const returnUrl = tab.url();
   for (const [page, asset] of [
     ["/calendar", "calendar_bg.wasm"],
     ["/calendar", "calendar.js"],
+    ["/calendar", "boot.mjs"],
     ["/settings/calendar", "bridge.mjs"]
   ] as const) {
+    await tab.setViewportSize(
+      page === "/calendar" ? { width: 1280, height: 860 } : { width: 390, height: 844 }
+    );
     const pattern = `**/module-ui/calendar/**/${asset}`;
     let intercepted = 0;
     await tab.route(pattern, async (route) => {
@@ -20,17 +25,27 @@ export async function checkStartup(tab: Page, base: string, out: string, event: 
       const frame = tab.frameLocator("#calendar");
       try {
         await frame
-          .getByRole("alert")
-          .filter({ hasText: "Calendar could not start" })
+          .getByRole(asset === "boot.mjs" ? "status" : "alert")
+          .filter({
+            hasText: asset === "boot.mjs" ? "Opening Calendar" : "Calendar could not start"
+          })
           .waitFor({ timeout: 10000 });
       } catch (error) {
         await tab.screenshot({ path: join(out, "startup-missing-fallback.png") });
+        assert(
+          intercepted > 0,
+          `The actual ${asset} request must fail before checking its fallback`
+        );
+        console.log(`REPRO ${page}: ${asset} request failed, but no startup fallback appeared`);
         throw error;
       }
       assert(intercepted > 0, `The actual ${asset} request must fail`);
       assert.equal(await frame.locator(".cal-wrap, .calendar-settings").count(), 0);
       if (asset === "calendar_bg.wasm") {
         await tab.screenshot({ path: join(out, "startup-failure.png") });
+      }
+      if (page === "/settings/calendar") {
+        await tab.screenshot({ path: join(out, "startup-failure-phone-width.png") });
       }
     } finally {
       await tab.unroute(pattern);
@@ -55,5 +70,6 @@ export async function checkStartup(tab: Page, base: string, out: string, event: 
     console.log(`PASS installed ${page} startup failure and reload after ${asset} request failed`);
   }
   await tab.screenshot({ path: join(out, "startup-recovered-settings.png") });
-  await tab.goto(`${base}/calendar`);
+  await tab.setViewportSize({ width: 1280, height: 860 });
+  await tab.goto(returnUrl);
 }
