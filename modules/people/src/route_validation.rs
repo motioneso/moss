@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 enum Kind {
     String,
     Strings,
+    Array(Box<Kind>, usize),
     Object(Vec<Field>),
     AnyOf(Vec<Kind>),
     Literal(&'static str),
@@ -39,6 +40,19 @@ fn schema(method: &str, path: &str) -> Option<Kind> {
             Field("newPersonDisplayName", false, Text),
         ],
         ("PUT", "/people/notes-settings") => vec![Field("folder", true, AnyOf(vec![Text, Null]))],
+        ("POST", "/people/index/refresh") => vec![Field(
+            "sourceRefs",
+            true,
+            Kind::Array(
+                Box::new(Object(vec![
+                    Field("source", true, Text),
+                    Field("sourceRefHash", true, Text),
+                    Field("sourceVersion", false, Text),
+                    Field("reason", true, Text),
+                ])),
+                50,
+            ),
+        )],
         _ => return None,
     };
     Some(Object(fields))
@@ -136,7 +150,7 @@ fn check(
             }
             true
         }
-        Strings => {
+        Strings | Kind::Array(_, _) => {
             if !value.is_array()
                 && (value.is_string() || value.is_number() || value.is_boolean() || value.is_null())
             {
@@ -145,8 +159,17 @@ fn check(
             let Some(items) = value.as_array_mut() else {
                 return fail(errors, "must be array".into());
             };
+            if let Kind::Array(_, max) = kind {
+                if items.len() > *max {
+                    return fail(errors, format!("must NOT have more than {max} items"));
+                }
+            }
+            let item_kind = match kind {
+                Kind::Array(item, _) => item.as_ref(),
+                _ => &Text,
+            };
             for (index, item) in items.iter_mut().enumerate() {
-                if !check(&Text, item, &format!("{path}/{index}"), errors) {
+                if !check(item_kind, item, &format!("{path}/{index}"), errors) {
                     return false;
                 }
             }

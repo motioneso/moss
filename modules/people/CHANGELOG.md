@@ -6,3 +6,12 @@ Rust component and shared-frame People Settings checkpoint. Complete installed p
 
 Retain legacy note-only PATCH list handling and compare configured-folder HTTP edits,
 canonical note bytes and all People tables against the existing implementation.
+
+Restore manual index refresh with the legacy batch validation, fifteen-minute delay and
+standard-queue repeat behavior. Compare real legacy and Rust queues in the route oracle.
+The fifty-reference request fails with the host's default five-second deadline on the test
+machine and leaves a partial batch queued. Functional replay passes with an explicit
+thirty-second budget; that is not a measured minimum or shipping-budget qualification.
+Do not expose this route through the shipping application until its call budget or enqueue
+performance is qualified. Failed sends can also leave unsent command records; retention
+and quotas remain unfinished.

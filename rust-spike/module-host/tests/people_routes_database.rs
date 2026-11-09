@@ -4,6 +4,8 @@ mod common;
 mod installed;
 #[path = "people_routes/normalization.rs"]
 mod normalization;
+#[path = "people_routes/refresh.rs"]
+mod refresh;
 #[path = "../../parity/src/canon.rs"]
 #[allow(dead_code)]
 #[rustfmt::skip]
@@ -102,18 +104,21 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
                         .collect(),
                 },
             )]),
-            Arc::new(ContextPorts::new(services.clone())),
+            Arc::new(ContextPorts::new(refresh::ports(
+                database.clone(),
+                services.clone(),
+            ))),
         )
         .unwrap(),
     );
-    let ports = Arc::new(
+    let ports: Arc<dyn moss_module_host::runtime::Ports> = Arc::new(
         TransactionalDatabasePorts::new(
             database.clone(),
             Arc::new(LinkedNotesPorts::new(Arc::new(folders), preferences)),
         )
         .unwrap(),
     );
-    let manifest = Arc::new(
+    let manifest = refresh::manifest(
         serde_json::from_str::<moss_module_host::manifest::Manifest>(include_str!(
             "../../../modules/people/moss.module.json"
         ))
@@ -147,6 +152,8 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         Uuid::parse_str(oracle["admin"].as_str().unwrap()).unwrap(),
         "people-install",
     );
+    rt.block_on(bootstrap.batch_execute(moss_platform_jobs::MIGRATION))
+        .unwrap();
     let registry = tempfile::tempdir().unwrap();
     let installer = std::env::var_os("JS73_PEOPLE_PACKAGE").map(|_| {
         rt.block_on(async {
@@ -156,10 +163,6 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
                 .unwrap();
             bootstrap
                 .batch_execute(moss_module_host::migrations::MIGRATION)
-                .await
-                .unwrap();
-            bootstrap
-                .batch_execute(moss_platform_jobs::MIGRATION)
                 .await
                 .unwrap();
             bootstrap
@@ -187,6 +190,9 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
     });
     let owner = Uuid::parse_str(oracle["actor"].as_str().unwrap()).unwrap();
     let mut configured = false;
+    let queue_replay = refresh::Replay::new(
+        ["actor", "other", "admin"].map(|key| oracle[key].as_str().unwrap().parse().unwrap()),
+    );
     for case in oracle["cases"].as_array().unwrap() {
         if !configured && case["configured"] == true {
             for (path, content) in oracle["folderSeed"].as_object().unwrap() {
@@ -211,6 +217,7 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
             Uuid::parse_str(case["actor"].as_str().unwrap()).unwrap(),
             "people-route-parity",
         );
+        let started = std::time::Instant::now();
         let reply = if let Some(installer) = &installer {
             installer.dispatch_extended(
                 access,
@@ -230,6 +237,18 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         }
         .expect("Compiled route must return a response envelope");
         let reply: Value = serde_json::from_str(&reply).unwrap();
+        if installer.is_some()
+            && method == "POST"
+            && path == "/people/index/refresh"
+            && case["body"]["sourceRefs"]
+                .as_array()
+                .is_some_and(|items| items.len() == 50)
+        {
+            println!(
+                "People fifty-reference installed request: status={}, elapsed_ms={}, configured_deadline_ms=30000",
+                reply["status"], started.elapsed().as_millis()
+            );
+        }
         let actual_people = people_rows(&rt, &bootstrap, owner);
         let expected_people = case["rows"][TABLES[0]].as_array().unwrap();
         let reply = normalization::signatures(&reply, &actual_people, &mut actual);
@@ -241,6 +260,9 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
             "Route response differs: {method} {path}; body={}",
             case["body"]
         );
+        if case.get("queued").is_some() {
+            queue_replay.compare(&rt, &bootstrap, &host, &manifest, &ports, &case["queued"]);
+        }
         if let Some(files) = case["files"].as_object() {
             assert_eq!(
                 normalization::files(&notes_root),

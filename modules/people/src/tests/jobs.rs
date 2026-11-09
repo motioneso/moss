@@ -1,6 +1,9 @@
 use moss_module_sdk::{Error, Host, Result};
 use serde_json::{json, Value};
-use std::{cell::RefCell, collections::BTreeMap};
+use std::{
+    cell::{Cell, RefCell},
+    collections::BTreeMap,
+};
 
 #[derive(Default)]
 struct Ports {
@@ -8,10 +11,17 @@ struct Ports {
     jobs: RefCell<BTreeMap<(String, String), Value>>,
     now: RefCell<String>,
     fail_enqueue: RefCell<bool>,
+    next_id: Cell<u64>,
+    fail_after: Cell<Option<usize>>,
 }
 impl Host for Ports {
     fn call(&self, port: &str, op: &str, resource: &str, p: Value) -> Result<Value> {
         match (port, op) {
+            ("context", "uuid") => {
+                let id = self.next_id.get() + 1;
+                self.next_id.set(id);
+                Ok(json!({"id":format!("30000000-0000-4000-8000-{id:012}")}))
+            }
             ("context", "read") => Ok(json!({"now":*self.now.borrow()})),
             ("kv", "records.get") => Ok(self
                 .records
@@ -27,7 +37,10 @@ impl Host for Ports {
                 Ok(json!({"created":created,"value":value}))
             }
             ("jobs", "enqueue-options") => {
-                if self.fail_enqueue.replace(false) {
+                if self.fail_enqueue.replace(false)
+                    || self.fail_after.get() == Some(self.jobs.borrow().len())
+                {
+                    self.fail_after.set(None);
                     return Err(Error::new("Queue unavailable"));
                 }
                 let mut jobs = self.jobs.borrow_mut();
@@ -42,6 +55,85 @@ impl Host for Ports {
             _ => Err(Error::new("Unexpected host request")),
         }
     }
+}
+
+fn refresh(host: &Ports, body: Value) -> Value {
+    serde_json::from_str(
+        &moss_people::guest::handle(
+            host,
+            "route",
+            &json!({
+                "method":"POST", "path":"/people/index/refresh", "body":body
+            })
+            .to_string(),
+        )
+        .unwrap(),
+    )
+    .unwrap()
+}
+
+#[test]
+fn manual_refresh_accepts_fifty_delays_each_job_and_allows_later_requests() {
+    let host = Ports::default();
+    *host.now.borrow_mut() = "2026-11-08T12:00:00.000Z".into();
+    let source = json!({"source":"email","sourceRefHash":"opaque/hash/🪴","sourceVersion":"v1","reason":"manual_refresh"});
+    let body = json!({"sourceRefs":vec![source.clone();50]});
+    assert_eq!(
+        refresh(&host, body),
+        json!({"status":202,"body":{"enqueued":50}})
+    );
+    assert_eq!(host.jobs.borrow().len(), 50);
+    for job in host.jobs.borrow().values() {
+        assert_eq!(job["availableAt"], "2026-11-08T12:15:00.000Z");
+        assert_eq!(job["params"].as_object().unwrap().len(), 1);
+    }
+    *host.now.borrow_mut() = "2026-11-08T12:01:00.000Z".into();
+    assert_eq!(
+        refresh(&host, json!({"sourceRefs":[source]}))["status"],
+        202
+    );
+    assert_eq!(host.jobs.borrow().len(), 51);
+    assert_eq!(
+        refresh(&host, json!({"sourceRefs":[]})),
+        json!({"status":202,"body":{"enqueued":0}})
+    );
+}
+
+#[test]
+fn invalid_refreshes_publish_nothing_and_queue_failures_return_safe_errors() {
+    let host = Ports::default();
+    *host.now.borrow_mut() = "2026-11-08T12:00:00.000Z".into();
+    let source = json!({"source":"email","sourceRefHash":"opaque","reason":"refresh"});
+    for body in [
+        json!({}),
+        json!({"sourceRefs":vec![source.clone();51]}),
+        json!({"sourceRefs":[{}]}),
+        json!({"sourceRefs":{}}),
+    ] {
+        assert_eq!(refresh(&host, body)["status"], 400);
+        assert!(host.records.borrow().is_empty());
+        assert!(host.jobs.borrow().is_empty());
+    }
+    *host.fail_enqueue.borrow_mut() = true;
+    assert_eq!(
+        refresh(&host, json!({"sourceRefs":[source]})),
+        json!({"status":500,"body":{"error":"Internal Server Error"}})
+    );
+    assert!(host.jobs.borrow().is_empty());
+}
+
+#[test]
+fn manual_refresh_keeps_earlier_sends_when_a_later_send_fails() {
+    let host = Ports::default();
+    *host.now.borrow_mut() = "2026-11-08T12:00:00.000Z".into();
+    host.fail_after.set(Some(1));
+    let source = json!({"source":"email","sourceRefHash":"opaque","reason":"refresh"});
+    assert_eq!(
+        refresh(&host, json!({"sourceRefs":[source.clone(), source]})),
+        json!({"status":500,"body":{"error":"Internal Server Error"}})
+    );
+    assert_eq!(host.jobs.borrow().len(), 1);
+    assert_eq!(host.records.borrow().len(), 2);
 }
 fn api(host: &Ports, name: &str, parameters: Value) -> Result<Value> {
     Ok(serde_json::from_str(&moss_people::guest::handle(

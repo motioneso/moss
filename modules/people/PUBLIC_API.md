@@ -162,6 +162,7 @@ they are not new consumer API names. Network HTTP composition remains open.
 | PATCH  | `/people/:id`                           | `{person, notePath}` or projection-only `{person}`         |
 | POST   | `/people/:id/archive`                   | `{archived: true, person, notePath}` or `{archived: true}` |
 | POST   | `/people/notes/refresh`                 | `{discovered, projected, ignored, candidates}`             |
+| POST   | `/people/index/refresh`                 | status 202, `{enqueued}`                                   |
 
 Responses use `{status, body}`. Internal failures return status 500 and
 `{error: "Internal Server Error"}`; unavailable refresh returns status 400 and
@@ -183,6 +184,29 @@ These rules apply after canonical-note discovery; projection fallback ignores th
 members. Unknown fields and summaries remain ignored. Dollar replacement tokens
 remain literal, as the documented note-corruption safeguard requires.
 
+Manual index refresh accepts `{sourceRefs: [{source, sourceRefHash, sourceVersion?, reason}]}`,
+with zero to fifty references. It retains Fastify's string coercion and validates the whole
+batch before sending jobs. Extra members cannot select an account. Each reference gets a
+fresh immutable command and the existing fifteen-minute delay; opaque source fields stay
+in account command records, and only command UUIDs reach the queue. The legacy module uses
+pg-boss's standard queue policy, so repeated references and requests create separate jobs.
+Internal command retries still deduplicate using their original UUID. A send failure returns
+the safe 500 response; earlier sends in the batch remain queued, as in the legacy route.
+Rust stores each immutable command before sending it. A failed send can therefore leave
+an unsent command record as well as earlier queued jobs. Repeating the manual request
+creates fresh IDs, so it can duplicate earlier work and accumulate more stored records.
+Command retention and quotas are not implemented; repeated signed-in requests can grow
+this storage without a module-level bound.
+The Rust handler requires the host queue adapter. If it is absent it returns a safe 500;
+it does not reproduce the legacy library's optional-boss branch, which acknowledges the
+batch without sending any jobs. The ordinary legacy application supplies a boss.
+The installed functional replay configures a thirty-second host call budget for up to fifty
+sequential real queue sends. The default five-second budget returned 500 for the fifty-item
+case on the test machine; earlier sends remained queued. Real application composition must
+qualify a sufficient budget or improve the enqueue path before exposing the route. Thirty
+seconds is the tested configuration, not a proven minimum. Default-budget performance remains
+unqualified, along with the network listener, ingest nudges and real provider composition.
+
 HTTP body decoding is not yet fully equivalent: Fastify rejects JSON bodies containing
 `__proto__` or constructor/prototype keys before dispatch. The current Rust route-value
 boundary does not reproduce that parser rejection. This remains an acceptance gap,
@@ -197,7 +221,7 @@ The differential gate compares legacy body-schema errors and coercion as well as
 query/error cases through installed dispatch when supplied a package. Positive limits
 above `u32::MAX` use an uncapped SDK scan if they fit PostgreSQL `int8`; repeated search
 values use JavaScript comma joining and repeated equality filters use node-postgres array
-text. This covers the enumerated oracle cases, not all HTTP inputs. Index-refresh, ingest
+text. This covers the enumerated oracle cases, not all HTTP inputs. Ingest
 nudges and real network HTTP compatibility remain unfinished.
 
 ## Part five Settings bridge

@@ -154,6 +154,10 @@
       "description": "The packaged indexing worker can check for an optional source provider. When no provider is present it finishes without changing People data. Live provider delivery remains unverified."
     },
     {
+      "id": "people.manual-index-refresh",
+      "description": "Manual indexing accepts up to fifty source references and queues each for fifteen minutes later. Repeated requests retain the legacy standard-queue behavior. Invalid batches are rejected before any job is sent. A failure or timeout can leave earlier jobs queued and an unsent command stored. Repeating a request creates separate jobs and more stored commands; check earlier work before retrying. Command cleanup, limits, the installed screen and live source delivery remain unverified."
+    },
+    {
       "id": "people.relative-folder-browse",
       "description": "Browse directories relative to the selected People folder through the legacy API. The Settings chooser still uses allowed absolute notes roots."
     },
@@ -171,6 +175,11 @@
     "defaultEnabled": true
   },
   "routes": [
+    {
+      "method": "POST",
+      "path": "/people/index/refresh",
+      "signIn": true
+    },
     {
       "method": "GET",
       "path": "/people",

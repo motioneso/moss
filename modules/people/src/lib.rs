@@ -1,5 +1,6 @@
 //! People & Context. Pure domain logic; all persistence belongs to the module SDK ports.
 pub mod guest;
+mod index_refresh;
 pub mod jobs;
 pub mod matching;
 mod name_lookup;

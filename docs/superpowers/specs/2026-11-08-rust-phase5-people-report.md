@@ -1,7 +1,7 @@
 # Rust Phase 5: People & Context
 
 Tasks JS-45 (part one), JS-50 (part two), JS-57 (part three), JS-58 (part four),
-JS-69 (part five) and subsequent continuations through JS-84 (part nine), Card 523.
+JS-69 (part five) and subsequent continuations through JS-88 (part ten), Card 523.
 Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
 Release note Category: N/A.
 
@@ -9,6 +9,7 @@ Status: **Installed People package checkpoint; full parity remains open.** The l
 continuation sections below record the current verification and remaining work; earlier
 sections are historical receipts. Part eight's note-edit behavior and evidence are retained.
 Part nine adds the packaged-worker permission fix and broader creation/refresh comparisons.
+Part ten restores manual source indexing; its qualification is recorded below.
 The authenticated Rust application still needs to compose People into Settings and chat.
 Full behavior parity, live UI and second-device HTTPS verification remain open. The
 continuation brief permits a bounded checkpoint before a second compaction.
@@ -1112,3 +1113,149 @@ The following remain open regardless of this checkpoint's integration results:
 
 The completed checks above qualify only the named integration seams. Do not label this
 checkpoint as the complete HTTP parity harness or live-device acceptance.
+
+## Part ten: manual source-index refresh (JS-88)
+
+Before editing, this task fast-forwarded its stale branch from `6d4eba749` to merged main
+`0ec737720`. That baseline includes the latest People part-nine report and PR 4077.
+No sibling worktree's source was copied into this tree.
+
+The package omitted `POST /people/index/refresh`. The unchanged module returned 404 for
+both new native regression tests; the corrected handler returns the legacy 202 response
+with the submitted count. It applies the complete legacy body schema before sending any
+jobs, including required fields, string coercion, ignored extra members and the maximum
+of fifty references. Each accepted reference uses a fresh host UUID, an immutable account
+command and the existing fifteen-minute delay. Queue parameters contain only the command
+UUID. No SQL, ownership rule, public consumer API, chat-tool name or job kind changed.
+
+The legacy registry declares the People queues without a special policy. Its standard
+pg-boss queue does not coalesce repeated singleton keys. The new oracle creates that real
+queue in the disposable gate database and compares repeated references, repeated requests,
+source-version changes, fifty-item batches, empty batches, validation/coercion and all three
+test actors against Rust's real queue and command records. It compares metadata as a
+multiset, so random queue UUIDs and insertion order do not hide missing or duplicate work.
+Every existing table snapshot and canonical-note comparison remains in the replay.
+
+Internal command retries still deduplicate by their original UUID. Manual refresh requests
+are separate cycles. A send error retains earlier sends and returns the safe legacy 500;
+a native fault test checks that partial-batch behavior. The Rust handler requires the host
+queue adapter and fails with 500 if it is missing. It deliberately does not copy the legacy
+library's optional-boss branch, which returns 202 without sending work. The normal legacy
+application supplies that dependency; this difference is documented in the public contract.
+
+Command privacy has a test-only negative control: `JS88_PEOPLE_UNSCOPED_COMMANDS=1` declares
+the command namespace install-wide during raw dispatch, deliberately removing the default
+account scope. The ordinary assertions require the other account and the administrator to
+read null for each queued reference. The control refuses installed-package mode and is not
+a production setting. Its failing/passing receipts are recorded with verification below.
+
+The owning manifest declares the route and its app-map behavior, including validation,
+delay and partial sends on queue failure. The four public People lookup APIs remain stable.
+Builds, Rust toolchain and dependency caches are task-owned. The existing compiler and
+standard-library targets were copied into task scratch. The already approved, declared
+`wit-bindgen =0.57.1` was fetched and compiled there, with no global installation or added
+dependency. JavaScript dependencies were restored offline from the frozen lockfile without
+install scripts.
+
+### Part-ten verification
+
+- Failing first: the unchanged module returned 404 in both new manual-refresh regression
+  tests. After implementation, all nineteen native People tests pass, including a queue
+  failure after the first send. Strict People Clippy also passes.
+- Command-privacy negative control `165753-LEZxHS` ended with `rc=101` at
+  `people_routes/refresh.rs:90`: another account read the command object where the ordinary
+  assertion requires null. This is the intended failure, not a build or setup error.
+  That receipt records `0083282df`, with the two new privacy-test files dirty; those exact
+  test changes were subsequently committed as `a8f165968`.
+- Complete nine-suite People gate `170132-iMoMNE` passed (`rc=0`, ten tests), including
+  the compiled worker, canonical notes, chat-tool execution and failing-first privacy
+  assertions across all seven tables for both runtime roles.
+- Final installed functional replay `171650-ZtxW3N` passed (`rc=0`): all 163 route responses
+  (including twenty-one new refresh cases), seven-table snapshots and canonical note bytes
+  matched. The signed package was downloaded, installed with legacy SQL and reloaded. All
+  four public APIs ran through an installed consumer; unrelated-user and administrator
+  command reads returned null with ordinary account scoping. The Settings asset check is
+  asset retrieval, not a browser or authenticated screen check.
+- This installed replay explicitly configures a thirty-second call deadline. Earlier runs
+  `170536-Sp1rmN` and `170915-STjRZL` failed the fifty-reference request with the host's
+  default five-second deadline: Rust returned 500 rather than 202, retaining earlier queued
+  references. Extending only the replay host's deadline made the unchanged package pass.
+  The final harness checks route responses before queue deltas so this failure is clear.
+  This proves functional behavior with the configured budget, not adequate performance
+  under the default budget. Shared shipping host defaults were not changed. Real host
+  composition must provide sufficient time for the batch or improve its enqueue path.
+- The generated component was rebuilt with the task's source-built wrapper and matched
+  the earlier task artifact byte for byte. SHA-256:
+  `2d97bed65bb527ea7ed651ff0d9a0a76dc1e561a9b693576f9af5e59a95b4fca`.
+- The unchanged Settings source was rebuilt and packed with that component. Package
+  SHA-256: `6be4e1e8d492c62284d9fa1b4edb025c44b844c033231ba176340a89dcdb47d3`
+  (402387 bytes). No checked-in binary or globally installed compiler is needed.
+- Repository lint and full typecheck, scoped Prettier, Rust formatting, Rust app-map
+  generation, file-size check and the unchanged pure-vector comparison passed.
+
+The nine-suite receipt identifies `a8f165968`, with only the report and PUBLIC_API dirty,
+input fingerprint `b43945859843`. The final installed receipt identifies that same commit with
+six dirty files: this report, PUBLIC_API, README, app-map metadata, the installed replay
+deadline and response-first assertion order, fingerprint `d684bb5f4725`. The earlier
+thirty-second diagnostic run `171216-6PZ59r` also passed all 163 cases; the final run
+requalifies the package after its app-map explanation changed. Later edits only record
+these results in this report. The receipts qualify the named seams only; CI and the full
+foundation gate have not been run here.
+
+### Part-ten review and remaining acceptance
+
+The first fresh Claude review found no blocker or major. Its minor optional-boss difference
+is documented above; the pending evidence and report notes are resolved by the final receipts.
+The second review is recorded against `2c7b2004e`. It found one major ship condition:
+the default-budget fifty-reference failure. The reviewer permitted disclosure in the
+CHANGELOG as an alternative to an in-scope runtime fix; the follow-up does that and says
+not to expose this route until host-budget or enqueue performance is qualified. The
+performance limitation itself remains unresolved. Its four minor notes are addressed by
+recording request time, explicitly describing unsent records and storage growth, keeping
+qualification wording out of the app map, and retaining the dirty-input receipt notes.
+Both allowed rounds are used. The post-review follow-up commit needs another review
+round before this task can be Ready.
+
+This is a bounded checkpoint. Completing the remaining application and physical-device
+qualification would exceed this continuation's single-context scope. The remaining work is:
+
+1. Finish ingest nudges, real source-provider composition, and command retention/quotas.
+   Qualify the fifty-reference call budget in the real host; the default five-second budget
+   failed here, and this checkpoint does not resolve that performance limitation.
+2. Broaden HTTP parity beyond the enumerated replay, including locale-sensitive directory
+   ordering, backend failures, large datasets, extreme numbers and JSON parser rejections.
+3. Compose People into the authenticated Rust Settings and chat application, then exercise
+   real reads/writes, approvals, blocked actions and policy behavior through its listener.
+4. Exercise desktop and phone layouts, then sign in from a second physical device over
+   HTTPS with trusted-origin, LAN/tailnet and cross-account privacy checks.
+
+No live application listener, browser interaction or physical second-device proof is claimed
+by this checkpoint. Package dispatch and disposable queue rows do not prove those paths.
+
+### Post-review follow-up
+
+The test now measures the fifty-reference installed request itself, separately from the
+whole replay. Thirty seconds remains an explicit test configuration, not a measured
+minimum or a promise for other machines. The merged application constructors currently
+use the five-second default; wiring People into them requires an explicit budget decision
+or an enqueue improvement before this route is exposed.
+
+A send failure leaves the current immutable command stored even when it has no queued
+job. The native regression observes two stored commands and one queued job after the
+second send fails. Fresh manual retries can duplicate the earlier job and add more stored
+commands. Without the deferred retention and quota work, signed-in repeated requests can
+grow this storage without a module-level bound. This is a ship condition to qualify,
+not a storage safety claim. README, PUBLIC_API and CHANGELOG now disclose it.
+
+Post-review installed gate `172751-ZZ7Zd3` passed (`rc=0`): all 163 responses, table
+snapshots, note bytes and installed consumer checks still match. Its measured fifty-item
+request returned 202 in 4577 milliseconds, with the explicit 30000-millisecond deadline.
+This is one sample, not a latency guarantee or a minimum-budget measurement. Earlier
+five-second failures remain relevant; the sample does not qualify that default.
+
+The package with the revised app-map wording is SHA-256
+`125804723b178505c5d26aa1b33c3016fb15e1a3a3ab989deab21d4764647b32`
+(402438 bytes). The component is unchanged from the digest above. The receipt identifies
+`2c7b2004e` with six dirty follow-up files, fingerprint `b1c0992033d3`; the only
+changes after that receipt finish this report. The final follow-up commit is pushed but unreviewed because both allowed rounds
+have been used. No Ready or full acceptance claim is made.

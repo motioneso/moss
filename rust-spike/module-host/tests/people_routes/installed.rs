@@ -187,7 +187,13 @@ pub fn reopen(
             )
             .unwrap(),
         ),
-        Host::new(Limits::default()).unwrap(),
+        // Functional replay includes fifty sequential real queue sends. Keep its
+        // budget explicit; this does not qualify the default five-second limit.
+        Host::new(Limits {
+            deadline: std::time::Duration::from_secs(30),
+            ..Limits::default()
+        })
+        .unwrap(),
         ports,
         "0.1.0".parse().unwrap(),
         LegacyInventory::default(),
@@ -231,7 +237,7 @@ pub fn services(data: &Path) -> Arc<moss_module_host::services::ServicePorts> {
             data,
             Arc::new(safety_core::secret::SecretCipher::connectors(&Default::default()).unwrap()),
             Arc::new(NoAi),
-            Arc::new(moss_module_host::runtime::DenyPorts),
+            Arc::new(moss_module_host::local::LocalPorts::new(data).unwrap()),
         )
         .unwrap(),
     )
