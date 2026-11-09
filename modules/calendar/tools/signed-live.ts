@@ -392,7 +392,7 @@ try {
       location: null
     }
   ];
-  for (const event of proofEvents) {
+  const seedProofEvent = async (event: (typeof proofEvents)[number]) => {
     assert.equal(
       (
         await db.query(
@@ -410,7 +410,8 @@ try {
       ).rowCount,
       1
     );
-  }
+  };
+  for (const event of proofEvents.slice(0, 3)) await seedProofEvent(event);
   // The task browser is visible in Herdr. Its own session is opened by the task's wrapper.
   const wrapper = "/home/ben/.local/bin/herdr-browser";
   const browserEnv = {
@@ -447,7 +448,12 @@ try {
   await frame.getByRole("dialog").filter({ hasText: "Calendar package check" }).waitFor();
   await screenshotDialog("signed-in-linked-event.png");
   await checkDetails(tab, local, out, data.event);
+  // Keep extra grid fixtures out of the existing Month overflow/detail checks.
+  for (const event of proofEvents.slice(3)) await seedProofEvent(event);
   await checkGrid(tab, local, out, data.event);
+  await db.query("DELETE FROM app.calendar_events WHERE id=ANY($1::uuid[])", [
+    proofEvents.slice(3).map((event) => event.id)
+  ]);
   await checkDayPlanWrites(tab, (path, options) => request(path, { ...options, cookie: other }));
   await checkOperationStatus(tab, db, data.actor, (path, options) =>
     request(path, { ...options, cookie: other })
@@ -470,7 +476,7 @@ try {
   }
   await frame
     .locator(".cal-legend__note")
-    .getByText("Cedar is holding 2 flexible blocks today.", { exact: true })
+    .getByText("Cedar is holding 1 flexible block today.", { exact: true })
     .waitFor();
   for (const tone of ["hard", "hold"]) {
     const swatch = frame.locator(`.cal-legend__sw--${tone}`);

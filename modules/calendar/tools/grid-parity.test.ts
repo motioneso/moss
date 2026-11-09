@@ -1,7 +1,7 @@
 /** Compare visible event labels with the real production React time grid. */
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -89,7 +89,7 @@ test("rendered event labels match the production React time grid", () => {
               createElement(CalendarTimeGrid, { days, hourH: 58, onPick: () => {} })
             )
           );
-          const result = spawnSync(binary, {
+          const result: SpawnSyncReturns<string> = spawnSync(binary, {
             input:
               JSON.stringify({
                 operation: "grid",
