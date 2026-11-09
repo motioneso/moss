@@ -84,6 +84,25 @@ class InstallTests(unittest.TestCase):
         uninstall(self.install)
         self.assertFalse(self.install.exists())
 
+    def test_running_nondumpable_supervisor_refuses(self):
+        source = self.root / "protected.c"
+        source.write_text('#include <sys/prctl.h>\n#include <unistd.h>\n#include <stdio.h>\nint main(void) { if (prctl(PR_SET_DUMPABLE, 0)) return 1; puts("ready"); fflush(stdout); pause(); return 0; }')
+        program = self.install / "moss-db"
+        subprocess.run(["cc", str(source), "-o", str(program)], check=True)
+        self.inventory(["moss-db"])
+        process = subprocess.Popen([str(program)], stdout=subprocess.PIPE)
+        try:
+            self.assertEqual(process.stdout.readline(), b"ready\n")
+            with self.assertRaises(PermissionError):
+                (Path("/proc") / str(process.pid) / "exe").resolve(strict=True)
+            with self.assertRaisesRegex(ValueError, "Quit Moss"):
+                uninstall(self.install)
+            self.assertTrue(program.exists())
+        finally:
+            process.terminate()
+            process.wait(timeout=5)
+            process.stdout.close()
+
     def test_stage_rejects_escaping_postgres_link_atomically(self):
         dist = self.root / "dist"
         pg = self.root / "pg"
@@ -112,6 +131,15 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(b"BEGIN CERTIFICATE", (self.root / "cert.pem").read_bytes())
         self.assertTrue((self.install / "runtime/lib/libcrypto.so.3").exists())
+        mixed = self.root / "mixed.pem"
+        mixed.write_bytes((self.root / "cert.pem").read_bytes() + (self.root / "key.pem").read_bytes())
+        unsafe = self.root / "unsafe"
+        unsafe.mkdir()
+        for name in ("moss-shell", "moss-db"):
+            shutil.copy2("/bin/true", unsafe / name)
+        (unsafe / "postgres").mkdir()
+        with self.assertRaisesRegex(ValueError, "public certificate bundle"):
+            stage_runtime(unsafe, Path("/usr/bin/openssl"), mixed)
 
     def test_missing_library_is_not_a_successful_closure(self):
         source = self.root / "probe.c"

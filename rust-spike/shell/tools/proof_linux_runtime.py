@@ -25,14 +25,18 @@ def run(args, **kwargs):
     return result.stdout
 
 
-def copy_baseline(root: Path, source: Path, target: str):
+def copy_baseline(root: Path, source: Path, target: str, runtime: Path):
     dest = root / target.lstrip("/")
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, dest)
     for library in dependencies(source):
+        bundled = runtime / library.name
+        if library.name == "libc.so.6" or library.name.startswith("ld-linux"):
+            if not bundled.is_file():
+                raise ValueError(f"Runtime closure is missing {library.name}")
         dest = root / str(library).lstrip("/")
         dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(library, dest)
+        shutil.copy2(bundled if bundled.is_file() else library, dest)
 
 
 def tree_digest(root: Path):
@@ -56,7 +60,7 @@ def prove():
     # Utilities only drive the proof; they are not supplied as Moss's runtime closure.
     for source, target in (("/bin/dash", "/bin/sh"), ("/bin/cat", "/bin/cat"),
                            ("/bin/mv", "/bin/mv"), ("/bin/chmod", "/bin/chmod")):
-        copy_baseline(root, Path(source), target)
+        copy_baseline(root, Path(source), target, install / "runtime/lib")
     (root / "etc").mkdir()
     (root / "etc/passwd").write_text("moss:x:1000:1000:Moss proof:/data:/bin/sh\n")
     (root / "etc/group").write_text("moss:x:1000:\n")
@@ -151,7 +155,7 @@ def prove():
             assert process.wait(timeout=35) == 0
         print("PASS: orderly server and database Stop", flush=True)
         case = proof / "uninstall-case"
-        shutil.copytree(install, case, copy_function=os.link)
+        shutil.copytree(install, case, symlinks=True, copy_function=os.link)
         (case / "servers/default").mkdir(parents=True)
         run(["docker", "cp", container + ":/data/database", str(case / "servers/default/database")])
         saved = tree_digest(case / "servers")

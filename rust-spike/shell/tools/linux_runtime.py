@@ -82,7 +82,8 @@ set -eu
 case "$0" in */*) script=$0 ;; *) script=$(command -v "$0") ;; esac
 root=$(CDPATH= cd -- "${script%/*}" && pwd -P)
 export LD_LIBRARY_PATH="$root/runtime/lib:$root/postgres/lib"
-export PATH="$root/runtime/bin:/usr/bin:/bin"
+unset LD_PRELOAD LD_AUDIT
+export PATH="$root/runtime/bin:${PATH:-/usr/bin:/bin}"
 export OPENSSL_CONF="$root/runtime/ssl/openssl.cnf"
 export SSL_CERT_FILE="$root/runtime/ssl/ca-certificates.crt"
 export SSL_CERT_DIR="$root/runtime/ssl"

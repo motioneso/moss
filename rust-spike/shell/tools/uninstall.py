@@ -11,6 +11,45 @@ import os
 from pathlib import Path, PurePosixPath
 
 
+def running_from(process: Path, root: Path) -> bool:
+    try:
+        return (process / "exe").resolve(strict=True).is_relative_to(root)
+    except (OSError, RuntimeError):
+        pass
+    # Phase 1's supervisor and PostgreSQL disable dumpability. Linux then hides exe
+    # even from their owner, but leaves argv[0] readable. Read only that first field,
+    # never the remaining command arguments (which unrelated programs may use for secrets).
+    try:
+        first = bytearray()
+        with (process / "cmdline").open("rb", buffering=0) as stream:
+            for _ in range(4096):
+                byte = stream.read(1)
+                if byte in (b"", b"\0"):
+                    break
+                first.extend(byte)
+            else:
+                return False
+        if not first:
+            return False
+        program = Path(os.fsdecode(bytes(first)))
+        if program.is_absolute():
+            return program.resolve().is_relative_to(root)
+        if program.name not in {"moss-app", "moss-shell", "moss-db", "postgres", "initdb", "pg_ctl"}:
+            return False
+        status = (process / "status").read_text()
+        uid = next(line.split()[1] for line in status.splitlines() if line.startswith("Uid:"))
+        if int(uid) != os.getuid():
+            return False
+        try:
+            return ((process / "cwd").resolve(strict=True) / program).resolve().is_relative_to(root)
+        except PermissionError:
+            # A protected relative invocation cannot be attributed safely. Stop it
+            # before uninstalling rather than assuming it belongs to another install.
+            return True
+    except (OSError, RuntimeError, StopIteration, ValueError):
+        return False
+
+
 def uninstall(root: Path) -> list[str]:
     if root.is_symlink() or root != root.resolve() or not root.is_dir():
         raise ValueError("Use the real install directory, without symbolic links")
@@ -26,11 +65,7 @@ def uninstall(root: Path) -> list[str]:
     for process in Path("/proc").iterdir():
         if not process.name.isdecimal():
             continue
-        try:
-            executable = (process / "exe").resolve(strict=True)
-        except (OSError, RuntimeError):
-            continue
-        if executable.is_relative_to(root):
+        if running_from(process, root):
             raise ValueError("Quit Moss and stop its servers before uninstalling")
     paths = []
     for name, digest in inventory["files"].items():
