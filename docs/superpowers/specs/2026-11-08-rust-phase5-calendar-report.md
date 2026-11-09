@@ -696,3 +696,27 @@ existing `localDay`/public API source-reference behavior is unchanged and does n
 establish full provenance validation; noncanonical timezone spelling and Intl-only
 aliases can differ from production and are outside the proven timezone cases.
 A browser API check is a fetch from a signed-in page, not a day-plan editor interaction.
+
+## JS-102 / part 12: cache-evict job checkpoint
+
+Package 0.11.0 ports the production `calendar.cache-evict-event` queue worker
+as the `calendar-cache-evict-event` job. The account comes from the host's
+queue envelope. The guest reads the event with the scoped query and deletes it
+through the same typed query only when visible, so a foreign user or an
+administrator gets `{"evicted":false}` and the owner's row survives. Queue
+retry options use host defaults; the production values (two retries, ten
+second delay, five minute retention) are not yet declarable.
+
+Evidence: three native guest tests written failing first (visible event,
+invisible event never deleted, unknown queue and extra fields rejected before
+any host call) and one database-backed installed test through the disposable
+gate. A first attempt used the untyped delete operation and failed against the
+real host, which is why the guest uses the typed query. The Wasm target for the
+1.95.0 compiler was added to a scratch Rust home (`CALENDAR_RUSTUP_HOME`); no
+global install, no new dependency, no wit-bindgen.
+
+Still open: the four provider tools, the day-plan apply job and its
+apply/retry/recovery/confirm flows, concrete public provider adapters,
+source-behavior controls, full shell/Today/chat composition, old-screen
+replacement, complete assembled parity and a physical second device over
+trusted HTTPS.

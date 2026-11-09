@@ -299,3 +299,13 @@ existing `localDay`/public API source-reference behavior is unchanged and does n
 establish full provenance validation; noncanonical timezone spelling and Intl-only
 aliases can differ from production and are outside the proven timezone cases.
 A browser API check is a fetch from a signed-in page, not a day-plan editor interaction.
+
+## Cache-evict job (part 12 checkpoint)
+
+Version 0.11.0 adds the `calendar-cache-evict-event` job (`target-item-id`),
+matching the production worker. The host captures the account in the queue
+envelope. The guest reads the event through the scoped query and deletes it
+only when that account can see it, so another user or an administrator gets
+`{"evicted":false}` and the row stays. The privacy rule has a failing-first
+native test plus a database-backed installed test. The day-plan apply job
+still needs the provider execution flows and stays open.

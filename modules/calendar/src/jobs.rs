@@ -30,6 +30,10 @@ pub fn handle(host: &impl Host, payload: &str) -> Result<Value> {
     if crate::query(host, events::TABLE, &q)?.is_empty() {
         return Ok(json!({"evicted":false}));
     }
-    host.call("db", "delete", events::TABLE, json!({"id":id}))?;
+    crate::query(
+        host,
+        events::TABLE,
+        &Query::delete(Filter::eq("id", id.as_str())),
+    )?;
     Ok(json!({"evicted":true}))
 }

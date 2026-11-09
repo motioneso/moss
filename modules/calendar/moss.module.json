@@ -10,7 +10,7 @@
   "capabilities": [
     {
       "port": "db",
-      "operations": ["query", "delete"],
+      "operations": ["query"],
       "resources": [
         "app.calendar_events",
         "app.day_plans",
@@ -234,6 +234,11 @@
           "path": "/settings/modules"
         }
       ]
+    },
+    {
+      "id": "calendar.cache_eviction",
+      "description": "A background job removes one cached calendar event for the account that queued it. An event the account cannot see is left untouched and reported as not removed, so one account can never remove or detect another account's event.",
+      "errors": []
     },
     {
       "id": "calendar.screens",

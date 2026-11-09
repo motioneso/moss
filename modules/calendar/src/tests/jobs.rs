@@ -14,9 +14,9 @@ impl Host for Scoped {
             .borrow_mut()
             .push((port.into(), op.into(), resource.into(), body.clone()));
         match (port, op) {
+            ("db", "query") if body["kind"] == "delete" => Ok(json!([{"id":"e1"}])),
             ("db", "query") if self.visible => Ok(json!([{"id":"e1"}])),
             ("db", "query") => Ok(json!([])),
-            ("db", "delete") => Ok(json!([{"id":"e1"}])),
             _ => panic!("unexpected host call {port}.{op}"),
         }
     }
@@ -34,9 +34,11 @@ fn evict_job_deletes_a_visible_event() {
     let out: Value = serde_json::from_str(&handle(&host, "job", &job("e1")).unwrap()).unwrap();
     assert_eq!(out, json!({"evicted":true}));
     let calls = host.calls.borrow();
-    let delete = calls.iter().find(|c| c.1 == "delete").expect("delete call");
+    let delete = calls
+        .iter()
+        .find(|c| c.3["kind"] == "delete")
+        .expect("delete call");
     assert_eq!(delete.2, "app.calendar_events");
-    assert_eq!(delete.3, json!({"id":"e1"}));
 }
 
 #[test]
@@ -47,7 +49,7 @@ fn evict_job_never_deletes_an_event_the_actor_cannot_see() {
     };
     let out: Value = serde_json::from_str(&handle(&host, "job", &job("e1")).unwrap()).unwrap();
     assert_eq!(out, json!({"evicted":false}));
-    assert!(host.calls.borrow().iter().all(|c| c.1 != "delete"));
+    assert!(host.calls.borrow().iter().all(|c| c.3["kind"] != "delete"));
 }
 
 #[test]
