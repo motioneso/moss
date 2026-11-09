@@ -88,3 +88,29 @@ Run it separately from the database gate:
 ```sh
 CARGO_TARGET_DIR=/tmp/moss-module-host-target cargo +1.95.0 test --locked --manifest-path rust-spike/module-host/Cargo.toml --test transfers -- --ignored --nocapture
 ```
+
+### Account policy routes and local dates
+
+The typed transactional host additionally handles two opt-in account contracts.
+Neither returns a database handle or accepts an actor, role or preference key.
+
+- `context / local-date / account` takes `{instant?, date?, offsetDays?}`. Choose
+  either an ISO instant or a calendar date, or omit both for now. It returns the
+  account's persisted IANA timezone, calendar `date`, UTC `start` and `nextStart`,
+  and `now`. Missing/invalid zones use the legacy `America/Los_Angeles` fallback.
+  Day offsets use calendar arithmetic; a day across DST can have 23 or 25 hours.
+- `action-policy / route-read|route-write / <family>` requires a `policyRoutes`
+  declaration. Read takes `{}`; write takes `{tier}` with `ask_each_time`,
+  `always_confirm` or `trusted_auto`. The host derives the canonical preference
+  key from the installed module ID and a single-segment family. Optional
+  `legacyBoolean` names a single-segment suffix under that same module ID;
+  `installTier` defaults to `ask_each_time`. Canonical values win over legacy
+  booleans. Only when neither row exists does read insert the declared install
+  tier, then reread storage. Write updates both rows in one transaction.
+
+Declarations are included in install/upgrade permission metadata. These are
+preference routes, not a replacement for the existing one-use tool approval
+contract. Both account contracts participate in guest commit/rollback and use
+runtime account RLS. The module still cannot query core preference tables.
+Run `scripts/run-gate.sh start --gate rust-spike/module-host/tools/account-contracts-gate.sh`
+for real-component database, policy compatibility, account isolation and DST checks.
