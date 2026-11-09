@@ -256,6 +256,11 @@ fn Frame(shell: ShellView) -> impl IntoView {
     } else {
         "Account menu".to_string()
     };
+    // The desktop app marks its server pages so the menu can offer Switch server.
+    let in_app = js_sys::Reflect::get(&window(), &"mossApp".into())
+        .map(|v| v.is_truthy())
+        .unwrap_or(false);
+    let account_menu_open = RwSignal::new(false);
     let initial = account
         .display_name
         .chars()
@@ -360,13 +365,26 @@ fn Frame(shell: ShellView) -> impl IntoView {
                     }).collect_view()}
                 </nav>
                 <div class="rail-foot">
-                    <div class="jds-menu jds-menu--content shell-account-menu">
+                    <div
+                        class="jds-menu jds-menu--content shell-account-menu"
+                        on:keydown=move |ev: ev::KeyboardEvent| {
+                            if ev.key() == "Escape" { account_menu_open.set(false); }
+                        }
+                    >
                         <button
                             type="button"
                             class="jds-menu__trigger jds-menu__trigger--content"
                             aria-label=account_label
+                            aria-haspopup=in_app.then_some("menu")
+                            aria-expanded=move || in_app.then(|| if account_menu_open.get() { "true" } else { "false" })
                             title="Open account and sharing settings"
-                            on:click=move |_| { let _ = window().location().set_href("/settings/sharing"); }
+                            on:click=move |_| {
+                                if in_app {
+                                    account_menu_open.update(|open| *open = !*open);
+                                } else {
+                                    let _ = window().location().set_href("/settings/sharing");
+                                }
+                            }
                         >
                             <span class="jds-avatar jds-avatar--sm" aria-hidden="true">{initial}</span>
                             <span class="jds-usermenu__id">
@@ -377,6 +395,24 @@ fn Frame(shell: ShellView) -> impl IntoView {
                             })}
                             <Icon svg=icons::CHEVRON_UP name="chevron-up" size=16 />
                         </button>
+                        <Show when=move || in_app && account_menu_open.get()>
+                            <div class="jds-menu__list jds-menu__list--top" role="menu">
+                                <button
+                                    type="button"
+                                    role="menuitem"
+                                    on:click=move |_| { let _ = window().location().set_href("/settings/sharing"); }
+                                >
+                                    "Sharing settings"
+                                </button>
+                                <button
+                                    type="button"
+                                    role="menuitem"
+                                    on:click=move |_| { let _ = window().location().set_href("moss-app://servers"); }
+                                >
+                                    "Switch server"
+                                </button>
+                            </div>
+                        </Show>
                     </div>
                 </div>
             </aside>

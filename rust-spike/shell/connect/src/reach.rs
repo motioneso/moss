@@ -425,7 +425,17 @@ pub async fn local_or_start(install: &Path, folder: &Path) -> Result<(Running, V
     let lock = start_lock(folder)?;
     if lock.is_some() {
         match local(folder).await {
-            Err(Problem::Unreachable) => start_local(install, folder)?,
+            Err(Problem::Unreachable) => {
+                // An instance the app made has its own database, which must be up first.
+                let (i, f) = (install.to_owned(), folder.to_owned());
+                tokio::task::spawn_blocking(move || {
+                    crate::provision::ensure_database(&i, &f, false)
+                })
+                .await
+                .map_err(|_| Problem::DidNotStart)?
+                .map_err(|_| Problem::DidNotStart)?;
+                start_local(install, folder)?
+            }
             other => return other,
         }
     }
@@ -446,6 +456,45 @@ pub async fn local_or_start(install: &Path, folder: &Path) -> Result<(Running, V
         }
     }
     Err(Problem::DidNotStart)
+}
+
+/// Stops the running local server for an instance, then its database. Asks the server to finish
+/// (it removes its running file on a clean stop) and gives up after thirty seconds.
+#[cfg_attr(not(unix), allow(unused_variables))]
+pub async fn stop_local(install: &Path, folder: &Path) -> Result<(), Problem> {
+    let (running, _) = local(folder).await?;
+    #[cfg(unix)]
+    {
+        if running.pid == 0 || running.pid > i32::MAX as u32 {
+            return Err(Problem::Unreachable);
+        }
+        // SAFETY: plain signal to a process whose certificate answered for this folder just now.
+        if unsafe { libc::kill(running.pid as i32, libc::SIGTERM) } != 0 {
+            return Err(Problem::Unreachable);
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = running;
+        return Err(Problem::Unreachable);
+    }
+    #[cfg(unix)]
+    {
+        for _ in 0..120 {
+            still_running(folder);
+            if !folder.join(RUNNING_FILE).exists() {
+                let (i, f) = (install.to_owned(), folder.to_owned());
+                return tokio::task::spawn_blocking(move || {
+                    crate::provision::stop_database(&i, &f)
+                })
+                .await
+                .map_err(|_| Problem::Unreachable)?
+                .map_err(|_| Problem::Unreachable);
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+        Err(Problem::Unreachable)
+    }
 }
 
 #[cfg(test)]

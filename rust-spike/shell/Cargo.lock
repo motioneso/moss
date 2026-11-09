@@ -2145,9 +2145,12 @@ name = "moss-app"
 version = "0.0.0"
 dependencies = [
  "axum",
+ "block2",
  "gio",
  "libc",
  "moss-network",
+ "objc2",
+ "objc2-foundation",
  "serde",
  "serde_json",
  "tao",
@@ -2156,6 +2159,8 @@ dependencies = [
  "url",
  "uuid",
  "webkit2gtk",
+ "webview2-com",
+ "windows-core 0.61.2",
  "wry",
 ]
 

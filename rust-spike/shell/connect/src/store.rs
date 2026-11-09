@@ -49,6 +49,7 @@ impl Target {
     }
 }
 
+#[derive(Clone)]
 pub struct Store {
     pub data: PathBuf,
 }
@@ -152,7 +153,7 @@ pub fn local_id(instance: &str) -> String {
     format!("{LOCAL_PREFIX}{instance}")
 }
 
-fn valid_instance(name: &str) -> bool {
+pub fn valid_instance(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 64
         && name
@@ -180,6 +181,7 @@ pub fn private_dir(path: &Path) -> Result<(), String> {
         Ok(meta) if meta.is_dir() && mine(&meta) => Ok(()),
         Ok(_) => Err("Expected a private folder".into()),
         Err(_) => {
+            #[allow(unused_mut)]
             let mut builder = std::fs::DirBuilder::new();
             #[cfg(unix)]
             {
@@ -193,12 +195,28 @@ pub fn private_dir(path: &Path) -> Result<(), String> {
     }
 }
 
-/// `$XDG_DATA_HOME/moss`, else `~/.local/share/moss`. macOS and Windows follow in Phase 7.
+/// Where the app keeps its server list and local servers. Linux uses `$XDG_DATA_HOME/moss`, else
+/// `~/.local/share/moss`; macOS uses `~/Library/Application Support/Moss`; Windows uses
+/// `%LOCALAPPDATA%\Moss`.
 pub fn default_data_dir() -> Option<PathBuf> {
-    if let Some(xdg) = std::env::var_os("XDG_DATA_HOME").filter(|v| !v.is_empty()) {
-        return Some(PathBuf::from(xdg).join("moss"));
+    #[cfg(windows)]
+    {
+        std::env::var_os("LOCALAPPDATA")
+            .filter(|v| !v.is_empty())
+            .map(|dir| PathBuf::from(dir).join("Moss"))
     }
-    std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share/moss"))
+    #[cfg(target_os = "macos")]
+    {
+        std::env::var_os("HOME")
+            .map(|home| PathBuf::from(home).join("Library/Application Support/Moss"))
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        if let Some(xdg) = std::env::var_os("XDG_DATA_HOME").filter(|v| !v.is_empty()) {
+            return Some(PathBuf::from(xdg).join("moss"));
+        }
+        std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share/moss"))
+    }
 }
 
 #[cfg(test)]
