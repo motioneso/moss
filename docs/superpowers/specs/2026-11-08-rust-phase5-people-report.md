@@ -2391,6 +2391,26 @@ passing large-account evidence.
 
 ### Part 20 verification receipts
 
-Final ordinary-gate and installed-replay receipts are pending. The diagnostic's
-known fuel failure and its exact tested commit are recorded separately when the
-runs finish; they must not be read as a green parity result.
+The clean-commit diagnostic failure was observed at
+`3499bbc68dc9b9c594b9cdec63c6427915320835`, input fingerprint
+`sha256:7832e5794daffa6239eaeb56fecbc8a2049375fe44a678e349e543fb471c1757`.
+Normal component run `20261109-105122-qNH5r4` ended `rc=101` at the first
+999-person request with `wasm trap: all fuel consumed by WebAssembly`.
+Scratch truncation control `20261109-105146-S8YFKU` ended `rc=101` at the
+same earlier decode. Both disposable gate containers were removed.
+The earlier fixture-setup failures were `104449-KJCvic` and `104540-Jvqzsb`;
+neither is parity or control evidence.
+
+The component SHA-256 is
+`94f3432357dca23e5b55184d013bec38152b80f6ec59b96384e01ea9f51e172f`;
+the package SHA-256 is
+`1508a5617586e4505b2c886eb7bb2250b2543e5f49d481b91b1f676b83dd1b97`.
+All 34 native People tests and strict native Clippy passed earlier in this
+checkpoint; module runtime code was not changed. Scoped lint, formatting and
+shell syntax checks cover the new diagnostic files.
+
+Final ordinary-gate, installed-replay and repository-check outcomes are recorded
+against their tested commits in [checkpoint PR 4139](https://github.com/motioneso/moss/pull/4139)
+and its proof artifact. They are separate from the known-red large-account probe;
+no passing receipt from part 19 is reused for this continuation. The checkpoint
+remains a diagnostic and handoff, not completed People acceptance.
