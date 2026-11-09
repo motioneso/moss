@@ -57,7 +57,7 @@
     {
       "port": "ai",
       "operations": ["generate"],
-      "resources": ["structured"]
+      "resources": ["chat"]
     },
     {
       "port": "jobs",

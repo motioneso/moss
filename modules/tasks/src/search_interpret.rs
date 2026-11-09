@@ -24,8 +24,8 @@ fn query(body: &Value) -> Result<String> {
         .get("query")
         .and_then(Value::as_str)
         .ok_or(Error::Http(400, "query must be a string"))?;
-    // Ajv bounds the untrimmed length before the handler trims.
-    match raw.encode_utf16().count() {
+    // Ajv counts code points and bounds the untrimmed length before the handler trims.
+    match raw.chars().count() {
         0 => return Err(Error::Http(400, "body/query must NOT have fewer than 1 characters")),
         n if n > 300 => {
             return Err(Error::Http(400, "body/query must NOT have more than 300 characters"))
@@ -38,6 +38,9 @@ fn query(body: &Value) -> Result<String> {
     }
     Ok(trimmed.to_owned())
 }
+
+const MAX_LISTS: usize = 200;
+const MAX_TAGS: usize = 300;
 
 pub fn interpret<H: Host + ?Sized>(
     repo: &Repository<'_, H>,
@@ -52,11 +55,13 @@ pub fn interpret<H: Host + ?Sized>(
             tag_names.insert(tag.name);
         }
     }
+    // The host refuses prompts over 64 KB, so the vocabulary is capped.
     let list_vocabulary: Vec<Value> = lists
         .iter()
+        .take(MAX_LISTS)
         .map(|l| json!({"id":l.id,"name":l.name}))
         .collect();
-    let tag_vocabulary: Vec<&String> = tag_names.iter().collect();
+    let tag_vocabulary: Vec<&String> = tag_names.iter().take(MAX_TAGS).collect();
     let today = repo.now()?.get(..10).unwrap_or_default().to_owned();
     let prompt = [
         "Convert the user's task search phrase into JSON only.".to_owned(),
@@ -74,7 +79,7 @@ pub fn interpret<H: Host + ?Sized>(
         .call(
             "ai",
             "generate",
-            "structured",
+            "chat",
             json!({"prompt":prompt,"maxOutputTokens":500}),
         )
         .map_err(|_| unavailable())?;
@@ -211,6 +216,9 @@ mod tests {
         assert!(query(&json!({"query":"   "})).is_err());
         assert!(query(&json!({"query":"x".repeat(301)})).is_err());
         assert_eq!(query(&json!({"query":"  due today "})).unwrap(), "due today");
+        // 200 astral characters pass the schema (code points) but not the trimmed check (UTF-16).
+        let error = query(&json!({"query":"\u{1F600}".repeat(200)})).unwrap_err();
+        assert!(format!("{error:?}").contains("1-300"));
     }
 
     #[test]

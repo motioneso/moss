@@ -158,9 +158,9 @@ these reads.
 
 Part 13 adds the natural-language search interpretation route
 (`POST /tasks/search/interpret`) over a new `ai` port (`generate`, resource
-`structured`). The host supplies the model; the guest names none. The prompt
+`chat`, the same model class the TypeScript route uses). The host supplies the model; the guest names none. The prompt
 lists the account's lists and tags, the reply is parsed as JSON, and unknown
-list ids and tag names are dropped with warnings. An unavailable provider
+list ids and tag names are dropped with warnings. An unavailable provider, or a prompt the host refuses,
 returns 503 and invalid JSON returns 502. Only the two assistant-policy routes
 (they need a core preferences port) and the items listed after part 12 remain,
 except that the UI fixture can now listen for a second device over HTTPS:

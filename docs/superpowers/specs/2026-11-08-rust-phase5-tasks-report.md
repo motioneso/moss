@@ -1060,7 +1060,7 @@ second-device HTTPS proof. Still an unfinished Tasks replacement; Workshop and
 Food are excluded. Part of #4027; release note Category N/A.
 
 `POST /tasks/search/interpret` uses a new `ai` port in the guest WIT and the
-manifest (`generate`, resource `structured`, the host rejects model and
+manifest (`generate`, resource `chat`, the model class the TypeScript route uses; the host rejects model and
 provider parameters). The prompt carries the account's lists and tags and the
 UTC day. Failures map to 503 (provider unavailable) or 502 (invalid JSON).
 Normalisation keeps known list ids and case-insensitive tag names, enforces
@@ -1092,3 +1092,14 @@ a wrong host got 421 and a wrong origin got 403. A browser on the tailnet
 address then signed in and listed `Browser proof task`. The owner account was
 created from loopback, as the setup page requires. The Mac check was curl, not
 a Mac browser.
+
+Independent review round one found no blockers and two majors, both fixed:
+the route now asks for the chat model instead of the structured one (the
+router's structured class could fail for users the TypeScript route served),
+and the lists and tags sent in the prompt are capped (200 and 300) so the host's
+64 KB prompt limit cannot turn a large account into a false "unavailable". The
+503 also covers a prompt the host refuses. The query length check now counts
+code points like the schema validator. Left as noted minors: tag order in the
+prompt is by codepoint, not locale; two tags differing only by case resolve to
+the first, not the last; and the fixture's address variable is not validated
+(it is a dev-only tool on a throwaway database).
