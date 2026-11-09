@@ -142,9 +142,17 @@ fn parse_document(content: &str) -> (Vec<String>, Vec<Chunk>) {
     }
     let mut sections: Vec<&str> = Vec::new();
     let mut start = 0;
-    for (index, _) in trimmed.match_indices("\n## ") {
-        sections.push(&trimmed[start..=index]);
-        start = index + 1;
+    // JavaScript's multiline `^` also matches after CR, U+2028 and U+2029.
+    let mut previous = None;
+    for (index, ch) in trimmed.char_indices() {
+        if index > 0
+            && matches!(previous, Some('\n' | '\r' | '\u{2028}' | '\u{2029}'))
+            && trimmed[index..].starts_with("## ")
+        {
+            sections.push(&trimmed[start..index]);
+            start = index;
+        }
+        previous = Some(ch);
     }
     sections.push(&trimmed[start..]);
     let sections: Vec<&str> = sections
@@ -622,6 +630,7 @@ impl Ports for MemoryIngestPorts {
 #[cfg(test)]
 mod tests {
     use super::parse_document;
+    use serde_json::json;
 
     #[test]
     fn parser_matches_legacy_boundaries() {
@@ -650,6 +659,27 @@ mod tests {
         assert!(chunks.iter().all(|c| super::utf16_len(&c.text) <= 2000));
         let (_, empty) = parse_document("---\ntitle: T\n---\n");
         assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn parser_matches_real_legacy_vectors() {
+        // Vectors come from the actual legacy parseDocument (tests/data/memory-parser-parity.ts).
+        let rows = include_str!("../tests/data/memory-parser-vectors.jsonl");
+        let mut count = 0;
+        for line in rows.lines() {
+            let row: serde_json::Value = serde_json::from_str(line).unwrap();
+            let input = row["input"].as_str().unwrap();
+            let expected = &row["expected"];
+            let (links, chunks) = parse_document(input);
+            let actual: Vec<_> = chunks
+                .iter()
+                .map(|c| json!({"text": c.text, "lineStart": c.line_start, "lineEnd": c.line_end}))
+                .collect();
+            assert_eq!(json!(links), expected["wikilinks"], "links for {input:?}");
+            assert_eq!(json!(actual), expected["chunks"], "chunks for {input:?}");
+            count += 1;
+        }
+        assert!(count >= 400);
     }
 }
 
