@@ -67,6 +67,70 @@ pub fn route(host: &impl Host, request: &RouteRequest) -> Result<Option<Response
     Ok(Some(Response::new(200, result?)))
 }
 
+/// Orders directory names like the legacy `localeCompare` sort.
+///
+/// The first pass ignores case and folds common Latin accents to their base
+/// letters. Later passes put unaccented letters first, then lowercase before
+/// uppercase. Scripts without a fold entry keep code-point order, which can
+/// differ from a full locale collation.
+pub fn compare_directory_names(a: &str, b: &str) -> std::cmp::Ordering {
+    let folded = |name: &str| {
+        name.chars()
+            .flat_map(|c| c.to_lowercase())
+            .flat_map(fold_letter)
+            .collect::<String>()
+    };
+    folded(a)
+        .cmp(&folded(b))
+        .then_with(|| accent_marks(a).cmp(&accent_marks(b)))
+        .then_with(|| case_marks(a).cmp(&case_marks(b)))
+        .then_with(|| a.cmp(b))
+}
+
+fn fold_letter(c: char) -> Vec<char> {
+    let folded = match c {
+        'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' | 'ā' | 'ă' | 'ą' | 'ǎ' | 'ȁ' | 'ȃ' | 'ạ' | 'ả' | 'ấ'
+        | 'ầ' | 'ẩ' | 'ẫ' | 'ậ' | 'ắ' | 'ằ' | 'ẳ' | 'ẵ' | 'ặ' => "a",
+        'æ' => "ae",
+        'ç' | 'ć' | 'ĉ' | 'ċ' | 'č' => "c",
+        'ď' | 'đ' | 'ð' => "d",
+        'è' | 'é' | 'ê' | 'ë' | 'ē' | 'ĕ' | 'ė' | 'ę' | 'ě' | 'ȅ' | 'ȇ' | 'ẹ' | 'ẻ' | 'ẽ' | 'ế'
+        | 'ề' | 'ể' | 'ễ' | 'ệ' => "e",
+        'ĝ' | 'ğ' | 'ġ' | 'ģ' => "g",
+        'ĥ' | 'ħ' => "h",
+        'ì' | 'í' | 'î' | 'ï' | 'ĩ' | 'ī' | 'ĭ' | 'į' | 'ı' | 'ị' | 'ỉ' => "i",
+        'ĵ' => "j",
+        'ķ' => "k",
+        'ĺ' | 'ļ' | 'ľ' | 'ŀ' | 'ł' => "l",
+        'ñ' | 'ń' | 'ņ' | 'ň' => "n",
+        'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ø' | 'ō' | 'ŏ' | 'ő' | 'ǒ' | 'ȍ' | 'ȏ' | 'ọ' | 'ỏ' | 'ố'
+        | 'ồ' | 'ổ' | 'ỗ' | 'ộ' | 'ớ' | 'ờ' | 'ở' | 'ỡ' | 'ợ' => "o",
+        'œ' => "oe",
+        'ŕ' | 'ŗ' | 'ř' => "r",
+        'ś' | 'ŝ' | 'ş' | 'š' | 'ș' => "s",
+        'ß' => "ss",
+        'ţ' | 'ť' | 'ŧ' | 'ț' => "t",
+        'þ' => "th",
+        'ù' | 'ú' | 'û' | 'ü' | 'ũ' | 'ū' | 'ŭ' | 'ů' | 'ű' | 'ų' | 'ǔ' | 'ȕ' | 'ȗ' | 'ụ' | 'ủ'
+        | 'ứ' | 'ừ' | 'ử' | 'ữ' | 'ự' => "u",
+        'ý' | 'ÿ' | 'ŷ' => "y",
+        'ź' | 'ż' | 'ž' => "z",
+        _ => return vec![c],
+    };
+    folded.chars().collect()
+}
+
+fn accent_marks(name: &str) -> Vec<bool> {
+    name.chars()
+        .flat_map(|c| c.to_lowercase())
+        .map(|c| fold_letter(c) != vec![c])
+        .collect()
+}
+
+fn case_marks(name: &str) -> Vec<bool> {
+    name.chars().map(|c| c.is_uppercase()).collect()
+}
+
 // Legacy browsing is relative to the selected People folder. The additive
 // note-folders picker instead browses the account's allowed absolute roots.
 fn directories(host: &impl Host, request: &RouteRequest) -> Result<Response> {
@@ -103,7 +167,12 @@ fn directories(host: &impl Host, request: &RouteRequest) -> Result<Response> {
         .filter_map(|entry| entry["name"].as_str())
         .map(|name| json!({"name":name,"path":if relative.is_empty(){name.to_owned()}else{format!("{relative}/{name}")}}))
         .collect();
-    directories.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
+    directories.sort_by(|a, b| {
+        compare_directory_names(
+            a["name"].as_str().unwrap_or_default(),
+            b["name"].as_str().unwrap_or_default(),
+        )
+    });
     Ok(Response::new(
         200,
         json!({"path":if path.is_empty(){None}else{Some(path)},"directories":directories}),

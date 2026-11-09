@@ -50,6 +50,9 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
     let notes_root = notes.path().join("People");
     std::fs::create_dir_all(notes_root.join("Family/Friends")).unwrap();
     std::fs::create_dir_all(notes_root.join("Work")).unwrap();
+    for name in ["Banana", "apple", "Ära", "zebra"] {
+        std::fs::create_dir_all(notes_root.join(name)).unwrap();
+    }
     let roots = ["actor", "other", "admin"]
         .into_iter()
         .map(|key| {
