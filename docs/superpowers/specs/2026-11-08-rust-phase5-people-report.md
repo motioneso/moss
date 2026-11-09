@@ -1980,5 +1980,61 @@ as partial parity work, without a claim that Phase 5 acceptance is complete.
 
 ### Verification receipts
 
-Final component, installed replay and repository check receipts will be recorded
-here after their runs finish. Pending runs are not passing evidence.
+The full disposable-database People gate passed (`rc=0`):
+`task_127_rust_port_phase_5_people_module-20261109-054501-XTTogl.log`.
+It launched on clean commit `0e49126c91cc30c905af7eb5f43ff221814623b5`, fingerprint
+`sha256:354a489c253b25f890cf60ce48551568ac3278a7c885b37a4a0f487600f2f368`.
+This covers the existing compiled workers, notes, Settings, tools and data rules.
+Privacy controls failed with protection removed and passed after restoring it for
+all seven tables, both runtime roles, and owner/other/admin actors. Settings and
+folder-preference privacy also failed without RLS and passed when restored. The
+container was removed. Later commits change test fixtures, the downstream lockfile
+and this report; they do not change the production guest used by this gate.
+
+The native People suite passed all thirty tests in a separate task-owned target,
+and strict Clippy passed all native targets. Core, directory, numeric and new
+note-scan vectors were regenerated and matched their committed fixtures. Component
+and UI builds passed. Repository `pnpm lint`, `pnpm format:check`, `pnpm typecheck`,
+`pnpm build:app-map` and `pnpm check:file-size` passed. The final root TypeScript
+check and scoped lint/format checks also passed after the oracle followups.
+
+Built component SHA-256:
+`d2e0b57ce89956854eb97bf18d049898a70b3c5e1dfd1b970dfd5300d22cb188`.
+Built package SHA-256:
+`f675bdb6435d4e8461f516dafc87ea620faa6eb817966c4a920dc7c3d663d686`.
+The package was built before test-only followups; production source and the module
+manifest are unchanged since that build. The installed gate logs those exact
+hashes and creates a temporary signed registry for download/install/reload.
+
+The corrected nested replay reached both refresh checks with exactly seven notes,
+three projections, one ignored note and four candidates. However, its first full
+attempt failed the existing fifty-reference refresh deadline: status 500 at
+5362 milliseconds against the unchanged 5000-millisecond limit. Receipt:
+`task_127_rust_port_phase_5_people_module-20261109-055607-8y58p5.log`, `rc=101`,
+fingerprint `sha256:6ac6f7c982a9d038cdaaea4fe26201b98cd2ddd3c15546b52586ca182bbe7c15`.
+It launched during the commit of the two corrected fixture/report files, so its
+header records dirty inputs on `14628170c`; those bytes were committed in
+`571ca1d7b`. This run is not full installed-parity evidence. A single rerun follows
+after this task's competing full gate and TypeScript checks have all finished;
+it retains the exact same package, strict deadline and response assertions.
+
+The last installed replay also failed (`rc=101`):
+`task_127_rust_port_phase_5_people_module-20261109-060340-eM3wXU.log`.
+It launched on clean commit `571ca1d7b639410056ebd93ab7bbac7beb6531c5`, fingerprint
+`sha256:e9a236fcd3b0aee03e7e63303f8c1b8e7a6b01396a88acd17296bd043fcebea9`.
+The normal downstream host JSON consumer passed 283 numeric vectors and three
+malformed/out-of-range bodies; the UI frame bridge test passed. Both nested legacy
+refresh assertions passed. The signed package downloaded, installed with legacy
+SQL and reloaded, but the fifty-reference request returned status 500 after
+6839 milliseconds. The gate stopped there, before completing the route/table and
+dependent-API comparisons. Its container was removed. The unchanged strict limit
+was not weakened and no further identical rerun was attempted.
+
+The full installed parity run is therefore **not passing**. This checkpoint does
+not requalify the previous checkpoint's batch-budget claim on this machine.
+Whether the deadline misses are solely contention or expose another performance
+problem was not established. Request-budget qualification remains open alongside
+the application/device acceptance above. The nested traversal fix, native bounds
+and full People privacy gate are independently evidenced; they do not substitute
+for that missing full installed result. Final review findings and the proof
+artifact accompany the checkpoint PR.
