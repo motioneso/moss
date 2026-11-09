@@ -231,3 +231,20 @@ Part 8 merged before PR 4079. This combined branch retains its date and legend
 changes alongside part 7’s assistant-name and narrow-week work. Full Calendar parity, regional
 formatting beyond default English, the old-screen switch and physical second-device
 HTTPS remain required. The report retains the complete remaining list.
+
+## Startup recovery (part 9 checkpoint)
+
+Version 0.9.0 keeps a shared loading state visible until Calendar or settings mounts.
+Generated-JavaScript, bridge-import and Wasm failures show a recovery message; a
+missing boot script retains the static loading guidance. **Reload page** lives in
+the authenticated parent, preserves the current screen and event query, and opens
+a fresh installed frame. The module remains a client of the server API.
+
+The signed-live runner invokes `tools/startup-check.ts` against real installed
+assets. It interrupts each download, verifies the visible fallback, removes the
+fault, and reloads into the real event or settings screen. It includes phone-width
+settings screenshots. These deliberate download faults do not substitute API
+responses or account identity. The existing gate, parity comparisons and privacy
+fault witnesses remain required. Full provider/tools/jobs parity, full shell/chat,
+old-screen replacement and a physical second device over trusted HTTPS remain
+open; see the canonical Calendar report and the part 9 checkpoint report.

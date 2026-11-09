@@ -21,6 +21,7 @@ import pg from "pg";
 import { chromium } from "@playwright/test";
 import { getMossDatabaseUrls } from "@moss/db";
 import { readHttpOracle } from "./http-oracle.js";
+import { checkStartup } from "./startup-check.js";
 import { DEFAULT_LOCALE_SETTINGS, type CalendarEventDto } from "@moss/shared";
 import { dateRangeLabel, dtoToViewEvent } from "../../../apps/web/src/calendar/calendar-model.js";
 
@@ -396,6 +397,7 @@ try {
   await tab.getByRole("button", { name: "Sign in", exact: true }).click();
   await tab.waitForURL(`${local}/calendar`, { timeout: 120000 });
   await tab.goto(`${local}/calendar?event=${encodeURIComponent(data.event)}`);
+  await checkStartup(tab, local, out, data.event);
   const frame = tab.frameLocator("#calendar");
   const screenshotDialog = async (filename: string) => {
     await frame.getByRole("dialog").evaluate(async (dialog) => {

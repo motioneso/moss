@@ -1,5 +1,12 @@
 # Calendar package
 
+## 0.9.0
+
+- Show a loading message before Calendar and settings start.
+- Explain failed screen downloads and offer a parent-page reload that keeps event links.
+- Check real installed startup faults and recovery at desktop and phone width.
+- Full Calendar parity and physical second-device trusted HTTPS remain open.
+
 ## 0.8.0
 
 - Keep midnight-ending events on the last covered day in their details.
