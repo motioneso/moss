@@ -1930,8 +1930,12 @@ checks reject malformed listings through the SDK's fixed `Invalid host response`
 error before reads or projections. The README now also records the existing host
 refusals for non-UTF-8 names and relative paths over 1024 UTF-8 bytes.
 The review suggested exactly two refresh candidates, but the earlier replay steps
-also create three records without canonical notes. The strengthened assertion
-therefore requires all five candidates rather than accepting a lower bound.
+also leave two unmerged records without canonical notes. The strengthened assertion
+requires all four candidates rather than accepting a lower bound. An initial
+assertion incorrectly counted a merged record; the real legacy replay returned
+four, matching the service rule that excludes merged records. That failed replay
+(`task_127_rust_port_phase_5_people_module-20261109-055145-973EZy.log`, `rc=1`)
+is not passing evidence; the corrected assertion is rerun below.
 
 The first installed gate stopped before replay because the downstream JSON test's
 lockfile lacked the newly merged host's existing `libc` dependency edge. Its failed

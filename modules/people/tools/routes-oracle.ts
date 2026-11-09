@@ -163,8 +163,8 @@ export async function routesOracle() {
           result.discovered !== 7 ||
           result.projected !== 3 ||
           result.ignored !== 1 ||
-          // Missing ID, duplicate pair, and three existing records without notes.
-          result.candidates !== 5
+          // Missing ID, duplicate pair, and two unmerged records without notes.
+          result.candidates !== 4
         )
           throw new Error(`Nested refresh coverage mismatch: ${JSON.stringify(result)}`);
         console.log("Nested People refresh coverage:", JSON.stringify(result));
