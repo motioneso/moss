@@ -462,7 +462,30 @@ pub async fn local_or_start(install: &Path, folder: &Path) -> Result<(Running, V
 /// (it removes its running file on a clean stop) and gives up after thirty seconds.
 #[cfg_attr(not(unix), allow(unused_variables))]
 pub async fn stop_local(install: &Path, folder: &Path) -> Result<(), Problem> {
-    let (running, _) = local(folder).await?;
+    // Wait for an in-progress connect/start, then hold the same lock through shutdown.
+    // Dropping a UI result cannot cancel spawn_blocking database startup; this lock can.
+    let _lock = timeout(Duration::from_secs(200), async {
+        loop {
+            if let Some(lock) = start_lock(folder)? {
+                return Ok::<_, Problem>(lock);
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .map_err(|_| Problem::Unreachable)??;
+    let running = match local(folder).await {
+        Ok((running, _)) => running,
+        Err(Problem::Unreachable) => {
+            // The server may have failed during startup. Still stop its private database.
+            let (i, f) = (install.to_owned(), folder.to_owned());
+            return tokio::task::spawn_blocking(move || crate::provision::stop_database(&i, &f))
+                .await
+                .map_err(|_| Problem::Unreachable)?
+                .map_err(|_| Problem::Unreachable);
+        }
+        Err(problem) => return Err(problem),
+    };
     #[cfg(unix)]
     {
         if running.pid == 0 || running.pid > i32::MAX as u32 {

@@ -2,7 +2,8 @@ import type { AiModelCapability, AiModelTier } from "./ai-types.js";
 import {
   DESKTOP_APP_ERRORS,
   DESKTOP_APP_REMEDIATIONS,
-  DESKTOP_APP_SCREENS
+  DESKTOP_APP_SCREENS,
+  DESKTOP_APP_SETTINGS
 } from "./app-map-desktop.js";
 
 export interface CoreAppSurfaceDeclaration {
@@ -181,6 +182,7 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
 // source of truth for what a user can actually reach). Native Android settings
 // identify the installed activity instead of inventing a web settings route.
 export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
+  ...DESKTOP_APP_SETTINGS,
   {
     id: "rust-network-sharing",
     runtime: "rust",

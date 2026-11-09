@@ -254,3 +254,19 @@ async fn a_server_is_started_once_and_a_stopped_start_fails_fast() {
     assert_eq!(starts(), 2, "a later try starts it again");
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn stop_waits_for_a_connect_that_holds_the_start_lock() {
+    let dir = scratch("stop-lock");
+    let guard = start_lock(&dir).unwrap().unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_millis(100), stop_local(&dir, &dir))
+            .await
+            .is_err(),
+        "Stop must wait until the in-progress start completes"
+    );
+    drop(guard);
+    assert!(stop_local(&dir, &dir).await.is_err());
+    std::fs::remove_dir_all(dir).unwrap();
+}

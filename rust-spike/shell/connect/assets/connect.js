@@ -156,6 +156,62 @@ const screens = {
     return [back("Servers", { do: "servers" }), heading("New server on this computer"), form];
   },
 
+  "confirm-stop": (s) => [
+    back("Servers", { do: "servers" }),
+    heading(`Stop ${s.name}?`),
+    muted(
+      "People using this server will be disconnected. Jobs and agents will stop. You can start it again from Servers."
+    ),
+    el(
+      "div",
+      { class: "connect-actions" },
+      button("Cancel", "secondary", () => post({ do: "servers" })),
+      button("Stop server", "primary", () => post({ do: "confirm-stop", id: s.id }))
+    )
+  ],
+
+  "stop-failed": (s) => [
+    heading("Could not stop Moss"),
+    muted(s.reason),
+    button("Servers", "secondary", () => post({ do: "servers" }))
+  ],
+
+  stopping: (s) => [heading(s.name), muted("Stopping the server and its database…")],
+
+  desktop: (s) => [
+    back("Servers", { do: "servers" }),
+    heading("Desktop settings"),
+    muted(
+      s.tray
+        ? "Closing the window keeps Moss in the tray. Click its icon to open Moss again."
+        : "The tray is unavailable. Closing the window quits the app; servers keep running."
+    ),
+    s.error ? el("p", { class: "connect-error", role: "alert" }, s.error) : "",
+    s.supported
+      ? el(
+          "div",
+          { class: "connect-actions" },
+          button(s.login ? "Turn off start at login" : "Start Moss at login", "secondary", () =>
+            post({ do: "login", enabled: !s.login })
+          ),
+          button(
+            s.notifications ? "Turn off notifications" : "Allow desktop notifications",
+            "secondary",
+            () => post({ do: "notifications", enabled: !s.notifications })
+          ),
+          s.notifications
+            ? button("Send test notification", "secondary", () => post({ do: "test-notification" }))
+            : ""
+        )
+      : muted(
+          "Tray, start at login and desktop notifications are available on Linux only in this build."
+        ),
+    muted(
+      "Notifications report server connections and stops. Reminder and chat notifications are not connected yet."
+    ),
+    button("Quit app", "quiet", () => post({ do: "quit" }))
+  ],
+
   "setting-up": (s) => [heading(s.name), muted("Setting up. The first start can take a minute.")],
 
   connecting: (s) => [heading(s.name), muted("Connecting…")],
@@ -232,7 +288,8 @@ const screens = {
       "div",
       { class: "connect-actions" },
       button("New server here", "secondary", () => post({ do: "new-server" })),
-      button("Add another computer", "primary", () => post({ do: "another" }))
+      button("Add another computer", "primary", () => post({ do: "another" })),
+      button("Desktop settings", "secondary", () => post({ do: "desktop" }))
     )
   ]
 };

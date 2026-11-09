@@ -92,7 +92,17 @@ fn ports_already_given_to_an_instance_are_skipped() {
     }
     .write(&one.join(NETWORK_FILE))
     .unwrap();
-    let port = free_port(&store).unwrap();
+    let (port, _reservation) = free_port(&store).unwrap();
     assert!(port > FIRST_PORT);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn concurrent_setups_reserve_different_ports() {
+    let dir = scratch();
+    let store = store_in(&dir);
+    let (first, _first_reservation) = free_port(&store).unwrap();
+    let (second, _second_reservation) = free_port(&store).unwrap();
+    assert_ne!(first, second, "unfinished setups must not share a port");
     let _ = std::fs::remove_dir_all(dir);
 }
