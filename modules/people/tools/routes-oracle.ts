@@ -38,9 +38,11 @@ export async function routesOracle() {
   const root = await mkdtemp(join(tmpdir(), "moss-people-http-folders-"));
   const selected = join(root, "People");
   await mkdir(join(selected, "Family", "Friends"), { recursive: true });
+  await mkdir(join(selected, "Family", "apple"));
+  await mkdir(join(selected, "Family", "Banana"));
+  await mkdir(join(selected, "Family", "Ábc"));
   await mkdir(join(selected, "Work"));
-  for (const name of ["Banana", "apple", "Ära", "zebra"])
-    await mkdir(join(selected, name));
+  for (const name of ["Banana", "apple", "Ära", "zebra"]) await mkdir(join(selected, name));
   const oldRoots = process.env.MOSS_NOTES_ROOTS;
   process.env.MOSS_NOTES_ROOTS = root;
   let refresh: Awaited<ReturnType<typeof refreshQueue>> | undefined;

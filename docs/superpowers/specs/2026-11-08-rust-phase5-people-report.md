@@ -1259,3 +1259,72 @@ The package with the revised app-map wording is SHA-256
 `2c7b2004e` with six dirty follow-up files, fingerprint `b1c0992033d3`; the only
 changes after that receipt finish this report. The final follow-up commit is pushed but unreviewed because both allowed rounds
 have been used. No Ready or full acceptance claim is made.
+
+## Part eleven: folder reading order and the full parity run (JS-94)
+
+Before editing, this branch was advanced from Phase 0a to merged main `1c63fa2f4`,
+which contains the part-ten report. No sibling worktree source was copied.
+
+The legacy directory listing sorts folder names with JavaScript
+`localeCompare`. The Rust route sorted by raw bytes, so capitalised and
+accented names landed in a different order. The route now compares base
+letter first, then accent, then case, with punctuation before digits and
+digits before letters. A native test pins the reference order for fourteen
+names. The route oracle creates `apple`, `Banana` and `Ábc` folders whose
+order differs between the two schemes, and the installed replay compares
+that listing against the real legacy handlers. The first full run failed at
+exactly that listing because the replay's own folder copy and expected
+answer still held only the old folders. Both now match the oracle. The app
+map's folder-browsing entry describes the reading order.
+
+### Part-eleven verification
+
+- Two review rounds drove the ordering work. The first found the first
+  pass still differed from the legacy order for punctuation, special
+  letters such as `ø`, `æ`, `œ` and `ß`, distinct accents, and separate
+  accent marks. The second found accented letters outside the table,
+  including Romanian and Vietnamese names, sorting after `z`. The
+  comparator now follows the legacy collation order for punctuation,
+  expands or places special letters as the legacy order does, compares
+  accents by kind, treats separate accent marks as accents, and places
+  the added letter groups under their base letters. Twenty-seven
+  native cases pin those pairs against the legacy results. Two small
+  differences remain accepted: a letter carrying two separate accent
+  marks compares by its first mark, and names the legacy order calls
+  equal keep a stable raw-text order. Two such names rarely coexist.
+- Installed replay `201753-ccBlpP` passed (`rc=0`) on clean `ca164b565`: all 163 legacy route responses and all seven table
+  snapshots matched, including the new folder order, other-user and
+  administrator attempts, signed installation and reload, and all four
+  consumer APIs. The fifty-reference timing remains as recorded in part
+  ten; the default five-second budget stays unqualified.
+- Nine-suite People gate `201951-jvQmoL` passed (`rc=0`) on the same
+  clean commit: ten integration tests across all nine suites, including
+  the failing-first privacy matrix for both runtime roles. Controls fail
+  with protection removed and pass with it restored.
+- Twenty-one native People tests pass, including both ordering tests.
+  Strict People Clippy, scoped Rust formatting, repository lint, full
+  typecheck, Prettier, file-size check, pure-vector comparison and Rust
+  app-map generation pass.
+- Component SHA-256:
+  `e4092dc68a207f15a8386e5186ca707b0baf852002132724562e695e0217d513`.
+- Gate-tested package SHA-256:
+  `7afaf9e8dd89b86b70c8c0ab5ea11062a97f5078056448a040e599f0041deb8a`
+  (406543 bytes).
+- Builds and caches stayed in task-owned scratch. No global install. The
+  approved pinned `wit-bindgen =0.57.1` remains a declared dependency.
+
+### Remaining acceptance work
+
+1. Compose People into the authenticated Rust shell. The shell still serves
+   Today and chat with its stub data contract and has no installed module
+   frame composition, so there is no real People screen to exercise yet.
+   This blocks the live UI, chat approval and second-device HTTPS checks.
+   Library dispatch and retrieved assets do not substitute for that proof.
+2. Finish ingest nudges, real source-provider composition and command
+   retention/quotas. Qualify the fifty-reference call budget in the real
+   host before exposing manual refresh through its listener.
+3. Broaden HTTP parity beyond the enumerated replay, including backend
+   failures, larger datasets, extreme numbers and JSON parser rejections.
+
+This is a bounded checkpoint. Full People parity stays open until the
+assembled application and device checks above pass.

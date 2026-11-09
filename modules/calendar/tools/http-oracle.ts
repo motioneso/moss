@@ -16,16 +16,28 @@ export async function readHttpOracle(actor: string, paths: readonly string[]) {
 export async function httpOracle(
   actor: string,
   requests: readonly {
-    method: "GET" | "PATCH";
+    method: "GET" | "PATCH" | "POST";
     url: string;
     body?: Record<string, unknown>;
-  }[]
+  }[],
+  tasks?: Readonly<Record<string, { ownerUserId: string; status: string; dueAt: string | null }>>
 ) {
   assert.equal(process.env.JARVIS_GATE_RUN, "1", "Use verify-gate");
   const db = createDatabase({ connectionString: getMossDatabaseUrls().app, maxConnections: 1 });
   const server = Fastify();
   registerCalendarRoutes(server, {
     resolveAccessContext: async () => ({ actorUserId: actor, requestId: "calendar-http-parity" }),
+    // Preview task facts, when a caller supplies them: only the actor's own tasks are visible,
+    // mirroring the actor-scoped public Tasks projection.
+    ...(tasks
+      ? {
+          findTask: async (_scopedDb: unknown, taskId: string) => {
+            const task = tasks[taskId];
+            if (!task || task.ownerUserId !== actor) return undefined;
+            return { status: task.status, due_at: task.dueAt };
+          }
+        }
+      : {}),
     dataContext: new DataContextRunner(db),
     dayPlanRepository: new DayPlanRepository({
       findTask: async () => {

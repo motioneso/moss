@@ -5,7 +5,7 @@ use axum::{
     http::{header, HeaderMap, HeaderValue, Method, StatusCode},
     middleware::{self, Next},
     response::{Html, IntoResponse, Redirect, Response},
-    routing::{any, get},
+    routing::{any, get, patch, post},
     Extension, Json, Router,
 };
 use moss_module_host::{application::Application, frame::AssetPolicy};
@@ -93,6 +93,10 @@ pub fn router(
             "/api/calendar/briefing-settings",
             get(dispatch).patch(dispatch),
         )
+        .route("/api/calendar/day-plan", get(dispatch))
+        .route("/api/calendar/day-plans", post(dispatch))
+        .route("/api/calendar/day-plans/{id}/draft", patch(dispatch))
+        .route("/api/calendar/day-plans/{id}/preview", post(dispatch))
         .route("/api/m/calendar/{*path}", any(dispatch))
         .with_state(state);
     Ok(moss_network::web::router(network, private, shared).merge(assets))
@@ -266,7 +270,7 @@ async fn dispatch(
         .map(|v| v.as_str())
         .unwrap_or(uri.path())
         .to_owned();
-    // Only the event reads and briefing-settings routes above enter through the legacy prefix.
+    // Only the legacy-prefix routes registered above enter through this prefix.
     // They still use the installed manifest, account enablement and per-call transaction.
     let path = if let Some(rest) = path.strip_prefix("/api/calendar/") {
         format!("/api/m/calendar/{rest}")

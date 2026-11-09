@@ -588,3 +588,54 @@ public adapters, execution/recovery, shell/Today/chat, old-screen replacement,
 complete assembled parity and physical-device HTTPS work remain required. Builds
 reuse the existing Rust/Wasm scratch toolchain and lockfiles, with no new dependency,
 global tool or wit-bindgen installation.
+
+## JS-95 / part 10: day-plan preview checkpoint
+
+Package 0.10.0 ports the production day-plan preview route
+(`POST /day-plans/:id/preview`) into the guest: revision check,
+selected-change validation with the production messages, before/after
+timing, task eligibility, deadline risk and overlaps between selected
+changes. Task facts arrive through the existing public task-reference
+link; a missing task, another account's task and a missing adapter all
+read as unavailable and are never distinguished, which keeps the privacy
+rule intact. The module stays a pure client of the server API and writes
+nothing during a preview.
+
+The production route feeds calendar-busy conflicts from its
+provider-backed source context. No such adapter exists in this Rust host
+yet, so the ported preview reports calendar availability as unavailable
+and claims no busy conflicts, matching the production route's own
+behavior when that dependency is absent. It never presents cached data
+as a live provider read.
+
+The Calendar web router now also dispatches the original
+`/api/calendar/day-plan`, `/api/calendar/day-plans`,
+`/api/calendar/day-plans/:id/draft` and `/api/calendar/day-plans/:id/preview`
+URLs through the installed package. The app map gains the
+`calendar.day_plan_preview` feature declaration.
+
+The disposable gate compares the installed Wasm preview against the
+production TypeScript route on the same gate database for the owner, an
+unrelated user and an administrator: status on success, revision
+conflict, unknown field, missing block, block without a pending change
+and invalid revision cases, with full body comparison on success. The
+existing five-table privacy fault witnesses stay in the same gate.
+
+Two minor review differences are accepted for this checkpoint. The
+malformed-id cases compare status only, because the production side
+answers those with a framework validation body that is not a stable
+comparison target. The preview treats a task owned by another account
+as unavailable even when that task is view-shared with the actor; the
+production read can see a view-shared task. Which rule shared tasks
+follow must be settled when the real public Tasks adapter lands in
+this host, since no production reference adapter exists here yet.
+
+This is another bounded checkpoint, not final Calendar acceptance. The
+remaining acceptance list is unchanged: four provider tools and both
+jobs, apply/retry/recovery/confirm execution, concrete public provider
+adapters, source-behavior controls and external-calendar status, full
+shell/Today/chat composition, old-screen replacement, complete assembled
+parity and a physical second device over trusted HTTPS. Builds reuse the
+existing task-local Rust 1.95.0/Wasm scratch toolchain (`CALENDAR_RUSTUP_HOME`
+pointing at a home that carries the Wasm target) and lockfiles. No global
+tool, new dependency or wit-bindgen installation was performed.
