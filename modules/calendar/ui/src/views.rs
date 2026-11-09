@@ -95,6 +95,7 @@ pub fn EventDetails(
     timezone: String,
     twelve: bool,
     on_close: Callback<()>,
+    #[prop(default = "Moss".to_string())] assistant_name: String,
 ) -> impl IntoView {
     let zone = model::zone(&timezone).unwrap_or(chrono_tz::UTC);
     let starts = chrono::DateTime::parse_from_rfc3339(&event.starts_at)
@@ -119,26 +120,26 @@ pub fn EventDetails(
     };
     let dates = model::date_range(&event, zone);
     let state = if event.is_moss_block {
-        "Moss is holding this"
+        format!("{assistant_name} is holding this")
     } else if event.unconfirmed {
-        "Needs verification in Outlook"
+        "Needs verification in Outlook".into()
     } else if matches!(event.status.as_deref(), Some("tentative" | "needsAction")) {
-        "Awaiting RSVP"
+        "Awaiting RSVP".into()
     } else {
-        "On your calendar"
+        "On your calendar".into()
     };
     let detail_status = if event.is_moss_block {
-        "Moss focus block"
+        format!("{assistant_name} focus block")
     } else if event.read_only {
         if event.unconfirmed {
-            "Needs verification"
+            "Needs verification".into()
         } else {
-            "Observed in Outlook"
+            "Observed in Outlook".into()
         }
     } else if matches!(event.status.as_deref(), Some("tentative" | "needsAction")) {
-        "Pending RSVP"
+        "Pending RSVP".into()
     } else {
-        "Accepted"
+        "Accepted".into()
     };
     view! {<PeekPanel on_close=on_close>
         <div class="cal-peek__head"><span class="cal-peek__kind">{state}</span></div>
@@ -149,7 +150,7 @@ pub fn EventDetails(
             {(event.attendee_count>0.0).then(||view!{<p>{format!("{} {}",event.attendee_count,if event.attendee_count==1.0 {"person"}else{"people"})}</p>})}
             <p>{detail_status}</p>
         </div>
-        {event.is_moss_block.then(||view!{<p class="cal-held-banner">"Moss can move or shorten this block when your day changes. Hard events always come first."</p>})}
+        {event.is_moss_block.then(||view!{<p class="cal-held-banner">{format!("{assistant_name} can move or shorten this block when your day changes. Hard events always come first.")}</p>})}
     </PeekPanel>}
 }
 

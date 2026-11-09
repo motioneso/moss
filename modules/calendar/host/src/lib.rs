@@ -112,11 +112,11 @@ impl Ports for CalendarPorts {
                 .await
                 .map_err(|_| anyhow::anyhow!("Calendar preferences unavailable"))?;
             let chat = request.resource == "calendar.chat-context";
-            let keys: &[&str] = if chat { &["locale"] } else { &PREFERENCE_KEYS };
+            let keys: &[&str] = if chat { &["locale", "persona.bundle"] } else { &PREFERENCE_KEYS };
             let rows = cx
                 .db()
                 .query(
-                    "SELECT key,value_json FROM app.preferences WHERE key = ANY($1)",
+                    "SELECT key, CASE WHEN key='persona.bundle' THEN jsonb_build_object('assistantName',value_json->'assistantName') ELSE value_json END FROM app.preferences WHERE key = ANY($1)",
                     &[&keys],
                 )
                 .await?;
@@ -128,7 +128,7 @@ impl Ports for CalendarPorts {
                 .await
                 .map_err(|_| anyhow::anyhow!("Calendar preferences unavailable"))?;
             if chat {
-                Ok(serde_json::json!({"timezone":values.get("locale").map(|v|v["timezone"].clone()),"dateFormat":values.get("locale").map(|v|v["dateFormat"].clone())}))
+                Ok(serde_json::json!({"timezone":values.get("locale").map(|v|v["timezone"].clone()),"dateFormat":values.get("locale").map(|v|v["dateFormat"].clone()),"assistantName":values.get("persona.bundle").map(|v|v["assistantName"].clone())}))
             } else {
                 Ok(Value::Object(values))
             }

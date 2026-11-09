@@ -4,7 +4,10 @@ Part of #4027. This is the package and data foundation, **not the full Calendar 
 The existing TypeScript app stays in place. Version 0.5.0 connects event links at
 `/calendar?event=<id>` through the signed-in Calendar composition, restores duration,
 attendee and status details, refreshes open details and closes a removed event.
-Day, Week and Month screens, saved views and editable briefing settings are packaged.
+Version 0.7.0 uses the account's assistant name in Calendar labels, held-event
+wording and settings. Narrow Week screens explain sideways scrolling and bring today
+into view when opening, navigating or resizing; routine refreshes keep the user's
+horizontal position. Day, Week and Month screens, saved views and editable briefing settings are packaged.
 Full shell composition, the source-behavior switch, the remaining four chat tools, jobs,
 provider execution and the assembled HTTP/UI parity gate remain open.
 
@@ -190,3 +193,26 @@ behavior and exhaustive error-message equivalence remain different. Signed-live 
 through the real UI, reloads, checks persisted policy, disconnects the browser for a
 failed save and retries. A phone-width screenshot and same-host LAN check still do
 not prove physical second-device access or production certificate trust.
+
+## Screen parity checkpoint (part 7)
+
+The trusted Calendar preference adapter projects only the assistant name from
+`persona.bundle` alongside the existing locale projection. The display route applies
+the original name normalization to valid stored names; it never returns persona text.
+The installed tests compare different account names and repeat the foreign-name assertion
+with preference RLS removed/restored on the disposable database. The existing five-table
+read/write privacy witnesses are retained.
+
+`tools/signed-live.ts` checks both account projections, personalized screen wording,
+narrow-week today positioning, resize and retained horizontal scroll through the real
+installed opaque frame after password sign-in. Fixtures are synthetic database records;
+there is no provider call or response interception. The full Calendar gate and this
+signed-in runner still use the commands above. Build both shared asset bundles into
+the same dedicated scratch folder, and retain the same browser launch arguments for
+open and CDP discovery.
+
+This is still a checkpoint: all original HTTP contracts/errors, provider tools and jobs,
+plan execution/recovery, writable automation, external status, full Today/chat shell and
+replacement of the old screen remain open. A phone-width browser and same-host LAN
+requests do not establish physical second-device access or trusted production HTTPS.
+No global tool or wit-bindgen is installed by this part.

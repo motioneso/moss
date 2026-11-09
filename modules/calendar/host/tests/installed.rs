@@ -36,6 +36,11 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
         f.root.batch_execute(moss_module_host::jobs::MIGRATION).await.unwrap();
         f.root.execute("INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'calendar.prep_task_mode','\"auto\"')",&[&f.a]).await.unwrap();
     });
+    f.rt.block_on(async {
+        for (actor, name) in [(f.a, "Cedar"), (f.b, "Juniper")] {
+            f.root.execute("INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'persona.bundle',$2)", &[&actor, &json!({"assistantName":name,"personaText":"private persona must not be projected"})]).await.unwrap();
+        }
+    });
     read_oracle::seed(&f);
     let dir = tempfile::tempdir().unwrap();
     let registry = tempfile::tempdir().unwrap();
@@ -128,6 +133,34 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
     assert_eq!(
         display["body"]["dateFormat"], "24",
         "Missing locale uses the production clock default"
+    );
+    assert_eq!(display["body"]["assistantName"], "Cedar");
+    assert_eq!(
+        call(f.b, "GET", "/display-settings", Value::Null)["body"]["assistantName"],
+        "Juniper"
+    );
+    let no_foreign_name = || {
+        call(f.admin, "GET", "/display-settings", Value::Null)["body"]["assistantName"] == "Moss"
+    };
+    assert!(
+        no_foreign_name(),
+        "Other accounts must not supply the assistant name"
+    );
+    f.rt.block_on(
+        f.root
+            .batch_execute("ALTER TABLE app.preferences DISABLE ROW LEVEL SECURITY"),
+    )
+    .unwrap();
+    let unprotected = no_foreign_name();
+    f.rt.block_on(f.root.batch_execute("ALTER TABLE app.preferences ENABLE ROW LEVEL SECURITY; ALTER TABLE app.preferences FORCE ROW LEVEL SECURITY")).unwrap();
+    assert!(
+        !unprotected,
+        "The same name assertion must detect removed preference RLS"
+    );
+    println!("RED assistant name: the same assertion detects another account's name with preference RLS removed");
+    assert!(no_foreign_name());
+    println!(
+        "GREEN assistant name: preference RLS restores account isolation including administrators"
     );
     kv_guard::witness(&captured);
     let view = json!({"view":"week","cursor":"2026-11-08","workWeek":true});

@@ -441,3 +441,59 @@ request deadline. The runner now allows extra time for unoptimized Rust password
 verification on loaded development machines. This changes only the proof runner,
 not production password settings or network deadlines. Final receipts, screenshots,
 review disposition and remaining limits are attached to the task Proof artifact.
+
+## JS-86 / part 7: account naming and narrow-week screen checkpoint
+
+Card 525. Part of issue 4027. This continuation works in the task worktree under
+`~/Jarv1s`, consuming current main without changing shared host or sibling sources.
+The outstanding provider/execution/shell work requires more than the permitted context
+budget, so this is a bounded checkpoint and does not claim final Calendar acceptance.
+
+Package 0.7.0 projects the signed-in account's assistant name from the existing
+`persona.bundle` preference. The trusted host selects only that field from the persona
+row; the guest applies the existing name cleanup and default behavior. The Calendar
+legend, held-event details and settings heading use it. Persona text is not part of the
+projection. The native screen test also checks escaped personalized held-event wording.
+The new route regression was observed failing before implementation: the requested
+assistant name was null rather than the account name. It passed with the projection.
+
+Week screens restore the existing scrolling explanation and region description, and
+bring today into view on first load, navigation, week selection and resize. Ordinary
+background event refresh does not request a new position. Day does not add an unnecessary
+keyboard stop, and Month omits the event-type legend, matching the original screen.
+The installed HTTPS runner checks the personalized settings and legend, narrow-week
+position, resize and a user's scroll position across a refresh, alongside the prior
+real sign-in, event links/details, offline retry, signed-out session and account checks.
+
+The data oracle adds comparisons against production `normalizePersonaSettings` for
+ordinary names, defaults, blank/control/markup characters, accents, emoji, whitespace
+and length limits. These are scoped comparisons, not exhaustive Unicode equivalence:
+legacy names cut inside a UTF-16 surrogate pair remain outside the proven set. The
+installed database test reads different names for two accounts and the default for an
+unrelated administrator, observes the same foreign-name assertion fail with preference
+RLS disabled, restores RLS and requires it to pass. All five Calendar tables retain their
+existing failing-first foreign read/write witnesses. No applied SQL file changes.
+
+Verification receipts, screenshots and independent review are recorded in the task's
+Proof artifact and PR against the final checked commit. All database checks use
+`scripts/run-gate.sh` and a disposable server. Both shared asset generators write to one
+scratch directory for the live run. The existing Rust 1.95.0 Wasm target and project
+binding helper are reused. Dependencies come only from existing lockfiles. No global
+tool, new dependency or wit-bindgen installation is performed.
+
+### Remaining acceptance work
+
+The part 5 remaining list still applies: the other original HTTP contracts and untested
+errors/defaults; four provider tools and both jobs; preview, authority/approval, apply,
+retry/recovery, follow-through and monitoring; concrete public provider/reference
+adapters; writable automation and external-calendar status; full shell/Today/chat
+composition; old-screen replacement and complete assembled parity-harness acceptance.
+The current main checkpoint still has read-only Calendar settings. This part does not
+claim to have delivered the separate settings-write work.
+
+Actual physical second-device sign-in/UI over trusted HTTPS is still unproven. This
+machine has no attached ADB device or configured SSH target, and available tailnet peers
+do not advertise SSH access. No device was commandeered or new remote tool installed.
+The disposable certificate, same-host LAN request and narrow viewport used by the live
+runner remain explicitly distinct from that final acceptance requirement. Production
+installation, trusted certificates and Windows/macOS execution also remain unproven.

@@ -1,10 +1,23 @@
-/* global document, location, requestAnimationFrame, addEventListener */
+/* global document, location, requestAnimationFrame, cancelAnimationFrame, addEventListener, removeEventListener */
 import { moduleClient } from "./guest-bridge.mjs";
 
 // Establish the document port before the first iframe load, including slow Wasm startup.
 const client = moduleClient();
 const presentation = client.theme();
 let interval;
+let revealFrame;
+function revealToday() {
+  cancelAnimationFrame(revealFrame);
+  revealFrame = requestAnimationFrame(() => {
+    const body = document.querySelector(".cal-body");
+    const today = body?.querySelector(".is-today");
+    if (!today) return;
+    const outer = body.getBoundingClientRect();
+    const box = today.getBoundingClientRect();
+    body.scrollLeft += box.left - outer.left + box.width / 2 - body.clientWidth / 2;
+  });
+}
+addEventListener("resize", revealToday);
 globalThis.calendarBridge = {
   async request(method, path, body) {
     const value = await client.request(method, path, body ? JSON.parse(body) : null);
@@ -44,6 +57,7 @@ globalThis.calendarBridge = {
       }
     });
   },
+  revealToday,
   watch(callback) {
     clearInterval(interval);
     interval = setInterval(callback, 30000);
@@ -60,6 +74,8 @@ addEventListener(
   "pagehide",
   () => {
     clearInterval(interval);
+    cancelAnimationFrame(revealFrame);
+    removeEventListener("resize", revealToday);
     client.dispose();
   },
   { once: true }

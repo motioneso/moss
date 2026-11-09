@@ -1,3 +1,9 @@
+## 0.7.0
+
+- Calendar labels, held-event details and settings follow the account's assistant name.
+- Narrow week screens explain scrolling and bring today into view when opening or resizing.
+- Ordinary refreshes keep the position chosen by the reader.
+
 # Calendar package
 
 ## 0.6.0

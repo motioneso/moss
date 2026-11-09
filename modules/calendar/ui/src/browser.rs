@@ -25,6 +25,8 @@ extern "C" {
     fn navigate(path: &str) -> js_sys::Promise;
     #[wasm_bindgen(js_namespace=calendarBridge)]
     fn watch(callback: &js_sys::Function);
+    #[wasm_bindgen(js_namespace=calendarBridge, js_name=revealToday)]
+    fn reveal_today();
 }
 async fn request(method: &str, path: &str, body: Value) -> Result<Value, ()> {
     let result = JsFuture::from(bridge_request(method, path, &body.to_string()))
@@ -101,6 +103,12 @@ impl State {
     }
     fn day(self) -> NaiveDate {
         self.cursor.get().unwrap_or_else(|| self.today())
+    }
+    fn assistant_name(self) -> String {
+        self.display.get()["assistantName"]
+            .as_str()
+            .unwrap_or("Moss")
+            .to_string()
     }
     fn twelve(self) -> bool {
         model::twelve(self.display.get()["dateFormat"].as_str())
@@ -252,6 +260,13 @@ pub fn Calendar() -> impl IntoView {
             }
         });
     }
+    let has_calendar = Memo::new(move |_| state.events.get().is_some());
+    Effect::new(move |_| {
+        let _ = (cursor.get(), state.view.get(), state.work.get(), zone.get());
+        if has_calendar.get() {
+            reveal_today();
+        }
+    });
     state.refresh(false);
     let tick = Closure::<dyn Fn()>::new(move || state.refresh(false));
     watch(tick.as_ref().unchecked_ref());
@@ -276,13 +291,14 @@ pub fn Calendar() -> impl IntoView {
                 }).collect_view()}
             </div>
         </div></div>
-        <div class="cal-legend"><span>"Accepted · Moss holding"</span><span>{move||state.zone().name()}</span></div>
+        {move||(state.view.get()!="month").then(||view!{<div class="cal-legend"><span>"Accepted"</span><span>{format!("{} holding",state.assistant_name())}</span><span>{state.zone().name()}</span></div>})}
+        {move||(state.view.get()=="week").then(||view!{<p class="cal-scroll-hint jds-caption" id="calendar-scroll-hint">"Scroll sideways to see more days, or choose Day for a closer look."</p>})}
         <div class="cal-notice" aria-live="polite">
             {move||(state.loading.get()!=Refresh::Idle && (state.events.get().is_none() || state.loading.get()==Refresh::Explicit)).then(||view!{<p role="status">{if state.events.get().is_some(){"Refreshing calendar…"}else{"Loading calendar…"}}</p>})}
             {move||state.failed.get().then(||view!{<ReadFailure retained=state.events.get().is_some() on_retry=Callback::new(move |_|state.refresh(true))/>})}
             {move||state.unsaved.get().then(||view!{<p role="status">"Your view choice could not be saved. It will last for this visit."</p>})}
         </div>
-        <div class="cal-body" tabindex="0" aria-label="Calendar days">{move||state.events.get().map(|events|{
+        <div class="cal-body" role="region" tabindex=move||if state.view.get()=="day"{None}else{Some("0")} aria-label=move||format!("Calendar {}",state.view.get()) aria-describedby=move||(state.view.get()=="week").then_some("calendar-scroll-hint")>{move||state.events.get().map(|events|{
             let empty=events.is_empty();
             let groups=model::group(&events,zone.get());
             view!{
@@ -295,7 +311,7 @@ pub fn Calendar() -> impl IntoView {
                 }}
             }
         })}</div>
-        {move||peek.get().map(|event|view!{<EventDetails event=event timezone=zone.get().name().into() twelve=twelve.get() on_close=Callback::new(move |_|{peek.set(None);restore(&opening.get_value());})/>})}
+        {move||peek.get().map(|event|view!{<EventDetails event=event timezone=zone.get().name().into() twelve=twelve.get() assistant_name=state.assistant_name() on_close=Callback::new(move |_|{peek.set(None);restore(&opening.get_value());})/>})}
     </main>}.into_any()
 }
 
@@ -303,7 +319,7 @@ pub fn Calendar() -> impl IntoView {
 fn Settings(state: State) -> impl IntoView {
     let disabled =
         Signal::derive(move || state.briefing_saving.get() || state.loading.get() != Refresh::Idle);
-    view! {<main class="calendar-settings"><Masthead title="Calendar" eyebrow="Settings" lede="How Moss helps you plan your days"/>
+    view! {<main class="calendar-settings">{move||view!{<Masthead title="Calendar" eyebrow="Settings" lede=format!("How {} helps you plan your days",state.assistant_name())/>}}
         {move||(state.loading.get()!=Refresh::Idle && (state.briefing.get()==Value::Null || state.loading.get()==Refresh::Explicit)).then(||view!{<p role="status">{if state.briefing.get()==Value::Null {"Loading settings…"}else{"Refreshing settings…"}}</p>})}
         {move||state.failed.get().then(||view!{<ReadFailure settings_page=true retained=state.briefing.get()!=Value::Null on_retry=Callback::new(move |_|state.refresh(true))/>})}
         {move||(state.briefing.get()!=Value::Null).then(||view!{

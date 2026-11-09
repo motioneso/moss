@@ -190,6 +190,16 @@ try {
       "INSERT INTO app.auth_accounts(id,account_id,provider_id,user_id,password) VALUES($1,$2,'credential',$3,$4)",
       [randomUUID(), actor, actor, hash]
     );
+  // Synthetic account preferences exercise the real authenticated projection, not a response stub.
+  await db.query(
+    "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'persona.bundle',$2),($3,'persona.bundle',$4)",
+    [
+      data.actor,
+      { assistantName: "Cedar", personaText: "Owner private persona" },
+      data.other,
+      { assistantName: "Juniper", personaText: "Other private persona" }
+    ]
+  );
   assert.equal((await request("/calendar")).status, 303);
   assert.equal((await request("/api/m/calendar/events")).status, 401);
   const login = async (email: string, base = local) => {
@@ -205,6 +215,17 @@ try {
   };
   const owner = await login(data.email);
   const other = await login(data.otherEmail);
+  for (const [cookie, name] of [
+    [owner, "Cedar"],
+    [other, "Juniper"]
+  ]) {
+    const display = await request("/api/m/calendar/display-settings", { cookie });
+    assert.equal(display.status, 200);
+    const projected = JSON.parse(display.body);
+    assert.equal(projected.assistantName, name);
+    assert(!display.body.includes("private persona"));
+    assert(!("personaText" in projected));
+  }
   const events = await request("/api/m/calendar/events", { cookie: owner });
   assert.equal(events.status, 200);
   assert(JSON.parse(events.body).events.some((e: { id: string }) => e.id === data.event));
@@ -358,10 +379,59 @@ try {
   await frame.getByRole("dialog").waitFor();
   await screenshotDialog("signed-in-event.png");
   await frame.getByRole("button", { name: "Close", exact: true }).click();
+  await tab.setViewportSize({ width: 390, height: 844 });
   await frame.getByRole("button", { name: "Week", exact: true }).click();
+  await frame
+    .getByText("Scroll sideways to see more days, or choose Day for a closer look.")
+    .waitFor();
+  await frame.locator(".cal-legend").getByText("Cedar holding", { exact: true }).waitFor();
+  // Today must be centered when possible, including when the viewport changes after loading.
+  const assertTodayVisible = async () => {
+    await frame.locator(".cal-body").evaluate(
+      (body) =>
+        new Promise<void>((resolve, reject) => {
+          const deadline = performance.now() + 10000;
+          const check = () => {
+            const today = body.querySelector(".cal-tg__dayhd.is-today");
+            if (!today) return resolve(); // A work week can omit today on a weekend.
+            const box = today.getBoundingClientRect();
+            const outer = body.getBoundingClientRect();
+            const ideal = Math.max(
+              0,
+              Math.min(
+                body.scrollWidth - body.clientWidth,
+                body.scrollLeft + box.left - outer.left + box.width / 2 - body.clientWidth / 2
+              )
+            );
+            if (Math.abs(body.scrollLeft - ideal) <= 2) resolve();
+            else if (performance.now() >= deadline)
+              reject(new Error("Today is not revealed in the narrow week"));
+            else requestAnimationFrame(check);
+          };
+          check();
+        })
+    );
+  };
+  await assertTodayVisible();
+  await tab.screenshot({ path: join(out, "signed-in-phone-week.png") });
+  await tab.setViewportSize({ width: 1280, height: 860 });
+  await tab.setViewportSize({ width: 390, height: 844 });
+  await assertTodayVisible();
+  // User scrolling survives an ordinary package refresh; only navigation/layout reveals today.
+  await frame.locator(".cal-body").evaluate((body) => {
+    body.scrollLeft = body.scrollWidth;
+  });
+  const userScroll = await frame.locator(".cal-body").evaluate((body) => body.scrollLeft);
+  await delay(31000);
+  assert.equal(await frame.locator(".cal-body").evaluate((body) => body.scrollLeft), userScroll);
+  console.log(
+    "PASS account assistant names and narrow-week today visibility, resize and retained user scroll"
+  );
   await frame.getByRole("button", { name: "Day", exact: true }).click();
+  await tab.setViewportSize({ width: 1280, height: 860 });
   await tab.getByRole("link", { name: "Calendar settings", exact: true }).click();
   await frame.getByLabel("Look ahead", { exact: true }).waitFor();
+  await frame.getByText("How Cedar helps you plan your days", { exact: true }).waitFor();
   const saved = frame.getByRole("status").filter({ hasText: "Settings saved." });
   const saveSetting = async (label: string, value: string) => {
     const response = tab.waitForResponse(
