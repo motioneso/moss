@@ -1,7 +1,7 @@
 /** Real installed Month screen checks; events come from the disposable server cache. */
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 export async function checkMonth(tab: Page, out: string) {
   const frame = tab.frameLocator("#calendar");
@@ -9,6 +9,8 @@ export async function checkMonth(tab: Page, out: string) {
     await tab.setViewportSize({ width, height: 860 });
     await frame.getByRole("button", { name: "Month", exact: true }).click();
     await frame.getByRole("button", { name: "Today", exact: true }).click();
+    await expect(frame.getByRole("button", { name: "Today", exact: true })).toBeEnabled();
+    await frame.locator("body").evaluate(() => document.fonts.ready);
     const month = frame.locator(".cal-month");
     await month.waitFor();
     const rows = await month.evaluate((el) => {
@@ -44,16 +46,26 @@ export async function checkMonth(tab: Page, out: string) {
     assert.equal(await today.locator(".cal-mchip").count(), 3);
     const more = today.locator(".cal-mmore");
     await more.waitFor();
-    await frame.locator(".cal-body").screenshot({ path: join(out, `month-${width}.png`) });
+    // Element capture scrolls nested clipping containers and changes hit testing.
+    // Capture the visible region without moving the opaque frame's scroll state.
+    const bounds = await frame.locator(".cal-body").boundingBox();
+    assert(bounds);
+    await tab.screenshot({
+      path: join(out, `month-${width}.png`),
+      clip: { ...bounds, height: Math.min(bounds.height, 860 - bounds.y) }
+    });
+    await expect(frame.getByRole("button", { name: "Today", exact: true })).toBeEnabled();
     await more.click();
     await frame.locator(".cal-tg__col").waitFor();
     const picked = await frame.locator(".cal-range").innerText();
     assert.equal(await frame.locator(".cal-tg__col").count(), 1);
     await frame.getByRole("button", { name: "Month", exact: true }).click();
+    await expect(frame.getByRole("button", { name: "Today", exact: true })).toBeEnabled();
     await today.locator(".cal-mcell__date").click();
     await frame.locator(".cal-tg__col").waitFor();
     assert.equal(await frame.locator(".cal-range").innerText(), picked);
     await frame.getByRole("button", { name: "Month", exact: true }).click();
+    await expect(frame.getByRole("button", { name: "Today", exact: true })).toBeEnabled();
     await today.locator(".cal-mchip").first().click();
     const dialog = frame.getByRole("dialog");
     await dialog.waitFor();
