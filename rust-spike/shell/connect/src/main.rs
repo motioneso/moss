@@ -5,8 +5,16 @@
 //! view with its own profile. That view allows the server's pinned certificate and closes any
 //! page load that arrived over a different one (see `trust_on_linux`).
 
+mod pin;
 mod reach;
 mod store;
+
+#[cfg(target_os = "linux")]
+mod trust_linux;
+#[cfg(target_os = "macos")]
+mod trust_macos;
+#[cfg(windows)]
+mod trust_windows;
 
 use reach::Problem;
 use serde_json::{json, Value};
@@ -536,10 +544,11 @@ impl App {
             .with_new_window_req_handler(|_, _| NewWindowResponse::Deny);
         let view = build(builder, &self.window);
         #[cfg(target_os = "linux")]
-        trust_on_linux(&view, opened, self.proxy.clone())?;
-        // Pinned certificates are not wired into the macOS and Windows web views yet.
-        #[cfg(not(target_os = "linux"))]
-        return Err("Server pages need Linux in this build".into());
+        trust_linux::install(&view, opened, self.proxy.clone())?;
+        #[cfg(target_os = "macos")]
+        trust_macos::install(&view, opened, self.proxy.clone())?;
+        #[cfg(windows)]
+        trust_windows::install(&view, opened, self.proxy.clone())?;
         view.load_url(&format!("{}/today", opened.origin))
             .map_err(|_| "Cannot load the server")?;
         Ok(ServerView {
@@ -549,87 +558,6 @@ impl App {
             _profile: profile,
         })
     }
-}
-
-/// Allows the pinned certificate for this server's host in its own profile, and reports failed
-/// loads so the app can show why. WebKit also accepts certificates a public authority signed, so
-/// every committed load is compared with the pin and closed when it differs. The request has
-/// already been sent by then; WebKitGTK has no earlier hook. Only page loads are checked, so later
-/// fetch and WebSocket connections from a loaded page are not.
-#[cfg(target_os = "linux")]
-fn trust_on_linux(
-    view: &WebView,
-    opened: &Opened,
-    proxy: EventLoopProxy<UserEvent>,
-) -> Result<(), String> {
-    use webkit2gtk::{WebContextExt, WebViewExt};
-    use wry::WebViewExtUnix;
-    let webkit = view.webview();
-    let context = webkit.context().ok_or("No web context")?;
-    let pem = pem(&opened.certificate);
-    let certificate = gio::TlsCertificate::from_pem(&pem).map_err(|_| "Invalid certificate")?;
-    let host = url::Url::parse(&opened.origin)
-        .ok()
-        .and_then(|u| u.host_str().map(|h| h.trim_matches(['[', ']']).to_owned()))
-        .ok_or("Invalid origin")?;
-    context.allow_tls_certificate_for_host(&certificate, &host);
-    let id = opened.id.clone();
-    let failed = proxy.clone();
-    webkit.connect_load_failed(move |_, _, _, _| {
-        let _ = failed.send_event(UserEvent::Check(id.clone()));
-        false
-    });
-    let id = opened.id.clone();
-    let tls_failed = proxy.clone();
-    webkit.connect_load_failed_with_tls_errors(move |_, _, _, _| {
-        let _ = tls_failed.send_event(UserEvent::Check(id.clone()));
-        false
-    });
-    let (id, pinned) = (opened.id.clone(), opened.certificate.clone());
-    webkit.connect_load_changed(move |webkit, event| {
-        use gio::prelude::TlsCertificateExt;
-        if !matches!(event, webkit2gtk::LoadEvent::Committed) {
-            return;
-        }
-        let presented = webkit
-            .tls_info()
-            .and_then(|(certificate, _)| certificate.certificate())
-            .map(|der| der.to_vec());
-        if presented.as_deref() != Some(pinned.as_slice()) {
-            webkit.stop_loading();
-            let fingerprint = presented.map(|der| moss_network::instance::fingerprint(&der));
-            let _ = proxy.send_event(UserEvent::WrongCertificate(id.clone(), fingerprint));
-        }
-    });
-    Ok(())
-}
-
-#[cfg(target_os = "linux")]
-fn pem(der: &[u8]) -> String {
-    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut encoded = String::new();
-    for chunk in der.chunks(3) {
-        let n = chunk
-            .iter()
-            .enumerate()
-            .fold(0u32, |n, (i, b)| n | (u32::from(*b) << (16 - 8 * i)));
-        for i in 0..4 {
-            if i <= chunk.len() {
-                encoded.push(CHARS[((n >> (18 - 6 * i)) & 63) as usize] as char);
-            } else {
-                encoded.push('=');
-            }
-        }
-    }
-    let body: Vec<&str> = encoded
-        .as_bytes()
-        .chunks(64)
-        .map(|line| std::str::from_utf8(line).expect("base64 is ascii"))
-        .collect();
-    format!(
-        "-----BEGIN CERTIFICATE-----\n{}\n-----END CERTIFICATE-----\n",
-        body.join("\n")
-    )
 }
 
 fn server_row(target: &Target, state: &str) -> Value {
@@ -676,24 +604,4 @@ fn problem_screen(target: &Target, problem: &Problem) -> Value {
     };
     state["code"] = json!(problem.code());
     state
-}
-
-#[cfg(all(test, target_os = "linux"))]
-mod pem_tests {
-    #[test]
-    fn pem_round_trips_through_the_certificate_parser() {
-        let der: Vec<u8> = (0..=255u8).cycle().take(1000).collect();
-        let pem = super::pem(&der);
-        assert_eq!(
-            moss_network::instance::leaf_der(pem.as_bytes()).unwrap(),
-            der
-        );
-        for len in [1, 2, 3, 4, 65] {
-            let short = &der[..len];
-            assert_eq!(
-                moss_network::instance::leaf_der(super::pem(short).as_bytes()).unwrap(),
-                short
-            );
-        }
-    }
 }
