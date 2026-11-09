@@ -110,7 +110,7 @@ fn refuses_junction_at_each_depth_without_touching_target() {
     );
     assert!(PrivateDirectory::open(&link).is_err());
     assert!(PrivateDirectory::open(&link.join("child")).is_err());
-    assert!(PrivateDirectory::open(&link.join("child/deeper")).is_err());
+    assert!(PrivateDirectory::open(&link.join("child").join("deeper")).is_err());
     assert!(PrivateDirectory::create(&link.join("new")).is_err());
     assert!(!real.join("new").exists());
     drop(deeper);
