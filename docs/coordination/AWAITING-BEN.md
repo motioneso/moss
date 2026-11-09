@@ -75,18 +75,6 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-### JS-93 Calendar continuation base — 2026-11-08
-
-Card 525. Part 9's brief says part 8 is merged, but GitHub's PR API reports
-[#4082](https://github.com/motioneso/moss/pull/4082) as `OPEN` with no merge date.
-The task checkout is at origin/main `874dbbf9e` (zero commits behind); its Calendar
-README and report still describe version 0.6.0, without the part 8 checkpoint.
-No Calendar implementation has been changed in part 9.
-
-Recommendation: continue after the accepted part 8 checkpoint merges, then update
-this task branch from main. Alternatively, confirm that part 9 should build from
-current main without those changes. Which continuation base should JS-93 use?
-
 No open Outlook calendar decision. Ben approved the
 [calendar-first design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md)
 on 2026-10-21. Implementation and isolated-dev verification are authorized;
