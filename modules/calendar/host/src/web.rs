@@ -218,6 +218,13 @@ async fn screen(
     OriginalUri(uri): OriginalUri,
 ) -> Response {
     let path = uri.path().to_owned();
+    // Keep event deep links when retrying, escaping the untrusted query for HTML.
+    let reload = uri
+        .to_string()
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
     let Ok(permit) = state.blocking.clone().try_acquire_owned() else {
         return unavailable();
     };
@@ -229,7 +236,7 @@ async fn screen(
         Ok(Ok(screen)) => {
             // The installer constructs src from validated identifiers/digest/relative paths.
             let src = screen.src.replace('&', "&amp;").replace('"', "&quot;").replace('<', "&lt;");
-            Html(format!(r#"<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calendar · Moss</title><link rel="stylesheet" href="/module-shared/park-press.css"><link rel="stylesheet" href="/calendar-host.css"></head><body><nav aria-label="Moss"><a href="/calendar">Calendar</a><a href="/settings/calendar">Calendar settings</a><a href="/settings/sharing">Device access</a><button type="button" id="sign-out" class="jds-btn jds-btn--secondary">Sign out</button></nav><p id="host-error" role="alert" hidden></p><iframe id="calendar" title="Calendar" sandbox="allow-scripts" data-src="{src}"></iframe><script type="module" src="/calendar-host.mjs"></script></body></html>"#)).into_response()
+            Html(format!(r#"<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calendar · Moss</title><link rel="stylesheet" href="/module-shared/park-press.css"><link rel="stylesheet" href="/calendar-host.css"></head><body><nav aria-label="Moss"><a href="/calendar">Calendar</a><a href="/settings/calendar">Calendar settings</a><a href="/settings/sharing">Device access</a><a class="jds-btn jds-btn--secondary" href="{reload}">Reload page</a><button type="button" id="sign-out" class="jds-btn jds-btn--secondary">Sign out</button></nav><p id="host-error" role="alert" hidden></p><iframe id="calendar" title="Calendar" sandbox="allow-scripts" data-src="{src}"></iframe><script type="module" src="/calendar-host.mjs"></script></body></html>"#)).into_response()
         }
         _ => (StatusCode::SERVICE_UNAVAILABLE, Html("<p>Calendar could not load. Check that its package is installed and enabled, then reload.</p>")).into_response(),
     }
