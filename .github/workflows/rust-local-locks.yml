@@ -19,9 +19,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     env:
-      CARGO_HOME: ${{ runner.temp }}/moss-locks-cargo
-      RUSTUP_HOME: ${{ runner.temp }}/moss-locks-rustup
-      CARGO_TARGET_DIR: ${{ runner.temp }}/moss-locks-target
+      CARGO_HOME: ${{ github.workspace }}/.rust-locks/cargo
+      RUSTUP_HOME: ${{ github.workspace }}/.rust-locks/rustup
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.rust-locks/target
     steps:
       - uses: actions/checkout@v5
       - name: Provision the declared Rust toolchain
