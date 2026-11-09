@@ -14,13 +14,7 @@ use std::{
 };
 use uuid::Uuid;
 
-const OPERATIONS: &[&str] = &[
-    "index.sync-open",
-    "index.sync-file",
-    "index.sync-canonical",
-    "index.sync-indexed",
-    "index.sync-remove",
-];
+const OPERATIONS: &[&str] = &["index.sync-open", "index.sync-file", "index.sync-cleanup"];
 struct CoreStandIn {
     case: Value,
     calls: Mutex<Vec<Value>>,

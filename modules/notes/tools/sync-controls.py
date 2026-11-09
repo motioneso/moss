@@ -25,10 +25,10 @@ CONTROLS = [
         "sync_matches_actual_legacy_coordinator",
     ),
     (
-        "cleanup-stays-in-source",
-        "if path.starts_with(&prefix) && !present.contains(&path)",
-        "if !present.contains(&path)",
-        "sync_matches_actual_legacy_coordinator",
+        "cleanup-is-one-core-transaction",
+        '"index.sync-cleanup",',
+        '"index.sync-remove",',
+        "cleanup_is_one_core_transaction_request",
     ),
     (
         "reported-chunks-stay-within-budget",
