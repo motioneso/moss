@@ -960,9 +960,9 @@ refreshes retain the user's vertical position, including zero at midnight. No
 provider, data, host or cross-module boundary changes are required; Calendar
 remains a pure client of the installed server API through its opaque frame bridge.
 
-The new differential mounts the real production React grid in a DOM test and
-runs its scroll effect for Day, work week and full week, three heights and four
-times of day. It compares initial positioning, not complete screen pixels. The
+The new differential compares Rust's pure initial-position calculation with the
+real production React grid's DOM scroll effect for three day counts, three heights
+and four times. It does not execute Wasm wiring or test browser scroll clamping. The
 signed-in live runner measures the real installed grid at desktop and phone
 widths, then changes a synthetic cache row on the disposable server and checks
 that the next ordinary refresh preserves the user's position. Fresh red/green
@@ -982,3 +982,4 @@ behavior and external-calendar status controls; full shell/Today/chat; old-scree
 replacement; complete assembled parity; physical second-device trusted HTTPS.
 A disposable certificate, same-computer LAN request or phone-width browser does
 not establish physical-device access or production certificate trust.
+Re-centering after a saved timezone change remains open; this slice covers initial positioning.

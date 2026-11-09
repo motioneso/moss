@@ -51,6 +51,7 @@ pub fn grid_scroll_top(now_min: u32, viewport_height: i32, saved: Option<i32>) -
         (now_min as f64 * 58.0 / 60.0 - viewport_height as f64 / 2.0).max(0.0) as i32
     })
 }
+
 pub fn today(now: &str, zone: Tz) -> Option<NaiveDate> {
     Some(
         DateTime::parse_from_rfc3339(now)

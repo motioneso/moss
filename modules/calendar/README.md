@@ -412,10 +412,12 @@ retains the user's vertical position, including a deliberate scroll to midnight.
 This uses the grid's measured height rather than a fixed desktop offset. The
 screen remains a client of the installed server API.
 
-The production comparison mounts the existing React grid and runs its real
-scroll effect for Day, work week and full week at three viewport heights and
-four times of day. The signed-in runner measures the installed grid at desktop
+The comparison checks Rust's pure initial-position calculation against the real
+React grid's DOM scroll effect for three day counts, three heights and four times.
+Wasm wiring and retention are checked separately by the signed-in runner at desktop
 and phone widths and checks retained scroll after a synthetic cached event
 changes on the disposable server. It does not substitute API responses.
 Full cutover, provider tools/jobs/execution, full shell/chat, complete parity and
 physical second-device trusted HTTPS remain open as listed in the phase report.
+Re-centering after a saved timezone change remains open. Browser clamping at
+controlled day-boundary times is not covered by the DOM comparison.

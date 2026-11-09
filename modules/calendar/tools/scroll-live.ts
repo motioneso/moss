@@ -16,6 +16,11 @@ export async function checkGridScroll(
       let frame = tab.frameLocator("#calendar");
       await frame.getByRole("button", { name: view, exact: true }).click();
       await expect(frame.getByRole("button", { name: "Today", exact: true })).toBeEnabled();
+      if (view === "Week") {
+        const fullWeek = frame.getByRole("button", { name: "Show full week", exact: true });
+        if (await fullWeek.count()) await fullWeek.click();
+        await expect(frame.getByRole("button", { name: "Today", exact: true })).toBeEnabled();
+      }
       // A reload opens a new grid with no in-memory user scroll position.
       await tab.reload();
       frame = tab.frameLocator("#calendar");
@@ -32,11 +37,11 @@ export async function checkGridScroll(
         )
         .toBeLessThanOrEqual(1);
       assert((await scroll.evaluate((el) => el.clientHeight)) > 0);
-      const bounds = await frame.locator(".cal-tg").boundingBox();
+      const bounds = await frame.locator(".cal-body").boundingBox();
       assert(bounds);
       await tab.screenshot({
         path: join(out, `grid-scroll-${view.toLowerCase()}-${width}.png`),
-        clip: bounds
+        clip: { ...bounds, height: Math.min(bounds.height, 860 - bounds.y) }
       });
       // Exercise both a deliberate scroll to midnight and a nonzero position.
       if ((width === 1280 && view === "Day") || (width === 390 && view === "Week")) {
@@ -51,6 +56,15 @@ export async function checkGridScroll(
           .locator(".cal-ev__titletext")
           .filter({ hasText: title })
           .waitFor({ state: "attached", timeout: 45000 });
+        // A new node starts at zero before its positioning effect. Sample after
+        // layout and two paint opportunities so midnight cannot pass on that default.
+        const settled = await scroll.evaluate(
+          (el) =>
+            new Promise<number>((resolve) => {
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve(el.scrollTop)));
+            })
+        );
+        assert.equal(settled, top);
         await expect.poll(() => scroll.evaluate((el) => el.scrollTop)).toBe(top);
       }
       console.log(
