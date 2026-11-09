@@ -2,7 +2,8 @@
 
 Part 22 connects the disposable endpoint adapter to the real Rust queue and a
 worker-role compiled guest invocation. The old harness table records only the
-actual terminal state and returned result after the real queue finishes; it does
+actual terminal state and successful handler result after the real queue finishes;
+failed jobs record a generic error rather than private error details. The table does
 not enqueue or execute work. Added comparisons cover private tasks, captured
 accounts, archive/reopen and repeated recurring completion. This adapter still
 is not installed worker dispatch or legacy queue retry/retention parity. The

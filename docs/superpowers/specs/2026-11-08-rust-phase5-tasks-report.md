@@ -1545,16 +1545,28 @@ invokes the actual Tasks Wasm handler under the captured account and the worker
 database role. Queue declarations validate the parameters; the adapter checks
 the manifest identity before dispatch. The adapter stops if its worker dies.
 The historical endpoint harness remains unchanged. Its existing observation
-table receives the real queue's terminal state and the actual handler result
-only after the queue is finished; that table never executes these jobs.
+table receives the real queue's terminal state and the successful handler result
+only after the queue is finished; failed jobs record a generic error instead of
+private error details. That table never executes these jobs.
 This is a differential test adapter, not the installed module worker.
 
 The unchanged deferred-status smoke case was reproduced failing before the
 binding: Rust returned 500 and left the task open while TypeScript returned 202
 and completed it. Three added differential cases check private tasks and forged
 actor input, archive/reopen with a repeated legacy request key, and repeated
-recurring completion with a child. They compare job output and saved Tasks and
-activity rows. The old endpoint cases are retained without exclusions.
+recurring completion. They compare job output and saved Tasks and activity rows,
+assert exactly two occurrences after repeated completion, and preserve the legacy
+refusal of children on recurring tasks. The old endpoint cases are retained
+without exclusions.
+
+The first complete comparison run passed 94 of 96 checks. Both servers rejected
+two invalid new fixtures: priority must be numeric, and the existing SQL hierarchy
+rule forbids a recurring task from being a parent. The fixtures now use a numeric
+priority and assert the existing child refusal instead of expecting creation.
+Shared-host load also exceeded the harness's normal startup allowance. A scratch
+copy extends only that allowance from 90 to 600 seconds; case assertions and
+the other harness sources remain unchanged. This does not prove the normal
+startup or performance budget. Final rerun receipts are in the proof artifact.
 
 The compiled deferred-worker privacy test now uses the real worker database
 role for task effects instead of the app role. It still requires the exact

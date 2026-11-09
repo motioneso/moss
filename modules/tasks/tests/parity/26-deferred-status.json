@@ -103,7 +103,7 @@
         "body": {
           "title": "Queue archive and reopen",
           "description": "Keep this description",
-          "priority": "high"
+          "priority": 3
         },
         "expect": {
           "status": 201
@@ -165,7 +165,7 @@
             "task": {
               "status": "todo",
               "description": "Keep this description",
-              "priority": "high",
+              "priority": 3,
               "completedAt": null
             }
           }
@@ -175,7 +175,7 @@
     "rows": ["app.tasks", "app.task_activity"]
   },
   {
-    "name": "component deferred status: recurring completion cascades once",
+    "name": "component deferred status: recurring completion is idempotent and rejects children",
     "source": "packages/tasks/src/jobs.ts and recurrence.ts",
     "steps": [
       {
@@ -184,7 +184,7 @@
         "path": "/api/tasks",
         "as": "A",
         "body": {
-          "title": "Queued repeating parent",
+          "title": "Queued repeating task",
           "dueAt": "2099-05-01T15:30:00.000Z",
           "doAt": "2099-04-30T10:00:00.000Z",
           "recurrence": {
@@ -202,11 +202,12 @@
         "path": "/api/tasks",
         "as": "A",
         "body": {
-          "title": "Queued completion child",
+          "title": "Refused recurring child",
           "parentTaskId": "{{task:/body/task/id}}"
         },
         "expect": {
-          "status": 201
+          "status": 500,
+          "body": { "error": "Internal server error" }
         }
       },
       {
@@ -258,7 +259,19 @@
         "path": "/api/tasks/{{task:/body/task/id}}/subtasks",
         "as": "A",
         "expect": {
-          "status": 200
+          "status": 200,
+          "body": { "tasks": [] }
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/api/tasks",
+        "as": "A",
+        "expect": {
+          "status": 200,
+          "body": {
+            "tasks": [{ "title": "Queued repeating task" }, { "title": "Queued repeating task" }]
+          }
         }
       }
     ],
