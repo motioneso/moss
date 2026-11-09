@@ -1885,3 +1885,76 @@ their launch fingerprint.
 The full People port remains **incomplete** for the acceptance items listed above.
 No real application screen, authenticated chat flow or second-device HTTPS path
 was exercised by these command-line checks.
+
+## Part seventeen: nested note discovery order
+
+This checkpoint starts at current main `b8d52e8d4` (People part sixteen, PR 4115).
+The task branch was still at Phase 0a and was fast-forwarded while clean before
+editing. The brief's PR 4066 reference predates that verified base. No Vikunja
+card or sibling module source was changed.
+
+### Behaviour and regression
+
+The legacy vault walker descends into each folder where it occurs in the immediate
+listing. The Rust guest instead read root files first, then visited sibling folders
+in reverse order. That changed canonical-note discovery order before refresh work.
+The guest now uses an explicit work stack, preserving the supplied listing order
+without recursive Wasm calls. The shared host still chooses and confines the folder;
+the module adds no filesystem access, server dependency or client-side data store.
+
+The new oracle creates real synthetic folders and calls the existing TypeScript
+`listVaultFilesRecursive` through `VaultContextRunner`. Six recorded cases include
+interleaved root files and nested/sibling directories, Unicode names, ignored file
+extensions and a note thirty-two folders deep. The same native regression failed
+before the fix (`rc=101`): Rust returned `root.md`, `B/second.md`, `A/first.md`,
+`A/z.md`, `A/Nested/deep.md`; the legacy result starts with `A/Nested/deep.md`
+and ends with `root.md`. The restored traversal passes that regression.
+
+Native boundary checks retain the two-thousand admitted-entry and four-MiB text
+limits. They check the exact allowed boundaries and the next overflowing entry,
+and refuse nested listing/read failures or disappearing files before any projection
+query. These checks use a host double; the compiled database and installed replay
+results are recorded separately below. No unlimited-folder or complete
+cross-filesystem enumeration-order parity is claimed.
+
+Several existing nested HTTP replay fixtures lacked the mandatory `status` field,
+so the old parser ignored them. They now contain valid canonical, missing-ID and
+duplicate-ID notes, plus real block-list aliases and emails. The oracle explicitly
+requires projections and review candidates instead of accepting that silent loss
+of coverage. The module app map, README and changelog describe the delivered scan.
+
+### Build and acceptance limits
+
+All Cargo, Rustup and target caches belong to this task's scratch directory.
+The pinned compiler and declared dependency caches were copied locally; declared
+Wasm standard-library targets and the approved pinned `wit-bindgen =0.57.1` were
+used there. JavaScript dependencies were restored from the lockfile offline.
+No global tool or new third-party package was installed.
+
+The task browser was tried again and Chrome refused to launch with "No usable
+sandbox". The shipping shell router still exposes shell, Today, desktop notices
+and chat; it does not compose installed People module frames/routes. A standalone
+render or dispatch test cannot qualify that missing authenticated application path.
+No application screen, sign-in, chat approval or physical-device HTTPS result is
+claimed by this checkpoint.
+
+The full People port remains **incomplete**. Remaining acceptance is:
+
+1. Compose installed module frames, routes and People chat tools into the
+   authenticated Rust server, keeping the Rust app a client of its local or remote
+   server API. Qualify numeric parsing through the shipping listener.
+2. Connect ingest nudges and real source providers; qualify installed scheduling,
+   command retention/quotas, backend failures, larger data sets and the remaining
+   locale-sensitive ordering gaps. Failed refresh batches can still leave earlier
+   jobs and stored commands; repeating a request can duplicate work.
+3. Exercise the real installed UI and chat approvals, sign-in, trusted origins,
+   privacy and HTTPS on desktop and a second physical device. Repair the task
+   browser's environment before claiming its UI path.
+
+Completing those assembled paths exceeds this bounded checkpoint. It is submitted
+as partial parity work, without a claim that Phase 5 acceptance is complete.
+
+### Verification receipts
+
+Final component, installed replay and repository check receipts will be recorded
+here after their runs finish. Pending runs are not passing evidence.
