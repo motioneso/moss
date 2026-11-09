@@ -89,7 +89,9 @@ fn compiled_people_read_apis_match_typescript_on_real_database() {
         );
     }
     let paging_actor = Uuid::parse_str(oracle["paging"]["actor"].as_str().unwrap()).unwrap();
-    for case in oracle["paging"]["cases"].as_array().unwrap() {
+    let paging_cases = oracle["paging"]["cases"].as_array().unwrap();
+    assert_eq!(paging_cases.len(), 15, "Keep every paging boundary case");
+    for case in paging_cases {
         let kind = case["kind"].as_str().unwrap();
         let reply = host
             .call(
@@ -121,7 +123,7 @@ fn compiled_people_read_apis_match_typescript_on_real_database() {
             case["count"]
         );
     }
-    println!("PASS People paging: 14 legacy reads at 999/1000/1001/1005/1006/unlimited, 1005 aliases and emails; default host limits unchanged");
+    println!("PASS People paging: 15 legacy reads at 999/1000/1001/1005/1006/unlimited, exact-page termination, 1005 aliases and emails including a duplicate; default host limits unchanged");
     // A background job authenticates through the worker pool, not the app pool.
     let worker_db = rt
         .block_on(safety_core::db::Database::connect(

@@ -2323,9 +2323,12 @@ The continuation's PR 4066 reference is an older installed-package checkpoint.
 
 This continuation qualifies the existing read interfaces beyond the host's
 thousand-row query page. A separate synthetic account contains 1,005 people,
-1,005 aliases, 1,005 email identities and 1,005 links. Fourteen comparisons cover
+1,005 aliases, 1,005 email identities and 1,005 links. Fifteen comparisons cover
 People/link limits of 999, 1,000, 1,001, 1,005, 1,006 and no limit, plus public
-name and email lookup. Real legacy Fastify handlers supply route responses;
+name and email lookup and an unbounded filtered query with exactly 1,000 links
+(requiring an empty terminal page). One rejected email identity duplicates an
+active email, qualifying duplicate preservation without violating the existing
+partial unique index. Real legacy Fastify handlers supply route responses;
 the real legacy public functions supply API responses. The compiled guest reads
 the same committed rows through the production transactional database ports.
 Email results have no legacy ordering guarantee, so their complete multisets
@@ -2351,3 +2354,14 @@ needs installed People route/frame and chat-tool composition. Authenticated real
 UI/chat approval, sign-in/origin/privacy acceptance and a second physical device
 over HTTPS remain unproved. This continuation does not add another server or
 connect the module directly to a database.
+
+The first independent Claude review of `8ff7c4753` raised a major concern about
+the pre-existing unordered name/alias paging, explicitly without a reproduction.
+That rating is rejected for this test-only checkpoint: the source behavior is
+unchanged, and the suggested unconditional ID ordering changes the established
+legacy alias tie behavior. This remains a known qualification limit, not a
+claim that arbitrary concurrent writes or query plans preserve pagination.
+Large tied-sort-key populations, three-page populations and concurrent writes
+remain unqualified. The review's concrete case-count and duplicate-fixture
+minors are addressed, as is exact-page termination; pending receipts remain
+explicit until the runs finish.

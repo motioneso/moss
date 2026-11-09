@@ -27,15 +27,18 @@ export async function largeDataOracle(
   await bootstrap.query(
     `INSERT INTO app.person_context_identities(owner_user_id,person_id,identity_kind,source_kind,
        normalized_value,display_value,status,first_seen_at,last_seen_at,created_at,updated_at)
-     SELECT $1,id,kind,'manual',value,value,'active','2020-01-01Z','2020-01-01Z','2020-01-01Z','2020-01-01Z'
+     SELECT $1,id,kind,'manual',value,value,
+       CASE WHEN kind='email_address' AND n=1005 THEN 'rejected' ELSE 'active' END,
+       '2020-01-01Z','2020-01-01Z','2020-01-01Z','2020-01-01Z'
      FROM unnest($2::uuid[]) WITH ORDINALITY AS input(id,n)
-     CROSS JOIN LATERAL (VALUES ('alias','Paging alias'),('email_address','paging-'||n||'@example.test')) AS identity(kind,value)`,
+     CROSS JOIN LATERAL (VALUES ('alias','Paging alias'),
+       ('email_address','paging-'||CASE WHEN n=1005 THEN 1 ELSE n END||'@example.test')) AS identity(kind,value)`,
     [actor, ids]
   );
   await bootstrap.query(
     `INSERT INTO app.person_context_links(owner_user_id,person_id,source_kind,source_ref,source_ref_hash,
        link_kind,occurred_at,created_at,updated_at)
-     SELECT $1,$2,'manual','paging-'||n,'paging-hash-'||n,'related',
+     SELECT $1,$2,CASE WHEN n<=1000 THEN 'manual' ELSE 'note' END,'paging-'||n,'paging-hash-'||n,'related',
        '2020-01-01Z'::timestamptz+n*INTERVAL '1 second','2020-01-01Z','2020-01-01Z'
      FROM generate_series(1,1005) n`,
     [actor, ids[0]]
@@ -75,6 +78,27 @@ export async function largeDataOracle(
         });
       }
     }
+    // An unbounded query with exactly one full page must terminate on its next,
+    // empty page. A finite limit of 1000 would not exercise that branch.
+    const filtered = await app.inject({
+      method: "GET",
+      url: `/api/people/${ids[0]}/links?sourceKind=manual`
+    });
+    const filteredBody = filtered.json<{ links: unknown[] }>();
+    if (filtered.statusCode !== 200 || filteredBody.links.length !== 1000)
+      throw new Error("Legacy exact-page fixture lost rows");
+    cases.push({
+      kind: "route",
+      request: {
+        method: "GET",
+        path: "/people/:id/links",
+        params: { id: ids[0] },
+        query: { sourceKind: "manual" },
+        body: null
+      },
+      expected: { status: filtered.statusCode, body: filteredBody },
+      count: 1000
+    });
     const [names, emails] = await runner.withDataContext(
       { actorUserId: actor },
       async (scope) =>
@@ -85,6 +109,8 @@ export async function largeDataOracle(
     );
     if (names.length !== 1005 || emails.length !== 1005)
       throw new Error("Legacy API paging fixture lost rows");
+    if (emails.filter((email) => email === "paging-1@example.test").length !== 2)
+      throw new Error("Legacy email fixture lost its duplicate");
     cases.push(
       {
         kind: "api",
