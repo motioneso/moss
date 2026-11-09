@@ -1138,3 +1138,43 @@ harness's native queue observer still cannot observe the module queue. A
 signed-package fixture is separate from the real application shell; physical
 second-device checks must be reported with their exact coverage in the proof.
 Part of #4027; release note Category N/A. Workshop and Food are excluded.
+
+## Tasks part 15 checkpoint (JS-114, Card 526)
+
+The package screen now supports the legacy list selection rules: include lists,
+show only one or more lists, or hide lists. The compact picker selects one list
+or all lists; **Choose lists** exposes combinations and shows the current choice.
+Tag filters can be combined and removed individually. A task matching any selected
+tag remains visible. List counts follow status and tags, before list selection
+and text search. **Clear filters** returns to open tasks across all lists and
+clears tags and search. Existing List/Grid grouping and saved view remain intact.
+The package manifest describes these controls and how to recover hidden tasks.
+
+`tools/filter-parity.mjs` compares visible tasks, list counts, total count,
+available tags and solo list ids with the unchanged legacy screen model over
+800 combinations. These include every status, multiple solo/excluded lists,
+an empty or stale list, multiple tags, missing tags, case-insensitive title
+search, description search and subtasks. Source rows must remain unchanged.
+The same comparison failed against the previous package model before the change
+and passes afterward. This is screen-model parity, not full screen acceptance.
+
+Final gate, browser and review receipts are recorded in this task's proof artifact.
+The signed-package browser fixture exercises the real Rust host and account
+boundary, separately from the application shell. At the start of this run the
+MacBook was offline on the tailnet, so earlier second-device evidence is not
+reused as proof of this work.
+
+No route, chat tool, job kind, SQL migration or host interface changes in this
+checkpoint. Both assistant-policy routes still need the public preferences seam.
+Actor timezone/lazy recurrence, recurrence jobs, deferred-queue policy and installed
+worker dispatch, public People linkage, policy/feedback orchestration, remaining
+screen/settings parity, installed chat, real-shell integration and performance
+budgets remain unfinished. The endpoint adapter's queue-observation gap remains.
+Physical second-device HTTPS acceptance must be reported with its actual coverage,
+not inferred from a local phone viewport. Full Phase 5 parity is not claimed.
+
+Tooling uses existing Rust 1.95 and Wasm target caches, including the approved
+pinned wit-bindgen graph. The tools lockfile was refreshed offline without a
+byte change. Declared JavaScript dependencies were restored offline inside this
+worktree. No global tool, target or package was installed. Part of #4027;
+release note Category N/A. Workshop and Food are excluded.

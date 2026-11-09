@@ -1,6 +1,7 @@
 /* global document, window, Option */
 import { moduleClient } from "./guest-bridge.mjs";
-import { taskFields, visibleTasks, taskGroups, viewMode } from "./model.mjs";
+import { taskFields, taskGroups, viewMode } from "./model.mjs";
+import { taskFilters } from "./filters.mjs";
 import { tagManager } from "./tags.mjs";
 import { listDeletion } from "./delete-list.mjs";
 
@@ -19,6 +20,7 @@ const state = {
   listDrafts: new Map()
 };
 const labels = { todo: "Open", done: "Done", suggested: "Suggested", archived: "Archived" };
+const filters = taskFilters(render);
 const deleting = listDeletion({
   api,
   lists: () => state.lists,
@@ -115,16 +117,7 @@ async function load() {
     ]);
     state.tasks = tasks.tasks;
     state.lists = lists.lists;
-    options("list-filter", state.lists, "All lists");
     options("task-list", state.lists);
-    const tags = [
-      ...new Set(state.tasks.flatMap((task) => task.tags.map((tag) => tag.name)))
-    ].sort();
-    options(
-      "tag-filter",
-      tags.map((name) => ({ id: name, name })),
-      "All tags"
-    );
     $("view").value = viewMode(preferences.preferences.defaultView);
     show("overview", $("editor").hidden && $("lists-editor").hidden && $("tags-editor").hidden);
     render();
@@ -178,12 +171,7 @@ function taskRow(task) {
   return row;
 }
 function render() {
-  const tasks = visibleTasks(state.tasks, {
-    listId: $("list-filter").value,
-    status: $("status-filter").value,
-    tag: $("tag-filter").value,
-    search: $("search").value
-  });
+  const tasks = filters.apply(state.tasks, state.lists);
   const result = $("task-results");
   result.replaceChildren();
   result.className = $("view").value === "matrix" ? "tasks-matrix" : "";
@@ -197,6 +185,7 @@ function render() {
     if (!grouped.length) section.append(text("p", "Nothing here.", "jds-caption"));
     result.append(section);
   }
+  void client.resize(document.documentElement.scrollHeight).catch(() => {});
 }
 function draftSnapshot() {
   return JSON.stringify(
@@ -350,6 +339,7 @@ function manageLists() {
   state.focusAfter = $("list-name");
 }
 const actions = {
+  "clear-filters": () => filters.clear(),
   "confirm-delete-list": () => deleting.confirm(),
   "keep-list": () => deleting.close(),
   reload: load,
@@ -398,8 +388,10 @@ const actions = {
 document
   .querySelectorAll("[data-action]")
   .forEach((node) => node.addEventListener("click", () => run(actions[node.dataset.action])));
-for (const id of ["list-filter", "status-filter", "tag-filter", "search"])
-  $(id).addEventListener("input", render);
+for (const id of ["status-filter", "search"]) $(id).addEventListener("input", render);
+$("list-options").addEventListener("toggle", () => {
+  void client.resize(document.documentElement.scrollHeight).catch(() => {});
+});
 $("view").addEventListener("change", () =>
   run(async () => {
     await api("PATCH", "/tasks/preferences", { defaultView: $("view").value });

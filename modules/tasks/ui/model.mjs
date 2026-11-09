@@ -27,16 +27,48 @@ export function taskFields(form, previous = null, today = new Date().toISOString
   return fields;
 }
 
-export function visibleTasks(tasks, { listId = "", status = "todo", tag = "", search = "" }) {
+export function filterTasks(
+  tasks,
+  { lists = [], listStates = {}, status = "todo", tagFilter = [], search = "" }
+) {
   const needle = search.trim().toLowerCase();
-  return tasks.filter(
-    (task) =>
-      !task.parentTaskId &&
-      (!listId || task.listId === listId) &&
-      (status === "all" || task.status === status) &&
-      (!tag || task.tags.some((item) => item.name === tag)) &&
-      (!needle || `${task.title}\n${task.description ?? ""}`.toLowerCase().includes(needle))
-  );
+  const soloIds = lists.filter((list) => listStates[list.id] === "solo").map((list) => list.id);
+  const listCounts = Object.fromEntries(lists.map((list) => [list.id, 0]));
+  const allTags = new Set();
+  const visible = [];
+  for (const task of tasks) {
+    for (const tag of task.tags) allTags.add(tag.name);
+    if (task.parentTaskId !== null) continue;
+    if (status !== "all" && task.status !== status) continue;
+    // Manual tags are alternatives, matching the legacy screen's tag set.
+    if (tagFilter.length && !task.tags.some((tag) => tagFilter.includes(tag.name))) continue;
+    if (Object.hasOwn(listCounts, task.listId)) listCounts[task.listId]++;
+    if (listStates[task.listId] === "excluded") continue;
+    if (soloIds.length && !soloIds.includes(task.listId)) continue;
+    if (
+      needle &&
+      !task.title.toLowerCase().includes(needle) &&
+      !task.description?.toLowerCase().includes(needle)
+    )
+      continue;
+    visible.push(task);
+  }
+  return {
+    visibleTasks: visible,
+    soloIds,
+    listCounts,
+    listCountTotal: Object.values(listCounts).reduce((sum, count) => sum + count, 0),
+    allTags: [...allTags].sort((a, b) => a.localeCompare(b))
+  };
+}
+
+// Retain the original single-picker interface for callers while sharing one filter model.
+export function visibleTasks(tasks, { listId = "", tag = "", ...filters }) {
+  return filterTasks(tasks, {
+    ...filters,
+    ...(listId ? { lists: [{ id: listId }], listStates: { [listId]: "solo" } } : {}),
+    ...(tag ? { tagFilter: [tag] } : {})
+  }).visibleTasks;
 }
 
 export function quadrant(task, now = Date.now()) {
