@@ -151,7 +151,7 @@ pub(crate) fn locale_compare(a: &str, b: &str) -> std::cmp::Ordering {
 }
 
 fn primary_key(c: char) -> (u8, u32) {
-    const PUNCTUATION: &str = " _-,;:!?.'()[]{}@*/\\&#%`^+=<>|~$";
+    const PUNCTUATION: &str = " _-,;:!?.\"()[]{}§@*/\\&#%`^+<=>|~$";
     if c.is_ascii_digit() {
         (1, c as u32)
     } else if c.is_alphabetic() {
@@ -194,7 +194,8 @@ fn base_expansion(c: char) -> (String, u32) {
         'Ð' | 'ð' => ("d".to_owned(), 1),
         'Ł' | 'ł' => ("l".to_owned(), 1),
         'Ħ' | 'ħ' => ("h".to_owned(), 1),
-        'Ŧ' | 'ŧ' => ("t".to_owned(), 1),
+        'Ŋ' | 'ŋ' => ("n".to_owned(), 1),
+        'ẞ' => ("ss".to_owned(), 1),
         'Đ' | 'đ' => ("d".to_owned(), 1),
         _ => {
             let (base, rank) = base_letter(c);
@@ -250,7 +251,7 @@ fn base_letter(c: char) -> (char, u32) {
         'Ö' | 'ö' => ('o', 8),
         'Ō' | 'ō' => ('o', 13),
         'Ŏ' | 'ŏ' => ('o', 4),
-        'Ő' | 'ő' => ('o', 14),
+        'Ő' | 'ő' => ('o', 12),
         'Ù' | 'ù' => ('u', 3),
         'Ú' | 'ú' => ('u', 2),
         'Û' | 'û' => ('u', 5),
@@ -285,6 +286,27 @@ fn base_letter(c: char) -> (char, u32) {
         'Ť' | 'ť' => ('t', 6),
         'Ţ' | 'ţ' => ('t', 11),
         'Ď' | 'ď' => ('d', 6),
+        'Ș' | 'ș' => ('s', 11),
+        'Ț' | 'ț' => ('t', 11),
+        'Ĩ' | 'ĩ' => ('i', 9),
+        'Ũ' | 'ũ' => ('u', 9),
+        'Ŷ' | 'ŷ' => ('y', 5),
+        'Ǎ' | 'ǎ' => ('a', 6),
+        'Ǐ' | 'ǐ' => ('i', 6),
+        'Ǒ' | 'ǒ' => ('o', 6),
+        'Ǔ' | 'ǔ' => ('u', 6),
+        'Ǖ' | 'ǖ' | 'Ǘ' | 'ǘ' | 'Ǚ' | 'ǚ' | 'Ǜ' | 'ǜ' => ('u', 8),
+        'Ạ' | 'ạ' | 'Ả' | 'ả' | 'Ấ' | 'ấ' | 'Ầ' | 'ầ' | 'Ẩ' | 'ẩ' | 'Ẫ' | 'ẫ' | 'Ậ' | 'ậ' | 'Ắ'
+        | 'ắ' | 'Ằ' | 'ằ' | 'Ẳ' | 'ẳ' | 'Ẵ' | 'ẵ' | 'Ặ' | 'ặ' => ('a', 15),
+        'Ẹ' | 'ẹ' | 'Ẻ' | 'ẻ' | 'Ẽ' | 'ẽ' | 'Ế' | 'ế' | 'Ề' | 'ề' | 'Ể' | 'ể' | 'Ễ' | 'ễ' | 'Ệ'
+        | 'ệ' => ('e', 15),
+        'Ị' | 'ị' | 'Ỉ' | 'ỉ' => ('i', 15),
+        'Ọ' | 'ọ' | 'Ỏ' | 'ỏ' | 'Ố' | 'ố' | 'Ồ' | 'ồ' | 'Ổ' | 'ổ' | 'Ỗ' | 'ỗ' | 'Ộ' | 'ộ' | 'Ớ'
+        | 'ớ' | 'Ờ' | 'ờ' | 'Ở' | 'ở' | 'Ỡ' | 'ỡ' | 'Ợ' | 'ợ' => ('o', 15),
+        'Ụ' | 'ụ' | 'Ủ' | 'ủ' | 'Ứ' | 'ứ' | 'Ừ' | 'ừ' | 'Ử' | 'ử' | 'Ữ' | 'ữ' | 'Ự' | 'ự' => {
+            ('u', 15)
+        }
+        'Ỳ' | 'ỳ' | 'Ỵ' | 'ỵ' | 'Ỷ' | 'ỷ' | 'Ỹ' | 'ỹ' => ('y', 15),
         _ => (c, 0),
     }
 }
@@ -327,6 +349,21 @@ mod tests {
             ("á", "à", Ordering::Less),
             ("e\u{301}z", "ea", Ordering::Greater),
             ("Œuvre", "of", Ordering::Less),
+            ("Ștefan", "Sz", Ordering::Less),
+            ("Țara", "Tz", Ordering::Less),
+            ("ạa", "ab", Ordering::Less),
+            ("ắa", "ab", Ordering::Less),
+            ("ĩa", "ib", Ordering::Less),
+            ("ũa", "ub", Ordering::Less),
+            ("ŷa", "yb", Ordering::Less),
+            ("ǎa", "ab", Ordering::Less),
+            ("\"a", "$a", Ordering::Less),
+            ("<a", "=a", Ordering::Less),
+            ("§a", "@a", Ordering::Less),
+            ("ő", "ō", Ordering::Less),
+            ("ŧb", "tz", Ordering::Greater),
+            ("ŋa", "za", Ordering::Less),
+            ("ẞa", "ssb", Ordering::Less),
         ];
         for (a, b, expected) in cases {
             assert_eq!(locale_compare(a, b), expected, "{a} vs {b}");
