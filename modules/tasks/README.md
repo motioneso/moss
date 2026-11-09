@@ -229,3 +229,25 @@ scripts/run-gate.sh wait --follow
 It verifies that `Browser proof task` moves from
 `Removed proof list` to `Kept proof list` with its old tag assignments removed.
 Six HTTP endpoints and four tools remain; earlier acceptance gaps still apply.
+
+## Part 14: task view ordering
+
+List view now groups tasks by Critical, High, Medium, Low, Someday and No priority,
+with empty groups hidden. Grid keeps all four quadrants (Do First, Schedule,
+Delegate and Later). Both views order each group by due instant, undated tasks
+last, then title using browser locale comparison, matching the legacy screen.
+List, status, text and tag filters still apply before grouping. The priority
+picker uses the same Critical and Someday labels. No stored task order changes.
+
+`pnpm exec tsx modules/tasks/tools/view-parity.mjs` compares package groups with
+the unchanged legacy functions, including multiple lists, every priority,
+undated tasks, title ties and the urgency boundary. The normal package gate
+runs this comparison and the existing screen-model tests.
+
+The current continuation boundary is the part 13 list: both assistant-policy
+routes, actor timezone/lazy recurrence, recurrence jobs and deferred-queue policy,
+public People linkage, policy/feedback, remaining screen/settings parity,
+installed chat, real-shell integration and performance acceptance. The full
+endpoint harness still needs an observer for the module queue; it currently
+looks only at the earlier native spike queue. Second-device evidence from a
+signed fixture does not prove real-shell integration.

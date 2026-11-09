@@ -68,7 +68,7 @@ pub fn render() -> String {
                         </Field>
                         <Field><FormLabel control_id="priority">"Priority"</FormLabel>
                             <select id="priority" name="priority" class="jds-input"><option value="">"None"</option>
-                                <option value="1">"Very low"</option><option value="2">"Low"</option><option value="3">"Medium"</option><option value="4">"High"</option><option value="5">"Very high"</option>
+                                <option value="1">"Someday"</option><option value="2">"Low"</option><option value="3">"Medium"</option><option value="4">"High"</option><option value="5">"Critical"</option>
                             </select>
                         </Field>
                         <Field><FormLabel control_id="effort">"Effort"</FormLabel>

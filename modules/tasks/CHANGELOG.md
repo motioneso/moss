@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Group List view by priority, highest first, with unprioritised tasks last.
+- Order List and Grid groups by due date then title, using the existing grid labels.
+- Use Critical and Someday in the task editor and compare view grouping with the legacy screen.
+
 - Add focus, at-risk and overdue routes and tools, plus a bounded twelve-row summary tool.
 - Compare compiled drift and summary results with the TypeScript executors and check privacy with row-level security removed and restored.
 - Days use UTC and recurring series are not advanced until the public actor-timezone seam exists.

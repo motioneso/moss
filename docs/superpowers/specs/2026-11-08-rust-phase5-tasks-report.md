@@ -1103,3 +1103,38 @@ code points like the schema validator. Left as noted minors: tag order in the
 prompt is by codepoint, not locale; two tags differing only by case resolve to
 the first, not the last; and the fixture's address variable is not validated
 (it is a dev-only tool on a throwaway database).
+
+## Tasks part 14 checkpoint (JS-108, Card 526)
+
+List view now groups tasks by Critical, High, Medium, Low, Someday and No
+priority, instead of by list. Empty priority groups stay hidden. Grid keeps
+all four legacy headings: Do First, Schedule, Delegate and Later. Each group
+sorts by due instant, undated tasks last, then title. Existing filters run first
+and each row retains its list name. The editor now labels the endpoints of
+the priority scale Critical and Someday. No data, SQL or host interface changes.
+The package app map describes the actual grouping and ordering.
+
+The package gate gains an exact comparison against the unchanged legacy
+`groupByPriority` and `groupTasksByQuadrant` functions: ten comparisons over
+96 synthetic tasks cover all priorities, mixed lists, absent dates, equal
+instants, accented titles and both sides of the 48-hour urgency boundary.
+The same comparison verifies that source task order and content stay unchanged.
+Final database, endpoint, live UI and independent review receipts belong to
+this task's proof artifact; a passing grouping check is not full screen parity.
+
+Tooling uses the existing scratch Rust 1.95 toolchain, Wasm target and Cargo
+cache, including the already approved pinned wit-bindgen graph. The tools
+lockfile was refreshed offline before locked gates without changing its bytes.
+Declared JavaScript dependencies were restored offline in this worktree.
+No global tool, target or package was installed.
+
+This remains an unfinished checkpoint. Finishing the entire remaining port
+would exceed this continuation's context boundary. Both assistant-policy
+routes need the public preferences seam. Actor timezone/lazy recurrence,
+recurrence jobs, deferred-queue policy/worker integration, public People
+linkage, policy/feedback orchestration, remaining screens/settings, installed
+chat, real-shell integration and performance budgets remain. The endpoint
+harness's native queue observer still cannot observe the module queue. A
+signed-package fixture is separate from the real application shell; physical
+second-device checks must be reported with their exact coverage in the proof.
+Part of #4027; release note Category N/A. Workshop and Food are excluded.
