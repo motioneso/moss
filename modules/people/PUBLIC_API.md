@@ -200,17 +200,21 @@ this storage without a module-level bound.
 The Rust handler requires the host queue adapter. If it is absent it returns a safe 500;
 it does not reproduce the legacy library's optional-boss branch, which acknowledges the
 batch without sending any jobs. The ordinary legacy application supplies a boss.
-The installed functional replay configures a thirty-second host call budget for up to fifty
-sequential real queue sends. The default five-second budget returned 500 for the fifty-item
-case on the test machine; earlier sends remained queued. Real application composition must
-qualify a sufficient budget or improve the enqueue path before exposing the route. Thirty
-seconds is the tested configuration, not a proven minimum. Default-budget performance remains
-unqualified, along with the network listener, ingest nudges and real provider composition.
+The installed functional replay requires the default five-second host call budget for up to
+fifty sequential real queue sends. Part 17's passing receipt follows earlier deadline misses;
+its exact elapsed time and limitations are in the delivery report. This is not a latency
+guarantee under other host load. The network listener, ingest nudges and real provider
+composition remain unqualified.
 
-HTTP body decoding is not yet fully equivalent: Fastify rejects JSON bodies containing
-`__proto__` or constructor/prototype keys before dispatch. The current Rust route-value
-boundary does not reproduce that parser rejection. This remains an acceptance gap,
-including when such an object appears inside a note-only list.
+On methods that parse a body, the People route-value boundary rejects decoded JSON with an own `__proto__` member
+or a `constructor` object with an own `prototype` member, matching Fastify's parser error.
+It checks arrays and unknown fields before schema validation/coercion, including note-only
+lists and routes without a body schema. No host service runs for these rejected bodies.
+GET bodies are ignored, matching Fastify's bodyless-method handling.
+Plain `constructor`/`prototype` members, differently cased names and string values retain
+their ordinary behavior. This is decoded-body dispatch parity, not qualification of the
+shipping listener's raw HTTP parser (malformed JSON, content types, size limits and empty
+bodies still need that boundary's tests).
 
 This does not widen the typed note-service API. The oracle covers selected finite numeric
 values; extreme numeric inputs still need broader parity work. Empty list elements can

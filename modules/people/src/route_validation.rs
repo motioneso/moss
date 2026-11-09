@@ -59,6 +59,20 @@ fn schema(method: &str, path: &str) -> Option<Kind> {
 }
 
 pub fn validate(request: &mut RouteRequest) -> Option<Response> {
+    // Fastify's secure-json-parse examines the decoded body before Ajv,
+    // including unknown members, arrays and routes with no body schema.
+    let parses_body = matches!(
+        request.method.as_str(),
+        "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS"
+    );
+    if parses_body && forbidden_keys(&request.body) {
+        return Some(Response::new(
+            400,
+            json!({
+                "error":"Body is not valid JSON but content-type is set to 'application/json'"
+            }),
+        ));
+    }
     let schema = schema(&request.method, &request.path)?;
     let mut errors = vec![];
     let mut body = request.body.clone();
@@ -68,6 +82,28 @@ pub fn validate(request: &mut RouteRequest) -> Option<Response> {
     } else {
         Some(Response::new(400, json!({"error":errors.join(", ")})))
     }
+}
+
+fn forbidden_keys(body: &Value) -> bool {
+    let mut pending = vec![body];
+    while let Some(value) = pending.pop() {
+        match value {
+            Value::Object(fields) => {
+                if fields.contains_key("__proto__")
+                    || fields
+                        .get("constructor")
+                        .and_then(Value::as_object)
+                        .is_some_and(|constructor| constructor.contains_key("prototype"))
+                {
+                    return true;
+                }
+                pending.extend(fields.values());
+            }
+            Value::Array(items) => pending.extend(items),
+            _ => {}
+        }
+    }
+    false
 }
 fn unwrap_single(value: &mut Value) {
     if let Value::Array(items) = value {

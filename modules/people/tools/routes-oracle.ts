@@ -207,7 +207,51 @@ export async function routesOracle() {
         ...(path === "/people/index/refresh" ? { queued: await refresh!.snapshot() } : {})
       });
     };
+    // Parse strings so __proto__ is an own JSON member, not object-literal syntax.
+    const forbiddenBodies: unknown[] = [
+      '{"__proto__":null}',
+      '{"constructor":{"prototype":false}}',
+      '{"extra":[{"nested":{"__proto__":{}}}]}',
+      '{"aliases":[{"constructor":{"prototype":null}}]}',
+      '[{"__proto__":true}]',
+      '{"folder":"Work","extra":{"__proto__":{}}}',
+      '{"extra":{"constructor":[{"__proto__":null}]}}',
+      '{"extra":{"constr\\u0075ctor":{"proto\\u0074ype":null}}}'
+    ].map((text) => JSON.parse(text));
+    const parserCases = async (method: "POST" | "PATCH" | "PUT", path: string) => {
+      for (const body of forbiddenBodies) {
+        await run(method, path, body);
+        const expected = cases.at(-1)?.expected;
+        if (
+          JSON.stringify(expected) !==
+          JSON.stringify({
+            status: 400,
+            body: {
+              error: "Body is not valid JSON but content-type is set to 'application/json'"
+            }
+          })
+        )
+          throw new Error(`Legacy JSON parser rejection changed: ${JSON.stringify(expected)}`);
+      }
+    };
     await run("GET", "/people");
+    // Fastify does not parse GET bodies, even if a JSON content type is supplied.
+    for (const body of forbiddenBodies) await run("GET", "/people", body);
+    await parserCases("POST", "/people");
+    await parserCases("PUT", "/people/notes-settings");
+    await parserCases("POST", `/people/${ids.primary}/archive`);
+    // Similar-looking valid members must keep their ordinary legacy result.
+    for (const extra of [
+      { constructor: null },
+      { constructor: false },
+      { constructor: "prototype" },
+      { constructor: [] },
+      { constructor: { name: "prototype" } },
+      { prototype: {} },
+      { text: "__proto__" },
+      { Constructor: { prototype: true }, __Proto__: true }
+    ])
+      await run("PUT", "/people/notes-settings", { folder: "", ...extra });
     await refreshCases(run);
     // These are real Fastify/Ajv responses, including coercion and error order.
     for (const method of ["POST", "PATCH", "PUT"] as const) {
@@ -358,6 +402,8 @@ Human text stays.
       [actor, JSON.stringify(selected)]
     );
     configured = true;
+    // Capture canonical bytes and all seven tables after every rejected edit.
+    await parserCases("PATCH", `/people/${ids.primary}`);
     await run("GET", "/people/notes-directories");
     await run("GET", "/people/notes-directories?path=Family");
     for (const path of [
