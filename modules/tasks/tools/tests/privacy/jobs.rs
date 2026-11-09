@@ -65,12 +65,24 @@ fn compiled_deferred_status_uses_real_queue_and_captured_actor() {
     });
     let request =
         json!({"queue":"tasks-deferred-status","parameters":job.1.metadata.params().unwrap()});
+    // Execute resource reads and writes under the actual worker database role,
+    // independently of the request producer's app-role connection pool.
+    let worker =
+        f.rt.block_on(Database::connect(
+            &std::env::var("JS51_WORKER_URL").unwrap(),
+            4,
+            RuntimeRole::Worker,
+        ))
+        .unwrap();
+    let job_ports = Arc::new(ContextPorts::new(Arc::new(
+        TransactionalDatabasePorts::new(worker, Arc::new(DenyPorts)).unwrap(),
+    )));
     let invoke = |actor| {
         f.host.call(
             &f.wasm,
             f.manifest.clone(),
             AccessContext::new(actor, "deferred-worker"),
-            f.ports.clone(),
+            job_ports.clone(),
             "job",
             &request.to_string(),
         )

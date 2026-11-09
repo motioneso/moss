@@ -1536,3 +1536,64 @@ write entry points and permission headlines need tightening. Current one-use too
 approval does not read these preference routes. Summary performance remains
 unproven; the future optimization is to batch date conversions. These limits do
 not establish full Phase 5 parity or physical second-device acceptance.
+
+## Tasks part 22 checkpoint (JS-141, Card 526)
+
+The disposable component endpoint adapter now binds the existing deferred-status
+route to the real Rust queue. A separate worker claims the typed metadata and
+invokes the actual Tasks Wasm handler under the captured account and the worker
+database role. Queue declarations validate the parameters; the adapter checks
+the manifest identity before dispatch. The adapter stops if its worker dies.
+The historical endpoint harness remains unchanged. Its existing observation
+table receives the real queue's terminal state and the successful handler result
+only after the queue is finished; failed jobs record a generic error instead of
+private error details. That table never executes these jobs.
+This is a differential test adapter, not the installed module worker.
+
+The unchanged deferred-status smoke case was reproduced failing before the
+binding: Rust returned 500 and left the task open while TypeScript returned 202
+and completed it. Three added differential cases check private tasks and forged
+actor input, archive/reopen with a repeated legacy request key, and repeated
+recurring completion. They compare job output and saved Tasks and activity rows,
+assert exactly two occurrences after repeated completion, and preserve the legacy
+refusal of children on recurring tasks. The old endpoint cases are retained
+without exclusions.
+
+The first complete comparison run passed 94 of 96 checks. Both servers rejected
+two invalid new fixtures: priority must be numeric, and the existing SQL hierarchy
+rule forbids a recurring task from being a parent. The fixtures now use a numeric
+priority and assert the existing child refusal instead of expecting creation.
+Shared-host load also exceeded the harness's normal startup allowance. A scratch
+copy extends only that allowance from 90 to 600 seconds; case assertions and
+the other harness sources remain unchanged. This does not prove the normal
+startup or performance budget. Final rerun receipts are in the proof artifact.
+
+The compiled deferred-worker privacy test now uses the real worker database
+role for task effects instead of the app role. It still requires the exact
+cross-account mutation assertion to fail with Tasks RLS removed and pass with
+RLS restored. The broader package gate retains its read and write privacy
+removal controls. The app map corrects broad unfinished-policy and timezone
+wording: the saved policy API and account-local drift reads already exist;
+automatic assistant actions and date-editor timezone support remain unfinished.
+
+The clean task branch was updated from its Phase 0a starting point to current
+remote main before editing. Existing scratch Rust 1.95, Wasm target and Cargo
+registry caches were reused offline, including the pinned wit-bindgen graph
+approved on 2026-11-08. No generator, global tool or new dependency was installed.
+The tools lockfile was refreshed offline with no byte change. Declared JavaScript
+dependencies were restored offline. No product route, job kind, SQL migration,
+shared host contract or sibling module was changed. Workshop and Food remain
+excluded. Part of #4027; release note Category N/A.
+
+This is a bounded parity checkpoint, not full Phase 5 acceptance. Remaining:
+lazy recurrence advancement; recurrence jobs; legacy deferred-queue retry and
+retention policy, optional request-key retention and installed worker dispatch;
+public People linkage; policy/feedback orchestration; remaining screens and
+settings, including the policy switch; interpreted-search and date-editor
+timezone support; installed chat and summary presentation; real application
+shell integration; performance budgets; and physical second-device HTTPS proof.
+The signed UI fixture exercises real installation, TLS and sign-in but remains
+separate from the application shell. No attached physical device was available
+through the existing device bridge; online network peers alone are not UI proof.
+Final gate, browser and independent-review receipts are recorded in the task
+proof artifact.

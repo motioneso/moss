@@ -17,6 +17,7 @@ use moss_module_host::{
     transactional_database::TransactionalDatabasePorts,
 };
 use moss_tasks_module::schema;
+mod parity_jobs;
 #[cfg(test)]
 use moss_tasks_module::schemas;
 use safety_core::{
@@ -66,6 +67,12 @@ async fn main() -> anyhow::Result<()> {
     });
     // The synchronous host owns a runtime. Construct and drop it on its blocking
     // executor, rather than dropping a nested runtime inside this async context.
+    parity_jobs::prepare().await?;
+    let worker_database =
+        Database::connect(&env["MOSS_WORKER_DATABASE_URL"], 4, RuntimeRole::Worker)
+            .await
+            .map_err(anyhow::Error::msg)?;
+    let producer = safety_core::secret::Secret::new(env["MOSS_APP_DATABASE_URL"].clone());
     let database = platform.app.clone();
     let server_platform = platform.clone();
     let state = tokio::task::spawn_blocking(move || -> anyhow::Result<Server> {
@@ -74,7 +81,14 @@ async fn main() -> anyhow::Result<()> {
         let host = Arc::new(Host::new(Limits::default())?);
         host.validate(&wasm, &manifest)?;
         let ports = Arc::new(ContextPorts::new(Arc::new(
-            TransactionalDatabasePorts::new(database, Arc::new(DenyPorts))?,
+            TransactionalDatabasePorts::new(
+                database.clone(),
+                Arc::new(moss_module_host::jobs::JobPorts::new(
+                    producer,
+                    database,
+                    Arc::new(DenyPorts),
+                )?),
+            )?,
         )));
         Ok(Server {
             platform: server_platform,
@@ -91,10 +105,29 @@ async fn main() -> anyhow::Result<()> {
         .layer(DefaultBodyLimit::max(body::BODY_LIMIT * 2))
         .with_state(state.clone());
     let listener = tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port))).await?;
-    axum::serve(listener, http::app(platform, extra))
-        .with_graceful_shutdown(shutdown())
-        .await?;
+    let (stop, worker_stop) = tokio::sync::watch::channel(false);
+    let mut server_stop = worker_stop.clone();
+    let worker_state = state.clone();
+    let worker_failed = stop.clone();
+    let worker = tokio::spawn(async move {
+        let result = parity_jobs::run(worker_state, worker_database, worker_stop).await;
+        // A dead worker must stop the adapter, rather than leave a healthy-looking API.
+        let _ = worker_failed.send(true);
+        result
+    });
+    let result = axum::serve(listener, http::app(platform, extra))
+        .with_graceful_shutdown(async move {
+            tokio::select! {
+                _ = shutdown() => {},
+                _ = server_stop.changed() => {},
+            }
+        })
+        .await;
+    let _ = stop.send(true);
+    let worker_result = worker.await;
     tokio::task::spawn_blocking(move || drop(state)).await?;
+    result?;
+    worker_result??;
     Ok(())
 }
 
