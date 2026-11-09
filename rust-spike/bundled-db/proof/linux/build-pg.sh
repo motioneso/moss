@@ -32,7 +32,7 @@ tar xzf $S/downloads/pgvector-0.8.7.tar.gz
 cd postgresql-17.11
 ./configure --prefix=$PREFIX --without-readline --with-icu --with-zstd --without-openssl \
   > $S/build/configure.log 2>&1
-make -j"$(nproc)" rpathdir='$$ORIGIN/../lib' > $S/build/make.log 2>&1
+make -j"${MOSS_BUILD_JOBS:-$(nproc)}" rpathdir='$$ORIGIN/../lib' > $S/build/make.log 2>&1
 make rpathdir='$$ORIGIN/../lib' install > $S/build/install.log 2>&1
 
 cd $S/build/pgvector-0.8.7
