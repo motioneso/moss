@@ -36,7 +36,18 @@ fn delayed_enqueue_preserves_queue_time_key_and_actor() {
             .unwrap();
         (db, app)
     });
-    let ports = Arc::new(JobPorts::new(Secret::new(app_url), app, Arc::new(DenyPorts)).unwrap());
+    let mut producer_url = url::Url::parse(&app_url).unwrap();
+    producer_url
+        .query_pairs_mut()
+        .append_pair("application_name", "people-refresh-producer-test");
+    let ports = Arc::new(
+        JobPorts::new(
+            Secret::new(producer_url.to_string()),
+            app,
+            Arc::new(DenyPorts),
+        )
+        .unwrap(),
+    );
     let mut manifest = common::manifest("0.1.0");
     manifest.id = "sample.enqueue-options".into();
     manifest.capabilities = vec![Capability {
@@ -84,6 +95,20 @@ fn delayed_enqueue_preserves_queue_time_key_and_actor() {
     let options = json!({"params":params,"idempotencyKey":key,"availableAt":at});
     let first = enqueue(owner, "person-index", "enqueue-options", options.clone());
     let first_id: uuid::Uuid = first["id"].as_str().unwrap().parse().unwrap();
+    runtime.block_on(async {
+        let count: i64 = db
+            .query_one(
+                "SELECT count(*) FROM pg_stat_activity WHERE application_name=$1",
+                &[&"people-refresh-producer-test"],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(
+            count, 1,
+            "Delayed sends must retain one reusable producer connection"
+        );
+    });
     assert!(
         enqueue(owner, "person-index", "enqueue-options", options.clone())["id"].is_null(),
         "Retry must not create a second job"

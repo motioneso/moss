@@ -251,7 +251,7 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
                 .is_some_and(|items| items.len() == 50)
         {
             println!(
-                "People fifty-reference installed request: status={}, elapsed_ms={}, configured_deadline_ms=30000",
+                "People fifty-reference installed request: status={}, elapsed_ms={}, configured_deadline_ms=5000",
                 reply["status"], started.elapsed().as_millis()
             );
         }
