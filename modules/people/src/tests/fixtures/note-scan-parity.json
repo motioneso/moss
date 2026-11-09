@@ -1,0 +1,155 @@
+[
+  { "listings": { "": [] }, "expected": [] },
+  {
+    "listings": {
+      "": [
+        { "name": "a.md", "kind": "file" },
+        { "name": "z.md", "kind": "file" }
+      ]
+    },
+    "expected": ["a.md", "z.md"]
+  },
+  {
+    "listings": {
+      "": [
+        { "name": "A", "kind": "directory" },
+        { "name": "B", "kind": "directory" },
+        { "name": "root.md", "kind": "file" }
+      ],
+      "A": [
+        { "name": "Nested", "kind": "directory" },
+        { "name": "first.md", "kind": "file" },
+        { "name": "z.md", "kind": "file" }
+      ],
+      "A/Nested": [{ "name": "deep.md", "kind": "file" }],
+      "B": [{ "name": "second.md", "kind": "file" }]
+    },
+    "expected": ["A/Nested/deep.md", "A/first.md", "A/z.md", "B/second.md", "root.md"]
+  },
+  {
+    "listings": {
+      "": [
+        { "name": "Notes", "kind": "directory" },
+        { "name": "résumé.md", "kind": "file" }
+      ],
+      "Notes": [
+        { "name": "People", "kind": "directory" },
+        { "name": "z.md", "kind": "file" }
+      ],
+      "Notes/People": [
+        { "name": "é.md", "kind": "file" },
+        { "name": "名.md", "kind": "file" }
+      ]
+    },
+    "expected": ["Notes/People/é.md", "Notes/People/名.md", "Notes/z.md", "résumé.md"]
+  },
+  {
+    "listings": {
+      "": [
+        { "name": "A", "kind": "directory" },
+        { "name": "B", "kind": "directory" },
+        { "name": "C", "kind": "directory" }
+      ],
+      "A": [],
+      "B": [],
+      "C": [{ "name": "valid.md", "kind": "file" }]
+    },
+    "expected": ["C/valid.md"]
+  },
+  {
+    "listings": {
+      "": [
+        { "name": "folder", "kind": "directory" },
+        { "name": "last.md", "kind": "file" }
+      ],
+      "folder": [{ "name": "folder", "kind": "directory" }],
+      "folder/folder": [{ "name": "folder", "kind": "directory" }],
+      "folder/folder/folder": [{ "name": "folder", "kind": "directory" }],
+      "folder/folder/folder/folder": [{ "name": "folder", "kind": "directory" }],
+      "folder/folder/folder/folder/folder": [{ "name": "folder", "kind": "directory" }],
+      "folder/folder/folder/folder/folder/folder": [{ "name": "folder", "kind": "directory" }],
+      "folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "folder", "kind": "directory" }
+      ],
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder": [
+        { "name": "deep.md", "kind": "file" }
+      ]
+    },
+    "expected": [
+      "folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/folder/deep.md",
+      "last.md"
+    ]
+  }
+]

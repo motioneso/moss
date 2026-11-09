@@ -324,12 +324,12 @@ status: active
 ---
 Human text stays.
 `,
-      "Family/Missing.md": "---\ndisplayName: Missing id\n---\nNeeds review.\n",
+      "Family/Missing.md": "---\ndisplayName: Missing id\nstatus: active\n---\nNeeds review.\n",
       "Family/Invalid.md": "Ordinary markdown without People frontmatter.\n",
       "Work/Upper.MD": "---\ndisplayName: Ignored uppercase extension\n---\n",
-      "Family/Duplicate.md": `---\njarvisPersonId: ${ids.secondary}\ndisplayName: Duplicate one\n---\n`,
-      "Work/Duplicate.md": `---\njarvisPersonId: ${ids.secondary}\ndisplayName: Duplicate two\n---\n`,
-      "Family/New.md": `---\njarvisPersonId: ${ids.explicit}\ndisplayName: New canonical\naliases: [New alias]\nemails: [new@example.test]\n---\n`
+      "Family/Duplicate.md": `---\njarvisPersonId: ${ids.secondary}\ndisplayName: Duplicate one\nstatus: active\n---\n`,
+      "Work/Duplicate.md": `---\njarvisPersonId: ${ids.secondary}\ndisplayName: Duplicate two\nstatus: active\n---\n`,
+      "Family/New.md": `---\njarvisPersonId: ${ids.explicit}\ndisplayName: New canonical\naliases:\n  - New alias\nemails:\n  - new@example.test\nstatus: active\n---\n`
     };
     for (const [path, content] of Object.entries(folderSeed)) {
       await writeFile(join(selected, path), content);

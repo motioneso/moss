@@ -34,13 +34,21 @@ node modules/people/tools/directory-vectors.mjs > /tmp/moss-people-directory-par
 cmp modules/people/src/tests/fixtures/directory-parity.json /tmp/moss-people-directory-parity.json
 node modules/people/tools/number-vectors.mjs > /tmp/moss-people-number-parity.json
 cmp modules/people/src/tests/fixtures/number-parity.json /tmp/moss-people-number-parity.json
+pnpm exec tsx modules/people/tools/note-scan-vectors.ts > /tmp/moss-people-note-scan-parity.json
+cmp modules/people/src/tests/fixtures/note-scan-parity.json /tmp/moss-people-note-scan-parity.json
 ```
 
 The vector generator runs the current TypeScript matching and note-format implementation.
 The directory oracle records JavaScript `localeCompare` for canonical Unicode equivalents
 and nearby case/order comparisons. The relative folder browser normalizes comparison keys
 to NFC, preserving original names and paths and stable input order for equal keys.
-This is canonical-equivalence coverage, not complete locale collation. The existing
+The note-scan oracle uses the real legacy vault walker on temporary synthetic folders,
+including interleaved root files, sibling/nested folders, Unicode names, ignored extensions
+and a deeply nested note. The guest preserves that depth-first listing order with an
+explicit stack. Native checks retain the total-entry/text limits and stop before projection
+on nested backend failures or disappearing files. This does not qualify every filesystem's
+directory enumeration order. Directory comparison is canonical-equivalence coverage, not
+complete locale collation. The existing
 literal-dollar safeguard for managed-note edits remains unchanged.
 It performs no database work. These fixtures prove only pure domain behavior. Database
 and live checks must go through verify-gate and the real Rust application before full People

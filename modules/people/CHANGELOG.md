@@ -4,6 +4,10 @@
 
 Rust component and shared-frame People Settings checkpoint. Complete installed parity and physical-device qualification remain open.
 
+Visit nested People notes in the legacy depth-first listing order. Refresh replay fixtures now
+include valid nested canonical notes, missing IDs and duplicate IDs instead of silently ignoring
+notes without a status field. Existing scan limits and failure refusals remain in place.
+
 Compare canonically equivalent Unicode folder names equally, as the legacy folder browser
 does. Comparison uses NFC keys; the names and paths returned to callers stay unchanged.
 This narrows directory-ordering differences without claiming complete locale collation.
