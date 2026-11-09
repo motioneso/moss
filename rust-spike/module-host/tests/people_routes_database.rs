@@ -236,9 +236,6 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         }
         .expect("Compiled route must return a response envelope");
         let reply: Value = serde_json::from_str(&reply).unwrap();
-        if case.get("queued").is_some() {
-            queue_replay.compare(&rt, &bootstrap, &host, &manifest, &ports, &case["queued"]);
-        }
         let actual_people = people_rows(&rt, &bootstrap, owner);
         let expected_people = case["rows"][TABLES[0]].as_array().unwrap();
         let reply = normalization::signatures(&reply, &actual_people, &mut actual);
@@ -250,6 +247,9 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
             "Route response differs: {method} {path}; body={}",
             case["body"]
         );
+        if case.get("queued").is_some() {
+            queue_replay.compare(&rt, &bootstrap, &host, &manifest, &ports, &case["queued"]);
+        }
         if let Some(files) = case["files"].as_object() {
             assert_eq!(
                 normalization::files(&notes_root),

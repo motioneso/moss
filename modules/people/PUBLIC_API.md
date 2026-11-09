@@ -192,7 +192,14 @@ in account command records, and only command UUIDs reach the queue. The legacy m
 pg-boss's standard queue policy, so repeated references and requests create separate jobs.
 Internal command retries still deduplicate using their original UUID. A send failure returns
 the safe 500 response; earlier sends in the batch remain queued, as in the legacy route.
-Network listener, ingest nudges and real provider composition remain unqualified.
+The Rust handler requires the host queue adapter. If it is absent it returns a safe 500;
+it does not reproduce the legacy library's optional-boss branch, which acknowledges the
+batch without sending any jobs. The ordinary legacy application supplies a boss.
+The installed functional replay configures a thirty-second host call budget for up to fifty
+sequential real queue sends. The default five-second budget returned 500 for the fifty-item
+case on the test machine; earlier sends remained queued. Real application composition must
+choose a sufficient budget or improve the enqueue path. Default-budget performance remains
+unqualified, along with the network listener, ingest nudges and real provider composition.
 
 HTTP body decoding is not yet fully equivalent: Fastify rejects JSON bodies containing
 `__proto__` or constructor/prototype keys before dispatch. The current Rust route-value

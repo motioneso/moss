@@ -230,3 +230,9 @@ failure can leave earlier batch entries queued; the response is the safe legacy 
 The route oracle now uses a real disposable pg-boss queue for manual refresh and compares
 its source metadata with the real Rust queue and command records. This remains package
 dispatch evidence; real application, source-provider and device acceptance are still open.
+
+The installed functional replay uses an explicit thirty-second host call budget. The
+fifty-reference request failed with the default five-second budget on this test machine
+and passed with the larger budget, with no package change. Real host composition still
+needs to qualify that budget or improve the sequential enqueue path. This checkpoint
+qualifies functional behavior with that configuration, not default-budget performance.
