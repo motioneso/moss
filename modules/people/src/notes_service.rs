@@ -14,12 +14,27 @@ use sha2::{Digest, Sha256};
 
 const RESOURCE: &str = "people-notes";
 const UNAVAILABLE: &str = "People notes folder is unavailable";
+#[cfg(test)]
+#[path = "tests/note_scan/mod.rs"]
+mod tests;
 #[derive(Deserialize)]
 struct CurrentNote {
     path: String,
     #[serde(rename = "destinationId")]
     destination_id: String,
     content: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum ScanKind {
+    Directory,
+    File,
+}
+#[derive(Deserialize)]
+struct ScanEntry {
+    name: String,
+    kind: ScanKind,
 }
 
 pub struct NotesService<'a, H: Host + ?Sized> {
@@ -47,48 +62,46 @@ impl<'a, H: Host + ?Sized> NotesService<'a, H> {
         Ok(())
     }
     fn files(&self) -> Result<Vec<NoteFile>> {
-        let mut directories = vec![String::new()];
+        // Reverse each immediate listing onto a work stack so a directory is
+        // visited in place, before its following siblings, like the legacy walk.
+        // An explicit stack keeps deeply nested folders off the Wasm call stack.
+        let mut pending = vec![(String::new(), ScanKind::Directory)];
         let mut files = vec![];
         let mut total = 0usize;
         let mut bytes = 0usize;
-        while let Some(directory) = directories.pop() {
-            let listing =
-                self.host
-                    .call("vault", "notes.list", RESOURCE, json!({"path":directory}))?;
-            let entries = listing["entries"]
-                .as_array()
-                .ok_or_else(|| Error::new("Invalid notes listing"))?;
-            total += entries.len();
-            if total > 2000 {
-                return Err(Error::new("People folder exceeds the note scan limit"));
-            }
-            // The host supplies confined immediate names; guests never choose an absolute root.
-            for entry in entries {
-                let name = entry["name"]
-                    .as_str()
-                    .ok_or_else(|| Error::new("Invalid note name"))?;
-                let path = if directory.is_empty() {
-                    name.into()
-                } else {
-                    format!("{directory}/{name}")
-                };
-                match entry["kind"].as_str() {
-                    Some("directory") => directories.push(path),
-                    Some("file") => {
-                        let current = self.read(&path)?;
-                        // A disappearing file is a conflict, not an empty note to project.
-                        let content = current
-                            .content
-                            .ok_or_else(|| Error::new("People note changed during refresh"))?;
-                        bytes += content.len();
-                        if bytes > 4 * 1024 * 1024 {
-                            return Err(Error::new(
-                                "People folder exceeds the note scan size limit",
-                            ));
-                        }
-                        files.push(NoteFile { path, content });
+        while let Some((path, kind)) = pending.pop() {
+            match kind {
+                ScanKind::Directory => {
+                    let listing =
+                        self.host
+                            .call("vault", "notes.list", RESOURCE, json!({"path":path}))?;
+                    let entries: Vec<ScanEntry> =
+                        serde_json::from_value(listing["entries"].clone())?;
+                    total += entries.len();
+                    if total > 2000 {
+                        return Err(Error::new("People folder exceeds the note scan limit"));
                     }
-                    _ => return Err(Error::new("Invalid notes entry")),
+                    // The host supplies confined immediate names, never an absolute root.
+                    for entry in entries.into_iter().rev() {
+                        let child = if path.is_empty() {
+                            entry.name
+                        } else {
+                            format!("{path}/{}", entry.name)
+                        };
+                        pending.push((child, entry.kind));
+                    }
+                }
+                ScanKind::File => {
+                    let current = self.read(&path)?;
+                    // A disappearing file is a conflict, not an empty note to project.
+                    let content = current
+                        .content
+                        .ok_or_else(|| Error::new("People note changed during refresh"))?;
+                    bytes += content.len();
+                    if bytes > 4 * 1024 * 1024 {
+                        return Err(Error::new("People folder exceeds the note scan size limit"));
+                    }
+                    files.push(NoteFile { path, content });
                 }
             }
         }

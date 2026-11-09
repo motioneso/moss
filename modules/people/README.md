@@ -2,8 +2,8 @@
 
 The Rust checkpoint contains the People core, SDK-backed repository, canonical-note service,
 two job handlers, route envelopes and a packaged Leptos Settings pane. The installed-package
-gate now passes signed registry installation, reload, the enumerated route replay and all
-four public lookup APIs through an installed consumer fixture. The authenticated Rust
+gate exercises signed registry installation, reload, route replay and all four public lookup
+APIs through an installed consumer fixture; the report records the current result. The authenticated Rust
 application still needs to compose that package into its real Settings and chat flows.
 The [delivery report](../../docs/superpowers/specs/2026-11-08-rust-phase5-people-report.md)
 records each delivered slice and the exact remaining continuation work.
@@ -34,13 +34,25 @@ node modules/people/tools/directory-vectors.mjs > /tmp/moss-people-directory-par
 cmp modules/people/src/tests/fixtures/directory-parity.json /tmp/moss-people-directory-parity.json
 node modules/people/tools/number-vectors.mjs > /tmp/moss-people-number-parity.json
 cmp modules/people/src/tests/fixtures/number-parity.json /tmp/moss-people-number-parity.json
+pnpm exec tsx modules/people/tools/note-scan-vectors.ts > /tmp/moss-people-note-scan-parity.json
+cmp modules/people/src/tests/fixtures/note-scan-parity.json /tmp/moss-people-note-scan-parity.json
 ```
 
 The vector generator runs the current TypeScript matching and note-format implementation.
 The directory oracle records JavaScript `localeCompare` for canonical Unicode equivalents
 and nearby case/order comparisons. The relative folder browser normalizes comparison keys
 to NFC, preserving original names and paths and stable input order for equal keys.
-This is canonical-equivalence coverage, not complete locale collation. The existing
+Index batches use one host-owned timestamp for their fifteen-minute delay, anchored at
+batch start. Each item still gets its own command record and queue send; retries retain the
+original record's delay. An empty batch performs no clock or queue work.
+
+The note-scan oracle uses the real legacy vault walker on temporary synthetic folders,
+including interleaved root files, sibling/nested folders, Unicode names, ignored extensions
+and a deeply nested note. The guest preserves that depth-first listing order with an
+explicit stack. Native checks retain the total-entry/text limits and stop before projection
+on nested backend failures or disappearing files. This does not qualify every filesystem's
+directory enumeration order. Directory comparison is canonical-equivalence coverage, not
+complete locale collation. The existing
 literal-dollar safeguard for managed-note edits remains unchanged.
 It performs no database work. These fixtures prove only pure domain behavior. Database
 and live checks must go through verify-gate and the real Rust application before full People
@@ -112,7 +124,10 @@ Folder settings, relative directory browsing and legacy body-schema validation a
 Manual index refresh is included; ingest nudges and complete HTTP compatibility remain continuation work.
 Scans fail explicitly above two thousand entries or four MiB of text;
 individual files retain the adapter's size bound. This bounded scan is not unlimited-folder
-parity. The manifest declares the packaged Settings screen; real shell reachability remains
+parity. The shared adapter also refuses relative note paths over 1024 UTF-8 bytes and
+non-UTF-8 filenames. Its byte-sorted immediate listings are the guest's traversal input;
+the oracle records that host ordering separately from the real legacy walk.
+The manifest declares the packaged Settings screen; real shell reachability remains
 unqualified.
 
 The additional route-envelope differential gate uses the real legacy Fastify handlers,

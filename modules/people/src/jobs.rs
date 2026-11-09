@@ -72,11 +72,24 @@ fn store(host: &impl Host, queue: &str, id: &str, command: Value) -> Result<Reco
     // records.put atomically returns the original immutable value on a retry.
     // A separate read would add a host/filesystem round trip to every fresh job.
     // same() below still refuses conflicting commands and keeps the first delay.
-    let now = host.call("context", "read", "call", json!({}))?["now"]
+    store_at(host, queue, id, command, command_time(host)?)
+}
+
+pub(crate) fn command_time(host: &impl Host) -> Result<DateTime<Utc>> {
+    host.call("context", "read", "call", json!({}))?["now"]
         .as_str()
         .ok_or_else(|| Error::new("Missing job time"))?
         .parse::<DateTime<Utc>>()
-        .map_err(|_| Error::new("Invalid job time"))?;
+        .map_err(|_| Error::new("Invalid job time"))
+}
+
+fn store_at(
+    host: &impl Host,
+    queue: &str,
+    id: &str,
+    command: Value,
+    now: DateTime<Utc>,
+) -> Result<Record> {
     let available = if queue == INDEX {
         now + Duration::minutes(15)
     } else {
@@ -115,11 +128,21 @@ fn enqueue(host: &impl Host, id: &str, record: &Record, deferred: bool) -> Resul
     Ok(())
 }
 pub fn enqueue_index(host: &impl Host, command: &IndexCommand) -> Result<()> {
-    let record = store(
+    enqueue_index_at(host, command, command_time(host)?)
+}
+// A manual/API batch shares one host-owned enqueue time. IDs, immutable records,
+// queue sends and partial-failure behaviour remain independent for each item.
+pub(crate) fn enqueue_index_at(
+    host: &impl Host,
+    command: &IndexCommand,
+    now: DateTime<Utc>,
+) -> Result<()> {
+    let record = store_at(
         host,
         INDEX,
         &command.command_id,
         serde_json::to_value(command)?,
+        now,
     )?;
     enqueue(host, &command.command_id, &record, false)
 }
@@ -140,8 +163,11 @@ pub fn api(host: &impl Host, name: &str, parameters: Value) -> Result<Value> {
         }
         "enqueueIndexBatch" => {
             let batch: Batch = serde_json::from_value(parameters)?;
-            for command in batch.commands.iter().take(50) {
-                enqueue_index(host, command)?;
+            if !batch.commands.is_empty() {
+                let now = command_time(host)?;
+                for command in batch.commands.iter().take(50) {
+                    enqueue_index_at(host, command, now)?;
+                }
             }
             Ok(json!({"enqueued":batch.commands.len().min(50)}))
         }

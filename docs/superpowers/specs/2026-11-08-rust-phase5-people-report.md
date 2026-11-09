@@ -1885,3 +1885,225 @@ their launch fingerprint.
 The full People port remains **incomplete** for the acceptance items listed above.
 No real application screen, authenticated chat flow or second-device HTTPS path
 was exercised by these command-line checks.
+
+## Part seventeen: nested note discovery order
+
+This checkpoint starts at current main `b8d52e8d4` (People part sixteen, PR 4115).
+The task branch was still at Phase 0a and was fast-forwarded while clean before
+editing. The brief's PR 4066 reference predates that verified base. No Vikunja
+card or sibling module source was changed.
+
+### Behaviour and regression
+
+The legacy vault walker descends into each folder where it occurs in the immediate
+listing. The Rust guest instead read root files first, then visited sibling folders
+in reverse order. That changed canonical-note discovery order before refresh work.
+The guest now uses an explicit work stack, preserving the supplied listing order
+without recursive Wasm calls. The shared host still chooses and confines the folder;
+the module adds no filesystem access, server dependency or client-side data store.
+
+The new oracle creates real synthetic folders and calls the existing TypeScript
+`listVaultFilesRecursive` through `VaultContextRunner`. Eight recorded cases include
+interleaved root files and nested/sibling directories, Unicode names, ignored file
+extensions and a note thirty-two folders deep. The same native regression failed
+before the fix (`rc=101`): Rust returned `root.md`, `B/second.md`, `A/first.md`,
+`A/z.md`, `A/Nested/deep.md`; the legacy result starts with `A/Nested/deep.md`
+and ends with `root.md`. The restored traversal passes that regression.
+
+Native boundary checks retain the two-thousand admitted-entry and four-MiB text
+limits. They check the exact allowed boundaries and the next overflowing entry,
+and refuse nested listing/read failures or disappearing files before any projection
+query. These checks use a host double; the compiled database and installed replay
+results are recorded separately below. No unlimited-folder or complete
+cross-filesystem enumeration-order parity is claimed.
+
+Several existing nested HTTP replay fixtures lacked the mandatory `status` field,
+so the old parser ignored them. They now contain valid canonical, missing-ID and
+duplicate-ID notes, plus real block-list aliases and emails. The oracle explicitly
+requires projections and review candidates instead of accepting that silent loss
+of coverage. The module app map, README and changelog describe the delivered scan.
+
+The first independent review found no blocker or major issue and four minor points.
+Its ordering suggestion is addressed by explicitly byte-sorting the host-shaped
+oracle listings; the expected walk still comes from the real legacy vault. New
+checks reject malformed listings through the SDK's fixed `Invalid host response`
+error before reads or projections. The README now also records the existing host
+refusals for non-UTF-8 names and relative paths over 1024 UTF-8 bytes.
+The review suggested exactly two refresh candidates, but the earlier replay steps
+also leave two unmerged records without canonical notes. The strengthened assertion
+requires all four candidates rather than accepting a lower bound. An initial
+assertion incorrectly counted a merged record; the real legacy replay returned
+four, matching the service rule that excludes merged records. That failed replay
+(`task_127_rust_port_phase_5_people_module-20261109-055145-973EZy.log`, `rc=1`)
+is not passing evidence; the corrected assertion is rerun below.
+
+The first installed gate stopped before replay because the downstream JSON test's
+lockfile lacked the newly merged host's existing `libc` dependency edge. Its failed
+receipt is `task_127_rust_port_phase_5_people_module-20261109-054801-gnvA7g.log`,
+`rc=101`; the disposable container was removed. Refreshing that single lockfile
+edge adds no new dependency. This failed run is not parity evidence.
+The reviewer also reported a native trait-identity compile failure while sharing
+the host target. A fresh task-owned native target passed; subsequent native tests
+and Clippy use that separate target. The exact cause of the reviewer's failure
+was not established.
+
+### Build and acceptance limits
+
+All Cargo, Rustup and target caches belong to this task's scratch directory.
+The pinned compiler and declared dependency caches were copied locally; declared
+Wasm standard-library targets and the approved pinned `wit-bindgen =0.57.1` were
+used there. JavaScript dependencies were restored from the lockfile offline.
+No global tool or new third-party package was installed.
+
+The task browser was tried again and Chrome refused to launch with "No usable
+sandbox". The shipping shell router still exposes shell, Today, desktop notices
+and chat; it does not compose installed People module frames/routes. A standalone
+render or dispatch test cannot qualify that missing authenticated application path.
+No application screen, sign-in, chat approval or physical-device HTTPS result is
+claimed by this checkpoint.
+
+The full People port remains **incomplete**. Remaining acceptance is:
+
+1. Compose installed module frames, routes and People chat tools into the
+   authenticated Rust server, keeping the Rust app a client of its local or remote
+   server API. Qualify numeric parsing through the shipping listener.
+2. Connect ingest nudges and real source providers; qualify installed scheduling,
+   command retention/quotas, backend failures, larger data sets and the remaining
+   locale-sensitive ordering gaps. Failed refresh batches can still leave earlier
+   jobs and stored commands; repeating a request can duplicate work.
+3. Exercise the real installed UI and chat approvals, sign-in, trusted origins,
+   privacy and HTTPS on desktop and a second physical device. Repair the task
+   browser's environment before claiming its UI path.
+
+Completing those assembled paths exceeds this bounded checkpoint. It is submitted
+as partial parity work, without a claim that Phase 5 acceptance is complete.
+
+### Verification receipts
+
+The full disposable-database People gate passed (`rc=0`):
+`task_127_rust_port_phase_5_people_module-20261109-054501-XTTogl.log`.
+It launched on clean commit `0e49126c91cc30c905af7eb5f43ff221814623b5`, fingerprint
+`sha256:354a489c253b25f890cf60ce48551568ac3278a7c885b37a4a0f487600f2f368`.
+This covers the existing compiled workers, notes, Settings, tools and data rules.
+Privacy controls failed with protection removed and passed after restoring it for
+all seven tables, both runtime roles, and owner/other/admin actors. Settings and
+folder-preference privacy also failed without RLS and passed when restored. The
+container was removed. Followups through `571ca1d7b` changed test fixtures, the
+downstream lockfile and this report. The timestamp optimization below changes
+production guest code and needs its own installed receipt; this earlier gate does
+not qualify that later optimization.
+
+The native People suite passed all thirty tests in a separate task-owned target,
+and strict Clippy passed all native targets. Core, directory, numeric and new
+note-scan vectors were regenerated and matched their committed fixtures. Component
+and UI builds passed. Repository `pnpm lint`, `pnpm format:check`, `pnpm typecheck`,
+`pnpm build:app-map` and `pnpm check:file-size` passed. The final root TypeScript
+check and scoped lint/format checks also passed after the oracle followups.
+
+Built component SHA-256:
+`d2e0b57ce89956854eb97bf18d049898a70b3c5e1dfd1b970dfd5300d22cb188`.
+Built package SHA-256:
+`f675bdb6435d4e8461f516dafc87ea620faa6eb817966c4a920dc7c3d663d686`.
+The package was built before test-only followups; production source and the module
+manifest are unchanged since that build. The installed gate logs those exact
+hashes and creates a temporary signed registry for download/install/reload.
+
+The corrected nested replay reached both refresh checks with exactly seven notes,
+three projections, one ignored note and four candidates. However, its first full
+attempt failed the existing fifty-reference refresh deadline: status 500 at
+5362 milliseconds against the unchanged 5000-millisecond limit. Receipt:
+`task_127_rust_port_phase_5_people_module-20261109-055607-8y58p5.log`, `rc=101`,
+fingerprint `sha256:6ac6f7c982a9d038cdaaea4fe26201b98cd2ddd3c15546b52586ca182bbe7c15`.
+It launched during the commit of the two corrected fixture/report files, so its
+header records dirty inputs on `14628170c`; those bytes were committed in
+`571ca1d7b`. This run is not full installed-parity evidence. A single rerun follows
+after this task's competing full gate and TypeScript checks have all finished;
+it retains the exact same package, strict deadline and response assertions.
+
+The last installed replay also failed (`rc=101`):
+`task_127_rust_port_phase_5_people_module-20261109-060340-eM3wXU.log`.
+It launched on clean commit `571ca1d7b639410056ebd93ab7bbac7beb6531c5`, fingerprint
+`sha256:e9a236fcd3b0aee03e7e63303f8c1b8e7a6b01396a88acd17296bd043fcebea9`.
+The normal downstream host JSON consumer passed 283 numeric vectors and three
+malformed/out-of-range bodies; the UI frame bridge test passed. Both nested legacy
+refresh assertions passed. The signed package downloaded, installed with legacy
+SQL and reloaded, but the fifty-reference request returned status 500 after
+6839 milliseconds. The gate stopped there, before completing the route/table and
+dependent-API comparisons. Its container was removed. The unchanged strict limit
+was not weakened and no further identical rerun was attempted.
+
+At that point the full installed parity run was **not passing**. That receipt did
+not requalify the previous checkpoint's batch-budget claim on this machine.
+Whether the deadline misses are solely contention or expose another performance
+problem was not established. Request-budget qualification remains open alongside
+the application/device acceptance above. The nested traversal fix, native bounds
+and full People privacy gate are independently evidenced; they do not substitute
+for that missing full installed result. Final review findings and the proof
+artifact accompany the checkpoint PR.
+
+### Added review round: batch clock and interleaved scan cases
+
+The second review found a major evidence gap: the failed index refresh stopped the
+installed replay before the changed nested-note cases. It also found a minor scan
+fixture gap: every immediate listing placed folders before files. The Assistant
+added one review round before further edits.
+
+Two new real-vault vectors put a file before a sibling folder and another file
+after it (`0.md`, `B/x.md`, `c.md`, and the lowercase equivalent). They distinguish
+the supplied-listing walk from a folders-first walk. The oracle now has eight
+cases; its expected paths still come from the actual legacy walker.
+
+The refresh batch also performed fifty separate host clock reads. New assertions
+failed first on both the HTTP path and public batch API (`rc=101`, fifty reads
+instead of one). Each nonempty batch now reads one host-owned timestamp and uses
+that as its fifteen-minute delay anchor. This intentionally gives all new items
+in the batch the same scheduled time, rather than sampling the clock separately
+for each send. Each item still gets its own fresh ID (for manual refresh), immutable
+command record and queue send. Retry records keep their original scheduled time.
+Empty batches perform no clock work; invalid host time publishes nothing; earlier
+sends remain queued after a later send fails. The maximum batch removes forty-nine
+host clock round trips without widening the shipping call deadline or changing
+request/response shapes, command scoping or queue parameters. The app map and
+changelog describe the batch timestamp anchor.
+
+The updated native suite passed all thirty tests, including the new scan vectors,
+empty batches, invalid time, original retry delays and partial sends. Strict Clippy,
+Rust formatting, scoped TypeScript lint/format, app-map generation and file-size
+checks passed. The regenerated eight scan vectors match the committed fixture.
+Earlier root lint/type/format checks are recorded above; no additional dependency
+or tool was installed for this followup.
+
+The rebuilt generated component and package passed the full installed replay:
+`task_127_rust_port_phase_5_people_module-20261109-063524-h6iVVI.log`, `rc=0`.
+It launched on clean commit `63f817478af3c88cfd17f6b6644438b17bd8e0c9`, fingerprint
+`sha256:4358d040e72d42e815b046c0a69f5b52e985d01cc17d15c4197d79f43992545d`.
+
+- Component SHA-256: `5c677ac2b29e59b8830311bf2eedd982adb8bde4722ad6a5ea35b79e6c3a70a6`.
+- Package SHA-256: `eab2033d4a525311237e533169203d4eef54a1ced0a2f7a399cd3727e3a3f87f`.
+- The normal downstream JSON consumer passed 283 numeric vectors and three invalid
+  bodies, and the real frame bridge test passed.
+- The package was downloaded from a temporary signed registry, installed with the
+  legacy SQL and reloaded. Its fifty-reference request returned 202 in 2290 ms,
+  below the unchanged 5000-ms deadline and strict elapsed assertion.
+- Both nested refresh assertions reported seven discovered notes, three projected,
+  one ignored and four review candidates. All 170 legacy route responses and
+  seven-table snapshots matched, including the corrected nested cases and
+  other-user/admin attempts.
+- All four public APIs passed through the installed consumer, including denied
+  cross-account/admin lookups. Installed folder save/browse/rejected-clear checks
+  and the packaged Settings asset passed. These remain fixture/dispatch evidence,
+  not a browser or shipping authenticated application proof.
+- The gate removed its disposable database container after success.
+
+A real `uptime` sample during this run reported load averages 23.96, 37.07 and
+48.34 on a machine reporting sixteen CPUs; the earlier failing run was observed
+near eighty by the reviewer. The clock optimization removes measured extra calls,
+but changing host load also affects elapsed time. This one successful run does not
+establish a latency guarantee under other load or prove the whole speedup came
+from this change. The earlier failed receipts remain in the record. The passing
+full replay resolves the second review's missing compiled-note comparisons; the
+additional final review and its exact verdict accompany the PR and proof artifact.
+
+The full People port still lacks the server/application, ingest and real-device
+acceptance listed above. No UI screenshot, sign-in, approval or HTTPS device
+result is added by this passing command-line replay.

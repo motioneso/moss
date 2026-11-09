@@ -10,6 +10,7 @@ struct Ports {
     records: RefCell<BTreeMap<(String, String), Value>>,
     jobs: RefCell<BTreeMap<(String, String), Value>>,
     now: RefCell<String>,
+    clock_reads: Cell<usize>,
     fail_enqueue: RefCell<bool>,
     next_id: Cell<u64>,
     fail_after: Cell<Option<usize>>,
@@ -22,7 +23,10 @@ impl Host for Ports {
                 self.next_id.set(id);
                 Ok(json!({"id":format!("30000000-0000-4000-8000-{id:012}")}))
             }
-            ("context", "read") => Ok(json!({"now":*self.now.borrow()})),
+            ("context", "read") => {
+                self.clock_reads.set(self.clock_reads.get() + 1);
+                Ok(json!({"now":*self.now.borrow()}))
+            }
             ("kv", "records.get") => Ok(self
                 .records
                 .borrow()
@@ -83,6 +87,11 @@ fn manual_refresh_accepts_fifty_delays_each_job_and_allows_later_requests() {
         json!({"status":202,"body":{"enqueued":50}})
     );
     assert_eq!(host.jobs.borrow().len(), 50);
+    assert_eq!(
+        host.clock_reads.get(),
+        1,
+        "A batch reads the host clock once"
+    );
     for job in host.jobs.borrow().values() {
         assert_eq!(job["availableAt"], "2026-11-08T12:15:00.000Z");
         assert_eq!(job["params"].as_object().unwrap().len(), 1);
@@ -94,9 +103,15 @@ fn manual_refresh_accepts_fifty_delays_each_job_and_allows_later_requests() {
     );
     assert_eq!(host.jobs.borrow().len(), 51);
     assert_eq!(
+        host.clock_reads.get(),
+        2,
+        "A later request gets a fresh time"
+    );
+    assert_eq!(
         refresh(&host, json!({"sourceRefs":[]})),
         json!({"status":202,"body":{"enqueued":0}})
     );
+    assert_eq!(host.clock_reads.get(), 2, "Empty refreshes need no clock");
 }
 
 #[test]
@@ -114,6 +129,14 @@ fn invalid_refreshes_publish_nothing_and_queue_failures_return_safe_errors() {
         assert!(host.records.borrow().is_empty());
         assert!(host.jobs.borrow().is_empty());
     }
+    *host.now.borrow_mut() = "invalid host time".into();
+    assert_eq!(
+        refresh(&host, json!({"sourceRefs":[source.clone()]}))["status"],
+        500
+    );
+    assert!(host.records.borrow().is_empty());
+    assert!(host.jobs.borrow().is_empty());
+    *host.now.borrow_mut() = "2026-11-08T12:00:00.000Z".into();
     *host.fail_enqueue.borrow_mut() = true;
     assert_eq!(
         refresh(&host, json!({"sourceRefs":[source]})),
@@ -194,6 +217,11 @@ fn enqueue_retries_keep_opaque_versions_and_time_without_suppressing_later_cycle
 fn index_batches_cap_at_fifty_and_memory_sync_remains_a_stub() {
     let host = Ports::default();
     *host.now.borrow_mut() = "2026-11-08T12:00:00.000Z".into();
+    assert_eq!(
+        api(&host, "enqueueIndexBatch", json!({"commands":[]})).unwrap(),
+        json!({"enqueued":0})
+    );
+    assert_eq!(host.clock_reads.get(), 0);
     let commands: Vec<_> = (0..55)
         .map(|n| request(&format!("10000000-0000-4000-8000-{n:012}")))
         .collect();
@@ -202,6 +230,11 @@ fn index_batches_cap_at_fifty_and_memory_sync_remains_a_stub() {
         json!({"enqueued":50})
     );
     assert_eq!(host.jobs.borrow().len(), 50);
+    assert_eq!(
+        host.clock_reads.get(),
+        1,
+        "A batch reads the host clock once"
+    );
     let id = "20000000-0000-4000-8000-000000000001";
     api(&host,"enqueueMemorySync",json!({"commandId":id,"personId":"20000000-0000-4000-8000-000000000002","personUpdatedAt":"2026-11-08T12:00:00.000Z","reason":"index_complete"})).unwrap();
     assert_eq!(

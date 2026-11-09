@@ -1,7 +1,7 @@
 //! Manual refresh uses one fresh command per reference. The legacy standard
 //! queue does not coalesce repeated singleton keys; retries of internal commands
 //! still use the immutable reference path in jobs.rs.
-use crate::jobs::{enqueue_index, IndexCommand};
+use crate::jobs::{command_time, enqueue_index_at, IndexCommand};
 use moss_module_sdk::{Error, Host, Response, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -24,12 +24,16 @@ pub(crate) fn refresh(host: &impl Host, body: &Value) -> Result<Response> {
     // Route validation has already applied the legacy schema and coercion to
     // the complete batch, so malformed later entries cannot publish earlier ones.
     let request: Refresh = serde_json::from_value(body.clone())?;
+    if request.source_refs.is_empty() {
+        return Ok(Response::new(202, json!({"enqueued":0})));
+    }
+    let now = command_time(host)?;
     for source in &request.source_refs {
         let id = host.call("context", "uuid", "new", json!({}))?["id"]
             .as_str()
             .ok_or_else(|| Error::new("Missing People command ID"))?
             .to_owned();
-        enqueue_index(
+        enqueue_index_at(
             host,
             &IndexCommand {
                 command_id: id,
@@ -38,6 +42,7 @@ pub(crate) fn refresh(host: &impl Host, body: &Value) -> Result<Response> {
                 source_version: source.source_version.clone(),
                 reason: source.reason.clone(),
             },
+            now,
         )?;
     }
     Ok(Response::new(
