@@ -115,83 +115,178 @@ fn directories(host: &impl Host, request: &RouteRequest) -> Result<Response> {
     ))
 }
 
-// The legacy listing sorts with JavaScript localeCompare. It orders letters
-// by their base letter first, then by accent, then by case, and it puts
-// punctuation before digits and digits before letters.
+// The legacy listing sorts with JavaScript localeCompare: punctuation in
+// legacy collation order, then digits, then letters by base letter, accent
+// and case. Special letters expand or follow their base letter.
 pub(crate) fn locale_compare(a: &str, b: &str) -> std::cmp::Ordering {
-    use std::cmp::Ordering;
-    let primary = |s: &str| {
-        s.chars()
-            .map(|c| {
-                let (base, _) = base_letter(c);
-                if base.is_ascii_digit() {
-                    (1, base)
-                } else if base.is_alphabetic() {
-                    (2, base.to_lowercase().next().unwrap_or(base))
-                } else {
-                    (0, c)
+    let keys = |s: &str| {
+        let mut primary: Vec<(u8, u32)> = Vec::new();
+        let mut secondary: Vec<u32> = Vec::new();
+        for c in s.chars() {
+            if let Some(rank) = combining_rank(c) {
+                if let Some(last) = secondary.last_mut() {
+                    *last = rank;
                 }
-            })
-            .collect::<Vec<_>>()
+                continue;
+            }
+            let (expansion, rank) = base_expansion(c);
+            for (i, base) in expansion.chars().enumerate() {
+                primary.push(primary_key(base));
+                secondary.push(if i == 0 { rank } else { 0 });
+            }
+        }
+        (primary, secondary)
     };
-    primary(a)
-        .cmp(&primary(b))
-        .then_with(|| {
-            a.chars()
-                .map(|c| base_letter(c).1)
-                .cmp(b.chars().map(|c| base_letter(c).1))
-        })
+    let (primary_a, secondary_a) = keys(a);
+    let (primary_b, secondary_b) = keys(b);
+    primary_a
+        .cmp(&primary_b)
+        .then_with(|| secondary_a.cmp(&secondary_b))
         .then_with(|| {
             a.chars()
                 .map(|c| c.is_uppercase())
                 .cmp(b.chars().map(|c| c.is_uppercase()))
         })
         .then_with(|| a.cmp(b))
-        .then(Ordering::Equal)
 }
 
-// Returns the unaccented base letter and an accent rank where plain is zero.
-fn base_letter(c: char) -> (char, u8) {
-    let (base, rank) = match c {
-        'À' | 'Á' | 'Â' | 'Ã' | 'Ä' | 'Å' | 'Ā' | 'Ă' | 'Ą' => ('A', 1),
-        'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' | 'ā' | 'ă' | 'ą' => ('a', 1),
-        'Ç' | 'Ć' | 'Ĉ' | 'Ċ' | 'Č' => ('C', 1),
-        'ç' | 'ć' | 'ĉ' | 'ċ' | 'č' => ('c', 1),
-        'È' | 'É' | 'Ê' | 'Ë' | 'Ē' | 'Ĕ' | 'Ė' | 'Ę' | 'Ě' => ('E', 1),
-        'è' | 'é' | 'ê' | 'ë' | 'ē' | 'ĕ' | 'ė' | 'ę' | 'ě' => ('e', 1),
-        'Ì' | 'Í' | 'Î' | 'Ï' | 'Ī' | 'Ĭ' | 'Į' | 'İ' => ('I', 1),
-        'ì' | 'í' | 'î' | 'ï' | 'ī' | 'ĭ' | 'į' | 'ı' => ('i', 1),
-        'Ñ' | 'Ń' | 'Ň' => ('N', 1),
-        'ñ' | 'ń' | 'ň' => ('n', 1),
-        'Ò' | 'Ó' | 'Ô' | 'Õ' | 'Ö' | 'Ō' | 'Ŏ' | 'Ő' => ('O', 1),
-        'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ō' | 'ŏ' | 'ő' => ('o', 1),
-        'Ù' | 'Ú' | 'Û' | 'Ü' | 'Ū' | 'Ŭ' | 'Ů' | 'Ű' | 'Ų' => ('U', 1),
-        'ù' | 'ú' | 'û' | 'ü' | 'ū' | 'ŭ' | 'ů' | 'ű' | 'ų' => ('u', 1),
-        'Ý' | 'Þ' => ('Y', 1),
-        'ý' | 'ÿ' | 'þ' => ('y', 1),
-        'Š' | 'Ŝ' | 'Ş' => ('S', 1),
-        'š' | 'ŝ' | 'ş' => ('s', 1),
-        'Ž' | 'Ź' | 'Ż' => ('Z', 1),
-        'ž' | 'ź' | 'ż' => ('z', 1),
-        'Ğ' | 'Ĝ' | 'Ġ' | 'Ģ' => ('G', 1),
-        'ğ' | 'ĝ' | 'ġ' | 'ģ' => ('g', 1),
-        'Ĥ' | 'Ħ' => ('H', 1),
-        'ĥ' | 'ħ' => ('h', 1),
-        'Ĵ' => ('J', 1),
-        'ĵ' => ('j', 1),
-        'Ķ' => ('K', 1),
-        'ķ' => ('k', 1),
-        'Ĺ' | 'Ļ' | 'Ľ' | 'Ŀ' | 'Ł' => ('L', 1),
-        'ĺ' | 'ļ' | 'ľ' | 'ŀ' | 'ł' => ('l', 1),
-        'Ŕ' | 'Ŗ' | 'Ř' => ('R', 1),
-        'ŕ' | 'ŗ' | 'ř' => ('r', 1),
-        'Ť' | 'Ţ' | 'Ŧ' => ('T', 1),
-        'ť' | 'ţ' | 'ŧ' => ('t', 1),
-        'Ď' | 'Đ' => ('D', 1),
-        'ď' | 'đ' => ('d', 1),
-        _ => (c, 0),
+fn primary_key(c: char) -> (u8, u32) {
+    const PUNCTUATION: &str = " _-,;:!?.'()[]{}@*/\\&#%`^+=<>|~$";
+    if c.is_ascii_digit() {
+        (1, c as u32)
+    } else if c.is_alphabetic() {
+        (2, c.to_lowercase().next().unwrap_or(c) as u32)
+    } else if let Some(index) = PUNCTUATION.chars().position(|p| p == c) {
+        (0, index as u32)
+    } else {
+        (0, 1000 + c as u32)
+    }
+}
+
+fn combining_rank(c: char) -> Option<u32> {
+    Some(match c {
+        '\u{301}' => 2,
+        '\u{300}' => 3,
+        '\u{306}' => 4,
+        '\u{302}' => 5,
+        '\u{30c}' => 6,
+        '\u{30a}' => 7,
+        '\u{308}' => 8,
+        '\u{303}' => 9,
+        '\u{307}' => 10,
+        '\u{327}' => 11,
+        '\u{328}' => 12,
+        '\u{304}' => 13,
+        '\u{30b}' => 14,
+        '\u{300}'..='\u{36f}' => 15,
+        _ => return None,
+    })
+}
+
+// Returns the base letters a character sorts as, plus its accent rank.
+// Plain letters rank zero and special letter forms rank one.
+fn base_expansion(c: char) -> (String, u32) {
+    let (expansion, rank) = match c {
+        'Æ' | 'æ' => ("ae".to_owned(), 1),
+        'Œ' | 'œ' => ("oe".to_owned(), 1),
+        'ß' => ("ss".to_owned(), 1),
+        'Ø' | 'ø' => ("o".to_owned(), 1),
+        'Ð' | 'ð' => ("d".to_owned(), 1),
+        'Ł' | 'ł' => ("l".to_owned(), 1),
+        'Ħ' | 'ħ' => ("h".to_owned(), 1),
+        'Ŧ' | 'ŧ' => ("t".to_owned(), 1),
+        'Đ' | 'đ' => ("d".to_owned(), 1),
+        _ => {
+            let (base, rank) = base_letter(c);
+            (base.to_string(), rank)
+        }
     };
-    (base, rank)
+    (expansion, rank)
+}
+
+fn base_letter(c: char) -> (char, u32) {
+    // Accent ranks follow the legacy accent order: acute, grave, breve,
+    // circumflex, caron, ring, diaeresis, tilde, dot, cedilla, ogonek,
+    // macron, then double acute.
+    match c {
+        'À' | 'à' => ('a', 3),
+        'Á' | 'á' => ('a', 2),
+        'Â' | 'â' => ('a', 5),
+        'Ã' | 'ã' => ('a', 9),
+        'Ä' | 'ä' => ('a', 8),
+        'Å' | 'å' => ('a', 7),
+        'Ā' | 'ā' => ('a', 13),
+        'Ă' | 'ă' => ('a', 4),
+        'Ą' | 'ą' => ('a', 12),
+        'Ç' | 'ç' => ('c', 11),
+        'Ć' | 'ć' => ('c', 2),
+        'Ĉ' | 'ĉ' => ('c', 5),
+        'Ċ' | 'ċ' => ('c', 10),
+        'Č' | 'č' => ('c', 6),
+        'È' | 'è' => ('e', 3),
+        'É' | 'é' => ('e', 2),
+        'Ê' | 'ê' => ('e', 5),
+        'Ë' | 'ë' => ('e', 8),
+        'Ē' | 'ē' => ('e', 13),
+        'Ĕ' | 'ĕ' => ('e', 4),
+        'Ė' | 'ė' => ('e', 10),
+        'Ę' | 'ę' => ('e', 12),
+        'Ě' | 'ě' => ('e', 6),
+        'Ì' | 'ì' => ('i', 3),
+        'Í' | 'í' => ('i', 2),
+        'Î' | 'î' => ('i', 5),
+        'Ï' | 'ï' => ('i', 8),
+        'Ī' | 'ī' => ('i', 13),
+        'Ĭ' | 'ĭ' => ('i', 4),
+        'Į' | 'į' => ('i', 12),
+        'İ' => ('i', 10),
+        'Ñ' | 'ñ' => ('n', 9),
+        'Ń' | 'ń' => ('n', 2),
+        'Ň' | 'ň' => ('n', 6),
+        'Ò' | 'ò' => ('o', 3),
+        'Ó' | 'ó' => ('o', 2),
+        'Ô' | 'ô' => ('o', 5),
+        'Õ' | 'õ' => ('o', 9),
+        'Ö' | 'ö' => ('o', 8),
+        'Ō' | 'ō' => ('o', 13),
+        'Ŏ' | 'ŏ' => ('o', 4),
+        'Ő' | 'ő' => ('o', 14),
+        'Ù' | 'ù' => ('u', 3),
+        'Ú' | 'ú' => ('u', 2),
+        'Û' | 'û' => ('u', 5),
+        'Ü' | 'ü' => ('u', 8),
+        'Ū' | 'ū' => ('u', 13),
+        'Ŭ' | 'ŭ' => ('u', 4),
+        'Ů' | 'ů' => ('u', 7),
+        'Ű' | 'ű' => ('u', 14),
+        'Ų' | 'ų' => ('u', 12),
+        'Ý' | 'ý' => ('y', 2),
+        'Ÿ' | 'ÿ' => ('y', 8),
+        'Š' | 'š' => ('s', 6),
+        'Ŝ' | 'ŝ' => ('s', 5),
+        'Ş' | 'ş' => ('s', 11),
+        'Ž' | 'ž' => ('z', 6),
+        'Ź' | 'ź' => ('z', 2),
+        'Ż' | 'ż' => ('z', 10),
+        'Ğ' | 'ğ' => ('g', 4),
+        'Ĝ' | 'ĝ' => ('g', 5),
+        'Ġ' | 'ġ' => ('g', 10),
+        'Ģ' | 'ģ' => ('g', 11),
+        'Ĥ' | 'ĥ' => ('h', 5),
+        'Ĵ' | 'ĵ' => ('j', 5),
+        'Ķ' | 'ķ' => ('k', 11),
+        'Ĺ' | 'ĺ' => ('l', 2),
+        'Ļ' | 'ļ' => ('l', 11),
+        'Ľ' | 'ľ' => ('l', 6),
+        'Ŀ' | 'ŀ' => ('l', 10),
+        'Ŕ' | 'ŕ' => ('r', 2),
+        'Ŗ' | 'ŗ' => ('r', 11),
+        'Ř' | 'ř' => ('r', 6),
+        'Ť' | 'ť' => ('t', 6),
+        'Ţ' | 'ţ' => ('t', 11),
+        'Ď' | 'ď' => ('d', 6),
+        _ => (c, 0),
+    }
 }
 
 #[cfg(test)]
@@ -214,5 +309,27 @@ mod tests {
             ]
         );
         assert_eq!(locale_compare("Family", "Work"), Ordering::Less);
+    }
+
+    #[test]
+    fn directory_order_matches_legacy_for_punctuation_and_special_letters() {
+        // Expected signs come from the legacy JavaScript localeCompare.
+        let cases = [
+            ("2024-01", "2024_01", Ordering::Greater),
+            ("-x", "_x", Ordering::Greater),
+            (".a", "_a", Ordering::Greater),
+            ("Øst", "Pa", Ordering::Less),
+            ("Æb", "af", Ordering::Less),
+            ("Straße", "Strasy", Ordering::Less),
+            ("Ÿa", "yb", Ordering::Less),
+            ("Þ", "z", Ordering::Greater),
+            ("ıa", "ib", Ordering::Greater),
+            ("á", "à", Ordering::Less),
+            ("e\u{301}z", "ea", Ordering::Greater),
+            ("Œuvre", "of", Ordering::Less),
+        ];
+        for (a, b, expected) in cases {
+            assert_eq!(locale_compare(a, b), expected, "{a} vs {b}");
+        }
     }
 }
