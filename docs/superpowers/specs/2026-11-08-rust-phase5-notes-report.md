@@ -1125,3 +1125,27 @@ the task card and in the checkpoint pull request.
 5. Finish path, error and handler parity, join Connections into the
    assembled shell, and prove the real UI and chat from a separate physical
    device over HTTPS. No such device proof is claimed here.
+
+## Part eleven checkpoint — parser vector parity
+
+### What changed
+
+- 423 input and output pairs are generated from the legacy parser by
+  `rust-spike/module-host/tests/data/memory-parser-parity.ts` and stored in
+  `memory-parser-vectors.jsonl`. A host test runs the Rust parser against
+  every row.
+- The run found one real difference. The legacy parser starts a new section
+  at a "## " heading after any line break its regex counts (LF, CR, U+2028,
+  U+2029). The Rust parser only split after LF. It now matches.
+- One vector with a lone UTF-16 surrogate (a note cut in the middle of an
+  emoji) cannot be written as JSON, so it is not in the set. Rust strings
+  cannot hold a lone surrogate, so that input never reaches the parser.
+
+### Not done in this part
+
+Wiring the ingest adapter into host assembly, queue dispatch for the sync
+job, the manual sync route and last-sync status writes. The sync job cannot
+carry file paths or hashes (queue parameters only allow ids, flags, counts
+and choices), so it needs a durable, account-bound checkpoint table with a
+new migration, row-level privacy tests and a package version bump. That is
+its own slice. Remaining-work item 3 above still stands as written.
