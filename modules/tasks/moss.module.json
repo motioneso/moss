@@ -130,6 +130,10 @@
       ]
     },
     {
+      "id": "tasks.package-tag-management",
+      "description": "Manage lists opens each list's tags. Create or rename tags, then assign them from task details. Deleting requires confirmation and removes the tag from the list's tasks while keeping the tasks. Unsaved tag names are retained after request failures and protected when returning to lists. These controls use the existing account-scoped tag routes."
+    },
+    {
       "id": "tasks.package-actions",
       "description": "Task actions preserve tool-entered text, return legacy result summaries, and run in the account-scoped host transaction. Breakdown preserves step order and adds parent activity; the HTTP route trims steps. The host requires account approval for each tool invocation. Legacy automatic-action policies, presentations and installed chat integration remain unfinished.",
       "errors": [

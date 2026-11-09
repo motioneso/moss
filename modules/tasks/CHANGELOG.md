@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Manage each list's tags in the package screen: create, rename and confirmed deletion, with draft protection.
+- Check the compiled tag routes with privacy removal controls and verify browser tag persistence.
+
 - Add the filtered task-list tool with legacy result ordering, tags and column order.
 - Compare compiled list results and privacy against the TypeScript executor; local-day recurrence and installed chat dispatch remain unfinished.
 

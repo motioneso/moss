@@ -43,7 +43,7 @@ pub fn package_files(
     }
     files.insert("code/module.wasm".into(), component);
     files.insert("ui/index.html".into(), screen::render().into_bytes());
-    for name in ["app.mjs", "model.mjs", "tasks.css"] {
+    for name in ["app.mjs", "model.mjs", "tags.mjs", "tasks.css"] {
         files.insert(
             format!("ui/{name}"),
             std::fs::read(root.join("modules/tasks/ui").join(name))?,

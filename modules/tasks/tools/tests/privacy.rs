@@ -27,6 +27,8 @@ mod owner_lookup;
 mod heartbeat;
 #[path = "privacy/jobs.rs"]
 mod jobs;
+#[path = "privacy/tags.rs"]
+mod tags;
 
 struct NativeHost<'a> {
     scope: &'a CallScope,

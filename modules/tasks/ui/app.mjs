@@ -1,6 +1,7 @@
 /* global document, window, Option */
 import { moduleClient } from "./guest-bridge.mjs";
 import { taskFields, visibleTasks, quadrant, quadrants, viewMode } from "./model.mjs";
+import { tagManager } from "./tags.mjs";
 
 const client = moduleClient();
 const $ = (id) => document.getElementById(id);
@@ -17,6 +18,15 @@ const state = {
   listDrafts: new Map()
 };
 const labels = { todo: "Open", done: "Done", suggested: "Suggested", archived: "Archived" };
+const tags = tagManager({
+  api,
+  run,
+  changed: load,
+  bindForm,
+  focus: (node) => {
+    state.focusAfter = node;
+  }
+});
 const show = (id, visible) => {
   $(id).hidden = !visible;
 };
@@ -64,6 +74,10 @@ async function run(action) {
       $("edit-error").textContent = message;
       show("edit-error", true);
     }
+    if (!$("tags-editor").hidden) {
+      $("tags-error").textContent = message;
+      show("tags-error", true);
+    }
   } finally {
     state.busy = false;
     controls.forEach((node, index) => {
@@ -99,7 +113,7 @@ async function load() {
       "All tags"
     );
     $("view").value = viewMode(preferences.preferences.defaultView);
-    show("overview", $("editor").hidden && $("lists-editor").hidden);
+    show("overview", $("editor").hidden && $("lists-editor").hidden && $("tags-editor").hidden);
     render();
     $("notice").textContent = "Tasks are up to date.";
   } catch (error) {
@@ -195,7 +209,8 @@ function savedExtra(id) {
 function hasDraft() {
   return (
     (!$("editor").hidden && state.baseline !== draftSnapshot()) ||
-    (!$("lists-editor").hidden && (state.listDrafts.size > 0 || $("list-name").value !== ""))
+    (!$("lists-editor").hidden && (state.listDrafts.size > 0 || $("list-name").value !== "")) ||
+    tags.hasDraft()
   );
 }
 function leaveEditor(action) {
@@ -300,7 +315,12 @@ function manageLists() {
       input.maxLength = 100;
       const save = text("button", "Save name", "jds-btn jds-btn--secondary");
       save.type = "submit";
-      form.append(label, input, save);
+      form.append(
+        label,
+        input,
+        save,
+        button(`Manage tags in ${list.name}`, () => leaveEditor(() => tags.open(list)))
+      );
       bindForm(form, async () => {
         await api("PATCH", `/tasks/lists/${list.id}`, { name: input.value });
         state.listDrafts.delete(list.id);
@@ -319,7 +339,11 @@ const actions = {
   "keep-editing": () => {
     show("discard-draft", false);
     state.leave = null;
-    state.focusAfter = $("editor").hidden ? $("list-name") : $("title");
+    state.focusAfter = !$("tags-editor").hidden
+      ? $("manage-tag-name")
+      : $("editor").hidden
+        ? $("list-name")
+        : $("title");
   },
   "discard-changes": async () => {
     const leave = state.leave;
@@ -327,9 +351,15 @@ const actions = {
     show("discard-draft", false);
     state.listDrafts.clear();
     $("list-name").value = "";
+    tags.discard();
     if (leave) await leave();
   },
   "manage-lists": manageLists,
+  "close-tags": () =>
+    leaveEditor(() => {
+      tags.close();
+      manageLists();
+    }),
   "close-lists": () =>
     leaveEditor(() => {
       show("lists-editor", false);
