@@ -2,7 +2,7 @@
 //! the account's selected folder and a chunk window. It cannot choose an account, source
 //! kind, folder, model or vector. Managed (snapshot-published) derivatives are never
 //! overwritten here; that publication authority is not part of this adapter.
-use crate::memory_cleanup::{walk, MemoryCleanupSource, MAX_ENTRIES};
+use crate::memory_cleanup::{walk, MemoryCleanupSource};
 use crate::memory_parser::parse_document;
 use crate::runtime::{CallScope, Ports, Request};
 use anyhow::{ensure, Context, Result};
@@ -13,7 +13,7 @@ use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
 use vault::{AllowedRoots, VaultContext};
 
-const MAX_FILE_BYTES: usize = 8 * 1024 * 1024;
+const MAX_FILE_BYTES: usize = 64 * 1024 * 1024;
 const MAX_CHUNK_WINDOW: i64 = 1000;
 
 /// Embeds note chunks with the account's configured document model. The guest never
@@ -152,7 +152,6 @@ impl MemoryIngestPorts {
                     .context("Invalid folder identity")?
                     .to_owned();
                 let files: Vec<String> = walk(&folder, scope)?.into_iter().collect();
-                ensure!(files.len() <= MAX_ENTRIES, "Notes folder is too large");
                 cx.commit_bounded(scope.remaining())
                     .await
                     .map_err(|_| anyhow::anyhow!("Memory commit failed"))?;
@@ -207,7 +206,7 @@ impl MemoryIngestPorts {
                     }
                 }
                 let managed: bool = cx.db().query_one(
-                    "SELECT EXISTS (SELECT 1 FROM app.memory_chunks WHERE owner_user_id=app.current_actor_user_id() AND source_kind=$1 AND source_path=$2 AND managed_snapshot->>'side' IS NOT NULL)",
+                    "SELECT EXISTS (SELECT 1 FROM app.memory_chunks WHERE owner_user_id=app.current_actor_user_id() AND source_kind=$1 AND source_path=$2 AND managed_snapshot->>'side' IS NOT NULL) OR EXISTS (SELECT 1 FROM app.memory_file_index WHERE owner_user_id=app.current_actor_user_id() AND source_kind=$1 AND source_path=$2 AND managed_snapshot->>'side' IS NOT NULL)",
                     &[&source.source_kind, &input.file_path],
                 ).await?.get(0);
                 ensure!(!managed, "Managed derivatives require current snapshot publication authority");
