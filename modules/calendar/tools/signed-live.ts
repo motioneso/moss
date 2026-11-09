@@ -422,7 +422,14 @@ try {
     body.scrollLeft = body.scrollWidth;
   });
   const userScroll = await frame.locator(".cal-body").evaluate((body) => body.scrollLeft);
-  await delay(31000);
+  await db.query(
+    "UPDATE app.calendar_events SET title='Calendar package check refreshed' WHERE id=$1",
+    [data.event]
+  );
+  await frame
+    .getByRole("button", { name: /Calendar package check refreshed/ })
+    .first()
+    .waitFor({ timeout: 120000 });
   assert.equal(await frame.locator(".cal-body").evaluate((body) => body.scrollLeft), userScroll);
   console.log(
     "PASS account assistant names and narrow-week today visibility, resize and retained user scroll"

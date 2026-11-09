@@ -1,3 +1,5 @@
+# Calendar package
+
 ## 0.7.0
 
 - Calendar labels, held-event details and settings follow the account's assistant name.

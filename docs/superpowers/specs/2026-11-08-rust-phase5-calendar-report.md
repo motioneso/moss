@@ -488,6 +488,7 @@ errors/defaults; four provider tools and both jobs; preview, authority/approval,
 retry/recovery, follow-through and monitoring; concrete public provider/reference
 adapters; writable automation and external-calendar status; full shell/Today/chat
 composition; old-screen replacement and complete assembled parity-harness acceptance.
+The Day legend still needs the original held-block count note and event-color swatches.
 The current main checkpoint still has read-only Calendar settings. This part does not
 claim to have delivered the separate settings-write work.
 
