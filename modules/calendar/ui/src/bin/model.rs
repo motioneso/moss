@@ -5,6 +5,20 @@ fn main() {
     for line in io::stdin().lock().lines() {
         let v: Value = serde_json::from_str(&line.unwrap()).unwrap();
         let output = match v["operation"].as_str().unwrap() {
+            "grid" => {
+                use leptos::prelude::*;
+                use moss_calendar_ui::views::TimeGrid;
+                let events: Vec<Event> = serde_json::from_value(v["events"].clone()).unwrap();
+                let date = v["cursor"].as_str().unwrap().parse().unwrap();
+                let days = if v["week"] == true {
+                    model::week(date, false)
+                } else {
+                    vec![date]
+                };
+                let groups =
+                    model::group(&events, model::zone(v["zone"].as_str().unwrap()).unwrap());
+                json!(view!{<TimeGrid days=days today=date now_min=Signal::derive(||600) events=groups twelve=v["twelve"]==true on_event=Callback::new(|_|{}) scroll_position=RwSignal::new(None)/ >}.to_html())
+            }
             "calendar" => {
                 let date = v["cursor"].as_str().unwrap().parse().unwrap();
                 json!({"week":model::week(date,v["work"].as_bool().unwrap_or(false)),"month":model::month(date),"next":model::navigate(date,v["view"].as_str().unwrap(),1),"previous":model::navigate(date,v["view"].as_str().unwrap(),-1)})

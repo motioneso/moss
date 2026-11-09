@@ -368,3 +368,21 @@ checks on a disposable Rust server; phone width does not prove a physical second
 device. Full-shell/chat integration, old-screen replacement, provider tools/jobs
 and execution flows, complete parity and physical second-device trusted HTTPS
 remain open as listed in the Calendar report.
+
+## Event grid parity checkpoint (part 16)
+
+Version 0.16.0 restores the production timed-event labels: title only below 44px,
+time from 44px, and location from 58px in Day view. Week stays compact. Held timed
+events use the authored marker and held all-day chips use the accent colour.
+These are additive options in the published Leptos kit, rather than a copied
+module-local primitive. The screen remains a client of the installed server API.
+
+`check.sh` includes rendered comparisons with the real production React time grid
+at both visibility boundaries, in Day/Week, both clock formats and accepted,
+tentative and held states. The signed-in live runner checks real installed chips,
+long-location clipping, all-day colours and opening details at desktop and phone
+widths. Its events are synthetic cache rows; no provider request is performed.
+The full Calendar gate still runs the installed API comparisons and failing-first
+privacy witnesses. This checkpoint does not complete the old-screen switch,
+providers, jobs/execution, full shell/chat, exhaustive parity or physical-device
+HTTPS acceptance. See the Phase 5 report for the complete remaining list.

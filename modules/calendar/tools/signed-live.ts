@@ -23,6 +23,7 @@ import { getMossDatabaseUrls } from "@moss/db";
 import { readHttpOracle } from "./http-oracle.js";
 import { checkStartup } from "./startup-check.js";
 import { checkDetails } from "./details-live.js";
+import { checkGrid } from "./grid-live.js";
 import { checkOperationStatus } from "./operation-live.js";
 import { checkDayPlanWrites } from "./day-plan-live.js";
 import { DEFAULT_LOCALE_SETTINGS, type CalendarEventDto } from "@moss/shared";
@@ -365,9 +366,33 @@ try {
       ends: `${today}T13:00:00Z`,
       metadata: { jarvisCreated: true, attendeeCount: 2 },
       location: "Room-" + "LongLocation".repeat(30)
+    },
+    {
+      id: randomUUID(),
+      title: "Short grid check",
+      starts: `${today}T09:00:00Z`,
+      ends: `${today}T09:15:00Z`,
+      metadata: {},
+      location: "Room short"
+    },
+    {
+      id: randomUUID(),
+      title: "Medium grid check",
+      starts: `${today}T10:00:00Z`,
+      ends: `${today}T10:46:00Z`,
+      metadata: {},
+      location: "Room medium"
+    },
+    {
+      id: randomUUID(),
+      title: "Held all-day grid check",
+      starts: `${today}T00:00:00Z`,
+      ends: `${nextDay(1)}T00:00:00Z`,
+      metadata: { allDay: true, jarvisCreated: true },
+      location: null
     }
   ];
-  for (const event of proofEvents) {
+  const seedProofEvent = async (event: (typeof proofEvents)[number]) => {
     assert.equal(
       (
         await db.query(
@@ -385,7 +410,8 @@ try {
       ).rowCount,
       1
     );
-  }
+  };
+  for (const event of proofEvents.slice(0, 3)) await seedProofEvent(event);
   // The task browser is visible in Herdr. Its own session is opened by the task's wrapper.
   const wrapper = "/home/ben/.local/bin/herdr-browser";
   const browserEnv = {
@@ -422,6 +448,12 @@ try {
   await frame.getByRole("dialog").filter({ hasText: "Calendar package check" }).waitFor();
   await screenshotDialog("signed-in-linked-event.png");
   await checkDetails(tab, local, out, data.event);
+  // Keep extra grid fixtures out of the existing Month overflow/detail checks.
+  for (const event of proofEvents.slice(3)) await seedProofEvent(event);
+  await checkGrid(tab, local, out, data.event);
+  await db.query("DELETE FROM app.calendar_events WHERE id=ANY($1::uuid[])", [
+    proofEvents.slice(3).map((event) => event.id)
+  ]);
   await checkDayPlanWrites(tab, (path, options) => request(path, { ...options, cookie: other }));
   await checkOperationStatus(tab, db, data.actor, (path, options) =>
     request(path, { ...options, cookie: other })
