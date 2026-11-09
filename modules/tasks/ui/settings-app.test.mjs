@@ -23,6 +23,10 @@ test(
     let failRead = true;
     let failWrite = false;
     let release;
+    let pauseRead = false;
+    let releaseRead;
+    let pauseView = false;
+    let releaseView;
     globalThis.__tasksSettings = {
       theme: async () => ({}),
       resize: async () => {},
@@ -31,9 +35,20 @@ test(
         calls.push({ method, path, body });
         if (path === "/tasks") return { tasks: [] };
         if (path === "/tasks/lists") return { lists: [] };
-        if (path === "/tasks/preferences") return { preferences: { defaultView: "priority" } };
+        if (path === "/tasks/preferences") {
+          if (method === "PATCH" && pauseView) {
+            await new Promise((resolve) => {
+              releaseView = resolve;
+            });
+          }
+          return { preferences: { defaultView: "priority" } };
+        }
         assert.equal(path, "/tasks/agency-auto-execute");
         if (method === "GET") {
+          if (pauseRead)
+            await new Promise((resolve) => {
+              releaseRead = resolve;
+            });
           if (failRead) throw new Error("offline read");
           return { enabled };
         }
@@ -48,7 +63,7 @@ test(
     };
     const settled = async () => {
       for (let i = 0; i < 100; i++) {
-        if (!$("tasks-app").hasAttribute("aria-busy")) return;
+        if (!$("tasks-app").hasAttribute("aria-busy") && $("task-settings-loading").hidden) return;
         await delay(5);
       }
       assert.fail("settings action did not settle");
@@ -58,7 +73,8 @@ test(
       await settled();
     };
     const toggle = () => $("assistant-auto-execute");
-    const writes = () => calls.filter((c) => c.method === "PATCH");
+    const writes = () =>
+      calls.filter((c) => c.method === "PATCH" && c.path.endsWith("auto-execute"));
     try {
       let source = readFileSync(new URL("./app.mjs", import.meta.url), "utf8");
       source = source.replace(
@@ -73,6 +89,7 @@ test(
       await settled();
       assert.equal($("overview").hidden, false);
       assert.equal(toggle().disabled, true);
+      assert.equal($("task-settings-saving").hidden, true);
       assert.equal(
         calls.some((c) => c.path.endsWith("auto-execute")),
         false
@@ -103,12 +120,14 @@ test(
       release = true;
       toggle().click();
       assert.equal(toggle().disabled, true);
+      assert.equal($("task-settings-saving").hidden, false);
       toggle().click();
       assert.equal(writes().length, 2, "pending saves cannot double-submit");
       release();
       release = null;
       await settled();
       assert.equal(enabled, false);
+      assert.equal($("task-settings-saving").hidden, true);
       assert.equal(toggle().checked, false);
       assert.equal($("task-settings-save-error").hidden, true);
       assert.equal($("task-settings-saved").hidden, false);
@@ -126,6 +145,25 @@ test(
         "refresh shows the server value, including other sessions"
       );
       assert.equal(writes().length, 2, "refresh retries must never write");
+      // An independent read can finish while another page action is pending.
+      // It must not unlock controls that the page action still owns.
+      pauseRead = true;
+      $("retry-task-settings").querySelector("button").click();
+      pauseView = true;
+      $("view").value = "matrix";
+      $("view").dispatchEvent(new window.Event("change"));
+      assert.equal(typeof releaseRead, "function");
+      assert.equal(typeof releaseView, "function");
+      releaseRead();
+      for (let i = 0; i < 100 && !$("task-settings-loading").hidden; i++) await delay(5);
+      assert.equal($("task-settings-loading").hidden, true);
+      assert.equal($("tasks-app").hasAttribute("aria-busy"), true);
+      assert.equal(toggle().disabled, true, "a completed read must honor another pending action");
+      assert.equal($("retry-task-settings").querySelector("button").disabled, true);
+      releaseView();
+      await settled();
+      assert.equal(toggle().disabled, false);
+      assert.equal(writes().length, 2);
       assert.match($("task-settings-limit").textContent, /still ask for approval/);
     } finally {
       dom.window.close();

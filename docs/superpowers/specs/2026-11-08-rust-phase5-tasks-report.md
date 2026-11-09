@@ -1630,6 +1630,39 @@ without a byte change. Declared JavaScript dependencies were restored offline.
 No global tool, generator, target or new dependency was installed. Workshop and
 Food remain excluded. Part of #4027; release note Category N/A.
 
+Validation for this checkpoint: all 27 real-markup controller tests pass,
+including the new independent-read/page-action race check. Four native guest
+tests pass. Repository lint, type checks, formatting, file-size and UI-class
+checks pass. The package gate reruns the compiled privacy removal controls in
+a disposable database; its final receipt is included in the proof artifact.
+
+The full endpoint comparison ran every case: **95 of 96 match**. The remaining
+failure is `component deferred status: recurring completion is idempotent and
+rejects children`, at the final task-list response: TypeScript returns the next
+occurrence before the completed original; Rust returns them in the opposite
+order. The guest, deferred worker and differential case are unchanged from
+part 22 in this checkpoint. This run does not prove full endpoint parity; the
+ordering mismatch needs investigation in the next parity slice. No cases were
+excluded or assertions relaxed. As in part 22, only the scratch harness startup
+allowance was extended for the loaded host; normal startup budgets are unproven.
+
+The final live check used a freshly signed package on the Rust HTTPS fixture:
+owner setup and sign-in, list creation, task creation, opening Task settings,
+saving off, reloading and observing off, then saving on. Desktop and narrow
+viewport screenshots show the actual installed screen and the saved notice.
+The fixture verified the browser-created task persisted exactly once. An earlier
+fixture had stale rendered HTML paired with newer controller assets and did not
+prove preference saving; it was discarded and the matching package rebuilt.
+Only the fresh fixture is used for settings proof. It verifies certificate and
+trusted-origin guards independently; the local automation browser ignores the
+fixture's test-certificate error. This is local HTTPS proof, not another device.
+
+Fresh review found the controller test could finish before the independent
+settings read. Its settling helper now waits for that read too. Minor findings
+were also addressed: show a saving notice, preserve page-wide disabled controls
+when a concurrent read finishes, and label the switch as a saved preference.
+The race regression holds a view save open while the settings read completes.
+
 This remains a bounded checkpoint, not full Phase 5 acceptance. Remaining:
 lazy recurrence advancement; recurrence jobs; legacy deferred-queue retry and
 retention policy, optional request-key retention and installed worker dispatch;

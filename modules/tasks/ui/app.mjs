@@ -12,11 +12,6 @@ import { taskActivity } from "./activity.mjs";
 import { taskSettings } from "./settings.mjs";
 
 const client = moduleClient();
-const settings = taskSettings({
-  api,
-  run,
-  resize: () => void client.resize(document.documentElement.scrollHeight).catch(() => {})
-});
 const $ = (id) => document.getElementById(id);
 const state = {
   tasks: [],
@@ -30,6 +25,12 @@ const state = {
   focusAfter: null,
   listDrafts: new Map()
 };
+const settings = taskSettings({
+  api,
+  run,
+  isBusy: () => state.busy,
+  resize: () => void client.resize(document.documentElement.scrollHeight).catch(() => {})
+});
 const capture = captureDraft({
   api,
   run,

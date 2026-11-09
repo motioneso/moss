@@ -2,7 +2,7 @@
 
 // Keep the last server-confirmed value visible after failed reads or writes.
 // Loading this preference must never block the task list or silently save a default.
-export function taskSettings({ api, run, resize }) {
+export function taskSettings({ api, run, isBusy, resize }) {
   const $ = (id) => document.getElementById(id);
   const toggle = $("assistant-auto-execute");
   const retry = $("retry-task-settings").querySelector("button");
@@ -10,8 +10,8 @@ export function taskSettings({ api, run, resize }) {
   let pending = false;
   function sync() {
     toggle.checked = confirmed ?? false;
-    toggle.disabled = pending || confirmed === null;
-    retry.disabled = pending;
+    toggle.disabled = pending || isBusy() || confirmed === null;
+    retry.disabled = pending || isBusy();
   }
   function accept(result) {
     if (typeof result?.enabled !== "boolean") throw new Error("Invalid task preference");
@@ -47,6 +47,7 @@ export function taskSettings({ api, run, resize }) {
     if (confirmed === null || pending) return;
     void run(async () => {
       pending = true;
+      $("task-settings-saving").hidden = false;
       $("task-settings-save-error").hidden = true;
       $("task-settings-saved").hidden = true;
       sync();
@@ -57,6 +58,7 @@ export function taskSettings({ api, run, resize }) {
         $("task-settings-save-error").hidden = false;
       } finally {
         pending = false;
+        $("task-settings-saving").hidden = true;
         sync();
       }
     });
