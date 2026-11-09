@@ -257,7 +257,7 @@ signed fixture does not prove real-shell integration.
 New task now offers editable, removable subtask drafts and removable tag drafts.
 Tags use the legacy lowercase/hash normalization; blank subtasks are dropped and
 remaining steps keep their order. A tag still in the input is included on Save.
-These drafts do not write until Save task. Leaving the editor uses the existing
+Matching list tags are reused by name, including a concurrent creator discovered after a rejected creation. These drafts do not write until Save task. Leaving the editor uses the existing
 unsaved-changes warning.
 
 If a child write fails after the parent was created, retry Save task. The screen
@@ -271,3 +271,15 @@ needs server-side idempotency and is not an exactly-once guarantee.
 the unchanged legacy editor. Both run in the package gate. This adds no route,
 tool, job kind or migration. The remaining port and acceptance gaps listed above
 are still outstanding; this is a screen parity checkpoint.
+
+For the controller regression, build `tasks-domain-check` and set
+`TASKS_SCREEN_BIN` to that binary when running
+`node --test modules/tasks/ui/capture-app.test.mjs`. The package gate does this
+and renders the actual shared-kit page for the test. Its bridge is mocked;
+this is not live UI evidence.
+
+Set `TASKS_UI_CAPTURE_PROOF=1` on the signed UI gate to verify one
+`Browser proof task` with tags `#literal`, `kept` and `typed`, subtasks
+`First proof step` then `Second proof step`, and no `discarded` tag.
+The fixtures are synthetic. This optional check asserts actual persisted rows
+created through the browser, not a mocked bridge.

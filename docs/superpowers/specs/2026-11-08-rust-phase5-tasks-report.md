@@ -1182,3 +1182,20 @@ refreshed offline without a byte change. Declared JavaScript dependencies were
 restored offline in this worktree. No global tool, target or package was installed.
 No route, chat tool, job kind, SQL migration or shared host crate changes.
 Workshop and Food are excluded. Part of #4027; release note Category N/A.
+
+Part 16 review round one found a major existing-tag recovery trap: creating a
+name already in the list failed after the parent had been saved and the draft
+locked. Matching tags are now reused through the public list route; a rejected
+creation rechecks that route to handle a concurrent creator. The same pass fixed
+stale list data after abandoning a partial save and focus landing on a locked
+tag input. A controller regression runs against the actual rendered shared-kit
+HTML, with a mocked bridge, and checks partial save, discard, list refresh and
+the next independent New task. Verification also caught a second normalization
+stripping a literal leading hash; committed draft names are now preserved.
+
+The initial full endpoint run matched 84 of 86 cases. The deferred-status request
+fails in the adapter's unbound jobs path, and the actor-timezone end-of-day at-risk
+case differs from UTC. These are remaining port gaps, not passing comparisons.
+The optional signed UI capture check asserts one parent, the exact three tags,
+ordered subtasks and the absence of a removed draft tag in the real database.
+Final independent review and gate receipts belong to the proof artifact.

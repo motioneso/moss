@@ -379,6 +379,8 @@ const actions = {
         : $("title");
   },
   "discard-changes": async () => {
+    // A failed child write may already have persisted the parent and some parts.
+    if (capture.started()) await load();
     const leave = state.leave;
     state.leave = null;
     show("discard-draft", false);

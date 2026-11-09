@@ -17,7 +17,8 @@ export function newTaskSave(api) {
         progress = {
           task: result.task,
           steps: cleanSubtasks(draft.steps),
-          tags: [...new Set(draft.tags.map(normalizeTagName).filter(Boolean))],
+          // Draft tags were normalized when committed in the editor.
+          tags: [...new Set(draft.tags.filter(Boolean))],
           subtasksDone: false,
           tagIds: new Map(),
           assigned: new Set()
@@ -35,11 +36,28 @@ export function newTaskSave(api) {
         await api("POST", `/tasks/${p.task.id}/breakdown`, { steps: p.steps });
         p.subtasksDone = true;
       }
+      const tagPath = `/tasks/lists/${p.task.listId}/tags`;
+      let available = p.tags.some((name) => !p.tagIds.has(name))
+        ? (await api("GET", tagPath)).tags
+        : [];
+      const matching = (name) =>
+        available.find((tag) => tag.name.toLowerCase() === name.toLowerCase());
       for (const name of p.tags) {
         if (p.assigned.has(name)) continue;
         if (!p.tagIds.has(name)) {
-          const result = await api("POST", `/tasks/lists/${p.task.listId}/tags`, { name });
-          p.tagIds.set(name, result.tag.id);
+          let tag = matching(name);
+          if (!tag) {
+            try {
+              tag = (await api("POST", tagPath, { name })).tag;
+            } catch (error) {
+              // A concurrent creator (or a lost creation response) may have won.
+              // Reuse only a tag actually returned by the public list route.
+              available = (await api("GET", tagPath)).tags;
+              tag = matching(name);
+              if (!tag) throw error;
+            }
+          }
+          p.tagIds.set(name, tag.id);
         }
         await api("POST", `/tasks/${p.task.id}/tags`, { tagId: p.tagIds.get(name) });
         p.assigned.add(name);
@@ -97,13 +115,13 @@ export function captureDraft({ api, run, text, button, focus }) {
     );
     lock();
   }
-  function addTag() {
+  function addTag({ moveFocus = true } = {}) {
     const name = normalizeTagName($("new-tag-name").value);
     if (!name) return;
     if (!tags.includes(name)) tags.push(name);
     $("new-tag-name").value = "";
     render();
-    focus($("new-tag-name"));
+    if (moveFocus) focus($("new-tag-name"));
   }
   $("add-new-subtask").addEventListener("click", () =>
     run(() => {
@@ -125,6 +143,7 @@ export function captureDraft({ api, run, text, button, focus }) {
   });
   return {
     lock,
+    started: save.started,
     snapshot: () => JSON.stringify({ steps, tags }),
     reset() {
       steps = [];
@@ -135,9 +154,12 @@ export function captureDraft({ api, run, text, button, focus }) {
     },
     async save(fields) {
       // Include a tag still in the input when Save task is clicked.
-      if (!save.started()) addTag();
+      if (!save.started()) addTag({ moveFocus: false });
       try {
         return await save.save(fields, { steps, tags });
+      } catch (error) {
+        focus(document.querySelector('#task-form button[type="submit"]'));
+        throw error;
       } finally {
         lock();
       }

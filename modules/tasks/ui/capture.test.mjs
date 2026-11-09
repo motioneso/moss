@@ -1,13 +1,16 @@
 /* global document */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { newTaskSave, normalizeTagName, cleanSubtasks } from "./capture.mjs";
+const captureSource =
+  process.env.TASKS_CAPTURE_SOURCE || new URL("./capture.mjs", import.meta.url).href;
+const { newTaskSave, normalizeTagName, cleanSubtasks } = await import(captureSource);
 
 test("new task retries resume acknowledged work after a child failure", async () => {
   const calls = [];
   let fail = true;
   const api = async (method, path, body) => {
     calls.push({ method, path, body });
+    if (method === "GET") return { tags: [] };
     if (path === "/tasks") return { task: { id: "parent", listId: "list" } };
     if (path.endsWith("/breakdown")) return { tasks: [] };
     if (path === "/tasks/lists/list/tags") return { tag: { id: `tag-${body.name}` } };
@@ -18,7 +21,7 @@ test("new task retries resume acknowledged work after a child failure", async ()
     return { task: { id: "parent", listId: "list" } };
   };
   const save = newTaskSave(api);
-  const draft = { steps: [" first ", "", "second"], tags: ["#FIRST", "second", "first"] };
+  const draft = { steps: [" first ", "", "second"], tags: ["first", "second", "first"] };
   await assert.rejects(save.save({ title: "Parent", listId: "list" }, draft));
   assert.equal(save.started(), true);
   const result = await save.save({ title: "Edited parent", listId: "list" }, draft);
@@ -33,7 +36,10 @@ test("new task retries resume acknowledged work after a child failure", async ()
     calls.filter((c) => c.path === "/tasks/parent/tags" && c.body.tagId === "tag-first").length,
     1
   );
-  assert.equal(calls.filter((c) => c.path === "/tasks/lists/list/tags").length, 2);
+  assert.equal(
+    calls.filter((c) => c.method === "POST" && c.path === "/tasks/lists/list/tags").length,
+    2
+  );
   assert(calls.some((c) => c.method === "PATCH" && c.body.title === "Edited parent"));
 });
 
@@ -61,7 +67,8 @@ test("a rejected breakdown resumes before tags without another parent", async ()
   let parents = 0;
   let breakdowns = 0;
   let tagWrites = 0;
-  const save = newTaskSave(async (_method, path) => {
+  const save = newTaskSave(async (method, path) => {
+    if (method === "GET") return { tags: [] };
     if (path === "/tasks") {
       parents++;
       return { task: { id: "p", listId: "l" } };
@@ -83,8 +90,9 @@ test("a rejected breakdown resumes before tags without another parent", async ()
 
 test("draft controls retain edits, remove items, defer writes and lock a partial save", async () => {
   const { JSDOM } = await import("jsdom");
-  const { captureDraft } = await import("./capture.mjs");
-  const dom = new JSDOM(`<select id="task-list"><option>list</option></select>
+  const { captureDraft } = await import(captureSource);
+  const dom =
+    new JSDOM(`<form id="task-form"><button type="submit">Save task</button></form><select id="task-list"><option>list</option></select>
     <section id="new-task-extras"><p id="capture-progress" hidden></p>
       <div id="new-subtasks"></div><span id="add-new-subtask"><button>Add</button></span>
       <div id="new-tags"></div><input id="new-tag-name"><span id="add-new-tag"><button>Add</button></span>
@@ -112,6 +120,7 @@ test("draft controls retain edits, remove items, defer writes and lock a partial
       focus: (node) => node.focus(),
       api: async (method, path, body) => {
         calls.push({ method, path, body });
+        if (method === "GET") return { tags: [] };
         if (path === "/tasks") return { task: { id: "p", listId: "list" } };
         if (path.endsWith("/breakdown") && fail) {
           fail = false;
@@ -148,7 +157,10 @@ test("draft controls retain edits, remove items, defer writes and lock a partial
     );
     await draft.save({ title: "Parent", listId: "list" });
     assert.deepEqual(calls.find((c) => c.path.endsWith("/breakdown")).body.steps, ["First step"]);
-    assert.equal(calls.find((c) => c.path === "/tasks/lists/list/tags").body.name, "kept");
+    assert.equal(
+      calls.find((c) => c.method === "POST" && c.path === "/tasks/lists/list/tags").body.name,
+      "kept"
+    );
     draft.reset();
     assert.equal($("task-list").disabled, false);
     assert.equal($("new-subtasks").children.length, 0);
@@ -157,4 +169,48 @@ test("draft controls retain edits, remove items, defer writes and lock a partial
     globalThis.document = previous;
     dom.window.close();
   }
+});
+
+test("saving committed tag drafts preserves a remaining leading hash", async () => {
+  let savedName;
+  const save = newTaskSave(async (method, path, body) => {
+    if (method === "GET") return { tags: [] };
+    if (path === "/tasks") return { task: { id: "p", listId: "l" } };
+    if (path === "/tasks/lists/l/tags") {
+      savedName = body.name;
+      return { tag: { id: "t" } };
+    }
+    return {};
+  });
+  await save.save({}, { steps: [], tags: [normalizeTagName("##Literal")] });
+  assert.equal(savedName, "#literal");
+});
+
+test("existing tags and a concurrent tag creator are reused", async () => {
+  const assigned = [];
+  let reads = 0;
+  let creates = 0;
+  const save = newTaskSave(async (method, path, body) => {
+    if (path === "/tasks") return { task: { id: "p", listId: "l" } };
+    if (path === "/tasks/lists/l/tags" && method === "GET") {
+      return {
+        tags:
+          ++reads === 1
+            ? [{ id: "existing", name: "WORK" }]
+            : [
+                { id: "existing", name: "WORK" },
+                { id: "concurrent", name: "home" }
+              ]
+      };
+    }
+    if (path === "/tasks/lists/l/tags") {
+      creates++;
+      throw new Error("duplicate tag");
+    }
+    assigned.push(body.tagId);
+    return {};
+  });
+  await save.save({}, { steps: [], tags: ["work", "home"] });
+  assert.deepEqual(assigned, ["existing", "concurrent"]);
+  assert.equal(creates, 1);
 });
