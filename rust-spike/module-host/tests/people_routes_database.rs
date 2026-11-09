@@ -49,7 +49,9 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
     let notes = tempfile::tempdir().unwrap();
     let notes_root = notes.path().join("People");
     std::fs::create_dir_all(notes_root.join("Family/Friends")).unwrap();
-    for name in ["Ü", "ü", "ǖ", "ǘ", "ǚ", "ǜ", "ű", "ũ", "ū", "á̈", "ä́"] {
+    for name in [
+        "Ü", "ü", "ǖ", "ǘ", "ǚ", "ǜ", "ű", "ũ", "ū", "á̈", "ä́", "Ş", "ș", "Ţ", "ț",
+    ] {
         std::fs::create_dir_all(notes_root.join("Family/Friends").join(name)).unwrap();
     }
     std::fs::create_dir_all(notes_root.join("Family/apple")).unwrap();

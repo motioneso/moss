@@ -2244,7 +2244,7 @@ keeps its base-letter position with a separately qualified secondary weight. Dou
 legacy comparisons. NFC comparison keys still preserve canonical equivalence;
 returned folder names and paths retain their original spelling.
 
-The directory oracle now records 728 comparisons from the real legacy JavaScript
+The directory oracle now records 888 comparisons from the real legacy JavaScript
 runtime, including all pairs of selected single/multiple-accent Latin letters,
 uppercase variants and differently ordered combining marks. The same failing-first
 regression passes with the fix, along with all 34 native People tests. A nested
@@ -2270,3 +2270,11 @@ This task does not add a second server or connect the client directly to a datab
 Authenticated real People UI/chat approval, sign-in/origin/privacy checks and a
 second physical device over HTTPS remain unproved. Fixture dispatch and a static
 Settings asset are not substitutes for those assembled checks.
+
+The first independent Claude review of `50b9d5c63` found no blockers or majors.
+Both minor observations were addressed: documentation now names selected letter
+families, and comma-below has a separate secondary weight from cedilla. The added
+legacy-generated comparison failed first on `Ş` versus `ș` (`rc=101`). The actual
+Node ordering places comma-below after macron, rather than immediately after
+cedilla; the expanded vectors cover that placement and case differences. The
+installed nested-folder fixture also includes both Romanian and cedilla forms.

@@ -44,8 +44,8 @@ and nearby case/order comparisons. The relative folder browser normalizes compar
 to NFC, preserving original names and paths and stable input order for equal keys.
 Comparison decomposes letters canonically and keeps each accent in order, so
 multiply accented names are compared before case, rather than losing accents or
-using their composed code points. The oracle includes pairwise Latin accent and
-case comparisons; this remains a bounded collation implementation.
+using their composed code points. The oracle includes pairwise accent and case
+comparisons for selected letter families; this remains a bounded collation implementation.
 Index batches use one host-owned timestamp for their fifteen-minute delay, anchored at
 batch start. Each item still gets its own command record and queue send; retries retain the
 original record's delay. An empty batch performs no clock or queue work.

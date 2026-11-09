@@ -186,9 +186,10 @@ fn combining_rank(c: char) -> Option<u32> {
         '\u{30b}' => 9,
         '\u{303}' => 10,
         '\u{307}' => 11,
-        '\u{327}' | '\u{326}' => 12,
+        '\u{327}' => 12,
         '\u{328}' => 13,
         '\u{304}' => 14,
+        '\u{326}' => 16,
         '\u{300}'..='\u{36f}' => 15,
         _ => return None,
     })
@@ -210,7 +211,7 @@ fn base_expansion(c: char) -> (String, u32) {
         'Đ' | 'đ' => ("d".to_owned(), 1),
         // L with middle dot has no canonical decomposition. Keep its base
         // letter ordering, with the legacy secondary weight after accents.
-        'Ŀ' | 'ŀ' => ("l".to_owned(), 16),
+        'Ŀ' | 'ŀ' => ("l".to_owned(), 17),
         // Canonical decomposition supplies all accents, including those on
         // multiply accented letters. Special non-decomposing forms above keep
         // their established expansion weights.

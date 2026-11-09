@@ -5,7 +5,7 @@
 Rust component and shared-frame People Settings checkpoint. Complete installed parity and physical-device qualification remain open.
 
 Preserve every canonical accent when sorting People folders, including multiple accents
-on one letter, before comparing case. The legacy-generated comparisons and installed
+on one letter, before comparing case. Comparisons for selected letter families and the installed
 folder replay cover this correction; complete locale collation remains unqualified.
 
 Reject forbidden JSON prototype members before schema coercion or host calls, matching

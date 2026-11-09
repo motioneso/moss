@@ -38,7 +38,7 @@ export async function routesOracle() {
   const root = await mkdtemp(join(tmpdir(), "moss-people-http-folders-"));
   const selected = join(root, "People");
   await mkdir(join(selected, "Family", "Friends"), { recursive: true });
-  for (const name of ["Ü", "ü", "ǖ", "ǘ", "ǚ", "ǜ", "ű", "ũ", "ū", "á̈", "ä́"])
+  for (const name of ["Ü", "ü", "ǖ", "ǘ", "ǚ", "ǜ", "ű", "ũ", "ū", "á̈", "ä́", "Ş", "ș", "Ţ", "ț"])
     await mkdir(join(selected, "Family", "Friends", name));
   await mkdir(join(selected, "Family", "apple"));
   await mkdir(join(selected, "Family", "Banana"));
