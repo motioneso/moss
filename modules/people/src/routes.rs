@@ -57,7 +57,10 @@ fn execute(host: &impl Host, request: &RouteRequest) -> Result<Response> {
         ("GET", "/people") => {
             let status = filter_query(request.query.get("status"));
             let search = request.query.get("search").map(query_text);
-            json!({"people":repo.list_people(status.as_deref(),search.as_deref(),limit()?)?})
+            let mut body = json!({});
+            body["people"] =
+                Value::Array(repo.list_people(status.as_deref(), search.as_deref(), limit()?)?);
+            body
         }
         ("GET", "/people/resolve") => {
             json!({"person":repo.resolve(query("q").ok_or_else(||Error::new("Missing query"))?)?})
@@ -67,7 +70,10 @@ fn execute(host: &impl Host, request: &RouteRequest) -> Result<Response> {
         ("GET", "/people/:id/links") => {
             let source = filter_query(request.query.get("sourceKind"));
             let kind = filter_query(request.query.get("linkKind"));
-            json!({"links":repo.links(id()?,source.as_deref(),kind.as_deref(),limit()?)?})
+            let mut body = json!({});
+            body["links"] =
+                Value::Array(repo.links(id()?, source.as_deref(), kind.as_deref(), limit()?)?);
+            body
         }
         ("POST", "/people/match-candidates/:id/accept") => {
             repo.accept_candidate(id()?)?;
