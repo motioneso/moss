@@ -1001,4 +1001,6 @@ table failing-first privacy passed; tools/jobs and root types were interrupted.
 Final acceptance requires a complete gate, after-fix live check, root types,
 review and task Proof artifact; use the artifact for the resumed run's verdicts.
 The first Claude review found no blocker/major. No new tools were installed.
+The live runner pins a late-day event and follows Month overflow to Day; the prior
+direct-chip lookup timed out when the current-time fixture sorted past three chips.
 See README for commands and remaining full-port and physical-device HTTPS work.

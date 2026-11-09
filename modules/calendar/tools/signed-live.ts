@@ -343,6 +343,13 @@ try {
   );
   // Real synthetic cache rows, read by the installed package. No network interception.
   const today = new Date().toISOString().slice(0, 10);
+  // Pin the primary event after the other timed fixtures. Month must reach it
+  // through overflow regardless of the wall-clock hour running this check.
+  await db.query("UPDATE app.calendar_events SET starts_at=$2,ends_at=$3 WHERE id=$1", [
+    data.event,
+    `${today}T23:00:00Z`,
+    `${today}T23:30:00Z`
+  ]);
   const nextDay = (days: number) =>
     new Date(Date.parse(`${today}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
   const proofEvents = [
@@ -545,6 +552,14 @@ try {
       .evaluate((el) => getComputedStyle(el).getPropertyValue("--font-sans").trim()),
     "The shared Park Press stylesheet must load in the opaque frame"
   );
+  const monthToday = frame.locator(".cal-mcell.is-today");
+  assert.equal(
+    await monthToday.getByRole("button", { name: /Calendar package check/ }).count(),
+    0,
+    "The pinned late event must be behind Month's three visible chips"
+  );
+  await monthToday.locator(".cal-mmore").click();
+  await frame.locator(".cal-tg__col").waitFor();
   await frame
     .getByRole("button", { name: /Calendar package check/ })
     .first()
