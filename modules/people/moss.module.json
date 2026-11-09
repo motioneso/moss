@@ -159,7 +159,7 @@
     },
     {
       "id": "people.relative-folder-browse",
-      "description": "Browse directories relative to the selected People folder through the legacy API, in the same reading order as the legacy app (base letter first, then accent, then case). The Settings chooser still uses allowed absolute notes roots."
+      "description": "Browse directories relative to the selected People folder through the legacy API. Common base-letter, accent and case ordering is covered by the replay; complete locale-sensitive ordering remains unqualified. The Settings chooser still uses allowed absolute notes roots."
     },
     {
       "id": "people.note-field-compatibility",

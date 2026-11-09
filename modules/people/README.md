@@ -252,8 +252,9 @@ quotas remain acceptance work.
 
 ## Part eleven folder-order checkpoint
 
-Directory browsing now returns folders in the legacy reading order (base
-letter, then accent, then case) instead of raw byte order. The route oracle
+Directory browsing now follows the tested legacy base-letter, accent and case
+ordering instead of raw byte order. Complete locale-sensitive collation remains
+unqualified. The route oracle
 covers folder names whose order differs between the two schemes, and the
 full installed replay and nine-suite gate pass on the recorded commit. The
 authenticated shell still has no installed module composition, so live UI,
