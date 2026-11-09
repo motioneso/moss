@@ -168,6 +168,25 @@
     {
       "id": "people.note-field-compatibility",
       "description": "Canonical-note edits keep the legacy handling of aliases, emails and phones, including nulls, empty lists and mixed JSON list values. The module host and People component parse incoming JSON numbers with correct rounding and keep the legacy decimal spelling, including equal-distance rounding ties. Listener and installed application parsing remain unqualified. Unusable list values return an error; legacy empty list items may publish unreadable frontmatter before projection fails. Repair the note and retry. Missing notes retain projection-only fallback. Dollar replacement tokens remain literal to protect human text."
+    },
+    {
+      "id": "people.json-body-validation",
+      "description": "People rejects decoded JSON bodies containing __proto__ members or constructor objects with a prototype member, including inside arrays and unknown fields, before schema coercion or host calls. It returns the legacy JSON parser error. Ordinary constructor and prototype fields and string values remain allowed. This qualifies module dispatch; the shipping listener and installed application remain unverified.",
+      "remediations": [
+        {
+          "id": "people-correct-json",
+          "description": "Remove the forbidden JSON members and send the request again.",
+          "path": "/settings/memory/people"
+        }
+      ],
+      "errors": [
+        {
+          "code": "people-invalid-json-body",
+          "class": "validation",
+          "description": "Body is not valid JSON but content-type is set to 'application/json'",
+          "remediationRef": "people-correct-json"
+        }
+      ]
     }
   ],
   "screens": {

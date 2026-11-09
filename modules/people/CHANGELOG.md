@@ -4,6 +4,10 @@
 
 Rust component and shared-frame People Settings checkpoint. Complete installed parity and physical-device qualification remain open.
 
+Reject forbidden JSON prototype members before schema coercion or host calls, matching
+the legacy parser response even inside unknown fields and note-only lists. Ordinary
+constructor/prototype fields and string values retain their existing behavior.
+
 Visit nested People notes in the legacy depth-first listing order. Refresh replay fixtures now
 include valid nested canonical notes, missing IDs and duplicate IDs instead of silently ignoring
 notes without a status field. Existing scan limits and failure refusals remain in place.

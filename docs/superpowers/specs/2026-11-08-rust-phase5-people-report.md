@@ -2107,3 +2107,67 @@ additional final review and its exact verdict accompany the PR and proof artifac
 The full People port still lacks the server/application, ingest and real-device
 acceptance listed above. No UI screenshot, sign-in, approval or HTTPS device
 result is added by this passing command-line replay.
+
+## People part 18 — decoded JSON body rejection checkpoint (JS-132)
+
+Before editing, this task's clean branch was updated from its old Phase 0a base
+to `cfab146b2`, containing the merged part 17 report and implementation (PR 4124).
+The continuation brief's PR 4066 reference points to an earlier People slice;
+the current report, rather than that number, supplied the starting state.
+
+This checkpoint closes the documented decoded-body rejection gap. People now
+checks the complete decoded JSON body before schema coercion or host calls,
+including arrays, unknown fields, note-only contact lists and routes without a
+body schema. An own `__proto__` member or a `constructor` object with an own
+`prototype` member returns the existing Fastify JSON-parser 400 text. Ordinary
+constructor/prototype fields, differently cased names and string values remain
+allowed. The package app map, API contract and changelog describe this boundary.
+No data tables, public lookup APIs, job kinds or client/server ownership changed.
+
+### Failing-first and negative-control evidence
+
+The new native regression failed first (`rc=101`): `POST /people` with
+`{"__proto__":null}` returned the schema error about missing `displayName`, while
+the real legacy Fastify parser returned its invalid-JSON body error. After the
+guard was added, the same regression passed. Its host panics on any attempted
+service call, covering rejected create, edit, settings and schema-free archive
+requests. The valid-name controls and all existing native tests also passed.
+
+A separate disposable source copy removed only this guard. The saved-folder
+regression failed (`rc=101`): a forbidden body changed the preference from
+`Previous folder` to `Work`. The shipping source kept the guard, and that same
+test passed with the previous folder retained. The weakened copy was never
+packaged or committed. This is a dispatch side-effect control, not a new RLS
+claim; the real database privacy matrix remains separately required.
+
+The route oracle adds thirty-two actual Fastify parser refusals and eight
+ordinary-field controls. It checks the parser's exact expected status/body and
+compares all seven tables after every case. Eight rejected note-backed PATCH
+cases also retain canonical file-byte snapshots. The installed replay and
+database privacy receipts for this checkpoint will be recorded below after
+they complete; a fixture addition by itself is not passing installed evidence.
+
+### Build setup and acceptance boundary
+
+Cargo dependencies, the pinned compiler, both Wasm targets and all build outputs
+are task-owned scratch. Declared missing dependencies were fetched from the
+locked manifests. The already approved pinned `wit-bindgen =0.57.1` is used as
+the declared project dependency, with no globally installed generator or tool.
+JavaScript dependencies were restored offline from the project lockfile.
+
+The task browser initially reproduced Chrome's `No usable sandbox` refusal.
+Passing its suggested `--args '--no-sandbox'` launch option opened the task browser
+and returned a real blank-page snapshot. That repairs this task's browser launch;
+it does not establish any application behavior. The shipping Rust shell still
+does not compose installed People routes/frames or its Settings/chat approval
+path. No application screenshot or physical-device HTTPS result is claimed.
+
+Raw listener parsing (malformed JSON, empty bodies, content types and size limits),
+authenticated installed UI/chat, ingest nudges, real source providers, installed
+scheduling, command retention/quotas, complete locale ordering and second-device
+HTTPS/privacy acceptance remain open. Completing that assembly exceeds a bounded
+continuation, so this is a reviewed checkpoint rather than full Phase 5 completion.
+The module continues to call only SDK/server ports; it does not own a server or
+database connection. The earlier stale thirty-second replay-budget description
+in the public contract was corrected to the current strict five-second test and
+part 17 receipt; no deadline or assertion was widened.
