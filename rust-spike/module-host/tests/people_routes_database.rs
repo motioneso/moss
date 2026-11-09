@@ -217,6 +217,7 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
             Uuid::parse_str(case["actor"].as_str().unwrap()).unwrap(),
             "people-route-parity",
         );
+        let started = std::time::Instant::now();
         let reply = if let Some(installer) = &installer {
             installer.dispatch_extended(
                 access,
@@ -236,6 +237,18 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         }
         .expect("Compiled route must return a response envelope");
         let reply: Value = serde_json::from_str(&reply).unwrap();
+        if installer.is_some()
+            && method == "POST"
+            && path == "/people/index/refresh"
+            && case["body"]["sourceRefs"]
+                .as_array()
+                .is_some_and(|items| items.len() == 50)
+        {
+            println!(
+                "People fifty-reference installed request: status={}, elapsed_ms={}, configured_deadline_ms=30000",
+                reply["status"], started.elapsed().as_millis()
+            );
+        }
         let actual_people = people_rows(&rt, &bootstrap, owner);
         let expected_people = case["rows"][TABLES[0]].as_array().unwrap();
         let reply = normalization::signatures(&reply, &actual_people, &mut actual);

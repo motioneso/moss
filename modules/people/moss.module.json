@@ -155,7 +155,7 @@
     },
     {
       "id": "people.manual-index-refresh",
-      "description": "Manual indexing accepts up to fifty source references and queues each for fifteen minutes later. Repeated requests retain the legacy standard-queue behavior. Invalid batches are rejected before any job is sent; queue failures return an error and may leave earlier jobs from the batch queued. Full batches need sufficient host call time; the installed functional replay uses thirty seconds because the default five-second budget failed on the test machine. Qualify the real host budget or improve its enqueue path. Installed shell and live source delivery remain unverified."
+      "description": "Manual indexing accepts up to fifty source references and queues each for fifteen minutes later. Repeated requests retain the legacy standard-queue behavior. Invalid batches are rejected before any job is sent. A failure or timeout can leave earlier jobs queued and an unsent command stored. Repeating a request creates separate jobs and more stored commands; check earlier work before retrying. Command cleanup, limits, the installed screen and live source delivery remain unverified."
     },
     {
       "id": "people.relative-folder-browse",

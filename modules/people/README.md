@@ -236,3 +236,9 @@ fifty-reference request failed with the default five-second budget on this test 
 and passed with the larger budget, with no package change. Real host composition still
 needs to qualify that budget or improve the sequential enqueue path. This checkpoint
 qualifies functional behavior with that configuration, not default-budget performance.
+
+Do not expose manual refresh through the shipping listener until its host budget or
+enqueue performance is qualified. Thirty seconds is the replay configuration, not a
+measured minimum. A failed send leaves its command stored without a queued job; retries
+use fresh IDs and can duplicate earlier work and grow command storage. Retention and
+quotas remain acceptance work.

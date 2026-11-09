@@ -1206,7 +1206,15 @@ foundation gate have not been run here.
 
 The first fresh Claude review found no blocker or major. Its minor optional-boss difference
 is documented above; the pending evidence and report notes are resolved by the final receipts.
-The second review is recorded against the final commit in the task and proof artifact.
+The second review is recorded against `2c7b2004e`. It found one major ship condition:
+the default-budget fifty-reference failure. The reviewer permitted disclosure in the
+CHANGELOG as an alternative to an in-scope runtime fix; the follow-up does that and says
+not to expose this route until host-budget or enqueue performance is qualified. The
+performance limitation itself remains unresolved. Its four minor notes are addressed by
+recording request time, explicitly describing unsent records and storage growth, keeping
+qualification wording out of the app map, and retaining the dirty-input receipt notes.
+Both allowed rounds are used. The post-review follow-up commit needs another review
+round before this task can be Ready.
 
 This is a bounded checkpoint. Completing the remaining application and physical-device
 qualification would exceed this continuation's single-context scope. The remaining work is:
@@ -1223,3 +1231,31 @@ qualification would exceed this continuation's single-context scope. The remaini
 
 No live application listener, browser interaction or physical second-device proof is claimed
 by this checkpoint. Package dispatch and disposable queue rows do not prove those paths.
+
+### Post-review follow-up
+
+The test now measures the fifty-reference installed request itself, separately from the
+whole replay. Thirty seconds remains an explicit test configuration, not a measured
+minimum or a promise for other machines. The merged application constructors currently
+use the five-second default; wiring People into them requires an explicit budget decision
+or an enqueue improvement before this route is exposed.
+
+A send failure leaves the current immutable command stored even when it has no queued
+job. The native regression observes two stored commands and one queued job after the
+second send fails. Fresh manual retries can duplicate the earlier job and add more stored
+commands. Without the deferred retention and quota work, signed-in repeated requests can
+grow this storage without a module-level bound. This is a ship condition to qualify,
+not a storage safety claim. README, PUBLIC_API and CHANGELOG now disclose it.
+
+Post-review installed gate `172751-ZZ7Zd3` passed (`rc=0`): all 163 responses, table
+snapshots, note bytes and installed consumer checks still match. Its measured fifty-item
+request returned 202 in 4577 milliseconds, with the explicit 30000-millisecond deadline.
+This is one sample, not a latency guarantee or a minimum-budget measurement. Earlier
+five-second failures remain relevant; the sample does not qualify that default.
+
+The package with the revised app-map wording is SHA-256
+`125804723b178505c5d26aa1b33c3016fb15e1a3a3ab989deab21d4764647b32`
+(402438 bytes). The component is unchanged from the digest above. The receipt identifies
+`2c7b2004e` with six dirty follow-up files, fingerprint `b1c0992033d3`; the only
+changes after that receipt finish this report. The final follow-up commit is pushed but unreviewed because both allowed rounds
+have been used. No Ready or full acceptance claim is made.
