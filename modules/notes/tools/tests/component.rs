@@ -29,6 +29,18 @@ fn actual_guest_runs_without_wasi_and_archive_is_reproducible() {
             "{}"
         );
     }
+    assert!(
+        host.call(
+            &wasm,
+            manifest.clone(),
+            AccessContext::new(uuid::Uuid::new_v4(), "ordinary-sync-unavailable"),
+            Arc::new(DenyPorts),
+            "api",
+            r#"{"name":"requestNotesSync","parameters":{}}"#
+        )
+        .is_err(),
+        "Unassembled sync request API must stay unavailable"
+    );
     let unavailable = host
         .call(
             &wasm,
@@ -59,8 +71,8 @@ fn actual_guest_runs_without_wasi_and_archive_is_reproducible() {
     assert_eq!(bytes, pack(&files).unwrap());
     let package = Package::read(&bytes, &trust::digest(&bytes), &"0.1.0".parse().unwrap()).unwrap();
     assert_eq!(package.files["code/module.wasm"], wasm);
-    assert_eq!(package.manifest.database.migrations.len(), 3);
-    assert_eq!(package.manifest.database.owned_tables.len(), 6);
+    assert_eq!(package.manifest.database.migrations.len(), 4);
+    assert_eq!(package.manifest.database.owned_tables.len(), 7);
     assert!(!package.manifest.accounts.supports_user_disable);
     assert!(package.manifest.navigation.is_empty());
     assert!(
@@ -81,7 +93,17 @@ fn actual_guest_runs_without_wasi_and_archive_is_reproducible() {
     for path in package.manifest.database.migrations {
         assert_eq!(
             package.files[&path],
-            std::fs::read(root.join("packages/notes").join(&path)).unwrap()
+            std::fs::read(
+                root.join(
+                    if moss_module_host::legacy::entry("notes", &path).is_some() {
+                        "packages/notes"
+                    } else {
+                        "modules/notes"
+                    }
+                )
+                .join(&path)
+            )
+            .unwrap()
         );
     }
 }
@@ -92,9 +114,22 @@ fn builder_refuses_changed_legacy_sql() {
     let temp = tempfile::tempdir().unwrap();
     let folder = temp.path().join("packages/notes/sql");
     std::fs::create_dir_all(&folder).unwrap();
-    for path in moss_notes_checks::manifest().unwrap().database.migrations {
+    for path in moss_notes_checks::manifest()
+        .unwrap()
+        .database
+        .migrations
+        .into_iter()
+        .filter(|path| moss_module_host::legacy::entry("notes", path).is_some())
+    {
         std::fs::copy(
-            root.join("packages/notes").join(&path),
+            root.join(
+                if moss_module_host::legacy::entry("notes", &path).is_some() {
+                    "packages/notes"
+                } else {
+                    "modules/notes"
+                },
+            )
+            .join(&path),
             temp.path().join("packages/notes").join(&path),
         )
         .unwrap();

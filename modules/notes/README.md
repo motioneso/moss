@@ -425,3 +425,29 @@ the compiled sync corpus. The actual SQL/privacy and installed-search checks rem
 separate evidence. Full indexing/sync, approved write execution, assembled Settings
 and chat, and a separate physical-device HTTPS check remain required before Notes
 can replace the working legacy module.
+
+## Durable sync checkpoint seam (part twelve)
+
+Package `0.1.5` adds `app.notes_sync_checkpoints` in new package SQL; the
+three original Notes migrations remain unchanged. The installer applies its
+ordinary generated owner-only policies, including for an unrelated admin.
+The `write-tools` test component accepts `requestNotesSync` with empty parameters
+and resumes a `notes.sync` job with `{ "checkpointId": "<uuid>" }`. It reads the
+private continuation through SDK typed queries and calls the existing sync
+coordinator. Deferred results save the next continuation before queue publication;
+queue parameters contain only its UUID. Each page may use a newly opened worker.
+
+This is a worker seam, not an activated sync service. The ordinary package does
+not declare that API or job. The test component retains the earlier raw coordinator
+entry for the legacy differential suite; production activation must accept only
+the UUID worker envelope. Embeddings and queue publication in the durable test
+are named stand-ins, while files, database queries, ingestion and cleanup are real.
+
+Checkpoint rows remain available for retry if publication fails after commit.
+There is no durable outbox, recovery sweeper, deduplication of continuation rows,
+or retention policy yet. Replaying a checkpoint can repeat coordinator work and
+create another continuation ID. These are activation blockers; a captured ID can
+be retried in the test, but automatic recovery after a crash is not proved.
+Real account-configured model assembly, saved last-sync outcomes, manual and
+scheduled sync, installed write approval/chat, managed publication and exports,
+assembled Settings and physical second-device HTTPS proof remain open.

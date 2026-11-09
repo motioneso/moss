@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.5
+
+- Store private sync continuations in an owner-only package table. The test worker resumes by opaque ID and queues no paths or hashes. Production sync activation remains unfinished.
+
 ## 0.1.4
 
 - Add the core-owned production file ingestion adapter behind the sync coordinator, with legacy document chunking, unchanged-file skipping and per-page indexing. Assembly, real embedding services, scheduling and write chat remain unavailable.

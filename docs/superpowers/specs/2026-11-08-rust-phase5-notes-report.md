@@ -1149,3 +1149,49 @@ carry file paths or hashes (queue parameters only allow ids, flags, counts
 and choices), so it needs a durable, account-bound checkpoint table with a
 new migration, row-level privacy tests and a package version bump. That is
 its own slice. Remaining-work item 3 above still stands as written.
+
+## Part twelve checkpoint — private durable sync continuations
+
+### What changed
+
+The Notes package now has its own owner-only sync checkpoint table in new SQL.
+It preserves the original six tables and all three legacy migration files.
+Package version `0.1.5` includes the new migration and a truthful app-map entry.
+The module remains a pure SDK client of the server API; it accesses no memory
+or People tables directly and opens no files or network connections itself.
+
+The write-tools test component can request sync with no source or account input.
+It stores an empty initial checkpoint, then requests queue publication after the
+outer database transaction commits. A worker reads it by opaque ID, calls the
+existing coordinator, and stores each deferred continuation the same way. Paths,
+file hashes and snapshot keys stay in the account-scoped database row. Queued
+parameters and worker results carry the ID instead of the private continuation.
+
+### Verification approach
+
+The disposable gate compares real persisted ingestion rows against the existing
+legacy oracle, restarting the port chain between continuation pages. It exercises
+both runtime roles, another owner and an unrelated admin. Read, update and delete
+privacy assertions are checked with RLS enabled, observed failing after removal,
+and checked again after restoration. Queue publication and embedding vectors
+are explicit test stand-ins. A post-commit publication refusal must leave the
+saved checkpoint resumable by its owner. The ordinary component must refuse the
+unassembled sync API. Final checks and review receipts are in the task proof.
+
+Builds use approved, pinned `wit-bindgen` 0.57.1 and project lockfiles, with
+Cargo and Rust toolchain homes copied into task-owned scratch storage. Nothing
+is installed globally. Database checks use `scripts/run-gate.sh` only.
+
+### Not complete
+
+This is a continuation checkpoint, not full Notes parity or an activated sync
+service. Checkpoints are retained for retry; durable outbox recovery, retention,
+continuation deduplication and automatic crash recovery are still needed.
+The test component retains the old raw coordinator job entry for its legacy
+corpus. Production activation must expose only the UUID worker envelope.
+The ordinary package still declares no sync job or request API. Real configured
+embedding service assembly, last-sync writes, manual and scheduled sync,
+approved installed chat writes, managed publication and fencing, exports and
+archives, full HTTP parity, assembled Settings/chat and a separate physical
+device over HTTPS remain acceptance work. The fixture browser check cannot
+prove that separate-device acceptance.
