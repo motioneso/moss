@@ -929,7 +929,44 @@ the ordinary and write-tools builds use separate target folders. No global tool,
 unlisted dependency, live database or real installation is changed. Database
 checks run only through `scripts/run-gate.sh` on disposable servers.
 
-Final results and review follow-ups are recorded below after the checks complete.
+### Review corrections and evidence
+
+The first independent Claude review found two major defects: the job envelope
+used `name` instead of the host's local `queue` field, and configured/canonical
+source paths were collapsed. Both are fixed. Continuations retain the configured
+path while walking, per-file calls and cleanup use the canonical root. The corpus
+now has 64 actual legacy executions, adding opening failures, differing final
+file errors, source aliases and trailing slashes. The revised regression was
+observed failing before the fixes and passing afterward.
+
+The four minor findings were also addressed: the ordinary-Wasm refusal check now
+uses working core ports and a permissive checkpoint manifest, an unlinked opening
+reply need not contain a walk, and the draft operation response shapes, corpus
+regeneration, removal controls and production limits are documented. Native
+exact-result/trace comparisons and strict guest Clippy pass; all five removed
+protections fail their assertions and restored source passes. Scoped TypeScript
+lint/format checks, the file-size check, and full-repository lint/format checks
+also pass. Final clean-commit compiled/database receipts and the second review
+are recorded with the checkpoint PR and its proof recipe, rather than reusing a
+receipt from an earlier dirty tree. The initial SQL differential attempt timed
+out awaiting its TypeScript server; that attempt is not a passing parity result.
+
+A real local HTTPS fixture selected, downloaded and installed the signed package
+through the module host. A new synthetic owner signed in, browsed and linked a
+folder, then confirmed unlink in the opaque module frame. The gate checked that
+the real preference became null after at least two revisions. Its native checks
+verified the certificate and refused an unknown authority and origin. Screenshots
+and the disposable gate receipt are in the proof recipe. The task browser and
+server were closed after the check. This is the package fixture, not the assembled
+Phase 4 shell or a physical second device. No second-device acceptance is claimed.
+
+Before production activation, cleanup must list and remove all selected files in
+one transaction, matching the legacy sweep. The draft stand-in calls currently
+list then remove paths independently; even atomic per-file deletion would not
+prove transaction equivalence. A typed safe-error channel is still needed because
+the host scrubs guest errors. Real work also needs bounded resumable dispatch
+within the host's default five-second and ten-million-fuel call limits.
+
 This checkpoint is not complete Notes parity. Remaining work is still production
 memory/query embedding assembly and recall; full per-file ingestion/managed
 publication; durable continuation, schedule and status orchestration; installed
