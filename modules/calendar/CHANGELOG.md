@@ -1,5 +1,11 @@
 # Calendar package
 
+## 0.13.0
+
+- Return the original saved day-plan response with live task and source-run summaries beside the unchanged plan.
+- Report unavailable references without losing the saved draft; reference lookups use the existing scoped public interface.
+- Concrete production adapters, the day-plan editor, provider execution, full shell and physical second-device HTTPS remain open.
+
 ## 0.12.0
 
 - Add a background job that removes one cached event for the account that queued it. An event the account cannot see is left untouched and reported as not removed.

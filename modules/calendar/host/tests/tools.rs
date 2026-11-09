@@ -35,14 +35,20 @@ impl moss_calendar_host::References for Tasks {
     fn task(&self, scope: &CallScope, id: &str) -> anyhow::Result<Value> {
         Ok(
             if scope.access().actor_user_id() == self.actor && id == self.id.to_string() {
-                json!({"task":{"id":id,"ownerUserId":self.actor}})
+                json!({"task":{"id":id,"ownerUserId":self.actor,"title":"Live task title","status":"todo","dueAt":"2026-11-09T10:00:00.000Z","doAt":null,"effort":"medium"}})
             } else {
                 json!({"task":null})
             },
         )
     }
-    fn briefing_run(&self, _: &CallScope, _: &str) -> anyhow::Result<Value> {
-        anyhow::bail!("No briefing adapter")
+    fn briefing_run(&self, scope: &CallScope, id: &str) -> anyhow::Result<Value> {
+        Ok(
+            if scope.access().actor_user_id() == self.actor && id == self.id.to_string() {
+                json!({"run":{"id":id,"briefingType":"evening","status":"succeeded","createdAt":"2026-11-08T00:00:00.000Z"}})
+            } else {
+                json!({"run":null})
+            },
+        )
     }
 }
 struct Installed {
@@ -393,4 +399,71 @@ fn installed_cache_evict_job_removes_only_the_actors_own_event() {
     assert_eq!(count(), 0);
     assert_eq!(job(f.a).unwrap(), json!({"evicted":false}));
     println!("PASS installed Calendar cache-evict job: owner removes own event; other user and administrator cannot; repeat is a no-op");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn installed_saved_reads_match_production_envelopes_and_public_summaries() {
+    let t = Installed::new();
+    let f = &t.f;
+    let day = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    f.rt.block_on(async {
+        f.root.execute("UPDATE app.day_plans SET source_run_id=$2,evening_intent=$3 WHERE id=$1",&[&f.plan,&t.task,&json!({
+            "priorityTaskIds":[t.task,f.event],"corrections":[{"taskId":t.task,"note":"Keep","source":"actor"}],
+            "commitments":[{"taskId":f.event,"decision":"defer"}]
+        })]).await.unwrap();
+        f.root.execute("UPDATE app.day_plan_blocks SET task_id=$2 WHERE id=$1",&[&f.block,&t.task]).await.unwrap();
+    });
+    let path = format!("/day-plan?date={day}&timeZone=UTC");
+    let paths = [path.as_str(), "/day-plan?date=2035-01-01&timeZone=UTC"];
+    let tasks = json!({t.task.to_string():{"ownerUserId":f.a,"title":"Live task title","status":"todo","dueAt":"2026-11-09T10:00:00.000Z","doAt":null,"effort":"medium"}});
+    let runs = json!({t.task.to_string():{"ownerUserId":f.a,"briefingType":"evening","status":"succeeded","createdAt":"2026-11-08T00:00:00.000Z"}});
+    let mut comparisons = 0;
+    for missing_source in [false, true] {
+        if missing_source {
+            f.rt.block_on(f.root.execute(
+                "UPDATE app.day_plans SET source_run_id=$2 WHERE id=$1",
+                &[&f.plan, &f.event],
+            ))
+            .unwrap();
+        }
+        for actor in [f.a, f.b, f.admin] {
+            let mut child = Command::new("pnpm")
+                .args(["exec", "tsx", "modules/calendar/tools/saved-read-oracle.ts"])
+                .current_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.."))
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap();
+            child.stdin.take().unwrap().write_all(json!({"actor":actor,"tasks":tasks,"runs":runs,
+                "requests":paths.iter().map(|p|json!({"method":"GET","url":format!("/api/calendar{p}")})).collect::<Vec<_>>()
+            }).to_string().as_bytes()).unwrap();
+            let result = child.wait_with_output().unwrap();
+            assert!(
+                result.status.success(),
+                "Saved-read production oracle failed (database diagnostics omitted)"
+            );
+            let expected: Vec<Value> = serde_json::from_slice(&result.stdout).unwrap();
+            assert_eq!(expected.len(), paths.len());
+            for (path, expected) in paths.iter().zip(expected) {
+                let raw = t
+                    .app
+                    .dispatch_extended(
+                        f.access(actor),
+                        "GET",
+                        &format!("/api/m/calendar{path}"),
+                        "null",
+                    )
+                    .unwrap();
+                let actual: Value = serde_json::from_str(&raw).unwrap();
+                assert_eq!(
+                    actual, expected,
+                    "Installed saved-read response differs from production"
+                );
+                comparisons += 1;
+            }
+        }
+    }
+    println!("PASS {comparisons} installed saved-plan/production comparisons: owner, foreign, admin, empty day, deduplicated live task summaries and present/missing source summaries (public adapters are stand-ins)");
 }
