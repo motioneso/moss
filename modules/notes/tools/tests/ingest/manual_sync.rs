@@ -125,7 +125,7 @@ fn installed_manual_sync_keeps_requests_private_and_resumes_indexing() {
         let id: Uuid = serde_json::from_value(out["body"]["jobId"].clone()).unwrap();
         assert_eq!(jobs.lock().unwrap().len(), 1);
         let params = jobs.lock().unwrap()[0]["params"].clone();
-        assert_eq!(params, json!({"checkpointId":id}));
+        assert_eq!(params, json!({"checkpoint-id":id}));
         assert_eq!(f.checkpoint_access(&db, owner, id), [1, 1, 1]);
         for outsider in [f.actors[1], f.actors[2]] {
             assert_eq!(f.checkpoint_access(&db, outsider, id), [0, 0, 0]);

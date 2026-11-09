@@ -32,7 +32,7 @@ impl Host for Services {
                 json!([params["values"]])
             }
             ("jobs", "enqueue-after-commit", "notes.sync") => {
-                assert_eq!(params["params"], json!({"checkpointId":ID}));
+                assert_eq!(params["params"], json!({"checkpoint-id":ID}));
                 assert_eq!(params["idempotencyKey"], ID);
                 assert_eq!(self.writes.borrow().len(), 1);
                 json!({"deferred":true})

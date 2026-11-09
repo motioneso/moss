@@ -1437,3 +1437,10 @@ checkpoint retention, managed publication/fencing, proposals/receipts/reconcilia
 private exports/daily archives, complete HTTP/path parity, assembled Settings/chat,
 and real use from another physical device over HTTPS. The fixture UI only proves
 folder controls; this checkpoint must not replace working legacy Notes.
+
+The first aggregate run found that the experimental queue parameter
+`checkpointId` was refused by the installer's manifest identifier rule. Queue
+publication now uses `checkpoint-id`; API result identities retain their existing
+shape, and the worker also accepts the earlier experimental job spelling. The
+signed installed gate checks the corrected declaration. The failed run is kept
+in the proof rather than counted as a passing receipt.

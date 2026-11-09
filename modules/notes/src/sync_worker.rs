@@ -34,6 +34,7 @@ struct SavedPage {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Resume {
+    #[serde(rename = "checkpoint-id", alias = "checkpointId")]
     checkpoint_id: String,
 }
 
@@ -46,7 +47,9 @@ struct Job {
 
 pub fn handle(host: &impl Host, payload: &str) -> Result<String> {
     let value: Value = serde_json::from_str(payload)?;
-    if value["parameters"].get("checkpointId").is_none() {
+    if value["parameters"].get("checkpoint-id").is_none()
+        && value["parameters"].get("checkpointId").is_none()
+    {
         return crate::sync::handle(host, payload);
     }
     let job: Job = serde_json::from_value(value)?;
@@ -83,7 +86,7 @@ pub(crate) fn publish(host: &impl Host, id: &str, now: &str) -> Result<()> {
         "enqueue-after-commit",
         "notes.sync",
         json!({
-            "params":{"checkpointId":id},"idempotencyKey":id,"availableAt":now
+            "params":{"checkpoint-id":id},"idempotencyKey":id,"availableAt":now
         }),
     )?;
     if result["deferred"] != true {

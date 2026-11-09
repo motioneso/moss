@@ -375,7 +375,7 @@ impl Ports for CapturedQueue {
             assert_eq!(request.resource, "notes.sync");
             let params = request.parameters["params"].as_object().unwrap();
             assert_eq!(params.len(), 1, "Private checkpoint leaked into a job");
-            let id: Uuid = serde_json::from_value(params["checkpointId"].clone()).unwrap();
+            let id: Uuid = serde_json::from_value(params["checkpoint-id"].clone()).unwrap();
             assert_eq!(request.parameters["idempotencyKey"], json!(id));
             // Real typed queue-schema admission, rather than merely inspecting JSON.
             let specs = moss_module_host::jobs::specs(scope.module());
@@ -433,7 +433,7 @@ impl Fixture {
             .extend(["notes.compare-write", "notes.remove"].map(String::from));
         manifest.jobs.insert(
             "notes.sync".into(),
-            serde_json::from_value(json!({"checkpointId":{"kind":"id"}})).unwrap(),
+            serde_json::from_value(json!({"checkpoint-id":{"kind":"id"}})).unwrap(),
         );
         manifest
     }
@@ -580,7 +580,7 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
         assert_eq!(queued.len(), 1);
         assert_eq!(
             requested["checkpointId"],
-            queued[0]["params"]["checkpointId"]
+            queued[0]["params"]["checkpoint-id"]
         );
         // Seed an earlier result; deferred pages and rejected foreign checkpoints
         // must preserve it until the final page finishes.
@@ -898,7 +898,7 @@ fn durable_checkpoints_resume_real_ingestion_and_detect_missing_privacy() {
         let recovered: Value = serde_json::from_str(&recovered.unwrap()).unwrap();
         assert_eq!(
             recovered["checkpointId"],
-            deferred_jobs[0]["params"]["checkpointId"]
+            deferred_jobs[0]["params"]["checkpoint-id"]
         );
         assert_eq!(recovered_jobs.len(), 1);
         assert_eq!(recovered_jobs[0]["params"], deferred_jobs[0]["params"]);
