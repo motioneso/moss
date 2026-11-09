@@ -81,6 +81,20 @@ pub fn render() -> String {
                         <Field><FormLabel control_id="do-at">"Do date"</FormLabel><input id="do-at" name="doAt" type="date" class="jds-input"/></Field>
                         <Field><FormLabel control_id="repeat">"Repeat"</FormLabel><select id="repeat" name="repeat" class="jds-input"><option value="never">"Never"</option><option value="daily">"Daily"</option><option value="weekly">"Weekly"</option><option value="monthly">"Monthly"</option></select></Field>
                     </div>
+                    <section id="new-task-extras" hidden aria-label="Prepare tags and subtasks">
+                        <h3>"Tags"</h3>
+                        <div id="new-tags" class="tasks-actions"></div>
+                        <div class="tasks-inline">
+                            <Field><FormLabel control_id="new-tag-name">"New task tag"</FormLabel>
+                                <input id="new-tag-name" class="jds-input" maxlength="100" placeholder="Type a tag and press Enter"/>
+                            </Field>
+                            <span id="add-new-tag"><Button variant=ButtonVariant::Secondary>"Add tag"</Button></span>
+                        </div>
+                        <h3>"Subtasks"</h3>
+                        <div id="new-subtasks" class="tasks-fields"></div>
+                        <span id="add-new-subtask"><Button variant=ButtonVariant::Secondary>"Add subtask"</Button></span>
+                        <p id="capture-progress" hidden role="status">"The task was saved. Retry Save task to finish adding its tags and subtasks. The list, tags and subtasks are kept while you retry."</p>
+                    </section>
                     <p id="edit-error" hidden role="alert"></p>
                     <div class="tasks-actions">
                         <Button kind=ButtonType::Submit>"Save task"</Button>

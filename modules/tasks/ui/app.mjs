@@ -3,6 +3,7 @@ import { moduleClient } from "./guest-bridge.mjs";
 import { taskFields, visibleTasks, taskGroups, viewMode } from "./model.mjs";
 import { tagManager } from "./tags.mjs";
 import { listDeletion } from "./delete-list.mjs";
+import { captureDraft } from "./capture.mjs";
 
 const client = moduleClient();
 const $ = (id) => document.getElementById(id);
@@ -18,6 +19,15 @@ const state = {
   focusAfter: null,
   listDrafts: new Map()
 };
+const capture = captureDraft({
+  api,
+  run,
+  text,
+  button,
+  focus: (node) => {
+    state.focusAfter = node;
+  }
+});
 const labels = { todo: "Open", done: "Done", suggested: "Suggested", archived: "Archived" };
 const deleting = listDeletion({
   api,
@@ -99,6 +109,7 @@ async function run(action) {
     document.querySelectorAll("button, input, select, textarea").forEach((node) => {
       if (!controls.includes(node)) node.disabled = false;
     });
+    capture.lock();
     $("tasks-app").removeAttribute("aria-busy");
     state.focusAfter?.focus();
     state.focusAfter = null;
@@ -200,9 +211,9 @@ function render() {
 }
 function draftSnapshot() {
   return JSON.stringify(
-    [...document.querySelectorAll("#editor input, #editor select, #editor textarea")].map(
-      (node) => [node.id, node.value]
-    )
+    [...document.querySelectorAll("#editor input, #editor select, #editor textarea")]
+      .map((node) => [node.id, node.value])
+      .concat([["capture-draft", capture.snapshot()]])
   );
 }
 function markSaved() {
@@ -236,6 +247,8 @@ async function editTask(id) {
   state.editing = task;
   state.pendingTag = null;
   $("task-form").reset();
+  capture.reset();
+  show("new-task-extras", !task);
   const defaults = {
     title: "",
     description: "",
@@ -261,6 +274,7 @@ async function editTask(id) {
 }
 function closeEditor() {
   state.editing = null;
+  capture.reset();
   show("editor", false);
   show("overview", true);
   render();
@@ -426,11 +440,10 @@ submit("task-form", async () => {
   for (const control of $("task-form").elements)
     if (control.name) form[control.name] = control.value;
   const previous = state.editing;
-  const response = await api(
-    previous ? "PATCH" : "POST",
-    previous ? `/tasks/${previous.id}` : "/tasks",
-    taskFields(form, previous)
-  );
+  const fields = taskFields(form, previous);
+  const response = previous
+    ? await api("PATCH", `/tasks/${previous.id}`, fields)
+    : await capture.save(fields);
   state.editing = response.task;
   await load();
   closeEditor();

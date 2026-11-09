@@ -251,3 +251,23 @@ installed chat, real-shell integration and performance acceptance. The full
 endpoint harness still needs an observer for the module queue; it currently
 looks only at the earlier native spike queue. Second-device evidence from a
 signed fixture does not prove real-shell integration.
+
+## Part 16: prepare a new task before saving
+
+New task now offers editable, removable subtask drafts and removable tag drafts.
+Tags use the legacy lowercase/hash normalization; blank subtasks are dropped and
+remaining steps keep their order. A tag still in the input is included on Save.
+These drafts do not write until Save task. Leaving the editor uses the existing
+unsaved-changes warning.
+
+If a child write fails after the parent was created, retry Save task. The screen
+keeps the list and child drafts locked and resumes pending writes using receipts
+for the parent, breakdown and tag assignments. Other parent fields remain editable.
+This avoids repeating acknowledged work; an ambiguous lost server response still
+needs server-side idempotency and is not an exactly-once guarantee.
+
+`node --test modules/tasks/ui/capture.test.mjs` checks retries and draft controls.
+`pnpm exec tsx modules/tasks/tools/capture-parity.mjs` compares draft cleaning with
+the unchanged legacy editor. Both run in the package gate. This adds no route,
+tool, job kind or migration. The remaining port and acceptance gaps listed above
+are still outstanding; this is a screen parity checkpoint.

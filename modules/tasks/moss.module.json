@@ -122,11 +122,11 @@
     },
     {
       "id": "tasks.package-screens",
-      "description": "Package screen using the shared UI kit, authored typography and parent bridge: task loading; priority groups (Critical through Someday, then No priority) and four-quadrant grid, each ordered by due date then title; status, list, text and tag filters; create and edit tasks; completion and suggestion review; list creation and renaming; subtasks; tag creation and assignment; activity comments; saved default view. Dates currently display in UTC. Full legacy screen and setting parity is unfinished.",
+      "description": "Package screen using the shared UI kit, authored typography and parent bridge: task loading; priority groups (Critical through Someday, then No priority) and four-quadrant grid, each ordered by due date then title; status, list, text and tag filters; create and edit tasks, including draft tags and editable subtasks before saving a new task; retry acknowledged partial saves without recreating the parent or completed child writes; completion and suggestion review; list creation and renaming; subtasks; tag creation and assignment; activity comments; saved default view. Dates currently display in UTC. Full legacy screen and setting parity is unfinished.",
       "remediations": [
         {
           "id": "reload-tasks",
-          "description": "Retry loading Tasks after checking the connection. Unsaved editor fields are retained on request failure.",
+          "description": "Retry loading Tasks after checking the connection. Unsaved editor fields are retained on request failure. If a new task was created before a tag or subtask write failed, retry Save task to finish; its list and child drafts stay locked during that retry.",
           "path": "/tasks"
         }
       ],

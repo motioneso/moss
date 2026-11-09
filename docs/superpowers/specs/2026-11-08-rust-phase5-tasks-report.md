@@ -1138,3 +1138,47 @@ harness's native queue observer still cannot observe the module queue. A
 signed-package fixture is separate from the real application shell; physical
 second-device checks must be reported with their exact coverage in the proof.
 Part of #4027; release note Category N/A. Workshop and Food are excluded.
+
+## Tasks part 16 checkpoint (JS-117, Card 526)
+
+New task now lets people prepare tags and editable, removable subtasks before
+saving, as the legacy editor does. Tags are normalized to lowercase with one
+leading hash removed; empty subtask drafts are dropped and the others keep their
+order. A tag left in its input is included when Save task is clicked. Drafts stay
+in the editor until saving and use the existing unsaved-changes protection.
+The package app map describes this path and its retry instructions.
+
+Save creates the parent, adds its ordered breakdown and assigns tags through the
+existing public routes. A failed child write keeps the saved parent and receipts
+for acknowledged child writes. Retry resumes pending work instead of creating
+another parent or repeating those completed operations. The list and child drafts
+stay locked during this recovery, while other parent fields remain editable.
+A lost response after a server commit is still ambiguous; this client flow cannot
+guarantee exactly-once writes without a server idempotency contract.
+
+Validation includes retry tests for rejected parent creation, breakdown and tag
+assignment, a draft-control DOM test, and twenty exact comparisons with the
+unchanged legacy tag/subtask cleaning functions, including Unicode and duplicate
+subtask titles. These checks are part of the package gate. They are separate from
+live signed-package browser evidence and do not establish full screen parity.
+Final gate, browser and review results are recorded in the task proof artifact.
+
+The starting checkout was behind current main and was fast-forwarded with Ben's
+approval. At the start, the part 15 PR was still open with CI running, despite the
+continuation brief calling it merged. This slice avoids duplicating its filters.
+
+This remains an unfinished checkpoint. Both assistant-policy routes need the
+public preferences seam. Actor timezone/lazy recurrence, recurrence jobs,
+deferred-queue policy and installed worker dispatch, public People linkage,
+policy/feedback orchestration, remaining screen/settings parity, installed chat,
+real-shell integration and performance acceptance remain. The endpoint adapter's
+queue-observation gap remains. The signed fixture is separate from the real shell.
+A physical second-device check must be reported with its actual coverage; the
+MacBook was offline on the tailnet at the first check in this run.
+
+Tooling reuses the existing scratch Rust 1.95 toolchain, Wasm target and Cargo
+cache, including the approved pinned wit-bindgen graph. The tools lockfile was
+refreshed offline without a byte change. Declared JavaScript dependencies were
+restored offline in this worktree. No global tool, target or package was installed.
+No route, chat tool, job kind, SQL migration or shared host crate changes.
+Workshop and Food are excluded. Part of #4027; release note Category N/A.
