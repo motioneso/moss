@@ -254,6 +254,10 @@ fn compiled_ingest_matches_legacy_and_skips_unchanged() {
         // A file changed while its chunks are being embedded is refused, and
         // its previously indexed rows stay in place.
         let small = PathBuf::from(f.oracle["root"].as_str().unwrap()).join("c.md");
+        let original = std::fs::read(&small).unwrap();
+        // An unchanged indexed file skips embedding. Change its bytes first
+        // so the mutating embedder actually reaches the write-time recheck.
+        std::fs::write(&small, "Small plain note.\nChanged before embedding.\n").unwrap();
         let changed: Value = serde_json::from_str(
             &f.run_emb(
                 db.clone(),
@@ -264,7 +268,7 @@ fn compiled_ingest_matches_legacy_and_skips_unchanged() {
             .unwrap(),
         )
         .unwrap();
-        std::fs::write(&small, "Small plain note.\n").unwrap();
+        std::fs::write(&small, original).unwrap();
         assert_eq!(changed["errors"], 1, "{role}: {changed}");
         assert_eq!(f.snapshot(), f.oracle["expected"]);
         // Positive control for the privacy checks below: the owner does read
