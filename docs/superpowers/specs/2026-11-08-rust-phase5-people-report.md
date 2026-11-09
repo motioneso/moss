@@ -1,7 +1,7 @@
 # Rust Phase 5: People & Context
 
 Tasks JS-45 (part one), JS-50 (part two), JS-57 (part three), JS-58 (part four),
-JS-69 (part five) and subsequent continuations through JS-104 (part thirteen), Card 523.
+JS-69 (part five) and subsequent continuations through JS-106 (part fourteen), Card 523.
 Part of [issue 4027](https://github.com/motioneso/moss/issues/4027).
 Release note Category: N/A.
 
@@ -1534,3 +1534,111 @@ checks as full Phase 5 acceptance:
 4. Prove the installed People screen and chat approval flow through the real app, with
    sign-in, trusted origins, privacy and HTTPS from desktop and a second physical device.
    No substitute UI, browser render or physical-device result is claimed by this checkpoint.
+
+## Part fourteen: qualify normal-host numeric dispatch
+
+The module host now keeps numeric contact values from changing before People sees
+them. The real app and phone checks still remain open.
+
+This checkpoint starts from freshly fetched `main` at `5ab839f65`, the merged
+part-thirteen report (PR 4099). The initial task branch predated the People port;
+it was advanced while clean before any edits. The brief's PR 4066 reference is
+older than that verified baseline. No sibling worktree source was copied.
+
+Part thirteen identified a real test boundary: the route replay's native People
+dev-dependency enabled correctly rounded JSON parsing in the test host, while the
+normal host did not request it. A component cannot repair a number already rounded
+by its caller. The host now explicitly enables `float_roundtrip` in its existing
+`serde_json` dependency. This is the only production change outside People-owned
+files. It affects JSON numbers parsed by the host generally, not only contact text.
+There is no new dependency version, public API, database schema or privacy policy.
+The module and its screen remain clients of the server's declared API and ports.
+
+`modules/people/tools/host-json` is an independent downstream executable. It depends
+on the normal host, omits native People and requests no JSON feature itself. It
+installs a signed echo fixture through the real installer and sends 283 raw numeric
+bodies through `Installer::dispatch_extended` and the component ABI. Expected values
+come from the committed JavaScript oracle and are compared as binary64 bits; the
+oracle's signed-zero string normalization is retained. Three additional malformed
+or out-of-range bodies must be rejected. Overflow rejection is an existing Rust
+parser behavior, not a claim of JavaScript overflow parity. The route gate runs this
+probe before its separate installed People replay.
+
+The echo fixture isolates the host parser. It supplies no People screen, People
+repository, listener, sign-in or chat flow. Its result must not be presented as live
+People application proof. The existing installed-package replay separately checks
+contact-edit responses, all seven tables and note bytes. The manifest app map,
+package change notes and README describe that distinction.
+
+### Part-fourteen verification
+
+- The final downstream probe failed with the host feature removed (`rc=1`):
+  `1.00000000000000011102230246251565404236316680908203125` became
+  `1.0000000000000002` instead of `1`. Its inspector uses the standard Rust float
+  parser, so the failure is in the host's echoed numeric token rather than a
+  second lossy JSON parse in the probe.
+- With the feature restored, the identical probe passed (`rc=0`): all 283 numeric
+  vectors and all three malformed/out-of-range rejection cases. Its lockfile has
+  no native People package and no new third-party dependency version.
+- All twenty-five native People tests pass (`rc=0`). The core and number-vector
+  generators match their committed fixtures byte for byte. The frame bridge check,
+  Rust app-map generation and scoped formatting pass. The generated Wasm component
+  was rebuilt from this worktree with the approved pinned generator.
+
+- The nine-suite People gate passed (`rc=0`, ten tests) through
+  `scripts/run-gate.sh`; failing-first privacy controls exposed cross-user read and
+  write access with protection removed and passed with protection restored for app
+  and worker roles, including admin actors. Settings/folder privacy controls also
+  failed first and passed restored. This is database/component evidence, not UI proof.
+- The full signed installed-package route gate passed (`rc=0`): the standalone
+  normal-host probe, frame bridge, 170 legacy route responses, all seven table
+  snapshots and canonical note bytes. All four public APIs were routed through an
+  installed consumer. Download, install, reload, folder selection and refusal without
+  clearing were exercised. The fifty-reference request returned `202` in `7936 ms`
+  with the replay's explicit `30000 ms` budget; this does **not** qualify the shipping
+  five-second budget.
+- Both gates tested code commit `0bab8729dcfbf92de672bc537105797888c1a43f`, with only
+  this report dirty, input fingerprint
+  `d525fc29d87dcf421d384a1c4ee5ea9eadc5258844716b74741c8ee37cb9eb75`.
+  Their sentinel waits returned zero and both disposable database containers were
+  removed. Receipt basenames are
+  `task_106_rust_port_phase_5_people_module-20261108-235649-wAL8iF.log`
+  (nine suites) and
+  `task_106_rust_port_phase_5_people_module-20261109-002008-HjCXxH.log`
+  (installed replay). Final report-only commits do not claim identical input hashes.
+- Rebuilt component SHA-256:
+  `8532551db8ee3f882913e4067fd8f335932efa468f3a29a9d0c808db8bd264c4`.
+  Rebuilt package SHA-256:
+  `06ef561f6e3d767034c048a8a253fd5b80138aaef7d4d3655ff6acf17ef89217`.
+- Strict Clippy on the independent downstream probe passed (`-D warnings`, `rc=0`).
+  The earlier interrupted Clippy run is not cited as a check result.
+
+Root lint and type checking passed. Final formatting, file-size and independent-review
+outcomes are recorded separately in the task proof. No full foundation, CI or live
+application result is claimed.
+
+### Remaining Phase 5 acceptance
+
+Normal-host dispatch qualification narrows item one from part thirteen; it does not
+complete the server listener or any other acceptance item:
+
+1. Exercise raw numeric request bodies through the shipping authenticated listener
+   after module-host composition, without earlier lossy parsing. Unusual numeric
+   overflow and the broader parser/error inventory remain outside this finite oracle.
+2. Compose the installed People frame and chat tools into the real Rust server.
+   The current shell still composes shell/Today/chat routes, not an installed module
+   frame. Keep the app a client of the local or remote server API.
+3. Finish ingest nudges, real provider composition, command retention/quotas and the
+   fifty-reference shipping budget. Broaden backend-failure, large-data and directory
+   collation coverage beyond the existing enumerated replay.
+4. Prove real installed UI and chat approvals, sign-in, trusted origins and privacy
+   over HTTPS from desktop and a second physical device. The task browser initially
+   failed to launch because Chrome's sandbox was unavailable. No rendered screen or
+   second-device result is claimed.
+
+All Cargo, Rustup and target caches used here belong to task scratch. The pinned
+compiler and existing dependency caches were copied there; the declared Wasm standard
+libraries were made available locally. Missing locked dependencies for the approved
+`wit-bindgen =0.57.1` generator were fetched into that task-owned Cargo cache.
+JavaScript dependencies came from the existing lockfile with an offline install.
+No global tool or package was installed. No Vikunja card was changed.
