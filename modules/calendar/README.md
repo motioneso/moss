@@ -232,6 +232,28 @@ changes alongside part 7’s assistant-name and narrow-week work. Full Calendar 
 formatting beyond default English, the old-screen switch and physical second-device
 HTTPS remain required. The report retains the complete remaining list.
 
+## Day-plan preview (part 10 checkpoint)
+
+Version 0.10.0 adds `POST /day-plans/:id/preview`, matching the production
+preview route: revision check, selected-change validation, before/after
+timing, task eligibility, deadline risk and overlaps between selected
+changes. Task facts arrive through the existing `calendar.task-reference`
+public link in `{task:{id,ownerUserId,status,dueAt}}` shape; a missing task,
+another account's task and a missing adapter all read as unavailable, never
+distinguished. Nothing is written and no provider is contacted. The
+production route takes busy intervals from its provider-backed source
+context; this host has no such adapter yet, so availability reports
+`unavailable` and no calendar-busy conflict is claimed, exactly as the
+production route behaves without that dependency. The original
+`/api/calendar/day-plan`, `/api/calendar/day-plans`,
+`/api/calendar/day-plans/:id/draft` and `/api/calendar/day-plans/:id/preview`
+URLs now also dispatch through the installed package in the Calendar web
+router. The disposable gate compares the installed preview against the
+production TypeScript route for owner, foreign user and administrator:
+status on every case, full body on success. Remaining provider tools and
+jobs, apply/retry/recovery, shell/Today/chat composition, old-screen
+replacement and physical second-device trusted HTTPS stay open.
+
 ## Startup recovery (part 9 checkpoint)
 
 Version 0.9.0 keeps a shared loading state visible until Calendar or settings mounts.

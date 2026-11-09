@@ -1,5 +1,7 @@
 #[path = "support/kv_guard.rs"]
 mod kv_guard;
+#[path = "support/preview_oracle.rs"]
+mod preview_oracle;
 #[path = "support/read_oracle.rs"]
 mod read_oracle;
 #[path = "support/registry.rs"]
@@ -42,12 +44,14 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
         }
     });
     read_oracle::seed(&f);
+    let preview_seeded = preview_oracle::seed(&f);
     let dir = tempfile::tempdir().unwrap();
     let registry = tempfile::tempdir().unwrap();
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let bytes = moss_calendar_host::package::pack(&root, &f.core()).unwrap();
     let (key, publisher, artifact) = registry::publish(registry.path(), &bytes);
     let database = f.db.clone();
+    let preview_refs = preview_seeded.references.clone();
     let captured = Arc::new(kv_guard::Captured::default());
     let observing = captured.clone();
     let app = Application::open_extended_with(
@@ -64,7 +68,8 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
         },
         move |next| {
             let guarded: Arc<dyn moss_module_host::runtime::Ports> = Arc::new(
-                moss_calendar_host::CalendarPorts::new(database, next.clone())?,
+                moss_calendar_host::CalendarPorts::new(database, next.clone())?
+                    .with_references(preview_refs.clone()),
             );
             *observing.guarded.lock().unwrap() = Some(guarded.clone());
             *observing.downstream.lock().unwrap() = Some(next);
@@ -125,6 +130,7 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
         assert_eq!(write["status"], 404);
     }
     read_oracle::compare(&app, &f);
+    preview_oracle::compare(&app, &f, &preview_seeded);
     let settings = call(f.a, "GET", "/briefing-settings", Value::Null);
     assert_eq!(settings["body"]["settings"]["prepTaskMode"], "auto");
     let display = call(f.a, "GET", "/display-settings", Value::Null);
