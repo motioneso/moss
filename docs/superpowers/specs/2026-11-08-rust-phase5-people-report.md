@@ -2401,6 +2401,14 @@ same earlier decode. Both disposable gate containers were removed.
 The earlier fixture-setup failures were `104449-KJCvic` and `104540-Jvqzsb`;
 neither is parity or control evidence.
 
+Installed replay `20261109-104533-plGjY8` on `a55381f0d` passed the standalone
+283-number JSON check and UI bridge, and downloaded, installed and reloaded the
+signed package. It then failed the fifty-reference refresh: status 500 after
+6,437 ms against the unchanged 5,000 ms deadline (`rc=101`). This is not a
+passing route-replay receipt. The runtime and replay test are unchanged from
+the branch base. Heavy machine load was observed, but its causal contribution
+is not proved; final checks run serially to reduce this task's own contention.
+
 The component SHA-256 is
 `94f3432357dca23e5b55184d013bec38152b80f6ec59b96384e01ea9f51e172f`;
 the package SHA-256 is
