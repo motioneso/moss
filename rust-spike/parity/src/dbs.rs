@@ -92,7 +92,10 @@ fn db_name(url: &Url) -> Result<String, String> {
 pub fn pg(error: &tokio_postgres::Error) -> String {
     match error.as_db_error() {
         Some(db) => {
-            let detail = db.detail().map(|text| format!(" ({text})")).unwrap_or_default();
+            let detail = db
+                .detail()
+                .map(|text| format!(" ({text})"))
+                .unwrap_or_default();
             format!("{} [{}]{detail}", db.message(), db.code().code())
         }
         None => error.to_string(),
@@ -139,8 +142,12 @@ impl Copies {
     pub async fn create(env: &GateEnv, spike_sql: &Path) -> Result<Self, String> {
         let maintenance = connect(&with_db(&env.bootstrap, "postgres")).await?;
         // PARITY_COPY_PREFIX lets two runs share one gate server without colliding.
-        let prefix = std::env::var("PARITY_COPY_PREFIX").unwrap_or_else(|_| "moss_parity".to_owned());
-        if !prefix.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_') {
+        let prefix =
+            std::env::var("PARITY_COPY_PREFIX").unwrap_or_else(|_| "moss_parity".to_owned());
+        if !prefix
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+        {
             return Err("PARITY_COPY_PREFIX may hold only a-z, 0-9 and _".into());
         }
         let ts_name = format!("{prefix}_ts");
@@ -182,7 +189,10 @@ impl Copy {
     async fn open(env: &GateEnv, name: String, spike_sql: Option<&str>) -> Result<Self, String> {
         let admin = connect(&with_db(&env.bootstrap, &name)).await?;
         if let Some(sql) = spike_sql {
-            admin.batch_execute(sql).await.map_err(|error| format!("spike SQL: {}", pg(&error)))?;
+            admin
+                .batch_execute(sql)
+                .await
+                .map_err(|error| format!("spike SQL: {}", pg(&error)))?;
         }
         let closure = admin
             .query(
@@ -222,13 +232,20 @@ impl Copy {
                 .get(0);
             let copy = keep_name(&table);
             admin
-                .batch_execute(&format!("CREATE TABLE {copy} AS SELECT {columns} FROM {table}"))
+                .batch_execute(&format!(
+                    "CREATE TABLE {copy} AS SELECT {columns} FROM {table}"
+                ))
                 .await
                 .map_err(|error| format!("keep {table}: {}", pg(&error)))?;
             keep.push(Keep { table, columns });
         }
         let mut truncate = Vec::new();
-        for table in ["app.users", "pgboss.job", "pgboss.schedule", "spike_jobs.jobs"] {
+        for table in [
+            "app.users",
+            "pgboss.job",
+            "pgboss.schedule",
+            "spike_jobs.jobs",
+        ] {
             let exists: bool = admin
                 .query_one("SELECT to_regclass($1) IS NOT NULL", &[&table])
                 .await
@@ -239,7 +256,13 @@ impl Copy {
             }
         }
         let has_spike_jobs = spike_sql.is_some();
-        Ok(Copy { name, admin, keep, truncate, has_spike_jobs })
+        Ok(Copy {
+            name,
+            admin,
+            keep,
+            truncate,
+            has_spike_jobs,
+        })
     }
 
     /// Back to a freshly migrated database plus the base seed, then the case's own seed.
@@ -256,7 +279,10 @@ impl Copy {
         }
         sql.push_str("SET session_replication_role = DEFAULT;\n");
         sql.push_str(BASE_SEED);
-        self.admin.batch_execute(&sql).await.map_err(|error| format!("reset: {}", pg(&error)))?;
+        self.admin
+            .batch_execute(&sql)
+            .await
+            .map_err(|error| format!("reset: {}", pg(&error)))?;
         for statement in seed {
             self.admin
                 .batch_execute(statement)
@@ -284,7 +310,11 @@ impl Copy {
 
     /// The finished state and output of a queued job, waiting up to 30 seconds for it.
     pub async fn job(&self, id: &str) -> Result<Value, String> {
-        let table = if self.has_spike_jobs { "spike_jobs.jobs" } else { "pgboss.job" };
+        let table = if self.has_spike_jobs {
+            "spike_jobs.jobs"
+        } else {
+            "pgboss.job"
+        };
         let query = format!("SELECT state::text, output FROM {table} WHERE id = $1::text::uuid");
         for _ in 0..150 {
             let row = self
@@ -333,11 +363,14 @@ pub async fn probe(role_url: &Url, db: &str, actor: Option<&str>, sql: &str) -> 
         return json!({ "error": { "setup": error.to_string() } });
     }
     let statement = sql.trim().trim_end_matches(';');
-    let is_select =
-        statement.get(..6).is_some_and(|head| head.eq_ignore_ascii_case("select")) && !statement.contains(';');
+    let is_select = statement
+        .get(..6)
+        .is_some_and(|head| head.eq_ignore_ascii_case("select"))
+        && !statement.contains(';');
     let result = if is_select {
         // A single SELECT keeps its column types by going through jsonb.
-        let wrapped = format!("SELECT coalesce(jsonb_agg(to_jsonb(q)), '[]'::jsonb) FROM ({statement}) q");
+        let wrapped =
+            format!("SELECT coalesce(jsonb_agg(to_jsonb(q)), '[]'::jsonb) FROM ({statement}) q");
         match client.query_one(&wrapped, &[]).await {
             Ok(row) => json!({ "rows": row.get::<_, Value>(0) }),
             Err(error) => probe_error(&error),
@@ -353,8 +386,10 @@ pub async fn probe(role_url: &Url, db: &str, actor: Option<&str>, sql: &str) -> 
                         SimpleQueryMessage::Row(row) => {
                             let mut object = Map::new();
                             for (index, column) in row.columns().iter().enumerate() {
-                                let value = row.get(index).map(|text| Value::String(text.to_owned()));
-                                object.insert(column.name().to_owned(), value.unwrap_or(Value::Null));
+                                let value =
+                                    row.get(index).map(|text| Value::String(text.to_owned()));
+                                object
+                                    .insert(column.name().to_owned(), value.unwrap_or(Value::Null));
                             }
                             rows.push(Value::Object(object));
                         }

@@ -63,7 +63,9 @@ fn sha256(text: &str) -> String {
 }
 fn sanitize(text: &str) -> String {
     text.chars()
-        .filter(|c| !matches!(c, '\u{0}'..='\u{8}' | '\u{b}' | '\u{c}' | '\u{e}'..='\u{1f}' | '\u{7f}'))
+        .filter(
+            |c| !matches!(c, '\u{0}'..='\u{8}' | '\u{b}' | '\u{c}' | '\u{e}'..='\u{1f}' | '\u{7f}'),
+        )
         .collect()
 }
 fn utf16_len(text: &str) -> usize {
@@ -139,7 +141,9 @@ fn parse_document(content: &str) -> (Vec<String>, Vec<Chunk>) {
 }
 
 fn frontmatter_end(content: &str) -> Option<(&str, usize)> {
-    let rest = content.strip_prefix("---\n").or_else(|| content.strip_prefix("---\r\n"))?;
+    let rest = content
+        .strip_prefix("---\n")
+        .or_else(|| content.strip_prefix("---\r\n"))?;
     // Find the closing fence at the start of a line.
     let mut search = 0;
     loop {
@@ -291,10 +295,7 @@ impl MemoryIngestPorts {
         let row = cx.db().query_opt(sql, &[&source.preference_key]).await?;
         let saved = row.and_then(|row| {
             let value: Value = row.get(0);
-            value
-                .as_str()
-                .filter(|s| !s.is_empty())
-                .map(str::to_string)
+            value.as_str().filter(|s| !s.is_empty()).map(str::to_string)
         });
         let Some(saved) = saved else {
             cx.commit_bounded(scope.remaining())
@@ -329,7 +330,11 @@ impl MemoryIngestPorts {
                         let allowed = AllowedRoots::for_account(scope.access(), roots);
                         Some((
                             path.clone(),
-                            VaultContext::at_allowed_root(scope.access(), Path::new(path), &allowed)?,
+                            VaultContext::at_allowed_root(
+                                scope.access(),
+                                Path::new(path),
+                                &allowed,
+                            )?,
                         ))
                     }
                     _ => self.saved_source(scope, &source, false).await?,
@@ -337,7 +342,11 @@ impl MemoryIngestPorts {
                 let Some((configured, folder)) = resolved else {
                     return Ok(json!({"sourcePath": null}));
                 };
-                let root = folder.folder_identity().to_str().context("Invalid folder identity")?.to_string();
+                let root = folder
+                    .folder_identity()
+                    .to_str()
+                    .context("Invalid folder identity")?
+                    .to_string();
                 let mut files = Vec::new();
                 walk_files(&folder, "", &root, &mut files, scope)?;
                 files.sort();
@@ -352,17 +361,28 @@ impl MemoryIngestPorts {
     fn file(&self, scope: &CallScope, r: &Request) -> Result<Value> {
         let source = self.source(scope, r)?.clone_source();
         let input: File = serde_json::from_value(r.parameters.clone())?;
-        if input.expected_snapshot_key.as_deref().is_some_and(|k| !k.is_empty()) {
+        if input
+            .expected_snapshot_key
+            .as_deref()
+            .is_some_and(|k| !k.is_empty())
+        {
             return Ok(json!({"error": "managed publication is not connected"}));
         }
-        ensure!(input.chunk_limit >= 1 && input.chunk_limit <= 100_000, "Invalid chunk limit");
+        ensure!(
+            input.chunk_limit >= 1 && input.chunk_limit <= 100_000,
+            "Invalid chunk limit"
+        );
         // Read and embed outside the write transaction, then recheck the file.
         let prepared = self.runtime.block_on(async {
             tokio::time::timeout(scope.remaining(), async {
                 let Some((_, folder)) = self.saved_source(scope, &source, false).await? else {
                     anyhow::bail!("Notes source is not configured");
                 };
-                let root = folder.folder_identity().to_str().context("Invalid folder identity")?.to_string();
+                let root = folder
+                    .folder_identity()
+                    .to_str()
+                    .context("Invalid folder identity")?
+                    .to_string();
                 ensure!(input.source_path == root, "Notes source has changed");
                 let relative = input
                     .file_path
@@ -560,7 +580,10 @@ mod tests {
 
 fn error_code(error: &anyhow::Error) -> &'static str {
     let text = format!("{error:#}");
-    if text.contains("no longer exists") || text.contains("No such file") || text.contains("not found") {
+    if text.contains("no longer exists")
+        || text.contains("No such file")
+        || text.contains("not found")
+    {
         "ENOENT"
     } else if text.contains("outside") || text.contains("Outside") || text.contains("not within") {
         "OUTSIDE"

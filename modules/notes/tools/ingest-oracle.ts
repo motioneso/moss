@@ -16,7 +16,8 @@ export const ingestSnapshotSql = `SELECT jsonb_build_object(
 ) AS value`;
 
 const NOTES: Record<string, string> = {
-  "a.md": "---\ntitle: Alpha\n---\n# Alpha\n\nSee [[Other Note|label]] and [[Plain]].\n\n## Two\n\nBody two text.\n",
+  "a.md":
+    "---\ntitle: Alpha\n---\n# Alpha\n\nSee [[Other Note|label]] and [[Plain]].\n\n## Two\n\nBody two text.\n",
   "nested/b.md": `# Long\n\n${"A long paragraph sentence with enough words to split. ".repeat(80)}\n`,
   "c.md": "Small plain note.\n"
 };
@@ -34,7 +35,11 @@ export async function ingestOracle() {
     try {
       await bootstrap.query("DELETE FROM app.users WHERE id=ANY($1::uuid[])", [actors]);
     } finally {
-      await Promise.allSettled([bootstrap.end(), app.destroy(), rm(folder, { recursive: true, force: true })]);
+      await Promise.allSettled([
+        bootstrap.end(),
+        app.destroy(),
+        rm(folder, { recursive: true, force: true })
+      ]);
     }
   };
   try {
@@ -51,24 +56,37 @@ export async function ingestOracle() {
     const files = Object.keys(NOTES).sort();
     await new DataContextRunner(app).withDataContext({ actorUserId: actors[0]! }, async (db) => {
       for (const relative of files) {
-        await new VaultContextRunner(folder).withVaultContextAt({ actorUserId: actors[0]! }, root, [folder], (ctx) =>
-          ingestVaultDocument(
-            db,
-            ctx,
-            relative,
-            { sourceKind: "notes", sourcePath: join(root, relative) },
-            { repository, embeddingProvider: provider }
-          )
+        await new VaultContextRunner(folder).withVaultContextAt(
+          { actorUserId: actors[0]! },
+          root,
+          [folder],
+          (ctx) =>
+            ingestVaultDocument(
+              db,
+              ctx,
+              relative,
+              { sourceKind: "notes", sourcePath: join(root, relative) },
+              { repository, embeddingProvider: provider }
+            )
         );
       }
     });
     const expected = (await bootstrap.query(ingestSnapshotSql, [actors])).rows[0]?.value;
     // Clear the legacy rows so the compiled run starts from the same empty index.
     for (const table of ["memory_chunks", "memory_links", "memory_file_index"])
-      await bootstrap.query(`DELETE FROM app.${table} WHERE owner_user_id=ANY($1::uuid[])`, [actors]);
+      await bootstrap.query(`DELETE FROM app.${table} WHERE owner_user_id=ANY($1::uuid[])`, [
+        actors
+      ]);
     await writeFile(
       path,
-      JSON.stringify({ actors, root, parent: folder, files: files.map((f) => join(root, f)), snapshotSql: ingestSnapshotSql, expected }),
+      JSON.stringify({
+        actors,
+        root,
+        parent: folder,
+        files: files.map((f) => join(root, f)),
+        snapshotSql: ingestSnapshotSql,
+        expected
+      }),
       { mode: 0o600 }
     );
     return { path, cleanup };

@@ -1050,3 +1050,67 @@ filesystem call. Invalid UTF-8 names refuse the whole walk, stricter than legacy
 These are explicit worker-design limits alongside the size bounds. No exhaustive
 platform, power-loss, external-editor race or physical second-device proof is
 claimed by the cleanup tests.
+
+## Part ten checkpoint — production file ingestion
+
+This continuation starts from merged part nine (#4083). It implements the
+coordinator's two remaining core operations for real. `MemoryIngestPorts`
+handles `index.sync-open` and `index.sync-file` behind the same trusted
+(module, resource) binding the cleanup adapter uses. The Notes guest stays a
+pure client of the server API. Core memory tables stay outside its grants.
+
+Open reads the account's saved `notes-source-path` preference (or the
+coordinator's configured override), opens the folder through VaultContext
+under the account's allowed roots, and returns the configured path, the
+canonical root and a name-sorted Markdown walk capped at ten thousand files.
+The sorted order is a deliberate deterministic difference from the legacy
+operating-system directory order.
+
+Sync-file locks the saved source row and the folder, reads one file with a
+16 MiB bound, and hashes it with SHA-256. A file whose saved hash and model
+name match is skipped before any embedding work. Otherwise the legacy
+document parser runs in Rust (frontmatter, `## ` sections, paragraph, line
+and character splitting at 2000 UTF-16 units, wiki links), the requested
+chunk window is embedded through the trusted account-configured
+`DocumentEmbeddings` service, and chunks, outgoing links and the file index
+are written in one account-scoped transaction with explicit owner context.
+The file is re-read inside that transaction, so a change during embedding
+refuses the write. Continuations carry chunk offset and file hash. A
+requested managed snapshot key is refused, because managed publication and
+fencing are still not connected. That refusal is an activation blocker for
+managed sources, not a silent drop.
+
+Package version `0.1.4` declares this host capability in the app map. The
+ordinary package still declares no sync job, schedule, manual sync route or
+write chat tools. Nothing a person can see changes in this checkpoint.
+
+### Verification
+
+The standard Notes gate now also runs `ingest-gate.ts`. Its oracle executes
+the real legacy ingest function, repository, stub embedding provider and
+vault context on three synthetic notes, saves those rows, clears them, and
+the Rust test runs the compiled sync guest through the real ingestion and
+cleanup adapters for both runtime roles. It compares every saved chunk,
+link and index row with the legacy result, requires a second run to skip
+all three unchanged files, and requires another owner to read none of the
+first owner's chunks. The stub provider is a named stand-in reproduced
+byte-for-byte in Rust, so no real model quality is claimed. Gate receipts
+and the review verdict are recorded with this checkpoint's proof and pull
+request.
+
+### Remaining acceptance work
+
+1. Connect the real account-configured document/query embedding services and
+   join `notes.search` into installed chat with the legacy schemas and
+   outside-content classification.
+2. Enable installed write tools with approval consumption and version
+   rechecks, then declare them and the sync job in the package.
+3. Add durable continuation storage, last-sync status writes, the manual
+   sync route and the fifteen-minute schedule. Never put checkpoint paths
+   or hashes in queue parameters.
+4. Port managed publication and fencing, proposals and receipts, crash
+   reconciliation, exact-block cleanup, private note exports, daily chat
+   archives and the account-export screen join.
+5. Finish path, error and handler parity, join Connections into the
+   assembled shell, and prove the real UI and chat from a separate physical
+   device over HTTPS. No such device proof is claimed here.
