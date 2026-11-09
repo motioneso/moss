@@ -1739,3 +1739,83 @@ the host, despite scrambled creation order. The replay nevertheless now uses dis
 Hangul collation keys to avoid relying on cross-filesystem tie order. Native vectors
 retain canonical equality coverage. The stale pre-manifest host build was restarted;
 only final successful builds and gates may be cited as verification.
+
+## Part sixteen: delayed queue connection reuse
+
+This continuation starts at merged part fifteen, `1dcef5726` (PR 4108). The initial
+branch predated the People port and was fast-forwarded while clean before editing.
+The brief's PR 4066 reference is older than that verified base. No sibling source
+was copied and no Vikunja card was changed.
+
+### Problem and change
+
+The fifty-reference manual refresh returned 500 under the shipping five-second
+module limit, although the legacy handler accepted it with 202. A fresh direct
+component replay reproduced that failure through `scripts/run-gate.sh`: baseline
+receipt `task_116_rust_port_phase_5_people_module-20261109-023353-s7KYfN.log`,
+code `79fc7d015`, one temporary profiling file dirty, fingerprint `fb99734be3e0`.
+The baseline failed with `rc=101` and its disposable database was removed.
+
+The temporary probe measured 43 delayed sends taking 4477 milliseconds in total
+(104 milliseconds each on average). Command puts took 785 milliseconds and record
+reads 964 milliseconds across the replay. These are diagnostic totals across that
+run, not a subtraction that predicts a new request's duration. The probe is removed
+from the delivered source.
+
+The server adapter previously opened and authenticated a new producer connection
+for every delayed send. It now retains one connection for the complete approved
+manifest. Different manifests replace that single slot; concurrent sends retain
+an immutable handle. Each enqueue still uses the existing queue implementation's
+separate transaction, transaction-local actor, typed metadata, key and delay.
+Immediate sends and schedules retain their existing path. A failed delayed send
+discards its cached connection; there is no automatic resend with an uncertain
+commit outcome. The next explicit attempt reconnects.
+
+This is a small host-adapter correction: a pure client module cannot remove server
+connection setup through its SDK. The People guest, public interfaces, SQL, privacy
+policies and packaged UI source are unchanged. No database or filesystem handle was
+added to the module or app. The manifest's manual-refresh declaration and current
+README/change notes describe the normal call budget without advertising an
+assembled UI.
+
+### Regression and verification
+
+The installed route replay now uses `Limits::default()` instead of extending it to
+thirty seconds. The standard People gate also includes the real queue adapter
+regression, making ten suites. That regression checks reuse, actor/queue key
+isolation, manifest/schema replacement, an explicitly terminated idle connection,
+refusal to resend automatically and reconnection on an explicit retry.
+
+Before the fix, the connection-reuse assertion failed with count zero versus one
+(`rc=101`); receipt `task_116_rust_port_phase_5_people_module-20261109-022750-q6hJdB.log`.
+That first gate began before test formatting and the regression commit, so its
+launch fingerprint is not claimed as the final committed test bytes. The separate
+route failure above reproduces the user-visible deadline failure on the committed
+regression. Final protected results and measured timings are recorded below after
+the gates complete.
+
+All Cargo, Rustup and target caches belong to this task's scratch directory. The
+pinned compiler and existing dependency cache were copied there. The already
+approved `wit-bindgen =0.57.1` dependencies and declared Wasm targets were fetched
+or copied locally. JavaScript dependencies used the existing lockfile offline.
+No global tool or new third-party package was installed.
+
+### Remaining Phase 5 acceptance
+
+This bounded performance/parity checkpoint does not complete the People port:
+
+1. Compose installed module frames and People chat tools into the authenticated
+   Rust server, then qualify raw numeric bodies through its shipping listener.
+   The inspected shell router still exposes shell/Today/chat rather than module
+   frames. Keep the app a client of the local or remote server API.
+2. Finish ingest nudges, actual source providers, command retention/quotas and
+   broader backend-failure, large-data and locale-sensitive ordering coverage.
+   Failed batches can still leave earlier jobs and unsent stored commands; a new
+   manual request uses fresh IDs and can duplicate earlier work.
+3. Exercise real installed UI and chat approvals, sign-in, trusted origins and
+   privacy over HTTPS on desktop and a second physical device. The task browser
+   failed to launch because Chrome had no usable sandbox. No substitute screen,
+   application access or second-device result is claimed here.
+
+A passing finite replay under the default budget will qualify that sample, not
+provide a latency guarantee across machines, database outages or concurrent loads.

@@ -76,21 +76,23 @@ fn delayed_enqueue_preserves_queue_time_key_and_actor() {
     let at = (chrono::Utc::now() + chrono::Duration::minutes(15))
         .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
     let params = json!({"command-id":command});
+    let try_enqueue = |declaration: Arc<moss_module_host::manifest::Manifest>,
+                       actor,
+                       queue: &str,
+                       operation: &str,
+                       parameters: Value|
+     -> anyhow::Result<Value> {
+        Ok(serde_json::from_str(&host.call(
+            &wasm,
+            declaration,
+            AccessContext::new(actor, "enqueue-options-test"),
+            ports.clone(),
+            "route",
+            &json!({"operation":operation,"resource":queue,"parameters":parameters}).to_string(),
+        )?)?)
+    };
     let enqueue = |actor, queue: &str, operation: &str, parameters: Value| -> Value {
-        serde_json::from_str(
-            &host
-                .call(
-                    &wasm,
-                    manifest.clone(),
-                    AccessContext::new(actor, "enqueue-options-test"),
-                    ports.clone(),
-                    "route",
-                    &json!({"operation":operation,"resource":queue,"parameters":parameters})
-                        .to_string(),
-                )
-                .unwrap(),
-        )
-        .unwrap()
+        try_enqueue(manifest.clone(), actor, queue, operation, parameters).unwrap()
     };
     let options = json!({"params":params,"idempotencyKey":key,"availableAt":at});
     let first = enqueue(owner, "person-index", "enqueue-options", options.clone());
@@ -137,7 +139,7 @@ fn delayed_enqueue_preserves_queue_time_key_and_actor() {
     });
     // Old enqueue still creates independent, immediately available jobs.
     let old_a = enqueue(owner, "person-index", "enqueue", params.clone());
-    let old_b = enqueue(owner, "person-index", "enqueue", params);
+    let old_b = enqueue(owner, "person-index", "enqueue", params.clone());
     assert!(old_a["id"].is_string() && old_b["id"].is_string());
     assert_ne!(old_a["id"], old_b["id"]);
     runtime.block_on(async {
@@ -156,5 +158,70 @@ fn delayed_enqueue_preserves_queue_time_key_and_actor() {
         assert_eq!(claimed.actor.user_id(), owner);
         worker.finish(&claimed, true).await.unwrap();
     });
-    println!("PASS real Wasm → JobPorts → PostgreSQL queue: delayed time retained, retries deduplicated, keys scoped to actor and queue, no early claim, legacy immediate enqueue unchanged");
+    // A changed declaration must not reuse the old connection's queue schema.
+    let mut revised = (*manifest).clone();
+    revised.jobs.get_mut("person-index").unwrap().insert(
+        "command-id".into(),
+        ParameterKind::Choice(["revised".into()].into()),
+    );
+    revised.validate(&"0.1.0".parse().unwrap()).unwrap();
+    let revised = Arc::new(revised);
+    let changed = try_enqueue(revised.clone(), owner, "person-index", "enqueue-options",
+        json!({"params":{"command-id":"revised"},"idempotencyKey":uuid::Uuid::new_v4(),"availableAt":at}),
+    ).unwrap();
+    let changed_id: uuid::Uuid = changed["id"].as_str().unwrap().parse().unwrap();
+    runtime.block_on(async {
+        let payload: Value = db
+            .query_one(
+                "SELECT payload FROM moss_queue.jobs WHERE id=$1",
+                &[&changed_id],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(payload["params"]["command-id"], "revised");
+        assert_eq!(
+            payload["manifestHash"],
+            moss_module_host::jobs::manifest_hash(&revised)
+        );
+    });
+    // Reverting the declaration replaces the slot again. Terminate that connection
+    // while idle: the next send must fail, then an explicit retry may reconnect.
+    enqueue(
+        owner,
+        "person-index",
+        "enqueue-options",
+        json!({"params":params,"idempotencyKey":uuid::Uuid::new_v4(),"availableAt":at}),
+    );
+    runtime.block_on(async {
+        let row = db.query_one(
+            "SELECT pg_terminate_backend(pid, 5000) FROM pg_stat_activity WHERE application_name=$1 ORDER BY backend_start DESC LIMIT 1",
+            &[&"people-refresh-producer-test"],
+        ).await.unwrap();
+        assert!(row.get::<_, bool>(0));
+    });
+    let retry_key = uuid::Uuid::new_v4();
+    let retry = json!({"params":params,"idempotencyKey":retry_key,"availableAt":at});
+    assert!(try_enqueue(
+        manifest.clone(),
+        owner,
+        "person-index",
+        "enqueue-options",
+        retry.clone()
+    )
+    .is_err());
+    runtime.block_on(async {
+        let count: i64 = db
+            .query_one(
+                "SELECT count(*) FROM moss_queue.jobs WHERE idempotency_key=$1",
+                &[&retry_key],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(count, 0, "A failed send must not be replayed automatically");
+    });
+    assert!(enqueue(owner, "person-index", "enqueue-options", retry.clone())["id"].is_string());
+    assert!(enqueue(owner, "person-index", "enqueue-options", retry)["id"].is_null());
+    println!("PASS real Wasm → JobPorts → PostgreSQL queue: reused producer, manifest replacement, explicit retry after disconnect, delayed time retained, retries deduplicated, keys scoped to actor and queue, no early claim, legacy immediate enqueue unchanged");
 }

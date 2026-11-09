@@ -74,6 +74,7 @@ fn actor(scope: &CallScope) -> Actor {
 pub struct JobPorts {
     runtime: Runtime,
     producer: Secret,
+    delayed_producer: crate::producer_queue::ProducerQueue,
     app: Database,
     next: Arc<dyn Ports>,
 }
@@ -82,6 +83,7 @@ impl JobPorts {
         Ok(Self {
             runtime: Runtime::new()?,
             producer,
+            delayed_producer: Default::default(),
             app,
             next,
         })
@@ -108,8 +110,8 @@ impl Ports for JobPorts {
                 }
                 "enqueue-options" => {
                     let options = crate::enqueue_options::parse(&request.parameters)?;
-                    let queue = Queue::connect(
-                        self.producer.expose_secret(), Role::Producer, vec![spec.clone()],
+                    let queue = self.delayed_producer.get(
+                        self.producer.expose_secret(), scope.module(),
                     ).await?;
                     let payload = json!({
                         "actorUserId": scope.access().actor_user_id(),
@@ -118,11 +120,16 @@ impl Ports for JobPorts {
                         "jobKind": spec.name,
                         "params": options.params,
                     });
-                    let id = queue.enqueue(
+                    let result = queue.enqueue(
                         actor(scope), &spec.name, payload,
                         options.idempotency_key, options.available_at,
-                    ).await?;
-                    Ok(json!({"id": id}))
+                    ).await;
+                    if result.is_err() {
+                        // A lost connection is replaced on the next explicit attempt.
+                        // Never replay a send whose commit outcome may be unknown.
+                        self.delayed_producer.discard(&queue).await;
+                    }
+                    Ok(json!({"id": result?}))
                 }
                 "schedule"=> {
                     let queue=Queue::connect(self.producer.expose_secret(),Role::Producer,vec![spec.clone()]).await?;
