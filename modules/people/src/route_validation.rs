@@ -249,6 +249,7 @@ mod tests {
         // shortest Display instead chooses the upper decimal at an equal tie.
         for (bits, expected) in [
             (0x430289fb4b135262, "652282746268236.2"),
+            (0x430289fb4b135266, "652282746268236.8"),
             (0xc2ebf11414163f94, "-245777903432188.62"),
             (0x42e69640c0ebc804, "198676698324544.12"),
             (0x4304fa2c4355d902, "738070943677216.2"),

@@ -396,6 +396,7 @@ Human text stays.
       { displayName: "Restored", aliases: null, emails: null, phones: null },
       {
         displayName: Number("652282746268236.2"),
+        aliases: [Number("652282746268236.8")],
         emails: [Number("-245777903432188.62")],
         phones: [Number("198676698324544.12")]
       },
