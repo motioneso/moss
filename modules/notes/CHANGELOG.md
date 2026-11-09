@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.11
+
+- Bind experimental create, edit and delete sync requests to the folder used by the write. Changing or unlinking the folder refuses pending indexing; selecting the original folder allows a retry. Installed chat and production sync remain unfinished.
+
 ## 0.1.10
 
 - Add the experimental manual sync HTTP handler, preserving the missing-folder response and returning a durable request ID. Installed routing and account privacy are checked with the compiled component. Ordinary manual sync remains unavailable.

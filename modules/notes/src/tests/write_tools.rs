@@ -58,7 +58,11 @@ impl Host for Ports {
             }
             ("db", "query", "app.notes_sync_checkpoints") => {
                 assert_eq!(parameters["kind"], "insert");
-                assert_eq!(parameters["values"]["checkpoint"], json!({}));
+                assert_eq!(
+                    parameters["values"]["checkpoint"],
+                    json!({"sourcePath":"/notes"}),
+                    "Write-triggered sync must stay bound to the folder used by the write"
+                );
                 self.checkpoints
                     .borrow_mut()
                     .push(parameters["values"].clone());
@@ -99,6 +103,18 @@ fn write_tools_match_actual_legacy_handlers() {
             case["request"]
         );
         assert_eq!(json!(*ports.syncs.borrow()), case["syncs"]);
+        let sources: Vec<_> = ports
+            .checkpoints
+            .borrow()
+            .iter()
+            .map(|row| row["checkpoint"]["sourcePath"].clone())
+            .collect();
+        assert_eq!(
+            json!(sources),
+            case["syncSources"],
+            "Legacy sync source {}",
+            case["request"]
+        );
     }
 }
 

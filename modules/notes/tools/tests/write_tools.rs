@@ -60,7 +60,10 @@ impl Ports for Services {
                 // coverage lives in the disposable ingest gate.
                 assert_eq!(r.resource, "app.notes_sync_checkpoints");
                 assert_eq!(r.parameters["kind"], "insert");
-                assert_eq!(r.parameters["values"]["checkpoint"], json!({}));
+                assert_eq!(
+                    r.parameters["values"]["checkpoint"],
+                    json!({"sourcePath":self.paths[&scope.access().actor_user_id()]})
+                );
                 let row = r.parameters["values"].clone();
                 self.checkpoints
                     .lock()

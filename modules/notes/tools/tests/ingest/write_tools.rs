@@ -139,6 +139,28 @@ fn writes_queue_private_checkpoints_and_resume_real_indexing() {
                 assert!(denied.is_err());
                 assert!(queued.is_empty());
             }
+            // A queued write must not follow a later folder selection or turn
+            // into a successful no-op after unlinking. Both refusals leave the
+            // original checkpoint available to resume once its source returns.
+            std::fs::write(foreign.join("unrelated.md"), "Unrelated folder note.").unwrap();
+            for selected in [json!(foreign), Value::Null] {
+                f.source(actor, selected);
+                let before = f.snapshot();
+                let (retargeted, queued) = f.durable_call(
+                    db.clone(),
+                    actor,
+                    "job",
+                    json!({"queue":"notes.sync","parameters":params}),
+                    false,
+                );
+                assert!(
+                    retargeted.is_err(),
+                    "Write-triggered sync followed a changed source"
+                );
+                assert!(queued.is_empty());
+                assert_eq!(f.snapshot(), before, "Refused sync changed the index");
+            }
+            f.source(actor, json!(root));
             let (resumed, _) = f.durable_call(
                 db.clone(),
                 actor,
@@ -192,7 +214,7 @@ fn writes_queue_private_checkpoints_and_resume_real_indexing() {
             );
         }
         f.rt.block_on(f.bootstrap.batch_execute("DROP TRIGGER reject_notes_write_checkpoint ON app.notes_sync_checkpoints; DROP FUNCTION app.reject_notes_write_checkpoint()" )).unwrap();
-        // A publication refusal happens after commit. The file and empty
+        // A publication refusal happens after commit. The file and source-bound
         // checkpoint survive, and the captured metadata is sufficient to retry.
         let (failed, jobs) = f.durable_call(db.clone(), actor, "tool", json!({"tool":"notes.create","parameters":{"path":"retry.md","content":"Retry this note."}}), true);
         assert!(failed.is_err());

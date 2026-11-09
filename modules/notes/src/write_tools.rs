@@ -207,10 +207,11 @@ pub fn handle(host: &impl Host, payload: &str) -> Result<String> {
         parameters["content"] = content;
     }
     call(host, "vault", operation, "source", parameters)?;
-    // Persist the same private checkpoint used by manual-sync requests. The
-    // surrounding transaction commits it before the deferred queue publication.
+    // Bind sync to the source resolved for this write, like manual requests.
+    // A later folder selection must not redirect this pending indexing work.
+    // The surrounding transaction commits before deferred queue publication.
     // A refusal before finalization compensates the file through LinkedNotesPorts.
-    crate::sync_worker::request(host)
+    crate::sync_worker::request_source(host, &root)
         .map_err(|_| failure(503, "Notes sync request was not accepted"))?;
     Ok(json!({"data":{"path":path,"synced":true}}).to_string())
 }

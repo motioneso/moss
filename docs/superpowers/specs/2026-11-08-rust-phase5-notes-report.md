@@ -1444,3 +1444,42 @@ publication now uses `checkpoint-id`; API result identities retain their existin
 shape, and the worker also accepts the earlier experimental job spelling. The
 signed installed gate checks the corrected declaration. The failed run is kept
 in the proof rather than counted as a passing receipt.
+
+## Part eighteen checkpoint — bind write-triggered sync to its folder
+
+Experimental create, edit and delete now save their resolved source folder in the
+private durable sync request, matching manual sync and the source supplied by the
+legacy write handlers. Previously they saved an empty checkpoint, so a later
+folder selection could silently send their pending sync to another folder, or an
+unlink could save a successful no-op. The existing worker now refuses those
+requests before ingestion or cleanup. The original request remains available;
+selecting its original folder again allows retry. Queue metadata still contains
+only the request UUID. This uses the existing resolved-path comparison, not an
+immutable filesystem identity: replacing a folder at the same path is not detected.
+No host changes, SQL changes, dependencies or additional runtime permissions were
+needed. Notes remains a pure SDK client of the server API. Package `0.1.11`, its
+changelog and app map describe the experimental behavior without activating it.
+
+The native regression first failed because the prior handler saved an empty
+checkpoint. The refreshed corpus runs the actual legacy write handlers and now
+records their sync source alongside responses, file effects and request counts.
+Compiled disposable checks exercise folder switching and unlinking after each
+create/edit/delete, unchanged index assertions on refusal, original-folder retry,
+and the existing other-owner/admin checkpoint privacy and RLS-removal controls
+for app and worker roles. File indexing and cleanup are real; queue delivery and
+embeddings remain named stand-ins. Final receipts and review belong in the proof.
+
+Builds use task-owned scratch Cargo and Rust homes and separate ordinary/write-tools
+Wasm targets. The already-declared Wasm target and pinned approved `wit-bindgen`
+0.57.1 are prepared only in scratch storage. No global tools were installed.
+Declared JavaScript dependencies were restored from the existing lockfile.
+Database checks run only through `scripts/run-gate.sh`.
+
+This is a bounded checkpoint, not full Notes acceptance. Still required:
+configured embeddings, installed chat search and approval consumption/write tools,
+production manual/scheduled sync and dispatcher, singleton coalescing and recall
+warmup, automatic recovery timer, checkpoint retention, managed publication/fencing,
+proposals/receipts/reconciliation, private exports/daily archives, full HTTP/path
+parity, assembled Settings/chat and physical second-device HTTPS proof. This work
+changes no screen and does not establish those live paths. Do not replace working
+legacy Notes with this checkpoint.
