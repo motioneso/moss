@@ -1,0 +1,53 @@
+[
+  {
+    "name": "package search interpretation: request validation",
+    "source": "packages/tasks/src/search-interpret-route.ts and shared/tasks-api.ts",
+    "steps": [
+      {
+        "id": "missing",
+        "method": "POST",
+        "path": "/api/tasks/search/interpret",
+        "as": "A",
+        "body": {},
+        "expect": {
+          "status": 400,
+          "body": { "error": "body must have required property 'query'" }
+        }
+      },
+      {
+        "id": "empty",
+        "method": "POST",
+        "path": "/api/tasks/search/interpret",
+        "as": "A",
+        "body": { "query": "" },
+        "expect": {
+          "status": 400,
+          "body": { "error": "body/query must NOT have fewer than 1 characters" }
+        }
+      },
+      {
+        "id": "blank",
+        "method": "POST",
+        "path": "/api/tasks/search/interpret",
+        "as": "A",
+        "body": { "query": "   " },
+        "expect": {
+          "status": 400,
+          "body": { "error": "query must be 1-300 characters" }
+        }
+      },
+      {
+        "id": "no_ai",
+        "method": "POST",
+        "path": "/api/tasks/search/interpret",
+        "as": "A",
+        "body": { "query": "overdue work tasks" },
+        "expect": {
+          "status": 503,
+          "body": { "error": "Natural-language task search is unavailable" }
+        }
+      }
+    ],
+    "rows": ["app.tasks"]
+  }
+]

@@ -10,6 +10,7 @@ pub fn request_schema(method: &str, path: &str) -> Option<Schema> {
         ("POST", "/tasks/:id/activity") => Some(schemas::add_activity()),
         ("POST", "/tasks/:id/breakdown") => Some(schemas::breakdown()),
         ("POST", "/tasks/:id/deferred-status") => Some(schemas::deferred_status()),
+        ("POST", "/tasks/search/interpret") => Some(schemas::interpret_search()),
         ("POST", "/tasks/:id/tags") => Some(schemas::assign_tag()),
         ("DELETE", "/tasks/lists/:list_id") => Some(schemas::delete_list()),
         ("PATCH", "/tasks/preferences") => Some(schemas::update_preferences()),

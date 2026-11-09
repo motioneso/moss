@@ -24,6 +24,14 @@ fn query(body: &Value) -> Result<String> {
         .get("query")
         .and_then(Value::as_str)
         .ok_or(Error::Http(400, "query must be a string"))?;
+    // Ajv bounds the untrimmed length before the handler trims.
+    match raw.encode_utf16().count() {
+        0 => return Err(Error::Http(400, "body/query must NOT have fewer than 1 characters")),
+        n if n > 300 => {
+            return Err(Error::Http(400, "body/query must NOT have more than 300 characters"))
+        }
+        _ => (),
+    }
     let trimmed = parse::js_trim(raw);
     if trimmed.is_empty() || trimmed.encode_utf16().count() > 300 {
         return Err(Error::Http(400, "query must be 1-300 characters"));
@@ -199,7 +207,7 @@ mod tests {
     #[test]
     fn query_must_be_trimmed_and_bounded() {
         assert!(query(&json!([])).is_err());
-        assert!(query(&json!({"query":5})).is_err());
+        assert!(query(&json!({"query":""})).is_err());
         assert!(query(&json!({"query":"   "})).is_err());
         assert!(query(&json!({"query":"x".repeat(301)})).is_err());
         assert_eq!(query(&json!({"query":"  due today "})).unwrap(), "due today");

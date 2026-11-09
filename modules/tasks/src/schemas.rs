@@ -114,6 +114,11 @@ pub fn name_only() -> Schema {
     Schema::object(&["name"], vec![("name", Schema::string())])
 }
 
+/// Search interpretation body; length bounds are checked by the route.
+pub fn interpret_search() -> Schema {
+    Schema::object(&["query"], vec![("query", Schema::string())])
+}
+
 pub fn delete_list() -> Schema {
     Schema::object(&[], vec![("reassignToListId", Schema::string())])
 }
