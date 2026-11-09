@@ -232,6 +232,9 @@ export async function routesOracle() {
         Number("9007199254740993"),
         2 ** -24,
         -(2 ** -24),
+        // Component-parser regression. The host test binary also enables
+        // float_roundtrip via its native People dev-dependency; this does not
+        // qualify the shipping host/listener's upstream JSON parsing.
         Number("2.3050789863520357e+299")
       ].map((displayName) => ({
         displayName

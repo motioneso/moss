@@ -277,4 +277,10 @@ The deterministic JavaScript oracle covers 283 literals, including underflow, su
 rounding boundaries and seeded finite values. The route replay includes projection-only and
 note-backed edits with a parser-sensitive input, comparing both replies and stored note bytes.
 This qualifies the component parser, not an unassembled server's request parser or real UI.
+The replay's host test binary enables the same JSON feature through its native People
+dev-dependency (Cargo feature unification). A normal host build does not declare it.
+`dispatch_extended` parses the raw body before calling the component, so upstream parser
+qualification is a prerequisite to full network parity. The component cannot recover a
+number already rounded incorrectly by its caller. The feature applies to all component
+JSON numbers, including provider confidence values, not only contact text.
 The remaining application, provider, ingest, retention and device work listed above stays open.

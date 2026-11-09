@@ -163,7 +163,7 @@
     },
     {
       "id": "people.note-field-compatibility",
-      "description": "Canonical-note edits keep the legacy handling of aliases, emails and phones, including nulls, empty lists and mixed JSON list values. Numeric contact values use correctly rounded JSON parsing and keep the legacy decimal spelling, including equal-distance rounding ties. Unusable list values return an error; legacy empty list items may publish unreadable frontmatter before projection fails. Repair the note and retry. Missing notes retain projection-only fallback. Dollar replacement tokens remain literal to protect human text."
+      "description": "Canonical-note edits keep the legacy handling of aliases, emails and phones, including nulls, empty lists and mixed JSON list values. The People component parses incoming JSON numbers with correct rounding and keeps the legacy decimal spelling, including equal-distance rounding ties. Upstream host and listener parsing remain unqualified. Unusable list values return an error; legacy empty list items may publish unreadable frontmatter before projection fails. Repair the note and retry. Missing notes retain projection-only fallback. Dollar replacement tokens remain literal to protect human text."
     }
   ],
   "screens": {
