@@ -17,12 +17,21 @@ pub mod settings;
 pub struct Error {
     pub status: u16,
     pub message: String,
+    pub code: Option<&'static str>,
 }
 impl Error {
     pub fn new(status: u16, message: impl Into<String>) -> Self {
         Self {
             status,
             message: message.into(),
+            code: None,
+        }
+    }
+    pub fn coded(status: u16, code: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            status,
+            message: message.into(),
+            code: Some(code),
         }
     }
 }
@@ -75,7 +84,13 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
     let response = match serde_json::from_str::<RouteRequest>(payload) {
         Ok(request) => match route(host, request) {
             Ok(data) => Response::new(200, data),
-            Err(error) => Response::new(error.status, json!({"error":error.message})),
+            Err(error) => {
+                let mut body = json!({"error":error.message});
+                if let Some(code) = error.code {
+                    body["code"] = json!(code);
+                }
+                Response::new(error.status, body)
+            }
         },
         Err(_) => Response::new(400, json!({"error":"Invalid calendar request"})),
     };

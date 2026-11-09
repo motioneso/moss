@@ -34,6 +34,19 @@ fn task_fact(host: &impl Host, actor: &Value, id: &str) -> Option<TaskFact> {
     })
 }
 
+fn is_uuid(value: &str) -> bool {
+    let groups: Vec<&str> = value.split('-').collect();
+    groups.len() == 5
+        && groups
+            .iter()
+            .zip([8, 4, 4, 4, 12])
+            .all(|(group, len)| group.len() == len && group.chars().all(|c| c.is_ascii_hexdigit()))
+}
+
+fn invalid(message: impl Into<String>) -> Error {
+    Error::coded(400, "day_plan_invalid", message)
+}
+
 fn ends_at(starts_at: &str, duration_minutes: i64) -> Result<String> {
     let parsed = chrono::DateTime::parse_from_rfc3339(starts_at)
         .map_err(|_| Error::new(503, "Invalid stored plan timing"))?;
@@ -50,11 +63,14 @@ fn overlaps(a_start: &str, a_end: &str, b_start: &str, b_end: &str) -> bool {
 pub fn preview(host: &impl Host, plan_id: &str, body: Value) -> Result<Value> {
     let object = body
         .as_object()
-        .ok_or_else(|| Error::new(400, "request must be an object"))?;
+        .ok_or_else(|| invalid("request must be an object"))?;
     for key in object.keys() {
         if !matches!(key.as_str(), "expectedRevision" | "selectedChangeBlockIds") {
-            return Err(Error::new(400, format!("unknown field: {key}")));
+            return Err(invalid(format!("unknown field: {key}")));
         }
+    }
+    if !is_uuid(plan_id) {
+        return Err(invalid("id must be a uuid"));
     }
     let expected = body["expectedRevision"].as_u64().filter(|v| *v >= 1);
     let Some(expected) = expected.filter(|_| body["expectedRevision"].is_u64()) else {
@@ -71,6 +87,9 @@ pub fn preview(host: &impl Host, plan_id: &str, body: Value) -> Result<Value> {
         let id = id
             .as_str()
             .ok_or_else(|| Error::new(400, "selectedChangeBlockIds must be a list"))?;
+        if !is_uuid(id) {
+            return Err(Error::new(400, "selectedChangeBlockIds must contain uuids"));
+        }
         if !selected_ids.iter().any(|seen| seen == id) {
             selected_ids.push(id.to_owned());
         }
@@ -83,13 +102,12 @@ pub fn preview(host: &impl Host, plan_id: &str, body: Value) -> Result<Value> {
     let find = |id: &str| blocks.iter().find(|b| b["id"] == id);
     for id in &selected_ids {
         let block = find(id).ok_or_else(|| {
-            Error::new(400, format!("selected change {id} is not part of this plan"))
+            invalid(format!("selected change {id} is not part of this plan"))
         })?;
         if block["pendingChange"].is_null() {
-            return Err(Error::new(
-                400,
-                format!("selected change {id} has no pending change"),
-            ));
+            return Err(invalid(format!(
+                "selected change {id} has no pending change"
+            )));
         }
     }
     let actor = context(host, "read", "call")?["actorUserId"].clone();

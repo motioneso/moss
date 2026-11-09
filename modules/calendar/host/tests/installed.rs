@@ -51,6 +51,7 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
     let bytes = moss_calendar_host::package::pack(&root, &f.core()).unwrap();
     let (key, publisher, artifact) = registry::publish(registry.path(), &bytes);
     let database = f.db.clone();
+    let preview_refs = preview_seeded.references.clone();
     let captured = Arc::new(kv_guard::Captured::default());
     let observing = captured.clone();
     let app = Application::open_extended_with(
@@ -67,7 +68,8 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
         },
         move |next| {
             let guarded: Arc<dyn moss_module_host::runtime::Ports> = Arc::new(
-                moss_calendar_host::CalendarPorts::new(database, next.clone())?,
+                moss_calendar_host::CalendarPorts::new(database, next.clone())?
+                    .with_references(preview_refs.clone()),
             );
             *observing.guarded.lock().unwrap() = Some(guarded.clone());
             *observing.downstream.lock().unwrap() = Some(next);
