@@ -386,3 +386,20 @@ The full Calendar gate still runs the installed API comparisons and failing-firs
 privacy witnesses. This checkpoint does not complete the old-screen switch,
 providers, jobs/execution, full shell/chat, exhaustive parity or physical-device
 HTTPS acceptance. See the Phase 5 report for the complete remaining list.
+
+## Month presentation parity (part 17)
+
+Version 0.17.0 restores the authored today number, first-of-month labels, equal
+row sizing and the production minimum height. The existing screen always uses
+five or six rows, including short February months. All-day and continuation
+chips omit their time element. Date and overflow buttons open Day; chips open
+event details. The published Rust kit owns these primitives; no host or API
+change is needed.
+
+The rendered comparison invokes the real React Month screen with its locale
+provider and the Rust screen for empty and populated months, five/six rows,
+clock formats and three timezones. It compares selected structure and labels,
+not full pixels or all regional formatting. The signed-in live check exercises
+Month layout, today styling and navigation at desktop and phone widths using
+synthetic cache rows. Full Calendar parity and physical second-device HTTPS
+remain open; see the phase report for the complete remaining list.

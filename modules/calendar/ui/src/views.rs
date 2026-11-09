@@ -34,12 +34,14 @@ pub fn Month(
     on_day: Callback<NaiveDate>,
     on_event: Callback<Event>,
 ) -> impl IntoView {
-    view! {<div class="cal-month"><div class="cal-month__head">{["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].into_iter().map(|name| view!{<div class="cal-month__dow">{name}</div>}).collect_view()}</div>
-    <div class="cal-month__grid">{model::month(cursor).into_iter().map(|day| {
+    let cells = model::month(cursor);
+    let rows = cells.len() / 7;
+    view! {<div class="cal-month" style=format!("min-height:{}px",42+rows*112)><div class="cal-month__head">{["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].into_iter().map(|name| view!{<div class="cal-month__dow">{name}</div>}).collect_view()}</div>
+    <div class="cal-month__grid" style=format!("grid-template-rows:repeat({rows},1fr)")>{cells.into_iter().map(|day| {
         let mut entries = events.get(&day).cloned().unwrap_or_default();
         entries.sort_by_key(|e| (!e.event.all_day,e.start_min));
         let extra = entries.len().saturating_sub(3);
-        view! {<DayCell focus_key=day.to_string() label=day.day().to_string() today=day==today outside=day.month()!=cursor.month() on_pick=Callback::new(move |_| on_day.run(day))>
+        view! {<DayCell focus_key=day.to_string() label=day.day().to_string() month_label=if day.day()==1 {day.format("%b").to_string()}else{String::new()} today=day==today outside=day.month()!=cursor.month() on_pick=Callback::new(move |_| on_day.run(day))>
             {entries.into_iter().take(3).map(|segment| {
                 let e = segment.event;
                 let time = if e.all_day || !segment.first_day {String::new()} else {model::time(segment.start_min,twelve)};

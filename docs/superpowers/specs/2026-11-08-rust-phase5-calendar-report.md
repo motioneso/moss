@@ -915,3 +915,38 @@ behavior and external-calendar status controls; full shell/Today/chat; old-scree
 replacement; complete assembled parity; physical second-device trusted HTTPS.
 Disposable TLS, same-computer LAN requests and phone-width screenshots do not
 establish physical-device access or production certificate trust.
+
+## JS-131 / part 17: Month presentation checkpoint
+
+Card 525. Package 0.17.0 restores Month's authored today marker, first-of-month
+labels, explicit equal rows and production minimum height. Five rows remain
+the minimum, including February; six rows appear when needed. All-day and
+continuation chips omit the time element. The shared published Rust kit owns
+the date and chip primitives. Calendar remains a pure client of the installed
+server API through its opaque frame bridge; data, providers and the shared host
+are unchanged.
+
+The new native rendering regression was observed failing on the old screen
+because its date number used a class absent from the authored stylesheet.
+The production differential invokes the actual React Month screen, locale
+provider and Rust rendering for empty/populated months, five/six rows, both
+clock formats and three timezones. It compares row declarations, date markers,
+headers, chip order/text/colour and overflow labels, not complete screen pixels
+or regional formatting. The signed-in live runner checks installed Month rows,
+first-of-month labels, today's computed highlight, date/overflow navigation to
+Day and chip navigation to details at desktop and phone widths. Fresh outcomes,
+screenshots and independent review are recorded in the task Proof artifact.
+
+Build outputs and an existing Rust 1.95.0 home with its declared Wasm target are
+copied into task-local scratch directories. Declared dependencies are restored
+offline from the lockfile. Both shared asset bundles use one scratch directory.
+No new dependency, global tool or wit-bindgen installation is performed.
+
+This is a screen checkpoint. Still required: concrete public Tasks/Briefings/
+provider adapters and full provenance; complete validation, coercion and error
+parity; four provider tools; day-plan apply job and apply/retry/recovery/confirm
+execution; worker-role cache-evict dispatch; source behavior and external-calendar
+status controls; full shell/Today/chat; old-screen replacement; complete assembled
+parity; physical second-device trusted HTTPS. Disposable TLS, a same-computer
+LAN request and a phone-width screenshot do not prove physical-device access
+or production certificate trust.

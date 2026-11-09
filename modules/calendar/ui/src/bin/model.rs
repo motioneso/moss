@@ -19,6 +19,16 @@ fn main() {
                     model::group(&events, model::zone(v["zone"].as_str().unwrap()).unwrap());
                 json!(view!{<TimeGrid days=days today=date now_min=Signal::derive(||600) events=groups twelve=v["twelve"]==true on_event=Callback::new(|_|{}) scroll_position=RwSignal::new(None)/ >}.to_html())
             }
+            "month" => {
+                use leptos::prelude::*;
+                use moss_calendar_ui::views::Month;
+                let events: Vec<Event> = serde_json::from_value(v["events"].clone()).unwrap();
+                let date = v["cursor"].as_str().unwrap().parse().unwrap();
+                let zone = model::zone(v["zone"].as_str().unwrap()).unwrap();
+                let today = model::today(v["today"].as_str().unwrap(), zone).unwrap();
+                let groups = model::group(&events, zone);
+                json!(view!{<Month cursor=date today=today events=groups twelve=v["twelve"]==true on_day=Callback::new(|_|{}) on_event=Callback::new(|_|{})/>}.to_html())
+            }
             "calendar" => {
                 let date = v["cursor"].as_str().unwrap().parse().unwrap();
                 json!({"week":model::week(date,v["work"].as_bool().unwrap_or(false)),"month":model::month(date),"next":model::navigate(date,v["view"].as_str().unwrap(),1),"previous":model::navigate(date,v["view"].as_str().unwrap(),-1)})

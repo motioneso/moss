@@ -7,9 +7,6 @@ body {
   max-height: 100dvh;
   --cal-h: 58px;
 }
-.cal-month__grid {
-  grid-auto-rows: minmax(112px, 1fr);
-}
 .cal-native-dialog {
   margin: 0 0 0 auto;
   max-height: 100dvh;

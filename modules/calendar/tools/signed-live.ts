@@ -24,6 +24,7 @@ import { readHttpOracle } from "./http-oracle.js";
 import { checkStartup } from "./startup-check.js";
 import { checkDetails } from "./details-live.js";
 import { checkGrid } from "./grid-live.js";
+import { checkMonth } from "./month-live.js";
 import { checkOperationStatus } from "./operation-live.js";
 import { checkDayPlanWrites } from "./day-plan-live.js";
 import { DEFAULT_LOCALE_SETTINGS, type CalendarEventDto } from "@moss/shared";
@@ -501,6 +502,7 @@ try {
   console.log(
     "PASS installed UI midnight/all-day date labels against production, authored swatches and today's held count at desktop and phone width"
   );
+  await checkMonth(tab, out);
   await frame.getByRole("button", { name: "Month", exact: true }).waitFor();
   await frame.getByRole("button", { name: "Month", exact: true }).click();
   await frame.locator(".cal-legend").waitFor({ state: "detached" });

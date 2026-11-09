@@ -1,5 +1,12 @@
 # Calendar package
 
+## 0.17.0
+
+- Restore Month date highlights, first-of-month labels and equal row sizing with the existing minimum height.
+- Omit empty time labels on all-day and continuation entries.
+- Compare rendered Month dates and chips with the existing screen and check installed date, overflow and detail navigation at desktop and phone widths.
+- Full cutover, provider execution and physical second-device acceptance remain open.
+
 ## 0.16.0
 
 - Match timed-event label density: compact events keep their title, taller events show the time, and Day view shows locations when there is room.
