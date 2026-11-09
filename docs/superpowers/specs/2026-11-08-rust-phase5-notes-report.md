@@ -1059,26 +1059,29 @@ handles `index.sync-open` and `index.sync-file` behind the same trusted
 (module, resource) binding the cleanup adapter uses. The Notes guest stays a
 pure client of the server API. Core memory tables stay outside its grants.
 
-Open reads the account's saved `notes-source-path` preference (or the
-coordinator's configured override), opens the folder through VaultContext
-under the account's allowed roots, and returns the configured path, the
-canonical root and a name-sorted Markdown walk capped at ten thousand files.
-The sorted order is a deliberate deterministic difference from the legacy
-operating-system directory order.
+Open reads the account's saved `notes-source-path` preference, refuses a
+coordinator override that names a different folder, opens the folder
+through VaultContext under the account's allowed roots, and returns the
+configured path, the canonical root and a name-sorted Markdown walk capped
+at ten thousand visited entries. The sorted order is a deliberate
+deterministic difference from the legacy operating-system directory order.
 
-Sync-file locks the saved source row and the folder, reads one file with a
-16 MiB bound, and hashes it with SHA-256. A file whose saved hash and model
-name match is skipped before any embedding work. Otherwise the legacy
+Sync-file first reads and embeds outside any write transaction. Its write
+transaction then locks the saved source row and the folder, reads one file
+with a 16 MiB bound, and hashes it with SHA-256. A file whose saved hash and
+model name match is skipped before any embedding work. Otherwise the legacy
 document parser runs in Rust (frontmatter, `## ` sections, paragraph, line
 and character splitting at 2000 UTF-16 units, wiki links), the requested
 chunk window is embedded through the trusted account-configured
-`DocumentEmbeddings` service, and chunks, outgoing links and the file index
-are written in one account-scoped transaction with explicit owner context.
-The file is re-read inside that transaction, so a change during embedding
-refuses the write. Continuations carry chunk offset and file hash. A
-requested managed snapshot key is refused, because managed publication and
-fencing are still not connected. That refusal is an activation blocker for
-managed sources, not a silent drop.
+`DocumentEmbeddings` service, and that window is written in one
+account-scoped transaction. A long file is written over several such pages,
+with links and the file index written on the final page, so search can see
+a partly indexed long file until the continuation runs. The file is
+re-read inside the write transaction, so a change during embedding refuses
+the write. Continuations carry chunk offset and file hash. A requested
+managed snapshot key is refused, because managed publication and fencing
+are still not connected. That refusal is an activation blocker for managed
+sources, not a silent drop.
 
 Package version `0.1.4` declares this host capability in the app map. The
 ordinary package still declares no sync job, schedule, manual sync route or
@@ -1088,15 +1091,23 @@ write chat tools. Nothing a person can see changes in this checkpoint.
 
 The standard Notes gate now also runs `ingest-gate.ts`. Its oracle executes
 the real legacy ingest function, repository, stub embedding provider and
-vault context on three synthetic notes, saves those rows, clears them, and
-the Rust test runs the compiled sync guest through the real ingestion and
-cleanup adapters for both runtime roles. It compares every saved chunk,
-link and index row with the legacy result, requires a second run to skip
-all three unchanged files, and requires another owner to read none of the
-first owner's chunks. The stub provider is a named stand-in reproduced
-byte-for-byte in Rust, so no real model quality is claimed. Gate receipts
-and the review verdict are recorded with this checkpoint's proof and pull
-request.
+vault context on five synthetic notes, including one longer than a single
+run's chunk budget and one with a byte-order mark and odd wiki-link shapes,
+saves those rows, clears them, and the Rust test runs the compiled sync
+guest through the real ingestion and cleanup adapters for both runtime
+roles. It compares every saved chunk row including a hash of its
+embedding, plus link and index rows, follows deferred continuations to
+completion, and requires a snapshot-key request to be refused without
+changing the indexed file. A second run must skip all five unchanged files.
+Another owner and an unrelated admin must each read none of the first
+owner's chunks through a direct database check. The stub provider is a
+named stand-in whose vectors the Rust test reproduces from the same hash
+rule, so no real model quality is claimed.
+
+The first full gate run passed with exit code 0 on commit `c7f8a0927`,
+input fingerprint `6e2a84e74a0b`. That run predates the review fixes in this
+checkpoint. The final gate receipt and both review rounds are recorded on
+the task card and in the checkpoint pull request.
 
 ### Remaining acceptance work
 

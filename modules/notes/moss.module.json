@@ -158,15 +158,7 @@
     },
     {
       "id": "notes.sync-ingest",
-      "description": "The host provides core-owned Notes file ingestion (folder walk, legacy document chunking, configured document embeddings, unchanged-file skipping and per-file atomic indexing) behind the sync coordinator's vault ports, plus atomic deleted-note cleanup. Assembly must connect MemoryIngestPorts and MemoryCleanupPorts with the same account-specific roots and notes-source-path preference as folder settings, and supply the account's configured document embedding model. Managed publication snapshots are refused until that join exists. The ordinary package still declares no sync job, schedule, manual sync route or write chat tools, so scheduled and manual sync are not available in the app yet.",
-      "errors": [
-        {
-          "code": "notes-ingest-unavailable",
-          "class": "prerequisite",
-          "description": "The memory ingestion adapter, configured document embedding service or selected notes folder is unavailable. No partial file index is kept for the failed file.",
-          "remediationRef": "notes.configure-ingest"
-        }
-      ],
+      "description": "The host provides core-owned Notes file ingestion (folder walk, legacy document chunking, configured document embeddings, unchanged-file skipping and per-page atomic indexing) behind the sync coordinator's vault ports, plus atomic deleted-note cleanup. Assembly must connect MemoryIngestPorts and MemoryCleanupPorts with the same account-specific roots and notes-source-path preference as folder settings, and supply the account's configured document embedding model. Managed publication snapshots are refused until that join exists. The ordinary package still declares no sync job, schedule, manual sync route or write chat tools, so scheduled and manual sync are not available in the app yet.",
       "remediations": [
         {
           "id": "notes.configure-ingest",

@@ -84,6 +84,11 @@ struct Chunk {
     line_end: i64,
 }
 
+/// JavaScript trim also removes the byte-order mark. Rust trim does not.
+fn trim_js(text: &str) -> &str {
+    text.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
+}
+
 /// Port of the legacy document parser. Its size budget counts UTF-16 units,
 /// matching the JavaScript string length the original code used.
 fn parse_document(content: &str) -> (Vec<String>, Vec<Chunk>) {
@@ -92,19 +97,45 @@ fn parse_document(content: &str) -> (Vec<String>, Vec<Chunk>) {
         None => ("", content),
     };
     let _ = frontmatter;
+    // Match the legacy wiki-link pattern, including its retry at the next
+    // character after a failed match at an opening bracket pair.
     let mut links = Vec::new();
-    let mut rest = body;
-    while let Some(start) = rest.find("[[") {
-        let after = &rest[start + 2..];
-        let Some(end) = after.find("]]") else { break };
-        let inner = &after[..end];
-        let target = inner.split('|').next().unwrap_or("");
-        if !target.contains(']') {
-            links.push(target.trim().to_string());
+    let chars: Vec<(usize, char)> = body.char_indices().collect();
+    let mut i = 0;
+    while i + 1 < chars.len() {
+        if chars[i].1 == '[' && chars[i + 1].1 == '[' {
+            let mut j = i + 2;
+            let mut target = String::new();
+            while j < chars.len() && chars[j].1 != ']' && chars[j].1 != '|' {
+                target.push(chars[j].1);
+                j += 1;
+            }
+            let matched = if !target.is_empty() && j < chars.len() && chars[j].1 == '|' {
+                let mut k = j + 1;
+                while k < chars.len() && chars[k].1 != ']' {
+                    k += 1;
+                }
+                k + 1 < chars.len() && chars[k].1 == ']' && chars[k + 1].1 == ']'
+            } else {
+                !target.is_empty()
+                    && j + 1 < chars.len()
+                    && chars[j].1 == ']'
+                    && chars[j + 1].1 == ']'
+            };
+            if matched {
+                links.push(trim_js(&target).to_string());
+                // Continue after the closing brackets.
+                let mut k = i + 2;
+                while k + 1 < chars.len() && !(chars[k].1 == ']' && chars[k + 1].1 == ']') {
+                    k += 1;
+                }
+                i = k + 2;
+                continue;
+            }
         }
-        rest = &after[end + 2..];
+        i += 1;
     }
-    let trimmed = body.trim();
+    let trimmed = trim_js(body);
     if trimmed.is_empty() {
         return (links, Vec::new());
     }
@@ -117,7 +148,7 @@ fn parse_document(content: &str) -> (Vec<String>, Vec<Chunk>) {
     sections.push(&trimmed[start..]);
     let sections: Vec<&str> = sections
         .into_iter()
-        .filter(|s| !s.trim().is_empty())
+        .filter(|s| !trim_js(s).is_empty())
         .collect();
     let mut running = count_lines(content) - count_lines(body);
     let mut chunks = Vec::new();
@@ -125,7 +156,7 @@ fn parse_document(content: &str) -> (Vec<String>, Vec<Chunk>) {
         let mut offset = 0i64;
         for part in cap_chunk_size(section) {
             let newlines = count_newlines(&part);
-            let text = part.trim();
+            let text = trim_js(&part);
             if !text.is_empty() {
                 chunks.push(Chunk {
                     text: text.to_string(),
@@ -144,44 +175,47 @@ fn frontmatter_end(content: &str) -> Option<(&str, usize)> {
     let rest = content
         .strip_prefix("---\n")
         .or_else(|| content.strip_prefix("---\r\n"))?;
-    // Find the closing fence at the start of a line.
-    let mut search = 0;
-    loop {
-        let idx = rest[search..].find("\n---")? + search;
+    // The legacy pattern closes at the first line-start fence. Its trailing
+    // newline is optional, so any text after the fence starts the body.
+    {
+        let idx = rest.find("\n---")?;
+        // The fence may be preceded by a carriage return as part of the
+        // frontmatter line ending, which the legacy capture excludes.
+        let fm_end = if idx > 0 && rest.as_bytes()[idx - 1] == b'\r' {
+            idx - 1
+        } else {
+            idx
+        };
+        let fm = &rest[..fm_end];
         let after = &rest[idx + 4..];
-        let fm = &rest[..idx];
         if let Some(tail) = after.strip_prefix("\r\n") {
             return Some((fm, content.len() - tail.len()));
         }
         if let Some(tail) = after.strip_prefix('\n') {
             return Some((fm, content.len() - tail.len()));
         }
-        if after.is_empty() {
-            return Some((fm, content.len()));
-        }
-        search = idx + 1;
+        Some((fm, content.len() - after.len()))
     }
 }
 
 fn split_after_blank(text: &str) -> Vec<String> {
+    // Every position whose prefix ends with a newline, optional spaces or
+    // tabs, and a newline is a split point, including overlapping ones.
     let bytes = text.as_bytes();
     let mut parts = Vec::new();
     let mut start = 0;
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'\n' {
-            let mut j = i + 1;
-            while j < bytes.len() && (bytes[j] == b' ' || bytes[j] == b'\t') {
-                j += 1;
-            }
-            if j < bytes.len() && bytes[j] == b'\n' {
-                parts.push(text[start..=j].to_string());
-                start = j + 1;
-                i = start;
-                continue;
-            }
+    for p in 1..=bytes.len() {
+        if bytes[p - 1] != b'\n' {
+            continue;
         }
-        i += 1;
+        let mut j = p - 1;
+        while j > 0 && (bytes[j - 1] == b' ' || bytes[j - 1] == b'\t') {
+            j -= 1;
+        }
+        if j > 0 && bytes[j - 1] == b'\n' {
+            parts.push(text[start..p].to_string());
+            start = p;
+        }
     }
     if start < text.len() {
         parts.push(text[start..].to_string());
@@ -311,6 +345,11 @@ impl MemoryIngestPorts {
         ensure!(!roots.is_empty(), "Notes roots are not configured");
         let allowed = AllowedRoots::for_account(scope.access(), roots);
         let folder = VaultContext::at_allowed_root(scope.access(), Path::new(&saved), &allowed)?;
+        // Commit the read so the pooled connection returns to the pool
+        // instead of being discarded when this context drops.
+        cx.commit_bounded(scope.remaining())
+            .await
+            .map_err(|_| anyhow::anyhow!("Memory commit failed"))?;
         Ok(Some((saved, folder)))
     }
 
@@ -319,36 +358,38 @@ impl MemoryIngestPorts {
         let input: Open = serde_json::from_value(r.parameters.clone())?;
         self.runtime.block_on(async {
             tokio::time::timeout(scope.remaining(), async {
-                let resolved = match &input.source_path {
-                    Some(path) if !path.is_empty() => {
-                        let roots = source
-                            .roots
-                            .get(&scope.access().actor_user_id())
-                            .cloned()
-                            .unwrap_or_default();
-                        ensure!(!roots.is_empty(), "Notes roots are not configured");
-                        let allowed = AllowedRoots::for_account(scope.access(), roots);
-                        Some((
-                            path.clone(),
-                            VaultContext::at_allowed_root(
-                                scope.access(),
-                                Path::new(path),
-                                &allowed,
-                            )?,
-                        ))
-                    }
-                    _ => self.saved_source(scope, &source, false).await?,
-                };
+                // The saved folder is the only source this adapter ingests.
+                // A coordinator override must name that same folder, so a
+                // mismatched request fails here instead of failing every file.
+                let resolved = self.saved_source(scope, &source, false).await?;
                 let Some((configured, folder)) = resolved else {
+                    if input.source_path.as_deref().is_some_and(|p| !p.is_empty()) {
+                        anyhow::bail!("Note source is outside the saved folder");
+                    }
                     return Ok(json!({"sourcePath": null}));
                 };
+                if let Some(path) = input.source_path.as_deref().filter(|p| !p.is_empty()) {
+                    let roots = source
+                        .roots
+                        .get(&scope.access().actor_user_id())
+                        .cloned()
+                        .unwrap_or_default();
+                    ensure!(!roots.is_empty(), "Notes roots are not configured");
+                    let allowed = AllowedRoots::for_account(scope.access(), roots);
+                    let requested =
+                        VaultContext::at_allowed_root(scope.access(), Path::new(path), &allowed)?;
+                    ensure!(
+                        requested.folder_identity() == folder.folder_identity(),
+                        "Note source is outside the saved folder"
+                    );
+                }
                 let root = folder
                     .folder_identity()
                     .to_str()
                     .context("Invalid folder identity")?
                     .to_string();
                 let mut files = Vec::new();
-                walk_files(&folder, "", &root, &mut files, scope)?;
+                walk_files(&folder, "", &root, &mut files, scope, &mut 0)?;
                 files.sort();
                 ensure!(files.len() <= MAX_ENTRIES, "Notes folder is too large");
                 Ok(json!({"sourcePath": configured, "resolvedSourcePath": root, "files": files}))
@@ -437,6 +478,7 @@ impl MemoryIngestPorts {
         let end = (offset as usize + input.chunk_limit as usize).min(chunks.len());
         let mut embedded = Vec::new();
         for chunk in &chunks[offset as usize..end] {
+            ensure!(!scope.remaining().is_zero(), "Memory ingest timed out");
             let vector = self.embeddings.embed_document(scope, &chunk.text)?;
             ensure!(
                 !vector.is_empty() && vector.len() <= 65536 && vector.iter().all(|n| n.is_finite()),
@@ -516,17 +558,20 @@ fn walk_files(
     root: &str,
     files: &mut Vec<String>,
     scope: &CallScope,
+    visited: &mut usize,
 ) -> Result<()> {
     ensure!(!scope.remaining().is_zero(), "Memory ingest timed out");
     ensure!(files.len() <= MAX_ENTRIES, "Notes folder is too large");
     for entry in folder.list_limited(directory, MAX_ENTRIES)? {
+        *visited += 1;
+        ensure!(*visited <= MAX_ENTRIES, "Notes folder is too large");
         let relative = if directory.is_empty() {
             entry.name.clone()
         } else {
             format!("{directory}/{}", entry.name)
         };
         match entry.kind {
-            EntryKind::Dir => walk_files(folder, &relative, root, files, scope)?,
+            EntryKind::Dir => walk_files(folder, &relative, root, files, scope, visited)?,
             EntryKind::File if relative.ends_with(".md") => {
                 files.push(format!("{root}/{relative}"));
             }
@@ -565,14 +610,27 @@ mod tests {
     fn parser_matches_legacy_boundaries() {
         let (links, chunks) = parse_document("---\ntitle: T\n---\n# Head\n\nSee [[Other Note|label]] and [[Plain]].\n\n## Two\n\nBody two.\n");
         assert_eq!(links, vec!["Other Note", "Plain"]);
-        assert!(chunks.iter().all(|c| !c.text.is_empty()));
-        assert!(chunks.iter().any(|c| c.text.contains("Body two.")));
-        // Line numbers count the frontmatter lines, as the legacy parser does.
-        assert!(chunks[0].line_start >= 3);
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(
+            chunks[0].text,
+            "# Head\n\nSee [[Other Note|label]] and [[Plain]]."
+        );
+        assert_eq!((chunks[0].line_start, chunks[0].line_end), (3, 7));
+        assert_eq!(chunks[1].text, "## Two\n\nBody two.");
+        assert_eq!((chunks[1].line_start, chunks[1].line_end), (8, 10));
+        // Failed matches retry at the next character, as the legacy pattern does.
+        let (links, _) = parse_document("[[]] [[|x]] [[a|b]c]] [[x] text [[y]]");
+        assert_eq!(links, vec!["y"]);
+        // A byte-order mark is trimmed the way JavaScript trim trims it.
+        let (_, chunks) = parse_document("\u{feff}# Hi\n\nText.\n");
+        assert_eq!(chunks[0].text, "# Hi\n\nText.");
+        // Text after a closing fence on the same line starts the body.
+        let (_, chunks) = parse_document("---\na: 1\n---foo\nBody.\n");
+        assert_eq!(chunks[0].text, "foo\nBody.");
         let long = "word ".repeat(600);
         let (_, chunks) = parse_document(&long);
         assert!(chunks.len() > 1);
-        assert!(chunks.iter().all(|c| c.text.chars().count() <= 2000));
+        assert!(chunks.iter().all(|c| super::utf16_len(&c.text) <= 2000));
         let (_, empty) = parse_document("---\ntitle: T\n---\n");
         assert!(empty.is_empty());
     }

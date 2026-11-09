@@ -1,6 +1,7 @@
 //! Compiled sync guest + real MemoryIngestPorts/CleanupPorts against the
-//! legacy ingest oracle. Document embeddings replicate the legacy stub
-//! provider byte-for-byte; no real model or managed publication is claimed.
+//! legacy ingest oracle. Document embeddings reproduce the legacy stub
+//! provider from the same hash rule, and the gate compares a hash of each
+//! saved embedding. No real model or managed publication is claimed.
 use access_context::AccessContext;
 use anyhow::Result;
 use moss_module_host::{
@@ -114,7 +115,7 @@ impl Fixture {
     fn source(&self, actor: Uuid, value: Value) {
         self.rt.block_on(self.bootstrap.execute("INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'notes-source-path',$2) ON CONFLICT(owner_user_id,key) DO UPDATE SET value_json=EXCLUDED.value_json", &[&actor, &value])).unwrap();
     }
-    fn run(&self, db: Database, actor: Uuid) -> Result<String> {
+    fn run(&self, db: Database, actor: Uuid, parameters: Value) -> Result<String> {
         let parent = PathBuf::from(self.oracle["parent"].as_str().unwrap());
         let roots: BTreeMap<Uuid, Vec<PathBuf>> = self
             .actors
@@ -158,7 +159,7 @@ impl Fixture {
             AccessContext::new(actor, "notes-ingest-check"),
             ingest,
             "job",
-            r#"{"queue":"notes.sync","parameters":{}}"#,
+            &json!({"queue":"notes.sync","parameters":parameters}).to_string(),
         )
     }
 }
@@ -171,36 +172,71 @@ fn compiled_ingest_matches_legacy_and_skips_unchanged() {
         let db = f.database(role);
         let actor = f.actors[0];
         f.source(actor, json!(f.oracle["root"]));
-        let first: Value = serde_json::from_str(&f.run(db.clone(), actor).unwrap()).unwrap();
-        assert_eq!(first["ingested"], 3, "{role}: {first}");
-        assert_eq!(first["errors"], 0);
+        // The long fixture exceeds one run's chunk budget, so the first run
+        // must defer and the continuations must finish the file.
+        let mut result: Value =
+            serde_json::from_str(&f.run(db.clone(), actor, json!({})).unwrap()).unwrap();
+        assert_eq!(result["deferred"], true, "{role}: {result}");
+        for _ in 0..6 {
+            if result["deferred"] != true {
+                break;
+            }
+            let continuation = result["continuation"].clone();
+            result =
+                serde_json::from_str(&f.run(db.clone(), actor, continuation).unwrap()).unwrap();
+        }
+        assert_ne!(result["deferred"], true, "{role}: continuations did not finish");
+        assert_eq!(result["errors"], 0);
         assert_eq!(
             f.snapshot(),
             f.oracle["expected"],
             "Rust ingestion rows differ from the legacy ingest for role {role}"
         );
-        let second: Value = serde_json::from_str(&f.run(db.clone(), actor).unwrap()).unwrap();
-        assert_eq!(second["skipped"], 3, "{role}: unchanged files must skip: {second}");
+        let second: Value =
+            serde_json::from_str(&f.run(db.clone(), actor, json!({})).unwrap()).unwrap();
+        assert_eq!(second["skipped"], 5, "{role}: unchanged files must skip: {second}");
         assert_eq!(f.snapshot(), f.oracle["expected"]);
-        // Another owner running the same guest sees none of the first owner's rows.
-        let other = f.actors[1];
-        f.rt.block_on(async {
-            let cx = safety_core::db::DataContext::open(
-                &db,
-                &AccessContext::new(other, "notes-ingest-privacy"),
+        // A managed snapshot key is refused for that file, and the refusal
+        // leaves the already indexed file untouched.
+        let first_file = f.oracle["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p.as_str().unwrap().ends_with("/a.md"))
+            .unwrap()
+            .clone();
+        let refused: Value = serde_json::from_str(
+            &f.run(
+                db.clone(),
+                actor,
+                json!({"filePath": first_file, "chunkOffset": 0, "fileHash": "", "snapshotKey": "managed-key"}),
             )
-            .await
-            .unwrap();
-            let rows = cx
-                .db()
-                .query(
-                    "SELECT text FROM app.memory_chunks WHERE owner_user_id=$1",
-                    &[&actor],
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(refused["errors"], 1, "{role}: {refused}");
+        assert_eq!(f.snapshot(), f.oracle["expected"]);
+        // Direct database checks: another owner and an unrelated instance
+        // admin each read none of the first owner's chunks.
+        for other in [f.actors[1], f.actors[2]] {
+            f.rt.block_on(async {
+                let cx = safety_core::db::DataContext::open(
+                    &db,
+                    &AccessContext::new(other, "notes-ingest-privacy"),
                 )
                 .await
                 .unwrap();
-            assert!(rows.is_empty(), "another owner read ingested chunks");
-        });
+                let rows = cx
+                    .db()
+                    .query(
+                        "SELECT text FROM app.memory_chunks WHERE owner_user_id=$1",
+                        &[&actor],
+                    )
+                    .await
+                    .unwrap();
+                assert!(rows.is_empty(), "another account read ingested chunks");
+            });
+        }
         // Reset for the next role.
         f.rt.block_on(async {
             for table in ["memory_chunks", "memory_links", "memory_file_index"] {

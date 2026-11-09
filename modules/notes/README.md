@@ -350,33 +350,43 @@ chat, HTTP parity or working ingestion.
 ## Production ingestion checkpoint (part ten)
 
 `MemoryIngestPorts` in the module host now implements the coordinator's
-`index.sync-open` and `index.sync-file` operations for real. Assembly binds a
-resource to the source kind, the `notes-source-path` preference and each
-account's allowed roots, exactly like cleanup, and supplies a trusted
-`DocumentEmbeddings` service that reports the account's configured document
-model name and version. The guest still chooses no account, folder, model or
-table, and the Notes package remains a pure client of these server ports.
+`index.sync-open` and `index.sync-file` operations for real. Assembly must
+bind a resource to the source kind, the `notes-source-path` preference and
+each account's allowed roots, exactly like cleanup, and supply a trusted
+`DocumentEmbeddings` service for the calling account's configured document
+model. No production assembly or real embedding service is connected yet;
+only the gate builds this adapter. The guest chooses no account, model or
+table. It may name a folder only inside the calling account's allowed roots,
+and the adapter ingests only the account's saved folder. The Notes package
+remains a pure client of these server ports.
 
-Open resolves the saved folder (or the coordinator's configured override),
-walks Markdown files under the canonical root and returns the configured and
-canonical source paths with the file list. Sync-file rechecks the saved
-source, locks the folder, reads one file with a 16 MiB bound, hashes it with
-SHA-256 and skips it unchanged when the saved index hash and model match.
-Otherwise it parses the document with the legacy rules (frontmatter, `## `
-sections, paragraph/line/character splitting at 2000 UTF-16 units, wiki
-links), embeds the requested chunk window through the trusted service, and
-writes chunks, links and the file index in one account-scoped transaction.
-The file is re-read under the write transaction, so a change during
-embedding refuses the write instead of indexing stale text. Continuations
-carry the chunk offset and file hash, never a managed snapshot key. A
-requested snapshot key is refused because managed publication is not
-connected yet.
+Open resolves the saved folder, refuses a coordinator override that names a
+different folder, walks Markdown files under the canonical root and returns
+the configured and canonical source paths with the file list. Sync-file
+rechecks the saved source, locks the folder, reads one file with a 16 MiB
+bound, hashes it with SHA-256 and skips it unchanged when the saved index
+hash and model match. Otherwise it parses the document with the legacy rules
+(frontmatter, `## ` sections, paragraph/line/character splitting at 2000
+UTF-16 units, wiki links), embeds the requested chunk window through the
+trusted service, and writes that window in one account-scoped transaction.
+A file longer than the run's remaining chunk budget is therefore written
+over several pages, each page atomic, with the file index written on the
+final page. Search can see a partly indexed long file until the
+continuation runs. The file is re-read under the write transaction, so a
+change during embedding refuses the write instead of indexing stale text.
+Continuations carry the chunk offset and file hash, never a managed
+snapshot key. A requested snapshot key is refused because managed
+publication is not connected yet.
 
 The walk is name-sorted, which is a deliberate deterministic difference from
-the legacy operating-system directory order. Files over the bound and
-non-UTF-8 notes fail that file instead of the whole run. No sync job,
-schedule, manual route or write tool is enabled in the ordinary package by
-this adapter.
+the legacy operating-system directory order. Two smaller parser differences
+are also deliberate. A hard 2000-unit cut never splits a character outside
+the basic plane, where legacy JavaScript could split a surrogate pair. A
+heading split happens only after a newline, where the legacy pattern also
+split after a lone carriage return or Unicode line separator. Files over
+the bound and non-UTF-8 notes fail that file instead of the whole run. No
+sync job, schedule, manual route or write tool is enabled in the ordinary
+package by this adapter.
 
 ```sh
 pnpm exec tsx modules/notes/tools/ingest-gate.ts
@@ -384,12 +394,17 @@ pnpm exec tsx modules/notes/tools/ingest-gate.ts
 
 That gate runs through `scripts/run-gate.sh` as part of the standard Notes
 gate. It executes the real legacy `ingestVaultDocument`, `MemoryRepository`,
-`StubEmbeddingProvider` and vault context on synthetic notes, clears those
-rows, then runs the compiled sync guest through the real Rust adapters for
-both runtime roles and compares every saved chunk, link and index row. A
-second run must skip every unchanged file, and another owner must read none
-of the first owner's chunks. The stub provider is a named stand-in shared
-byte-for-byte with Rust; no real model quality is claimed.
+`StubEmbeddingProvider` and vault context on synthetic notes, including one
+note longer than a single run's chunk budget, clears those rows, then runs
+the compiled sync guest through the real Rust adapters for both runtime
+roles. It compares every saved chunk row including a hash of its embedding,
+plus link and index rows, follows the deferred continuations to completion,
+and requires a snapshot-key request to be refused without changing the
+indexed file. A second run must skip every unchanged file, and another
+owner and an unrelated admin must each read none of the first owner's
+chunks through a direct database check. The stub provider is a named
+stand-in whose vectors the Rust test reproduces from the same hash rule;
+no real model quality is claimed.
 
 The synchronous checkpoint envelope/result may contain source/file paths and
 hashes. **Do not enqueue that envelope or continuation as job parameters.** The

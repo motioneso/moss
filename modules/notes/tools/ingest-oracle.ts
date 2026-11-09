@@ -10,7 +10,7 @@ import { ingestVaultDocument, MemoryRepository, StubEmbeddingProvider } from "@m
 import { VaultContextRunner } from "@moss/vault";
 
 export const ingestSnapshotSql = `SELECT jsonb_build_object(
-  'chunks', COALESCE((SELECT jsonb_agg(jsonb_build_array(owner_user_id,source_kind,source_path,line_start,line_end,content_hash,text,embed_model_name,embed_model_version) ORDER BY source_path,line_start,text) FROM app.memory_chunks WHERE owner_user_id=ANY($1::uuid[])), '[]'),
+  'chunks', COALESCE((SELECT jsonb_agg(jsonb_build_array(owner_user_id,source_kind,source_path,line_start,line_end,content_hash,text,embed_model_name,embed_model_version,md5(embedding::text)) ORDER BY source_path,line_start,text) FROM app.memory_chunks WHERE owner_user_id=ANY($1::uuid[])), '[]'),
   'links', COALESCE((SELECT jsonb_agg(jsonb_build_array(owner_user_id,from_path,to_path) ORDER BY from_path,to_path) FROM app.memory_links WHERE owner_user_id=ANY($1::uuid[])), '[]'),
   'index', COALESCE((SELECT jsonb_agg(jsonb_build_array(owner_user_id,source_kind,source_path,file_hash,chunk_count,embed_model_name,embed_model_version) ORDER BY source_path) FROM app.memory_file_index WHERE owner_user_id=ANY($1::uuid[])), '[]')
 ) AS value`;
@@ -19,7 +19,14 @@ const NOTES: Record<string, string> = {
   "a.md":
     "---\ntitle: Alpha\n---\n# Alpha\n\nSee [[Other Note|label]] and [[Plain]].\n\n## Two\n\nBody two text.\n",
   "nested/b.md": `# Long\n\n${"A long paragraph sentence with enough words to split. ".repeat(80)}\n`,
-  "c.md": "Small plain note.\n"
+  "c.md": "Small plain note.\n",
+  "edge.md": "\uFEFF# Edge\n\n[[]] [[|x]] [[a|b]c]] [[x] text [[y]]\n",
+  // More chunks than one sync run's hundred-chunk budget, so the compiled
+  // coordinator must defer and resume to finish this file.
+  "long.md": Array.from(
+    { length: 120 },
+    (_, i) => `Long paragraph number ${i}. ${"word ".repeat(300)}`
+  ).join("\n\n")
 };
 
 export async function ingestOracle() {
