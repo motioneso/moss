@@ -354,3 +354,17 @@ device over trusted HTTPS are unfinished.
 
 This continuation adds the already declared Wasm target to a task-local Rust home
 and installs no global tool or new dependency and does not change the module's client/server boundary.
+
+## Event details screen parity (part 15)
+
+Version 0.15.0 restores the existing Calendar detail panel's title marker,
+time/date and duration grouping, location and attendee rows, status marker and
+held-block note. It retains the shared modal lifecycle and existing account data
+requests. Long titles and locations wrap within the panel.
+
+The signed-in runner checks authored layout, long-location wrapping and dismissal
+with focus return at desktop and phone widths. These are real installed-screen
+checks on a disposable Rust server; phone width does not prove a physical second
+device. Full-shell/chat integration, old-screen replacement, provider tools/jobs
+and execution flows, complete parity and physical second-device trusted HTTPS
+remain open as listed in the Calendar report.

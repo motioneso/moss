@@ -1,6 +1,7 @@
 //! Calendar presentation. Account data only enters through the parent's module bridge.
 #[cfg(target_arch = "wasm32")]
 mod browser;
+mod event_details;
 pub mod model;
 pub mod views;
 

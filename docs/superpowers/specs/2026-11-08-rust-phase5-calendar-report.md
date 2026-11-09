@@ -851,3 +851,32 @@ matrix includes both a valid denial and the extension rejection (210 comparisons
 Exact fresh rerun outcomes belong in the Proof artifact; earlier partial runs
 are not passing full-gate evidence. Strict host Clippy also reports a pre-existing
 `useless_vec` in the unchanged day-plan oracle; allowing only that lint passes.
+
+## JS-118 / part 15: event details screen checkpoint
+
+Card 525. Package 0.15.0 restores the existing Calendar detail panel's authored
+structure: title marker, time and duration, subordinate date and timezone,
+location and attendee rows, status marker and the held-block note. The shared
+modal lifecycle stays in the kit. Long titles and locations wrap inside the
+panel; no provider, database, host or cross-module interface changes are needed.
+The module remains a client of the server API through its opaque frame bridge.
+
+The screen regression checks the authored structure and escaped event text.
+The signed-in runner exercises real installed event details at desktop and phone
+widths, including loaded synthetic event data, computed row layout, long-location
+wrapping, Escape and Close dismissal, and focus return to the event. Fresh test
+results, screenshots and independent review belong in this task's Proof artifact.
+
+Builds use a task-local copy of an existing Rust 1.95.0 home with its declared
+Wasm target, task-local build outputs and dependencies restored offline from the
+project lockfile. Both shared asset builders write into one scratch directory.
+No global tool, new dependency or wit-bindgen installation is performed.
+
+This is a bounded screen checkpoint, not final Calendar acceptance. Remaining:
+concrete public Tasks/Briefings/provider adapters and full provenance; complete
+validation/coercion/error parity; four provider tools; day-plan apply job and
+apply/retry/recovery/confirm execution; worker-role cache-evict dispatch; source
+behavior and external-calendar status controls; full shell/Today/chat; old-screen
+replacement; complete assembled parity; physical second-device trusted HTTPS.
+Disposable TLS, a same-computer LAN request and a phone-width browser cannot
+establish production certificate trust or physical second-device access.
