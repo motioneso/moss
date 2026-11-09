@@ -162,6 +162,22 @@ test("draft controls retain edits, remove items, defer writes and lock a partial
       }
     });
     draft.reset();
+    const realDate = globalThis.Date;
+    let clock = "2026-11-09T23:59:00.000Z";
+    globalThis.Date = class extends realDate {
+      constructor(...args) {
+        super(...(args.length ? args : [clock]));
+      }
+    };
+    try {
+      assert.equal(draft.today(), "2026-11-09");
+      clock = "2026-11-10T00:01:00.000Z";
+      assert.equal(draft.today(), "2026-11-09", "child retries keep the first save's default day");
+      draft.reset();
+      assert.equal(draft.today(), "2026-11-10", "a separate capture starts a fresh default day");
+    } finally {
+      globalThis.Date = realDate;
+    }
     $("add-new-subtask").querySelector("button").click();
     let input = $("new-subtasks").querySelector("input");
     input.value = " First step ";

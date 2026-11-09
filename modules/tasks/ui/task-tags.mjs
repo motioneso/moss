@@ -13,7 +13,8 @@ export async function findOrCreateTag(api, listId, name) {
     return (await api("POST", path, { name })).tag;
   } catch (error) {
     // A concurrent creator, or an acknowledged response lost in transit, may win.
-    const found = find((await api("GET", path)).tags);
+    const refreshed = await api("GET", path).catch(() => null);
+    const found = refreshed && find(refreshed.tags);
     if (!found) throw error;
     return found;
   }

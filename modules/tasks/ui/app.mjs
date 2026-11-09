@@ -454,7 +454,7 @@ submit("task-form", async () => {
   for (const control of $("task-form").elements)
     if (control.name) form[control.name] = control.value;
   const previous = state.editing;
-  const fields = taskFields(form, previous);
+  const fields = taskFields(form, previous, previous ? undefined : capture.today());
   const response = previous
     ? await api("PATCH", `/tasks/${previous.id}`, fields)
     : await capture.save(fields);

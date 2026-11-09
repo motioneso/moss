@@ -39,3 +39,20 @@ test("a failed create rechecks concurrent tags, but a real failure is kept", asy
     assert.equal(reads, 2);
   }
 });
+
+test("a failed conflict recheck preserves the original creation error", async () => {
+  let reads = 0;
+  const original = new Error("create rejected");
+  await assert.rejects(
+    findOrCreateTag(
+      async (method) => {
+        if (method === "POST") throw original;
+        if (++reads > 1) throw new Error("recheck unavailable");
+        return { tags: [] };
+      },
+      "list",
+      "work"
+    ),
+    (error) => error === original
+  );
+});

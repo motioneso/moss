@@ -83,6 +83,7 @@ export function captureDraft({ api, run, text, button, focus }) {
   let steps = [];
   let tags = [];
   let available = [];
+  let firstSaveDay = null;
   function lock() {
     const locked = save.started();
     $("task-list").disabled = locked;
@@ -184,12 +185,14 @@ export function captureDraft({ api, run, text, button, focus }) {
   return {
     lock,
     loadTags,
+    today: () => (firstSaveDay ??= new Date().toISOString().slice(0, 10)),
     started: save.started,
     snapshot: () => JSON.stringify({ steps, tags }),
     reset() {
       steps = [];
       tags = [];
       available = [];
+      firstSaveDay = null;
       $("new-tags-error").hidden = true;
       save.reset();
       $("new-tag-name").value = "";
