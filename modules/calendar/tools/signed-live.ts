@@ -25,6 +25,7 @@ import { checkStartup } from "./startup-check.js";
 import { checkDetails } from "./details-live.js";
 import { checkGrid } from "./grid-live.js";
 import { checkGridScroll } from "./scroll-live.js";
+import { checkTimezoneScroll } from "./timezone-live.js";
 import { checkMonth } from "./month-live.js";
 import { checkOperationStatus } from "./operation-live.js";
 import { checkDayPlanWrites } from "./day-plan-live.js";
@@ -452,6 +453,22 @@ try {
   await checkDetails(tab, local, out, data.event);
   // Keep extra grid fixtures out of the existing Month overflow/detail checks.
   for (const event of proofEvents.slice(3)) await seedProofEvent(event);
+  let timezoneRevision = 0;
+  await checkTimezoneScroll(tab, local, out, async (zone, changeEvents) => {
+    await db.query(
+      "UPDATE app.preferences SET value_json=jsonb_set(value_json,'{timezone}',to_jsonb($1::text)) WHERE owner_user_id=$2 AND key='locale'",
+      [zone, data.actor]
+    );
+    if (changeEvents) {
+      const title = `Timezone retention ${++timezoneRevision}`;
+      await db.query("UPDATE app.calendar_events SET title=$1 WHERE id=$2", [
+        title,
+        proofEvents[3]!.id
+      ]);
+      return title;
+    }
+    return undefined;
+  });
   await checkGridScroll(tab, local, out, async (title) => {
     await db.query("UPDATE app.calendar_events SET title=$1 WHERE id=$2", [
       title,
