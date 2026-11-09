@@ -385,98 +385,14 @@ needs to be completed before publication. This unfinished unsigned package must
 not be published or presented as the production replacement. These limits remain
 visible rather than being counted as parity proof.
 
-### Tasks part 4: exact remaining work
+### Tasks part 4 continuation boundary
 
-This PR is the partial component checkpoint, Part of #4027, with release note
-Category N/A. Ready applies to merging this bounded slice, not to a completed
-Tasks replacement. The user approved pushing and opening this PR after the
-checkpoint was saved. Merge remains the person's decision. Workshop and Food
-remain excluded.
-
-1. **Finish HTTP behavior.** `packages/tasks/src/manifest.ts` declares 27 legacy
-   routes; `modules/tasks/moss.module.json` and `src/routes.rs` implement 18 after
-   normalizing `/api` and parameter-name spelling. Add these nine endpoints
-   under the module host's route prefix:
-
-   | Method | Legacy path                      | Required behavior                               |
-   | ------ | -------------------------------- | ----------------------------------------------- |
-   | POST   | `/api/tasks/search/interpret`    | Structured search interpretation                |
-   | POST   | `/api/tasks/:id/deferred-status` | Actor-scoped deferred status job                |
-   | DELETE | `/api/tasks/lists/:listId`       | Existing list deletion/reassignment rules       |
-   | POST   | `/api/tasks/:id/breakdown`       | Existing task breakdown and suggestion behavior |
-   | GET    | `/api/tasks/focus`               | Focus selection                                 |
-   | GET    | `/api/tasks/at-risk`             | At-risk/drift view                              |
-   | GET    | `/api/tasks/overdue`             | Overdue view                                    |
-   | GET    | `/api/tasks/agency-auto-execute` | Read assistant-action preferences               |
-   | PATCH  | `/api/tasks/agency-auto-execute` | Save assistant-action preferences               |
-
-   The 18 existing routes still need full request/response schema, validation,
-   filter and error parity. In particular, the list route currently implements
-   quadrant and tag filtering; port `listId`, status, priority, due bounds and
-   `completedAfter` too. Preserve suggestion/triage feedback on mutations and
-   legacy duplicate-name conflict responses, including the concurrent rename
-   case already recorded above. Do not interpret route presence as endpoint
-   parity. Keep all six existing tables and nine original migrations unchanged.
-
-2. **Complete calendar orchestration.** Obtain actor timezone/preferences through
-   a public core contract. Offset-free timestamps currently use UTC; restore
-   legacy parsing/local-day behavior, free-text dates and exceptional interval
-   handling before claiming parity. Port lazy roll-forward for reads and drift
-   views, account-scoped schedule reconciliation and recurrence worker behavior
-   from `recurrence.ts`, `drift.ts`, `jobs.ts` and `recurrence-schedule.ts`. The
-   existing daily trigger is `0 3 * * *` in UTC, keyed per actor; the worker uses
-   that actor's local day. Preserve schedule failure isolation and idempotency.
-   Next-occurrence creation on completion is already present and tested.
-
-3. **Port all assistant tools and policies.** No tools are declared or handled by
-   this Rust package yet. Match the 23 current tool names and schemas in the
-   legacy manifest and summary tool:
-   `tasks.summary`, `tasks.list`, `tasks.heartbeatWindow`, `tasks.get`,
-   `tasks.focus`, `tasks.atRisk`, `tasks.overdue`, `tasks.listLists`,
-   `tasks.listTags`, `tasks.activity`, `tasks.create`, `tasks.update`,
-   `tasks.updateStatus`, `tasks.breakDown`, `tasks.addActivity`, `tasks.assignTag`,
-   `tasks.unassignTag`, `tasks.createList`, `tasks.renameList`, `tasks.createTag`,
-   `tasks.renameTag`, `tasks.deleteList`, `tasks.deleteTag`. Preserve approval
-   policy, action presentation, chat targets and structured visual summaries.
-   Port the Tasks heartbeat/monitor and suggestion/feedback behavior through
-   public host services; background reads must not advance recurrence.
-
-4. **Port both job kinds.** Declare and consume `tasks-deferred-status` and
-   `tasks-recurrence-materialize` with metadata-only typed payloads, captured
-   actor context, idempotency and existing queue retention/retry behavior.
-   Deferred status carries task/status metadata; recurrence carries actor and
-   optional idempotency metadata, never task text. Reuse the jobs host contract;
-   do not embed a separate scheduler in the guest.
-
-5. **Use public People/core interfaces.** Add the required People linkage and
-   public module API surfaces without reading People tables or implementation
-   code. This checkpoint accesses only Tasks tables and has no People calls.
-   Add declared host capabilities and public API tests as each call is ported.
-
-6. **Package the real screens and install path.** Build the Tasks list/grid,
-   list picker, editing/subtasks, tags, activity and action-policy settings on
-   the shared UI kit and frame bridge. Preserve phone behavior, completion and
-   recurrence interactions, loading/error states and chat affordances. Wire the
-   installed package into the authenticated Rust shell and add truthful
-   navigation/settings/features and error remediations to its app-map metadata.
-   Finish dependency attribution in NOTICE, sign the actual archive and prove
-   registry selection/download and installation; the current archive is unsigned
-   format evidence only. No Tasks screen or navigation entry is shipped here.
-
-7. **Close the acceptance evidence.** Adapt `rust-spike/parity/` to the actual
-   component/host rather than the old Phase 0b native server and run endpoint,
-   tool and job comparisons. Keep the failing-first privacy controls; expand
-   cross-account/admin cases to newly added surfaces, and measure large-account
-   tag/query and message-size limits. Exercise the real installed Tasks UI on a
-   running Rust instance with sign-in, HTTPS and trusted origins, then from an
-   actual second device over LAN or tailnet. Use a claimed dev port. Capture
-   real UI screenshots and record any remaining failures; none of those live
-   checks has been performed for Tasks in this checkpoint.
-
-The component build, manifest and database tests are reproducible from
-`modules/tasks/README.md`. Keep the existing approved generator pins and the
-WASI-free build. Full parity, signed installation and live remote UI proof remain
-acceptance gates for the continuation, not claims made by this partial PR.
+This was a partial component checkpoint, Part of #4027, release note Category N/A.
+Later checkpoints below supersede its route/tool counts. Remaining work is kept
+in `modules/tasks/README.md` and the latest checkpoint. All six existing tables
+and nine migrations remain unchanged. Workshop and Food remain excluded.
+Full parity, authenticated application-shell integration and a second physical
+device over HTTPS are still acceptance gates, not claims made by this checkpoint.
 
 ## Tasks part 4 checkpoint (JS-56, Card 526)
 
@@ -997,3 +913,36 @@ lockfile is refreshed offline without a diff. Seven HTTP endpoints and five tool
 recurrence/timezone, list-delete locking, queue policies, People, feedback/policies,
 full screens/settings, installed chat, real shell, performance and a second device
 over HTTPS remain unfinished. Part of #4027; release note Category N/A.
+
+## Tasks part 10 checkpoint (JS-85, Card 526)
+
+This continuation exposes existing tag actions through the package screen's
+Manage lists path: create, rename and confirmed deletion. Deleting a tag removes
+its assignments and keeps tasks. The task editor continues to assign and unassign
+tags. Unsaved names are protected when returning to lists and retained after
+request failures; refreshed tag names and removals reach the task list and filters.
+The package app map now names these controls. No new HTTP route or tool is claimed.
+
+A compiled-component check exercises the same read, rename and delete privacy
+assertions with the real tag RLS removed and restored. It also checks deletion's
+assignment cleanup and task preservation. The optional signed UI tag check
+verifies browser-created data in the disposable database. These are real host
+transactions and installed package bridge requests, never mocked browser responses.
+The legacy interface offered rename/delete through routes and chat tools; this
+package also exposes them in Manage lists. This is not a claim of screen parity.
+The first full endpoint comparison in this continuation matched 69 of 84 cases
+and exited unsuccessfully. Its fifteen failures remain visible; no endpoint
+parity improvement is claimed for this UI checkpoint. Current committed gate
+receipts, browser evidence and review findings are in the task proof.
+
+The work reuses the approved pinned wit-bindgen graph and existing scratch Rust
+and Cargo cache. The tools lockfile was resolved offline before locked gates;
+no global tool, package or compiler target was installed. Existing lockfile
+JavaScript dependencies were installed offline inside this worktree.
+
+Seven HTTP endpoints and five tools remain, along with actor-local dates and lazy
+recurrence, list-delete locking, queue policy/worker parity, public People linkage,
+feedback/action policy, remaining screens/settings, installed chat, real application
+shell, performance and physical second-device HTTPS acceptance. The signed UI
+fixture is loopback-only and separate from the application shell. This is an
+unfinished checkpoint, not completion of Phase 5. Part of #4027; Category N/A.

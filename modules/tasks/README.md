@@ -177,3 +177,13 @@ handler exceeds the default host runtime allowance on that probe. The check is n
 truncated, its limits are not raised and its failure must not be reported as parity.
 Tag membership is chunked at the public query limit; quadrant filtering runs in
 the database. Cross-page success and the package speed budget remain unproved.
+
+Part 10 exposes existing tag actions through list tag management in the package screen. Open **Manage lists**
+and choose **Manage tags** for a list to create, rename or delete tags. Deletion
+requires confirmation, removes assignments and keeps tasks. Unsaved tag names
+are protected on return and retained on failed writes. Task details still assigns
+and unassigns list tags. The app map describes this path. No new route or tool is
+claimed; the seven endpoints, five tools and other acceptance gaps above remain.
+Set `TASKS_UI_TAG_PROOF=1` for the signed UI gate to additionally verify that
+`Browser proof task` retains exactly `Kept proof tag`, with `Removed proof tag`
+absent after browser deletion. These fixture names are synthetic.

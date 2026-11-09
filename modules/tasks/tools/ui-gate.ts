@@ -144,6 +144,22 @@ try {
       "select count(*)::text as count from app.tasks where title = 'Browser proof task'"
     );
     assert.equal(result.rows[0]?.count, "1", "The real UI must create the proof task exactly once");
+    if (process.env["TASKS_UI_TAG_PROOF"] === "1") {
+      const tags = await db.query<{ name: string }>(
+        "select g.name from app.tasks t join app.task_tag_assignments a on a.task_id=t.id join app.task_tags g on g.id=a.tag_id where t.title='Browser proof task' order by g.name"
+      );
+      assert.deepEqual(
+        tags.rows.map((tag) => tag.name),
+        ["Kept proof tag"]
+      );
+      const removed = await db.query<{ count: string }>(
+        "select count(*)::text as count from app.task_tags where name='Removed proof tag'"
+      );
+      assert.equal(removed.rows[0]?.count, "0");
+      console.log(
+        "PASS browser tag proof: expected assigned tag is present; removed-name tag is absent; task is kept"
+      );
+    }
   } finally {
     await db.end();
   }
