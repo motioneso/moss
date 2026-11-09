@@ -1519,3 +1519,20 @@ untrusted host/origin checks, owner setup and a browser-created task persisted
 exactly once. Its browser and server were stopped afterward. This proves the
 fixture's installed package path, not the application shell or a second device.
 Final package/static gates and independent review receipts are in the task proof.
+
+The expanded differential first failed on the casing of a saved `asia/tokyo`
+zone: the package gate reused an older `tasks-tool-parity` executable. The gate
+now builds that executable explicitly alongside the screen adapter, so an empty
+or stale target directory cannot silently select old host behavior. The failing
+run and fresh-build rerun are retained in the task proof.
+
+Independent review found no blocker or major issue in this checkpoint. Its
+namespace-test explanation was corrected: module identifiers forbid underscores,
+which prevents legacy aliases from entering the reserved canonical policy prefix.
+Two minor limits remain documented: policy preference writes are capability-gated
+but not restricted by guest entry kind, and summary rendering makes up to thirteen
+account-date calls. Before stored route tiers can drive registry-module approvals,
+write entry points and permission headlines need tightening. Current one-use tool
+approval does not read these preference routes. Summary performance remains
+unproven; the future optimization is to batch date conversions. These limits do
+not establish full Phase 5 parity or physical second-device acceptance.
