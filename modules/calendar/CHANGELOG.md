@@ -8,6 +8,12 @@
 - Compare date labels with the production UI model and check the installed HTTPS screen.
 - Full parity, regional formatting, provider execution and second-device trust remain open.
 
+## 0.7.0
+
+- Calendar labels, held-event details and settings follow the account's assistant name.
+- Narrow week screens explain scrolling and bring today into view when opening or resizing.
+- Ordinary refreshes keep the position chosen by the reader.
+
 ## 0.6.0
 
 - Save account lookahead, prep-task and time-block choices from Calendar settings.

@@ -11,7 +11,11 @@ import {
 } from "../../../packages/calendar/src/day-plan-model.js";
 import type { CalendarEvent } from "@moss/db";
 import type { DayPlanBlockInput, DayPlanEveningIntent } from "@moss/shared";
-import { heartbeatRevision, parseHeartbeatSourceReadInput } from "@moss/shared";
+import {
+  heartbeatRevision,
+  parseHeartbeatSourceReadInput,
+  normalizePersonaSettings
+} from "@moss/shared";
 
 type Case = {
   op: string;
@@ -37,6 +41,24 @@ const event = {
   updated_at: new Date("2026-11-08T09:00:00Z")
 };
 const cases: Case[] = [
+  ...[
+    null,
+    {},
+    { assistantName: null },
+    { assistantName: 3 },
+    ...[
+      "Cedar",
+      "",
+      "  ",
+      "# Cedar *",
+      "A\u0000\t B",
+      "Café 🪴",
+      "<script>alert(1)</script>",
+      "A".repeat(100),
+      "🪴".repeat(40),
+      "\uFEFF Cedar \u00a0"
+    ].map((assistantName) => ({ assistantName }))
+  ].map((value) => ({ op: "assistant-name", value })),
   ...[
     {},
     null,
@@ -157,6 +179,9 @@ function ts(c: Case): unknown {
   try {
     let value: unknown;
     switch (c.op) {
+      case "assistant-name":
+        value = normalizePersonaSettings(c.value).assistantName;
+        break;
       case "heartbeat-input": {
         value = parseHeartbeatSourceReadInput(c.value);
         if (value === null) return { error: true };

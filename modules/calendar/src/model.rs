@@ -194,3 +194,38 @@ pub fn block(value: &Value, position: usize) -> Result<Value> {
         json!({"id":value["id"],"kind":kind,"task_id":nullable_text(&value["taskId"])?,"title":title,"position":position,"pending_change":pending}),
     )
 }
+
+/// The existing persona name projection, without persona text. Mirrors sanitizePersonaName.
+pub fn assistant_name(value: &serde_json::Value) -> String {
+    let Some(raw) = value.as_str() else {
+        return "Moss".into();
+    };
+    // JavaScript \s differs from Unicode White_Space at U+0085 and U+FEFF.
+    let space = |c: char| (c.is_whitespace() && c != '\u{0085}') || c == '\u{feff}';
+    let cleaned: String = raw
+        .chars()
+        .filter_map(|c| {
+            if c.is_control() {
+                Some(' ')
+            } else if "<>#`*_~[]{}|".contains(c) {
+                None
+            } else {
+                Some(c)
+            }
+        })
+        .collect();
+    let collapsed = cleaned
+        .split(space)
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    // Persisted names are already limited by the original persona writer. Bound legacy rows too.
+    let units: Vec<_> = collapsed.encode_utf16().take(80).collect();
+    let bounded = String::from_utf16_lossy(&units);
+    let name = bounded.trim_end_matches(space);
+    if name.is_empty() {
+        "there".into()
+    } else {
+        name.into()
+    }
+}

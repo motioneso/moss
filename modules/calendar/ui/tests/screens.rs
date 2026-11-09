@@ -103,6 +103,29 @@ fn event_details_distinguish_rsvp_observation_and_held_blocks() {
 }
 
 #[test]
+fn held_event_text_uses_the_account_name_and_escapes_it() {
+    let event: Event = serde_json::from_value(serde_json::json!({
+        "id":"block", "title":"Focus", "isMossBlock":true,
+        "startsAt":"2026-11-08T10:00:00Z", "endsAt":"2026-11-08T11:00:00Z"
+    }))
+    .unwrap();
+    let output = view! {<EventDetails event=event timezone="UTC".to_string() twelve=false
+    assistant_name="Cedar & Co".to_string() on_close=Callback::new(|_|{})/>}
+    .to_html();
+    for text in [
+        "Cedar &amp; Co is holding this",
+        "Cedar &amp; Co focus block",
+        "Cedar &amp; Co can move or shorten this block",
+    ] {
+        assert!(
+            output.contains(text),
+            "Missing personalized wording: {text}"
+        );
+    }
+    assert!(!output.contains("Moss"));
+}
+
+#[test]
 fn midnight_end_does_not_add_a_day_to_event_details() {
     let event: Event = serde_json::from_value(serde_json::json!({
         "id":"midnight", "title":"Late meeting", "startsAt":"2026-11-08T22:30:00Z",

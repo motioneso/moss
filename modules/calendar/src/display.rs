@@ -8,7 +8,7 @@ pub fn read(host: &impl Host) -> Result<Value> {
     let saved = host.call("kv", "get", "calendar.ui-view", json!({}))?;
     let now = crate::context(host, "read", "call")?;
     Ok(
-        json!({"timezone":locale["timezone"],"dateFormat":if locale["dateFormat"] == "12" {"12"} else {"24"},"now":now["now"],"view":saved}),
+        json!({"timezone":locale["timezone"],"dateFormat":if locale["dateFormat"] == "12" {"12"} else {"24"},"now":now["now"],"view":saved,"assistantName":crate::model::assistant_name(&locale["assistantName"])}),
     )
 }
 pub fn save(host: &impl Host, body: Value) -> Result<Value> {

@@ -134,3 +134,27 @@ fn settings_reject_unknown_owners_and_invalid_values_before_host_access() {
         assert_eq!(response["status"], 400);
     }
 }
+
+#[test]
+fn display_projects_the_account_assistant_name_without_persona_text() {
+    struct Display;
+    impl Host for Display {
+        fn call(&self, _: &str, _: &str, resource: &str, _: Value) -> Result<Value> {
+            Ok(match resource {
+                "calendar.chat-context" => json!({"timezone":"UTC", "assistantName":"Cedar"}),
+                _ => json!({}),
+            })
+        }
+    }
+    let output: Value = serde_json::from_str(
+        &handle(
+            &Display,
+            "route",
+            &json!({"method":"GET", "path":"/display-settings", "body":null}).to_string(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(output["status"], 200);
+    assert_eq!(output["body"]["assistantName"], "Cedar");
+}

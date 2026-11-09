@@ -442,6 +442,74 @@ verification on loaded development machines. This changes only the proof runner,
 not production password settings or network deadlines. Final receipts, screenshots,
 review disposition and remaining limits are attached to the task Proof artifact.
 
+## JS-86 / part 7: account naming and narrow-week screen checkpoint
+
+Card 525. Part of issue 4027. This continuation works in the task worktree under
+`~/Jarv1s`, consuming current main without changing shared host or sibling sources.
+The outstanding provider/execution/shell work requires more than the permitted context
+budget, so this is a bounded checkpoint and does not claim final Calendar acceptance.
+
+Package 0.7.0 projects the signed-in account's assistant name from the existing
+`persona.bundle` preference. The trusted host selects only that field from the persona
+row; the guest applies the existing name cleanup and default behavior. The Calendar
+legend, held-event details and settings heading use it. Persona text is not part of the
+projection. The native screen test also checks escaped personalized held-event wording.
+The new route regression was observed failing before implementation: the requested
+assistant name was null rather than the account name. It passed with the projection.
+
+Week screens restore the existing scrolling explanation and region description, and
+bring today into view on first load, navigation, week selection and resize. Ordinary
+background event refresh does not request a new position. Day does not add an unnecessary
+keyboard stop, and Month omits the event-type legend, matching the original screen.
+The installed HTTPS runner checks the personalized settings and legend, narrow-week
+position, resize and a user's scroll position across a refresh, alongside the prior
+real sign-in, event links/details, offline retry, signed-out session and account checks.
+
+The data oracle adds comparisons against production `normalizePersonaSettings` for
+ordinary names, defaults, blank/control/markup characters, accents, emoji, whitespace
+and length limits. These are scoped comparisons, not exhaustive Unicode equivalence:
+legacy names cut inside a UTF-16 surrogate pair remain outside the proven set. The
+installed database test reads different names for two accounts and the default for an
+unrelated administrator, observes the same foreign-name assertion fail with preference
+RLS disabled, restores RLS and requires it to pass. All five Calendar tables retain their
+existing failing-first foreign read/write witnesses. No applied SQL file changes.
+
+Verification receipts, screenshots and independent review are recorded in the task's
+Proof artifact and PR against the final checked commit. All database checks use
+`scripts/run-gate.sh` and a disposable server. Both shared asset generators write to one
+scratch directory for the live run. The existing Rust 1.95.0 Wasm target and project
+binding helper are reused. Dependencies come only from existing lockfiles. No global
+tool, new dependency or wit-bindgen installation is performed.
+
+The first live attempt reached signed-in Calendar but its new visibility assertion
+failed because TypeScript inserted a helper into a nested browser callback. The
+runner now polls from Node with a self-contained browser callback. This correction
+and the subsequent main rebase happened after both allowed independent reviews;
+the checkpoint needs another review round before Ready. The earlier reviews found
+no blocker or major. Height-only resizing still recenters today and remains a minor
+follow-up. Part 6 merged during final verification. This branch is rebased onto it,
+retains the editable settings and their tests, and adds account naming to that screen.
+The merged settings checkpoint also fixes the earlier time-format Clippy findings.
+The combined package is checked again; earlier receipts prove only their recorded commit.
+
+### Remaining acceptance work
+
+The part 5 remaining list still applies: the other original HTTP contracts and untested
+errors/defaults; four provider tools and both jobs; preview, authority/approval, apply,
+retry/recovery, follow-through and monitoring; concrete public provider/reference
+adapters; source-behavior controls and external-calendar status; full shell/Today/chat
+composition; old-screen replacement and complete assembled parity-harness acceptance.
+The original held-block count note and event-color swatches are now retained from merged part 8.
+Editable lookahead, prep-task and time-block settings come from the merged part 6
+checkpoint and remain intact. This part does not claim that inherited work as new.
+
+Actual physical second-device sign-in/UI over trusted HTTPS is still unproven. This
+machine has no attached ADB device or configured SSH target, and available tailnet peers
+do not advertise SSH access. No device was commandeered or new remote tool installed.
+The disposable certificate, same-host LAN request and narrow viewport used by the live
+runner remain explicitly distinct from that final acceptance requirement. Production
+installation, trusted certificates and Windows/macOS execution also remain unproven.
+
 ## JS-91 / part 8: event dates and Day legend checkpoint
 
 Card 525. Work stays in Calendar-owned files in the `~/Jarv1s` task worktree.
@@ -486,3 +554,14 @@ already saves the owner's UTC locale before publishing the fixture. The live run
 now asserts that stored timezone explicitly before creating dated events. Minor
 coverage gaps remain: malformed end-time date labels and regional weekday prefixes
 are not compared by the added date/toolbar oracle. Neither is claimed as proven.
+
+## Part 7 integration after part 8 merged
+
+PR 4079 now includes main’s part 8 date wording, exclusive-end handling, Day legend
+count and swatches alongside part 7’s account assistant name and narrow-week behavior.
+The shared legend receives the account name; both sets of native and browser assertions
+are retained. The package stays at main’s version 0.8.0. The earlier third review covered
+the pre-integration commit; this conflict resolution needs a fresh review receipt.
+Only quick checks are rerun for this requested integration. Earlier full gate and HTTPS
+receipts remain proof of their recorded commit, not of the combined merge commit.
+The full acceptance and physical second-device limitations above remain open.
