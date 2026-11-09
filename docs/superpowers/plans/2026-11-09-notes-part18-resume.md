@@ -56,7 +56,7 @@ tools and unchanged indexing on refusal, before resuming the original checkpoint
    acceptance list; installed chat and production sync remain disabled, and
    full UI/physical second-device HTTPS acceptance is not established.
 
-All task tracking uses `/home/ben/.local/bin/herdr-task` with
+All task tracking uses `~/.local/bin/herdr-task` with
 `--folder ~/Jarv1s`; the brief explicitly says not to touch Vikunja cards.
 Do not merge. Current scope is a bounded checkpoint because full Notes acceptance
 exceeds a single context window. The user explicitly authorized the reboot push.
