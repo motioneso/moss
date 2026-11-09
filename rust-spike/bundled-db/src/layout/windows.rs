@@ -113,7 +113,7 @@ impl Layout {
         Ok(())
     }
 
-    /// Used through InstallLock so external writers cannot bypass supervisor serialization.
+    /// Canonical state writer, exposed to library callers through InstallLock.
     pub(crate) fn write_state(&self, bytes: &[u8]) -> io::Result<()> {
         self.check_run()?;
         self.windows

@@ -47,10 +47,11 @@ fn subprocess() {
 
 fn check(root: &Path, mode: &str) {
     let output = child(root, mode).output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        output.status.success(),
+        output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed"),
         "{mode}: {} {}",
-        String::from_utf8_lossy(&output.stdout),
+        stdout,
         String::from_utf8_lossy(&output.stderr)
     );
 }

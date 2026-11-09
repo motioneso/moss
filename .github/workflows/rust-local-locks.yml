@@ -56,7 +56,7 @@ jobs:
       - name: Compile the Windows app and check server executable discovery
         if: runner.os == 'Windows'
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app server_program_uses_the_platform_executable_suffix -- --nocapture
-      - name: Build canonical Windows layout tests (supervisor remains Unix only)
+      - name: Build Windows layout and lock tests (CLI stays Unix only)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |

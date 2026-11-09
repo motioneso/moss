@@ -9,8 +9,9 @@ supervisor still calls `cluster::lock`, which re-exports the shared implementati
 Windows supervision itself is not enabled.
 
 - Windows opens or exclusively creates `moss-db.lock` through the existing pinned private
-  root, validating its existing exact user/SYSTEM file policy. Concurrent creation reopens
-  with validation; contention never truncates the holder's PID. A redirected public lock
+  root, validating its existing exact user/SYSTEM file policy. The creation-race retry
+  reopens with validation, but that branch is not deterministically exercised here.
+  Contention never truncates the holder's PID. A redirected public lock
   path is refused. No ACL is repaired and no second provisioner is introduced.
 - `InstallLock` retains a Layout clone, keeping its directory pins alive for the guard's
   lifetime. The existing shared-ancestor trust policy is unchanged: OS, administrators,
@@ -22,7 +23,9 @@ Windows supervision itself is not enabled.
   truncation, independent instances and release after process death. Windows test sources
   also cover retained pins/state writes, planted nonprivate locks, redirected paths and
   deletion/rename refusal while held. The standard-user Windows workflow runs seven tests
-  and three negative controls, each checking its intended assertion.
+  and three negative controls for in-process contention, planted lock validation and
+  redirected paths, each checking its intended assertion. Guard pin retention and state
+  writes have native test sources but no dedicated mutation controls in this checkpoint.
 
 Internal groundwork only: Windows app creation and Stop remain disabled. No new screen,
 setting, error or remediation reaches the app, so its app map remains unchanged and truthful.
