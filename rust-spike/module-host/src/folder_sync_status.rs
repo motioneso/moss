@@ -96,12 +96,14 @@ impl FolderSyncStatusPorts {
     fn save(&self, scope: &CallScope, key: &str, value: Value) -> Result<()> {
         self.runtime.block_on(async {
             tokio::time::timeout(scope.remaining(), async {
-                let cx = DataContext::open_bounded(&self.database, scope.access(), scope.remaining()).await?;
+                let cx = DataContext::open_bounded(&self.database, scope.access(), scope.remaining())
+                    .await.map_err(|_| anyhow::anyhow!("Sync status data unavailable"))?;
                 cx.db().execute(
                     "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,$2,$3) ON CONFLICT(owner_user_id,key) DO UPDATE SET value_json=EXCLUDED.value_json,revision=app.preferences.revision+1,updated_at=now()",
                     &[&scope.access().actor_user_id(), &key, &value],
                 ).await?;
-                cx.commit_bounded(scope.remaining()).await?;
+                cx.commit_bounded(scope.remaining()).await
+                    .map_err(|_| anyhow::anyhow!("Sync status commit failed"))?;
                 Ok(())
             }).await.context("Sync status deadline exceeded")?
         })

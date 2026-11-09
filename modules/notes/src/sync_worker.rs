@@ -101,6 +101,7 @@ fn resume(host: &impl Host, input: Resume) -> Result<String> {
     {
         // Record a deferred attempt so a later publication refusal can be shown,
         // while successful continuation pages leave the previous stats alone.
+        // Each invocation records one outcome; deferred pages skip completion below.
         record(host, json!({"outcome":"deferred"}));
         let saved = enqueue(host, next)?;
         result["checkpointId"] = saved["checkpointId"].clone();
