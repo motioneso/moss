@@ -1,0 +1,32 @@
+[
+  {
+    "name": "package: empty list deletion accepts no request body",
+    "source": "Tasks part 11 legacy no-body deletion contract",
+    "steps": [
+      {
+        "id": "keeper",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": { "name": "No body keeper" },
+        "expect": { "status": 201 }
+      },
+      {
+        "id": "source",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": { "name": "No body source" },
+        "expect": { "status": 201 }
+      },
+      {
+        "id": "deleted",
+        "method": "DELETE",
+        "path": "/api/tasks/lists/{{source:/body/list/id}}",
+        "as": "A",
+        "expect": { "status": 200, "body": { "deleted": true } }
+      }
+    ],
+    "rows": ["app.task_lists"]
+  }
+]

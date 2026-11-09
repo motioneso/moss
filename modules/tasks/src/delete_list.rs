@@ -67,34 +67,54 @@ impl<H: Host + ?Sized> Repository<'_, H> {
                     "Destination list not found or not accessible",
                 ));
             }
-            let tasks: Vec<Task> =
+            // Read each source task once, then handle assignment membership in
+            // bounded groups. Do not cross the public port once per task/link.
+            let tasks: Vec<Value> =
                 self.all(TASKS, Filter::eq("list_id", id), vec![order("id", false)])?;
             let kept_tags = self
                 .tags(destination)?
                 .into_iter()
                 .map(|tag| tag.id)
                 .collect::<std::collections::BTreeSet<_>>();
-            // Retain the legacy rule even for historical assignments that do
-            // not satisfy today's list/tag trigger: keep only destination tags.
-            for task in tasks {
-                let links: Vec<Value> =
-                    self.all(ASSIGNMENTS, Filter::eq("task_id", task.id.clone()), vec![])?;
+            for tasks in tasks.chunks(1000) {
+                let task_ids = tasks
+                    .iter()
+                    .map(|task| task["id"].clone())
+                    .collect::<Vec<_>>();
+                let membership = Filter::In {
+                    column: "task_id".into(),
+                    values: task_ids,
+                };
+                let links: Vec<Value> = self.all(
+                    ASSIGNMENTS,
+                    membership.clone(),
+                    vec![order("task_id", false), order("tag_id", false)],
+                )?;
+                let mut removed = std::collections::BTreeSet::new();
                 for link in links {
                     let tag = link["tag_id"]
                         .as_str()
                         .ok_or(Error::Http(500, "Internal server error"))?;
                     if !kept_tags.contains(tag) {
-                        let _: Vec<Value> = self.query(
-                            ASSIGNMENTS,
-                            &Query::delete(and(vec![
-                                Filter::eq("task_id", task.id.clone()),
-                                Filter::eq("tag_id", tag),
-                            ])),
-                        )?;
+                        removed.insert(tag.to_owned());
                     }
                 }
+                let removed = removed.into_iter().collect::<Vec<_>>();
+                for tags in removed.chunks(1000) {
+                    self.client.query(
+                        ASSIGNMENTS,
+                        &Query::delete(and(vec![
+                            membership.clone(),
+                            Filter::In {
+                                column: "tag_id".into(),
+                                values: tags.iter().map(|id| json!(id)).collect(),
+                            },
+                        ])),
+                    )?;
+                }
             }
-            let _: Vec<Task> = self.query(
+            // Returning rows are discarded, avoiding a second Task/date decode.
+            self.client.query(
                 TASKS,
                 &Query::update(
                     Filter::eq("list_id", id),

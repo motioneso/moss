@@ -196,7 +196,13 @@ through identifier-preserving updates in stable order, then count again; no
 SQL migration or private host contract is added. These row locks replace the
 legacy advisory lock within package requests; mixed legacy/Rust writers are not
 a supported cutover mode. Privacy and lock-removal controls execute the compiled
-component against disposable PostgreSQL. Set `TASKS_UI_LIST_DELETE_PROOF=1` for
-the signed UI fixture to verify that `Browser proof task` moves from
+component against disposable PostgreSQL. Run the signed UI deletion check with:
+
+```sh
+TASKS_UI_LIST_DELETE_PROOF=1 TASKS_UI_OUT=/tmp/tasks-ui scripts/run-gate.sh start --gate modules/tasks/tools/ui-gate.sh
+scripts/run-gate.sh wait --follow
+```
+
+It verifies that `Browser proof task` moves from
 `Removed proof list` to `Kept proof list` with its old tag assignments removed.
 Six HTTP endpoints and four tools remain; earlier acceptance gaps still apply.

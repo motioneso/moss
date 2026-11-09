@@ -28,11 +28,13 @@ export function listDeletion({ api, lists, changed, focus }) {
         await api("DELETE", `/tasks/lists/${pending.id}`, {
           ...(destination ? { reassignToListId: destination } : {})
         });
-      } catch (error) {
+      } catch {
         $("delete-list-error").textContent =
           "Could not delete this list. If it has tasks, choose a list to move them to. Your last list is kept. Check the connection and retry.";
         $("delete-list-error").hidden = false;
-        throw error;
+        $("notice").textContent = "";
+        focus($("delete-list-destination"));
+        return;
       }
       pending = null;
       $("delete-list-confirmation").hidden = true;
