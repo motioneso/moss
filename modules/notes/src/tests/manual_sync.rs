@@ -5,6 +5,62 @@ use serde_json::{json, Value};
 use std::cell::RefCell;
 
 const ID: &str = "ca52403e-9b4a-4ff7-bd53-7590890c563c";
+
+#[test]
+fn api_sync_pins_the_server_read_source_and_refuses_unlinked_sources() {
+    for source in [json!("/notes"), Value::Null, json!(""), json!(42)] {
+        let host = Services {
+            source: source.clone(),
+            fail: None,
+            writes: RefCell::new(vec![]),
+        };
+        let out = handle(
+            &host,
+            "api",
+            r#"{"name":"requestNotesSync","parameters":{}}"#,
+        );
+        let configured = source.as_str().is_some_and(|s| !s.is_empty());
+        assert_eq!(out.is_ok(), configured);
+        assert_eq!(host.writes.borrow().len(), usize::from(configured));
+        if configured {
+            assert_eq!(
+                serde_json::from_str::<Value>(&out.unwrap()).unwrap(),
+                json!({"checkpointId":ID})
+            );
+        }
+    }
+}
+
+#[test]
+fn api_sync_refuses_caller_overrides_before_host_access() {
+    struct Deny;
+    impl Host for Deny {
+        fn call(&self, _: &str, _: &str, _: &str, _: Value) -> Result<Value> {
+            panic!("Caller override reached a host service");
+        }
+    }
+    for field in ["actorUserId", "sourcePath", "checkpointId"] {
+        let request = json!({"name":"requestNotesSync","parameters":{(field):"forged"}});
+        assert!(handle(&Deny, "api", &request.to_string()).is_err());
+    }
+}
+
+#[test]
+fn api_sync_lookup_failure_never_saves_a_request_or_exposes_backend_text() {
+    let host = Services {
+        source: json!("/notes"),
+        fail: Some("vault"),
+        writes: RefCell::new(vec![]),
+    };
+    let error = handle(
+        &host,
+        "api",
+        r#"{"name":"requestNotesSync","parameters":{}}"#,
+    )
+    .unwrap_err();
+    assert!(!error.message.contains("private backend"));
+    assert!(host.writes.borrow().is_empty());
+}
 struct Services {
     source: Value,
     fail: Option<&'static str>,

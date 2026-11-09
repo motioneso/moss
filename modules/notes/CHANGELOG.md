@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.12
+
+- Bind experimental API sync requests to the selected folder, matching manual sync. Unlinked sources are refused before saving or queueing work; a later folder change cannot redirect a saved request. Installed production sync remains unfinished.
+
 ## 0.1.11
 
 - Bind experimental create, edit and delete sync requests to the folder used by the write. Changing or unlinking the folder refuses pending indexing; selecting the original folder allows a retry. Installed chat and production sync remain unfinished.

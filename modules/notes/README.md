@@ -86,6 +86,24 @@ restored-source retry, both runtime roles and the existing checkpoint RLS remova
 control. File indexing is real; queue delivery and embeddings are named stand-ins.
 No installed chat, production sync, screen change or second-device proof is claimed.
 
+## API sync folder binding (part nineteen)
+
+The experimental `requestNotesSync` API now reads the calling account's saved
+source and binds the private request to it, using the same helper as manual sync.
+A missing, empty or non-string source refuses the API before checkpoint creation
+or publication. The API still accepts only empty parameters; neither account nor
+source can be supplied by the caller. Resolution and filesystem validation remain
+worker work. A folder change or unlink refuses pending indexing; selecting the
+original folder lets the same request resume. Existing empty checkpoints remain
+readable with their earlier unbound semantics; this change does not migrate them.
+
+The native regression fails on the earlier empty checkpoint. The signed installed
+experimental component is checked for both runtime roles, other-owner/admin
+separation with preference RLS removal controls, folder-switch and unlink refusal,
+and real indexing after restoring the folder. Queue delivery and embeddings are
+stand-ins. No ordinary-package sync activation, assembled UI, installed chat or
+physical second-device HTTPS proof is claimed.
+
 ## Disposable database checks
 
 Read `.claude/skills/verify-gate/SKILL.md`. Never run the database tests directly.
