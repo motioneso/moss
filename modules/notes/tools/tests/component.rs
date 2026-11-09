@@ -130,40 +130,38 @@ fn actual_guest_runs_without_wasi_and_archive_is_reproducible() {
 }
 
 #[test]
-fn builder_refuses_changed_legacy_sql() {
+fn builder_refuses_changed_sql() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-    let temp = tempfile::tempdir().unwrap();
-    let folder = temp.path().join("packages/notes/sql");
-    std::fs::create_dir_all(&folder).unwrap();
-    for path in moss_notes_checks::manifest()
-        .unwrap()
-        .database
-        .migrations
-        .into_iter()
-        .filter(|path| moss_module_host::legacy::entry("notes", path).is_some())
-    {
-        std::fs::copy(
-            root.join(
-                if moss_module_host::legacy::entry("notes", &path).is_some() {
-                    "packages/notes"
-                } else {
-                    "modules/notes"
-                },
-            )
-            .join(&path),
-            temp.path().join("packages/notes").join(&path),
+    for changed in [
+        "sql/0336_notes_managed_source_lifecycle.sql",
+        "sql/0360_notes_sync_checkpoints.sql",
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        for path in moss_notes_checks::manifest().unwrap().database.migrations {
+            let owner = if moss_module_host::legacy::entry("notes", &path).is_some() {
+                "packages/notes"
+            } else {
+                "modules/notes"
+            };
+            let destination = temp.path().join(owner).join(&path);
+            std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
+            std::fs::copy(root.join(owner).join(&path), destination).unwrap();
+        }
+        let owner = if moss_module_host::legacy::entry("notes", changed).is_some() {
+            "packages/notes"
+        } else {
+            "modules/notes"
+        };
+        std::fs::write(
+            temp.path().join(owner).join(changed),
+            b"-- changed migration\n",
         )
         .unwrap();
+        assert!(moss_notes_checks::package_files(temp.path(), vec![])
+            .unwrap_err()
+            .to_string()
+            .contains("Notes migration bytes changed"));
     }
-    std::fs::write(
-        folder.join("0336_notes_managed_source_lifecycle.sql"),
-        b"-- changed migration\n",
-    )
-    .unwrap();
-    assert!(moss_notes_checks::package_files(temp.path(), vec![])
-        .unwrap_err()
-        .to_string()
-        .contains("Notes migration bytes changed"));
 }
 
 #[test]
