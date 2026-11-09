@@ -114,3 +114,11 @@ contract. Both account contracts participate in guest commit/rollback and use
 runtime account RLS. The module still cannot query core preference tables.
 Run `scripts/run-gate.sh start --gate rust-spike/module-host/tools/account-contracts-gate.sh`
 for real-component database, policy compatibility, account isolation and DST checks.
+
+Current limitation: these routes store module-owned preferences; they do not
+enforce tool approval. A declared `route-write` capability works from any guest
+entry point, and `installTier` can grant a tier on first read. Before registry
+packages can use these stored tiers for approval decisions, constrain writes to
+user-initiated routes and make that grant explicit in the permission headline.
+Module IDs forbid underscores, preventing legacy keys from entering the reserved
+`assistant.action_policy.v1.` canonical namespace.

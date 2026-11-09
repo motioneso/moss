@@ -36,6 +36,20 @@ fn declarations_cannot_name_another_module_preference() {
     )]
     .into();
     assert!(m.validate(&"0.1.0".parse().unwrap()).is_err());
+    // The reserved canonical namespace contains an underscore, which module
+    // identifiers forbid even when they contain dots. A legacy alias therefore
+    // cannot impersonate another module's canonical key.
+    m.id = "assistant.action_policy.v1.tasks".into();
+    assert!(!moss_module_host::manifest::identifier(&m.id));
+    m.policy_routes = [(
+        "changes".into(),
+        PolicyRoute {
+            install_tier: PolicyTier::AskEachTime,
+            legacy_boolean: Some("task_changes".into()),
+        },
+    )]
+    .into();
+    assert!(m.validate(&"0.1.0".parse().unwrap()).is_err());
 }
 
 #[test]
