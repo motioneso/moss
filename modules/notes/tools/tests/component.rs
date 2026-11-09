@@ -62,6 +62,17 @@ fn actual_guest_runs_without_wasi_and_archive_is_reproducible() {
         0,
         "Ordinary sync must refuse before invoking any host service"
     );
+    assert!(host
+        .call(
+            &wasm,
+            manifest.clone(),
+            AccessContext::new(uuid::Uuid::new_v4(), "ordinary-recovery-unavailable"),
+            sync_ports.clone(),
+            "api",
+            r#"{"name":"recoverNotesSync","parameters":{}}"#
+        )
+        .is_err());
+    assert_eq!(sync_ports.0.load(Ordering::SeqCst), 0);
     let unavailable = host
         .call(
             &wasm,

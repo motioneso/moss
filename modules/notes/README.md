@@ -542,3 +542,39 @@ new checkpoints as owner, another owner and an unrelated admin under app/worker
 roles. RLS removal controls must expose the otherwise denied read/update/delete
 probes. Queue delivery and embeddings are named stand-ins. These tests are not
 proof of installed chat, a working manual-sync screen or a separate device.
+
+## Saved request publication recovery (part sixteen)
+
+Package `0.1.9` adds experimental `recoverNotesSync` to the write-tools component
+only. An authenticated trusted server caller supplies `{}` for the first page,
+then `{ "after": "<nextCursor>" }` for each following page. No account, path,
+source or page-size override is accepted. Each page scans at most 25 of the
+calling owner's checkpoints in ascending UUID order. It requests post-commit
+publication for unfinished rows, including initial requests whose publication
+failed and continuation rows whose parent already completed. Successful saved
+pages are skipped. Only scanned/requested counts and the next UUID cursor are
+returned; jobs still carry just a checkpoint UUID with the same idempotency key.
+
+Advance the cursor only after the whole call, including finalization, succeeds.
+Retry a failed page from its previous cursor. Publication can succeed for some
+jobs before a later one fails; retries deliberately reuse queue identities. A
+trusted timer must periodically restart at the first page to notice new UUIDs
+below an earlier cursor. Concurrent worker completion can produce a redundant
+request; saved worker results and queue idempotency handle that duplicate.
+
+This adds explicit recovery by scanning, not an active timer or a new automatic
+outbox service. The existing queue does not resurrect an exhausted/completed job
+with the same idempotency key. This API recovers missing publication; it cannot
+retry an exhausted job. Checkpoints remain retained, so full scans cost more as
+history grows; retention and trusted timer assembly remain activation work.
+The ordinary manifest declares neither this API nor a sync job. Configured real
+embeddings, manual/scheduled sync, installed chat approvals, full parity and
+physical second-device HTTPS acceptance remain unfinished.
+
+Native tests cover cursor pages, retries and refusal before host access. The
+compiled disposable ingest gate covers first-request publication loss without
+knowing its ID, continuation discovery, completed-page skip and real worker
+resume, with other-owner/admin recovery denial under both runtime roles. Removing
+checkpoint RLS must expose those otherwise denied rows and publications; restoring
+it restores denial. Queue publication and document embeddings remain named
+stand-ins; these checks do not prove the queue's live delivery or phone use.

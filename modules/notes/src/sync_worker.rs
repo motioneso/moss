@@ -77,7 +77,7 @@ fn enqueue(host: &impl Host, checkpoint: Value) -> Result<Value> {
     Ok(json!({"checkpointId":id}))
 }
 
-fn publish(host: &impl Host, id: &str, now: &str) -> Result<()> {
+pub(crate) fn publish(host: &impl Host, id: &str, now: &str) -> Result<()> {
     let result = host.call(
         "jobs",
         "enqueue-after-commit",

@@ -26,6 +26,8 @@ use uuid::Uuid;
 
 #[path = "ingest/write_tools.rs"]
 mod durable_writes;
+#[path = "ingest/recovery.rs"]
+mod recovery;
 
 struct MutatingStub {
     file: PathBuf,

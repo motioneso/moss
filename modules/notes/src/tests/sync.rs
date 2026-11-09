@@ -350,3 +350,6 @@ fn malformed_saved_pages_are_refused_before_publication() {
         assert_eq!(error.message, "Notes sync checkpoint is unavailable");
     }
 }
+
+#[path = "sync/recovery.rs"]
+mod recovery;

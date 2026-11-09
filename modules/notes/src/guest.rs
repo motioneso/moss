@@ -14,6 +14,9 @@ enum ApiRequest {
     #[cfg(feature = "write-tools")]
     #[serde(rename = "requestNotesSync")]
     RequestSync(Empty),
+    #[cfg(feature = "write-tools")]
+    #[serde(rename = "recoverNotesSync")]
+    RecoverSync(crate::sync_recovery::Recovery),
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -48,6 +51,8 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> Result<String> {
                 ApiRequest::Export(_) => crate::export::collect(host)?,
                 #[cfg(feature = "write-tools")]
                 ApiRequest::RequestSync(_) => crate::sync_worker::request(host)?,
+                #[cfg(feature = "write-tools")]
+                ApiRequest::RecoverSync(input) => crate::sync_recovery::recover(host, input)?,
                 ApiRequest::Prepare(request) => {
                     match crate::write_tools::prepare_json(host, &request.tool, &request.input_json)
                     {
