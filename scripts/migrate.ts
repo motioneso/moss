@@ -42,9 +42,15 @@ const allMigrationFiles = (
 ).flat();
 // Reserve package-owned SQL numbers without running them as the core owner.
 // Only the restricted package installer may execute these migrations.
+const moduleEntries = await readdir(join(root, "modules"), { withFileTypes: true }).catch(
+  (error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+);
 const packageMigrationFiles = (
   await Promise.all(
-    (await readdir(join(root, "modules"), { withFileTypes: true }))
+    moduleEntries
       .filter((entry) => entry.isDirectory())
       .map(async (entry) => {
         const directory = join(root, "modules", entry.name, "sql");

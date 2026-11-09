@@ -331,7 +331,12 @@ fn quote_ident(name: &str) -> String {
 /// Reserve package SQL versions; execution stays with the restricted installer.
 fn package_migration_reservations(repo: &Path) -> Result<Vec<MigrationFile>, String> {
     let mut files = Vec::new();
-    for entry in std::fs::read_dir(repo.join("modules")).map_err(|e| e.to_string())? {
+    let entries = match std::fs::read_dir(repo.join("modules")) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(files),
+        Err(error) => return Err(error.to_string()),
+    };
+    for entry in entries {
         let entry = entry.map_err(|e| e.to_string())?;
         let sql = entry.path().join("sql");
         if sql.is_dir() {
@@ -348,6 +353,7 @@ mod reservation_tests {
     #[test]
     fn package_sql_reserves_versions_without_entering_execution_folders() {
         let repo = tempfile::tempdir().unwrap();
+        assert!(package_migration_reservations(repo.path()).unwrap().is_empty());
         let package = repo.path().join("modules/notes/sql");
         let core = repo.path().join("infra/postgres/migrations");
         std::fs::create_dir_all(&package).unwrap();
