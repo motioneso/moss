@@ -443,7 +443,7 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
         );
         assert_eq!(
             request(owner, "GET", "/people/notes-directories", Value::Null),
-            json!({"status":200,"body":{"path":null,"directories":[{"name":"Family","path":"Family"},{"name":"Work","path":"Work"}]}})
+            json!({"status":200,"body":{"path":null,"directories":[{"name":"apple","path":"apple"},{"name":"Ära","path":"Ära"},{"name":"Banana","path":"Banana"},{"name":"Family","path":"Family"},{"name":"Work","path":"Work"},{"name":"zebra","path":"zebra"}]}})
         );
         assert_eq!(
             request(
