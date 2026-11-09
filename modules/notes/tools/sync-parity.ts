@@ -163,7 +163,57 @@ async function legacy(entry: Entry) {
   } catch (error) {
     expected = { error: error instanceof NotesSyncFailure ? error.message : safe(error) };
   }
-  return { ...entry, payload, expected, calls };
+  // Exercise the actual legacy worker wrapper and last-sync writer too. Only
+  // the coordinator result, queue delivery and data-context runner are stand-ins.
+  const wrapperScript = ts.transpileModule(
+    ["writeNotesLastSync", "runNotesAfterSyncHook", "registerNotesJobWorkers"]
+      .map((name) => declarations.get(name)!)
+      .join("\n") + "\nregisterNotesJobWorkers;",
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }
+  ).outputText;
+  let worker: ((jobs: object[]) => Promise<unknown>) | undefined;
+  let lastSync: Record<string, unknown> | null = null;
+  const result = expected as { ok?: unknown; error?: string };
+  const register = runInNewContext(wrapperScript, {
+    Error,
+    Date,
+    console: { error: () => {} },
+    NOTES_SYNC_QUEUE: "notes.sync",
+    NOTES_LAST_SYNC_PREFERENCE_KEY: "notes-last-sync",
+    toAccessContext: () => ({}),
+    handleNotesSyncJobWithDataContext: async () => {
+      if (result.error) throw new NotesSyncFailure(result.error);
+      return result.ok;
+    },
+    sendJob: async () => {},
+    sinkSafeErrorMessage: safe
+  }) as (boss: object, runner: object, options: object) => Promise<unknown>;
+  await register(
+    {
+      work: async (_queue: string, _options: object, callback: typeof worker) => {
+        worker = callback;
+        return "worker";
+      }
+    },
+    {
+      withDataContext: async (_access: object, fn: (db: object) => Promise<void>) => fn({})
+    },
+    {
+      embeddingProviderFactory: async () => ({}),
+      preferencesRepository: {
+        upsert: async (_db: object, _key: string, outcome: Record<string, unknown>) => {
+          const { at: _at, ...value } = outcome;
+          lastSync = value;
+        }
+      }
+    }
+  );
+  try {
+    await worker!([{ data: payload }]);
+  } catch {
+    /* Expected failed coordinator. */
+  }
+  return { ...entry, payload, expected, calls, lastSync };
 }
 const files = ["/notes/a.md", "/notes/b.md", "/notes/c.md"];
 const cases: Entry[] = [

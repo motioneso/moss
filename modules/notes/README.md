@@ -451,3 +451,33 @@ be retried in the test, but automatic recovery after a crash is not proved.
 Real account-configured model assembly, saved last-sync outcomes, manual and
 scheduled sync, installed write approval/chat, managed publication and exports,
 assembled Settings and physical second-device HTTPS proof remain open.
+
+## Saved sync outcomes (part thirteen)
+
+Package `0.1.6` adds final-outcome recording to the durable sync test worker.
+It matches the legacy worker's last-sync counts and safe failure messages.
+Successful deferred pages and ticks with no linked source leave earlier stats
+alone. A failed continuation publication records a generic safe failure instead
+of exposing the backend error. No paths, hashes or raw backend messages enter
+this status through the worker.
+
+Host assembly must wrap `TransactionalDatabasePorts` and its deferred queue
+publisher **outside** with `FolderSyncStatusPorts`, binding `(notes, source)`
+to the existing `notes-last-sync` preference. Grant `folder.record-sync` only
+to the future assembled sync component. The adapter timestamps and saves in a
+fresh account-scoped transaction after downstream finalization, including failed
+calls. Status writes are best effort and do not change the sync result. Deadline
+exhaustion, process death, a missing adapter or missing grant can leave old stats.
+This is not a durable status outbox or a guarantee that every failure is recorded.
+The ordinary package still declares no sync worker or write tools.
+
+`tools/sync-parity.ts` now executes the actual legacy worker wrapper and status
+writer in addition to its coordinator oracle, with explicit coordinator, queue
+and data-context stand-ins. Native tests compare those outcomes and simulate a
+status service refusal. The disposable ingest gate exercises real compiled sync,
+post-finalization status persistence and reads through the compiled status route
+for app and worker roles. Its owner, other-owner and admin privacy assertions
+are observed failing when preferences RLS is removed and passing after restoration.
+Status read/update controls cover both roles; deletion follows RLS for the app
+role, while the worker's missing DELETE grant must refuse deletion throughout.
+This does not prove installed chat, assembled UI sync or a separate device.

@@ -4,7 +4,7 @@
   "name": "Notes",
   "description": "Choose your notes folder, prepare note changes for approval, and search your indexed notes.",
   "publisher": "Moss",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -188,6 +188,10 @@
           "path": "/settings/connections"
         }
       ]
+    },
+    {
+      "id": "notes.sync-outcomes",
+      "description": "The durable sync test worker records final counts or a safe failure in the calling account's saved last-sync status after database finalization. Deferred pages and ticks after unlinking preserve prior results. Status writes are best effort and never change the sync result. Assembly must wrap the transaction and queue adapters with FolderSyncStatusPorts, bound to notes-last-sync. Manual and scheduled sync are not available in the ordinary package yet."
     },
     {
       "id": "notes.sync-checkpoints",
