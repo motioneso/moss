@@ -1,16 +1,28 @@
 //! Deletion shares the invocation transaction. Identifier-preserving updates
 //! lock existing actor lists without changing their stored fields or timestamps.
 use crate::{
-    repository::{and, order, values, Error, Repository, Result, ASSIGNMENTS, LISTS, TASKS},
+    repository::{and, order, values, Error, Repository, Result, LISTS, TAGS, TASKS},
     rows::{List, Task},
 };
 use moss_module_sdk::{
     query::{Filter, Query},
     Host,
 };
-use serde_json::{json, Value};
+use serde_json::json;
 
 impl<H: Host + ?Sized> Repository<'_, H> {
+    fn discard_deletion_rows(&self, table: &str, query: &Query) -> Result<()> {
+        #[cfg(target_arch = "wasm32")]
+        {
+            crate::component::execute_query(table, query)?;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.client.query(table, query)?;
+        }
+        Ok(())
+    }
+
     fn owned_lists(&self) -> Result<Vec<List>> {
         self.all(LISTS, Filter::Owned, vec![order("id", false)])
     }
@@ -67,54 +79,13 @@ impl<H: Host + ?Sized> Repository<'_, H> {
                     "Destination list not found or not accessible",
                 ));
             }
-            // Read each source task once, then handle assignment membership in
-            // bounded groups. Do not cross the public port once per task/link.
-            let tasks: Vec<Value> =
-                self.all(TASKS, Filter::eq("list_id", id), vec![order("id", false)])?;
-            let kept_tags = self
-                .tags(destination)?
-                .into_iter()
-                .map(|tag| tag.id)
-                .collect::<std::collections::BTreeSet<_>>();
-            for tasks in tasks.chunks(1000) {
-                let task_ids = tasks
-                    .iter()
-                    .map(|task| task["id"].clone())
-                    .collect::<Vec<_>>();
-                let membership = Filter::In {
-                    column: "task_id".into(),
-                    values: task_ids,
-                };
-                let links: Vec<Value> = self.all(
-                    ASSIGNMENTS,
-                    membership.clone(),
-                    vec![order("task_id", false), order("tag_id", false)],
-                )?;
-                let mut removed = std::collections::BTreeSet::new();
-                for link in links {
-                    let tag = link["tag_id"]
-                        .as_str()
-                        .ok_or(Error::Http(500, "Internal server error"))?;
-                    if !kept_tags.contains(tag) {
-                        removed.insert(tag.to_owned());
-                    }
-                }
-                let removed = removed.into_iter().collect::<Vec<_>>();
-                for tags in removed.chunks(1000) {
-                    self.client.query(
-                        ASSIGNMENTS,
-                        &Query::delete(and(vec![
-                            membership.clone(),
-                            Filter::In {
-                                column: "tag_id".into(),
-                                values: tags.iter().map(|id| json!(id)).collect(),
-                            },
-                        ])),
-                    )?;
-                }
-            }
-            // Returning rows are discarded, avoiding a second Task/date decode.
-            self.client.query(
+            // The existing task_tag_list_match rule only permits assignments
+            // within a task's list. Removing source tags cascades their links;
+            // those definitions would be removed with the source list anyway.
+            // Do this before moving tasks, without reading full task bodies.
+            self.discard_deletion_rows(TAGS, &Query::delete(Filter::eq("list_id", id)))?;
+            // Unused returning rows are not parsed or copied into Task values.
+            self.discard_deletion_rows(
                 TASKS,
                 &Query::update(
                     Filter::eq("list_id", id),

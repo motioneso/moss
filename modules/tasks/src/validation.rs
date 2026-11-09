@@ -22,14 +22,6 @@ pub fn request_schema(method: &str, path: &str) -> Option<Schema> {
 }
 
 pub fn validate(request: &mut RouteRequest) -> Result<(), Error> {
-    // The route envelope represents an absent HTTP body as null. Legacy list
-    // deletion accepts no body and treats it as an empty options object.
-    if request.method == "DELETE"
-        && request.path == "/tasks/lists/:list_id"
-        && request.body.is_null()
-    {
-        request.body = serde_json::json!({});
-    }
     if let Some(schema) = request_schema(&request.method, &request.path) {
         crate::schema::validate(&schema, &mut request.body, "body")
             .map_err(|failure| Error::http(400, failure.message))?;

@@ -17,7 +17,7 @@ fn compiled_list_deletion_preserves_tasks_and_requires_rls() {
     assert_eq!(f.route(f.owner, "DELETE", &path, json!({}))["status"], 409);
     assert_eq!(
         f.route(f.owner, "DELETE", &path, Value::Null)["status"],
-        409
+        400
     );
     assert_eq!(
         f.route(f.owner, "DELETE", &path, json!({"reassignToListId":source}))["status"],
@@ -397,10 +397,28 @@ fn compiled_parallel_deletes_keep_the_last_list_with_lock_removal_control() {
     println!("PASS compiled concurrent deletion: exact last-list assertion fails with row locks removed and passes with locks restored");
 }
 
+struct BulkCalls {
+    next: Arc<dyn Ports>,
+    calls: std::sync::atomic::AtomicUsize,
+}
+impl Ports for BulkCalls {
+    fn invoke(&self, scope: &CallScope, port: &str, r: &Request) -> Result<Value> {
+        if port == "db" {
+            let count = self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+            anyhow::ensure!(count <= 20, "Bulk deletion must batch database calls");
+            eprintln!("bulk call {count}: {} {}", r.resource, r.parameters["kind"]);
+        }
+        self.next.invoke(scope, port, r)
+    }
+    fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
+        self.next.finish_call(scope, success)
+    }
+}
+
 #[test]
 #[ignore = "Database work only through the Tasks verify-gate"]
 fn compiled_list_deletion_moves_a_thousand_tagged_tasks() {
-    let f = Fixture::open_with(true);
+    let mut f = Fixture::open_with(true);
     let source = create_list(&f, f.owner, "Large source");
     let destination = create_list(&f, f.owner, "Large destination");
     let tag = f.route(
@@ -414,6 +432,10 @@ fn compiled_list_deletion_moves_a_thousand_tagged_tasks() {
         "INSERT INTO app.tasks(id,owner_user_id,list_id,title) SELECT gen_random_uuid(),'{}'::uuid,'{}'::uuid,'Large task ' || n FROM generate_series(1,1011) n; INSERT INTO app.task_tag_assignments(task_id,tag_id) SELECT id,'{}'::uuid FROM app.tasks WHERE list_id='{}'::uuid",
         f.owner, source, tag, source,
     ));
+    f.ports = Arc::new(BulkCalls {
+        next: f.ports.clone(),
+        calls: std::sync::atomic::AtomicUsize::new(0),
+    });
     let response = f.route(
         f.owner,
         "DELETE",

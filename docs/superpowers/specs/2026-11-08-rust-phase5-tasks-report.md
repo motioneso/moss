@@ -953,9 +953,9 @@ Manage lists now offers confirmed deletion and an optional owned destination.
 The DELETE list route and `tasks.deleteList` share one transaction: a nonempty
 list requires a destination, every task and subtask moves, assignments outside
 the destination are removed, and the source list is deleted. The last list stays.
-The package app map names the controls, restrictions and recovery path. Empty
-HTTP bodies are accepted. Failed confirmation retains its destination and focuses
-the picker; cancellation defaults to Keep list.
+The package app map names the controls, restrictions and recovery path. HTTP
+checks cover missing-body rejection and empty-object deletion, matching legacy.
+Failed confirmation retains its destination and focuses the picker; Keep list is default.
 
 Package deletion requests lock the actor's existing lists in identifier order
 using identifier-preserving updates, then count again. The public typed query
@@ -974,11 +974,11 @@ Failure after tag removal must roll back tasks, assignments and list records.
 
 The first full endpoint run matched 76 of 84 cases, up from 69; all seven existing
 list-deletion cases pass. Its eight failures concern deferred-job integration,
-focus/risk and timezone behavior. An additional case covers empty-body deletion.
+focus/risk and timezone behavior. An additional case covers empty-object deletion.
 The data comparisons pass 50 mutation-tool and 84 filtered-list cases. Native
 guest checks pass. Current committed receipts and independent review results are
-in the task proof. Review prompted batched assignment reads/deletes instead of a
-call per task/link, and a thousand-tagged-task check under unchanged guest limits.
+in the task proof. Bulk deletion uses the existing same-list tag rule and cascading
+source-tag removal. A compiled 1,011-task check uses nine calls under default fuel.
 Concurrent insert/FK-conflict status parity remains unproven: the public port has
 no typed constraint-error contract; arbitrary host failures must not become 409.
 
