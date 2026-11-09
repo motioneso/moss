@@ -5,6 +5,11 @@ two job handlers, route envelopes and a packaged Leptos Settings pane. The insta
 gate exercises signed registry installation, reload, route replay and all four public lookup
 APIs through an installed consumer fixture; the report records the current result. The authenticated Rust
 application still needs to compose that package into its real Settings and chat flows.
+The full People gate also compares large-account reads against the legacy implementation:
+1,005 people, aliases, email identities and links cross the host's thousand-row query boundary.
+The list/link cases use real legacy Fastify handlers; name/email cases use the public legacy
+functions. This compiled-guest qualification keeps the ordinary host limits and does not
+establish installed UI reachability or unlimited account size.
 The [delivery report](../../docs/superpowers/specs/2026-11-08-rust-phase5-people-report.md)
 records each delivered slice and the exact remaining continuation work.
 

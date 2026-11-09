@@ -2314,3 +2314,40 @@ replay-test formatting, all five regenerated legacy fixture sets, scoped oracle
 lint, root lint/typecheck and app-map generation passed. Whole-host Rust formatting
 reports existing formatting in imported parity sources outside this checkpoint;
 those sibling files were not changed. Root formatting and file-size checks passed.
+
+## People part 20 — large-account read parity (JS-139)
+
+The task branch initially contained only Phase 0a. Before editing it was
+fast-forwarded to `35ef498b1`, including the merged part 19 report and code.
+The continuation's PR 4066 reference is an older installed-package checkpoint.
+
+This continuation qualifies the existing read interfaces beyond the host's
+thousand-row query page. A separate synthetic account contains 1,005 people,
+1,005 aliases, 1,005 email identities and 1,005 links. Fourteen comparisons cover
+People/link limits of 999, 1,000, 1,001, 1,005, 1,006 and no limit, plus public
+name and email lookup. Real legacy Fastify handlers supply route responses;
+the real legacy public functions supply API responses. The compiled guest reads
+the same committed rows through the production transactional database ports.
+Email results have no legacy ordering guarantee, so their complete multisets
+are compared, retaining duplicates. Ordered responses retain exact comparison.
+
+No public API or product behavior is intentionally changed; the existing app-map
+declarations remain applicable. This is bounded large-account qualification,
+not unlimited-data parity or a new account-size promise. The ordinary host fuel,
+memory, message and five-second limits remain unchanged. Gate receipts are
+pending until recorded below.
+
+Builds use task-owned Cargo, rustup and target directories. The pinned compiler
+and existing dependency caches were copied into task scratch; missing packages
+were fetched from the project lockfiles. Both declared Wasm standard-library
+targets were installed only into that scratch toolchain. The approved
+`wit-bindgen =0.57.1` remains a local project dependency; no global generator or
+new third-party package was installed.
+
+Remaining acceptance is unchanged: complete locale ordering and shipping HTTP
+parser qualification, ingest nudges, real providers, installed scheduling,
+command retention/quotas and broader backend failures. The real Rust shell still
+needs installed People route/frame and chat-tool composition. Authenticated real
+UI/chat approval, sign-in/origin/privacy acceptance and a second physical device
+over HTTPS remain unproved. This continuation does not add another server or
+connect the module directly to a database.

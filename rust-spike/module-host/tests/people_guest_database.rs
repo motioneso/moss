@@ -88,6 +88,40 @@ fn compiled_people_read_apis_match_typescript_on_real_database() {
             case["request"]["name"]
         );
     }
+    let paging_actor = Uuid::parse_str(oracle["paging"]["actor"].as_str().unwrap()).unwrap();
+    for case in oracle["paging"]["cases"].as_array().unwrap() {
+        let kind = case["kind"].as_str().unwrap();
+        let reply = host
+            .call(
+                &component,
+                manifest.clone(),
+                AccessContext::new(paging_actor, "compiled-people-paging"),
+                ports.clone(),
+                kind,
+                &case["request"].to_string(),
+            )
+            .unwrap_or_else(|error| panic!("Paging {}: {error:#}", case["request"]));
+        let actual: Value = serde_json::from_str(&reply).unwrap();
+        // Email lookup deliberately has no legacy ORDER BY; compare the complete
+        // multiset, preserving duplicates, rather than database scan order.
+        let normalize = |mut value: Value| {
+            if case["request"]["name"] == "listEmailIdentityValues" {
+                value
+                    .as_array_mut()
+                    .unwrap()
+                    .sort_by(|a, b| a.as_str().cmp(&b.as_str()));
+            }
+            value
+        };
+        assert_eq!(
+            normalize(actual),
+            normalize(case["expected"].clone()),
+            "Paging parity: {} ({} rows)",
+            case["request"],
+            case["count"]
+        );
+    }
+    println!("PASS People paging: 14 legacy reads at 999/1000/1001/1005/1006/unlimited, 1005 aliases and emails; default host limits unchanged");
     // A background job authenticates through the worker pool, not the app pool.
     let worker_db = rt
         .block_on(safety_core::db::Database::connect(
