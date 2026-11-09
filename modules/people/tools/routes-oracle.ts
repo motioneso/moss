@@ -151,6 +151,22 @@ export async function routesOracle() {
           : {})
       });
       const expected: unknown = response.json();
+      if (configured && method === "POST" && path === "/people/notes/refresh") {
+        const result = response.json<{
+          discovered: number;
+          projected: number;
+          ignored: number;
+          candidates: number;
+        }>();
+        if (
+          response.statusCode !== 200 ||
+          result.discovered !== 7 ||
+          result.projected !== 3 ||
+          result.ignored !== 1 ||
+          result.candidates < 2
+        )
+          throw new Error("Nested refresh must project notes and review missing/duplicate IDs");
+      }
       if (configured && method === "POST" && path === "/people") {
         if (response.statusCode !== 200) throw new Error("Configured People creation must succeed");
         const notePath: unknown = response.json().notePath;
