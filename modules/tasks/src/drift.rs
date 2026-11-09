@@ -71,20 +71,24 @@ pub fn at_risk<H: Host + ?Sized>(
             order("id", false),
         ],
     )?;
-    let mut kept = Vec::new();
-    for task in rows.drain(..) {
-        let done_child: Option<Task> = repo.first(
+    // One batched call per thousand candidates, not one call per task.
+    let mut done_parents = std::collections::HashSet::new();
+    for chunk in rows.chunks(1000) {
+        let children: Vec<Task> = repo.all(
             TASKS,
             and(vec![
-                Filter::eq("parent_task_id", task.id.clone()),
+                Filter::In {
+                    column: "parent_task_id".into(),
+                    values: chunk.iter().map(|t| json!(t.id)).collect(),
+                },
                 Filter::eq("status", "done"),
             ]),
+            vec![order("id", false)],
         )?;
-        if done_child.is_none() {
-            kept.push(task);
-        }
+        done_parents.extend(children.into_iter().filter_map(|t| t.parent_task_id));
     }
-    Ok(kept)
+    rows.retain(|task| !done_parents.contains(&task.id));
+    Ok(rows)
 }
 
 pub fn focus<H: Host + ?Sized>(repo: &Repository<'_, H>, now: DateTime<Utc>) -> Result<Vec<Task>> {
@@ -109,9 +113,9 @@ pub fn focus<H: Host + ?Sized>(repo: &Repository<'_, H>, now: DateTime<Utc>) -> 
         bp.cmp(&ap)
             .then(
                 a.due_at
-                    .map(|d| d.timestamp())
+                    .map(|d| d.timestamp_millis())
                     .unwrap_or(i64::MAX)
-                    .cmp(&b.due_at.map(|d| d.timestamp()).unwrap_or(i64::MAX)),
+                    .cmp(&b.due_at.map(|d| d.timestamp_millis()).unwrap_or(i64::MAX)),
             )
             .then(effort_rank(&a.effort).cmp(&effort_rank(&b.effort)))
             .then(a.id.cmp(&b.id))

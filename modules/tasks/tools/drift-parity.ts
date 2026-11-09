@@ -101,6 +101,26 @@ try {
     "INSERT INTO app.tasks(id,owner_user_id,list_id,title,status,parent_task_id) VALUES($1,$2,$3,'done child','done',$4)",
     [randomUUID(), owner, list, ids[5]]
   );
+  // Boundaries in UTC: due later today is not overdue; the end of today+2 is
+  // at risk while the start of today+3 is not.
+  const startToday = new Date();
+  startToday.setUTCHours(0, 0, 0, 0);
+  for (const [title, due] of [
+    ["due later today", startToday.getTime() + 3600000],
+    ["risk end of plus two", startToday.getTime() + 2 * day + 23 * 3600000],
+    ["not risk plus three", startToday.getTime() + 3 * day]
+  ] as const)
+    await bootstrap.query(
+      "INSERT INTO app.tasks(id,owner_user_id,list_id,title,status,priority,due_at) VALUES($1,$2,$3,$4,'todo',4,$5)",
+      [randomUUID(), owner, list, title, iso(due)]
+    );
+  // Fourteen long titles push the summary text form over its legacy bound,
+  // so both sides must drop rows from the end and mark the result partial.
+  for (let i = 0; i < 14; i++)
+    await bootstrap.query(
+      "INSERT INTO app.tasks(id,owner_user_id,list_id,title,status,priority,due_at) VALUES($1,$2,$3,$4,'todo',3,$5)",
+      [randomUUID(), owner, list, `Long ${i} ${"x".repeat(340)}`, iso(now - (20 + i) * day)]
+    );
   const tools: Record<string, (db: never, input: never, c: never) => Promise<unknown>> = {
     "tasks.focus": taskFocusExecute as never,
     "tasks.atRisk": taskAtRiskExecute as never,
@@ -152,7 +172,7 @@ try {
         items: exposedAll.data.items.filter((item: { listId: string }) => item.listId === list)
       }
     };
-    assert.equal(exposed.data.items.length, 2);
+    assert.equal(exposed.data.items.length, 16);
     assert.throws(() => hidden(exposed), assert.AssertionError);
     console.log("PASS compiled drift privacy assertion fails with RLS removed");
   } finally {
