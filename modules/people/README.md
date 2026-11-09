@@ -252,8 +252,9 @@ quotas remain acceptance work.
 
 ## Part eleven folder-order checkpoint
 
-Directory browsing now returns folders in the legacy reading order (base
-letter, then accent, then case) instead of raw byte order. The route oracle
+Directory browsing now follows the tested legacy base-letter, accent and case
+ordering instead of raw byte order. Complete locale-sensitive collation remains
+unqualified. The route oracle
 covers folder names whose order differs between the two schemes, and the
 full installed replay and nine-suite gate pass on the recorded commit. The
 authenticated shell still has no installed module composition, so live UI,
@@ -276,11 +277,29 @@ This prevents a numeric contact input from changing before the legacy text conve
 The deterministic JavaScript oracle covers 283 literals, including underflow, subnormals,
 rounding boundaries and seeded finite values. The route replay includes projection-only and
 note-backed edits with a parser-sensitive input, comparing both replies and stored note bytes.
-This qualifies the component parser, not an unassembled server's request parser or real UI.
-The replay's host test binary enables the same JSON feature through its native People
-dev-dependency (Cargo feature unification). A normal host build does not declare it.
-`dispatch_extended` parses the raw body before calling the component, so upstream parser
-qualification is a prerequisite to full network parity. The component cannot recover a
-number already rounded incorrectly by its caller. The feature applies to all component
-JSON numbers, including provider confidence values, not only contact text.
+Part thirteen qualified the component parser, not an unassembled server's request parser or
+real UI. Its replay host enabled the same JSON feature through its native People
+dev-dependency (Cargo feature unification), masking a missing normal-host declaration.
+Part fourteen explicitly enables the feature in the host and adds the independent regression
+below. `dispatch_extended` parses the raw body before calling the component; a component
+cannot recover a number already rounded incorrectly by its caller. The feature applies to
+all JSON numbers parsed by these crates, including provider confidence values, not only
+contact text. Listener and installed application qualification remain open.
 The remaining application, provider, ingest, retention and device work listed above stays open.
+
+## Part fourteen normal-host JSON regression
+
+The route gate also runs a separate downstream executable before the People replay:
+
+```sh
+cargo +1.95.0 run --locked --offline --manifest-path modules/people/tools/host-json/Cargo.toml
+```
+
+Use the task-owned Cargo, Rustup and target directories described above. This executable
+depends on the normal module host, without its native People dev-dependency and without
+requesting JSON parser features itself. It installs a signed echo fixture and sends all
+283 JavaScript numeric literals as raw request bodies through `Installer::dispatch_extended`,
+comparing the numeric bits received across the component ABI. It also refuses three malformed or out-of-range
+bodies. The echo isolates host parsing; it is not the People package, an HTTP listener,
+an authenticated browser session or a second-device check. The existing installed People
+replay separately compares contact edits, note bytes and all seven tables.

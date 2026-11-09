@@ -159,11 +159,11 @@
     },
     {
       "id": "people.relative-folder-browse",
-      "description": "Browse directories relative to the selected People folder through the legacy API, in the same reading order as the legacy app (base letter first, then accent, then case). The Settings chooser still uses allowed absolute notes roots."
+      "description": "Browse directories relative to the selected People folder through the legacy API. Common base-letter, accent and case ordering is covered by the replay; complete locale-sensitive ordering remains unqualified. The Settings chooser still uses allowed absolute notes roots."
     },
     {
       "id": "people.note-field-compatibility",
-      "description": "Canonical-note edits keep the legacy handling of aliases, emails and phones, including nulls, empty lists and mixed JSON list values. The People component parses incoming JSON numbers with correct rounding and keeps the legacy decimal spelling, including equal-distance rounding ties. Upstream host and listener parsing remain unqualified. Unusable list values return an error; legacy empty list items may publish unreadable frontmatter before projection fails. Repair the note and retry. Missing notes retain projection-only fallback. Dollar replacement tokens remain literal to protect human text."
+      "description": "Canonical-note edits keep the legacy handling of aliases, emails and phones, including nulls, empty lists and mixed JSON list values. The module host and People component parse incoming JSON numbers with correct rounding and keep the legacy decimal spelling, including equal-distance rounding ties. Listener and installed application parsing remain unqualified. Unusable list values return an error; legacy empty list items may publish unreadable frontmatter before projection fails. Repair the note and retry. Missing notes retain projection-only fallback. Dollar replacement tokens remain literal to protect human text."
     }
   ],
   "screens": {
