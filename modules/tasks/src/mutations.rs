@@ -114,6 +114,10 @@ pub fn execute<H: Host + ?Sized>(
             repo.delete_tag(text("listId"), text("tagId"))?;
             json!({"data":{"summary":"Deleted task tag.","deleted":true}})
         }
+        "tasks.deleteList" => {
+            repo.delete_list(text("listId"), input["reassignToListId"].as_str())?;
+            json!({"data":{"summary":"Deleted task list.","deleted":true}})
+        }
         _ => unreachable!("mutation tool schema already checked"),
     })
 }

@@ -111,6 +111,18 @@ pub fn render() -> String {
                 </div>
             </section>
             <section id="lists-editor" hidden aria-labelledby="lists-heading"><h2 id="lists-heading">"Your lists"</h2>
+                <p class="jds-caption">"Your last list is kept. Move tasks to another list before deleting a list that has tasks. Tags from the deleted list are removed; tasks are kept."</p>
+                <section id="delete-list-confirmation" hidden aria-labelledby="delete-list-title">
+                    <h3 id="delete-list-title">"Delete list?"</h3>
+                    <Field><FormLabel control_id="delete-list-destination">"Move tasks to"</FormLabel>
+                        <select id="delete-list-destination" class="jds-input"></select>
+                    </Field>
+                    <p id="delete-list-error" role="alert" hidden></p>
+                    <div class="tasks-actions">
+                        {action("confirm-delete-list", "Delete list and keep tasks")}
+                        <span id="keep-list">{action("keep-list", "Keep list")}</span>
+                    </div>
+                </section>
                 <div id="list-names" class="tasks-fields"></div>
                 <form id="list-form" class="tasks-inline">
                     <Field><FormLabel control_id="list-name">"New list"</FormLabel><input id="list-name" class="jds-input" required maxlength="100"/></Field>

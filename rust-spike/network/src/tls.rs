@@ -43,6 +43,22 @@ pub fn acceptor(certificate: &Path, key: &Path) -> Result<TlsAcceptor, String> {
     Ok(TlsAcceptor::from(Arc::new(config)))
 }
 
+/// Ctrl-C, or the termination signal the app and service managers send.
+async fn stop_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        if let Ok(mut term) = signal(SignalKind::terminate()) {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {}
+                _ = term.recv() => {}
+            }
+            return;
+        }
+    }
+    let _ = tokio::signal::ctrl_c().await;
+}
+
 /// Native TLS; no plaintext listener and no forwarded-header trust path.
 pub async fn serve(
     listener: TcpListener,
@@ -53,9 +69,11 @@ pub async fn serve(
     let local_slots = Arc::new(Semaphore::new(32));
     let remote_slots = Arc::new(Semaphore::new(224));
     let mut connections = tokio::task::JoinSet::new();
+    let stop = stop_signal();
+    tokio::pin!(stop);
     loop {
         tokio::select! {
-            _ = tokio::signal::ctrl_c() => break,
+            _ = &mut stop => break,
             Some(_) = connections.join_next(), if !connections.is_empty() => {},
             accepted = listener.accept() => {
                 let (stream, peer) = match accepted {

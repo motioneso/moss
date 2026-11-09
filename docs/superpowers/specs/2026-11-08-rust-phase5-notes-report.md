@@ -975,3 +975,78 @@ cleanup; private exports/daily archives and account-export join; remaining
 handler/path/error parity; assembled Settings/chat; separate physical-device
 HTTPS acceptance. The prior filesystem race, crash, compensation, paging and
 platform limits remain. No Docker cutover or complete Notes acceptance is claimed.
+
+## Part nine checkpoint — atomic deleted-note cleanup
+
+This continuation starts from main `874dbbf9e`. It takes the brief's bounded
+checkpoint allowance. It replaces the sync coordinator's separate indexed-list
+and per-path remove calls with one core cleanup request and an actual persistence
+adapter. The Notes package remains a pure client of the server's SDK/API ports;
+core memory remains outside its database grants. No ordinary-package capability,
+sync job or write tool is enabled, and the existing app map remains truthful:
+manual/scheduled sync and installed write chat are unavailable.
+
+`MemoryCleanupPorts` binds a resource to the source kind, preference name and
+account-specific allowed roots in trusted assembly. It locks the actor's selected
+folder preference, compares the requested canonical root, opens VaultContext and
+a participating-process folder lock, and performs its own bounded Markdown walk.
+Guest paths may retain original walk entries; they cannot authorize a deletion or
+replace the host's filesystem check. The entire indexed snapshot, Notes chunks,
+outgoing links and file-index deletion share one actor-scoped transaction. Owner
+predicates supplement unchanged RLS. Existing incoming links, other kinds, other
+roots and prefix collisions are retained, matching legacy. Links have no kind
+column: outgoing links at the exact removed Notes path follow legacy behavior.
+
+The added host walk preserves newly present files even if omitted by the guest,
+and refuses to sweep when the current walk is empty. These conservative differences
+from legacy under concurrent folder changes are explicit. Walk/index size and path
+bounds refuse the whole operation rather than partially deleting data. They do not
+establish resumable cleanup for large folders. Symlinks remain unfollowed; existing
+vault race, platform and external-editor limitations remain. No atomic snapshot
+between the filesystem and database is claimed.
+
+### Verification and limits
+
+The initial native regression failed when cleanup escaped into the old separate
+list/remove calls. The new single-request regression and all legacy sync vectors
+pass after the coordinator change. The cleanup gate compares real persisted rows
+with the authored legacy cleanup using real files, MemoryRepository and transactions.
+Only per-file ingestion and the job-opening walk are stand-ins. It includes both
+runtime roles, two owners and an unrelated administrator. Privacy-removal controls,
+a late final-table delete refusal and source/input admission exercise isolation
+and rollback rather than asserting them from the code alone. Scratch controls
+also remove the source-prefix and empty-host-walk protections and require the
+compiled persistence assertions to fail. Final gate receipts,
+review and browser results are recorded in the checkpoint proof and PR.
+
+The build uses pinned, approved `wit-bindgen` 0.57.1 and dependencies already in
+project lockfiles, in task-owned scratch Cargo and Rust toolchain homes. No global
+tool or package is installed. No existing migration bytes, real installation or
+live database are changed. Database checks use `scripts/run-gate.sh`.
+
+This remains a partial checkpoint. Production ingestion/query model assembly,
+managed publication and fencing, durable continuations, schedule/status/manual
+sync orchestration, approved installed writes, recall, proposals/receipts,
+reconciliation, exact-block cleanup, private exports/daily archives, account export,
+all-handler HTTP parity, assembled Settings/chat and physical second-device HTTPS
+acceptance remain open. The cleanup adapter alone does not enable Notes sync or
+make this package a replacement for working legacy Notes.
+
+### Part nine review follow-ups
+
+The first independent Claude review found no adapter code defect and required
+passing cleanup/browser evidence before acceptance. It also identified missing
+empty-host-walk coverage and overbroad corpus wording. The tests now exercise the
+real empty-host-walk branch, seed an additional absent indexed path, retain
+unindexed chunks, and remove the source/empty guards in scratch controls.
+Canonical alias cleanup in the older corpus is now a stand-in; the real adapter
+walks regular files and does not resolve guest-provided canonical aliases.
+
+Generic safe errors currently replace legacy errno-specific cleanup failures.
+The ordinary package remains disabled for sync, so installed saved-error parity
+is still an activation blocker. Synchronous disk calls may stall while holding the
+source row lock and a pooled connection; an async timer cannot interrupt that
+filesystem call. Invalid UTF-8 names refuse the whole walk, stricter than legacy.
+These are explicit worker-design limits alongside the size bounds. No exhaustive
+platform, power-loss, external-editor race or physical second-device proof is
+claimed by the cleanup tests.

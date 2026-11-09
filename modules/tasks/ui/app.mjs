@@ -2,6 +2,7 @@
 import { moduleClient } from "./guest-bridge.mjs";
 import { taskFields, visibleTasks, quadrant, quadrants, viewMode } from "./model.mjs";
 import { tagManager } from "./tags.mjs";
+import { listDeletion } from "./delete-list.mjs";
 
 const client = moduleClient();
 const $ = (id) => document.getElementById(id);
@@ -18,6 +19,17 @@ const state = {
   listDrafts: new Map()
 };
 const labels = { todo: "Open", done: "Done", suggested: "Suggested", archived: "Archived" };
+const deleting = listDeletion({
+  api,
+  lists: () => state.lists,
+  changed: async () => {
+    await load();
+    manageLists();
+  },
+  focus: (node) => {
+    state.focusAfter = node;
+  }
+});
 const tags = tagManager({
   api,
   run,
@@ -298,6 +310,7 @@ async function refreshEditor() {
   await extras();
 }
 function manageLists() {
+  deleting.close();
   show("overview", false);
   show("lists-editor", true);
   $("list-names").replaceChildren(
@@ -316,11 +329,20 @@ function manageLists() {
       input.maxLength = 100;
       const save = text("button", "Save name", "jds-btn jds-btn--secondary");
       save.type = "submit";
+      const remove = button(`Delete ${list.name}`, () => {
+        if (state.lists.length <= 1) {
+          $("notice").textContent = "Your last list is kept. Create another list first.";
+          return;
+        }
+        leaveEditor(() => deleting.open(list));
+      });
+      remove.id = `delete-list-${list.id}`;
       form.append(
         label,
         input,
         save,
-        button(`Manage tags in ${list.name}`, () => leaveEditor(() => tags.open(list)))
+        button(`Manage tags in ${list.name}`, () => leaveEditor(() => tags.open(list))),
+        remove
       );
       bindForm(form, async () => {
         await api("PATCH", `/tasks/lists/${list.id}`, { name: input.value });
@@ -334,6 +356,8 @@ function manageLists() {
   state.focusAfter = $("list-name");
 }
 const actions = {
+  "confirm-delete-list": () => deleting.confirm(),
+  "keep-list": () => deleting.close(),
   reload: load,
   new: () => openEditor(),
   "close-editor": () => leaveEditor(closeEditor),

@@ -1,0 +1,58 @@
+[
+  {
+    "name": "package: empty list deletion validates missing and empty-object bodies",
+    "source": "Tasks part 11 empty-object deletion contract",
+    "steps": [
+      {
+        "id": "keeper",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Empty object keeper"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "source",
+        "method": "POST",
+        "path": "/api/tasks/lists",
+        "as": "A",
+        "body": {
+          "name": "Empty object source"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "missing_body",
+        "method": "DELETE",
+        "path": "/api/tasks/lists/{{source:/body/list/id}}",
+        "as": "A",
+        "expect": {
+          "status": 400,
+          "body": {
+            "error": "body must be object"
+          }
+        }
+      },
+      {
+        "id": "deleted",
+        "method": "DELETE",
+        "path": "/api/tasks/lists/{{source:/body/list/id}}",
+        "as": "A",
+        "expect": {
+          "status": 200,
+          "body": {
+            "deleted": true
+          }
+        },
+        "body": {}
+      }
+    ],
+    "rows": ["app.task_lists"]
+  }
+]

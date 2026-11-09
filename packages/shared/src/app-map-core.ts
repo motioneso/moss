@@ -1,4 +1,9 @@
 import type { AiModelCapability, AiModelTier } from "./ai-types.js";
+import {
+  DESKTOP_APP_ERRORS,
+  DESKTOP_APP_REMEDIATIONS,
+  DESKTOP_APP_SCREENS
+} from "./app-map-desktop.js";
 
 export interface CoreAppSurfaceDeclaration {
   readonly runtime?: "rust";
@@ -67,7 +72,8 @@ export const RUST_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
       "The Rust app requires sign-in before private pages or API calls. Create the first administrator at /setup using a loopback address on the computer running Moss; setup closes after the owner exists. Passwords use the existing hash format. Browser sessions use Secure HttpOnly cookies and sign-in replies contain only public user fields. Sign-in is limited after repeated attempts; wait a minute before retrying. Further registration awaits the Rust People screens.",
     path: "/sign-in",
     scope: "user"
-  }
+  },
+  ...DESKTOP_APP_SCREENS
 ];
 
 export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
@@ -608,6 +614,7 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     remediationRef: "rust-sign-in-wait",
     description: "Rust Moss reached its sign-in attempt or concurrent password-check limit."
   },
+  ...DESKTOP_APP_ERRORS,
   {
     code: "core.page.page_load_failed",
     class: "transient",
@@ -818,6 +825,7 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
     path: "/sign-in",
     scope: "user"
   },
+  ...DESKTOP_APP_REMEDIATIONS,
   {
     id: "core.page.reload_page",
     description:

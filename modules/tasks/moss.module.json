@@ -46,7 +46,8 @@
         "tasks.renameTag",
         "tasks.deleteTag",
         "tasks.heartbeatWindow",
-        "tasks.list"
+        "tasks.list",
+        "tasks.deleteList"
       ]
     },
     {
@@ -91,7 +92,7 @@
   "features": [
     {
       "id": "tasks.package-data",
-      "description": "Tasks component with validated task, list, tag, activity, view preference and ordered breakdown routes. Eighteen tool handlers cover six reads and twelve task, list, tag, activity and breakdown actions. Full parity, assistant action policies and background jobs remain unfinished.",
+      "description": "Tasks component with validated task, list, tag, activity, view preference and ordered breakdown routes. Nineteen tool handlers cover six reads and thirteen task, list, tag, activity and breakdown actions. Full parity, assistant action policies and background jobs remain unfinished.",
       "errors": [
         {
           "code": "tasks-invalid-input",
@@ -155,6 +156,24 @@
     {
       "id": "tasks.package-filtered-list",
       "description": "The tasks.list tool filters visible persisted tasks by list, tag, status, priority, strict date/completion boundaries and priority quadrant, preserving updated-time/identifier ordering and tag data. Explicit shares remain visible; private tasks remain hidden from other accounts including admins. Actor-local lazy recurrence and installed chat integration remain unfinished. Correct invalid filter types or date text and retry."
+    },
+    {
+      "id": "tasks.package-list-deletion",
+      "description": "Manage lists offers confirmed deletion, optionally moving every task and subtask to another owned list. Tasks are kept and assignments to tags outside the destination are removed. The last list cannot be deleted, including by concurrent package requests. The same behavior is available through tasks.deleteList. Legacy automatic approvals and installed chat integration remain unfinished.",
+      "errors": [
+        {
+          "code": "tasks-list-delete-conflict",
+          "class": "validation",
+          "description": "The list is not empty or is the last list. Choose another list to keep the tasks, or create another list first."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "tasks-list-delete-destination",
+          "description": "Choose a different owned list as the destination before confirming deletion of a nonempty list.",
+          "path": "/tasks"
+        }
+      ]
     }
   ],
   "screens": {
@@ -265,6 +284,11 @@
       "method": "POST",
       "path": "/tasks/:id/deferred-status",
       "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/tasks/lists/:list_id",
+      "signIn": true
     }
   ],
   "tools": {
@@ -339,6 +363,10 @@
     "tasks.list": {
       "description": "List visible persisted tasks with list, tag, status, priority, date, completion and quadrant filters. Actor-local recurrence reconciliation remains unfinished.",
       "risk": "read"
+    },
+    "tasks.deleteList": {
+      "description": "Delete an owned task list, optionally moving its tasks to another owned list. The last list is kept; a nonempty list requires a destination.",
+      "risk": "write"
     }
   },
   "jobs": {

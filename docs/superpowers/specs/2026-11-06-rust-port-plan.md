@@ -53,7 +53,7 @@ What it will take:
 | --------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | Server          | Fastify API, pg-boss worker, CLI-runner sidecar, scripts | One Rust program with internal services: web server, job runner, agent runner, migrator |
 | Screens         | React 19 app built by Vite, served as static files       | Rust UI compiled to WebAssembly, served by the same program to any browser              |
-| Desktop         | None (browser only)                                      | Rust desktop shell (tray, window, start at login) that opens the same UI                |
+| Desktop         | None (browser only)                                      | `moss-app`, installed with the server, connects to this or another computer (JS-90)     |
 | Database        | Postgres with pgvector in Docker                         | Same Postgres and pgvector, bundled and managed by Moss on every install (see 3.2)      |
 | Add-on modules  | Node processes over JSON-RPC, React bundles in the host  | WebAssembly components with the same host ports, UI in a sandboxed frame (see 3.4)      |
 | Server installs | Docker Compose                                           | Same program as a Linux service or a Docker image                                       |
@@ -175,12 +175,12 @@ Postgres with pgvector and RLS is the security model. 633 policies, 93 security-
 and four locked-down roles carry the privacy guarantees. The desktop question is how to get that
 database onto a Windows or Mac machine.
 
-| Option                                       | Keeps RLS and roles                    | Keeps migrations and data          | Desktop cost                                                     | Verdict                        |
-| -------------------------------------------- | -------------------------------------- | ---------------------------------- | ---------------------------------------------------------------- | ------------------------------ |
-| Bundled Postgres plus pgvector               | Yes, unchanged                         | Yes, same files, same dump format  | Ship and manage a Postgres per OS, sign its files                | **Recommended**                |
-| Embedded Postgres-compatible engine          | Partly; RLS and extension support vary | Unproven for 84 PL/pgSQL functions | Smaller, but every policy needs re-proof                         | Reject                         |
-| SQLite with a new isolation model            | No; SQLite has no RLS or roles         | No; every SQL file rewritten       | Smallest, but the privacy model must be redesigned and re-proven | Reject                         |
-| Thin client to an install on another machine | Yes                                    | Yes                                | No local database                                                | Fallback only if Phase 1 fails |
+| Option                                       | Keeps RLS and roles                    | Keeps migrations and data          | Desktop cost                                                     | Verdict                  |
+| -------------------------------------------- | -------------------------------------- | ---------------------------------- | ---------------------------------------------------------------- | ------------------------ |
+| Bundled Postgres plus pgvector               | Yes, unchanged                         | Yes, same files, same dump format  | Ship and manage a Postgres per OS, sign its files                | **Recommended**          |
+| Embedded Postgres-compatible engine          | Partly; RLS and extension support vary | Unproven for 84 PL/pgSQL functions | Smaller, but every policy needs re-proof                         | Reject                   |
+| SQLite with a new isolation model            | No; SQLite has no RLS or roles         | No; every SQL file rewritten       | Smallest, but the privacy model must be redesigned and re-proven | Reject                   |
+| Thin client to an install on another machine | Yes                                    | Yes                                | No local database                                                | First-class mode (JS-90) |
 
 Recommendation: bundle Postgres and pgvector on every OS. The deferred desktop plan reached the
 same answer (`docs/superpowers/plans/2026-09-05-moss-desktop-install.md`, "Postgres stays"), and so
@@ -523,8 +523,8 @@ converted tests.
   protection at rest only when verified (companion doc).
 
 **Kill gate.** If pgvector cannot load under macOS notarization, or Postgres cannot run as a normal
-Windows user, installs on that OS become a thin client to an install on another machine, and the
-plan is re-cut before Phase 7.
+Windows user, installs on that OS use the app to connect to another computer until it is fixed.
+The plan is not re-cut, because connecting to another computer is already a normal mode (JS-90).
 
 ### Phase 2: core platform (L)
 
@@ -554,7 +554,10 @@ the gate.
 
 ### Phase 4: UI shell and design system (L)
 
-- App frame, navigation, chat drawer, Today, Settings frame, desktop shell, design-system audit.
+- App frame, navigation, chat drawer, Today, Settings frame, design-system audit.
+- The desktop shell is `moss-app`, a separate program that connects to a local or remote server.
+  The server has no window of its own. See
+  `docs/superpowers/specs/2026-11-08-rust-server-and-app-split-design.md` (JS-90).
 
 **Kill gate.** Today and the chat drawer pass Ben's look check on a phone and a desktop, using the
 carried-over CSS. If the CSS cannot be reused cleanly, re-size Phase 5 before it starts.
@@ -588,6 +591,9 @@ express what finance needs, redesign it before rebuilding meals.
 
 - Per-OS packages, signing, signed updates, start at login, LAN sharing prompt, backup and restore,
   the import screen for existing Docker installs.
+- Each package installs both the server and the app. Each local instance runs as a user service
+  or login item. The updater updates both together. The app gains instance, Stop and tray
+  controls, and accepts public certificates through the OS trust store (JS-90 sections 6.3, 13.2).
 
 **Kill gate.** A clean install on a fresh machine on each OS, using clicks only, starts, signs in,
 opens Today, and backs up and restores. A failed update on each OS falls back to the old cluster.
@@ -598,6 +604,7 @@ The full parity checklist runs in Phase 8, once modules exist.
 - Rehearse the 4.2 move and both 4.3 rollbacks on a copy of real data, then move Ben's prod.
 - Run the full parity checklist on a fresh install on each OS: sign-in, chat with tools, one read
   and one write per module, one job per queue kind, backup and restore, and phone access.
+- A second computer connects to the moved server through the app (JS-90).
 
 **Kill gate.** The rehearsal passes both rollbacks, and the full parity checklist passes on each
 OS. If either fails, prod does not move.

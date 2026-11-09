@@ -21,12 +21,14 @@ use uuid::Uuid;
 
 #[path = "privacy/actions.rs"]
 mod actions;
-#[path = "privacy/owner_lookup.rs"]
-mod owner_lookup;
 #[path = "privacy/heartbeat.rs"]
 mod heartbeat;
 #[path = "privacy/jobs.rs"]
 mod jobs;
+#[path = "privacy/lists.rs"]
+mod lists;
+#[path = "privacy/owner_lookup.rs"]
+mod owner_lookup;
 #[path = "privacy/tags.rs"]
 mod tags;
 

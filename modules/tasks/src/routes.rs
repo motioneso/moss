@@ -134,6 +134,13 @@ fn dispatch<H: Host + ?Sized>(repo: &Repository<'_, H>, r: &RouteRequest) -> Res
         ("PATCH", "/tasks/lists/:list_id") => {
             json!({"list":repo.rename_list(param(r,"list_id")?,&name(r)?)?.dto()})
         }
+        ("DELETE", "/tasks/lists/:list_id") => {
+            let body = parse::require_object(&r.body)?;
+            let destination =
+                parse::optional_string(body.get("reassignToListId"), "reassignToListId")?;
+            repo.delete_list(param(r, "list_id")?, destination.as_deref())?;
+            json!({"deleted":true})
+        }
         ("GET", "/tasks/lists/:list_id/tags") => {
             json!({"tags":repo.tags(param(r,"list_id")?)?.iter().map(|t| t.dto()).collect::<Vec<_>>()})
         }

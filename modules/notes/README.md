@@ -271,40 +271,81 @@ a scratch copy (unlink no-op, empty walk retention, cleanup source boundary,
 chunk budget and unknown-error redaction), require each assertion to fail, then
 require the restored source to pass. They never edit the source worktree.
 
-The draft core adapter calls are confined to the test build's `vault` source
-resource: `index.sync-open`, `index.sync-file`, `index.sync-canonical`,
-`index.sync-indexed`, and `index.sync-remove`. No production adapter or permission
-is added. Before enabling them, core must bind the actor and selected source,
-validate every file independently through VaultContext, fence source/file changes,
-perform per-file indexing and removals atomically under RLS, and preserve managed
-publication admission. `index.sync-remove` must remove only that actor's Notes
-chunks, file links and index row together. Guest-selected paths never authorize it.
-The walk and canonical-path responses are not an authority to bypass those checks.
+The draft ingestion calls remain confined to the test build's `vault` source
+resource. They are `index.sync-open` and `index.sync-file`; they still have no
+production implementation or permission. Before enabling sync, core must bind
+the actor and selected source, validate every file through VaultContext, fence
+source/file changes, index per file atomically under RLS and preserve managed
+publication admission. These remain release blockers.
 
-The draft synchronous boundary shapes are:
-
-| Operation              | Parameters                                                                                 | Successful response                                                                                                   |
-| ---------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `index.sync-open`      | `{sourcePath: string \| null}` override, otherwise saved preference                        | `{sourcePath: string, resolvedSourcePath: string, files: string[]}`; unlinked: `{sourcePath: null}`                   |
-| `index.sync-file`      | `{sourcePath, filePath, chunkOffset, chunkLimit, expectedFileHash?, expectedSnapshotKey?}` | `{status: "ingested" \| "skipped", chunksProcessed, filePath?, continuation?: {chunkOffset, fileHash, snapshotKey?}}` |
-| `index.sync-canonical` | `{sourcePath, filePath}`                                                                   | `{path: string}`                                                                                                      |
-| `index.sync-indexed`   | `{sourcePath}`                                                                             | `{paths: string[]}`                                                                                                   |
-| `index.sync-remove`    | `{sourcePath, filePath}`                                                                   | `{}`                                                                                                                  |
+| Operation            | Parameters                                                                                 | Successful response                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `index.sync-open`    | `{sourcePath: string \| null}` override, otherwise saved preference                        | `{sourcePath: string, resolvedSourcePath: string, files: string[]}`; unlinked: `{sourcePath: null}`                   |
+| `index.sync-file`    | `{sourcePath, filePath, chunkOffset, chunkLimit, expectedFileHash?, expectedSnapshotKey?}` | `{status: "ingested" \| "skipped", chunksProcessed, filePath?, continuation?: {chunkOffset, fileHash, snapshotKey?}}` |
+| `index.sync-cleanup` | `{sourcePath, walkedPaths: string[]}`                                                      | `{}`                                                                                                                  |
 
 The open response preserves the configured `sourcePath` for continuations and
-separately returns the canonical `resolvedSourcePath` for file operations and
-cleanup. The walk must use that canonical root. Other operations receive it as
-`sourcePath`. This separation is compared against legacy with alias and trailing
-slash vectors; it does not prove real adapter symlink support. Failures use
-`{error: string}` with an errno or `OUTSIDE`; other values produce the generic
-safe error. Malformed opening replies are also reduced to that generic error.
-No raw error message is used. A missing walk is permitted for an unlinked source.
+separately returns canonical `resolvedSourcePath` for file operations and cleanup.
+Other operations receive that canonical root as `sourcePath`. Failures use
+`{error: string}` with an errno or `OUTSIDE`; other values produce a generic safe
+error. A missing walk is permitted for an unlinked source. Canonical alias vectors now exercise the cleanup stand-in behind the single
+request; they do not prove actual adapter alias handling. The real rewalk uses
+regular files under the resolved root and does not follow symlinks, matching the
+legacy walk admission. Full alias/path parity remains open.
 
-Transaction equivalence is **not** established: legacy lists and purges all
-deleted files in one data-context transaction, whereas these draft calls list
-then remove each path independently. Production must provide a single transaction
-for the entire cleanup sweep, including its indexed-path snapshot; per-file
-atomic deletion alone is insufficient. None of these stand-ins persist data.
+## Atomic cleanup checkpoint (part nine)
+
+The coordinator now makes **one** `index.sync-cleanup` request after the file loop.
+It no longer asks the host to list and delete individual index paths separately.
+The real, additive core adapter is `MemoryCleanupPorts` in the module host.
+Assembly binds `(module, resource)` to `MemoryCleanupSource`, containing the
+source kind, preference key and each account's allowed roots. It must use the same
+source configuration as folder settings and ingestion. The ordinary package still
+has no cleanup permission or sync job; no real sync is enabled here.
+
+The adapter locks the calling account's existing source preference until commit,
+checks the supplied canonical root against that selection, obtains a VaultContext
+and folder lock, and rewalks the actual folder. Guest-supplied `walkedPaths` can only
+retain rows, including paths that disappeared or failed to resolve during the run.
+They cannot select an account, kind, root or individual deletion target. The host
+walk independently retains currently present Markdown files even if the guest
+omits them. An empty host walk leaves the index untouched. That extra empty-walk
+check and retention of files that appeared since the original walk are deliberate,
+conservative differences from legacy during concurrent filesystem changes.
+
+The indexed-path snapshot and every selected chunk, outgoing link and index-row
+delete share one account-scoped transaction. Explicit owner predicates supplement
+existing RLS. Like legacy, cleanup retains other source kinds, other roots,
+root-prefix collisions and incoming links; outgoing links have no source-kind
+column and are removed for the exact deleted path. A late failure rolls back the
+whole sweep. No new SQL, schema ownership or module database grant is introduced.
+
+The walk and selected index are capped at ten thousand entries/rows; source and
+walked paths are capped at 4096 bytes. Exceeding those bounds refuses the entire
+sweep. Large-folder pagination is still required before activation. Symlinks are
+not followed. Existing vault ancestor-swap and platform limits remain; folder locks
+do not fence external editors, and no atomic filesystem/database snapshot is
+claimed. Sharing the folder lock with future ingestion must be designed at assembly
+rather than holding a conflicting linked-file lock through this call. The
+synchronous filesystem walk can pin the source row lock and a pooled connection
+while a disk call stalls; the timer cannot interrupt that call. Non-UTF-8 names
+refuse the sweep, which is stricter than legacy. Production activation needs a
+bounded worker design for these cases. Adapter errors currently become the generic
+safe sync error; the stand-in errno vectors do not establish installed saved-error
+parity. A typed safe-error channel is still required.
+
+The standard Notes gate now runs `cleanup-gate.ts`. It executes the actual legacy
+`purgeDeletedNotes` body with the real MemoryRepository, transactions and synthetic
+files, then compares all three persisted tables with the compiled guest and real
+adapter, for both roles, two owners and an unrelated admin. Per-file ingestion and
+opening the job walk remain named stand-ins. Late database failure, invalid input,
+unlink, stale source, missing allowed roots and omitted walk paths are checked.
+Direct cross-account read/delete assertions fail when each table's RLS is removed,
+then pass restored. A scratch source copy removes the explicit owner predicates;
+the compiled privacy assertion must fail with memory RLS removed too, and pass
+when the source is restored. Source-boundary and empty-host-walk removals must
+also fail their compiled persistence assertions. These are compiled tool-boundary checks, not installed
+chat, HTTP parity or working ingestion.
 
 The synchronous checkpoint envelope/result may contain source/file paths and
 hashes. **Do not enqueue that envelope or continuation as job parameters.** The

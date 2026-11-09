@@ -1,8 +1,10 @@
-//! The browser and desktop shell use the same authenticated HTTPS entrypoint.
-//! Supply --network <private configuration file>; see rust-spike/network/README.md.
+//! The Moss server. Browsers, phones and the desktop app (`moss-app`) all use this one
+//! authenticated HTTPS entrypoint.
+//! Supply --instance <folder> or --network <private configuration file>; see
+//! rust-spike/network/README.md.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use axum::extract::State;
@@ -13,7 +15,7 @@ use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use moss_network::{
     config::Config,
-    tls,
+    instance, tls,
     web::{self, Network},
 };
 use moss_shell_contract::stub::StubShellData;
@@ -107,25 +109,25 @@ async fn app_page(uri: Uri, index: PathBuf) -> Response {
 }
 
 struct Args {
-    mode: String,
     network: PathBuf,
+    /// Instance folder: holds network.json and, while listening, running.json.
+    instance: Option<PathBuf>,
     web: PathBuf,
     runner: Option<PathBuf>,
 }
 
 fn parse_args() -> Result<Args, String> {
     let mut raw = std::env::args().skip(1).peekable();
-    let mode = match raw.peek().map(String::as_str) {
-        Some("serve") | Some("desktop") => raw.next().unwrap_or_default(),
-        _ => "desktop".to_string(),
-    };
+    if raw.peek().map(String::as_str) == Some("serve") {
+        raw.next();
+    }
     let exe_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(PathBuf::from))
         .unwrap_or_default();
     let mut args = Args {
-        mode,
-        network: exe_dir.join("network.json"),
+        network: exe_dir.join(instance::NETWORK_FILE),
+        instance: None,
         web: exe_dir.join("web"),
         runner: None,
     };
@@ -133,6 +135,11 @@ fn parse_args() -> Result<Args, String> {
         let value = raw.next().ok_or_else(|| format!("{flag} needs a value"))?;
         match flag.as_str() {
             "--network" => args.network = PathBuf::from(value),
+            "--instance" => {
+                let folder = PathBuf::from(value);
+                args.network = folder.join(instance::NETWORK_FILE);
+                args.instance = Some(folder);
+            }
             "--web" => args.web = PathBuf::from(value),
             "--runner" => args.runner = Some(PathBuf::from(value)),
             _ => return Err(format!("unknown option {flag}")),
@@ -147,6 +154,28 @@ fn parse_args() -> Result<Args, String> {
     Ok(args)
 }
 
+/// The record the connecting app uses to find and trust this server. Its origin must use the
+/// port the server is listening on.
+fn running_record(folder: &Path, config: &Config, port: u16) -> Result<instance::Running, String> {
+    let origin = config.local_origin().ok_or("No local HTTPS origin")?;
+    if !origin.ends_with(&format!(":{port}")) {
+        return Err("The local HTTPS origin does not use the listening port".into());
+    }
+    let pem = std::fs::read(&config.certificate).map_err(|_| "Cannot read the TLS certificate")?;
+    Ok(instance::Running {
+        instance: folder
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("default")
+            .to_owned(),
+        origin: origin.to_owned(),
+        fingerprint: instance::fingerprint(&instance::leaf_der(&pem)?),
+        pid: std::process::id(),
+        version: instance::VERSION.to_owned(),
+        api: instance::API,
+    })
+}
+
 fn main() {
     let args = match parse_args() {
         Ok(a) => a,
@@ -158,20 +187,19 @@ fn main() {
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
     let prepared = runtime.block_on(async {
         let config = Config::read(&args.network)?;
-        if args.mode == "desktop" && !config.listen.ip().is_loopback() {
-            return Err(
-                "Desktop mode needs a loopback listener; use serve for network sharing".to_string(),
-            );
-        }
         let platform = config.platform().await?;
         let acceptor = tls::acceptor(&config.certificate, &config.private_key)?;
         let listener = tokio::net::TcpListener::bind(config.listen)
             .await
             .map_err(|_| "Cannot bind the configured HTTPS listener")?;
-        let desktop_origin = config
-            .local_origin()
-            .ok_or("No local HTTPS origin")?
-            .to_owned();
+        let port = listener
+            .local_addr()
+            .map_err(|_| "Cannot read the listening port")?
+            .port();
+        let running = match &args.instance {
+            Some(folder) => Some(running_record(folder, &config, port)?),
+            None => None,
+        };
         let network = Network::new(platform.clone(), config, args.network)?;
         let data = Arc::new(Accounts {
             platform,
@@ -179,66 +207,26 @@ fn main() {
             data: Mutex::new(HashMap::new()),
         });
         let app = web::router(network, router(data, args.web.clone()), args.web);
-        Ok::<_, String>((listener, acceptor, app, desktop_origin))
+        Ok::<_, String>((listener, acceptor, app, running))
     });
-    let (listener, acceptor, app, desktop_origin) = match prepared {
+    let (listener, acceptor, app, running) = match prepared {
         Ok(parts) => parts,
         Err(_) => {
             eprintln!("moss-shell: could not start secure HTTPS; check private configuration, certificates and runtime database roles");
             std::process::exit(1);
         }
     };
-    if args.mode == "serve" {
-        if runtime
-            .block_on(tls::serve(listener, acceptor, app))
-            .is_err()
-        {
+    if let (Some(folder), Some(running)) = (&args.instance, &running) {
+        if running.write(folder).is_err() {
+            eprintln!("moss-shell: could not write the instance running file");
             std::process::exit(1);
         }
-    } else {
-        runtime.spawn(tls::serve(listener, acceptor, app));
-        desktop::run(desktop_origin);
     }
-}
-
-mod desktop {
-    use tao::dpi::LogicalSize;
-    use tao::event::{Event, WindowEvent};
-    use tao::event_loop::{ControlFlow, EventLoop};
-    use tao::window::WindowBuilder;
-    use wry::WebViewBuilder;
-
-    pub fn run(origin: String) {
-        let event_loop = EventLoop::new();
-        let window = WindowBuilder::new()
-            .with_title("Moss")
-            .with_inner_size(LogicalSize::new(1360.0, 860.0))
-            .with_min_inner_size(LogicalSize::new(360.0, 560.0))
-            .build(&event_loop)
-            .expect("window");
-
-        let builder = WebViewBuilder::new().with_url(format!("{origin}/today"));
-
-        #[cfg(not(target_os = "linux"))]
-        let _webview = builder.build(&window).expect("webview");
-        #[cfg(target_os = "linux")]
-        let _webview = {
-            use tao::platform::unix::WindowExtUnix;
-            use wry::WebViewBuilderExtUnix;
-            builder
-                .build_gtk(window.default_vbox().expect("vbox"))
-                .expect("webview")
-        };
-
-        event_loop.run(move |event, _, control_flow| {
-            *control_flow = ControlFlow::Wait;
-            if let Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } = event
-            {
-                *control_flow = ControlFlow::Exit;
-            }
-        });
+    let served = runtime.block_on(tls::serve(listener, acceptor, app));
+    if let Some(folder) = &args.instance {
+        instance::Running::remove_if_ours(folder);
+    }
+    if served.is_err() {
+        std::process::exit(1);
     }
 }

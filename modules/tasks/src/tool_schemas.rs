@@ -71,6 +71,7 @@ pub fn input(tool: &str) -> Option<Schema> {
         }
         "tasks.renameTag" => with_ids(schemas::name_only(), &["listId", "tagId", "name"]),
         "tasks.deleteTag" => strings(&["listId", "tagId"]),
+        "tasks.deleteList" => with_ids(schemas::delete_list(), &["listId"]),
         _ => return None,
     })
 }
