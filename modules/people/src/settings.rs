@@ -1,6 +1,7 @@
 //! Settings routes keep shared preferences in the host; no direct app.preferences access.
 use moss_module_sdk::{Host, Response, Result, RouteRequest};
 use serde_json::json;
+use unicode_normalization::UnicodeNormalization;
 
 pub fn route(host: &impl Host, request: &RouteRequest) -> Result<Option<Response>> {
     let (operation, resource, parameters) = match (request.method.as_str(), request.path.as_str()) {
@@ -119,26 +120,30 @@ fn directories(host: &impl Host, request: &RouteRequest) -> Result<Response> {
 // legacy collation order, then digits, then letters by base letter, accent
 // and case. Special letters expand or follow their base letter.
 pub(crate) fn locale_compare(a: &str, b: &str) -> std::cmp::Ordering {
+    // localeCompare treats canonical Unicode spellings as equal. Normalize
+    // comparison keys only: the folder name and path returned to clients stay exact.
+    let a: String = a.nfc().collect();
+    let b: String = b.nfc().collect();
     let keys = |s: &str| {
         let mut primary: Vec<(u8, u32)> = Vec::new();
         let mut secondary: Vec<u32> = Vec::new();
         for c in s.chars() {
-            if let Some(rank) = combining_rank(c) {
-                if let Some(last) = secondary.last_mut() {
-                    *last = rank;
-                }
-                continue;
-            }
             let (expansion, rank) = base_expansion(c);
             for (i, base) in expansion.chars().enumerate() {
+                if let Some(rank) = combining_rank(base) {
+                    if let Some(last) = secondary.last_mut() {
+                        *last = rank;
+                    }
+                    continue;
+                }
                 primary.push(primary_key(base));
                 secondary.push(if i == 0 { rank } else { 0 });
             }
         }
         (primary, secondary)
     };
-    let (primary_a, secondary_a) = keys(a);
-    let (primary_b, secondary_b) = keys(b);
+    let (primary_a, secondary_a) = keys(&a);
+    let (primary_b, secondary_b) = keys(&b);
     primary_a
         .cmp(&primary_b)
         .then_with(|| secondary_a.cmp(&secondary_b))
@@ -147,7 +152,7 @@ pub(crate) fn locale_compare(a: &str, b: &str) -> std::cmp::Ordering {
                 .map(|c| c.is_uppercase())
                 .cmp(b.chars().map(|c| c.is_uppercase()))
         })
-        .then_with(|| a.cmp(b))
+        .then_with(|| a.cmp(&b))
 }
 
 fn primary_key(c: char) -> (u8, u32) {
@@ -199,7 +204,13 @@ fn base_expansion(c: char) -> (String, u32) {
         'Đ' | 'đ' => ("d".to_owned(), 1),
         _ => {
             let (base, rank) = base_letter(c);
-            (base.to_string(), rank)
+            // Preserve the established special-letter weights; for other
+            // composed characters compare their canonical base and accents.
+            if base == c && rank == 0 {
+                (c.nfd().collect(), 0)
+            } else {
+                (base.to_string(), rank)
+            }
         }
     };
     (expansion, rank)
@@ -315,6 +326,18 @@ fn base_letter(c: char) -> (char, u32) {
 mod tests {
     use super::locale_compare;
     use std::cmp::Ordering;
+
+    #[test]
+    fn directory_order_matches_canonical_equivalence_vectors() {
+        let cases: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("tests/fixtures/directory-parity.json")).unwrap();
+        for case in cases {
+            let a = case["a"].as_str().unwrap();
+            let b = case["b"].as_str().unwrap();
+            let expected = case["expected"].as_i64().unwrap().cmp(&0);
+            assert_eq!(locale_compare(a, b), expected, "{a:?} vs {b:?}");
+        }
+    }
 
     #[test]
     fn directory_order_matches_legacy_locale_order() {

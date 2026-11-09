@@ -1642,3 +1642,100 @@ libraries were made available locally. Missing locked dependencies for the appro
 `wit-bindgen =0.57.1` generator were fetched into that task-owned Cargo cache.
 JavaScript dependencies came from the existing lockfile with an offline install.
 No global tool or package was installed. No Vikunja card was changed.
+
+## Part fifteen: canonical Unicode folder comparison
+
+The relative People folder browser now treats canonically equivalent Unicode names
+as equal when sorting. For example, `é` and `e` followed by a combining acute accent
+compare equally, matching JavaScript `localeCompare`. The returned folder names and
+paths keep their original spelling. Stable sorting preserves the incoming order of
+equal keys; no folder or saved preference is renamed.
+
+The task branch initially predated the People work. It was fast-forwarded while clean
+to `0b8d143d7`, which contains the merged part-fourteen report (PR 4105), before edits.
+The brief's PR 4066 reference describes older work.
+
+The comparator normalizes its keys to NFC using `unicode-normalization =0.1.26`,
+already declared by the repository's portability crate and present in the module-host
+lockfile. The People lockfile adds that existing package and its existing `tinyvec`
+dependency; no new third-party package version or global tool is introduced. The
+only host changes are the People replay's folder fixture and its native dev-dependency
+lock entry. The module remains a client of host ports, without database or filesystem
+handles. Public APIs, SQL, privacy rules and folder settings are unchanged.
+
+A JavaScript oracle records forty-two directional comparisons, including composed
+and decomposed Latin, Greek and Hangul, canonical combining-mark reordering and case
+comparisons. Native tests consume those recorded signs. Unrecognized composed letters
+are decomposed into their base and accents for comparison, retaining the existing
+special-letter weights. This avoids regressing decomposed Greek ordering. The installed
+route replay adds decomposed `나` and composed `가` names to both real filesystem trees
+and compares their order and exact returned paths against the legacy handler. These
+names have distinct collation keys; equal-key comparisons are checked by native vectors
+without relying on two independent filesystems to return tied names in the same order.
+
+An initial investigation rediscovered the documented dollar-token compatibility
+exception. A trial reproduction failed the existing intentional-safeguard test; all
+trial edits were discarded. Literal dollar tokens continue to protect human note
+text. No legacy replacement-token expansion ships in this checkpoint.
+
+### Verification and acceptance boundary
+
+- The new native regression failed first (`rc=101`): `é` versus decomposed
+  `e` plus acute returned `Less` instead of JavaScript's `Equal`. After the fix,
+  all twenty-six native People tests pass, including forty-two directional
+  JavaScript comparisons. The regenerated oracle matches its committed fixture.
+- The full nine-suite People gate passed (`rc=0`, ten tests). The seven-table
+  privacy matrix and folder/settings controls failed with protection removed and
+  passed restored for both runtime roles, including admin actors. Worker, note,
+  public API and all seven chat-tool comparisons passed. This tested clean
+  `1cc09928f61dd0f88b03b1b33a0b704fb651a044`, input fingerprint
+  `1969f6f6e8a17ecbc0c7e58b5bd5996c7871047ecfa7191533d8f051aa9ad17f`.
+- The signed installed-package replay passed (`rc=0`): the independent normal-host
+  probe's 283 numeric vectors and three rejection cases, frame bridge, 170 legacy
+  route responses, all seven table snapshots, exact note bytes and all four public
+  APIs through an installed consumer. Download, install and reload were exercised.
+  The fifty-reference request returned `202` in `9118 ms` against the explicit
+  `30000 ms` replay limit; this does not meet the shipping five-second requirement.
+  This tested clean `63590de02f37cb021350b92faeacc54747b358c4`, input fingerprint
+  `f878fda9e77fa3e4ded52e9afd1d9b4ddffa791f8714f3195230f371c42b5be3`.
+- Both waits returned zero and their disposable database containers were removed.
+  Receipt basenames are `task_111_rust_port_phase_5_people_module-20261109-012542-cwcLRS.log` (nine suites) and
+  `task_111_rust_port_phase_5_people_module-20261109-013610-R8MXaU.log` (installed replay). Later report-only changes do not claim
+  identical input hashes. The initial installed run failed a separate hard-coded
+  directory expectation that omitted the two new Hangul folders; both filesystem
+  seeds and the oracle comparison were correct. Commit `63590de02` fixes that
+  expectation before the successful rerun.
+- Component SHA-256:
+  `0dd8d4e40ed5a0132b8ca82c36d2d452e0c58cc2b87f563a7e24d7ed74040551`.
+  Package SHA-256:
+  `00fc70eb02ac030776c5d673b84f299e010229a7ffda9906fbc1de9f90646927`.
+- Final guest, host and UI builds, strict People Clippy, scoped Rust formatting,
+  frame bridge and app-map generation pass. Root lint, type checks, Prettier and
+  file-size checks pass. A whole-host Rust formatting check found existing style
+  differences in unchanged `rust-spike/parity/src/dbs.rs`; changed-file checks pass.
+  No full foundation, CI or live-application result is claimed. Final independent
+  review evidence is attached to the task proof.
+
+Rust 1.95.0, Cargo, Rustup and all target caches were task-owned scratch. Missing
+locked dependencies for the approved `wit-bindgen =0.57.1` were fetched locally;
+the generator and Wasm targets were used only there. JavaScript installation used
+the existing lockfile offline. No global tool was installed or Vikunja card changed.
+
+This is a bounded checkpoint: complete locale-sensitive ordering, authenticated server
+composition and raw numeric listener qualification, ingest nudges, real provider
+composition, command retention/quotas, the fifty-reference shipping budget and broader
+backend-failure/large-data coverage remain open. Real UI/chat approvals, sign-in,
+trusted origins, privacy and HTTPS from desktop and a second physical device still
+require proof through the assembled Rust application. No standalone test or rendered
+substitute is offered as that proof.
+
+### Independent review follow-up
+
+The first review identified a Greek ordering regression from composing a character
+outside the existing accent table. The fallback decomposition and four added Greek
+comparisons address it. Its major tied-directory replay concern was not reproduced
+on this Linux/Node runtime: a fresh `readdir` probe returned UTF-8 byte order, matching
+the host, despite scrambled creation order. The replay nevertheless now uses distinct
+Hangul collation keys to avoid relying on cross-filesystem tie order. Native vectors
+retain canonical equality coverage. The stale pre-manifest host build was restarted;
+only final successful builds and gates may be cited as verification.
