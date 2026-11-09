@@ -814,8 +814,9 @@ new status screen. Direct fixture rows model saved progress; they do not establi
 provider execution. Exact fresh checks, review and commit are recorded in the
 task Proof artifact.
 
-Builds reuse the existing scratch Rust 1.95.0 home with the Wasm target and copies
-of existing build caches in this task's scratch directory. Dependencies are restored
+Builds copy the existing Rust 1.95.0 home and build caches into this task's
+scratch directories. The declared Wasm target is added to that task-local Rust home
+after the first two gate attempts found incomplete scratch targets. Dependencies are restored
 offline from the declared lockfile in this worktree. Both shared asset bundles go
 into one scratch directory. No new dependency, global tool or wit-bindgen installation
 is performed. A same-machine LAN request, disposable TLS certificate and phone-width
@@ -826,3 +827,11 @@ complete validation/coercion/error parity; four provider tools; day-plan apply j
 and apply/retry/recovery/confirm execution; worker-role cache-evict dispatch; source
 behavior and external-calendar status controls; full shell/Today/chat; old-screen
 replacement; complete assembled parity; physical second-device trusted HTTPS.
+
+The first independent review found no blocker or major. Its app-map mismatch is
+corrected by describing the original plain HTTP errors without inventing a new
+response code; the selection lookup now uses a map, and the operation oracle runs
+last so its synthetic state cannot affect later checks. A page-size concern is not
+a current defect: the host does not impose a smaller limit, and native coverage
+reads through a full page into the next. The inherited chat-policy integration
+remains open alongside the full chat composition.

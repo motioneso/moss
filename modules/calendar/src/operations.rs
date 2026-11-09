@@ -106,7 +106,10 @@ pub fn read(host: &impl Host, plan_id: &str, operation_id: &str) -> Result<Value
         }
         snapshot["selection"].as_array().ok_or_else(unreadable)?
     };
-    let order: Vec<&str> = entries.iter().map(selection).collect::<Result<_>>()?;
+    let mut order = std::collections::BTreeMap::new();
+    for (index, entry) in entries.iter().enumerate() {
+        order.insert(selection(entry)?, index);
+    }
     let mut rows = vec![];
     loop {
         let page = query(
@@ -130,9 +133,10 @@ pub fn read(host: &impl Host, plan_id: &str, operation_id: &str) -> Result<Value
     }
     let fallback = rows.len();
     rows.sort_by_key(|row| {
-        order
-            .iter()
-            .rposition(|id| Some(*id) == row["block_id"].as_str())
+        row["block_id"]
+            .as_str()
+            .and_then(|id| order.get(id))
+            .copied()
             .unwrap_or(fallback)
     });
     let mut items = vec![];

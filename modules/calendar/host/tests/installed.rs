@@ -136,7 +136,6 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
     read_oracle::compare(&app, &f);
     preview_oracle::compare(&app, &f, &preview_seeded);
     day_plan_oracle::verify(&app, &f);
-    operation_oracle::verify(&app, &f);
     let settings = call(f.a, "GET", "/briefing-settings", Value::Null);
     assert_eq!(settings["body"]["settings"]["prepTaskMode"], "auto");
     let display = call(f.a, "GET", "/display-settings", Value::Null);
@@ -328,4 +327,5 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
     });
     settings_oracle::verify(&app, &f, &captured);
     println!("PASS signed registry download + install; actual Rust Wasm events/plans/preferences; owner/foreign/admin; revision conflict; rollback; original fifteen ledgers");
+    operation_oracle::verify(&app, &f);
 }

@@ -349,5 +349,5 @@ screen or evidence that provider execution works.
 The remaining acceptance list in the calendar report still applies. In particular,
 apply/retry/recovery/confirm, actual worker dispatch, concrete public adapters,
 full shell/chat and old-screen replacement, complete parity and a physical second
-device over trusted HTTPS are unfinished. This continuation installs no new tool
-or dependency and does not change the module's client/server boundary.
+device over trusted HTTPS are unfinished. This continuation adds the already declared Wasm target to a task-local Rust home
+and installs no global tool or new dependency and does not change the module's client/server boundary.
