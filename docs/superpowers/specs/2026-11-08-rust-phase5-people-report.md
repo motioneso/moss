@@ -2315,53 +2315,82 @@ lint, root lint/typecheck and app-map generation passed. Whole-host Rust formatt
 reports existing formatting in imported parity sources outside this checkpoint;
 those sibling files were not changed. Root formatting and file-size checks passed.
 
-## People part 20 — large-account read parity (JS-139)
+## People part 20 — large-account diagnostic checkpoint (JS-139)
 
 The task branch initially contained only Phase 0a. Before editing it was
 fast-forwarded to `35ef498b1`, including the merged part 19 report and code.
 The continuation's PR 4066 reference is an older installed-package checkpoint.
 
-This continuation qualifies the existing read interfaces beyond the host's
-thousand-row query page. A separate synthetic account contains 1,005 people,
-1,005 aliases, 1,005 email identities and 1,005 links. Fifteen comparisons cover
-People/link limits of 999, 1,000, 1,001, 1,005, 1,006 and no limit, plus public
-name and email lookup and an unbounded filtered query with exactly 1,000 links
-(requiring an empty terminal page). One rejected email identity duplicates an
-active email, qualifying duplicate preservation without violating the existing
-partial unique index. Real legacy Fastify handlers supply route responses;
-the real legacy public functions supply API responses. The compiled guest reads
-the same committed rows through the production transactional database ports.
-Email results have no legacy ordering guarantee, so their complete multisets
-are compared, retaining duplicates. Ordered responses retain exact comparison.
+This continuation adds a reproducible **failing** large-account parity probe.
+It does not qualify large-account reads or complete Phase 5. A separate synthetic
+account contains 1,005 people, aliases, email identities and links. Fifteen
+comparisons target People/link limits of 999, 1,000, 1,001, 1,005, 1,006 and no
+limit, public name/email lookup, and an unbounded filtered query with exactly
+1,000 links (requiring an empty terminal page). A rejected email identity
+repeats an active email without violating the existing partial unique index.
+Real legacy Fastify handlers supply route responses; real public functions
+supply API responses. The compiled guest reads the same committed rows through
+production transactional database ports. Email results compare complete
+multisets because legacy has no ordering guarantee; other responses compare
+exactly. The probe asserts all fifteen cases are present.
 
-No public API or product behavior is intentionally changed; the existing app-map
-declarations remain applicable. This is bounded large-account qualification,
-not unlimited-data parity or a new account-size promise. The ordinary host fuel,
-memory, message and five-second limits remain unchanged. Gate receipts are
-pending until recorded below.
+### Observed gap and reproduction
+
+The first 999-person list response exhausts the host's default **10,000,000
+Wasm fuel** while parsing the database JSON in `generated_component::Ports::call`.
+The legacy handler returns all 999 people. The guest never reaches the second
+page, so none of the fifteen large-account comparisons is qualified as passing.
+Memory, message, fuel and five-second limits are unchanged. The trace fails
+inside the initial JSON decode, before the SDK's later value conversion; merely
+removing that redundant conversion would not fix this observed failure.
+
+The dedicated `modules/people/tools/large-data-gate.sh` enables
+`JS139_PEOPLE_PAGING_PROBE=1` and selects the compiled database suite. Run it
+through `scripts/run-gate.sh` with the normal generated component and task-owned
+build environment, as documented in the module README. It intentionally remains
+red until the resource gap is fixed. The ordinary full People gate keeps its
+previous bounded checks and does not enable this diagnostic. A green ordinary
+gate is not a green large-account parity receipt.
+
+A scratch control that deliberately stopped repository reads after the first
+thousand rows also exhausted fuel on the first 999-person case, before its
+planted truncation was reached. This is **not** a successful truncation-control
+proof. Both initial gate attempts had first failed on fixture SQL using text
+expressions for enum columns; explicit casts fixed that setup error before the
+fuel failure was observed.
+
+No runtime behavior, public API, migration or product metadata is changed.
+The existing app-map declarations therefore remain unchanged. The next parity
+step is to process these real responses within the existing host budgets;
+shared-port projection or transport changes would require coordinated host
+work and are not implemented here. Arbitrary query plans, tied sort keys,
+three-page populations and concurrent writes remain unqualified too.
 
 Builds use task-owned Cargo, rustup and target directories. The pinned compiler
 and existing dependency caches were copied into task scratch; missing packages
-were fetched from the project lockfiles. Both declared Wasm standard-library
-targets were installed only into that scratch toolchain. The approved
-`wit-bindgen =0.57.1` remains a local project dependency; no global generator or
-new third-party package was installed.
+were fetched from project lockfiles. Both declared Wasm standard-library targets
+were installed only into scratch. Approved `wit-bindgen =0.57.1` remains a local
+project dependency; no global generator or new third-party package was installed.
 
-Remaining acceptance is unchanged: complete locale ordering and shipping HTTP
+Remaining acceptance also includes complete locale ordering and shipping HTTP
 parser qualification, ingest nudges, real providers, installed scheduling,
 command retention/quotas and broader backend failures. The real Rust shell still
 needs installed People route/frame and chat-tool composition. Authenticated real
 UI/chat approval, sign-in/origin/privacy acceptance and a second physical device
-over HTTPS remain unproved. This continuation does not add another server or
-connect the module directly to a database.
+over HTTPS remain unproved. This checkpoint adds no server or direct database
+connection to the module.
 
 The first independent Claude review of `8ff7c4753` raised a major concern about
-the pre-existing unordered name/alias paging, explicitly without a reproduction.
-That rating is rejected for this test-only checkpoint: the source behavior is
-unchanged, and the suggested unconditional ID ordering changes the established
-legacy alias tie behavior. This remains a known qualification limit, not a
-claim that arbitrary concurrent writes or query plans preserve pagination.
-Large tied-sort-key populations, three-page populations and concurrent writes
-remain unqualified. The review's concrete case-count and duplicate-fixture
-minors are addressed, as is exact-page termination; pending receipts remain
-explicit until the runs finish.
+pre-existing unordered name/alias paging, explicitly without a reproduction.
+That rating is rejected for this test-only checkpoint: source behavior is
+unchanged, and unconditional ID ordering changes established legacy alias tie
+behavior. This remains a known limit, not a claim that arbitrary query plans or
+concurrent writes preserve paging. Concrete count and duplicate-fixture minors
+are addressed, along with an exact-page case. All remain probe coverage, not
+passing large-account evidence.
+
+### Part 20 verification receipts
+
+Final ordinary-gate and installed-replay receipts are pending. The diagnostic's
+known fuel failure and its exact tested commit are recorded separately when the
+runs finish; they must not be read as a green parity result.
