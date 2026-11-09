@@ -1,4 +1,4 @@
-/* global document, window, fetch, setInterval */
+/* global document, window */
 // Runs only in the selected server's web view, using that profile's signed-in session.
 (() => {
   let account = null;

@@ -1,5 +1,6 @@
 //! Win32 tray and session startup. All handles belong to this app, never another process.
 use super::identity::{install_id, Action};
+use std::cell::RefCell;
 use std::ffi::c_void;
 use std::path::Path;
 use std::sync::atomic::{AtomicIsize, Ordering};
@@ -80,6 +81,7 @@ extern "system" {
     fn TranslateMessage(message: *const Message) -> i32;
     fn DispatchMessageW(message: *const Message) -> isize;
     fn PostMessageW(window: Handle, message: u32, w: usize, l: isize) -> i32;
+    fn PostQuitMessage(exit_code: i32);
     fn RegisterWindowMessageW(name: *const u16) -> u32;
 }
 #[link(name = "shell32")]
@@ -145,9 +147,64 @@ fn icon(window: Handle) -> Icon {
     icon.id = 1;
     icon
 }
+struct Callbacks {
+    action: Box<dyn Fn(Action)>,
+    restarted: u32,
+}
+thread_local! {
+    // Accessed only by the thread that owns the hidden tray window.
+    static CALLBACKS: RefCell<Option<Callbacks>> = const { RefCell::new(None) };
+}
+fn tray_icon(window: Handle) -> Icon {
+    let mut item = icon(window);
+    item.flags = 1 | 2 | 4; // message, icon, tooltip
+    item.callback = CALLBACK;
+    // SAFETY: IDI_APPLICATION is a predefined system resource.
+    item.icon = unsafe { LoadIconW(std::ptr::null_mut(), 32512usize as *const u16) };
+    fill(&mut item.tip, "Moss — right-click for Desktop settings");
+    item
+}
 unsafe extern "system" fn procedure(window: Handle, message: u32, w: usize, l: isize) -> isize {
-    // SAFETY: forwarded to the system with exactly the callback arguments.
-    unsafe { DefWindowProcW(window, message, w, l) }
+    // Sent messages arrive here while GetMessageW is waiting; posted messages arrive
+    // through DispatchMessageW. Handle both in the window procedure.
+    let handled = CALLBACKS.with(|cell| {
+        let callbacks = cell.borrow();
+        let Some(callbacks) = callbacks.as_ref() else {
+            return false;
+        };
+        if message == CALLBACK {
+            let event = match l as u32 {
+                0x0202 => Some(Action::Reveal),
+                0x0205 => Some(Action::Settings),
+                _ => None,
+            };
+            if let Some(event) = event {
+                (callbacks.action)(event);
+            }
+            true
+        } else if message == 0x0010 {
+            unsafe {
+                PostQuitMessage(0);
+            }
+            true
+        } else if callbacks.restarted != 0 && message == callbacks.restarted {
+            if unsafe { Shell_NotifyIconW(0, &tray_icon(window)) } == 0 {
+                (callbacks.action)(Action::Unavailable);
+                unsafe {
+                    PostQuitMessage(0);
+                }
+            }
+            true
+        } else {
+            false
+        }
+    });
+    if handled {
+        0
+    } else {
+        // SAFETY: forwarded to the system with exactly the callback arguments.
+        unsafe { DefWindowProcW(window, message, w, l) }
+    }
 }
 
 pub struct Tray {
@@ -194,11 +251,13 @@ pub fn tray(action: impl Fn(Action) + Send + 'static) -> Option<Tray> {
                 let _ = tx.send(None);
                 return;
             }
-            let mut item = icon(window);
-            item.flags = 1 | 2 | 4; // message, icon, tooltip
-            item.callback = CALLBACK;
-            item.icon = LoadIconW(std::ptr::null_mut(), 32512usize as *const u16);
-            fill(&mut item.tip, "Moss — right-click for Desktop settings");
+            let item = tray_icon(window);
+            CALLBACKS.with(|cell| {
+                *cell.borrow_mut() = Some(Callbacks {
+                    action: Box::new(action),
+                    restarted: RegisterWindowMessageW(wide("TaskbarCreated").as_ptr()),
+                })
+            });
             if Shell_NotifyIconW(0, &item) == 0 {
                 DestroyWindow(window);
                 let _ = tx.send(None);
@@ -210,32 +269,16 @@ pub fn tray(action: impl Fn(Action) + Send + 'static) -> Option<Tray> {
                 DestroyWindow(window);
                 return;
             }
-            let restarted = RegisterWindowMessageW(wide("TaskbarCreated").as_ptr());
             let mut message: Message = std::mem::zeroed();
             while GetMessageW(&mut message, std::ptr::null_mut(), 0, 0) > 0 {
-                if message.message == CALLBACK {
-                    let event = match message.l as u32 {
-                        0x0202 => Some(Action::Reveal),   // left release
-                        0x0205 => Some(Action::Settings), // right release
-                        _ => None,
-                    };
-                    if let Some(event) = event {
-                        action(event);
-                    }
-                } else if message.message == 0x0010 {
-                    break;
-                } else if restarted != 0
-                    && message.message == restarted
-                    && Shell_NotifyIconW(0, &item) == 0
-                {
-                    // The icon is gone: the window must become reachable again.
-                    action(Action::Unavailable);
-                    break;
-                }
                 TranslateMessage(&message);
                 DispatchMessageW(&message);
             }
-            action(Action::Unavailable);
+            CALLBACKS.with(|cell| {
+                if let Some(callbacks) = cell.borrow_mut().take() {
+                    (callbacks.action)(Action::Unavailable);
+                }
+            });
             WINDOW.store(0, Ordering::SeqCst);
             Shell_NotifyIconW(2, &item);
             DestroyWindow(window);

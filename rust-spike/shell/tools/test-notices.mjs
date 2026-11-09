@@ -1,11 +1,8 @@
-const { test } = require("node:test");
-const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const vm = require("node:vm");
-const source = fs.readFileSync(
-  require("node:path").join(__dirname, "../connect/assets/notices.js"),
-  "utf8"
-);
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import vm from "node:vm";
+const source = fs.readFileSync(new URL("../connect/assets/notices.js", import.meta.url), "utf8");
 
 async function client() {
   let tick;

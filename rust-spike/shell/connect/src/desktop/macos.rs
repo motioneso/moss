@@ -103,8 +103,8 @@ pub fn tray(action: impl Fn(Action) + Send + 'static) -> Option<Tray> {
 }
 
 pub fn notify(title: &str, body: &str) -> Result<(), String> {
-    // NSUserNotification remains available on supported macOS releases. A signed app bundle
-    // and the user's OS permission are required for delivery; Phase 7 qualifies those.
+    // This legacy native API is guarded by class availability. Delivery on supported macOS
+    // releases, bundle identity and OS permission still need Phase 7 runtime qualification.
     unsafe {
         let class = AnyClass::get(c"NSUserNotificationCenter")
             .ok_or("macOS notifications are unavailable")?;

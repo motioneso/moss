@@ -97,6 +97,7 @@ struct App {
     pending_stop: Option<String>,
     stopping: Option<String>,
     preferences: desktop::Preferences,
+    last_notice: [Option<std::time::Instant>; 2],
     tray: Option<desktop::Tray>,
     quit: bool,
 }
@@ -185,6 +186,7 @@ fn main() {
         pending_stop: None,
         stopping: None,
         preferences,
+        last_notice: [None; 2],
         tray,
         quit: false,
     };
@@ -279,11 +281,19 @@ impl App {
                     && self.current.as_ref() == Some(&server)
                     && self.server.as_ref().is_some_and(|view| view.id == server)
                 {
-                    let (title, body) = match kind.as_str() {
-                        "chat" => ("Moss chat", "A new reply is ready in Moss."),
-                        "reminder" => ("Moss reminder", "A new notification is waiting in Moss."),
+                    let (slot, title, body) = match kind.as_str() {
+                        "chat" => (0, "Moss chat", "A new reply is ready in Moss."),
+                        "reminder" => (
+                            1,
+                            "Moss notification",
+                            "A new notification is waiting in Moss.",
+                        ),
                         _ => return,
                     };
+                    if self.last_notice[slot].is_some_and(|last| last.elapsed().as_secs() < 3) {
+                        return;
+                    }
+                    self.last_notice[slot] = Some(std::time::Instant::now());
                     let _ = desktop::notify(title, body);
                 }
             }

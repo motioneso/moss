@@ -105,7 +105,7 @@ async fn desktop_notices(
 ) -> Result<impl IntoResponse, safety_core::error::ApiError> {
     let cx = safety_core::db::DataContext::open(&data.platform.app, &access).await?;
     let rows = cx.db().query(
-        "SELECT n.id::text || ':' || n.updated_at::text FROM app.notifications n
+        "SELECT n.id::text FROM app.notifications n
          WHERE n.recipient_user_id = $1 AND NOT EXISTS
            (SELECT 1 FROM app.notification_reads r WHERE r.notification_id = n.id AND r.user_id = $1)
          ORDER BY n.updated_at DESC, n.id DESC LIMIT 100", &[&access.actor_user_id()]
