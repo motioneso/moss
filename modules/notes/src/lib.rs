@@ -3,7 +3,6 @@ pub mod blocks;
 pub mod export;
 pub mod guest;
 pub mod identity;
-pub mod parser;
 pub mod routes;
 pub mod search;
 #[cfg(feature = "write-tools")]

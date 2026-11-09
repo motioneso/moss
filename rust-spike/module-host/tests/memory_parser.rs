@@ -1,10 +1,10 @@
 //! Compares the Rust parser with the actual legacy parseDocument vectors.
-use moss_notes::parser::parse_document;
+use moss_module_host::memory_parser::parse_document;
 use serde_json::Value;
 
 #[test]
 fn parser_matches_legacy_vectors() {
-    let rows = include_str!("parser-vectors.jsonl");
+    let rows = include_str!("data/memory-parser-vectors.jsonl");
     let mut count = 0;
     for line in rows.lines() {
         let row: Value = serde_json::from_str(line).unwrap();

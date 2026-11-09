@@ -1050,3 +1050,15 @@ filesystem call. Invalid UTF-8 names refuse the whole walk, stricter than legacy
 These are explicit worker-design limits alongside the size bounds. No exhaustive
 platform, power-loss, external-editor race or physical second-device proof is
 claimed by the cleanup tests.
+
+## Part eleven checkpoint — parser and file-indexing adapter
+
+Adds a legacy-compatible Rust note parser (423 real-oracle vectors; failing controls
+observed) and an unwired `MemoryIngestPorts` host adapter for `index.sync-open` and
+`index.sync-file`. See "Part eleven" in `modules/notes/README.md` for limits.
+
+Still open: wire the adapter and a real embedding service in assembly; database and
+privacy gate for ingestion (two owners, admin, RLS removal control); managed publication;
+queue dispatch, schedule and manual sync route; last-sync status; installed chat tool
+join with approval; private export, daily archives; full HTTP parity; live Rust-instance
+proof and second-device HTTPS proof. No `wit-bindgen` change this part (0.57.1 pinned).

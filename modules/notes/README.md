@@ -366,3 +366,21 @@ the compiled sync corpus. The actual SQL/privacy and installed-search checks rem
 separate evidence. Full indexing/sync, approved write execution, assembled Settings
 and chat, and a separate physical-device HTTPS check remain required before Notes
 can replace the working legacy module.
+
+## Part eleven checkpoint — note parser and file-indexing adapter
+
+`rust-spike/module-host/src/memory_parser.rs` ports the legacy note parser (frontmatter,
+wikilinks, `## ` sections, 2000-unit chunk cap, line ranges) on UTF-16 units. It is
+compared with 423 vectors produced by the actual legacy `parseDocument`
+(`tests/data/memory-parser-parity.ts`), and the comparison was observed failing with the
+chunk budget and the section-boundary rule altered. Lone surrogates cut by the budget
+become U+FFFD here and in the content hash, where legacy would keep the lone surrogate.
+
+`memory_ingest.rs` adds `MemoryIngestPorts` for `index.sync-open` and `index.sync-file`
+on the same trusted source binding as `MemoryCleanupPorts`. It checks the saved folder
+under actor RLS, rejects a different root or path, reads one file without following
+symlinks, indexes one file per transaction (chunks, links, file record) and refuses to
+touch managed-snapshot rows. Embeddings come from a host `DocumentEmbeddings` service
+the guest cannot influence. It compiles but is NOT wired into assembly, has no database
+or privacy test yet, embeds sequentially, and has no managed publication. Sync stays
+disabled in the package until those exist.

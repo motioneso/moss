@@ -1,6 +1,6 @@
 /** Runs the actual legacy parseDocument over fixed and seeded inputs and writes the vectors. */
 import { writeFileSync } from "node:fs";
-import { parseDocument } from "../../../packages/memory/src/parser.ts";
+import { parseDocument } from "../../../../packages/memory/src/parser.ts";
 
 const long = (n: number, ch = "word ") => ch.repeat(n);
 const fixed: string[] = [
@@ -47,7 +47,7 @@ for (let i = 0; i < 400; i++) {
 }
 const rows = cases.map((input) => ({ input, expected: parseDocument(input) }));
 writeFileSync(
-  new URL("../src/tests/parser-vectors.jsonl", import.meta.url),
+  new URL("./memory-parser-vectors.jsonl", import.meta.url),
   rows.map((r) => JSON.stringify(r)).join("\n") + "\n"
 );
 console.log(`PASS ${rows.length} actual legacy parseDocument vectors`);
