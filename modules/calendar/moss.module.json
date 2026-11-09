@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -109,6 +109,11 @@
       "signIn": true
     },
     {
+      "method": "POST",
+      "path": "/day-plans/:id/preview",
+      "signIn": true
+    },
+    {
       "method": "GET",
       "path": "/briefing-settings",
       "signIn": true
@@ -193,6 +198,18 @@
           "id": "calendar-read-draft",
           "description": "Read the current draft before retrying. Check the public task adapter for task-linked edits.",
           "path": "/settings/modules"
+        }
+      ]
+    },
+    {
+      "id": "calendar.day_plan_preview",
+      "description": "Preview a saved day plan's selected changes before anything is applied: before and after times, task eligibility, deadline risk and overlaps between selected changes. Nothing is written and no provider is contacted. Calendar-busy conflicts need the provider-backed source context, which this host does not provide yet, so availability reports unavailable instead of claiming the time is free.",
+      "errors": [
+        {
+          "code": "preview-not-available",
+          "class": "transient",
+          "description": "The plan changed since it was read, or a selected change is not part of this plan. Read the current plan before previewing again.",
+          "remediationRef": "calendar-read-draft"
         }
       ]
     },

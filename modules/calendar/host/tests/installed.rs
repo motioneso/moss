@@ -1,5 +1,7 @@
 #[path = "support/kv_guard.rs"]
 mod kv_guard;
+#[path = "support/preview_oracle.rs"]
+mod preview_oracle;
 #[path = "support/read_oracle.rs"]
 mod read_oracle;
 #[path = "support/registry.rs"]
@@ -42,6 +44,7 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
         }
     });
     read_oracle::seed(&f);
+    let preview_seeded = preview_oracle::seed(&f);
     let dir = tempfile::tempdir().unwrap();
     let registry = tempfile::tempdir().unwrap();
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
@@ -125,6 +128,7 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
         assert_eq!(write["status"], 404);
     }
     read_oracle::compare(&app, &f);
+    preview_oracle::compare(&app, &f, &preview_seeded);
     let settings = call(f.a, "GET", "/briefing-settings", Value::Null);
     assert_eq!(settings["body"]["settings"]["prepTaskMode"], "auto");
     let display = call(f.a, "GET", "/display-settings", Value::Null);

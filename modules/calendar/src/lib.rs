@@ -10,6 +10,7 @@ pub mod events;
 pub mod heartbeat;
 pub mod model;
 pub mod plans;
+mod preview;
 pub mod settings;
 
 #[derive(Debug)]
@@ -115,6 +116,7 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
             input.plan_id = id;
             plans::save(host, input)
         }
+        ("POST", "/day-plans/:id/preview") => preview::preview(host, &id, request.body),
         ("GET", "/briefing-settings") => settings::read(host),
         ("PATCH", "/briefing-settings") => settings::save(host, request.body),
         ("GET", "/display-settings") => display::read(host),

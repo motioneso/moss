@@ -16,7 +16,7 @@ export async function readHttpOracle(actor: string, paths: readonly string[]) {
 export async function httpOracle(
   actor: string,
   requests: readonly {
-    method: "GET" | "PATCH";
+    method: "GET" | "PATCH" | "POST";
     url: string;
     body?: Record<string, unknown>;
   }[]
