@@ -403,3 +403,24 @@ not full pixels or all regional formatting. The signed-in live check exercises
 Month layout, today styling and navigation at desktop and phone widths using
 synthetic cache rows. Full Calendar parity and physical second-device HTTPS
 remain open; see the phase report for the complete remaining list.
+
+## Day and Week scroll positioning (part 18)
+
+Version 0.18.0 opens Day and Week with the current time centered in the actual
+visible grid, clamped at the start and end of the day. A changed-data refresh
+retains the user's vertical position, including a deliberate scroll to midnight.
+This uses the grid's measured height rather than a fixed desktop offset. The
+screen remains a client of the installed server API.
+
+The comparison checks Rust's pure initial-position calculation against the real
+React grid's DOM scroll effect for three day counts, three heights and four times.
+Wasm wiring and retention are checked separately by the signed-in runner at desktop
+and phone widths and checks retained scroll after a synthetic cached event
+changes on the disposable server. It does not substitute API responses.
+Full cutover, provider tools/jobs/execution, full shell/chat, complete parity and
+physical second-device trusted HTTPS remain open as listed in the phase report.
+Month now reserves more minimum row height than the existing screen so three
+event chips and the extra-events button stay inside their clipping container.
+The live check verifies the whole overflow control fits before clicking it.
+Re-centering after a saved timezone change remains open. Browser clamping at
+controlled day-boundary times is not covered by the DOM comparison.

@@ -950,3 +950,41 @@ status controls; full shell/Today/chat; old-screen replacement; complete assembl
 parity; physical second-device trusted HTTPS. Disposable TLS, a same-computer
 LAN request and a phone-width screenshot do not prove physical-device access
 or production certificate trust.
+
+## JS-135 / part 18: Day and Week scroll positioning checkpoint
+
+Card 525. Package 0.18.0 opens Day and Week around the current time using half
+the actual visible grid height, matching the existing screen's scroll effect.
+The browser clamps the result at the beginning and end of the day. Changed-data
+refreshes retain the user's vertical position, including zero at midnight. No
+provider, data, host or cross-module boundary changes are required; Calendar
+remains a pure client of the installed server API through its opaque frame bridge.
+
+The new differential compares Rust's pure initial-position calculation with the
+real production React grid's DOM scroll effect for three day counts, three heights
+and four times. It does not execute Wasm wiring or test browser scroll clamping. The
+signed-in live runner measures the real installed grid at desktop and phone
+widths, then changes a synthetic cache row on the disposable server and checks
+that the next ordinary refresh preserves the user's position. Fresh red/green
+results, full Calendar gate, live checks and review are recorded in the task's
+Proof artifact. The original failing-first privacy witnesses remain in the gate.
+
+The build uses a task-local copy of an existing Rust 1.95.0 home with its declared
+Wasm target and build caches. Dependencies are restored offline from the project
+lockfile. Both shared asset builders write into one scratch directory. No new
+dependency, global tool or wit-bindgen installation is performed.
+
+This is a bounded screen checkpoint. Still required: concrete public Tasks,
+Briefings and provider adapters and full provenance; complete validation,
+coercion and error parity; four provider tools; day-plan apply job and
+apply/retry/recovery/confirm execution; worker-role cache-evict dispatch; source
+behavior and external-calendar status controls; full shell/Today/chat; old-screen
+replacement; complete assembled parity; physical second-device trusted HTTPS.
+A disposable certificate, same-computer LAN request or phone-width browser does
+not establish physical-device access or production certificate trust.
+The live run also reproduced Month overflow clicks being intercepted by the next
+row. Its minimum row height now reserves room for the date, three chips and the
+extra-events button. This deliberately exceeds the legacy minimum; the rendered
+comparison still checks other Month structure and labels against production.
+The live runner checks the entire overflow button fits its event list before clicking.
+Re-centering after a saved timezone change remains open; this slice covers initial positioning.

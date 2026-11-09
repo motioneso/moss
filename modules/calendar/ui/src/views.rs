@@ -36,7 +36,7 @@ pub fn Month(
 ) -> impl IntoView {
     let cells = model::month(cursor);
     let rows = cells.len() / 7;
-    view! {<div class="cal-month" style=format!("min-height:{}px",42+rows*112)><div class="cal-month__head">{["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].into_iter().map(|name| view!{<div class="cal-month__dow">{name}</div>}).collect_view()}</div>
+    view! {<div class="cal-month" style=format!("min-height:{}px",42+rows*144)><div class="cal-month__head">{["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].into_iter().map(|name| view!{<div class="cal-month__dow">{name}</div>}).collect_view()}</div>
     <div class="cal-month__grid" style=format!("grid-template-rows:repeat({rows},1fr)")>{cells.into_iter().map(|day| {
         let mut entries = events.get(&day).cloned().unwrap_or_default();
         entries.sort_by_key(|e| (!e.event.all_day,e.start_min));
@@ -84,9 +84,11 @@ pub fn TimeGrid(
     #[cfg(target_arch = "wasm32")]
     Effect::new(move |_| {
         if let Some(el) = scroll.get() {
-            el.set_scroll_top(scroll_position.get_untracked().unwrap_or_else(|| {
-                (now_min.get_untracked() as f64 * 58.0 / 60.0 - 180.0).max(0.0) as i32
-            }));
+            el.set_scroll_top(model::grid_scroll_top(
+                now_min.get_untracked(),
+                el.client_height(),
+                scroll_position.get_untracked(),
+            ));
         }
     });
     view! {<div class="cal-tg">

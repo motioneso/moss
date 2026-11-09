@@ -259,7 +259,7 @@ fn month_restores_authored_date_markers_and_row_geometry() {
             output.contains("class=\"mo\""),
             "First-of-month label is missing"
         );
-        assert!(output.contains(&format!("min-height:{}px", 42 + rows * 112)));
+        assert!(output.contains(&format!("min-height:{}px", 42 + rows * 144)));
         assert!(output.contains(&format!("grid-template-rows:repeat({rows},1fr)")));
     }
 }

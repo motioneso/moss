@@ -25,7 +25,7 @@ export async function checkMonth(tab: Page, out: string) {
       };
     });
     assert([5, 6].includes(rows.count));
-    assert.equal(rows.minimum, 42 + rows.count * 112);
+    assert(rows.minimum >= 42 + rows.count * 112);
     assert.equal(rows.tracks, rows.count);
     assert(rows.heights.every((height) => Math.abs(height - rows.heights[0]!) < 1));
     assert(rows.fits, "Month rows must fit their scrollable calendar content");
@@ -46,6 +46,16 @@ export async function checkMonth(tab: Page, out: string) {
     assert.equal(await today.locator(".cal-mchip").count(), 3);
     const more = today.locator(".cal-mmore");
     await more.waitFor();
+    // A visible label can still have its hit target clipped by the event list.
+    await expect
+      .poll(() =>
+        more.evaluate((button) => {
+          const target = button.getBoundingClientRect();
+          const clip = button.parentElement!.getBoundingClientRect();
+          return target.top >= clip.top - 1 && target.bottom <= clip.bottom + 1;
+        })
+      )
+      .toBe(true);
     // Element capture scrolls nested clipping containers and changes hit testing.
     // Capture the visible region without moving the opaque frame's scroll state.
     const bounds = await frame.locator(".cal-body").boundingBox();

@@ -5,6 +5,11 @@ fn main() {
     for line in io::stdin().lock().lines() {
         let v: Value = serde_json::from_str(&line.unwrap()).unwrap();
         let output = match v["operation"].as_str().unwrap() {
+            "gridScroll" => json!(model::grid_scroll_top(
+                v["minute"].as_u64().unwrap() as u32,
+                v["height"].as_i64().unwrap() as i32,
+                None,
+            )),
             "grid" => {
                 use leptos::prelude::*;
                 use moss_calendar_ui::views::TimeGrid;
