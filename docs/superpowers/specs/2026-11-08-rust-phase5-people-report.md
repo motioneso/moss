@@ -1279,20 +1279,25 @@ map's folder-browsing entry describes the reading order.
 
 ### Part-eleven verification
 
-- First review found the first ordering pass still differed from the
-  legacy order for punctuation, special letters such as `ø`, `æ`, `œ`
-  and `ß`, distinct accents, and separate accent marks. The comparator
-  now follows the legacy collation order for punctuation, expands or
-  places special letters as the legacy order does, compares accents by
-  kind, and treats separate accent marks as accents. Twelve further
-  native cases pin those pairs against the legacy results.
-- Installed replay `200554-LZ4xRx` passed (`rc=0`) on clean merged
-  `72030a7ca`: all 163 legacy route responses and all seven table
+- Two review rounds drove the ordering work. The first found the first
+  pass still differed from the legacy order for punctuation, special
+  letters such as `ø`, `æ`, `œ` and `ß`, distinct accents, and separate
+  accent marks. The second found accented letters outside the table,
+  including Romanian and Vietnamese names, sorting after `z`. The
+  comparator now follows the legacy collation order for punctuation,
+  expands or places special letters as the legacy order does, compares
+  accents by kind, treats separate accent marks as accents, and places
+  the added letter groups under their base letters. Twenty-seven
+  native cases pin those pairs against the legacy results. Two small
+  differences remain accepted: a letter carrying two separate accent
+  marks compares by its first mark, and names the legacy order calls
+  equal keep a stable raw-text order. Two such names rarely coexist.
+- Installed replay `201753-ccBlpP` passed (`rc=0`) on clean `ca164b565`: all 163 legacy route responses and all seven table
   snapshots matched, including the new folder order, other-user and
   administrator attempts, signed installation and reload, and all four
   consumer APIs. The fifty-reference timing remains as recorded in part
   ten; the default five-second budget stays unqualified.
-- Nine-suite People gate `201039-jiKrUU` passed (`rc=0`) on the same
+- Nine-suite People gate `201951-jvQmoL` passed (`rc=0`) on the same
   clean commit: ten integration tests across all nine suites, including
   the failing-first privacy matrix for both runtime roles. Controls fail
   with protection removed and pass with it restored.
@@ -1301,10 +1306,10 @@ map's folder-browsing entry describes the reading order.
   typecheck, Prettier, file-size check, pure-vector comparison and Rust
   app-map generation pass.
 - Component SHA-256:
-  `244190bfac2347e8b432cdf996e4f0edd89b23739b3099ab48381740eefa6764`.
+  `e4092dc68a207f15a8386e5186ca707b0baf852002132724562e695e0217d513`.
 - Gate-tested package SHA-256:
-  `9e078cdb30d772b62648585b80099c7636bd23270015075e70e6c4a798290419`
-  (406466 bytes).
+  `7afaf9e8dd89b86b70c8c0ab5ea11062a97f5078056448a040e599f0041deb8a`
+  (406543 bytes).
 - Builds and caches stayed in task-owned scratch. No global install. The
   approved pinned `wit-bindgen =0.57.1` remains a declared dependency.
 
