@@ -18,7 +18,7 @@ pub struct Layout {
     /// Spike stand-in for the OS key store: one owner-only file per database password.
     pub secrets: PathBuf,
     pub logs: PathBuf,
-    /// Held with `flock` by the one supervisor allowed to run this install.
+    /// Held by the one supervisor allowed to run this install.
     pub lock: PathBuf,
 }
 
