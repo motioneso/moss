@@ -991,10 +991,13 @@ Part 18 covered initial positioning; the part 19 checkpoint below adds timezone 
 
 ## JS-142 / part 19: saved timezone positioning checkpoint
 
-Card 525. Package 0.19.0 recenters Day and Week when a refresh receives a different
-account timezone; ordinary refreshes in the same timezone retain the user's scroll.
-The installed signed-in test changes real disposable-server preferences and cache
-rows at desktop and phone widths. Fresh red/green results, gate, screenshots and
-review belong in the Proof artifact. See `modules/calendar/README.md` for details.
-No new tool or dependency is installed. The remaining part-18 list above still
-applies, including full cutover, provider execution and physical-device HTTPS.
+Card 525, package 0.19.0, draft PR #4141. Day and Week reset their remembered scroll
+only when the effective saved timezone changes. App map and live regression updated.
+Baseline live assertion failed by 474.033 pixels; the after-fix live run is pending.
+Paused at Ben's CPU-load request on 2026-11-09. No further builds or tests started.
+The full gate passed UI/data, installed reads/settings/drafts, 210 operation cases,
+and failing-first privacy for all five tables; tools/jobs were interrupted (rc 143).
+Repository formatting/file-size and scoped types/lint passed; root types interrupted.
+Claude found no blocker/major on c4a20ef90. This resume-note commit needs review.
+Resume: rerun the full gate, then signed-live, root types, proof and remaining review.
+See README for commands. No new tools installed. Full port/device proof remain open.
