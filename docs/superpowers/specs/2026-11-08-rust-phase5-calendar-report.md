@@ -481,6 +481,15 @@ scratch directory for the live run. The existing Rust 1.95.0 Wasm target and pro
 binding helper are reused. Dependencies come only from existing lockfiles. No global
 tool, new dependency or wit-bindgen installation is performed.
 
+The first live attempt reached signed-in Calendar but its new visibility assertion
+failed because TypeScript inserted a helper into a nested browser callback. The
+runner now polls from Node with a self-contained browser callback. This correction
+and the subsequent main rebase happened after both allowed independent reviews;
+the checkpoint needs another review round before Ready. The earlier reviews found
+no blocker or major. Height-only resizing still recenters today and remains a minor
+follow-up. Strict UI Clippy also reports two pre-existing modulo-style lints in the
+time formatter; the guest and host strict Clippy checks pass.
+
 ### Remaining acceptance work
 
 The part 5 remaining list still applies: the other original HTTP contracts and untested

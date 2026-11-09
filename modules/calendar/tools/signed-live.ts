@@ -387,30 +387,26 @@ try {
   await frame.locator(".cal-legend").getByText("Cedar holding", { exact: true }).waitFor();
   // Today must be centered when possible, including when the viewport changes after loading.
   const assertTodayVisible = async () => {
-    await frame.locator(".cal-body").evaluate(
-      (body) =>
-        new Promise<void>((resolve, reject) => {
-          const deadline = performance.now() + 10000;
-          const check = () => {
-            const today = body.querySelector(".cal-tg__dayhd.is-today");
-            if (!today) return resolve(); // A work week can omit today on a weekend.
-            const box = today.getBoundingClientRect();
-            const outer = body.getBoundingClientRect();
-            const ideal = Math.max(
-              0,
-              Math.min(
-                body.scrollWidth - body.clientWidth,
-                body.scrollLeft + box.left - outer.left + box.width / 2 - body.clientWidth / 2
-              )
-            );
-            if (Math.abs(body.scrollLeft - ideal) <= 2) resolve();
-            else if (performance.now() >= deadline)
-              reject(new Error("Today is not revealed in the narrow week"));
-            else requestAnimationFrame(check);
-          };
-          check();
-        })
-    );
+    const deadline = Date.now() + 10000;
+    while (Date.now() < deadline) {
+      const visible = await frame.locator(".cal-body").evaluate((body) => {
+        const today = body.querySelector(".cal-tg__dayhd.is-today");
+        if (!today) return true; // A work week can omit today on a weekend.
+        const box = today.getBoundingClientRect();
+        const outer = body.getBoundingClientRect();
+        const ideal = Math.max(
+          0,
+          Math.min(
+            body.scrollWidth - body.clientWidth,
+            body.scrollLeft + box.left - outer.left + box.width / 2 - body.clientWidth / 2
+          )
+        );
+        return Math.abs(body.scrollLeft - ideal) <= 2;
+      });
+      if (visible) return;
+      await delay(100);
+    }
+    assert.fail("Today is not revealed in the narrow week");
   };
   await assertTodayVisible();
   await tab.screenshot({ path: join(out, "signed-in-phone-week.png") });
