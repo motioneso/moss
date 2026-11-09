@@ -74,7 +74,7 @@ fn open(path: &Path, directory: bool) -> io::Result<File> {
     wide(path)?;
     let mut options = OpenOptions::new();
     options.access_mode(if directory {
-        READ_CONTROL | FILE_READ_ATTRIBUTES
+        READ_CONTROL | FILE_READ_ATTRIBUTES | FILE_LIST_DIRECTORY
     } else {
         GENERIC_READ | GENERIC_WRITE | READ_CONTROL
     });
@@ -91,6 +91,7 @@ fn open(path: &Path, directory: bool) -> io::Result<File> {
 /// to be equivalent. It also rejects file hard links and all final-component reparse points.
 fn validate(file: &File, directory: bool) -> io::Result<()> {
     let expected = Security::current(directory)?;
+    // SAFETY: FileInformation is a POD output structure with no invalid bit patterns.
     let mut info: FileInformation = unsafe { std::mem::zeroed() };
     // SAFETY: file owns the handle; info is a correctly sized output buffer.
     check(unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut info) })?;
@@ -187,7 +188,7 @@ fn ace(acl: *const c_void, index: u32) -> io::Result<(u8, u32, *const c_void)> {
     if header.kind != 0 || header.size < 16 {
         return Err(refused("expected a simple allow entry"));
     }
-    let mask = unsafe { *pointer.cast::<u8>().add(4).cast::<u32>() };
+    let mask = unsafe { pointer.cast::<u8>().add(4).cast::<u32>().read_unaligned() };
     let sid = unsafe { pointer.cast::<u8>().add(8).cast::<c_void>() };
     if unsafe { IsValidSid(sid) } == 0 || unsafe { GetLengthSid(sid) } + 8 > u32::from(header.size)
     {

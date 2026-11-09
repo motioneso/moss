@@ -24,8 +24,8 @@ packages. It does **not** enable Windows local server creation or Stop.
   and invalid paths. A disposable Windows CI harness runs the suite as a standard user and
   uses a second standard account to check actual read/write/traversal denial for both a file
   within a private directory and a private file directly within a shared parent.
-- Negative controls remove ACL comparison and hard-link rejection and require the matching
-  native rejection tests to fail. A configured workflow is not evidence of a completed run.
+- Negative controls remove directory data access (needed for share checks), protected-DACL
+  rejection, ACL comparison and hard-link rejection, requiring the matching tests to fail. A configured workflow is not evidence of a completed run.
 
 This is internal groundwork with no new screen, setting, error or remediation. Existing app-map
 entries saying Windows local setup/Stop are unavailable remain accurate. The canonical Phase 1

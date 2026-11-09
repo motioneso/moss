@@ -15,10 +15,10 @@ fn private_directory_and_file_round_trip() {
     let mut contents = String::new();
     reopened.read_to_string(&mut contents).unwrap();
     assert_eq!(contents, "private state");
-    validate(&directory, true).unwrap();
-    // The object cannot be renamed out from under an active consumer.
-    assert!(std::fs::rename(&dir, temp.path().join("moved")).is_err());
     drop(reopened);
+    validate(&directory, true).unwrap();
+    // Only the directory handle remains: an open child must not mask a broken directory lock.
+    assert!(std::fs::rename(&dir, temp.path().join("moved")).is_err());
     drop(directory);
     std::fs::rename(&dir, temp.path().join("moved")).unwrap();
 }
@@ -66,7 +66,7 @@ fn rejects_broader_missing_duplicate_and_inherited_acl_entries() {
         let handle = unsafe {
             CreateFileW(
                 path_wide.as_ptr(),
-                GENERIC_READ | GENERIC_WRITE | READ_CONTROL,
+                FILE_ALL_ACCESS,
                 FILE_SHARE_READ | FILE_SHARE_WRITE,
                 &descriptor.attributes(),
                 CREATE_NEW,
@@ -76,6 +76,27 @@ fn rejects_broader_missing_duplicate_and_inherited_acl_entries() {
         };
         assert_ne!(handle as isize, -1, "{}", io::Error::last_os_error());
         let file = unsafe { File::from_raw_handle(handle) };
+        if dacl.starts_with("D:(") {
+            // Creation may normalize an explicit ACL into a protected one. Explicitly enable
+            // inheritance on the actual object instead of assuming the SDDL control survives.
+            let (_, acl) = descriptor.owner_and_acl().unwrap();
+            let code = unsafe {
+                SetSecurityInfo(
+                    file.as_raw_handle(),
+                    SE_FILE_OBJECT,
+                    DACL_SECURITY_INFORMATION | 0x2000_0000,
+                    null_mut(),
+                    null_mut(),
+                    acl,
+                    null_mut(),
+                )
+            };
+            assert_eq!(code, 0, "could not unprotect the fixture DACL");
+            assert_eq!(
+                validate(&file, false).unwrap_err().to_string(),
+                "expected a protected, non-null private DACL"
+            );
+        }
         assert!(validate(&file, false).is_err(), "accepted {dacl}");
     }
 }

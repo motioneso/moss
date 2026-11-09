@@ -1,8 +1,7 @@
 param(
     [string]$BuildReport = '.rust-locks/child-build.jsonl',
     [string]$Filter = 'windows_child',
-    [switch]$ExpectFailure,
-    [string]$ExpectedResult = 'test result: ok\. 8 passed; 0 failed; 1 ignored'
+    [switch]$ExpectFailure
 )
 # GitHub's Windows runner is elevated. Exercise the actual test binary as a separate standard
 # local account; do not weaken the product's elevation refusal just to accommodate CI.
@@ -49,7 +48,7 @@ try {
             throw 'Negative control did not produce the expected test failure'
         }
         Write-Output 'Negative control: expected failure observed.'
-    } elseif ($process.ExitCode -ne 0 -or -not (Select-String -Path $out -Pattern $ExpectedResult)) {
+    } elseif ($process.ExitCode -ne 0 -or -not (Select-String -Path $out -Pattern 'test result: ok\. 8 passed; 0 failed; 1 ignored')) {
         throw "Windows child qualification failed or did not run the complete suite ($($process.ExitCode))"
     }
 } finally {

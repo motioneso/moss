@@ -7,6 +7,7 @@ pub const SE_FILE_OBJECT: u32 = 1;
 pub const SE_DACL_PROTECTED: u16 = 0x1000;
 pub const FILE_ALL_ACCESS: u32 = 0x001f01ff;
 pub const READ_CONTROL: u32 = 0x20000;
+pub const FILE_LIST_DIRECTORY: u32 = 1;
 pub const FILE_READ_ATTRIBUTES: u32 = 0x80;
 pub const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x00200000;
 pub const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x02000000;
@@ -123,4 +124,14 @@ extern "system" {
     pub fn EqualSid(a: *const c_void, b: *const c_void) -> i32;
     pub fn IsValidSid(sid: *const c_void) -> i32;
     pub fn GetLengthSid(sid: *const c_void) -> u32;
+    #[cfg(test)]
+    pub fn SetSecurityInfo(
+        handle: *mut c_void,
+        kind: u32,
+        information: u32,
+        owner: *mut c_void,
+        group: *mut c_void,
+        dacl: *mut c_void,
+        sacl: *mut c_void,
+    ) -> u32;
 }

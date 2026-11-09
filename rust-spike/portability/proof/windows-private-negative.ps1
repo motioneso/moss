@@ -7,6 +7,8 @@ $root = (Resolve-Path "$PSScriptRoot/../../..").Path
 $source = Join-Path $root 'rust-spike/portability/src/windows_private.rs'
 $original = [IO.File]::ReadAllText($source)
 $mutations = @(
+    @{ before = '| FILE_LIST_DIRECTORY'; after = ''; test = 'private_directory_and_file_round_trip' },
+    @{ before = 'control & SE_DACL_PROTECTED == 0'; after = 'false'; test = 'rejects_broader_missing_duplicate_and_inherited_acl_entries' },
     @{ before = 'compare_acl(dacl, expected_acl)'; after = 'Ok(())'; test = 'rejects_broader_missing_duplicate_and_inherited_acl_entries' },
     @{ before = '|| (!directory && info.links != 1)'; after = ''; test = 'rejects_hard_links_and_wrong_object_types' }
 )
