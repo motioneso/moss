@@ -101,7 +101,7 @@
   "features": [
     {
       "id": "tasks.package-data",
-      "description": "Tasks component with validated task, list, tag, activity, view preference and ordered breakdown routes. Nineteen tool handlers cover six reads and thirteen task, list, tag, activity and breakdown actions. Full parity, assistant action policies and background jobs remain unfinished.",
+      "description": "Tasks component with validated task, list, tag, activity, view preference and ordered breakdown routes. Twenty-three tool handlers cover ten reads and thirteen task, list, tag, activity and breakdown actions. Full parity, assistant action policies and background jobs remain unfinished.",
       "errors": [
         {
           "code": "tasks-invalid-input",
@@ -122,11 +122,11 @@
     },
     {
       "id": "tasks.package-screens",
-      "description": "Package screen using the shared UI kit, authored typography and parent bridge: task loading; priority groups (Critical through Someday, then No priority) and four-quadrant grid, each ordered by due date then title; status and text search; list inclusion, show-only and exclusion with counts after status and tags but before search; multiple tag filters matching any selected tag, individually removable; Clear filters resets to open tasks across all lists; create and edit tasks, including draft tags and editable subtasks before saving a new task, reusing matching list tags; retry acknowledged partial saves without recreating the parent or completed child writes; completion and suggestion review; list creation and renaming; subtasks; tag creation and assignment; activity comments; saved default view. Open Choose lists for list choices; remove tag filters or clear filters to recover hidden tasks. Dates currently display in UTC. Full legacy screen and setting parity is unfinished.",
+      "description": "Package screen using the shared UI kit, authored typography and parent bridge: task loading; priority groups (Critical through Someday, then No priority) and four-quadrant grid, each ordered by due date then title; status and text search; list inclusion, show-only and exclusion with counts after status and tags but before search; multiple tag filters matching any selected tag, individually removable; Clear filters resets to open tasks across all lists; create and edit tasks, including draft tags and editable subtasks before saving a new task, offering up to eight unselected tags from the chosen list and refreshing suggestions when switching lists; typed existing tags are reused in task details; retry acknowledged partial saves without recreating the parent, replaying unchanged completion or recurrence, or repeating completed child writes; completion and suggestion review; list creation and renaming; subtasks; tag creation and assignment; activity comments; saved default view. Open Choose lists for list choices; remove tag filters or clear filters to recover hidden tasks. Dates currently display in UTC. Full legacy screen and setting parity is unfinished.",
       "remediations": [
         {
           "id": "reload-tasks",
-          "description": "Retry loading Tasks after checking the connection. Unsaved editor fields are retained on request failure. If a new task was created before a tag or subtask write failed, retry Save task to finish; its list and child drafts stay locked during that retry.",
+          "description": "Retry loading Tasks after checking the connection. Unsaved editor fields are retained on request failure. If a new task was created before a tag or subtask write failed, retry Save task to finish; its list and child drafts stay locked during that retry. If list tag suggestions fail to load, use Retry list tags or type a tag; other drafts are kept.",
           "path": "/tasks"
         }
       ],

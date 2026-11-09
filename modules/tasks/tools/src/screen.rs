@@ -105,6 +105,11 @@ pub fn render() -> String {
                             </Field>
                             <span id="add-new-tag"><Button variant=ButtonVariant::Secondary>"Add tag"</Button></span>
                         </div>
+                        <div id="new-tag-suggestions" class="tasks-actions" role="group" aria-label="Suggested list tags"></div>
+                        <div id="new-tags-error" hidden role="status">
+                            <p>"List tags could not load. You can still type tags, or try again."</p>
+                            {action("retry-new-tags", "Retry list tags")}
+                        </div>
                         <h3>"Subtasks"</h3>
                         <div id="new-subtasks" class="tasks-fields"></div>
                         <span id="add-new-subtask"><Button variant=ButtonVariant::Secondary>"Add subtask"</Button></span>

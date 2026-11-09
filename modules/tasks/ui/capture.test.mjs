@@ -63,6 +63,37 @@ test("draft cleaning keeps legacy tag and subtask rules", () => {
   assert.deepEqual(cleanSubtasks([" first ", "", "\t", "same", "same"]), ["first", "same", "same"]);
 });
 
+test("retrying child writes does not repeat completion or reset an advanced recurrence", async () => {
+  const patches = [];
+  const fields = {
+    title: "Repeating parent",
+    listId: "l",
+    status: "done",
+    recurrence: { freq: "daily", interval: 1, occurrence_date: "2026-11-09" }
+  };
+  const save = newTaskSave(async (method, path, body) => {
+    if (method === "POST" && path === "/tasks")
+      return {
+        task: {
+          ...fields,
+          id: "p",
+          recurrence: { ...fields.recurrence, occurrence_date: "2026-11-10" }
+        }
+      };
+    if (method === "PATCH") {
+      patches.push(body);
+      return { task: { id: "p", listId: "l" } };
+    }
+    if (path.endsWith("/breakdown")) throw new Error("child refused");
+    throw new Error("Unexpected request");
+  });
+  await assert.rejects(save.save(fields, { steps: ["child"], tags: [] }));
+  await assert.rejects(save.save({ ...fields, title: "Renamed" }, { steps: [], tags: [] }));
+  assert.deepEqual(patches, [{ title: "Renamed" }]);
+  await assert.rejects(save.save({ ...fields, title: "Renamed" }, { steps: [], tags: [] }));
+  assert.equal(patches.length, 1, "acknowledged parent changes are not resent");
+});
+
 test("a rejected breakdown resumes before tags without another parent", async () => {
   let parents = 0;
   let breakdowns = 0;
@@ -95,7 +126,7 @@ test("draft controls retain edits, remove items, defer writes and lock a partial
     new JSDOM(`<form id="task-form"><button type="submit">Save task</button></form><select id="task-list"><option>list</option></select>
     <section id="new-task-extras"><p id="capture-progress" hidden></p>
       <div id="new-subtasks"></div><span id="add-new-subtask"><button>Add</button></span>
-      <div id="new-tags"></div><input id="new-tag-name"><span id="add-new-tag"><button>Add</button></span>
+      <div id="new-tags"></div><div id="new-tag-suggestions"></div><div id="new-tags-error" hidden></div><input id="new-tag-name"><span id="add-new-tag"><button>Add</button></span>
     </section>`);
   const previous = globalThis.document;
   globalThis.document = dom.window.document;
@@ -213,4 +244,25 @@ test("existing tags and a concurrent tag creator are reused", async () => {
   await save.save({}, { steps: [], tags: ["work", "home"] });
   assert.deepEqual(assigned, ["existing", "concurrent"]);
   assert.equal(creates, 1);
+});
+
+test("failed parent edits remain pending and explicit status edits are sent on retry", async () => {
+  const patches = [];
+  let rejectEdit = true;
+  const save = newTaskSave(async (method, path, body) => {
+    if (path === "/tasks") return { task: { id: "p", listId: "l" } };
+    if (method === "PATCH") {
+      patches.push(body);
+      if (rejectEdit) {
+        rejectEdit = false;
+        throw new Error("edit refused");
+      }
+      return { task: { id: "p", listId: "l" } };
+    }
+    throw new Error("breakdown refused");
+  });
+  await assert.rejects(save.save({ status: "done" }, { steps: ["child"], tags: [] }));
+  await assert.rejects(save.save({ status: "todo" }, { steps: [], tags: [] }));
+  await assert.rejects(save.save({ status: "todo" }, { steps: [], tags: [] }));
+  assert.deepEqual(patches, [{ status: "todo" }, { status: "todo" }]);
 });

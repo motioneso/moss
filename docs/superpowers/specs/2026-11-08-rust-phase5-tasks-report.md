@@ -1329,3 +1329,43 @@ Inbox list and persisted task. Browser checks exercised the real unavailable-pro
 message, description search recovery, Clear filters, disabled empty interpretation
 and task persistence after reload. Desktop and narrow-viewport screenshots are in
 the proof artifact; the narrow viewport is not second-device evidence.
+
+## Tasks part 18 checkpoint (JS-125, Card 526)
+
+New task now offers the chosen list's existing tags, excluding selected names and
+showing at most eight, as the legacy editor does. Switching lists refreshes the
+choices without discarding the draft. A failed tag read has an inline retry;
+people can still type tags. Selecting a stored tag preserves a literal leading
+hash. Existing task details reuses typed matching tags case-insensitively and
+rechecks the public list route after a rejected create to recover concurrent
+creation. The module app map describes these paths and recovery.
+
+Partial new-task saves now compare parent fields with acknowledged input.
+Retrying pending tags or subtasks sends only changed parent fields, instead of
+replaying completion and an old recurrence schedule after the server has advanced
+it. The same regression failed before this change and passes afterward. Lost
+responses after a server commit remain ambiguous without server idempotency.
+
+The worktree began at Phase 0a and was fast-forwarded to current main with Ben's
+explicit approval. Changes stay in Tasks and this report. Existing scratch Rust
+1.95, Wasm target and Cargo caches are reused offline, including the approved
+pinned wit-bindgen graph. The tools lockfile was refreshed offline without a
+byte change. Declared JavaScript dependencies were restored offline in this
+worktree. Nothing was installed globally. Workshop and Food remain excluded.
+Part of #4027; release note Category N/A.
+
+Both assistant-policy routes, actor timezone and lazy recurrence, recurrence
+jobs, deferred-queue policy and installed worker dispatch, public People linkage,
+policy/feedback, remaining screens/settings, installed chat, real-shell integration
+and performance acceptance remain unfinished. The full endpoint harness still
+has an unbound queue adapter and no observer for the module queue. Full Phase 5
+parity is not claimed. The signed UI fixture is separate from the real application
+shell; a narrow viewport does not establish physical second-device acceptance.
+Final checks, independent review and live evidence are recorded in the task proof.
+
+The new controller scenario fails against the previous controller and passes
+against this checkpoint's real shared-kit markup with a mocked parent bridge.
+All 23 screen/controller tests pass. Twenty-four exact comparisons extract the
+unchanged legacy editor's tag-suggestion expression, alongside twenty existing
+draft-cleaning comparisons. Targeted lint and Rust formatting checks pass.
+These controller checks do not replace signed-package browser or database proof.

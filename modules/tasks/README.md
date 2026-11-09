@@ -311,3 +311,19 @@ composition still needs live proof with a configured AI service.
 
 The existing full-port and real-shell acceptance gaps above remain. No new HTTP
 route, tool, job kind, SQL or shared host interface is added by this screen slice.
+
+## Part 18: list tag suggestions and retry safety
+
+New task offers up to eight unselected tags from its chosen list, matching the
+legacy editor. Changing lists refreshes the choices and keeps the draft. If a
+list's tags cannot load, Retry list tags fetches them again; typing still works.
+Selecting an existing tag preserves its stored name, including a literal leading
+hash. Task details reuses a case-insensitive existing tag instead of trying to
+create a duplicate; a rejected creation rechecks for a concurrent creator.
+
+A partial new-task retry sends only parent fields changed since the last
+acknowledged write. Unchanged completion and recurrence are not replayed while
+retrying tags or subtasks, preserving a schedule already advanced by the server.
+A lost response after a commit remains ambiguous without server idempotency.
+No route, tool, job kind, SQL or host interface changes. Remaining Phase 5 gaps
+listed in the report are still open; this checkpoint does not claim full parity.

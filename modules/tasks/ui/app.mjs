@@ -5,6 +5,7 @@ import { taskFilters } from "./filters.mjs";
 import { tagManager } from "./tags.mjs";
 import { listDeletion } from "./delete-list.mjs";
 import { captureDraft } from "./capture.mjs";
+import { findOrCreateTag } from "./task-tags.mjs";
 import { interpretedSearch } from "./search.mjs";
 
 const client = moduleClient();
@@ -271,6 +272,7 @@ async function editTask(id) {
   markSaved();
   state.focusAfter = $("title");
   if (task) await extras();
+  else await capture.loadTags($("task-list").value);
 }
 function closeEditor() {
   state.editing = null;
@@ -364,6 +366,7 @@ function manageLists() {
   state.focusAfter = $("list-name");
 }
 const actions = {
+  "retry-new-tags": () => capture.loadTags($("task-list").value),
   "clear-filters": () => {
     search.clear();
     filters.clear();
@@ -418,6 +421,9 @@ const actions = {
 document
   .querySelectorAll("[data-action]")
   .forEach((node) => node.addEventListener("click", () => run(actions[node.dataset.action])));
+$("task-list").addEventListener("change", () => {
+  if (!state.editing) void run(() => capture.loadTags($("task-list").value));
+});
 $("status-filter").addEventListener("input", render);
 $("list-options").addEventListener("toggle", () => {
   void client.resize(document.documentElement.scrollHeight).catch(() => {});
@@ -469,9 +475,7 @@ submit("subtask-form", async () => {
 submit("tag-form", async () => {
   const name = $("tag-name").value.trim().replace(/^#/, "").toLowerCase();
   if (!state.pendingTag || state.pendingTag.name !== name) {
-    state.pendingTag = (
-      await api("POST", `/tasks/lists/${state.editing.listId}/tags`, { name })
-    ).tag;
+    state.pendingTag = await findOrCreateTag(api, state.editing.listId, name);
   }
   await api("POST", `/tasks/${state.editing.id}/tags`, { tagId: state.pendingTag.id });
   state.pendingTag = null;
