@@ -1052,6 +1052,45 @@ begins `e8a717e66ecb`. Logs end `155045-j56WMp` (installed replay) and `155045-C
 They do not stand in
 for CI, the full foundation gate or browser e2e acceptance.
 
+### Main integration and review dispositions
+
+The first fresh review found a newer People part-eight merge (`7f934edde`, PR 4072) on
+main. It overlapped this task's oracle and report. The task integrated main `6c26f775a`
+into its own branch at `058879bfd`, retaining part eight's source fixes, historical reports
+and all of its per-case seeded note-edit requests. Those run before this task's creation
+and nested refresh requests, and the installed-consumer positive fixture is retained.
+The package and both database gates are rebuilt and rerun on that combined source.
+
+The review's file-inventory concern is addressed by comparing every relative filename
+in addition to note contents. Its seeded-ID concern is not a normalization defect:
+`Canon` preserves known IDs, so seeded note IDs already compare literally. An additional
+native assertion now proves that boundary, and the wording above states it explicitly.
+The generic initial worker error is recorded as such; its missing-permission cause follows
+from the guest call, grants and corrected regression. Repository lint is rerun after the
+combined oracle, replacing the earlier receipt's timing uncertainty.
+
+### Final integrated verification
+
+- Installed replay `160704-cLxwLC`: `rc=0`; **142 legacy responses**, all seven table
+  snapshots, canonical note bytes and the complete relative file inventory matched.
+  Both part eight's seeded edits and part nine's creation/refresh cases run. All four
+  consumer APIs, owner/other/admin isolation and installed Settings assets also passed.
+- Complete nine-suite People gate `160655-fmV3vo`: `rc=0`, including the shipping-manifest
+  worker regression and failing-first seven-table privacy matrix for both runtime roles.
+- Native People tests: 14 passed; strict People Clippy passed. The updated comparator
+  assertion passed, including literal seeded IDs. Repository lint and typecheck passed
+  again on the integrated source. Scoped Prettier, Rust formatting, Rust app-map generation
+  and the file-size check passed. A dry-run merge with main reports no conflicts.
+- Rebuilt generated guest SHA-256:
+  `7a868a7b96d610e88a0bd8032c56e969f5a448cbb36775ed443bcb93825e614d`.
+- Rebuilt package SHA-256:
+  `5d27b731cf77cb707bc96b0de820d3f5033138084bfbd3b7535a756f69709e43`
+  (404729 bytes). Its Settings assets come from the unchanged People UI source built above.
+- Both database receipts identify source commit `058879bfd`, only this report dirty,
+  fingerprint `be404fc55ec1`. Later changes only record these results in this report.
+  These replace the initial part-nine receipts for integration qualification. CI, full
+  foundation, real HTTP/UI/chat and physical-device acceptance remain unverified.
+
 This is a bounded checkpoint. The remaining full-port work below exceeds this continuation's
 single-context scope. No live listener, browser session or physical second device has been
 qualified by this task; those acceptance requirements remain open.
