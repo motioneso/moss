@@ -144,7 +144,14 @@ try {
   hidden(await compiled(other, "tasks.overdue", {}));
   await bootstrap.query("ALTER TABLE app.tasks DISABLE ROW LEVEL SECURITY");
   try {
-    const exposed = await compiled(other, "tasks.overdue", {});
+    const exposedAll = await compiled(other, "tasks.overdue", {});
+    // Scope the probe to this script's synthetic list: earlier gate fixtures
+    // also become visible when RLS is off and are not part of this assertion.
+    const exposed = {
+      data: {
+        items: exposedAll.data.items.filter((item: { listId: string }) => item.listId === list)
+      }
+    };
     assert.equal(exposed.data.items.length, 2);
     assert.throws(() => hidden(exposed), assert.AssertionError);
     console.log("PASS compiled drift privacy assertion fails with RLS removed");

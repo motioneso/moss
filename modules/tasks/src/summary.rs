@@ -71,25 +71,52 @@ pub fn execute<H: Host + ?Sized>(repo: &Repository<'_, H>, input: &Value) -> Res
     let today = now.date_naive();
     let start = Utc.from_utc_datetime(&today.and_hms_opt(0, 0, 0).expect("midnight"));
     let end = start + chrono::Duration::days(1);
-    let mut rows: Vec<Task> = repo
-        .persisted_tasks()?
-        .into_iter()
-        .filter(|t| match scope {
-            "completed" => t.status == "done",
-            "all" => true,
-            "overdue" => t.status == "todo" && t.due_at.is_some_and(|d| d < start),
-            "upcoming" => t.status == "todo" && t.due_at.is_some_and(|d| d >= end),
-            "undated" => t.status == "todo" && t.due_at.is_none(),
-            _ => t.status == "todo" && (t.due_at.is_none() || t.due_at.is_some_and(|d| d < end)),
-        })
-        .collect();
-    rows.sort_by(|a, b| {
-        a.due_at
-            .map(|d| d.timestamp())
-            .unwrap_or(i64::MAX)
-            .cmp(&b.due_at.map(|d| d.timestamp()).unwrap_or(i64::MAX))
-            .then(a.id.cmp(&b.id))
-    });
+    let cmp = |column: &str, op: moss_module_sdk::query::Compare, at: DateTime<Utc>| {
+        moss_module_sdk::query::Filter::Compare {
+            column: column.into(),
+            op,
+            value: json!(iso(at)),
+        }
+    };
+    use moss_module_sdk::query::{Compare, Filter};
+    let filter = match scope {
+        "completed" => Filter::eq("status", "done"),
+        "all" => Filter::All,
+        "overdue" => crate::repository::and(vec![
+            Filter::eq("status", "todo"),
+            cmp("due_at", Compare::Lt, start),
+        ]),
+        "upcoming" => crate::repository::and(vec![
+            Filter::eq("status", "todo"),
+            cmp("due_at", Compare::Ge, end),
+        ]),
+        "undated" => crate::repository::and(vec![
+            Filter::eq("status", "todo"),
+            Filter::Null {
+                column: "due_at".into(),
+                not: false,
+            },
+        ]),
+        _ => crate::repository::and(vec![
+            Filter::eq("status", "todo"),
+            Filter::Or {
+                filters: vec![
+                    Filter::Null {
+                        column: "due_at".into(),
+                        not: false,
+                    },
+                    cmp("due_at", Compare::Lt, end),
+                ],
+            },
+        ]),
+    };
+    let mut query = moss_module_sdk::query::Query::select(filter);
+    query.order = vec![
+        crate::repository::order("due_at", false),
+        crate::repository::order("id", false),
+    ];
+    query.limit = Some((LIMIT + 1) as u32);
+    let rows: Vec<Task> = repo.query(crate::repository::TASKS, &query)?;
     let truncated = rows.len() > LIMIT;
     let items: Vec<Value> = rows
         .iter()

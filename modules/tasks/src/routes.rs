@@ -76,28 +76,25 @@ fn dispatch<H: Host + ?Sized>(repo: &Repository<'_, H>, r: &RouteRequest) -> Res
             json!({"task":task_json(repo,repo.create_task(&input)?)?})
         }
         ("GET", "/tasks/focus") => {
-            let today = repo
+            let now = repo
                 .now()?
                 .parse::<chrono::DateTime<chrono::Utc>>()
-                .map_err(|_| Error::Http(500, "Internal server error"))?
-                .date_naive();
-            json!({"tasks":tasks_json(repo,crate::drift::focus(repo,today)?)?,"signals":[]})
+                .map_err(|_| Error::Http(500, "Internal server error"))?;
+            json!({"tasks":tasks_json(repo,crate::drift::focus(repo,now)?)?,"signals":[]})
         }
         ("GET", "/tasks/at-risk") => {
-            let today = repo
+            let now = repo
                 .now()?
                 .parse::<chrono::DateTime<chrono::Utc>>()
-                .map_err(|_| Error::Http(500, "Internal server error"))?
-                .date_naive();
-            json!({"tasks":tasks_json(repo,crate::drift::at_risk(repo,today)?)?})
+                .map_err(|_| Error::Http(500, "Internal server error"))?;
+            json!({"tasks":tasks_json(repo,crate::drift::at_risk(repo,now)?)?})
         }
         ("GET", "/tasks/overdue") => {
-            let today = repo
+            let now = repo
                 .now()?
                 .parse::<chrono::DateTime<chrono::Utc>>()
-                .map_err(|_| Error::Http(500, "Internal server error"))?
-                .date_naive();
-            json!({"tasks":tasks_json(repo,crate::drift::overdue(repo,today)?)?})
+                .map_err(|_| Error::Http(500, "Internal server error"))?;
+            json!({"tasks":tasks_json(repo,crate::drift::overdue(repo,now)?)?})
         }
         ("GET", "/tasks/:id") => {
             let task = repo
