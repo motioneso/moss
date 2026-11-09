@@ -11,7 +11,7 @@ pub fn handle<H: Host + ?Sized>(host: &H, mut request: RouteRequest) -> Response
     if let Err(error) = crate::validation::validate(&mut request) {
         return error.response();
     }
-    match dispatch(&Repository::new(host), &request) {
+    match dispatch(host, &Repository::new(host), &request) {
         Ok(response) => response,
         Err(error) => error.response(),
     }
@@ -39,7 +39,11 @@ fn param<'a>(request: &'a RouteRequest, name: &str) -> Result<&'a str> {
 fn name(request: &RouteRequest) -> Result<String> {
     parse::required_string(parse::require_object(&request.body)?.get("name"), "name")
 }
-fn dispatch<H: Host + ?Sized>(repo: &Repository<'_, H>, r: &RouteRequest) -> Result<Response> {
+fn dispatch<H: Host + ?Sized>(
+    host: &H,
+    repo: &Repository<'_, H>,
+    r: &RouteRequest,
+) -> Result<Response> {
     let mut status = 200;
     let body = match (r.method.as_str(), r.path.as_str()) {
         ("GET", "/tasks") => {
@@ -102,6 +106,9 @@ fn dispatch<H: Host + ?Sized>(repo: &Repository<'_, H>, r: &RouteRequest) -> Res
                 .parse::<chrono::DateTime<chrono::Utc>>()
                 .map_err(|_| Error::Http(500, "Internal server error"))?;
             json!({"tasks":drift_json(repo,&crate::drift::overdue(repo,now)?)?})
+        }
+        ("POST", "/tasks/search/interpret") => {
+            crate::search_interpret::interpret(repo, host, &r.body)?
         }
         ("GET", "/tasks/:id") => {
             let task = repo

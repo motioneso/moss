@@ -55,6 +55,11 @@
       ]
     },
     {
+      "port": "ai",
+      "operations": ["generate"],
+      "resources": ["structured"]
+    },
+    {
       "port": "jobs",
       "operations": ["enqueue"],
       "resources": ["tasks-deferred-status"]
@@ -251,6 +256,11 @@
     {
       "method": "POST",
       "path": "/tasks/lists",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/tasks/search/interpret",
       "signIn": true
     },
     {
