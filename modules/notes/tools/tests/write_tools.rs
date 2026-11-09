@@ -46,6 +46,7 @@ impl FolderProvider for Folders {
 struct Services {
     paths: BTreeMap<Uuid, PathBuf>,
     published: Mutex<Vec<(Uuid, Value)>>,
+    checkpoints: Mutex<Vec<(Uuid, Value)>>,
     fail_publication: AtomicBool,
 }
 impl Ports for Services {
@@ -54,12 +55,36 @@ impl Ports for Services {
             ("vault", "folder.resolve") => {
                 Ok(json!({"status":200,"body":self.paths[&scope.access().actor_user_id()]}))
             }
+            ("db", "query") => {
+                // Explicit database boundary stand-in. Real transaction and RLS
+                // coverage lives in the disposable ingest gate.
+                assert_eq!(r.resource, "app.notes_sync_checkpoints");
+                assert_eq!(r.parameters["kind"], "insert");
+                assert_eq!(r.parameters["values"]["checkpoint"], json!({}));
+                let row = r.parameters["values"].clone();
+                self.checkpoints
+                    .lock()
+                    .unwrap()
+                    .push((scope.access().actor_user_id(), row.clone()));
+                Ok(json!([row]))
+            }
             ("jobs", "enqueue-options") => {
                 if self.fail_publication.load(Ordering::Relaxed) {
                     bail!("Synthetic publication failure")
                 }
                 assert_eq!(r.resource, "notes.sync");
-                assert_eq!(r.parameters["params"], json!({}));
+                let id = &r.parameters["params"]["checkpointId"];
+                assert!(Uuid::parse_str(id.as_str().unwrap()).is_ok());
+                assert_eq!(r.parameters["params"].as_object().unwrap().len(), 1);
+                assert_eq!(&r.parameters["idempotencyKey"], id);
+                assert!(self
+                    .checkpoints
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .any(
+                        |(actor, row)| *actor == scope.access().actor_user_id() && &row["id"] == id
+                    ));
                 assert_eq!(r.parameters.as_object().unwrap().len(), 3);
                 self.published
                     .lock()
@@ -121,7 +146,10 @@ impl Fixture {
             {"port":"jobs","operations":["enqueue-after-commit","enqueue-options"],"resources":["notes.sync"]},
             {"port":"context","operations":["uuid","read"],"resources":["new","call"]}
         ])).unwrap());
-        manifest.jobs.insert("notes.sync".into(), BTreeMap::new());
+        manifest.jobs.insert(
+            "notes.sync".into(),
+            serde_json::from_value(json!({"checkpointId":{"kind":"id"}})).unwrap(),
+        );
         Self {
             _temp: temp,
             wasm: std::fs::read(std::env::var_os("NOTES_TOOL_COMPONENT").unwrap()).unwrap(),
@@ -132,6 +160,7 @@ impl Fixture {
             services: Arc::new(Services {
                 paths,
                 published: Mutex::new(vec![]),
+                checkpoints: Mutex::new(vec![]),
                 fail_publication: AtomicBool::new(false),
             }),
         }

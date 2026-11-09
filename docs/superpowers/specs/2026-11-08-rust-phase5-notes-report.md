@@ -1296,3 +1296,53 @@ approved installed chat tools, managed publication/fencing, proposals/receipts,
 reconciliation, exports/archives, full HTTP/path parity, the assembled shell and
 physical second-device HTTPS proof remain unfinished. This checkpoint must not
 replace working legacy Notes.
+
+## Part fifteen checkpoint — note writes request resumable sync
+
+Experimental create, edit and delete tools now use the same owner-only durable
+checkpoint request as the test manual-sync API. The previous empty queue envelope
+could enter the raw legacy coordinator seam instead of the durable worker. Each
+write now saves an empty checkpoint after changing the file, then requests
+post-commit publication carrying only its UUID. Success keeps the legacy response
+and means requested sync, not completed indexing. Package `0.1.8` and the app map
+describe this test-only join without enabling unfinished installed chat or sync.
+The first compiled run exposed an incorrect test expectation for deleting the
+only note: the existing empty-walk guard intentionally retains the index. The
+deletion-cleanup fixture now keeps another note present; the guard is unchanged.
+
+The required adapter order remains transactional database outside deferred queue
+and linked files. Refusal to save a checkpoint before finalization compensates
+new files, overwrites, edits and deletions. Refused publication after commit leaves
+the saved file and checkpoint resumable by known ID. It does not provide a durable
+outbox, discovery of orphan initial requests or automatic crash recovery. The
+failed tool response does not return the checkpoint ID; blindly retrying create
+can return an existing-file conflict even though the first file was saved. The guest
+remains a pure SDK client and gains no host, filesystem or cross-module table access.
+
+The native regression was observed failing because writes queued an empty object.
+The fixed legacy-handler corpus additionally requires a saved checkpoint before
+queueing its ID. Compiled disposable checks cover real create/edit/delete followed
+by indexing and deleted-file cleanup, checkpoint INSERT refusal, publication retry,
+and owner/other-owner/admin checkpoint privacy under both runtime roles, including
+RLS removal and restoration controls. Queue delivery and embeddings remain named
+stand-ins; final receipts belong in this task's proof artifact.
+The full gate passed its database suites, archive, screen and sync corpus, then
+caught an outdated empty-parameter job declaration in the standalone compiled
+write fixture. Its test-only declaration now admits the checkpoint UUID; all five
+compiled write tests pass separately. The aggregate run ended red before that
+fixture correction, and the final correction needs an additional review round.
+
+Builds use approved pinned `wit-bindgen` 0.57.1 and task-owned scratch Cargo/Rust
+homes, with separate ordinary and write-tools guest targets. Nothing was installed
+globally. The Notes-tools and module-host lockfiles needed the already-declared
+portability `libc` dependency added for locked builds against current main; no new
+dependency or version was introduced. Database checks use `scripts/run-gate.sh`.
+
+Full Notes acceptance is still unfinished: installed approval consumption and chat
+writes/search, manifest grants for file mutation and sync, configured embeddings,
+active manual/scheduled sync and dispatcher,
+automatic publication recovery and checkpoint retention, managed publication and
+fencing, proposals/receipts/reconciliation, private exports and daily archives,
+full path/HTTP parity, assembled Settings/chat and a separate physical device over
+HTTPS remain. A fixture browser check cannot establish those claims, and this
+checkpoint must not replace a working legacy Notes installation.

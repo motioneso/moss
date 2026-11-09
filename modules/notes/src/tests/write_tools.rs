@@ -7,6 +7,7 @@ use std::{cell::RefCell, collections::BTreeMap};
 struct Ports {
     files: RefCell<BTreeMap<String, String>>,
     syncs: RefCell<usize>,
+    checkpoints: RefCell<Vec<Value>>,
 }
 impl Host for Ports {
     fn call(
@@ -38,10 +39,30 @@ impl Host for Ports {
                 Ok(json!({}))
             }
             ("jobs", "enqueue-after-commit", "notes.sync") => {
-                assert_eq!(parameters["params"], json!({}));
+                assert_eq!(
+                    parameters["params"],
+                    json!({"checkpointId":"00000000-0000-4000-8000-000000000001"})
+                );
+                assert_eq!(
+                    parameters["idempotencyKey"],
+                    parameters["params"]["checkpointId"]
+                );
+                assert_eq!(
+                    self.checkpoints.borrow().len(),
+                    *self.syncs.borrow() + 1,
+                    "Every write must save a private checkpoint before queueing"
+                );
                 assert_eq!(parameters.as_object().unwrap().len(), 3);
                 *self.syncs.borrow_mut() += 1;
                 Ok(json!({"deferred":true}))
+            }
+            ("db", "query", "app.notes_sync_checkpoints") => {
+                assert_eq!(parameters["kind"], "insert");
+                assert_eq!(parameters["values"]["checkpoint"], json!({}));
+                self.checkpoints
+                    .borrow_mut()
+                    .push(parameters["values"].clone());
+                Ok(json!([parameters["values"]]))
             }
             ("context", "read", "call") => Ok(json!({"now":"2026-11-08T12:00:00.000Z"})),
             ("context", "uuid", "new") => Ok(json!({"id":"00000000-0000-4000-8000-000000000001"})),
@@ -62,6 +83,7 @@ fn write_tools_match_actual_legacy_handlers() {
         let ports = Ports {
             files: RefCell::new(files),
             syncs: RefCell::new(0),
+            checkpoints: RefCell::new(Vec::new()),
         };
         let actual = match handle(&ports, "tool", &case["request"].to_string()) {
             Ok(result) => json!({"ok":serde_json::from_str::<Value>(&result).unwrap()}),
@@ -112,6 +134,7 @@ fn approval_details_match_actual_legacy_hooks_without_writing_or_enqueueing() {
         let ports = Ports {
             files: RefCell::new(case.files.clone()),
             syncs: RefCell::new(0),
+            checkpoints: RefCell::new(Vec::new()),
         };
         let out = moss_notes::write_tools::presentation(&ports, case.request.get()).unwrap();
         assert_eq!(

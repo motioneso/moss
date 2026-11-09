@@ -24,6 +24,9 @@ use std::{
 };
 use uuid::Uuid;
 
+#[path = "ingest/write_tools.rs"]
+mod durable_writes;
+
 struct MutatingStub {
     file: PathBuf,
 }
@@ -404,7 +407,9 @@ impl Fixture {
         let ports = Arc::new(
             TransactionalDatabasePorts::new(
                 db.clone(),
-                Arc::new(ContextPorts::new(Arc::new(AfterCommitJobs::new(queue)))),
+                Arc::new(ContextPorts::new(Arc::new(AfterCommitJobs::new(
+                    durable_writes::write_ports(self, db.clone(), queue),
+                )))),
             )
             .unwrap(),
         );
@@ -417,6 +422,13 @@ impl Fixture {
             .unwrap(),
         );
         let mut manifest = (*self.manifest).clone();
+        manifest
+            .capabilities
+            .iter_mut()
+            .find(|c| c.port == "vault")
+            .unwrap()
+            .operations
+            .extend(["notes.compare-write", "notes.remove"].map(String::from));
         manifest.jobs.insert(
             "notes.sync".into(),
             serde_json::from_value(json!({"checkpointId":{"kind":"id"}})).unwrap(),
