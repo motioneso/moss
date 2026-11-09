@@ -1052,3 +1052,43 @@ plain-text form exceeds the legacy 4,000-unit bound; the at-risk
 finished-subtask check and the three new routes now batch their lookups;
 the parity script gained long-title, twelve-row and day-boundary cases; and
 the focus sort compares due times in milliseconds.
+
+## Tasks part 13 checkpoint (JS-101, Card 526)
+
+Adds natural-language search interpretation inside `modules/tasks/`, plus a
+second-device HTTPS proof. Still an unfinished Tasks replacement; Workshop and
+Food are excluded. Part of #4027; release note Category N/A.
+
+`POST /tasks/search/interpret` uses a new `ai` port in the guest WIT and the
+manifest (`generate`, resource `structured`, the host rejects model and
+provider parameters). The prompt carries the account's lists and tags and the
+UTC day. Failures map to 503 (provider unavailable) or 502 (invalid JSON).
+Normalisation keeps known list ids and case-insensitive tag names, enforces
+enums, priority 1-5, due kinds and confidence, and emits "Unknown list/tag
+ignored" warnings. Known small difference: tag names are listed in codepoint
+order where the TypeScript code uses locale order. The route is in the app map
+through the package feature list.
+
+Remaining after part 13: both assistant-policy routes (need a core
+preferences port), recurrence jobs, deferred-queue policy parity, actor
+timezone and lazy recurrence, public People linkage, policy and feedback
+orchestration, full screen and settings parity, real-shell integration,
+performance budgets.
+
+Tooling record: wit-bindgen was used from an existing cargo cache. No global
+install was made. The wasm32 standard library came from a copy of the 1.95.0
+toolchain kept in scratch (`rustup target add` run there), and `pnpm install
+--frozen-lockfile` ran inside this worktree.
+
+Validation: package gate passes; parity matches 85 of 86 cases (the same
+deferred-status job case as part 12 is the only failure; the new request
+validation case passes against the TypeScript API); the UI gate passes.
+
+Second device: the fixture listened on the LAN and tailnet addresses over
+HTTPS with a generated certificate. From the MacBook, over the tailnet, with
+only the public certificate copied: the certificate fingerprint matched, TLS 1.3
+verified against the tailnet address, an unsigned request got 303 to sign-in,
+a wrong host got 421 and a wrong origin got 403. A browser on the tailnet
+address then signed in and listed `Browser proof task`. The owner account was
+created from loopback, as the setup page requires. The Mac check was curl, not
+a Mac browser.

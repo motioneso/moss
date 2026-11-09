@@ -156,6 +156,16 @@ TypeScript executors for synthetic non-recurring rows under a UTC locale,
 private/admin visibility, and an RLS removal/restoration control scoped to
 these reads.
 
+Part 13 adds the natural-language search interpretation route
+(`POST /tasks/search/interpret`) over a new `ai` port (`generate`, resource
+`structured`). The host supplies the model; the guest names none. The prompt
+lists the account's lists and tags, the reply is parsed as JSON, and unknown
+list ids and tag names are dropped with warnings. An unavailable provider
+returns 503 and invalid JSON returns 502. Only the two assistant-policy routes
+(they need a core preferences port) and the items listed after part 12 remain,
+except that the UI fixture can now listen for a second device over HTTPS:
+set `TASKS_UI_LAN_HOSTS` to comma-separated addresses before the UI gate.
+
 Part 8 adds `tasks.heartbeatWindow`: bounded owner-only open/due tasks, UTF-16
 material revisions and time boundaries, without writes or lazy recurrence. The
 host still requires tool approval; scheduled background authorization is not joined.
