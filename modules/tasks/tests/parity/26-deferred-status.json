@@ -1,0 +1,267 @@
+[
+  {
+    "name": "component deferred status: private task and captured actor",
+    "source": "packages/tasks/src/routes.ts and jobs.ts",
+    "steps": [
+      {
+        "id": "task",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "Private queued status"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/api/tasks/{{task:/body/task/id}}/deferred-status",
+        "as": "B",
+        "body": {
+          "status": "done"
+        },
+        "expect": {
+          "status": 404,
+          "body": {
+            "error": "Task not found"
+          }
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/api/tasks/{{task:/body/task/id}}/deferred-status",
+        "as": "admin",
+        "body": {
+          "status": "done"
+        },
+        "expect": {
+          "status": 404,
+          "body": {
+            "error": "Task not found"
+          }
+        }
+      },
+      {
+        "id": "queued",
+        "method": "POST",
+        "path": "/api/tasks/{{task:/body/task/id}}/deferred-status",
+        "as": "A",
+        "body": {
+          "status": "done",
+          "actorUserId": "{{userB}}"
+        },
+        "expect": {
+          "status": 202
+        }
+      },
+      {
+        "wait_job": "{{queued:/body/jobId}}",
+        "expect": {
+          "state": "completed",
+          "output": {
+            "taskId": "{{task:/body/task/id}}",
+            "updated": true,
+            "status": "done"
+          }
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/api/tasks/{{task:/body/task/id}}",
+        "as": "B",
+        "expect": {
+          "status": 404
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/api/tasks/{{task:/body/task/id}}",
+        "as": "A",
+        "expect": {
+          "status": 200,
+          "body": {
+            "task": {
+              "status": "done"
+            }
+          }
+        }
+      }
+    ],
+    "rows": ["app.tasks", "app.task_activity"]
+  },
+  {
+    "name": "component deferred status: archive and reopen retain task data",
+    "source": "packages/tasks/src/jobs.ts registerTasksJobWorkers",
+    "steps": [
+      {
+        "id": "task",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "B",
+        "body": {
+          "title": "Queue archive and reopen",
+          "description": "Keep this description",
+          "priority": "high"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "archive",
+        "method": "POST",
+        "path": "/api/tasks/{{task:/body/task/id}}/deferred-status",
+        "as": "B",
+        "body": {
+          "status": "archived",
+          "idempotencyKey": "same-legacy-key"
+        },
+        "expect": {
+          "status": 202
+        }
+      },
+      {
+        "wait_job": "{{archive:/body/jobId}}",
+        "expect": {
+          "state": "completed",
+          "output": {
+            "updated": true,
+            "status": "archived"
+          }
+        }
+      },
+      {
+        "id": "reopen",
+        "method": "POST",
+        "path": "/api/tasks/{{task:/body/task/id}}/deferred-status",
+        "as": "B",
+        "body": {
+          "status": "todo",
+          "idempotencyKey": "same-legacy-key"
+        },
+        "expect": {
+          "status": 202
+        }
+      },
+      {
+        "wait_job": "{{reopen:/body/jobId}}",
+        "expect": {
+          "state": "completed",
+          "output": {
+            "updated": true,
+            "status": "todo"
+          }
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/api/tasks/{{task:/body/task/id}}",
+        "as": "B",
+        "expect": {
+          "status": 200,
+          "body": {
+            "task": {
+              "status": "todo",
+              "description": "Keep this description",
+              "priority": "high",
+              "completedAt": null
+            }
+          }
+        }
+      }
+    ],
+    "rows": ["app.tasks", "app.task_activity"]
+  },
+  {
+    "name": "component deferred status: recurring completion cascades once",
+    "source": "packages/tasks/src/jobs.ts and recurrence.ts",
+    "steps": [
+      {
+        "id": "task",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "Queued repeating parent",
+          "dueAt": "2099-05-01T15:30:00.000Z",
+          "doAt": "2099-04-30T10:00:00.000Z",
+          "recurrence": {
+            "freq": "monthly",
+            "interval": 1,
+            "occurrence_date": "2099-05-01"
+          }
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "Queued completion child",
+          "parentTaskId": "{{task:/body/task/id}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "complete",
+        "method": "POST",
+        "path": "/api/tasks/{{task:/body/task/id}}/deferred-status",
+        "as": "A",
+        "body": {
+          "status": "done"
+        },
+        "expect": {
+          "status": 202
+        }
+      },
+      {
+        "wait_job": "{{complete:/body/jobId}}",
+        "expect": {
+          "state": "completed",
+          "output": {
+            "updated": true,
+            "status": "done"
+          }
+        }
+      },
+      {
+        "id": "repeat",
+        "method": "POST",
+        "path": "/api/tasks/{{task:/body/task/id}}/deferred-status",
+        "as": "A",
+        "body": {
+          "status": "done"
+        },
+        "expect": {
+          "status": 202
+        }
+      },
+      {
+        "wait_job": "{{repeat:/body/jobId}}",
+        "expect": {
+          "state": "completed",
+          "output": {
+            "updated": true,
+            "status": "done"
+          }
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/api/tasks/{{task:/body/task/id}}/subtasks",
+        "as": "A",
+        "expect": {
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.tasks", "app.task_activity"]
+  }
+]

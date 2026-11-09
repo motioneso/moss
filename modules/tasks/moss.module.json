@@ -96,7 +96,7 @@
     {
       "id": "tasks",
       "label": "Tasks",
-      "description": "View tasks in priority groups or a priority grid, include, show only or hide lists, combine tag filters, edit tasks, and manage subtasks, tags and comments. Account timezone, People, assistant policies and background jobs remain unfinished.",
+      "description": "View tasks in priority groups or a priority grid, include, show only or hide lists, combine tag filters, edit tasks, and manage subtasks, tags and comments. Date-editor timezone support, People, automatic assistant actions and full background-job parity remain unfinished.",
       "path": "/tasks",
       "icon": "CheckSquare",
       "order": 30
@@ -106,7 +106,7 @@
   "features": [
     {
       "id": "tasks.package-data",
-      "description": "Tasks component with validated task, list, tag, activity, view preference and ordered breakdown routes. Twenty-three tool handlers cover ten reads and thirteen task, list, tag, activity and breakdown actions. Full parity, assistant action policies and background jobs remain unfinished.",
+      "description": "Tasks component with validated task, list, tag, activity, view preference and ordered breakdown routes. Twenty-three tool handlers cover ten reads and thirteen task, list, tag, activity and breakdown actions. Full parity, automatic assistant actions and full background-job parity remain unfinished.",
       "errors": [
         {
           "code": "tasks-invalid-input",

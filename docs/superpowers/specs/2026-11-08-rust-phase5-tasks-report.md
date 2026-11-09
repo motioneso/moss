@@ -1536,3 +1536,52 @@ write entry points and permission headlines need tightening. Current one-use too
 approval does not read these preference routes. Summary performance remains
 unproven; the future optimization is to batch date conversions. These limits do
 not establish full Phase 5 parity or physical second-device acceptance.
+
+## Tasks part 22 checkpoint (JS-141, Card 526)
+
+The disposable component endpoint adapter now binds the existing deferred-status
+route to the real Rust queue. A separate worker claims the typed metadata and
+invokes the actual Tasks Wasm handler under the captured account and the worker
+database role. Queue declarations validate the parameters; the adapter checks
+the manifest identity before dispatch. The adapter stops if its worker dies.
+The historical endpoint harness remains unchanged. Its existing observation
+table receives the real queue's terminal state and the actual handler result
+only after the queue is finished; that table never executes these jobs.
+This is a differential test adapter, not the installed module worker.
+
+The unchanged deferred-status smoke case was reproduced failing before the
+binding: Rust returned 500 and left the task open while TypeScript returned 202
+and completed it. Three added differential cases check private tasks and forged
+actor input, archive/reopen with a repeated legacy request key, and repeated
+recurring completion with a child. They compare job output and saved Tasks and
+activity rows. The old endpoint cases are retained without exclusions.
+
+The compiled deferred-worker privacy test now uses the real worker database
+role for task effects instead of the app role. It still requires the exact
+cross-account mutation assertion to fail with Tasks RLS removed and pass with
+RLS restored. The broader package gate retains its read and write privacy
+removal controls. The app map corrects broad unfinished-policy and timezone
+wording: the saved policy API and account-local drift reads already exist;
+automatic assistant actions and date-editor timezone support remain unfinished.
+
+The clean task branch was updated from its Phase 0a starting point to current
+remote main before editing. Existing scratch Rust 1.95, Wasm target and Cargo
+registry caches were reused offline, including the pinned wit-bindgen graph
+approved on 2026-11-08. No generator, global tool or new dependency was installed.
+The tools lockfile was refreshed offline with no byte change. Declared JavaScript
+dependencies were restored offline. No product route, job kind, SQL migration,
+shared host contract or sibling module was changed. Workshop and Food remain
+excluded. Part of #4027; release note Category N/A.
+
+This is a bounded parity checkpoint, not full Phase 5 acceptance. Remaining:
+lazy recurrence advancement; recurrence jobs; legacy deferred-queue retry and
+retention policy, optional request-key retention and installed worker dispatch;
+public People linkage; policy/feedback orchestration; remaining screens and
+settings, including the policy switch; interpreted-search and date-editor
+timezone support; installed chat and summary presentation; real application
+shell integration; performance budgets; and physical second-device HTTPS proof.
+The signed UI fixture exercises real installation, TLS and sign-in but remains
+separate from the application shell. No attached physical device was available
+through the existing device bridge; online network peers alone are not UI proof.
+Final gate, browser and independent-review receipts are recorded in the task
+proof artifact.

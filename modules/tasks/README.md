@@ -1,5 +1,13 @@
 # Tasks component checkpoint
 
+Part 22 connects the disposable endpoint adapter to the real Rust queue and a
+worker-role compiled guest invocation. The old harness table records only the
+actual terminal state and returned result after the real queue finishes; it does
+not enqueue or execute work. Added comparisons cover private tasks, captured
+accounts, archive/reopen and repeated recurring completion. This adapter still
+is not installed worker dispatch or legacy queue retry/retention parity. The
+privacy removal control now runs the guest with the actual worker database role.
+
 Part 21 adds the two existing assistant-policy API routes and account-local day
 boundaries for focus, at-risk, overdue and bounded summaries. The host supplies
 scoped policy and calendar-day contracts; Tasks never queries core preferences.
@@ -128,9 +136,9 @@ them. Do not use this fixture with real data.
 
 The recurrence differential check covers ordinary
 calendar dates and invalid inputs, not full endpoint parity. Date parsing covers
-the ISO branch; offset-free timestamps currently use UTC because the host has no
-actor-timezone port. Lazy recurrence roll-forward needs that public host seam
-before it can preserve the actor's local day. Additional routes, queued work
+the ISO branch; offset-free timestamps currently use UTC. The account-local day contract now
+exists, but lazy recurrence roll-forward and the timestamp parser have not yet
+been connected to it. Additional routes, queued work
 and public People calls also remain to be ported. See the
 Phase 5 Tasks report for the exact validation results and continuation boundary.
 

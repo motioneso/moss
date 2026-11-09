@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bind the endpoint differential adapter to the real Rust queue and worker-role compiled Tasks handler.
+- Compare deferred completion, cross-account rejection, archive/reopen and repeated recurring completion with TypeScript, including worker results and saved rows.
+- Run the compiled worker privacy removal control under the real worker database role. Installed worker dispatch and legacy queue policy remain unfinished.
+
 - Restore the existing task assistant-policy read and write API, preserving canonical choices and legacy opt-outs.
 - Use account-local day boundaries for focus, at-risk, overdue and summary reads, including daylight-saving changes.
 - Compare those reads in UTC and four account timezones. Screen date controls and interpreted search still use UTC; lazy recurrence and installed chat policy remain unfinished.
