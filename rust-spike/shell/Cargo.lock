@@ -2141,6 +2141,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "moss-app"
+version = "0.0.0"
+dependencies = [
+ "axum",
+ "gio",
+ "libc",
+ "moss-network",
+ "serde",
+ "serde_json",
+ "tao",
+ "tokio",
+ "tokio-rustls",
+ "url",
+ "uuid",
+ "webkit2gtk",
+ "wry",
+]
+
+[[package]]
 name = "moss-network"
 version = "0.0.0"
 dependencies = [
@@ -2169,11 +2188,9 @@ dependencies = [
  "moss-shell-contract",
  "safety-core",
  "serde_json",
- "tao",
  "tokio",
  "tower-http",
  "uuid",
- "wry",
 ]
 
 [[package]]

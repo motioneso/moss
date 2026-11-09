@@ -1,0 +1,27 @@
+[package]
+name = "moss-app"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+description = "The Moss desktop app: connects to a Moss server on this or another computer"
+
+[dependencies]
+moss-network = { path = "../../network" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "io-util"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+url = "2"
+uuid = { version = "1", features = ["v4"] }
+tao = "0.34"
+wry = "0.53"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gio = "0.18"
+webkit2gtk = { version = "=2.0.1", features = ["v2_38"] }
+
+[dev-dependencies]
+axum = "0.8"
