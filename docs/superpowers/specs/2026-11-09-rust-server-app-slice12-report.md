@@ -38,10 +38,12 @@ The actual sequence was:
 
 ## Runtime and verification boundaries
 
-The native app used the host's installed filesystem and libraries mounted read-only into an
+The native app used the host root filesystem and installed libraries mounted read-only into an
 existing Docker image, with its own writable data directory and virtual display. The harness
 allowed `SYS_ADMIN` and disabled Docker's seccomp filter. It did not explicitly disable the
-native app's WebKit sandbox; this run makes no sandbox-isolation claim.
+native app's WebKit sandbox; this run makes no sandbox-isolation claim. WebKit's debug inspector
+also listened inside the app namespace, with no Docker port published. It was not used for the
+UI assertions, which copied selected window text through the display clipboard.
 
 The local task Chromium browser needed `--no-sandbox` and ignored the local test certificate.
 Those launch options had to be supplied consistently on every task-browser command. The native
