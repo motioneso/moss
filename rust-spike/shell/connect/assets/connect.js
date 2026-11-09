@@ -121,6 +121,46 @@ const screens = {
     )
   ],
 
+  create: (s) => {
+    const input = el("input", {
+      class: "jds-input",
+      id: "name",
+      name: "name",
+      type: "text",
+      autocomplete: "off",
+      spellcheck: "false",
+      placeholder: "work"
+    });
+    input.value = s.name || "";
+    const form = el(
+      "form",
+      { class: "auth-form" },
+      el(
+        "div",
+        { class: "jds-field" },
+        el("label", { class: "jds-label", for: "name" }, "Name"),
+        input
+      ),
+      s.error ? el("p", { class: "connect-error", role: "alert" }, s.error) : "",
+      el(
+        "div",
+        { class: "connect-actions" },
+        el("button", { class: "jds-btn jds-btn--primary", type: "submit" }, "Create")
+      )
+    );
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      post({ do: "create", name: input.value.trim() });
+    });
+    queueMicrotask(() => input.focus());
+    return [back("Servers", { do: "servers" }), heading("New server on this computer"), form];
+  },
+
+  "setting-up": (s) => [
+    heading(s.name),
+    muted("Setting up. The first start can take a minute.")
+  ],
+
   connecting: (s) => [heading(s.name), muted("Connecting…")],
 
   problem: (s) => {
@@ -183,6 +223,9 @@ const screens = {
             server.removable
               ? button("Remove", "quiet", () => post({ do: "remove", id: server.id }))
               : "",
+            server.stoppable
+              ? button("Stop", "quiet", () => post({ do: "stop", id: server.id }))
+              : "",
             button("Open", "secondary", () => post({ do: "open", id: server.id }))
           )
         )
@@ -191,6 +234,7 @@ const screens = {
     el(
       "div",
       { class: "connect-actions" },
+      button("New server here", "secondary", () => post({ do: "new-server" })),
       button("Add another computer", "primary", () => post({ do: "another" }))
     )
   ]

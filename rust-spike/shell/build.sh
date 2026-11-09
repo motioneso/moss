@@ -21,4 +21,13 @@ python3 assets/build-assets.py "$web"
 cp assets/index.html "$web/index.html"
 cargo build --release --quiet -p moss-shell -p moss-app
 cp "$CARGO_TARGET_DIR/release/moss-shell" "$CARGO_TARGET_DIR/release/moss-app" "$out/"
+# The database supervisor the app uses to set up a local server (unix only).
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*) ;;
+  *)
+    (cd ../bundled-db && cargo build --release --quiet)
+    cp ../bundled-db/target/release/moss-db "$out/" 2>/dev/null \
+      || cp "$CARGO_TARGET_DIR/release/moss-db" "$out/"
+    ;;
+esac
 echo "built $out/moss-shell, $out/moss-app and $web"

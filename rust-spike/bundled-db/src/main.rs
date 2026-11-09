@@ -21,6 +21,7 @@ usage:
   moss-db up      --root DIR --pg DIR --repo DIR [--tcp] [--port-range FIRST-LAST]
   moss-db stop    --root DIR
   moss-db status  --root DIR
+  moss-db credentials --root DIR
   moss-db check   --root DIR [--write NOTE]
   moss-db hold    --root DIR --seconds N
   moss-db at-rest [--root DIR] [--path LABEL=DIR]...
@@ -58,6 +59,7 @@ fn main() -> ExitCode {
         "up" => up(&options),
         "stop" => stop(&options),
         "status" => status(&options),
+        "credentials" => credentials(&options),
         "check" => check(&options),
         "hold" => hold(&options),
         "at-rest" => at_rest_report(&options),
@@ -89,7 +91,11 @@ impl Options {
         let mut options = Options::default();
         let mut args = args.iter();
         while let Some(flag) = args.next() {
-            let mut value = || args.next().cloned().ok_or_else(|| format!("{flag} needs a value"));
+            let mut value = || {
+                args.next()
+                    .cloned()
+                    .ok_or_else(|| format!("{flag} needs a value"))
+            };
             match flag.as_str() {
                 "--root" => options.root = Some(value()?.into()),
                 "--pg" => options.pg = Some(value()?.into()),
@@ -105,10 +111,15 @@ impl Options {
                     options.port_range = Some(range);
                 }
                 "--write" => options.write = Some(value()?),
-                "--seconds" => options.seconds = Some(value()?.parse().map_err(|_| "--seconds needs a number")?),
+                "--seconds" => {
+                    options.seconds =
+                        Some(value()?.parse().map_err(|_| "--seconds needs a number")?)
+                }
                 "--path" => {
                     let text = value()?;
-                    let (label, path) = text.split_once('=').ok_or_else(|| format!("--path wants LABEL=DIR, got {text}"))?;
+                    let (label, path) = text
+                        .split_once('=')
+                        .ok_or_else(|| format!("--path wants LABEL=DIR, got {text}"))?;
                     options.paths.push((label.to_string(), path.into()));
                 }
                 other => return Err(format!("unknown option {other}")),
@@ -118,7 +129,9 @@ impl Options {
     }
 
     fn root(&self) -> Result<&Path, String> {
-        self.root.as_deref().ok_or_else(|| "--root is required".into())
+        self.root
+            .as_deref()
+            .ok_or_else(|| "--root is required".into())
     }
 
     fn bundle(&self) -> Result<Bundle, String> {
@@ -154,7 +167,8 @@ fn up(options: &Options) -> Result<ExitCode, String> {
 
     // Registered before Postgres starts: a stop request during start-up or migration waits
     // here and is acted on once the cluster can be stopped in order.
-    let mut signals = Signals::new([SIGINT, SIGTERM, SIGHUP, SIGCHLD]).map_err(|e| e.to_string())?;
+    let mut signals =
+        Signals::new([SIGINT, SIGTERM, SIGHUP, SIGCHLD]).map_err(|e| e.to_string())?;
 
     let clock = Instant::now();
     let mut running = cluster::start(&layout, &bundle, &listen, START_TIMEOUT)?;
@@ -252,12 +266,59 @@ fn status(options: &Options) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
+/// Prints the four values a server's credentials file needs, for the running database. Creates
+/// the session signing secret and the connector key on first use. Output carries secrets, so the
+/// caller must write it straight to an owner-only file.
+fn credentials(options: &Options) -> Result<ExitCode, String> {
+    let layout = Layout::open(options.root()?).map_err(|e| e.to_string())?;
+    let state = cluster::read_state(&layout)?;
+    let endpoint = Endpoint::from_json(&state["endpoint"], &layout.run)
+        .ok_or("the state file has no endpoint")?;
+    let host = match &endpoint.socket_dir {
+        Some(dir) => {
+            let encoded: String = dir
+                .to_string_lossy()
+                .bytes()
+                .map(|b| {
+                    if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) {
+                        (b as char).to_string()
+                    } else {
+                        format!("%{b:02X}")
+                    }
+                })
+                .collect();
+            format!("{encoded}:{}", endpoint.port)
+        }
+        None => format!("127.0.0.1:{}", endpoint.port),
+    };
+    let url = |role: &str| -> Result<String, String> {
+        let password = secrets::existing(&layout, role)?;
+        Ok(format!(
+            "postgres://{role}:{}@{host}/{APP_DATABASE}",
+            password.expose()
+        ))
+    };
+    let generated = |name: &str| {
+        secrets::password(&layout, name)
+            .map(|s| s.expose().to_owned())
+            .map_err(|e| e.to_string())
+    };
+    emit(&json!({
+        "app_url": url("jarvis_app_runtime")?,
+        "auth_url": url("jarvis_auth_runtime")?,
+        "auth_secret": generated("session-signing-secret")?,
+        "connector_key": generated("connector-key")?,
+    }));
+    Ok(ExitCode::SUCCESS)
+}
+
 /// Reads back what `up` set up, and runs a vector search. `--write NOTE` also stores a
 /// marked row, so a later check after a restart or a crash can show the row survived.
 fn check(options: &Options) -> Result<ExitCode, String> {
     let layout = Layout::open(options.root()?).map_err(|e| e.to_string())?;
     let state = cluster::read_state(&layout)?;
-    let endpoint = Endpoint::from_json(&state["endpoint"], &layout.run).ok_or("the state file has no endpoint")?;
+    let endpoint = Endpoint::from_json(&state["endpoint"], &layout.run)
+        .ok_or("the state file has no endpoint")?;
     let superuser = secrets::existing(&layout, SUPERUSER)?;
     let sql = |e: postgres::Error| cluster::db_error(&e);
 
@@ -270,14 +331,23 @@ fn check(options: &Options) -> Result<ExitCode, String> {
         )
         .map_err(sql)?;
     let vector: Option<String> = app
-        .query_opt("SELECT extversion FROM pg_extension WHERE extname = 'vector'", &[])
+        .query_opt(
+            "SELECT extversion FROM pg_extension WHERE extname = 'vector'",
+            &[],
+        )
         .map_err(sql)?
         .map(|row| row.get(0));
     let vector_columns: i64 = app
-        .query_one("SELECT count(*) FROM information_schema.columns WHERE udt_name = 'vector'", &[])
+        .query_one(
+            "SELECT count(*) FROM information_schema.columns WHERE udt_name = 'vector'",
+            &[],
+        )
         .map_err(sql)?
         .get(0);
-    let migrations: i64 = app.query_one("SELECT count(*) FROM app.schema_migrations", &[]).map_err(sql)?.get(0);
+    let migrations: i64 = app
+        .query_one("SELECT count(*) FROM app.schema_migrations", &[])
+        .map_err(sql)?
+        .get(0);
 
     // The app's runtime role signs in with its own password and has no special powers.
     let runtime = secrets::existing(&layout, "jarvis_app_runtime")?;
@@ -288,14 +358,23 @@ fn check(options: &Options) -> Result<ExitCode, String> {
 
     let mut maintenance = endpoint.connect(SUPERUSER, &superuser, "postgres")?;
     let has_proof = maintenance
-        .query_opt("SELECT 1 FROM pg_database WHERE datname = $1", &[&PROOF_DATABASE])
+        .query_opt(
+            "SELECT 1 FROM pg_database WHERE datname = $1",
+            &[&PROOF_DATABASE],
+        )
         .map_err(sql)?
         .is_some();
     if !has_proof && options.write.is_some() {
-        maintenance.batch_execute(&format!("CREATE DATABASE {PROOF_DATABASE}")).map_err(sql)?;
+        maintenance
+            .batch_execute(&format!("CREATE DATABASE {PROOF_DATABASE}"))
+            .map_err(sql)?;
     }
     let proof = if has_proof || options.write.is_some() {
-        Some(vector_proof(&endpoint, &superuser, options.write.as_deref())?)
+        Some(vector_proof(
+            &endpoint,
+            &superuser,
+            options.write.as_deref(),
+        )?)
     } else {
         None
     };
@@ -323,7 +402,11 @@ fn check(options: &Options) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
-fn vector_proof(endpoint: &Endpoint, superuser: &secrets::Secret, note: Option<&str>) -> Result<Value, String> {
+fn vector_proof(
+    endpoint: &Endpoint,
+    superuser: &secrets::Secret,
+    note: Option<&str>,
+) -> Result<Value, String> {
     let sql = |e: postgres::Error| cluster::db_error(&e);
     let mut db = endpoint.connect(SUPERUSER, superuser, PROOF_DATABASE)?;
     db.batch_execute(
@@ -337,7 +420,8 @@ fn vector_proof(endpoint: &Endpoint, superuser: &secrets::Secret, note: Option<&
     )
     .map_err(sql)?;
     if let Some(note) = note {
-        db.execute("INSERT INTO marks (note) VALUES ($1)", &[&note]).map_err(sql)?;
+        db.execute("INSERT INTO marks (note) VALUES ($1)", &[&note])
+            .map_err(sql)?;
     }
     let query = "[0.9,0.6,0]";
     let nearest: Vec<Value> = db
@@ -353,7 +437,8 @@ fn vector_proof(endpoint: &Endpoint, superuser: &secrets::Secret, note: Option<&
     // Too few rows for the planner to choose the index on cost, so sequential scans are off
     // for this one plan to show the HNSW index can serve the search.
     let mut tx = db.transaction().map_err(sql)?;
-    tx.batch_execute("SET LOCAL enable_seqscan = off").map_err(sql)?;
+    tx.batch_execute("SET LOCAL enable_seqscan = off")
+        .map_err(sql)?;
     let plan: Vec<String> = tx
         .query("EXPLAIN (COSTS OFF) SELECT id FROM items ORDER BY embedding <-> $1::text::vector LIMIT 2", &[&query])
         .map_err(sql)?
@@ -377,12 +462,17 @@ fn hold(options: &Options) -> Result<ExitCode, String> {
     let seconds = options.seconds.ok_or("give --seconds")?;
     let layout = Layout::open(options.root()?).map_err(|e| e.to_string())?;
     let state = cluster::read_state(&layout)?;
-    let endpoint = Endpoint::from_json(&state["endpoint"], &layout.run).ok_or("the state file has no endpoint")?;
+    let endpoint = Endpoint::from_json(&state["endpoint"], &layout.run)
+        .ok_or("the state file has no endpoint")?;
     let superuser = secrets::existing(&layout, SUPERUSER)?;
     let sql = |e: postgres::Error| cluster::db_error(&e);
     let mut db = endpoint.connect(SUPERUSER, &superuser, PROOF_DATABASE)?;
-    let row = db.query_one("SELECT pg_backend_pid(), count(*) FROM marks", &[]).map_err(sql)?;
-    emit(&json!({ "event": "holding", "backend_pid": row.get::<_, i32>(0), "rows_read": row.get::<_, i64>(1) }));
+    let row = db
+        .query_one("SELECT pg_backend_pid(), count(*) FROM marks", &[])
+        .map_err(sql)?;
+    emit(
+        &json!({ "event": "holding", "backend_pid": row.get::<_, i32>(0), "rows_read": row.get::<_, i64>(1) }),
+    );
     let busy = format!(
         "DO $$ BEGIN WHILE clock_timestamp() < now() + interval '{seconds} seconds' LOOP END LOOP; END $$"
     );
@@ -454,6 +544,10 @@ fn emit(value: &Value) {
 
 fn emit_pretty(value: &Value) {
     let mut out = std::io::stdout().lock();
-    let _ = writeln!(out, "{}", serde_json::to_string_pretty(value).unwrap_or_default());
+    let _ = writeln!(
+        out,
+        "{}",
+        serde_json::to_string_pretty(value).unwrap_or_default()
+    );
     let _ = out.flush();
 }

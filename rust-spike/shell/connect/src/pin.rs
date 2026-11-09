@@ -3,6 +3,7 @@
 const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 /// Encodes one DER certificate as PEM.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub fn pem(der: &[u8]) -> String {
     let mut encoded = String::new();
     for chunk in der.chunks(3) {

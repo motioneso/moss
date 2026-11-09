@@ -6,6 +6,7 @@
 //! page load that arrived over a different one (see `trust_on_linux`).
 
 mod pin;
+mod provision;
 mod reach;
 mod store;
 
@@ -37,7 +38,9 @@ enum UserEvent {
     Show(Value),
     Open(Opened),
     ShowServers,
+    Connect(String),
     /// A server page failed to load; check whether the server is still there.
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
     Check(String),
     /// A server page arrived over a certificate other than the pinned one. Holds its
     /// fingerprint, if it had a certificate at all.
@@ -243,6 +246,7 @@ impl App {
             UserEvent::Show(state) => self.show(state),
             UserEvent::Open(opened) => self.open(opened),
             UserEvent::ShowServers => self.list_servers(),
+            UserEvent::Connect(id) => self.choose(id),
             UserEvent::Check(id) => {
                 if self.current.as_deref() == Some(id.as_str()) {
                     self.check(id);
@@ -289,7 +293,10 @@ impl App {
                 None => self.show(json!({"screen":"first-run"})),
             },
             "first-run" => self.show(json!({"screen":"first-run"})),
-            "this-computer" => self.choose(store::local_id("default")),
+            "this-computer" => self.this_computer(),
+            "new-server" => self.show(json!({"screen":"create", "name": text("name")})),
+            "create" => self.create(text("name")),
+            "stop" => self.stop(text("id")),
             "another" => self.show(json!({
                 "screen":"add", "first": self.servers.last.is_none(), "address": text("address"),
             })),
@@ -335,6 +342,65 @@ impl App {
         if self.store.save(&self.servers).is_err() {
             eprintln!("moss-app: could not save the server list");
         }
+    }
+
+    /// Opens this computer's default server, setting it up first when it does not exist yet.
+    fn this_computer(&mut self) {
+        let id = store::local_id("default");
+        if self.store.find(&self.servers, &id).is_some() {
+            return self.choose(id);
+        }
+        self.create("default".into());
+    }
+
+    /// Makes a local server (folder, certificate, database) and opens it.
+    fn create(&mut self, name: String) {
+        if !store::valid_instance(&name) {
+            return self.show(
+                json!({"screen":"create", "name": name, "error": provision::Failure::BadName.reason()}),
+            );
+        }
+        let label = if name == "default" {
+            "This computer".to_owned()
+        } else {
+            format!("This computer ({name})")
+        };
+        self.show(json!({"screen":"setting-up", "name": label}));
+        let (proxy, turn) = (self.proxy.clone(), self.turn);
+        let (store, install) = (self.store.clone(), self.install.clone());
+        self.runtime.spawn(async move {
+            let made = tokio::task::spawn_blocking({
+                let name = name.clone();
+                move || provision::create_instance(&store, &install, &name)
+            })
+            .await;
+            let event = match made {
+                Ok(Ok(())) => UserEvent::Connect(store::local_id(&name)),
+                Ok(Err(failure)) => UserEvent::Show(
+                    json!({"screen":"create", "name": name, "error": failure.reason()}),
+                ),
+                Err(_) => UserEvent::Show(
+                    json!({"screen":"create", "name": name, "error": provision::Failure::Other.reason()}),
+                ),
+            };
+            let _ = proxy.send_event(UserEvent::Later(turn, Box::new(event)));
+        });
+    }
+
+    /// Stops a local server and its database, then refreshes the list.
+    fn stop(&mut self, id: String) {
+        let Some(Target::Local { folder, .. }) = self.store.find(&self.servers, &id) else {
+            return self.list_servers();
+        };
+        if self.server.as_ref().is_some_and(|s| s.id == id) {
+            self.server = None;
+        }
+        self.current = None;
+        let (proxy, install) = (self.proxy.clone(), self.install.clone());
+        self.runtime.spawn(async move {
+            let _ = reach::stop_local(&install, &folder).await;
+            let _ = proxy.send_event(UserEvent::ShowServers);
+        });
     }
 
     fn choose(&mut self, id: String) {
@@ -541,7 +607,8 @@ impl App {
                 }
                 url == origin || url.starts_with(&format!("{origin}/"))
             })
-            .with_new_window_req_handler(|_, _| NewWindowResponse::Deny);
+            .with_new_window_req_handler(|_, _| NewWindowResponse::Deny)
+            .with_initialization_script("window.mossApp = true;");
         let view = build(builder, &self.window);
         #[cfg(target_os = "linux")]
         trust_linux::install(&view, opened, self.proxy.clone())?;
@@ -571,6 +638,7 @@ fn server_row(target: &Target, state: &str) -> Value {
         "detail": detail,
         "state": state,
         "removable": matches!(target, Target::Remote(_)),
+        "stoppable": matches!(target, Target::Local { .. }) && state == "Running",
     })
 }
 
