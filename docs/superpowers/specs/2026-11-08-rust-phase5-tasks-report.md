@@ -946,3 +946,54 @@ feedback/action policy, remaining screens/settings, installed chat, real applica
 shell, performance and physical second-device HTTPS acceptance. The signed UI
 fixture is loopback-only and separate from the application shell. This is an
 unfinished checkpoint, not completion of Phase 5. Part of #4027; Category N/A.
+
+## Tasks part 11 checkpoint (JS-89, Card 526)
+
+Manage lists now offers confirmed deletion and an optional owned destination.
+The DELETE list route and `tasks.deleteList` share one transaction: a nonempty
+list requires a destination, every task and subtask moves, assignments outside
+the destination are removed, and the source list is deleted. The last list stays.
+The package app map names the controls, restrictions and recovery path. HTTP
+checks cover missing-body rejection and empty-object deletion, matching legacy.
+Failed confirmation retains its destination and focuses the picker; Keep list is default.
+
+Package deletion requests lock the actor's existing lists in identifier order
+using identifier-preserving updates, then count again. The public typed query
+port has no advisory-lock operation. A successful-deletion check compares the
+entire surviving database record, including timestamp precision. Concurrent mixed
+legacy/Rust writers are not a supported or proven cutover mode.
+
+The unchanged deletion assertion fails against the old component (404 instead of
+409). New compiled checks exercise deletion as the owner, another account and an
+admin. The same private-list assertions fail with actual list RLS removed and
+pass after restoration, through both route and tool. The concurrency removal
+control forces both unprotected counts before deletion. The strengthened protected
+control holds the first count until PostgreSQL reports the second request waiting
+on its row lock, then requires the second count after commit and one conflict.
+Failure after tag removal must roll back tasks, assignments and list records.
+
+The first full endpoint run matched 76 of 84 cases, up from 69; all seven existing
+list-deletion cases pass. Its eight failures concern deferred-job integration,
+focus/risk and timezone behavior. An additional case covers empty-object deletion.
+The data comparisons pass 50 mutation-tool and 84 filtered-list cases. Native
+guest checks pass. Current committed receipts and independent review results are
+in the task proof. Bulk deletion uses the existing same-list tag rule and cascading
+source-tag removal. A compiled 1,011-task check uses nine calls under default fuel.
+Concurrent insert/FK-conflict status parity remains unproven: the public port has
+no typed constraint-error contract; arbitrary host failures must not become 409.
+
+The signed UI fixture passed cancellation, nonempty rejection, destination moves,
+task/subtask retention, tag removal, last-list refusal and persistence after reload.
+A narrow viewport was checked. The exact optional deletion-proof command is in
+the README. This fixture binds loopback and is separate from the real shell.
+The work reuses the approved pinned wit-bindgen graph, scratch toolchain/Cargo
+cache and declared offline JavaScript dependencies. The tools lockfile was
+refreshed offline without a diff. No global installation, shared crate or SQL
+migration changed.
+
+Six endpoints and four tools remain: search interpretation, focus, at-risk,
+overdue and both assistant-policy routes; summary, focus, at-risk and overdue
+tools. Actor-local dates/lazy recurrence, recurrence jobs, queue policy/worker
+parity, public People linkage, feedback/action policy, remaining screens/settings,
+installed chat, real shell, performance and physical second-device HTTPS remain
+unfinished. This is a checkpoint, not Phase 5 acceptance. Part of #4027; Category N/A.

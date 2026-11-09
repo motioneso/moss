@@ -1,8 +1,22 @@
-//! Generated canonical ABI; all domain effects still use the guest-safe SDK.
+//! Generated canonical ABI; domain effects use the declared public host ports.
 use moss_module_sdk::{Error, Host};
 use serde_json::{json, Value};
 
 wit_bindgen::generate!({ path: "../wit", world: "tasks" });
+
+// Mutation results may contain every moved task, including private descriptions.
+// A successful public port call reports query success. Bulk
+// deletion needs no returning values, so do not parse that unused JSON in Wasm.
+pub(crate) fn execute_query(
+    resource: &str,
+    query: &moss_module_sdk::query::Query,
+) -> moss_module_sdk::Result<()> {
+    let request = serde_json::to_string(
+        &json!({"operation":"query","resource":resource,"parameters":query}),
+    )?;
+    moss::module::db::call(&request).map_err(|_| Error::new("Tasks host call failed"))?;
+    Ok(())
+}
 
 struct ComponentHost;
 impl Host for ComponentHost {

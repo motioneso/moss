@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Delete lists through confirmed package-screen actions, HTTP and the assistant handler, optionally keeping tasks in another owned list.
+- Preserve the final list across concurrent package deletion requests; check compiled privacy and lock-removal controls.
+
 - Manage each list's tags in the package screen: create, rename and confirmed deletion, with draft protection.
 - Check the compiled tag routes with privacy removal controls and verify browser tag persistence.
 
