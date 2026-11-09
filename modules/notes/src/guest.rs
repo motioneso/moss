@@ -27,6 +27,8 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> Result<String> {
     match kind {
         "health" | "install" => Ok("{}".into()),
         "route" => crate::routes::handle(host, payload),
+        #[cfg(feature = "write-tools")]
+        "job" => crate::sync::handle(host, payload),
         "tool" => {
             let request: Value = serde_json::from_str(payload)?;
             if request["tool"] == "notes.search" {

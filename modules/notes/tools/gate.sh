@@ -10,4 +10,4 @@ fi
 pnpm exec tsx modules/notes/tools/database-gate.ts
 pnpm exec tsx modules/notes/tools/guest-gate.ts
 
-cargo +1.95.0 test --locked --offline --manifest-path modules/notes/tools/Cargo.toml --test component --test write_tools --test screen
+cargo +1.95.0 test --locked --offline --manifest-path modules/notes/tools/Cargo.toml --test component --test write_tools --test screen --test sync

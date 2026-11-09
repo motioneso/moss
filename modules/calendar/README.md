@@ -4,7 +4,7 @@ Part of #4027. This is the package and data foundation, **not the full Calendar 
 The existing TypeScript app stays in place. Version 0.5.0 connects event links at
 `/calendar?event=<id>` through the signed-in Calendar composition, restores duration,
 attendee and status details, refreshes open details and closes a removed event.
-Version 0.7.0 uses the account's assistant name in Calendar labels, held-event
+Version 0.8.0 combines part 7 with the merged part 8 date and Day legend changes. It uses the account's assistant name in Calendar labels, held-event
 wording and settings. Narrow Week screens explain sideways scrolling and bring today
 into view when opening, navigating or resizing; routine refreshes keep the user's
 horizontal position. Day, Week and Month screens, saved views and editable briefing settings are packaged.
@@ -216,3 +216,18 @@ plan execution/recovery, writable automation, external status, full Today/chat s
 replacement of the old screen remain open. A phone-width browser and same-host LAN
 requests do not establish physical second-device access or trusted production HTTPS.
 No global tool or wit-bindgen is installed by this part.
+
+## Event dates and Day legend (part 8 checkpoint)
+
+Version 0.8.0 keeps all-day exclusive ends and timed local-midnight ends off the next
+day in event details. Default English event-date and toolbar-range wording match the
+production Calendar model. The Day legend shows event swatches and counts today’s
+held blocks; Week has no count note and Month has no event-type legend. These are
+cache presentations, not evidence of provider execution. Native regressions and the
+UI differential harness cover midnight, multi-day, leap-day, year-boundary and
+timezone cases. The signed-live runner checks the rendered details and legend.
+
+Part 8 merged before PR 4079. This combined branch retains its date and legend
+changes alongside part 7’s assistant-name and narrow-week work. Full Calendar parity, regional
+formatting beyond default English, the old-screen switch and physical second-device
+HTTPS remain required. The report retains the complete remaining list.

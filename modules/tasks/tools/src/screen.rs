@@ -118,6 +118,18 @@ pub fn render() -> String {
                 </form>
                 {action("close-lists", "Back to tasks")}
             </section>
+            <section id="tags-editor" hidden aria-labelledby="list-tags-heading">
+                <h2 id="list-tags-heading">"List tags"</h2>
+                <p>"Tags belong to this list. Open a task to assign or remove its tags."</p>
+                <p id="tags-error" hidden role="alert"></p>
+                <div id="tags-empty" hidden><EmptyState title="No tags yet" description="Create a tag to organise tasks in this list."/></div>
+                <div id="tag-names" class="tasks-fields"></div>
+                <form id="manage-tag-form" class="tasks-inline">
+                    <Field><FormLabel control_id="manage-tag-name">"New list tag"</FormLabel><input id="manage-tag-name" class="jds-input" required maxlength="100"/></Field>
+                    <Button kind=ButtonType::Submit>"Create tag"</Button>
+                </form>
+                {action("close-tags", "Back to lists")}
+            </section>
         </main>
     }.to_html();
     format!("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Tasks · Moss</title><link rel=\"stylesheet\" href=\"/module-shared/park-press.css\"><link rel=\"stylesheet\" href=\"./tasks.css\"><script type=\"module\" src=\"./app.mjs\"></script></head><body>{html}</body></html>")

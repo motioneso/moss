@@ -4,7 +4,7 @@
   "name": "Notes",
   "description": "Choose your notes folder, prepare note changes for approval, and search your indexed notes.",
   "publisher": "Moss",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -59,7 +59,7 @@
     {
       "id": "notes.source",
       "label": "Notes folder",
-      "description": "Browse, link, change or unlink your allowed notes folder. View saved sync status. Sync and chat tools are not available in this checkpoint.",
+      "description": "Browse, link, change or unlink your allowed notes folder. View saved sync status. Manual and scheduled sync and write chat tools are not available yet.",
       "path": "/settings/connections",
       "scope": "user",
       "entry": "ui/index.html"
@@ -87,7 +87,7 @@
     },
     {
       "id": "notes.folder-settings",
-      "description": "Settings \u2192 Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. This checkpoint does not run sync or chat tools and is not a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
+      "description": "Settings → Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. Saved status may be from an earlier installation; this package does not run manual or scheduled sync or write chat tools. It is not a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
       "errors": [
         {
           "code": "notes-folder-path-refused",

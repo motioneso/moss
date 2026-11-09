@@ -110,6 +110,7 @@ export async function routesOracle() {
     await seed();
     const startedAt = new Date().toISOString();
     let configured = false;
+    const notePaths = new Set<string>();
     const cases: {
       actor: string;
       method: string;
@@ -136,6 +137,13 @@ export async function routesOracle() {
           ? { payload: JSON.stringify(body), headers: { "content-type": "application/json" } }
           : {})
       });
+      const expected: unknown = response.json();
+      if (configured && method === "POST" && path === "/people") {
+        if (response.statusCode !== 200) throw new Error("Configured People creation must succeed");
+        const notePath: unknown = response.json().notePath;
+        if (typeof notePath !== "string") throw new Error("Created People note path missing");
+        notePaths.add(notePath);
+      }
       const rows: Record<string, unknown> = {};
       for (const table of peopleTables) {
         rows[table] = (
@@ -153,10 +161,17 @@ export async function routesOracle() {
         ...(configured
           ? {
               configured: true,
-              files: { "Route.md": await readFile(join(selected, "Route.md"), "utf8") }
+              files: Object.fromEntries(
+                await Promise.all(
+                  [...notePaths].map(async (path) => [
+                    path,
+                    await readFile(join(selected, path), "utf8")
+                  ])
+                )
+              )
             }
           : {}),
-        expected: { status: response.statusCode, body: response.json() },
+        expected: { status: response.statusCode, body: expected },
         rows
       });
     };
@@ -276,9 +291,18 @@ phones: []
 status: active
 ---
 Human text stays.
-`
+`,
+      "Family/Missing.md": "---\ndisplayName: Missing id\n---\nNeeds review.\n",
+      "Family/Invalid.md": "Ordinary markdown without People frontmatter.\n",
+      "Work/Upper.MD": "---\ndisplayName: Ignored uppercase extension\n---\n",
+      "Family/Duplicate.md": `---\njarvisPersonId: ${ids.secondary}\ndisplayName: Duplicate one\n---\n`,
+      "Work/Duplicate.md": `---\njarvisPersonId: ${ids.secondary}\ndisplayName: Duplicate two\n---\n`,
+      "Family/New.md": `---\njarvisPersonId: ${ids.explicit}\ndisplayName: New canonical\naliases: [New alias]\nemails: [new@example.test]\n---\n`
     };
-    await writeFile(join(selected, "Route.md"), folderSeed["Route.md"]);
+    for (const [path, content] of Object.entries(folderSeed)) {
+      await writeFile(join(selected, path), content);
+      notePaths.add(path);
+    }
     await bootstrap.query(
       "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'people-notes-folder',$2) ON CONFLICT(owner_user_id,key) DO UPDATE SET value_json=EXCLUDED.value_json",
       [actor, JSON.stringify(selected)]
@@ -286,6 +310,15 @@ Human text stays.
     configured = true;
     await run("GET", "/people/notes-directories");
     await run("GET", "/people/notes-directories?path=Family");
+    for (const path of [
+      ".",
+      "Family/",
+      "Family/./Friends",
+      "Family//Friends",
+      "missing",
+      "../Work"
+    ])
+      await run("GET", `/people/notes-directories?path=${encodeURIComponent(path)}`);
     await run("PATCH", `/people/${ids.primary}`, { displayName: "Canonical renamed" });
     await run("PATCH", `/people/${ids.primary}`, { relationshipSummary: {}, contextSummary: [1] });
     await run("PATCH", `/people/${ids.primary}`, { aliases: "", emails: "", phones: "" });
@@ -347,6 +380,17 @@ Human text stays.
       displayName: "Canonical renamed",
       status: "active"
     });
+    await run("POST", "/people", {
+      displayName: "Created Person",
+      aliases: ["Created alias"],
+      emails: ["created@example.test"],
+      phones: ["12345"]
+    });
+    await run("GET", "/people?search=Created");
+    await run("GET", "/people/resolve?q=created%40example.test");
+    await run("POST", "/people/notes/refresh");
+    await run("POST", "/people/notes/refresh");
+    await run("GET", "/people/match-candidates");
     await bootstrap.query(
       "DELETE FROM app.preferences WHERE owner_user_id=$1 AND key='people-notes-folder'",
       [actor]

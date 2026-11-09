@@ -869,3 +869,109 @@ HTTPS proof is claimed. Complete Notes acceptance remains unverified.
 The filesystem race, compensation, crash, platform, snapshot/paging and queue
 publication limits from prior checkpoints remain. Do not replace legacy Notes
 with this package yet. This checkpoint is not full parity or release acceptance.
+
+## Part eight checkpoint — sync coordinator parity
+
+This continuation starts from main `678cb536d`. The brief permits a bounded
+checkpoint rather than more than one context compaction. Core memory ingestion,
+the production local embedding service and the assembled Notes/chat join are still
+absent here, so enabling the three write tools or announcing working sync would
+be false. This part ports the legacy sync control flow into the existing test-only
+component, with no new shared-host files or activation permissions.
+
+### What changed and what the checks mean
+
+Package `0.1.3` retains the same Connections screen, public APIs and read-only
+search tool. The app map now explicitly says manual/scheduled sync and write chat
+tools are unavailable and saved sync status may be from an earlier installation.
+The ordinary component continues to reject sync; the separate `write-tools`
+checkpoint build accepts the `notes.sync` job envelope for boundary comparisons.
+
+The Rust coordinator preserves the hundred-chunk run budget, deferred and
+within-file continuations, resume hashes/snapshot keys, missing-checkpoint file
+fallback, counts, partial/total failure and no-op after unlink. Cleanup selection
+preserves walked paths even when a file cannot be resolved, also preserves
+canonical paths, skips other roots and prefix collisions, and refuses to wipe an
+index on an empty walk. The native corpus executes the actual authored legacy
+worker, cleanup helper and error-message sink rather than a second handwritten
+reference. Filesystem, embeddings, per-file ingestion and transactions are named
+stand-ins. Canonical-path cases demonstrate coordinator behavior only; they do
+not establish symlink support in the real vault adapter.
+
+The initial regression was observed failing because the job handler was absent.
+Native comparisons check exact results/errors and the core-operation trace.
+Actual-Wasm comparisons check successful results, failure versus success and
+operation traces: the host scrubs raw guest errors, so exact saved error text is
+compared natively. Unknown input fields and invalid checkpoint offsets are refused
+before any core operation. Malformed/over-budget core progress is a counted file
+failure and does not expand the run budget. These explicit bounds are stricter
+than the unchecked legacy boundary.
+
+No production core adapter is included. The draft SDK operations and required
+actor/source/file admission are documented in `modules/notes/README.md`. Before
+activation, the core implementation must use real account-configured embeddings,
+VaultContext, per-file transactions, managed publication fencing and existing RLS.
+Cleanup must atomically remove the actor's Notes chunks, links and index row. These
+stand-in tests establish none of those privacy or persistence properties.
+
+The coordinator's synchronous input/output may include paths/hashes; they must
+never be copied into queue parameters. Future dispatch must persist account-bound
+checkpoint state and queue only its opaque ID under the typed job schema. Queue
+publication, last-sync writes in separate transactions, after-sync hooks, the
+manual route and fifteen-minute schedule reconciliation are not implemented here.
+No-op/deferred results must not overwrite the last real sync status.
+
+### Tools, verification and remaining acceptance
+
+The build uses pinned, previously approved `wit-bindgen` 0.57.1 from project
+lockfiles. Guest Cargo and Rust toolchain homes are task-owned scratch copies;
+the ordinary and write-tools builds use separate target folders. No global tool,
+unlisted dependency, live database or real installation is changed. Database
+checks run only through `scripts/run-gate.sh` on disposable servers.
+
+### Review corrections and evidence
+
+The first independent Claude review found two major defects: the job envelope
+used `name` instead of the host's local `queue` field, and configured/canonical
+source paths were collapsed. Both are fixed. Continuations retain the configured
+path while walking, per-file calls and cleanup use the canonical root. The corpus
+now has 64 actual legacy executions, adding opening failures, differing final
+file errors, source aliases and trailing slashes. The revised regression was
+observed failing before the fixes and passing afterward.
+
+The four minor findings were also addressed: the ordinary-Wasm refusal check now
+uses working core ports and a permissive checkpoint manifest, an unlinked opening
+reply need not contain a walk, and the draft operation response shapes, corpus
+regeneration, removal controls and production limits are documented. Native
+exact-result/trace comparisons and strict guest Clippy pass; all five removed
+protections fail their assertions and restored source passes. Scoped TypeScript
+lint/format checks, the file-size check, and full-repository lint/format checks
+also pass. Final clean-commit compiled/database receipts and the second review
+are recorded with the checkpoint PR and its proof recipe, rather than reusing a
+receipt from an earlier dirty tree. The initial SQL differential attempt timed
+out awaiting its TypeScript server; that attempt is not a passing parity result.
+
+A real local HTTPS fixture selected, downloaded and installed the signed package
+through the module host. A new synthetic owner signed in, browsed and linked a
+folder, then confirmed unlink in the opaque module frame. The gate checked that
+the real preference became null after at least two revisions. Its native checks
+verified the certificate and refused an unknown authority and origin. Screenshots
+and the disposable gate receipt are in the proof recipe. The task browser and
+server were closed after the check. This is the package fixture, not the assembled
+Phase 4 shell or a physical second device. No second-device acceptance is claimed.
+
+Before production activation, cleanup must list and remove all selected files in
+one transaction, matching the legacy sweep. The draft stand-in calls currently
+list then remove paths independently; even atomic per-file deletion would not
+prove transaction equivalence. A typed safe-error channel is still needed because
+the host scrubs guest errors. Real work also needs bounded resumable dispatch
+within the host's default five-second and ten-million-fuel call limits.
+
+This checkpoint is not complete Notes parity. Remaining work is still production
+memory/query embedding assembly and recall; full per-file ingestion/managed
+publication; durable continuation, schedule and status orchestration; installed
+write approvals/version rechecks; proposals/receipts, reconciliation and exact
+cleanup; private exports/daily archives and account-export join; remaining
+handler/path/error parity; assembled Settings/chat; separate physical-device
+HTTPS acceptance. The prior filesystem race, crash, compensation, paging and
+platform limits remain. No Docker cutover or complete Notes acceptance is claimed.
