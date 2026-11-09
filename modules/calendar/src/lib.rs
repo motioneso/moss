@@ -10,6 +10,7 @@ pub mod events;
 pub mod heartbeat;
 mod jobs;
 pub mod model;
+mod operations;
 pub mod plans;
 mod preview;
 mod saved_read;
@@ -199,6 +200,15 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
             plans::save(host, input)
         }
         ("POST", "/day-plans/:id/preview") => preview::preview(host, &id, request.body),
+        ("GET", "/day-plans/:id/operations/:operationId") => operations::read(
+            host,
+            &id,
+            request
+                .params
+                .get("operationId")
+                .map(String::as_str)
+                .unwrap_or(""),
+        ),
         ("GET", "/briefing-settings") => settings::read(host),
         ("PATCH", "/briefing-settings") => settings::save(host, request.body),
         ("GET", "/display-settings") => display::read(host),

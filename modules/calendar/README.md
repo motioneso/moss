@@ -332,3 +332,22 @@ lookup throws; this package returns the saved plan with that reference marked
 unavailable. Null references, missing adapters and lookup faults all use that flag.
 It describes what this read could resolve, not proof that the referenced record was
 deleted. Exact public-adapter error parity remains open.
+
+## Saved operation status (part 14)
+
+Version 0.14.0 reads a saved apply operation at
+`GET /api/m/calendar/day-plans/:id/operations/:operationId`, with the matching
+original `/api/calendar/` URL. It returns selected item order, pending/completed
+status, stored results and access-denied guidance without contacting a provider
+or changing the plan. The original owner-only operation policies are retained.
+Native regressions, installed comparisons with the production TypeScript route,
+and an installed read with row security removed/restored cover this addition.
+The signed-in browser runner reads synthetic stored operation rows through both
+URLs; this is API evidence from a loaded Calendar page, not an operation-status
+screen or evidence that provider execution works.
+
+The remaining acceptance list in the calendar report still applies. In particular,
+apply/retry/recovery/confirm, actual worker dispatch, concrete public adapters,
+full shell/chat and old-screen replacement, complete parity and a physical second
+device over trusted HTTPS are unfinished. This continuation installs no new tool
+or dependency and does not change the module's client/server boundary.

@@ -776,3 +776,53 @@ the adapter's visibility obligation and the error-path difference explicit. A fu
 adapter must demonstrate that another account's private task cannot be summarized,
 with a failing-first installed privacy check. The installed comparisons below use
 owner-scoped stand-ins and do not discharge that production-adapter requirement.
+
+## JS-112 / part 14: saved operation status checkpoint
+
+Card 525. Package 0.14.0 adds the original read-only apply operation status route
+through the installed API and the Calendar web composition's original URL alias.
+A plan id and operation id must identify the same visible apply batch. The
+response retains selected item order, stored item results, pending/completed
+status and access-denied guidance. Stored result extensions are omitted like
+the original HTTP response schema. Legacy array snapshots and current snapshots
+with explicit intent are supported. No provider action, queue change or plan
+mutation is performed. This is a bounded checkpoint, not final Calendar acceptance.
+
+The native route regressions were observed failing against the previous
+implementation (missing route: success returned not found, malformed ids were
+not validated). The same tests pass after the change. Additional native cases
+cover empty batches, nonbatch headers, unreadable snapshots/results, multiple
+item pages and result-field filtering. Installed-Wasm comparisons call the real
+production TypeScript route on the same disposable database for owner, unrelated
+user and administrator; both snapshot formats, pending/unknown/failed/applied
+results, denial guidance, wrong plan, absent operation and malformed ids are
+covered. Malformed-id response bodies are excluded because production validation
+is framework-owned. Other validation/coercion/error cases remain unproven.
+
+The installed privacy witness reads the same operation as another account before,
+with the two operation tables' row security disabled in the disposable fixture,
+and after restoration. It must observe the privacy violation without protection
+and refusal again after restoration. The full gate also retains the original
+failing-first foreign read/write witnesses on all five Calendar tables. Production
+SQL and privacy rules are unchanged.
+
+The signed-in HTTPS runner loads the real installed Calendar screen and then
+reads synthetic stored operation rows from that page through both URL prefixes.
+It checks pending/completed status, denial guidance, result filtering and foreign
+and wrong-plan refusal. These are browser API requests, not interactions with a
+new status screen. Direct fixture rows model saved progress; they do not establish
+provider execution. Exact fresh checks, review and commit are recorded in the
+task Proof artifact.
+
+Builds reuse the existing scratch Rust 1.95.0 home with the Wasm target and copies
+of existing build caches in this task's scratch directory. Dependencies are restored
+offline from the declared lockfile in this worktree. Both shared asset bundles go
+into one scratch directory. No new dependency, global tool or wit-bindgen installation
+is performed. A same-machine LAN request, disposable TLS certificate and phone-width
+browser are not a physical second device or production certificate trust.
+
+Remaining: concrete public Tasks/Briefings/provider adapters and full provenance;
+complete validation/coercion/error parity; four provider tools; day-plan apply job
+and apply/retry/recovery/confirm execution; worker-role cache-evict dispatch; source
+behavior and external-calendar status controls; full shell/Today/chat; old-screen
+replacement; complete assembled parity; physical second-device trusted HTTPS.
