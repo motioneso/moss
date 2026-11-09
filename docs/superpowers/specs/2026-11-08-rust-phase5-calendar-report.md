@@ -987,4 +987,14 @@ row. Its minimum row height now reserves room for the date, three chips and the
 extra-events button. This deliberately exceeds the legacy minimum; the rendered
 comparison still checks other Month structure and labels against production.
 The live runner checks the entire overflow button fits its event list before clicking.
-Re-centering after a saved timezone change remains open; this slice covers initial positioning.
+Part 18 covered initial positioning; the part 19 checkpoint below adds timezone changes.
+
+## JS-142 / part 19: saved timezone positioning checkpoint
+
+Card 525. Package 0.19.0 recenters Day and Week when a refresh receives a different
+account timezone; ordinary refreshes in the same timezone retain the user's scroll.
+The installed signed-in test changes real disposable-server preferences and cache
+rows at desktop and phone widths. Fresh red/green results, gate, screenshots and
+review belong in the Proof artifact. See `modules/calendar/README.md` for details.
+No new tool or dependency is installed. The remaining part-18 list above still
+applies, including full cutover, provider execution and physical-device HTTPS.
