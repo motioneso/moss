@@ -5,6 +5,7 @@
 Rust component and shared-frame People Settings checkpoint. Complete installed parity and physical-device qualification remain open.
 
 Keep the legacy decimal spelling when a numeric contact value is converted to text, including rounding ties.
+Parse JSON contact numbers with correct binary64 rounding before converting them to text.
 
 Retain legacy note-only PATCH list handling and compare configured-folder HTTP edits,
 canonical note bytes and all People tables against the existing implementation.

@@ -229,6 +229,16 @@ mod tests {
     use serde_json::Number;
 
     #[test]
+    fn json_numeric_contacts_match_the_javascript_parser() {
+        let cases: Vec<(String, String)> =
+            serde_json::from_str(include_str!("tests/fixtures/number-parity.json")).unwrap();
+        for (input, expected) in cases {
+            let number: Number = serde_json::from_str(&input).unwrap();
+            assert_eq!(number_text(&number), expected, "{input}");
+        }
+    }
+
+    #[test]
     fn numeric_contact_values_keep_javascript_notation_boundaries() {
         for (value, expected) in [
             (0.0, "0"),
