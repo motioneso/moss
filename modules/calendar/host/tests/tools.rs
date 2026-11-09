@@ -359,7 +359,7 @@ fn installed_cache_evict_job_removes_only_the_actors_own_event() {
     let t = Installed::new();
     let f = &t.f;
     // Production runs this job on the worker role, which alone holds DELETE (SQL 0113).
-    // This disposable database gives the app role the same owner-scoped delete rule so
+    // This disposable database gives the app role the simpler owner-only delete rule (production also requires a calendar connector account, SQL 0113) so
     // the guest's own visibility check and the database rule are both exercised. Real
     // worker-role dispatch belongs to the host job runner and is not proven here.
     f.rt.block_on(f.root.batch_execute(

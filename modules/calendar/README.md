@@ -302,7 +302,7 @@ A browser API check is a fetch from a signed-in page, not a day-plan editor inte
 
 ## Cache-evict job (part 12 checkpoint)
 
-Version 0.11.0 adds the `calendar-cache-evict-event` job (`target-item-id`),
+Version 0.12.0 adds the `calendar-cache-evict-event` job (`target-item-id`),
 matching the production worker. The host captures the account in the queue
 envelope. The guest reads the event through the scoped query and deletes it
 only when that account can see it, so another user or an administrator gets
