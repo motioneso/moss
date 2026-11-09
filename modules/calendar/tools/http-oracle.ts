@@ -1,6 +1,8 @@
 /** Production Calendar routes and real repositories on the disposable gate DB. */
 import assert from "node:assert/strict";
 import Fastify from "fastify";
+import { PreferencesRepository } from "@moss/structured-state";
+import { LOCALE_PREFERENCE_KEY, resolveEffectiveLocale } from "@moss/shared";
 import { AiRepository } from "../../../packages/ai/src/repository.js";
 import { createDatabase, DataContextRunner, getMossDatabaseUrls } from "@moss/db";
 import { registerCalendarRoutes } from "../../../packages/calendar/src/routes.js";
@@ -25,6 +27,7 @@ export async function httpOracle(
   assert.equal(process.env.JARVIS_GATE_RUN, "1", "Use verify-gate");
   const db = createDatabase({ connectionString: getMossDatabaseUrls().app, maxConnections: 1 });
   const server = Fastify();
+  const dataContext = new DataContextRunner(db);
   registerCalendarRoutes(server, {
     resolveAccessContext: async () => ({ actorUserId: actor, requestId: "calendar-http-parity" }),
     // Preview task facts, when a caller supplies them: only the actor's own tasks are visible,
@@ -38,16 +41,21 @@ export async function httpOracle(
           }
         }
       : {}),
-    dataContext: new DataContextRunner(db),
+    dataContext,
     dayPlanRepository: new DayPlanRepository({
       findTask: async () => {
-        throw new Error("Task projections are outside this read oracle");
+        throw new Error("Task projections are outside this HTTP oracle");
       }
     }),
-    // These public projections are not called by the three read contracts under test.
+    // Source-run and task enrichment are outside these scoped comparisons.
     findSourceRun: async () => undefined,
     findRun: async () => undefined,
-    resolveTimeZone: async () => "UTC",
+    resolveTimeZone: async (access) => {
+      const locale = await dataContext.withDataContext(access, (scopedDb) =>
+        new PreferencesRepository().get(scopedDb, LOCALE_PREFERENCE_KEY)
+      );
+      return resolveEffectiveLocale(locale).timezone;
+    },
     calendarWritebackPolicy: {
       set: (db, module, family, tier) =>
         new AiRepository().setActionPolicy(db, module, family, tier)

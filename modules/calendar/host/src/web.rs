@@ -89,6 +89,11 @@ pub fn router(
         )
         .route("/api/calendar/events", get(dispatch))
         .route("/api/calendar/events/{id}", get(dispatch))
+        .route("/api/calendar/day-plans", axum::routing::post(dispatch))
+        .route(
+            "/api/calendar/day-plans/{id}/draft",
+            axum::routing::patch(dispatch),
+        )
         .route(
             "/api/calendar/briefing-settings",
             get(dispatch).patch(dispatch),

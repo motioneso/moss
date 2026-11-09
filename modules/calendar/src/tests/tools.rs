@@ -158,3 +158,85 @@ fn display_projects_the_account_assistant_name_without_persona_text() {
     assert_eq!(output["status"], 200);
     assert_eq!(output["body"]["assistantName"], "Cedar");
 }
+
+#[test]
+fn original_draft_envelopes_reject_ambiguous_or_unsupported_requests_before_host_access() {
+    for (method, path, body, status) in [
+        (
+            "POST",
+            "/day-plans",
+            json!({"date":"2026-12-15","localDay":"2026-12-16"}),
+            400,
+        ),
+        (
+            "POST",
+            "/day-plans",
+            json!({"date":"2026-12-15","eveningIntent":{}}),
+            400,
+        ),
+        (
+            "POST",
+            "/day-plans",
+            json!({"date":"2026-12-15","sourceRunId":"source"}),
+            503,
+        ),
+        (
+            "PATCH",
+            "/day-plans/:id/draft",
+            json!({"date":"2026-12-15","expectedRevision":1}),
+            400,
+        ),
+    ] {
+        let response: Value = serde_json::from_str(
+            &handle(
+                &NoCalls,
+                "route",
+                &json!({
+                    "method":method,"path":path,"params":{"id":"plan"},"query":{},"body":body
+                })
+                .to_string(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(response["status"], status);
+    }
+}
+
+#[test]
+fn original_day_read_uses_account_timezone_or_the_product_default() {
+    struct Locale(Value, &'static str);
+    impl Host for Locale {
+        fn call(&self, port: &str, operation: &str, resource: &str, body: Value) -> Result<Value> {
+            if (port, operation, resource) == ("kv", "get", "calendar.chat-context") {
+                return Ok(json!({"timezone":self.0}));
+            }
+            assert_eq!(
+                (port, operation, resource),
+                ("db", "query", "app.day_plans")
+            );
+            let query: moss_module_sdk::query::Query = serde_json::from_value(body).unwrap();
+            assert_eq!(
+                query.filter,
+                moss_module_sdk::query::Filter::And {
+                    filters: vec![
+                        moss_module_sdk::query::Filter::eq("local_day", "2026-12-15"),
+                        moss_module_sdk::query::Filter::eq("time_zone", self.1),
+                    ]
+                }
+            );
+            Ok(json!([]))
+        }
+    }
+    for (stored, zone) in [
+        (Value::Null, "America/Los_Angeles"),
+        (json!("invalid"), "America/Los_Angeles"),
+        (json!("Pacific/Auckland"), "Pacific/Auckland"),
+    ] {
+        let response: Value = serde_json::from_str(&handle(&Locale(stored, zone), "route", &json!({
+            "method":"GET","path":"/day-plan","params":{},"query":{"date":"2026-12-15"},"body":null
+        }).to_string()).unwrap()).unwrap();
+        assert_eq!(response["status"], 200);
+        assert!(response["body"]["plan"].is_null());
+    }
+}

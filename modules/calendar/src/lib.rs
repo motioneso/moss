@@ -117,17 +117,72 @@ fn api(host: &impl Host, name: &str, input: Value) -> Result<Value> {
         _ => Err(Error::new(404, "Calendar data operation not found")),
     }
 }
+/// The original HTTP routes name the day `date` and resolve a missing
+/// timezone from the account. Installed callers already send `localDay`.
+/// Accept both spellings at the route boundary only.
+fn original_day(host: &impl Host, mut value: Value, timezone_required: bool) -> Result<Value> {
+    let object = value
+        .as_object_mut()
+        .ok_or_else(|| Error::new(400, "Invalid calendar request"))?;
+    let original = object.contains_key("date");
+    if original && object.contains_key("localDay") {
+        return Err(Error::new(400, "Use only one day field"));
+    }
+    if original
+        && !timezone_required
+        && object
+            .keys()
+            .any(|key| !matches!(key.as_str(), "date" | "timeZone" | "sourceRunId"))
+    {
+        return Err(Error::new(400, "Invalid calendar request"));
+    }
+    // Full source-run provenance needs a concrete public Briefings adapter.
+    // Keep the original create envelope closed for linked runs until then.
+    if original && !timezone_required && object.get("sourceRunId").is_some_and(|id| !id.is_null()) {
+        return Err(Error::new(
+            503,
+            "Calendar source-run creation is unavailable",
+        ));
+    }
+    if !object.contains_key("localDay") {
+        if let Some(date) = object.remove("date") {
+            object.insert("localDay".into(), date);
+        }
+    } else {
+        object.remove("date");
+    }
+    if object.get("timeZone").is_none() || object["timeZone"].is_null() {
+        object.remove("timeZone");
+        if timezone_required {
+            return Err(Error::new(400, "timeZone must be a valid IANA name"));
+        }
+        let locale = host.call("kv", "get", "calendar.chat-context", json!({}))?;
+        let zone = locale["timezone"]
+            .as_str()
+            .map(str::trim)
+            .filter(|zone| zone.len() <= 100 && zone.parse::<chrono_tz::Tz>().is_ok())
+            .unwrap_or("America/Los_Angeles");
+        object.insert("timeZone".into(), json!(zone));
+    }
+    Ok(value)
+}
+
 fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
     let id = request.params.get("id").cloned().unwrap_or_default();
     match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/events") => api(host, "listEvents", Value::Null),
         ("GET", "/events/:id") => api(host, "getEvent", json!({"id":id})),
         ("GET", "/day-plan") => {
-            plans::get_for_day(host, serde_json::from_value(json!(request.query))?)
+            let query = original_day(host, json!(request.query), false)?;
+            plans::get_for_day(host, serde_json::from_value(query)?)
         }
-        ("POST", "/day-plans") => plans::create(host, serde_json::from_value(request.body)?),
+        ("POST", "/day-plans") => {
+            let body = original_day(host, request.body, false)?;
+            plans::create(host, serde_json::from_value(body)?)
+        }
         ("PATCH", "/day-plans/:id/draft") => {
-            let mut input: plans::Save = serde_json::from_value(request.body)?;
+            let body = original_day(host, request.body, true)?;
+            let mut input: plans::Save = serde_json::from_value(body)?;
             input.plan_id = id;
             plans::save(host, input)
         }
