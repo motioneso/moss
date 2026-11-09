@@ -83,10 +83,13 @@ for (const stored of [null, "", 3, {}, "/notes", " "]) {
   )
     throw new Error("Legacy caller isolation changed");
 }
-writeFileSync(
-  new URL("../src/tests/manual-sync-vectors.jsonl", import.meta.url),
-  cases.map((entry) => JSON.stringify(entry)).join("\n") + "\n"
-);
+const output = new URL("../src/tests/manual-sync-vectors.jsonl", import.meta.url);
+const vectors = cases.map((entry) => JSON.stringify(entry)).join("\n") + "\n";
+if (process.argv.includes("--check")) {
+  if (readFileSync(output, "utf8") !== vectors) throw new Error("Manual-sync corpus is stale");
+} else {
+  writeFileSync(output, vectors);
+}
 console.log(
   `PASS ${cases.length} legacy manual-sync HTTP cases; preference/queue boundaries are stand-ins`
 );

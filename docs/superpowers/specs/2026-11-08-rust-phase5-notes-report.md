@@ -1400,7 +1400,10 @@ The experimental component now handles `POST /notes/sync`. Its installed test
 package exposes `/api/m/notes/notes/sync`, returning the legacy 409 missing-folder
 message or 202 with the new durable request identity as `jobId`. It reads only
 the calling account's saved preference; body/query account, source and checkpoint
-fields are ignored. Like the legacy route, it leaves filesystem validation to the
+fields are ignored. The selected source is saved in the private checkpoint,
+keeping the original request bound to that folder without putting a private path
+in queue metadata. A changed folder cannot retarget the pending job. Like the
+legacy route, it leaves filesystem validation to the
 worker. The server must finalize the transaction and publish deferred work before
 sending success. A post-commit publication failure can leave a saved request for
 the existing recovery API. No atomic filesystem/database/queue claim is made.

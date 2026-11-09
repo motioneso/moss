@@ -77,7 +77,7 @@ fn manual_sync(host: &impl Host) -> Result<Response> {
             }),
         ));
     }
-    let saved = crate::sync_worker::request(host)?;
+    let saved = crate::sync_worker::request_source(host, source.body.as_str().unwrap())?;
     // This is the durable request identity, not a claim of completed indexing.
     // Outer finalization must commit and publish before returning HTTP success.
     Ok(Response::new(202, json!({"jobId":saved["checkpointId"]})))

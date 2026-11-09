@@ -130,6 +130,25 @@ fn installed_manual_sync_keeps_requests_private_and_resumes_indexing() {
         for outsider in [f.actors[1], f.actors[2]] {
             assert_eq!(f.checkpoint_access(&db, outsider, id), [0, 0, 0]);
         }
+        // The private checkpoint pins the server-read source, while the public
+        // job envelope above contains only its ID. Changing the preference must
+        // refuse this request rather than silently indexing the new folder.
+        let changed = PathBuf::from(f.oracle["parent"].as_str().unwrap())
+            .join(format!("manual-changed-{role}"));
+        std::fs::create_dir(&changed).unwrap();
+        f.source(owner, json!(changed));
+        let (retargeted, _) = f.durable_call(
+            db.clone(),
+            owner,
+            "job",
+            json!({"queue":"notes.sync","parameters":params}),
+            false,
+        );
+        assert!(
+            retargeted.is_err(),
+            "Pending request followed the changed folder"
+        );
+        f.source(owner, f.oracle["root"].clone());
         let (resumed, _) = f.durable_call(
             db,
             owner,

@@ -191,7 +191,7 @@
     },
     {
       "id": "notes.manual-sync-request",
-      "description": "The experimental write-tools component handles POST /notes/sync with the legacy missing-folder response and an accepted durable request ID. It uses only the calling account's saved folder preference; request body and query fields cannot choose another account or source. The surrounding server must commit and publish before returning success. The ordinary package does not declare this route or enable manual sync; installed experimental routing is a test checkpoint, not an assembled app feature. Configured embeddings, worker dispatch, recall preparation and legacy singleton coalescing still need assembly."
+      "description": "The experimental write-tools component handles POST /notes/sync with the legacy missing-folder response and an accepted durable request ID. It saves the calling account's source preference in the private checkpoint so later folder changes cannot retarget a pending request; queued metadata contains only its ID. Request body and query fields cannot choose another account or source. The surrounding server must commit and publish before returning success. The ordinary package does not declare this route or enable manual sync; installed experimental routing is a test checkpoint, not an assembled app feature. Configured embeddings, worker dispatch, recall preparation and legacy singleton coalescing still need assembly."
     },
     {
       "id": "notes.sync-outcomes",

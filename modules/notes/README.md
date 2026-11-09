@@ -46,7 +46,9 @@ The experimental `write-tools` component now handles `POST /notes/sync`, exposed
 by the installed test package at `/api/m/notes/notes/sync`. An absent, empty or
 non-string saved source returns the legacy 409 response. A configured source
 requests an owner-only durable checkpoint and returns 202 with its opaque
-`jobId`. Body/query fields never select a source, actor or checkpoint. Filesystem
+`jobId`. Body/query fields never select a source, actor or checkpoint. The
+server-read source is saved in the private checkpoint so a later folder change
+cannot retarget the request; queued metadata still contains only its ID. Filesystem
 resolution remains worker work, matching the legacy HTTP prerequisite check.
 
 The server must finish the transaction and deferred publication before sending

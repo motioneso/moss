@@ -97,6 +97,12 @@ pub fn request(host: &impl Host) -> Result<Value> {
     enqueue(host, json!({}))
 }
 
+/// Preserve the HTTP handler's server-read source in private durable state,
+/// never in the queue envelope. A later folder change cannot retarget this job.
+pub(crate) fn request_source(host: &impl Host, source: &str) -> Result<Value> {
+    enqueue(host, json!({"sourcePath":source}))
+}
+
 fn resume(host: &impl Host, input: Resume) -> Result<String> {
     let rows = Client(host).query(
         TABLE,

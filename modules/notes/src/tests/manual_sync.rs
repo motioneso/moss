@@ -24,7 +24,10 @@ impl Host for Services {
             ("context", "uuid", "new") => json!({"id":ID}),
             ("db", "query", "app.notes_sync_checkpoints") => {
                 assert_eq!(params["kind"], "insert");
-                assert_eq!(params["values"], json!({"id":ID,"checkpoint":{}}));
+                assert_eq!(
+                    params["values"],
+                    json!({"id":ID,"checkpoint":{"sourcePath":self.source}})
+                );
                 self.writes.borrow_mut().push(params.clone());
                 json!([params["values"]])
             }
