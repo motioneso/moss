@@ -200,6 +200,12 @@ invocation transaction, using the authenticated actor and installed module ID. A
 invocation rolls them back; desktop acceptance remains independent of bell reads. The older
 non-extended service assembly retains its module-local notification files.
 
+The bridge respects the actor's `notifications:<module ID>` disabled preference. It currently
+accepts only a text title: body, urgency, event identity, links and deduplication are not
+ported. Quiet-hours authority and deferred delivery are also unimplemented. Do not enable
+real reminder producers through this opt-in assembly until those policies are ported and
+qualified. This checkpoint only qualifies a synthetic assembly fixture.
+
 `test:rust-module-assembly`, through verify-gate with task-owned Rust directories, exercises
 the actual HTTPS executable with a synthetic signed Wasm module and an overdue schedule.
 It is not proof of real reminder producers, native banners, background notifications after

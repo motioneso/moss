@@ -139,7 +139,7 @@ impl TransactionalDatabasePorts {
 impl Ports for TransactionalDatabasePorts {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
         let account = crate::account_contracts::handles(port, request);
-        let notification = port == "notify";
+        let notification = port == "notify" && request.operation == "post";
         if !account && !notification && (port != "db" || request.operation != "query") {
             return self.next.invoke(scope, port, request);
         }

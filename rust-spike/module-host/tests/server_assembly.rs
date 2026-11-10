@@ -302,6 +302,28 @@ fn module_worker_and_https_feed_assemble_without_a_desktop() {
     );
     files.insert("code/module.wasm".into(), fixture(false));
     install(&files);
+    runtime.block_on(db.execute(
+        "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'notifications:sample.counter',$2)",
+        &[&owner, &json!({"enabled": false})],
+    )).unwrap();
+    application
+        .installer
+        .call(&manifest.id, access.clone(), "route", "null")
+        .unwrap();
+    assert_eq!(
+        runtime
+            .block_on(db.query_one(
+                "SELECT count(*) FROM app.notifications WHERE recipient_user_id=$1",
+                &[&owner],
+            ))
+            .unwrap()
+            .get::<_, i64>(0),
+        0,
+        "A muted module must not post into the recipient feed"
+    );
+    runtime.block_on(db.execute(
+        "DELETE FROM app.preferences WHERE owner_user_id=$1 AND key='notifications:sample.counter'", &[&owner],
+    )).unwrap();
     private(
         &root.join("modules.json"),
         &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key}),
@@ -365,11 +387,14 @@ fn module_worker_and_https_feed_assemble_without_a_desktop() {
         .send()
         .unwrap();
     assert_eq!(accepted.status(), 200);
+    let notification_id = uuid::Uuid::parse_str(&notice_id).unwrap();
     runtime.block_on(async {
+        assert_eq!(db.query_one("SELECT count(*) FROM app.desktop_notification_receipts WHERE user_id=$1 AND client_id=$2 AND notification_id=$3", &[&owner, &client_id, &notification_id]).await.unwrap().get::<_,i64>(0), 1);
+
         assert!(db.query_one("SELECT count(*) FROM app.notifications WHERE recipient_user_id=$1 AND module_id='sample.counter'", &[&owner]).await.unwrap().get::<_,i64>(0) >= 2);
         assert_eq!(db.query_one("SELECT count(*) FROM app.notification_reads WHERE user_id=$1", &[&owner]).await.unwrap().get::<_,i64>(0), 0);
     });
     drop(server);
-    println!("PASS real HTTPS executable: owner signup, existing module catalog, server-owned due schedule execution, synthetic Wasm notification in desktop feed, authenticated module dispatch, durable acknowledgement without bell reads; failed guest rolls notification back");
+    println!("PASS real HTTPS executable: owner signup, existing module catalog, server-owned due schedule execution, synthetic Wasm notification in desktop feed, authenticated module dispatch, durable acknowledgement without bell reads; failed guest rolls notification back; module mute suppresses posts");
     println!("NOT PROVEN: real reminder producers, installed desktop, background process, native target devices or second-device HTTPS");
 }

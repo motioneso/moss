@@ -14,6 +14,17 @@ pub(crate) async fn post(cx: &DataContext, scope: &CallScope, r: &Request) -> Re
         "Invalid notification text"
     );
     let actor = scope.access().actor_user_id();
+    let preference_key = format!("notifications:{}", scope.module().id);
+    let preference = cx
+        .db()
+        .query_opt(
+            "SELECT value_json FROM app.preferences WHERE owner_user_id=$1 AND key=$2",
+            &[&actor, &preference_key],
+        )
+        .await?;
+    if preference.is_some_and(|row| row.get::<_, Value>(0)["enabled"] == false) {
+        return Ok(json!({"posted":false}));
+    }
     let id = uuid::Uuid::new_v4();
     cx.db().execute(
         "INSERT INTO app.notifications(id,actor_user_id,recipient_user_id,title,module_id) VALUES($1,$2,$2,$3,$4)",

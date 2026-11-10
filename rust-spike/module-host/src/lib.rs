@@ -64,6 +64,6 @@ pub mod memory_cleanup;
 pub mod memory_ingest;
 pub mod memory_search;
 
-mod producer_queue;
 mod notifications;
+mod producer_queue;
 pub mod worker;
