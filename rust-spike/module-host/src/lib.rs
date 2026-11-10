@@ -65,5 +65,6 @@ pub mod memory_ingest;
 pub mod memory_search;
 
 mod notifications;
+mod quiet_hours;
 mod producer_queue;
 pub mod worker;

@@ -2119,3 +2119,28 @@ excluded. Part of #4027; release note Category N/A.
 Remaining: per-queue retention in the host; email triage feedback; Today/chat focus links;
 installed chat and summary presentation; real shell integration; performance budgets;
 physical second-device HTTPS proof.
+
+## Tasks part 34 checkpoint (JS-198, Card 526)
+
+Installed module screens now appear in the Rust shell. The host lists navigation entries of
+installed, enabled modules for the signed-in account (`/api/modules/navigation`, only entries
+that open a declared screen). The shell adds them to its menu (Tasks gets a check icon) and
+opens the screen in the page through the existing sandboxed frame. The frame page carries its
+own security policy so the shell may embed it.
+
+Checked: host test `module_frame` passes (2); the live HTTPS gate (`test:rust-tasks-server`)
+passed with the new navigation assertions (401 unsigned, Tasks entry when signed in). In a real
+browser on the gate server: signed in on the real page, Tasks in the menu, the screen loaded,
+a new task saved and was still there after reload. Proof artifact attached to the task.
+
+Not proven or not built: a second physical device (the test certificate trusts only this
+machine); navigation entries from modules other than Tasks; Today/chat focus links; the account
+name inside the Tasks screen; native app window; retention of finished jobs; email triage
+feedback; installed chat and summary presentation; performance budgets. Workshop and Food
+remain excluded. Part of #4027; release note Category N/A.
+
+Known gap from review: the menu reads module screens once at page load, so a module installed
+during a session shows after a reload.
+
+Remaining: per-queue retention in the host; email triage feedback; Today/chat focus links;
+installed chat and summary presentation; performance budgets; physical second-device HTTPS proof.
