@@ -135,25 +135,33 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         .into(),
     );
     assert!(!port.0.is_empty());
-    // Set NOTES_LIVE_HOST to this machine's LAN or tailnet address to reach the server
-    // through that address (listening on all interfaces) instead of loopback.
-    let lan_host = std::env::var("NOTES_LIVE_HOST").ok();
-    let listen = if lan_host.is_some() { "0.0.0.0" } else { "127.0.0.1" };
     let origin = format!("https://localhost:{}", port.0);
-    let lan_origin = lan_host.map(|h| format!("https://{h}:{}", port.0));
-    let mut all_origins = vec![origin.clone()];
-    all_origins.extend(lan_origin.clone());
+    // MOSS_NOTES_HOST names the address another device uses. When set, the listener binds
+    // every interface, trusts that origin and turns sharing on. The test stays on loopback.
+    let remote = std::env::var("MOSS_NOTES_HOST")
+        .ok()
+        .map(|host| format!("https://{host}:{}", port.0));
     let cert = root.join("tls/certificate.pem");
     assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
         .args(["local-certificate"])
         .arg(root.join("tls"))
-        .args(&all_origins)
+        .arg(&origin)
+        .args(&remote)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
         .unwrap()
         .success());
     fs::create_dir(root.join("web")).unwrap();
+    if let Ok(shared) = std::env::var("MOSS_MODULE_SHARED_DIR") {
+        // Generated shared styles and fonts for a manual browser check.
+        assert!(Command::new("cp")
+            .args(["-r", &shared])
+            .arg(root.join("web/module-shared"))
+            .status()
+            .unwrap()
+            .success());
+    }
     fs::write(
         root.join("web/index.html"),
         "<!doctype html><title>Notes</title>",
@@ -168,9 +176,13 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         &root.join("credentials.json"),
         &json!({"app_url":app_url,"auth_url":auth_url,"auth_secret":"temporary-disposable-notes-signing-secret-183","connector_key":connector_key}),
     );
+    let origins: Vec<String> = [Some(origin.clone()), remote.clone()]
+        .into_iter()
+        .flatten()
+        .collect();
     private(
         &root.join("network.json"),
-        &json!({"listen":format!("{listen}:{}",port.0),"origins":all_origins,"sharing":lan_origin.is_some(),"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
+        &json!({"listen":format!("{}:{}",if remote.is_some() {"0.0.0.0"} else {"127.0.0.1"},port.0),"origins":origins,"sharing":remote.is_some(),"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
     );
     let client = reqwest::blocking::Client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
@@ -342,9 +354,8 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"notes_base":root.join("notes"),"embeddings":{"url":embedding_url,"model":"bag-of-words-768","api_key":"local-stub"}}),
     );
     let _server = start(true);
-    // Notes calls go through the LAN address when one is set, so they cross the real
-    // non-loopback path (sharing switch, trusted origin, certificate for that address).
-    let notes_origin = lan_origin.clone().unwrap_or_else(|| origin.clone());
+    // With MOSS_NOTES_HOST set, Notes calls cross the non-loopback address.
+    let notes_origin = remote.clone().unwrap_or_else(|| origin.clone());
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
         let mut request = client
             .request(method, format!("{notes_origin}/api/m/notes{path}"))
@@ -392,6 +403,12 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         b"# Garden\nTomato seedlings need compost and sunny soil.\n",
     )
     .unwrap();
+    // Optional manual browser check: keep the server up and print where it is. The browser
+    // must leave the folder unlinked before the hold ends.
+    if let Ok(seconds) = std::env::var("MOSS_NOTES_HOLD_SECONDS") {
+        println!("HOLD {} for {seconds}s", remote.as_ref().unwrap_or(&origin));
+        std::thread::sleep(Duration::from_secs(seconds.parse().unwrap_or(0)));
+    }
     let (status, roots) = call(
         Method::GET,
         "/notes-source/directories",

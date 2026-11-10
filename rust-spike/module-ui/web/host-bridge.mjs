@@ -112,8 +112,15 @@ export function connectModuleFrame(
           throw new Error();
       }
       reply({ ok: true, result });
-    } catch {
-      reply({ ok: false, error: "Moss could not finish this request" });
+    } catch (error) {
+      const status = Number.isInteger(error?.status) && error.status >= 400 && error.status < 600;
+      const detail = status && JSON.stringify(error.body ?? null).length <= 4096;
+      reply({
+        ok: false,
+        error: "Moss could not finish this request",
+        ...(status ? { status: error.status } : {}),
+        ...(detail ? { body: error.body ?? null } : {})
+      });
     } finally {
       pending.delete(message.id);
       replyPort.close();
