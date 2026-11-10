@@ -134,7 +134,8 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
             manifest.tools.insert(
                 name.into(),
                 serde_json::from_value(json!({
-                    "description":"Experimental Notes routing check", "risk":risk
+                    "description":"Experimental Notes routing check", "risk":risk,
+                    "approvalVersion":true
                 }))
                 .unwrap(),
             );
@@ -235,14 +236,14 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
                 AccessContext::new(actor, "notes-tool-dispatch"),
                 observed_services.clone(),
                 "route",
-                &json!({"operation":"run","resource":name,"parameters":{"parameters":parameters}})
+                &json!({"operation":"run","resource":name,"parameters":{"parameters":parameters,"approvalVersion":"caller-forged"}})
                     .to_string(),
             )
         };
         for (name, parameters, text) in [
             (
                 "notes.create",
-                json!({"path":"note.md","content":"Before edit."}),
+                json!({"path":"note.md","content":"Before edit.","overwrite":true}),
                 Some("Before edit."),
             ),
             (
@@ -256,6 +257,8 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
             let count = jobs.lock().unwrap().len();
             let untouched = backend_calls.load(Ordering::SeqCst);
             assert_approval_denied(call(owner, name, parameters.clone()), &service_errors);
+            // Plain grants cannot bypass the displayed-target requirement, even
+            // if the caller adds a forged version to the tools.run envelope.
             services
                 .approve_tool(
                     &AccessContext::new(owner, "notes-tool-approval"),
@@ -264,6 +267,86 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
                     &parameters,
                 )
                 .unwrap();
+            assert_approval_denied(call(owner, name, parameters.clone()), &service_errors);
+            assert_eq!(backend_calls.load(Ordering::SeqCst), untouched);
+            let details: Value = serde_json::from_str(
+                &installer
+                    .call(
+                        "notes",
+                        AccessContext::new(owner, "notes-current-approval"),
+                        "api",
+                        &json!({"name":"prepareNoteAction","parameters":{
+                            "tool":name,"inputJson":parameters.to_string()
+                        }})
+                        .to_string(),
+                    )
+                    .unwrap(),
+            )
+            .unwrap();
+            let version = details["ok"]["version"].as_str().unwrap();
+            services
+                .approve_tool_at_version(
+                    &AccessContext::new(owner, "notes-stale-approval"),
+                    "notes",
+                    name,
+                    &parameters,
+                    version,
+                )
+                .unwrap();
+            // External changes preserve the edit needle, so the old handler
+            // would perform the write rather than fail for an unrelated reason.
+            std::fs::write(root.join("note.md"), "Before edit. Changed externally.").unwrap();
+            assert!(call(owner, name, parameters.clone()).is_err());
+            service_errors.lock().unwrap().clear();
+            assert!(backend_calls.load(Ordering::SeqCst) > untouched);
+            assert_approval_denied(call(owner, name, parameters.clone()), &service_errors);
+            assert_eq!(
+                std::fs::read_to_string(root.join("note.md")).unwrap(),
+                "Before edit. Changed externally."
+            );
+            assert_eq!(jobs.lock().unwrap().len(), count);
+            match &before {
+                Some(bytes) => std::fs::write(root.join("note.md"), bytes).unwrap(),
+                None => std::fs::remove_file(root.join("note.md")).unwrap(),
+            }
+            // Relinking to another folder with the same text must also refuse.
+            let alternate = root.join("alternate");
+            std::fs::create_dir_all(&alternate).unwrap();
+            match &before {
+                Some(bytes) => std::fs::write(alternate.join("note.md"), bytes).unwrap(),
+                None => (),
+            }
+            services
+                .approve_tool_at_version(
+                    &AccessContext::new(owner, "notes-relinked-approval"),
+                    "notes",
+                    name,
+                    &parameters,
+                    version,
+                )
+                .unwrap();
+            f.source(owner, json!(alternate));
+            let before_relink = backend_calls.load(Ordering::SeqCst);
+            assert!(call(owner, name, parameters.clone()).is_err());
+            service_errors.lock().unwrap().clear();
+            assert!(
+                backend_calls.load(Ordering::SeqCst) > before_relink,
+                "Relink refusal must reach Notes, not fail at approval"
+            );
+            assert_eq!(std::fs::read(alternate.join("note.md")).ok(), before);
+            assert_eq!(jobs.lock().unwrap().len(), count);
+            f.source(owner, json!(root));
+            std::fs::remove_dir_all(&alternate).unwrap();
+            services
+                .approve_tool_at_version(
+                    &AccessContext::new(owner, "notes-fresh-approval"),
+                    "notes",
+                    name,
+                    &parameters,
+                    version,
+                )
+                .unwrap();
+            let untouched = backend_calls.load(Ordering::SeqCst);
             // Neither another account nor changed parameters may spend this grant.
             for actor in [other, f.actors[2]] {
                 assert_approval_denied(call(actor, name, parameters.clone()), &service_errors);

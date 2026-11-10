@@ -4,7 +4,7 @@
   "name": "Notes",
   "description": "Choose your notes folder, prepare note changes for approval, and search your indexed notes.",
   "publisher": "Moss",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -131,8 +131,14 @@
     },
     {
       "id": "notes.action-details",
-      "description": "The prepareNoteAction public API prepares legacy create, edit and delete approval details from the calling account's linked folder. It returns the target, ordered fields and current version, including the permanent-delete warning. Preparing details does not grant approval, change files or request sync. Preparing details leaves the folder available for the next approved action. Installed chat execution and approval consumption remain unfinished. Canonical source identity is used for versions; symlink descendant selections remain refused.",
+      "description": "The prepareNoteAction public API prepares legacy create, edit and delete approval details from the calling account's linked folder. It returns the target, ordered fields and current version, including the permanent-delete warning. Preparing details does not grant approval, change files or request sync. Preparing details leaves the folder available for the next approved action. Experimental installed write tools can require a trusted displayed-target version: a changed note or relinked folder is refused before writing or requesting sync. The trusted server must store the displayed version with approval and declare approvalVersion on those tools. Stale grants are consumed, requiring a newly prepared approval. Ordinary installed chat execution remains unfinished. Canonical source identity is used for versions; symlink descendant selections remain refused.",
       "errors": [
+        {
+          "code": "notes-action-stale",
+          "class": "transient",
+          "description": "An experimental approved write found a changed note or relinked source. It does not write or request sync, and its approval has been consumed.",
+          "remediationRef": "notes.retry-action-details"
+        },
         {
           "code": "notes-action-source-unavailable",
           "class": "prerequisite",

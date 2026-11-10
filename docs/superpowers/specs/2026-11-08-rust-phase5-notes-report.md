@@ -1646,3 +1646,66 @@ Both permitted review rounds were used before these execution findings; the
 corrected commit still requires a fresh review and final aggregate gate before
 Ready. Current passing and failing receipts are attached to the checkpoint PR
 and proof artifact; no full acceptance claim follows from partial gate results.
+
+## Part twenty-two checkpoint — displayed-target approval freshness
+
+Experimental installed write tools can now require approval for the note version
+shown to the account, in addition to the existing account, tool and exact-input
+binding. The additive host tool flag `approvalVersion` defaults off for existing
+packages. Permission summaries include the target requirement, so adding or
+removing it during an update requests install approval. The trusted server saves
+the displayed version using
+`approve_tool_at_version`; plain grants cannot run tools with this flag. The
+dispatcher ignores caller envelope versions and forwards only the saved grant's
+version. It consumes that grant before calling the installed tool, including when
+Notes subsequently refuses a stale target. Existing expiry and replay rules remain.
+
+The Notes guest reuses the preparation hash over resolved source, relative path
+and exact saved text. It compares the approved version before create, edit or
+delete after notes.read acquires its linked-folder call lock, and still uses
+the existing expected-text/destination guard for the actual mutation. Folder
+resolution itself is not locked. The returned file destination must also match that resolved source, closing a
+folder-selection race between resolving and reading. An intervening content
+change or source relink refuses the action before writing or saving a sync
+checkpoint. The account must prepare and approve again. This compares state,
+not inode identity: replacing a folder/file at the same path with identical text
+is not detected. The outer host still redacts guest failures; assembled chat
+retry guidance is not implemented here.
+
+Only the signed experimental fixture opts these tools in. The ordinary package
+still offers search alone, and legacy direct-handler comparisons remain
+unversioned. No write-tool activation, applied SQL, runtime permission, dependency
+or UI change is introduced. Notes remains a pure SDK client of the server API.
+Package 0.1.14, its changelog and app-map metadata describe this experimental path.
+
+The native freshness test initially failed because the guest did not accept the
+version envelope. After implementation it passed; removing the comparison then
+made the same test fail by actually accepting a changed-note write. The installed
+test covers stale content and relinked sources for all three tools, plain grants,
+forged caller versions, account/input/tool refusal, replay and subsequent fresh
+writes, sync and search. It retains the checkpoint privacy RLS-removal controls
+for both runtime roles. Queue delivery and embeddings remain named stand-ins.
+A separate native host stand-in regression reproduced an accepted delete with
+the check removed when the source
+changed between folder resolution and file read; the destination identity check
+now refuses it. This mid-call switch is native stand-in proof, not a live
+installed-path race test. Final execution receipts and independent review are recorded in
+the task proof.
+
+Builds use task-owned scratch Cargo/Rust homes and separate ordinary/write-tools
+guest targets, with the already-declared Wasm target and approved pinned
+wit-bindgen 0.57.1. Immutable prepared toolchain/dependency files were hard-linked
+into task-owned homes, so removing a previous task's directory cannot remove
+them. No global tools were installed. Declared JavaScript dependencies were
+restored from the lockfile. Host compilation uses task-owned executable temporary
+memory storage because local disk space is nearly exhausted. Database tests run
+only through scripts/run-gate.sh.
+
+This is a bounded checkpoint. Full Notes acceptance still needs assembled chat
+approval presentation/consumption, configured models, production sync/queue
+delivery, singleton coalescing, recall warmup, automatic recovery/retention,
+managed publication/fencing/reconciliation, private exports and daily archives,
+complete HTTP/path parity, assembled Settings/chat and real use from another
+physical device over HTTPS. No screen or second-device proof is claimed here.
+Completing that list exceeds this continuation's context scope; this checkpoint
+must not replace working legacy Notes.

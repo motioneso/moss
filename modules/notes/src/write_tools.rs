@@ -13,6 +13,9 @@ use sha2::{Digest, Sha256};
 struct Request {
     tool: String,
     parameters: Parameters,
+    #[serde(default, rename = "approvalVersion")]
+    #[cfg_attr(not(feature = "write-tools"), allow(dead_code))]
+    approval_version: Option<String>,
 }
 // Retain submitted field order without randomized maps, which need WASI entropy.
 struct Parameters {
@@ -185,6 +188,19 @@ pub fn handle(host: &impl Host, payload: &str) -> Result<String> {
     let root = source(host)?;
     let path = relative(&input.raw["path"], &root)?;
     let note = read(host, &path)?;
+    if request.approval_version.as_ref().is_some_and(|version| {
+        version != &target_version(&root, &path, &note)
+            || note["destinationId"]
+                != crate::identity::destination_id(&format!(
+                    "{}/{path}",
+                    root.trim_end_matches('/')
+                ))
+    }) {
+        return Err(failure(
+            409,
+            "Note changed since approval. Prepare the action again.",
+        ));
+    }
     validate_existing(&input, &note)?;
     let content = match input.tool {
         "notes.create" => input.raw["content"].clone(),
@@ -216,8 +232,8 @@ pub fn handle(host: &impl Host, payload: &str) -> Result<String> {
     Ok(json!({"data":{"path":path,"synced":true}}).to_string())
 }
 
-/// Read-only presentation preparation. Its opaque version must be rechecked by
-/// the future host approval join; this function does not grant or consume approval.
+/// Read-only presentation preparation. The trusted server stores this version
+/// with approval; this function does not grant or consume approval.
 pub fn presentation(host: &impl Host, payload: &str) -> Result<String> {
     let request: Request =
         serde_json::from_str(payload).map_err(|_| failure(400, "Invalid Notes input"))?;
@@ -233,6 +249,7 @@ pub(crate) fn prepare_json(host: &impl Host, tool: &str, input_json: &str) -> Re
         &Request {
             tool: tool.into(),
             parameters,
+            approval_version: None,
         },
     )
 }
@@ -297,10 +314,7 @@ fn prepare(host: &impl Host, request: &Request) -> Result<Value> {
     if input.tool == "notes.delete" {
         fields.push(json!({"label":"Deletion","value":"Permanently delete this note. There is no trash or undo."}));
     }
-    let version = format!(
-        "{:x}",
-        Sha256::digest(serde_json::to_vec(&json!([root, path, note["content"]]))?)
-    );
+    let version = target_version(&root, &path, &note);
     let mut result = json!({"target":target,"fields":fields,"version":version});
     if input.tool == "notes.create" {
         result["title"] = json!(if input.raw["overwrite"] == true {
@@ -313,4 +327,11 @@ fn prepare(host: &impl Host, request: &Request) -> Result<Value> {
         result["approvalKind"] = json!("note_delete");
     }
     Ok(result)
+}
+
+fn target_version(root: &str, path: &str, note: &Value) -> String {
+    format!(
+        "{:x}",
+        Sha256::digest(json!([root, path, note["content"]]).to_string().as_bytes())
+    )
 }

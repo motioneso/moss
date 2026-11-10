@@ -22,12 +22,15 @@ impl Host for Ports {
             ("vault", "notes.read", "source") => {
                 let path = parameters["path"].as_str().unwrap();
                 Ok(
-                    json!({"path":path,"destinationId":"destination","content":self.files.borrow().get(path)}),
+                    json!({"path":path,"destinationId":moss_notes::identity::destination_id(&format!("/notes/{path}")),"content":self.files.borrow().get(path)}),
                 )
             }
             ("vault", "notes.compare-write", "source") | ("vault", "notes.remove", "source") => {
                 let path = parameters["path"].as_str().unwrap();
-                assert_eq!(parameters["destinationId"], "destination");
+                assert_eq!(
+                    parameters["destinationId"],
+                    moss_notes::identity::destination_id(&format!("/notes/{path}"))
+                );
                 assert_eq!(json!(self.files.borrow().get(path)), parameters["expected"]);
                 if operation == "notes.remove" {
                     self.files.borrow_mut().remove(path);
@@ -74,6 +77,93 @@ impl Host for Ports {
         }
     }
 }
+#[test]
+fn approved_version_refuses_changed_notes_before_writing_or_syncing() {
+    for (tool, parameters) in [
+        (
+            "notes.create",
+            json!({"path":"note.md","content":"Replacement","overwrite":true}),
+        ),
+        (
+            "notes.edit",
+            json!({"path":"note.md","oldText":"Before","newText":"After"}),
+        ),
+        ("notes.delete", json!({"path":"note.md"})),
+    ] {
+        let ports = Ports {
+            files: RefCell::new(BTreeMap::from([("note.md".into(), "Before".into())])),
+            syncs: RefCell::new(0),
+            checkpoints: RefCell::new(Vec::new()),
+        };
+        let request = json!({"tool":tool,"parameters":parameters});
+        let details: Value = serde_json::from_str(
+            &moss_notes::write_tools::presentation(&ports, &request.to_string()).unwrap(),
+        )
+        .unwrap();
+        ports
+            .files
+            .borrow_mut()
+            .insert("note.md".into(), "Before, changed on disk".into());
+        let mut approved = request;
+        approved["approvalVersion"] = details["version"].clone();
+        let error = handle(&ports, "tool", &approved.to_string()).unwrap_err();
+        assert_eq!(
+            serde_json::from_str::<Value>(&error.message).unwrap(),
+            json!({"statusCode":409,"error":"Note changed since approval. Prepare the action again."}),
+            "{tool}"
+        );
+        assert_eq!(ports.files.borrow()["note.md"], "Before, changed on disk");
+        assert_eq!(*ports.syncs.borrow(), 0);
+        assert!(ports.checkpoints.borrow().is_empty());
+    }
+}
+
+#[test]
+fn approved_version_refuses_a_source_switch_between_resolution_and_read() {
+    struct RelinkDuringRead<'a>(&'a Ports);
+    impl Host for RelinkDuringRead<'_> {
+        fn call(
+            &self,
+            port: &str,
+            operation: &str,
+            resource: &str,
+            mut parameters: Value,
+        ) -> Result<Value> {
+            if matches!(operation, "notes.compare-write" | "notes.remove") {
+                // The current linked folder accepts its own returned identity.
+                // Adapt the simple backing map's identity to model that switch.
+                assert_eq!(
+                    parameters["destinationId"],
+                    moss_notes::identity::destination_id("/other/note.md")
+                );
+                parameters["destinationId"] =
+                    json!(moss_notes::identity::destination_id("/notes/note.md"));
+            }
+            let mut out = self.0.call(port, operation, resource, parameters)?;
+            if operation == "notes.read" {
+                out["destinationId"] =
+                    json!(moss_notes::identity::destination_id("/other/note.md"));
+            }
+            Ok(out)
+        }
+    }
+    let ports = Ports {
+        files: RefCell::new(BTreeMap::from([("note.md".into(), "Before".into())])),
+        syncs: RefCell::new(0),
+        checkpoints: RefCell::new(Vec::new()),
+    };
+    let mut request = json!({"tool":"notes.delete","parameters":{"path":"note.md"}});
+    let details: Value = serde_json::from_str(
+        &moss_notes::write_tools::presentation(&ports, &request.to_string()).unwrap(),
+    )
+    .unwrap();
+    request["approvalVersion"] = details["version"].clone();
+    assert!(handle(&RelinkDuringRead(&ports), "tool", &request.to_string()).is_err());
+    assert_eq!(ports.files.borrow()["note.md"], "Before");
+    assert_eq!(*ports.syncs.borrow(), 0);
+    assert!(ports.checkpoints.borrow().is_empty());
+}
+
 #[test]
 fn write_tools_match_actual_legacy_handlers() {
     let cases: Vec<Value> = include_str!("write-tool-vectors.jsonl")
