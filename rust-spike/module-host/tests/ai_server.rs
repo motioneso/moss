@@ -256,6 +256,12 @@ fn modules_ask_the_router_and_fail_closed_until_a_provider_exists() {
             }
         });
     }
+    // The module host loads in the background after the server answers, so wait for it.
+    let ready = Instant::now() + Duration::from_secs(60);
+    while call(Method::GET, "/tasks", Some(&cookie), None).0 == 503 {
+        assert!(Instant::now() < ready, "module host did not start");
+        std::thread::sleep(Duration::from_millis(250));
+    }
     let interpret = || {
         call(
             Method::POST,
@@ -294,7 +300,7 @@ fn modules_ask_the_router_and_fail_closed_until_a_provider_exists() {
     });
     let (status, body) = interpret();
     assert_eq!(status, 200, "{body}\n{}", fs::read_to_string(root.join("server.log")).unwrap_or_default());
-    assert_eq!(body["status"], "done", "{body}");
+    assert_eq!(body["intent"]["status"], "done", "{body}");
     {
         let seen = requests.lock().unwrap();
         assert_eq!(seen.len(), 1);
