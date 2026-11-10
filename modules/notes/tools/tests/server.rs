@@ -136,17 +136,32 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     );
     assert!(!port.0.is_empty());
     let origin = format!("https://localhost:{}", port.0);
+    // MOSS_NOTES_HOST names the address another device uses. When set, the listener binds
+    // every interface, trusts that origin and turns sharing on. The test stays on loopback.
+    let remote = std::env::var("MOSS_NOTES_HOST")
+        .ok()
+        .map(|host| format!("https://{host}:{}", port.0));
     let cert = root.join("tls/certificate.pem");
     assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
         .args(["local-certificate"])
         .arg(root.join("tls"))
         .arg(&origin)
+        .args(&remote)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
         .unwrap()
         .success());
     fs::create_dir(root.join("web")).unwrap();
+    if let Ok(shared) = std::env::var("MOSS_MODULE_SHARED_DIR") {
+        // Generated shared styles and fonts for a manual browser check.
+        assert!(Command::new("cp")
+            .args(["-r", &shared])
+            .arg(root.join("web/module-shared"))
+            .status()
+            .unwrap()
+            .success());
+    }
     fs::write(
         root.join("web/index.html"),
         "<!doctype html><title>Notes</title>",
@@ -161,9 +176,13 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         &root.join("credentials.json"),
         &json!({"app_url":app_url,"auth_url":auth_url,"auth_secret":"temporary-disposable-notes-signing-secret-183","connector_key":connector_key}),
     );
+    let origins: Vec<String> = [Some(origin.clone()), remote.clone()]
+        .into_iter()
+        .flatten()
+        .collect();
     private(
         &root.join("network.json"),
-        &json!({"listen":format!("127.0.0.1:{}",port.0),"origins":[origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
+        &json!({"listen":format!("{}:{}",if remote.is_some() {"0.0.0.0"} else {"127.0.0.1"},port.0),"origins":origins,"sharing":remote.is_some(),"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
     );
     let client = reqwest::blocking::Client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
@@ -382,6 +401,12 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         b"# Garden\nTomato seedlings need compost and sunny soil.\n",
     )
     .unwrap();
+    // Optional manual browser check: keep the server up and print where it is. The browser
+    // must leave the folder unlinked before the hold ends.
+    if let Ok(seconds) = std::env::var("MOSS_NOTES_HOLD_SECONDS") {
+        println!("HOLD {} for {seconds}s", remote.as_ref().unwrap_or(&origin));
+        std::thread::sleep(Duration::from_secs(seconds.parse().unwrap_or(0)));
+    }
     let (status, roots) = call(
         Method::GET,
         "/notes-source/directories",

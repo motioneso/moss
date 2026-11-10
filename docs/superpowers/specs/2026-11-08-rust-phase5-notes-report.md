@@ -1964,3 +1964,15 @@ Not proven: a real 24-hour wait (an old row was inserted with a past timestamp),
 Still open: managed publication and reconciliation (needs the Meetings module), singleton coalescing and recall warmup, the assembled Settings and chat join, second-device HTTPS proof.
 
 Review round 1 (Codex): two majors fixed. Recovery covered only 250 rows per tick (now 1000, restarting from the start each tick; a day beyond 1000 rows needs a very large folder and would leave later rows unrecovered, which is a documented limit, not a persisted cursor). Unlinking cancelled the only maintenance entry point, so it now runs maintenance first.
+
+## Part thirty-three checkpoint - folder settings screen proven in a real browser
+
+Package 0.1.21. No new parity item was built. This part ran the Connections screen against the real server and fixed what that showed.
+
+Defect found live: the screen said "Couldn't check linked folder" although the server answered 200. The real bridge hands a screen the plain body and throws on a refused call, while the screen read a `status` field. Fix: the page's route helper now throws an error carrying the status and parsed body, the host bridge forwards the status (400-599) and a body of at most 4096 characters, the guest bridge puts both on the rejection, and the screen treats either reply shape the same. A new bridge test covers a 400 with a body, a 500 with a large body (body dropped) and a 200 (status not forwarded).
+
+Live proof (real HTTPS server, real Postgres, disposable account, real browser through Playwright, no intercepted responses): empty screen with only Browse; Browse lists one allowed root; typing /etc gives a 400 and the message "That folder is outside your allowed notes folders. Choose an allowed folder."; picking the account folder then Journal and pressing Link folder gives "Folder linked" with the path; Sync now gives a 202 and "Sync requested. It finishes in the background."; Unlink confirms, then shows "No folder linked". `pnpm test:rust-notes-server` passed through the gate with the screen run held open in the middle. Module-ui bridge tests: 16 of 16.
+
+Not proven: a second physical device (the browser ran on the same machine, at its LAN address with sharing on), chat join, hosted embeddings, native app screen, a real 15-minute wait. The fixture web folder lacks the shell stylesheet, so the console logs one stylesheet refusal; that is a fixture gap.
+
+Still open: managed publication and reconciliation, singleton coalescing and recall warmup, the assembled Settings and chat join, second-device HTTPS proof.

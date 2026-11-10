@@ -21,8 +21,17 @@ async function request(method, path, body) {
     headers: body === null ? {} : { "content-type": "application/json" },
     body: body === null ? undefined : JSON.stringify(body)
   });
-  if (!response.ok) throw new Error();
   const text = await response.text();
+  if (!response.ok) {
+    // The bridge passes the status and a small JSON body on so a screen can show guidance.
+    let parsed = null;
+    try {
+      parsed = text ? JSON.parse(text) : null;
+    } catch {
+      parsed = null;
+    }
+    throw Object.assign(new Error(), { status: response.status, body: parsed });
+  }
   if (!text) return null;
   return JSON.parse(text);
 }

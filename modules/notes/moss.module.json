@@ -4,7 +4,7 @@
   "name": "Notes",
   "description": "Choose your notes folder, search your indexed notes, and create, edit or delete notes with your approval.",
   "publisher": "Moss",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
