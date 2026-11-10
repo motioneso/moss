@@ -297,7 +297,15 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     };
     use reqwest::Method;
     assert_eq!(call(Method::GET, "/events", None, None).0, 401);
-    let (status, events) = call(Method::GET, "/events", Some(&cookie), None);
+    // The server loads modules in the background and answers 503 until the host is ready.
+    let started = std::time::Instant::now();
+    let (status, events) = loop {
+        let answer = call(Method::GET, "/events", Some(&cookie), None);
+        if answer.0 != 503 || started.elapsed() > std::time::Duration::from_secs(60) {
+            break answer;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    };
     assert_eq!(status, 200, "{events}");
     let found = events["events"]
         .as_array()
