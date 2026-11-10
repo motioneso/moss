@@ -68,8 +68,17 @@ fn compiled_people_read_apis_match_typescript_on_real_database() {
         },
     ];
     common::people_job_imports(&mut manifest);
+    // The explicit large-account probe lets the manifest ask for a bounded larger budget.
+    let probe_fuel: Option<u64> = std::env::var("JS177_PEOPLE_FUEL")
+        .ok()
+        .map(|v| v.parse().unwrap());
+    manifest.fuel_limit = probe_fuel;
     let manifest = Arc::new(manifest);
-    let host = Host::new(Limits::default()).unwrap();
+    let host = Host::new(Limits {
+        fuel_ceiling: probe_fuel.unwrap_or(Limits::default().fuel),
+        ..Limits::default()
+    })
+    .unwrap();
     let run = |actor, payload: &Value| {
         host.call(
             &component,
