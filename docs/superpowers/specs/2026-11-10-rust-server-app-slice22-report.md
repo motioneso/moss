@@ -17,6 +17,11 @@
 - Embeddings stay unwired and fail closed with a clear message.
 - Not read yet: per-chat bindings and the per-user model override.
 
+## Review round 1
+
+- Fixed: provisioning asked for an AI key name the private credential store rejected, so bundled setup would have failed. The name is now allowed and covered by the credential unit test.
+- Kept by design: an account with no provider of its own may use a provider created by an active admin, as the existing database rules and the TypeScript router already allow (admin-owned providers are the shared default). Personal providers stay owner-only.
+
 ## Live proof
 
 Gate `pnpm test:rust-module-ai`, real HTTPS server, throwaway Postgres, local fake provider.
