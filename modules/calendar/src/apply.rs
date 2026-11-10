@@ -289,3 +289,54 @@ pub fn route(_host: &impl Host, plan_id: &str, body: Value) -> Result<Value> {
     }
     Err(Error::new(503, "day plan apply is unavailable"))
 }
+
+fn operation_ids(plan_id: &str, operation_id: &str) -> Result<()> {
+    if !operations::uuid(plan_id) || !operations::uuid(operation_id) {
+        return Err(invalid("id and operationId must be uuids"));
+    }
+    Ok(())
+}
+
+fn only_keys(body: &Value, allowed: &[&str]) -> Result<()> {
+    let object = body
+        .as_object()
+        .ok_or_else(|| invalid("request must be an object"))?;
+    match object.keys().find(|key| !allowed.contains(&key.as_str())) {
+        Some(key) => Err(invalid(&format!("unknown field: {key}"))),
+        None => Ok(()),
+    }
+}
+
+/// Retry. The selection is checked like the original, then the request is refused
+/// before anything is read or written because execution needs a Connectors package.
+pub fn retry_route(plan_id: &str, operation_id: &str, body: Value) -> Result<Value> {
+    only_keys(&body, &["itemIds"])?;
+    let ids = body["itemIds"]
+        .as_array()
+        .filter(|list| !list.is_empty() && list.iter().all(|id| id.as_str().is_some_and(operations::uuid)))
+        .ok_or_else(|| invalid("itemIds must be a non-empty list of ids"))?;
+    if ids.iter().filter_map(Value::as_str).collect::<std::collections::BTreeSet<_>>().len() != ids.len() {
+        return Err(invalid("itemIds must not repeat an id"));
+    }
+    operation_ids(plan_id, operation_id)?;
+    Err(Error::new(503, "day plan apply is unavailable"))
+}
+
+/// Recover takes no selection: the body is absent or an empty object.
+pub fn recover_route(plan_id: &str, operation_id: &str, body: Value) -> Result<Value> {
+    if !body.is_null() {
+        only_keys(&body, &[])?;
+    }
+    operation_ids(plan_id, operation_id)?;
+    Err(Error::new(503, "day plan apply is unavailable"))
+}
+
+/// Confirm needs a stored approval to match, which the host does not offer yet.
+pub fn confirm_route(plan_id: &str, operation_id: &str, body: Value) -> Result<Value> {
+    only_keys(&body, &["approvalId"])?;
+    if !body["approvalId"].as_str().is_some_and(|id| !id.trim().is_empty()) {
+        return Err(invalid("approvalId must be a non-empty string"));
+    }
+    operation_ids(plan_id, operation_id)?;
+    Err(Error::new(503, "day plan apply is unavailable"))
+}
