@@ -123,7 +123,8 @@ impl Host {
         ensure!(
             limits.fuel > 0
                 && limits.fuel_ceiling >= limits.fuel
-                && limits.memory_bytes > 0 && !limits.deadline.is_zero(),
+                && limits.memory_bytes > 0
+                && !limits.deadline.is_zero(),
             "Host limits must be positive"
         );
         let mut config = Config::new();
