@@ -1277,3 +1277,44 @@ a change, a second account, a second physical device. Still required: Connectors
 Briefings adapters, the apply job and execution, source behavior and external-calendar status
 controls, full shell and chat, old-screen replacement, complete parity. These need a Rust
 Connectors package first, which does not exist yet.
+
+## JS-205 / part 27: unattended day-plan step (package 0.24.0)
+
+Ports the original scheduled-run planning step (`day-plan-auto.ts`) as two public Calendar methods,
+`reserveAutoPlan` and `findUnfinishedBatch`, in `modules/calendar/src/auto_plan.rs`. They are for the
+future Briefings package; nothing in Calendar's own screens calls them.
+
+`reserveAutoPlan` takes the run id, definition id, local day, zone and signals. Block-time intents
+become automatic blocks and `suggest_time_block` signals become suggestions (prep takes the hour
+before the meeting, other windows are capped to 15..120 minutes). Block ids are the original SHA-256
+digest of definition, day and target, so a duplicate scheduled fire converges on the same rows (the
+test pins one digest computed by the original code). Blocks already in the plan are skipped. A cached
+event Moss created for the same follow-through reference links the block as already placed with no
+reservation; two or more leave that target alone while others proceed. Fresh blocks are appended
+(new `plans::append_blocks`, one revision bump), then only the new automatic blocks are frozen as one
+batch under `day-plan-auto:<run id>` (new option on `apply::reserve` that skips pending manual
+additions; it cannot be set from a request body). A revision conflict at either step returns a result
+with `revisionRace` set and nothing reserved, so the run still commits. It returns `null` when the run
+planned nothing. `findUnfinishedBatch` reads without writing and names the operation while any item is
+pending or unknown.
+
+Differences from the original: the ambiguous-target warning log is not emitted (the guest has no
+logger); the legacy-event lookup reads cached events in pages and filters in the guest because the
+query port has no JSON-path filter; a source run is checked through the existing Briefings reference
+when the plan is created, as in the plan-create path.
+
+Checks: nine guest tests in `tests/auto_plan.rs` (in-memory host) plus all earlier guest suites pass
+with Rust 1.95.0; the Wasm build passes. The signed-package database gate now also runs
+`auto_plan_oracle` against installed Wasm, real Postgres and row security: one block reserved, a
+second linked from a real cached event, a duplicate fire converged to one batch, another account sees
+nothing.
+
+Review round 1 (codex) found two majors, both fixed. Appending blocks now claims the plan revision
+before writing any block, so a conflicting save leaves nothing behind. The unfinished-batch lookup
+now asks the database for one pending or unknown item instead of reading the first 1000 items.
+
+Not proven: a save landing between the revision claim and the block writes (the order is the
+protection, there is no concurrent test), a batch over 1000 items, any caller (no Briefings package),
+the apply job that would settle the batch, a second account over HTTP, a second physical device. Still required: Connectors, Tasks and Briefings
+adapters, apply execution, retry/recover/confirm running a change, source behavior and
+external-calendar status controls, full shell and chat, old-screen replacement, complete parity.

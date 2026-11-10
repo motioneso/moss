@@ -1,5 +1,6 @@
 //! Tasks package data core. All effects cross the guest-safe SDK Host interface.
 pub mod account;
+mod approval;
 mod breakdown;
 pub mod dates;
 mod delete_list;
@@ -48,6 +49,24 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
             Ok(serde_json::to_string(&result)?)
         }
         "job" => jobs::handle(host, payload),
+        "api" => {
+            #[derive(serde::Deserialize)]
+            #[serde(deny_unknown_fields)]
+            #[serde(tag = "name", content = "parameters")]
+            enum Api {
+                #[serde(rename = "prepareTaskAction")]
+                Prepare(Prepare),
+            }
+            #[derive(serde::Deserialize)]
+            #[serde(rename_all = "camelCase", deny_unknown_fields)]
+            struct Prepare {
+                tool: String,
+                // A JSON string keeps field order, which sets the card's row order.
+                input_json: String,
+            }
+            let Api::Prepare(request) = serde_json::from_str(payload)?;
+            Ok(approval::prepare(host, &request.tool, &request.input_json).to_string())
+        }
         _ => Err(moss_module_sdk::Error::new("Unsupported Tasks invocation")),
     }
 }

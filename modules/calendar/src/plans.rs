@@ -309,3 +309,101 @@ pub fn save(host: &impl Host, input: Save) -> Result<Value> {
     }
     Ok(json!({"plan":dto(host,&updated[0])?}))
 }
+
+/// A block that is already on the calendar. It carries a recorded placement and no pending change.
+fn placed_block(block: &Value) -> Result<Value> {
+    let kind = block["kind"].as_str().unwrap_or("");
+    if !["focus", "meeting", "prep", "break", "personal", "unscheduled"].contains(&kind) {
+        return Err(model::invalid("blocks must carry a known kind"));
+    }
+    let task = &block["taskId"];
+    if !task.is_null() && task.as_str().is_none_or(|t| t.trim().is_empty()) {
+        return Err(model::invalid("blocks.taskId must be a task id or null"));
+    }
+    let placement = &block["actualPlacement"];
+    let starts = placement["startsAt"].as_str().filter(|s| {
+        chrono::DateTime::parse_from_rfc3339(s).is_ok()
+    });
+    let duration = placement["durationMinutes"].as_f64().filter(|d| *d > 0.0);
+    let reference = placement["calendarEventRef"]
+        .as_str()
+        .filter(|r| !r.trim().is_empty());
+    let (Some(starts), Some(duration), Some(reference)) = (starts, duration, reference) else {
+        return Err(model::invalid("placed blocks must carry a recorded placement"));
+    };
+    let title = block["title"].as_str().map(str::trim).filter(|t| !t.is_empty());
+    Ok(json!({
+        "id": block["id"], "kind": kind, "task_id": task, "title": title, "pending_change": Value::Null,
+        "actual_placement": {"startsAt": starts, "durationMinutes": duration, "calendarEventRef": reference},
+    }))
+}
+
+/// Adds blocks after the existing ones and raises the revision. Blocks whose id is already
+/// stored are skipped, so a repeated append converges. A moved revision conflicts (409).
+pub fn append_blocks(
+    host: &impl Host,
+    plan_id: &str,
+    day: Day,
+    expected_revision: u32,
+    additions: &[Value],
+) -> Result<Value> {
+    let (local_day, zone) = model::day_zone(&day.local_day, &day.time_zone)?;
+    let rows = additions
+        .iter()
+        .enumerate()
+        .map(|(i, b)| {
+            if b.get("actualPlacement").is_some_and(|p| !p.is_null()) {
+                if !b["pendingChange"].is_null() && b.get("pendingChange").is_some() {
+                    return Err(model::invalid("placed blocks must not carry a pending change"));
+                }
+                placed_block(b)
+            } else {
+                model::block(b, i)
+            }
+        })
+        .collect::<Result<Vec<_>>>()?;
+    if expected_revision == 0 || expected_revision >= i32::MAX as u32 {
+        return Err(model::invalid("expectedRevision must be a positive integer"));
+    }
+    let current = query(host, PLANS, &Query::select(Filter::eq("id", plan_id)))?
+        .into_iter()
+        .next()
+        .filter(|p| p["local_day"] == local_day && p["time_zone"] == zone)
+        .ok_or_else(|| Error::new(404, "day plan is not available"))?;
+    if current["revision"] != expected_revision {
+        return Err(Error::new(409, "day plan changed since it was read"));
+    }
+    require_tasks(host, &json!({}), &rows)?;
+    // The revision is claimed before any block is written, so a conflicting save
+    // leaves nothing behind.
+    let now = context(host, "read", "call")?["now"].clone();
+    let updated = query(
+        host,
+        PLANS,
+        &Query::update(
+            both(vec![Filter::eq("id", plan_id), Filter::eq("revision", expected_revision)]),
+            values(json!({"revision":expected_revision+1,"updated_at":now})),
+        ),
+    )?;
+    let row = updated
+        .first()
+        .ok_or_else(|| Error::new(409, "day plan changed since it was read"))?
+        .clone();
+    let stored = blocks(host, plan_id)?;
+    let mut position = stored.iter().filter_map(|b| b["position"].as_i64()).max().map_or(0, |p| p + 1);
+    for mut row in rows {
+        let id = row["id"].as_str().map(str::to_owned);
+        if id.as_ref().is_some_and(|id| stored.iter().any(|b| b["id"] == id.as_str())) {
+            continue;
+        }
+        if id.is_none() {
+            row.as_object_mut().unwrap().remove("id");
+        }
+        row["plan_id"] = json!(plan_id);
+        row["position"] = json!(position);
+        row.as_object_mut().unwrap().entry("actual_placement").or_insert(Value::Null);
+        position += 1;
+        query(host, BLOCKS, &Query::insert(values(row)))?;
+    }
+    Ok(json!({"plan":dto(host, &row)?}))
+}
