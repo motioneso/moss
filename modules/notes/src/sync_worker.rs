@@ -74,6 +74,7 @@ pub(crate) fn cancel_schedule(host: &impl Host) {
 /// A scheduled tick requests a fresh checkpoint for the linked folder. With no
 /// folder linked it does nothing, so unlinking needs no schedule cancellation.
 fn tick(host: &impl Host) -> Result<String> {
+    crate::sync_recovery::maintain(host);
     let Some(source) = selected_source(host)? else {
         return Ok(json!({"noOp":true}).to_string());
     };

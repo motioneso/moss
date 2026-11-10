@@ -514,6 +514,19 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
             tokio::spawn(async move {
                 let _ = connection.await;
             });
+            // One finished checkpoint past retention and one recent one. The tick
+            // must delete only the old one.
+            for (id, age) in [
+                ("0a000000-0000-4000-8000-0000000000a1", "3 days"),
+                ("0a000000-0000-4000-8000-0000000000a2", "1 minute"),
+            ] {
+                db.execute(
+                    &format!("INSERT INTO app.notes_sync_checkpoints (id, owner_user_id, checkpoint, created_at) VALUES ($1::text::uuid, $2, '{{\"workerResult\":{{\"ingested\":0,\"skipped\":0,\"errors\":0}}}}'::jsonb, now()-interval '{age}')"),
+                    &[&id, &owner],
+                )
+                .await
+                .unwrap();
+            }
             let changed = db
                 .execute(
                     "UPDATE moss_queue.schedules SET next_at=now()-interval '1 minute' WHERE actor_user_id=$1 AND queue LIKE '%.notes.sync-tick'",
@@ -537,6 +550,10 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         std::thread::sleep(Duration::from_millis(500));
     }
     println!("scheduled tick indexed a note added after the first sync");
+    // The same tick ran retention: the old checkpoint is gone, the recent one stays.
+    let kept = rows("SELECT id::text FROM app.notes_sync_checkpoints WHERE owner_user_id=$1 AND id::text LIKE '0a000000-%' ORDER BY id");
+    assert_eq!(kept, vec!["0a000000-0000-4000-8000-0000000000a2".to_string()]);
+    println!("tick retention removed the old checkpoint and kept the recent one: {kept:?}");
     // Search runs through the same host ports in this process (the server has no tool
     // endpoint yet), against the real index and the same embeddings endpoint.
     {
