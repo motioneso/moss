@@ -19,8 +19,14 @@ pub struct FolderSettingsPorts {
     runtime: tokio::runtime::Runtime,
     resources: BTreeMap<(String, String), FolderSetting>,
     next: Arc<dyn Ports>,
+    account_base: Option<PathBuf>,
 }
 impl FolderSettingsPorts {
+    /// Accounts without explicit roots get `<base>/<account id>`.
+    pub fn with_account_base(mut self, base: PathBuf) -> Self {
+        self.account_base = Some(base);
+        self
+    }
     pub fn new(
         database: Database,
         resources: BTreeMap<(String, String), FolderSetting>,
@@ -30,6 +36,7 @@ impl FolderSettingsPorts {
             database,
             resources,
             next,
+            account_base: None,
             runtime: tokio::runtime::Runtime::new()?,
         })
     }
@@ -83,7 +90,12 @@ impl FolderSettingsPorts {
                 .context("Folder settings deadline exceeded")?
             })?;
             return if request.operation == "folder.resolve" {
-                Ok(resolve_source(scope, config, &response["body"]))
+                Ok(resolve_source(
+                    scope,
+                    config,
+                    self.account_base.as_deref(),
+                    &response["body"],
+                ))
             } else {
                 Ok(response)
             };
@@ -93,11 +105,7 @@ impl FolderSettingsPorts {
         if request.operation == "folder.set" && path.is_null() {
             return self.save(scope, &config.path_key, &Value::Null);
         }
-        let roots = config
-            .roots
-            .get(&scope.access().actor_user_id())
-            .cloned()
-            .unwrap_or_default();
+        let roots = roots_for(config, self.account_base.as_deref(), scope);
         if roots.is_empty() {
             return Ok(error(503, "Notes roots not configured on this server"));
         }
@@ -183,21 +191,33 @@ impl Ports for FolderSettingsPorts {
         self.next.finish_call(scope, success)
     }
 }
+/// Explicit roots win; otherwise the host-owned per-account base (created on demand).
+fn roots_for(config: &FolderSetting, base: Option<&std::path::Path>, scope: &CallScope) -> Vec<PathBuf> {
+    let actor = scope.access().actor_user_id();
+    match (config.roots.get(&actor), base) {
+        (Some(roots), _) => roots.clone(),
+        (None, Some(base)) => {
+            crate::account_preferences::account_base_root(base, actor).unwrap_or_default()
+        }
+        _ => Vec::new(),
+    }
+}
 fn error(status: u16, message: &str) -> Value {
     json!({"status":status,"body":{"error":message}})
 }
 
 /// A canonical source for action versions, bound to this account's saved choice.
 /// No caller-selected path or preference key is accepted by folder.resolve.
-fn resolve_source(scope: &CallScope, config: &FolderSetting, value: &Value) -> Value {
+fn resolve_source(
+    scope: &CallScope,
+    config: &FolderSetting,
+    base: Option<&std::path::Path>,
+    value: &Value,
+) -> Value {
     let Some(path) = value.as_str().filter(|s| !s.is_empty()) else {
         return error(409, "Notes source is not configured");
     };
-    let roots = config
-        .roots
-        .get(&scope.access().actor_user_id())
-        .cloned()
-        .unwrap_or_default();
+    let roots = roots_for(config, base, scope);
     let allowed = AllowedRoots::for_account(scope.access(), roots.clone());
     if roots.is_empty()
         || !roots

@@ -13,6 +13,7 @@ use moss_module_host::{
     ai::Intelligence,
     application::{Application, Configuration},
     account_preferences::{AccountPreferencesPorts, Binding},
+    folder_settings::{FolderSetting, FolderSettingsPorts},
     linked_notes::{LinkedNotesPorts, PreferenceFolder, PreferenceFolders},
     runtime::{CallScope, Ports, Request},
     worker::Worker,
@@ -90,21 +91,46 @@ fn linked_notes(
     )?
     .with_account_base(base.clone());
     let folders = PreferenceFolders::new(
-        database,
-        BTreeMap::from([(
-            ("people".into(), "people-notes".into()),
-            PreferenceFolder {
-                preference: "people-notes-folder".into(),
-                relative_to: Some("notes-source-path".into()),
-            },
-        )]),
+        database.clone(),
+        BTreeMap::from([
+            (
+                ("people".into(), "people-notes".into()),
+                PreferenceFolder {
+                    preference: "people-notes-folder".into(),
+                    relative_to: Some("notes-source-path".into()),
+                },
+            ),
+            (
+                ("notes".into(), "source".into()),
+                PreferenceFolder {
+                    preference: "notes-source-path".into(),
+                    relative_to: None,
+                },
+            ),
+        ]),
         BTreeMap::new(),
     )?
-    .with_account_base(base);
-    Ok(Arc::new(LinkedNotesPorts::new(
+    .with_account_base(base.clone());
+    let linked: Arc<dyn Ports> = Arc::new(LinkedNotesPorts::new(
         Arc::new(folders),
         Arc::new(preferences),
-    )))
+    ));
+    // Notes folder browse, link and status. The setting keys are fixed here.
+    Ok(Arc::new(
+        FolderSettingsPorts::new(
+            database,
+            BTreeMap::from([(
+                ("notes".into(), "source".into()),
+                FolderSetting {
+                    path_key: "notes-source-path".into(),
+                    status_key: "notes-last-sync".into(),
+                    roots: BTreeMap::new(),
+                },
+            )]),
+            linked,
+        )?
+        .with_account_base(base),
+    ))
 }
 
 pub struct ServerModules {
