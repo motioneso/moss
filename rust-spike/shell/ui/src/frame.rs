@@ -479,6 +479,8 @@ fn Frame(shell: ShellView) -> impl IntoView {
                     <main class="content-surface" hidden=move || expanded.get()>
                         {move || if path.get() == "/today" {
                             view! { <TodayPage /> }.into_any()
+                        } else if path.get() == "/modules" {
+                            view! { <crate::modules_page::ModulesPage /> }.into_any()
                         } else {
                             view! { <NotPortedYet /> }.into_any()
                         }}
