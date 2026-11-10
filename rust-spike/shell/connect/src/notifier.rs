@@ -131,22 +131,24 @@ pub fn run(data: PathBuf, once: bool) -> i32 {
         return 0;
     };
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
+    // Held so a click on an alert reaches this process.
+    let _session = crate::desktop::notifier_session(&data);
     let mut seen: HashSet<(String, String)> = HashSet::new();
     loop {
         for entry in load(&data).entries {
             if app_active_for(&data, &entry.server) {
                 continue;
             }
-            runtime.block_on(poll(&entry, &mut seen));
+            runtime.block_on(poll(&data, &entry, &mut seen));
         }
         if once {
             return 0;
         }
-        std::thread::sleep(Duration::from_secs(5));
+        crate::desktop::pause(Duration::from_secs(5));
     }
 }
 
-async fn poll(entry: &Entry, seen: &mut HashSet<(String, String)>) {
+async fn poll(data: &Path, entry: &Entry, seen: &mut HashSet<(String, String)>) {
     let path = format!("/api/notifier/notices?client={}", entry.client);
     let Ok((200, body)) =
         reach::request(&entry.origin, &entry.pin, "GET", &path, &entry.token, None).await
@@ -162,13 +164,27 @@ async fn poll(entry: &Entry, seen: &mut HashSet<(String, String)>) {
             continue;
         }
         let text = notice.body.clone().unwrap_or_default();
-        let key = (entry.server.clone(), format!("{}@{}", notice.id, notice.version));
+        let key = (
+            entry.server.clone(),
+            format!("{}@{}", notice.id, notice.version),
+        );
         // A failed acceptance last round must not show the same alert twice.
-        if seen.contains(&key) || crate::desktop::notify(&notice.title, &text).is_ok() {
+        let delivered = seen.contains(&key)
+            || match notice
+                .href
+                .as_deref()
+                .filter(|h| crate::link::valid_path(h))
+            {
+                Some(path) => {
+                    crate::desktop::notify_link(data, &entry.server, path, &notice.title, &text)
+                }
+                None => crate::desktop::notify(&notice.title, &text),
+            }
+            .is_ok();
+        if delivered {
             seen.insert(key);
             shown.push((notice.id, notice.version));
         }
-        let _ = notice.href;
     }
     if shown.is_empty() {
         return;
@@ -177,7 +193,8 @@ async fn poll(entry: &Entry, seen: &mut HashSet<(String, String)>) {
         "client": entry.client,
         "events": shown.iter().map(|(id, _)| id).collect::<Vec<_>>(),
         "versions": shown.iter().map(|(_, v)| v).collect::<Vec<_>>(),
-    }).to_string();
+    })
+    .to_string();
     let accepted = reach::request(
         &entry.origin,
         &entry.pin,
@@ -189,7 +206,10 @@ async fn poll(entry: &Entry, seen: &mut HashSet<(String, String)>) {
     .await;
     // The notice is in `seen` until the server agrees; after that the receipt carries it.
     if !matches!(accepted, Ok((200, _))) {
-        eprintln!("moss-app notifier: the server did not accept the receipt ({:?})", accepted.as_ref().map(|(c, _)| *c));
+        eprintln!(
+            "moss-app notifier: the server did not accept the receipt ({:?})",
+            accepted.as_ref().map(|(c, _)| *c)
+        );
     }
     if matches!(accepted, Ok((200, _))) {
         seen.retain(|(s, key)| {

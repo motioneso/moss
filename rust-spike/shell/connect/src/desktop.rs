@@ -181,35 +181,147 @@ mod linux {
     }
 
     pub fn notify(title: &str, body: &str) -> Result<(), String> {
+        send(title, body, false).map(|_| ())
+    }
+
+    /// What the notifier keeps for as long as it shows alerts. Linux needs nothing.
+    pub fn notifier_session(_data: &Path) {}
+
+    /// Waits between notifier rounds.
+    pub fn pause(duration: std::time::Duration) {
+        std::thread::sleep(duration);
+    }
+
+    /// Sends an alert that opens `path` on the saved server when clicked.
+    pub fn notify_link(
+        data: &Path,
+        server: &str,
+        path: &str,
+        title: &str,
+        body: &str,
+    ) -> Result<(), String> {
+        if !crate::link::valid_path(path) {
+            return notify(title, body);
+        }
+        listen_for_clicks(data);
+        // The lock is held across the send so a fast click waits for the entry to exist.
+        let mut held = links().lock().unwrap_or_else(|e| e.into_inner());
+        let id = send(title, body, true)?;
+        held.insert(id, (server.to_owned(), path.to_owned()));
+        Ok(())
+    }
+
+    type Links = std::sync::Mutex<HashMap<u32, (String, String)>>;
+
+    /// Alerts on screen that carry a link, by the desktop's alert number.
+    fn links() -> &'static Links {
+        static LINKS: std::sync::OnceLock<Links> = std::sync::OnceLock::new();
+        LINKS.get_or_init(Default::default)
+    }
+
+    /// Listens once per process for clicks. The desktop broadcasts every program's clicks, so
+    /// only alert numbers this process sent count.
+    fn listen_for_clicks(data: &Path) {
+        static STARTED: std::sync::Once = std::sync::Once::new();
+        let data = data.to_owned();
+        STARTED.call_once(|| {
+            let (ready, wait) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let context = gio::glib::MainContext::new();
+                let _ = context.with_thread_default(|| {
+                    let Ok(bus) = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE)
+                    else {
+                        let _ = ready.send(());
+                        return;
+                    };
+                    let subscribe = |signal: &str, action: Box<dyn Fn(&Variant) + 'static>| {
+                        bus.signal_subscribe(
+                            Some("org.freedesktop.Notifications"),
+                            Some("org.freedesktop.Notifications"),
+                            Some(signal),
+                            Some("/org/freedesktop/Notifications"),
+                            None,
+                            gio::DBusSignalFlags::NONE,
+                            move |_, _, _, _, _, params| action(params),
+                        )
+                    };
+                    let _ = subscribe(
+                        "ActionInvoked",
+                        Box::new(move |params| {
+                            let Some((id, key)) = params.get::<(u32, String)>() else {
+                                return;
+                            };
+                            let link = links()
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .remove(&id);
+                            if let (Some((server, path)), "default") = (link, key.as_str()) {
+                                let request = crate::link::Request {
+                                    server: Some(server),
+                                    path: Some(path),
+                                };
+                                if let Err(e) = crate::link::open(&data, &request) {
+                                    eprintln!("moss-app notifier: {e}");
+                                }
+                            }
+                        }),
+                    );
+                    let _ = subscribe(
+                        "NotificationClosed",
+                        Box::new(|params| {
+                            if let Some((id, _)) = params.get::<(u32, u32)>() {
+                                // A click also closes the alert; ActionInvoked arrives first.
+                                links()
+                                    .lock()
+                                    .unwrap_or_else(|e| e.into_inner())
+                                    .remove(&id);
+                            }
+                        }),
+                    );
+                    let _ = ready.send(());
+                    gio::glib::MainLoop::new(Some(&context), false).run();
+                });
+            });
+            let _ = wait.recv_timeout(std::time::Duration::from_secs(2));
+        });
+    }
+
+    fn send(title: &str, body: &str, clickable: bool) -> Result<u32, String> {
         let bus = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE)
             .map_err(|_| "Desktop notifications are unavailable")?;
         let hints: HashMap<String, Variant> = HashMap::new();
         let body = gio::glib::markup_escape_text(body);
-        bus.call_sync(
-            Some("org.freedesktop.Notifications"),
-            "/org/freedesktop/Notifications",
-            "org.freedesktop.Notifications",
-            "Notify",
-            Some(
-                &(
-                    "Moss",
-                    0u32,
-                    "applications-office",
-                    title,
-                    body.as_str(),
-                    Vec::<String>::new(),
-                    hints,
-                    -1i32,
-                )
-                    .to_variant(),
-            ),
-            None,
-            gio::DBusCallFlags::NONE,
-            1000,
-            gio::Cancellable::NONE,
-        )
-        .map_err(|_| "Desktop notifications are unavailable")?;
-        Ok(())
+        let actions: Vec<&str> = if clickable {
+            vec!["default", "Open"]
+        } else {
+            Vec::new()
+        };
+        let reply = bus
+            .call_sync(
+                Some("org.freedesktop.Notifications"),
+                "/org/freedesktop/Notifications",
+                "org.freedesktop.Notifications",
+                "Notify",
+                Some(
+                    &(
+                        "Moss",
+                        0u32,
+                        "applications-office",
+                        title,
+                        body.as_str(),
+                        actions,
+                        hints,
+                        -1i32,
+                    )
+                        .to_variant(),
+                ),
+                None,
+                gio::DBusCallFlags::NONE,
+                1000,
+                gio::Cancellable::NONE,
+            )
+            .map_err(|_| "Desktop notifications are unavailable")?;
+        Ok(reply.get::<(u32,)>().map_or(0, |(id,)| id))
     }
 
     fn autostart_file(store: &Store) -> Result<PathBuf, String> {
@@ -304,7 +416,29 @@ mod native {
     #[cfg(windows)]
     use super::windows as os;
     use super::*;
-    pub use os::{notify, Tray};
+    pub use os::{notify, notify_link, pause, Tray};
+
+    /// Keeps what the notifier needs so a click on its alert reaches it. On Windows that is a
+    /// hidden notification icon with a message loop; on macOS it is the notification delegate.
+    pub struct NotifierSession {
+        #[cfg(windows)]
+        _icon: Option<Tray>,
+    }
+
+    pub fn notifier_session(data: &Path) -> NotifierSession {
+        #[cfg(target_os = "macos")]
+        {
+            os::listen_for_clicks(data);
+            NotifierSession {}
+        }
+        #[cfg(windows)]
+        {
+            let _ = data;
+            NotifierSession {
+                _icon: os::hidden_tray(),
+            }
+        }
+    }
     use std::path::Path;
     pub fn tray(proxy: tao::event_loop::EventLoopProxy<crate::UserEvent>) -> Option<Tray> {
         os::tray(move |action| {

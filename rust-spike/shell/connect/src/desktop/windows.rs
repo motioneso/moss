@@ -3,11 +3,19 @@ use super::identity::{install_id, Action};
 use std::cell::RefCell;
 use std::ffi::c_void;
 use std::path::Path;
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
+use std::sync::Mutex;
 
 type Handle = *mut c_void;
 const CALLBACK: u32 = 0x8001;
 static WINDOW: AtomicIsize = AtomicIsize::new(0);
+/// The notifier keeps its icon hidden. Hidden icons still show balloons.
+static HIDDEN: AtomicBool = AtomicBool::new(false);
+/// Sent to the icon's window when the user clicks a balloon.
+const BALLOON_USER_CLICK: u32 = 0x405;
+/// The page link of the balloon on screen, if it has one: data folder, server and path.
+static PENDING: Mutex<Option<(PathBuf, String, String)>> = Mutex::new(None);
 
 #[repr(C)]
 struct Point {
@@ -159,6 +167,11 @@ fn tray_icon(window: Handle) -> Icon {
     let mut item = icon(window);
     item.flags = 1 | 2 | 4; // message, icon, tooltip
     item.callback = CALLBACK;
+    if HIDDEN.load(Ordering::SeqCst) {
+        item.flags |= 8; // NIF_STATE
+        item.state = 1; // NIS_HIDDEN
+        item.state_mask = 1;
+    }
     // SAFETY: IDI_APPLICATION is a predefined system resource.
     item.icon = unsafe { LoadIconW(std::ptr::null_mut(), 32512usize as *const u16) };
     fill(&mut item.tip, "Moss — right-click for Desktop settings");
@@ -173,6 +186,9 @@ unsafe extern "system" fn procedure(window: Handle, message: u32, w: usize, l: i
             return false;
         };
         if message == CALLBACK {
+            if l as u32 == BALLOON_USER_CLICK {
+                open_pending();
+            }
             let event = match l as u32 {
                 0x0202 => Some(Action::Reveal),
                 0x0205 => Some(Action::Settings),
@@ -220,6 +236,16 @@ impl Drop for Tray {
     }
 }
 pub fn tray(action: impl Fn(Action) + Send + 'static) -> Option<Tray> {
+    start(action)
+}
+
+/// The notifier's window for balloons: an icon nobody sees, so clicks reach `procedure`.
+pub fn hidden_tray() -> Option<Tray> {
+    HIDDEN.store(true, Ordering::SeqCst);
+    start(|_| {})
+}
+
+fn start(action: impl Fn(Action) + Send + 'static) -> Option<Tray> {
     let (tx, rx) = std::sync::mpsc::sync_channel(1);
     std::thread::spawn(move || {
         // SAFETY: this thread owns the window, class registration and message loop. All
@@ -288,6 +314,66 @@ pub fn tray(action: impl Fn(Action) + Send + 'static) -> Option<Tray> {
 }
 
 pub fn notify(title: &str, body: &str) -> Result<(), String> {
+    show_and_remember(title, body, None)
+}
+
+/// Shows an alert that opens `path` on the saved server when the user clicks it.
+pub fn notify_link(
+    data: &Path,
+    server: &str,
+    path: &str,
+    title: &str,
+    body: &str,
+) -> Result<(), String> {
+    if !crate::link::valid_path(path) {
+        return notify(title, body);
+    }
+    show_and_remember(
+        title,
+        body,
+        Some((data.to_owned(), server.to_owned(), path.to_owned())),
+    )
+}
+
+/// Waits between notifier rounds. The icon's own thread handles clicks meanwhile.
+pub fn pause(duration: std::time::Duration) {
+    std::thread::sleep(duration);
+}
+
+/// Only one balloon is on screen, so one remembered link is enough. A newer balloon replaces it.
+/// The lock is held across the show, so a click always sees the link of the balloon it hit.
+/// A failed show leaves the previous balloon and its link untouched.
+fn show_and_remember(
+    title: &str,
+    body: &str,
+    link: Option<(PathBuf, String, String)>,
+) -> Result<(), String> {
+    let mut pending = PENDING.lock().unwrap_or_else(|e| e.into_inner());
+    show(title, body)?;
+    *pending = link;
+    Ok(())
+}
+
+#[cfg(test)]
+fn remember(link: Option<(PathBuf, String, String)>) {
+    *PENDING.lock().unwrap_or_else(|e| e.into_inner()) = link;
+}
+
+/// Takes the click for the balloon on screen and hands it to the window app.
+fn open_pending() {
+    let pending = PENDING.lock().unwrap_or_else(|e| e.into_inner()).take();
+    if let Some((data, server, path)) = pending {
+        let request = crate::link::Request {
+            server: Some(server),
+            path: Some(path),
+        };
+        if let Err(e) = crate::link::open(&data, &request) {
+            eprintln!("moss-app notifier: {e}");
+        }
+    }
+}
+
+fn show(title: &str, body: &str) -> Result<(), String> {
     let window = WINDOW.load(Ordering::SeqCst);
     if window == 0 {
         return Err("The Windows notification icon is unavailable".into());
@@ -302,6 +388,60 @@ pub fn notify(title: &str, body: &str) -> Result<(), String> {
         Err("Windows could not show the notification".into())
     } else {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn folder() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("moss balloon {}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn click(window: isize) {
+        // SAFETY: posting a message to this process's own window.
+        unsafe { PostMessageW(window as Handle, CALLBACK, 0, BALLOON_USER_CLICK as isize) };
+    }
+
+    /// The window procedure receives the message Windows sends for a balloon click. The test
+    /// posts that message itself: a real mouse click needs a person at the screen.
+    #[test]
+    fn balloon_click_opens_the_page_the_alert_carries() {
+        let dir = folder();
+        // Holding the window lock stops the click from starting a second app.
+        let _window = crate::link::window_lock(&dir).expect("window lock");
+        let tray = hidden_tray().expect("the notification window starts");
+        let window = WINDOW.load(Ordering::SeqCst);
+        remember(Some((dir.clone(), "s1".into(), "/tasks".into())));
+        click(window);
+        let mut taken = None;
+        for _ in 0..50 {
+            taken = crate::link::take_request(&dir);
+            if taken.is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        let want = crate::link::Request {
+            server: Some("s1".into()),
+            path: Some("/tasks".into()),
+        };
+        assert_eq!(taken, Some(want));
+        // The click is used up: a second click on the same balloon opens nothing.
+        click(window);
+        std::thread::sleep(std::time::Duration::from_millis(800));
+        assert_eq!(crate::link::take_request(&dir), None);
+        // A plain alert replaces the link, so its click opens nothing either.
+        remember(Some((dir.clone(), "s1".into(), "/notes".into())));
+        let _ = notify("plain", "no link");
+        click(window);
+        std::thread::sleep(std::time::Duration::from_millis(800));
+        assert_eq!(crate::link::take_request(&dir), None);
+        drop(tray);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }
 
