@@ -174,6 +174,12 @@ pub fn private_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
                     let _ = e;
                     std::thread::sleep(std::time::Duration::from_millis(100));
                 }
+                Err(e) if cfg!(windows) => {
+                    // Something keeps the new file open. Write the final file in place.
+                    break fs::write(path, bytes).map_err(|w| {
+                        format!("Cannot replace private configuration ({e}; {w})")
+                    });
+                }
                 Err(e) => break Err(format!("Cannot replace private configuration ({e})")),
             }
         }
