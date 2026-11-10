@@ -140,8 +140,15 @@ fn settle(host: &impl Host, header: &Value) -> Result<Value> {
     let plan_id = header["plan_id"].as_str().ok_or_else(unreadable)?;
     let (_, selection) = snapshot(&header["selection_snapshot"])?;
     let existing = query(host, ITEMS, &Query::select(Filter::eq("operation_id", id)))?;
+    // A deleted block leaves its item behind with a null block id, so items are matched
+    // by the frozen pending change and never recreated for a block that is gone.
+    let live = plans::blocks(host, plan_id)?;
     for wanted in &selection {
-        if existing.iter().any(|row| row["block_id"] == wanted["blockId"]) {
+        if existing
+            .iter()
+            .any(|row| row["pending_change"]["blockId"] == wanted["blockId"])
+            || !live.iter().any(|b| b["id"] == wanted["blockId"])
+        {
             continue;
         }
         let mut insert = Query::insert(rows(json!({
@@ -218,6 +225,13 @@ pub fn reserve(host: &impl Host, plan_id: &str, request: Request) -> Result<Valu
         .iter()
         .map(plans::block_dto)
         .collect();
+    // Each host call commits alone, so there is no row lock. A draft save raises the
+    // revision before it rewrites blocks, so a changed revision here means the blocks
+    // just read may belong to a newer draft.
+    let after = query(host, plans::PLANS, &Query::select(Filter::eq("id", plan_id)))?;
+    if after.first().map(|p| p["revision"].as_i64()) != Some(Some(revision)) {
+        return Err(Error::new(409, "day plan changed since it was read"));
+    }
     let selection = resolve_selection(&blocks, &intent)?;
     if selection.is_empty() {
         return Err(invalid("no pending changes to reserve"));
@@ -254,6 +268,14 @@ pub fn route(_host: &impl Host, plan_id: &str, body: Value) -> Result<Value> {
     if !operations::uuid(plan_id) {
         return Err(invalid("id must be a uuid"));
     }
+    if body.get("selectedBlockIds").is_some_and(|ids| {
+        !ids.as_array().is_some_and(|list| {
+            list.iter().all(|id| id.as_str().is_some_and(operations::uuid))
+                && list.iter().filter_map(Value::as_str).collect::<std::collections::BTreeSet<_>>().len() == list.len()
+        })
+    }) {
+        return Err(invalid("selectedBlockIds must be a list of distinct ids"));
+    }
     let request: Request = serde_json::from_value(body)
         .map_err(|_| invalid("request must hold expectedRevision, idempotencyKey and optional operationKey and selectedBlockIds"))?;
     if request.expected_revision < 1
@@ -262,13 +284,8 @@ pub fn route(_host: &impl Host, plan_id: &str, body: Value) -> Result<Value> {
     {
         return Err(invalid("expectedRevision and idempotencyKey are required"));
     }
-    if request
-        .selected_block_ids
-        .iter()
-        .flatten()
-        .any(|id| !operations::uuid(id))
-    {
-        return Err(invalid("selectedBlockIds must be uuids"));
+    if request.operation_key.as_deref() == Some("") {
+        return Err(invalid("operationKey must be text or null"));
     }
     Err(Error::new(503, "day plan apply is unavailable"))
 }

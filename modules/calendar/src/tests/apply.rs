@@ -15,6 +15,8 @@ struct Mem {
     tables: RefCell<BTreeMap<String, Vec<Value>>>,
     next: RefCell<u32>,
     inserts: RefCell<u32>,
+    /// Runs once when the plan's blocks are read, to model a draft save landing mid-reservation.
+    on_blocks: RefCell<Option<Box<dyn FnOnce(&mut BTreeMap<String, Vec<Value>>)>>>,
 }
 fn matches(row: &Value, filter: &Value) -> bool {
     match filter["type"].as_str() {
@@ -32,6 +34,11 @@ impl Host for Mem {
         }
         assert_eq!((port, op), ("db", "query"));
         let q: Query = serde_json::from_value(body).unwrap();
+        if resource == "app.day_plan_blocks" {
+            if let Some(hook) = self.on_blocks.borrow_mut().take() {
+                hook(&mut self.tables.borrow_mut());
+            }
+        }
         let mut tables = self.tables.borrow_mut();
         let rows = tables.entry(resource.to_owned()).or_default();
         let filter = serde_json::to_value(&q.filter).unwrap();
@@ -169,4 +176,44 @@ fn the_route_validates_then_fails_closed_without_writing() {
     }
     assert!(call("nope", json!({"expectedRevision":3,"idempotencyKey":"k"})).unwrap().contains("\"status\":400"));
     assert_eq!(*h.inserts.borrow(), 0);
+}
+
+#[test]
+fn a_draft_save_during_reservation_conflicts_instead_of_freezing_the_newer_draft() {
+    let h = host();
+    *h.on_blocks.borrow_mut() = Some(Box::new(|tables| {
+        tables.get_mut("app.day_plans").unwrap()[0]["revision"] = json!(4);
+    }));
+    assert_eq!(apply::reserve(&h, PLAN, request("k1", 3, None)).unwrap_err().status, 409);
+    assert_eq!(*h.inserts.borrow(), 0);
+}
+
+#[test]
+fn replay_after_a_selected_block_is_deleted_returns_the_stored_batch_without_new_writes() {
+    let h = host();
+    let first = apply::reserve(&h, PLAN, request("k1", 3, None)).unwrap();
+    {
+        let mut tables = h.tables.borrow_mut();
+        tables.get_mut("app.day_plan_blocks").unwrap().retain(|b| b["id"] != A);
+        tables.get_mut("app.day_plan_operation_items").unwrap()[0]["block_id"] = Value::Null;
+    }
+    let writes = *h.inserts.borrow();
+    let again = apply::reserve(&h, PLAN, request("k1", 3, None)).unwrap();
+    assert_eq!(*h.inserts.borrow(), writes);
+    assert_eq!(first["selection"], again["selection"]);
+    assert_eq!(again["items"][0]["blockId"], Value::Null);
+}
+
+#[test]
+fn the_route_rejects_null_or_repeated_selections_and_empty_operation_keys() {
+    let h = host();
+    let call = |body: Value| {
+        handle(&h, "route", &json!({"method":"POST","path":"/day-plans/:id/apply","params":{"id":PLAN},"query":{},"body":body}).to_string()).unwrap()
+    };
+    for extra in [json!({"selectedBlockIds":null}), json!({"selectedBlockIds":[A,A]}), json!({"operationKey":""})] {
+        let mut body = json!({"expectedRevision":3,"idempotencyKey":"k"});
+        body.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        assert!(call(body).contains("\"status\":400"));
+    }
+    assert!(call(json!({"expectedRevision":3,"idempotencyKey":"k","operationKey":null})).contains("\"status\":503"));
 }

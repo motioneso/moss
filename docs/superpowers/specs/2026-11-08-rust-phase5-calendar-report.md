@@ -1204,11 +1204,13 @@ fields, uuids, key length) and answers 503 "day plan apply is unavailable" witho
 execution needs a Connectors package. The route does not call `reserve` yet, so no pending batch can
 be left that nothing can run.
 
+Review round 1 fixes: the plan revision is re-read after the blocks are read, so a draft save that lands mid-reservation conflicts instead of freezing the newer draft; replay matches items by their frozen change and never recreates an item for a deleted block; the route refuses a null or repeated selection and an empty operation key like the original.
+
 Differences from the original: the original holds a row lock on the plan while reserving; the host
 runs each database call in its own transaction, so the unique idempotency key, the revision check and
 replay repair carry that protection. The 202 approval gate and tier policy are host work, not built.
 
-Checks: seven guest tests in `tests/apply.rs` (in-memory host) plus the existing guest suites pass with
+Checks: ten guest tests in `tests/apply.rs` (in-memory host) plus the existing guest suites pass with
 Rust 1.95.0. The live gate `pnpm test:rust-calendar-server` passes against the real HTTPS server: apply
 without sign-in 401, valid body 503 with the fail-closed message, unknown field 400 with
 `day_plan_invalid`, plus the earlier event, day-plan and settings checks. The gate now waits for the
