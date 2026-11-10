@@ -148,7 +148,7 @@ pub fn private_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
         .parent()
         .ok_or("A private file needs a parent folder")?;
     let tmp = parent.join(format!(".moss-{}.tmp", uuid::Uuid::new_v4()));
-    let result = (|| {
+    let result: Result<(), String> = (|| {
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
         #[cfg(unix)]
@@ -158,16 +158,28 @@ pub fn private_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
         }
         let mut file = options
             .open(&tmp)
-            .map_err(|_| "Cannot create private configuration")?;
+            .map_err(|_| "Cannot create private configuration".to_owned())?;
         file.write_all(bytes)
             .and_then(|_| file.sync_all())
-            .map_err(|_| "Cannot save private configuration")?;
+            .map_err(|_| "Cannot save private configuration".to_owned())?;
         // Windows refuses to rename a file that is still open.
         drop(file);
-        fs::rename(&tmp, path).map_err(|_| "Cannot replace private configuration")
+        // A scanner or indexer can hold the new file for a moment on Windows.
+        let mut tries = 0;
+        loop {
+            match fs::rename(&tmp, path) {
+                Ok(()) => break Ok(()),
+                Err(e) if cfg!(windows) && tries < 20 => {
+                    tries += 1;
+                    let _ = e;
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+                Err(e) => break Err(format!("Cannot replace private configuration ({e})")),
+            }
+        }
     })();
     if result.is_err() {
         let _ = fs::remove_file(tmp);
     }
-    result.map_err(str::to_owned)
+    result
 }
