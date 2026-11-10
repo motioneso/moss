@@ -1035,7 +1035,9 @@ selected choices, compact Previous / Next arrows and small Today button. Additiv
 Segmented and IconButton components live in the published Leptos kit and consume
 the authored Park Press classes. Calendar uses the same installed display-settings
 API and remains a pure client of the server. No data, host, provider or module
-boundary changes are needed.
+boundary changes are needed. The shared asset builder now includes the existing
+form-layout stylesheet after the kit stylesheet, matching the web app cascade;
+without it the segmented controls lacked their authored padding and height.
 
 The rendered differential invokes the real production React Calendar page for
 Day, Week and Month with both week choices. It was observed failing on the prior
