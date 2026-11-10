@@ -44,7 +44,9 @@ def flatten(path: Path, seen: set) -> str:
 out = Path(sys.argv[1])
 out.mkdir(parents=True, exist_ok=True)
 seen: set = set()
-(out / "app.css").write_text("\n".join(flatten(p, seen) for p in ENTRIES))
+(out / "app.css").write_text(
+    "\n".join(flatten(p, seen) for p in ENTRIES) + "\n" + (Path(__file__).parent / "shell-extra.css").read_text()
+)
 for folder in ["fonts", "textures"]:
     shutil.copytree(WEB / "public" / folder, out / folder, dirs_exist_ok=True)
 shutil.copy(WEB / "public/boot-theme.js", out / "boot-theme.js")
