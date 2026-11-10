@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Diagnostic parity probe: currently red on the first 999-person response's fuel budget.
+# Full large-account diagnostic under the unchanged default host budgets.
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 if [[ "${JARVIS_GATE_RUN:-}" != 1 ]]; then

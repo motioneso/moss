@@ -73,21 +73,21 @@ impl<H: Host + ?Sized> Repository<'_, H> {
                 "email_address" | "source_identity"
             )
         {
-            return Ok(identity_response(&self.insert(IDENTITIES, values)?));
+            return Ok(identity_response(self.insert(IDENTITIES, values)?));
         }
         // The legacy index is partial. Conflict-ignore waits on a racing insert;
         // the subsequent owner-scoped update preserves first-seen/confidence/source.
         let mut insert = Query::insert(crate::repository::fields(values)?);
         insert.conflict = Conflict::Ignore;
         let rows = self.query(IDENTITIES, insert)?;
-        if let Some(row) = rows.first() {
+        if let Some(row) = rows.into_iter().next() {
             return Ok(identity_response(row));
         }
         let rows = self.update(IDENTITIES, and(vec![
             Filter::eq("identity_kind", input.identity_kind.clone()), Filter::eq("source_kind", input.source_kind.clone()),
             Filter::eq("normalized_value", input.normalized_value.clone()), Filter::eq("status", "active"),
         ]), json!({"person_id":input.person_id,"display_value":input.display_value,"last_seen_at":now,"updated_at":now}))?;
-        Ok(identity_response(&first(rows)?))
+        Ok(identity_response(first(rows)?))
     }
     pub fn upsert_link(&self, input: &LinkInput) -> Result<Value> {
         self.person(&input.person_id)?;
@@ -98,7 +98,7 @@ impl<H: Host + ?Sized> Repository<'_, H> {
             "confidence":input.confidence.unwrap_or(0.5),"provenance":input.provenance.as_deref().unwrap_or("source"),
             "created_at":now,"updated_at":now});
         let update = json!({"source_label":input.source_label,"summary":input.summary,"source_updated_at":input.source_updated_at,"updated_at":now});
-        Ok(link_response(&self.upsert(
+        Ok(link_response(self.upsert(
             LINKS,
             &["owner_user_id", "person_id", "source_ref_hash", "link_kind"],
             initial,
@@ -122,16 +122,16 @@ impl<H: Host + ?Sized> Repository<'_, H> {
             json!({"link_id":link,"identity_id":identity,"source_ref_hash":hash,"link_kind":kind,"confidence":confidence,"created_at":self.now()?}),
             json!({"confidence":confidence}))?;
         Ok(response(
-            &row,
+            row,
             &[
-                "id",
-                "owner_user_id",
-                "link_id",
-                "identity_id",
-                "source_ref_hash",
-                "link_kind",
-                "confidence",
-                "created_at",
+                ("id", "id"),
+                ("owner_user_id", "ownerUserId"),
+                ("link_id", "linkId"),
+                ("identity_id", "identityId"),
+                ("source_ref_hash", "sourceRefHash"),
+                ("link_kind", "linkKind"),
+                ("confidence", "confidence"),
+                ("created_at", "createdAt"),
             ],
         ))
     }
@@ -152,11 +152,11 @@ impl<H: Host + ?Sized> Repository<'_, H> {
                 "reason_summary":input.reason_summary,"confidence":input.confidence.unwrap_or(0.5),
                 "candidate_signature":crate::matching::candidate_signature(&input.candidate_kind,&input.ids),"created_at":now,"updated_at":now}),
             json!({"confidence":input.confidence.unwrap_or(0.5),"updated_at":now}))?;
-        Ok(candidate_response(&row))
+        Ok(candidate_response(row))
     }
     pub fn candidate(&self, id: &str) -> Result<Value> {
         self.one(CANDIDATES, Filter::eq("id", id))?
-            .map(|r| candidate_response(&r))
+            .map(candidate_response)
             .ok_or_else(|| Error::new("Candidate not found"))
     }
     pub fn candidates(&self, status: Option<&str>) -> Result<Vec<Value>> {
@@ -170,12 +170,12 @@ impl<H: Host + ?Sized> Repository<'_, H> {
                 orders(&[("created_at", true), ("id", false)]),
                 None,
             )?
-            .iter()
+            .into_iter()
             .map(candidate_response)
             .collect())
     }
     pub fn set_candidate_status(&self, id: &str, status: &str) -> Result<Value> {
-        Ok(candidate_response(&first(self.update(
+        Ok(candidate_response(first(self.update(
             CANDIDATES,
             Filter::eq("id", id),
             json!({"status":status,"updated_at":self.now()?}),
@@ -202,17 +202,17 @@ impl<H: Host + ?Sized> Repository<'_, H> {
         let row = self.insert(EVENTS,json!({"event_kind":kind,"person_id":person,"secondary_person_id":secondary,
             "identity_id":identity,"candidate_id":candidate,"source_ref_hash":hash,"created_at":self.now()?}))?;
         Ok(response(
-            &row,
+            row,
             &[
-                "id",
-                "owner_user_id",
-                "event_kind",
-                "person_id",
-                "secondary_person_id",
-                "identity_id",
-                "candidate_id",
-                "source_ref_hash",
-                "created_at",
+                ("id", "id"),
+                ("owner_user_id", "ownerUserId"),
+                ("event_kind", "eventKind"),
+                ("person_id", "personId"),
+                ("secondary_person_id", "secondaryPersonId"),
+                ("identity_id", "identityId"),
+                ("candidate_id", "candidateId"),
+                ("source_ref_hash", "sourceRefHash"),
+                ("created_at", "createdAt"),
             ],
         ))
     }
@@ -266,23 +266,23 @@ impl<H: Host + ?Sized> Repository<'_, H> {
     }
 }
 
-fn candidate_response(row: &Value) -> Value {
+fn candidate_response(row: Value) -> Value {
     response(
         row,
         &[
-            "id",
-            "owner_user_id",
-            "candidate_kind",
-            "status",
-            "primary_person_id",
-            "secondary_person_id",
-            "identity_id",
-            "suggested_display_name",
-            "reason_summary",
-            "confidence",
-            "candidate_signature",
-            "created_at",
-            "updated_at",
+            ("id", "id"),
+            ("owner_user_id", "ownerUserId"),
+            ("candidate_kind", "candidateKind"),
+            ("status", "status"),
+            ("primary_person_id", "primaryPersonId"),
+            ("secondary_person_id", "secondaryPersonId"),
+            ("identity_id", "identityId"),
+            ("suggested_display_name", "suggestedDisplayName"),
+            ("reason_summary", "reasonSummary"),
+            ("confidence", "confidence"),
+            ("candidate_signature", "candidateSignature"),
+            ("created_at", "createdAt"),
+            ("updated_at", "updatedAt"),
         ],
     )
 }
