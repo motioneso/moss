@@ -6,6 +6,8 @@ import { openModuleFrame } from "/module-shared/host-bridge.mjs";
 const params = new URLSearchParams(location.search);
 const moduleId = params.get("module") ?? "";
 const screenPath = params.get("path") ?? "";
+// A Today or chat link may carry a short lowercase preset for the screen to open with.
+const focusParam = params.get("focus") ?? "";
 const frame = document.getElementById("frame");
 const failure = document.getElementById("failure");
 
@@ -36,7 +38,9 @@ try {
   const screen = await reply.json();
   const dark = matchMedia("(prefers-color-scheme: dark)").matches;
   document.title = screen.title;
-  openModuleFrame(frame, moduleId, screen.src, {
+  const screenUrl = new URL(screen.src, location.href);
+  if (/^[a-z]{1,20}$/.test(focusParam)) screenUrl.searchParams.set("focus", focusParam);
+  openModuleFrame(frame, moduleId, screenUrl.href, {
     request,
     theme: () => ({ theme: "park-press", colorMode: dark ? "dark" : "light" }),
     navigate: async (path) => {
