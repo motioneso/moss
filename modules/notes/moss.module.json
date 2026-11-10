@@ -41,7 +41,7 @@
     },
     {
       "port": "jobs",
-      "operations": ["enqueue-after-commit", "enqueue-options", "schedule"],
+      "operations": ["enqueue-after-commit", "enqueue-options", "schedule", "unschedule"],
       "resources": ["notes.sync", "notes.sync-tick"]
     },
     {

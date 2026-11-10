@@ -1891,7 +1891,7 @@ Package 0.1.17 declares a `notes.sync-tick` job and the `schedule` operation. Li
 folder (and pressing Sync now) creates one stable-keyed schedule per account (`*/15 * * * *`
 UTC), as Tasks does for its nightly roll-forward. Each tick requests a fresh checkpoint for the
 linked folder, which the existing sync job then indexes. With no folder linked the tick does
-nothing, so unlinking needs no cancellation. Scheduling failures never fail the link or the
+nothing, and unlinking cancels the schedule (a tick already queued does nothing). Scheduling failures never fail the link or the
 manual sync. Unit tests cover the schedule request and the linked and unlinked tick; the
 write-tools, sync, component and screen suites pass on the rebuilt components.
 

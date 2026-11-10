@@ -50,12 +50,25 @@ pub const TICK: &str = "notes.sync-tick";
 /// Keeps one fifteen-minute sync schedule per account. The stable key makes
 /// repeat calls replace the row. A scheduling failure never fails the caller.
 pub(crate) fn reconcile_schedule(host: &impl Host) {
-    let _ = host.call(
+    let _ = schedule(host);
+}
+
+fn schedule(host: &impl Host) -> Result<Value> {
+    host.call(
         "jobs",
         "schedule",
         TICK,
         json!({"cron":"*/15 * * * *","timezone":"UTC","key":"notes-sync","params":{}}),
-    );
+    )
+}
+
+/// Cancels the account's schedule when the folder is unlinked. The keyed
+/// schedule call is idempotent and returns the stable row id to cancel.
+pub(crate) fn cancel_schedule(host: &impl Host) {
+    let Ok(saved) = schedule(host) else { return };
+    if let Some(id) = saved["id"].as_str() {
+        let _ = host.call("jobs", "unschedule", TICK, json!({"id":id}));
+    }
 }
 
 /// A scheduled tick requests a fresh checkpoint for the linked folder. With no
@@ -64,6 +77,8 @@ fn tick(host: &impl Host) -> Result<String> {
     let Some(source) = selected_source(host)? else {
         return Ok(json!({"noOp":true}).to_string());
     };
+    // Re-register in case the first registration failed; the keyed row is replaced.
+    reconcile_schedule(host);
     Ok(request_source(host, &source)?.to_string())
 }
 

@@ -635,6 +635,10 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         journal.join("day.md").is_file(),
         "unlinking must keep the files"
     );
+    assert!(
+        rows(schedule_sql).is_empty(),
+        "unlinking must cancel the sync schedule"
+    );
     println!("PASS installed Notes package served over HTTPS: sign-in required, folder offered and browsed inside the account root, outside path refused, link saved, status readable, sync requested, unlink keeps files");
     println!("PASS schedule: linking created one fifteen-minute sync schedule per account; when due, the server's scheduler and worker indexed a note added later, with no manual request");
     println!("PASS indexing: the server's own worker embedded three real notes through a local HTTP embeddings endpoint, and search returned the matching note first for two queries");
