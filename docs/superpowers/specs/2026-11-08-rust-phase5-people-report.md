@@ -2835,3 +2835,41 @@ those live paths. The previous continuation's remaining list remains applicable.
 
 Final clean-commit gate and independent review receipts are retained in this task's
 proof. No receipt from an earlier continuation is presented as proof for this work.
+
+## Part 26 — live-proof blocker and next step (checkpoint, documentation only)
+
+Before editing, this branch fast-forwarded to `28ae5ec9c`, including merged part 25
+(PR 4167). No source, package, SQL or host budget changed in this part.
+
+### Live proof cannot run yet
+
+The goal for this continuation was a real-UI check on a running Rust instance with a
+second device over HTTPS. The merged server/app slice 17 report ("Left unbuilt", item 1)
+states that the shipping server does not yet assemble the module host or its worker loop.
+Slice 17 is on `origin/main` and this branch is at `origin/main`, so the statement applies
+to this checkout. A running Rust instance therefore cannot serve installed People routes
+or Settings, and no authenticated UI, chat or second-device check was attempted. Fixture
+dispatch results from earlier parts remain the only installed evidence and are not
+presented as live proof.
+
+### Why no parity change was made
+
+The only open parity gap that a user hits directly is the 150-contact fuel limit
+(parts 21-25). Five parts of allocation trimming did not move it. The module host fixes
+fuel at 10,000,000 per invocation (`rust-spike/module-host/src/runtime.rs`, default
+`fuel: 10_000_000`), and a manifest cannot declare a higher limit. Raising it is a host
+safety-budget decision that belongs with the host owner, not a People-only change.
+
+### Recommended next steps, in order
+
+1. Server composition: assemble the module host and worker loop in the server (slice 17
+   item 1), then install the People package through the registry on a running instance.
+2. Decide the fuel policy: let a signed manifest request a bounded larger fuel limit
+   (with a host-wide ceiling), then re-run the 1,005-contact diagnostic. This is the
+   likely root fix for large accounts.
+3. Run the live proof: real UI on desktop and a second device over HTTPS, sign-in,
+   trusted origin, and a failing-first privacy check with a second user.
+4. Remaining groundwork: ingest nudges, real source providers, command retention and
+   quotas, full locale ordering, shipping listener parser qualification.
+
+Not proven: everything in step 3 and the large-account list limit.
