@@ -1,3 +1,4 @@
+/* global document, location, matchMedia */
 // Parent page for a module screen. The signed-in session stays here; the sandboxed frame
 // reaches its own module routes only through this bridge.
 import { openModuleFrame } from "/module-shared/host-bridge.mjs";
