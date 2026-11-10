@@ -278,8 +278,9 @@ fn main() {
     });
     let (listener, acceptor, app, running, modules, loader) = match prepared {
         Ok(parts) => parts,
-        Err(_) => {
-            eprintln!("moss-shell: could not start secure HTTPS; check private configuration, certificates and runtime database roles");
+        Err(reason) => {
+            // The reasons are fixed messages that never carry secrets.
+            eprintln!("moss-shell: could not start secure HTTPS ({reason}); check private configuration, certificates and runtime database roles");
             std::process::exit(1);
         }
     };

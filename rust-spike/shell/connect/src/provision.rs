@@ -259,7 +259,15 @@ pub fn ensure_database(install: &Path, folder: &Path, create: bool) -> Result<()
         .arg("--pg")
         .arg(install.join("postgres"))
         .arg("--repo")
-        .arg(install.join("schema"))
+        .arg(install.join("schema"));
+    // Windows has no database socket, so the port is part of every saved database address.
+    // It is chosen once and reused, so a restart finds the same address.
+    #[cfg(windows)]
+    {
+        let port = database_port(folder).ok_or(Failure::Other)?;
+        command.arg("--port-range").arg(format!("{port}-{port}"));
+    }
+    command
         .stdin(Stdio::null())
         .stdout(log.try_clone().map_err(|_| Failure::Other)?)
         .stderr(log);
@@ -296,6 +304,25 @@ pub fn ensure_database(install: &Path, folder: &Path, create: bool) -> Result<()
         }
         std::thread::sleep(Duration::from_millis(250));
     }
+}
+
+/// The instance's fixed database port: read from its folder, or chosen free and saved there.
+#[cfg(windows)]
+fn database_port(folder: &Path) -> Option<u16> {
+    let file = folder.join("database.port");
+    if let Some(port) = std::fs::read_to_string(&file)
+        .ok()
+        .and_then(|t| t.trim().parse::<u16>().ok())
+    {
+        return Some(port);
+    }
+    let port = std::net::TcpListener::bind(("127.0.0.1", 0))
+        .ok()?
+        .local_addr()
+        .ok()?
+        .port();
+    std::fs::write(&file, port.to_string()).ok()?;
+    Some(port)
 }
 
 /// The most decisive event in the supervisor's log: "ready" or "error", else the last one.
