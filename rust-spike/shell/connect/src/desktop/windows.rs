@@ -314,8 +314,7 @@ fn start(action: impl Fn(Action) + Send + 'static) -> Option<Tray> {
 }
 
 pub fn notify(title: &str, body: &str) -> Result<(), String> {
-    remember(None);
-    show(title, body)
+    show_and_remember(title, body, None)
 }
 
 /// Shows an alert that opens `path` on the saved server when the user clicks it.
@@ -329,8 +328,11 @@ pub fn notify_link(
     if !crate::link::valid_path(path) {
         return notify(title, body);
     }
-    remember(Some((data.to_owned(), server.to_owned(), path.to_owned())));
-    show(title, body).inspect_err(|_| remember(None))
+    show_and_remember(
+        title,
+        body,
+        Some((data.to_owned(), server.to_owned(), path.to_owned())),
+    )
 }
 
 /// Waits between notifier rounds. The icon's own thread handles clicks meanwhile.
@@ -338,7 +340,21 @@ pub fn pause(duration: std::time::Duration) {
     std::thread::sleep(duration);
 }
 
-/// Only one balloon is on screen, so one remembered link is enough. A newer alert replaces it.
+/// Only one balloon is on screen, so one remembered link is enough. A newer balloon replaces it.
+/// The lock is held across the show, so a click always sees the link of the balloon it hit.
+/// A failed show leaves the previous balloon and its link untouched.
+fn show_and_remember(
+    title: &str,
+    body: &str,
+    link: Option<(PathBuf, String, String)>,
+) -> Result<(), String> {
+    let mut pending = PENDING.lock().unwrap_or_else(|e| e.into_inner());
+    show(title, body)?;
+    *pending = link;
+    Ok(())
+}
+
+#[cfg(test)]
 fn remember(link: Option<(PathBuf, String, String)>) {
     *PENDING.lock().unwrap_or_else(|e| e.into_inner()) = link;
 }
