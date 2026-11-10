@@ -262,12 +262,25 @@ fn main() {
     let served = runtime.block_on(tls::serve(listener, acceptor, app));
     // The host owns blocking runtimes. Drop it outside the asynchronous executor.
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
-    if let Some(loader) = loader {
-        let _ = runtime.block_on(loader);
+    // The loader can sit in a database wait or a lock held by another installer. Give it a few
+    // seconds, then leave without it so shutdown never hangs.
+    let stuck = match loader {
+        Some(loader) => runtime
+            .block_on(tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                loader,
+            ))
+            .is_err(),
+        None => false,
+    };
+    if !stuck {
+        drop(modules.lock().unwrap_or_else(|e| e.into_inner()).take());
     }
-    drop(modules.lock().unwrap_or_else(|e| e.into_inner()).take());
     if let Some(folder) = &args.instance {
         instance::Running::remove_if_ours(folder);
+    }
+    if stuck {
+        std::process::exit(if served.is_err() { 1 } else { 0 });
     }
     if served.is_err() {
         std::process::exit(1);

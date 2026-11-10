@@ -52,6 +52,7 @@ cargo(
     JS43_APP_URL: urls.app,
     JS43_WORKER_URL: urls.worker,
     JS43_BOOTSTRAP_URL: urls.bootstrap,
+    JS43_MIGRATION_URL: urls.migration,
     JS170_AUTH_URL: urls.auth,
     JS170_SERVER: join(process.env.CARGO_TARGET_DIR!, "debug/moss-shell"),
     JS170_CERTIFICATE: join(process.env.CARGO_TARGET_DIR!, "debug/moss-network")

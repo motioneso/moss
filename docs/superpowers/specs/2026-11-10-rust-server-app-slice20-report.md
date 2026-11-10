@@ -4,6 +4,8 @@
 
 - Item 1, automatic bootstrap. App-created instances get a private `modules.json` at setup. The server uses it without a flag, retries in the background and serves modules as soon as the first one is installed, with no restart. `moss-shell install-module` creates missing module tables (idempotent), records the instance owner and installs signed modules from a registry folder or address. Without `--approve`, a module asking for new permissions is refused.
 - `moss-db credentials --module-host` returns the migration-owner and worker database addresses. The server's own credentials file keeps its four fields.
+- `moss-db credentials --module-install` also returns the superuser address. `install-module` reads it from `MOSS_INSTALL_DATABASE_URL` for one run (module roles need it; the migration owner cannot create roles) and never stores it. The app does not yet call install-module with it.
+- Review round 1 fixes: the installer hands module schemas to the migration owner; shutdown waits at most five seconds for the loader. The live proof now runs the server on the real migration-owner login.
 - Module routes answer 503 until a module host is running.
 
 ## Live proof

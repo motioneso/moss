@@ -11,6 +11,9 @@ use safety_core::{
 };
 use std::path::PathBuf;
 
+/// Environment variable carrying the elevated database URL for one install run.
+pub const INSTALL_URL_VARIABLE: &str = "MOSS_INSTALL_DATABASE_URL";
+
 const USAGE: &str = "usage: moss-shell install-module --instance DIR --registry-id ID \
 (--registry-folder DIR | --registry-url URL) --root-key KEY --first-party-key KEY [--approve] MODULE...";
 
@@ -88,6 +91,15 @@ fn bootstrap_steps() -> [(&'static str, &'static str); 4] {
     ]
 }
 
+/// Gives the migration owner the schemas, tables and sequences the steps created. Safe to repeat.
+const HAND_OVER: &str = "DO $$ DECLARE r record; BEGIN \
+ALTER SCHEMA moss_modules OWNER TO jarvis_migration_owner; \
+ALTER SCHEMA moss_queue OWNER TO jarvis_migration_owner; \
+FOR r IN SELECT schemaname AS s, tablename AS n FROM pg_tables WHERE schemaname IN ('moss_modules','moss_queue') LOOP \
+EXECUTE format('ALTER TABLE %I.%I OWNER TO jarvis_migration_owner', r.s, r.n); END LOOP; \
+FOR r IN SELECT sequence_schema AS s, sequence_name AS n FROM information_schema.sequences WHERE sequence_schema IN ('moss_modules','moss_queue') LOOP \
+EXECUTE format('ALTER SEQUENCE %I.%I OWNER TO jarvis_migration_owner', r.s, r.n); END LOOP; END $$";
+
 /// Creates the module tables that are missing and returns the instance owner's id.
 async fn prepare_database(migrations_url: &str) -> Result<uuid::Uuid> {
     let (db, connection) = tokio_postgres::connect(migrations_url, tokio_postgres::NoTls)
@@ -105,6 +117,8 @@ async fn prepare_database(migrations_url: &str) -> Result<uuid::Uuid> {
             db.batch_execute(sql).await?;
         }
     }
+    // The server opens the host as the migration owner, so it must own what the steps made.
+    db.batch_execute(HAND_OVER).await?;
     let owner = db
         .query_opt(
             "SELECT id::text FROM app.users ORDER BY is_instance_admin DESC, created_at LIMIT 1",
@@ -119,14 +133,22 @@ pub fn run(raw: Vec<String>) -> Result<()> {
     let args = parse(raw)?;
     let file = args.instance.join("modules.json");
     let runtime = tokio::runtime::Runtime::new()?;
-    let settings = modules::read_settings(&file)?;
+    let mut settings = modules::read_settings(&file)?;
+    // Creating module roles needs a stronger login than the stored migration owner. The caller
+    // passes it in the environment for this one run; it is never written anywhere.
+    if let Ok(url) = std::env::var(INSTALL_URL_VARIABLE) {
+        settings.migrations_url = url;
+    }
     let owner = runtime.block_on(prepare_database(&settings.migrations_url))?;
     // Record the owner so the server's host can open. The server may already be waiting.
     let mut stored: serde_json::Value =
         serde_json::from_slice(&private_read(&file).map_err(anyhow::Error::msg)?)?;
     stored["admin_user_id"] = serde_json::json!(owner);
     private_write(&file, stored.to_string().as_bytes()).map_err(anyhow::Error::msg)?;
-    let settings = modules::read_settings(&file)?;
+    let mut settings = modules::read_settings(&file)?;
+    if let Ok(url) = std::env::var(INSTALL_URL_VARIABLE) {
+        settings.migrations_url = url;
+    }
     let database = runtime
         .block_on(Database::connect(
             &settings.producer_url,

@@ -72,6 +72,8 @@ fn installer_alone_brings_a_fresh_instance_to_serving_people() {
     .unwrap();
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
+    // The stored login is the real migration owner. Only the install run gets the stronger one.
+    let migration_url = std::env::var("JS43_MIGRATION_URL").unwrap();
     let bootstrap_url = std::env::var("JS43_BOOTSTRAP_URL").unwrap();
     let auth_url = std::env::var("JS170_AUTH_URL").unwrap();
     let connector_key = "ab".repeat(32);
@@ -86,7 +88,7 @@ fn installer_alone_brings_a_fresh_instance_to_serving_people() {
     // What the app writes at setup. There is no owner account and there are no module tables yet.
     private(
         &root.join("modules.json"),
-        &json!({"data":root.join("modules"),"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"notes_base":root.join("notes")}),
+        &json!({"data":root.join("modules"),"migrations_url":migration_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"notes_base":root.join("notes")}),
     );
     let client = reqwest::blocking::Client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
@@ -156,6 +158,7 @@ fn installer_alone_brings_a_fresh_instance_to_serving_people() {
     let registry = root.join("registry");
     let keys = installed::publish(&registry);
     let output = Command::new(std::env::var("JS170_SERVER").unwrap())
+        .env("MOSS_INSTALL_DATABASE_URL", &bootstrap_url)
         .arg("install-module")
         .arg("--instance")
         .arg(root)
