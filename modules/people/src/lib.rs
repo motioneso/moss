@@ -10,7 +10,6 @@ pub mod notes_format;
 pub mod notes_service;
 pub mod repository;
 pub mod repository_mutations;
-mod response_time;
 mod review;
 mod route_validation;
 mod routes;

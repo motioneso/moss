@@ -94,12 +94,16 @@ fn compiled_people_read_apis_match_typescript_on_real_database() {
         let full_probe = std::env::var("JS139_PEOPLE_PAGING_PROBE").as_deref() == Ok("1");
         let paging_actor = Uuid::parse_str(oracle["paging"]["actor"].as_str().unwrap()).unwrap();
         let paging_cases = oracle["paging"]["cases"].as_array().unwrap();
-        assert_eq!(paging_cases.len(), 21, "Keep every paging boundary case");
+        assert_eq!(paging_cases.len(), 23, "Keep every paging boundary case");
         assert_eq!(paging_cases[0]["count"], 100);
         assert_eq!(paging_cases[0]["request"]["path"], "/people");
         assert_eq!(paging_cases[1]["count"], 100);
         assert_eq!(paging_cases[1]["request"]["path"], "/people/:id/links");
-        for case in paging_cases.iter().take(if full_probe { 21 } else { 2 }) {
+        assert_eq!(paging_cases[2]["count"], 200);
+        assert_eq!(paging_cases[2]["request"]["path"], "/people");
+        assert_eq!(paging_cases[3]["count"], 200);
+        assert_eq!(paging_cases[3]["request"]["path"], "/people/:id/links");
+        for case in paging_cases.iter().take(if full_probe { 23 } else { 2 }) {
             let kind = case["kind"].as_str().unwrap();
             let reply = host
                 .call(
@@ -137,7 +141,7 @@ fn compiled_people_read_apis_match_typescript_on_real_database() {
         }
         if full_probe {
             println!(
-                "PASS People paging: 21 legacy reads at 100/250/500/999/1000/1001/1005/1006/unlimited, exact-page termination, 1005 aliases and emails including a duplicate; default host limits unchanged"
+                "PASS People paging: 23 legacy reads at 100/200/250/500/999/1000/1001/1005/1006/unlimited, exact-page termination, 1005 aliases and emails including a duplicate; default host limits unchanged"
             );
         } else {
             println!("PASS default-budget People lists: 100 complete people and links from a 1005-person account; larger reads remain unqualified");
