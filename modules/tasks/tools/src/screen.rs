@@ -155,13 +155,26 @@ pub fn render() -> String {
                 </form>
                 <div id="task-extras" hidden class="tasks-fields">
                     <section aria-labelledby="subtasks-heading"><h3 id="subtasks-heading">"Subtasks"</h3>
+                        <p id="subtasks-loading" hidden role="status">"Loading subtasks…"</p>
+                        <div id="subtasks-error" hidden role="alert">
+                            <p>"Could not load subtasks. Any previously loaded subtasks are still shown."</p>
+                            {action("retry-subtasks", "Retry subtasks")}
+                        </div>
+                        <p id="subtasks-empty" hidden role="status">"No subtasks yet."</p>
                         <div id="subtasks"></div>
                         <form id="subtask-form" class="tasks-inline">
                             <Field><FormLabel control_id="subtask-title">"New subtask"</FormLabel><input id="subtask-title" class="jds-input" required maxlength="500"/></Field>
                             <Button kind=ButtonType::Submit variant=ButtonVariant::Secondary>"Add subtask"</Button>
                         </form>
                     </section>
-                    <section aria-labelledby="tags-heading"><h3 id="tags-heading">"Tags"</h3><div id="task-tags" class="tasks-actions"></div>
+                    <section aria-labelledby="tags-heading"><h3 id="tags-heading">"Tags"</h3>
+                        <p id="task-tags-loading" hidden role="status">"Loading list tags…"</p>
+                        <div id="task-tags-error" hidden role="alert">
+                            <p>"Could not load list tags. Assigned tags and previously loaded choices are still shown."</p>
+                            {action("retry-task-tags", "Retry list tags")}
+                        </div>
+                        <p id="task-tags-empty" hidden role="status">"No tags in this list yet."</p>
+                        <div id="task-tags" class="tasks-actions"></div>
                         <form id="tag-form" class="tasks-inline">
                             <Field><FormLabel control_id="tag-name">"New tag"</FormLabel><input id="tag-name" class="jds-input" required maxlength="100"/></Field>
                             <Button kind=ButtonType::Submit variant=ButtonVariant::Secondary>"Create and assign tag"</Button>
