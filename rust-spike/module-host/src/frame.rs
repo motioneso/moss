@@ -11,7 +11,7 @@ use anyhow::{ensure, Context, Result};
 use serde::Serialize;
 use std::collections::BTreeMap;
 
-pub const SANDBOX: &str = "allow-scripts";
+pub const SANDBOX: &str = "allow-scripts allow-forms";
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Screen {
@@ -48,7 +48,7 @@ impl AssetPolicy {
         let base = format!("{}/module-ui/{id}/{digest}/ui/", self.origin);
         let shared = format!("{}/module-shared/", self.origin);
         BTreeMap::from([
-            ("Content-Security-Policy".into(),format!("default-src 'none'; sandbox allow-scripts; script-src {base} 'wasm-unsafe-eval'; style-src {base} {shared}park-press.css; style-src-attr 'unsafe-inline'; connect-src {base}; img-src {base}; font-src {shared}; base-uri 'none'; form-action 'none'; frame-ancestors 'self'")),
+            ("Content-Security-Policy".into(),format!("default-src 'none'; sandbox allow-scripts allow-forms; script-src {base} 'wasm-unsafe-eval'; style-src {base} {shared}park-press.css; style-src-attr 'unsafe-inline'; connect-src {base}; img-src {base}; font-src {shared}; base-uri 'none'; form-action 'none'; frame-ancestors 'self'")),
             ("Access-Control-Allow-Origin".into(),"null".into()),
             ("Cross-Origin-Resource-Policy".into(),"cross-origin".into()),
             ("X-Content-Type-Options".into(),"nosniff".into()),

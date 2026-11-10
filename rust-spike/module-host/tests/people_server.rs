@@ -290,7 +290,7 @@ fn installed_people_package_serves_routes_from_the_real_server() {
         .unwrap();
     assert_eq!(asset.status(), 200, "screen file without a session");
     let csp = asset.headers()["content-security-policy"].to_str().unwrap().to_owned();
-    assert!(csp.contains("sandbox allow-scripts") && csp.contains(&origin), "{csp}");
+    assert!(csp.contains("sandbox allow-scripts allow-forms") && csp.contains(&origin), "{csp}");
     assert_eq!(
         client
             .get(format!("{origin}/api/modules/people/screen?path=/nope"))
