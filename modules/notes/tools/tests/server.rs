@@ -498,7 +498,7 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     // Linking the folder also created the account's fifteen-minute sync schedule. Add a
     // note, make the schedule due now, and wait for the server's own scheduler and worker
     // to index it without any manual sync request.
-    let schedule_sql = "SELECT cron FROM moss_queue.schedules WHERE actor_user_id=$1 AND queue='notes.sync-tick' AND disabled_reason IS NULL";
+    let schedule_sql = "SELECT cron FROM moss_queue.schedules WHERE actor_user_id=$1 AND queue LIKE '%.notes.sync-tick' AND disabled_reason IS NULL";
     assert_eq!(rows(schedule_sql), vec!["*/15 * * * *".to_string()]);
     fs::write(
         journal.join("tick.md"),
@@ -516,7 +516,7 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
             });
             let changed = db
                 .execute(
-                    "UPDATE moss_queue.schedules SET next_at=now()-interval '1 minute' WHERE actor_user_id=$1 AND queue='notes.sync-tick'",
+                    "UPDATE moss_queue.schedules SET next_at=now()-interval '1 minute' WHERE actor_user_id=$1 AND queue LIKE '%.notes.sync-tick'",
                     &[&owner],
                 )
                 .await
