@@ -452,10 +452,32 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     assert_eq!(got["path"], json!(journal), "{got}");
     let (status, state) = call(Method::GET, "/notes-last-sync", Some(&cookie), None);
     assert_eq!(status, 200, "{state}");
+    // An unfinished request for this folder already waits. Sync now must join it
+    // and return its id instead of queueing a second pass.
+    let waiting = "0b000000-0000-4000-8000-0000000000b1";
+    {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+                .await
+                .unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            let checkpoint = json!({"sourcePath": got["path"]});
+            db.execute(
+                "INSERT INTO app.notes_sync_checkpoints (id, owner_user_id, checkpoint) VALUES ($1::text::uuid, $2, $3::text::jsonb)",
+                &[&waiting, &owner, &checkpoint.to_string()],
+            )
+            .await
+            .unwrap();
+        });
+    }
     let sync = call(Method::POST, "/notes/sync", Some(&cookie), Some(json!({})));
     println!("sync request answered {} {}", sync.0, sync.1);
     assert_eq!(sync.0, 202, "{}", sync.1);
-    assert!(sync.1["jobId"].is_string(), "{}", sync.1);
+    assert_eq!(sync.1["jobId"], waiting, "the request must join the waiting one: {}", sync.1);
+    println!("manual sync joined the unfinished request instead of queueing another");
     // The server's own worker runs the sync: wait for the rows it indexed.
     let rows = |sql: &'static str| -> Vec<String> {
         let runtime = tokio::runtime::Runtime::new().unwrap();
