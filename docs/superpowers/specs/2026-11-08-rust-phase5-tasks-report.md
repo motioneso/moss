@@ -2070,3 +2070,27 @@ release note Category N/A.
 Remaining: footer uses the name "Moss" instead of the user's saved assistant name (review round 2; the package screen has no assistant-name source yet); per-queue retry/retention in the host; public People linkage; email triage
 feedback; Today/chat focus links; installed chat and summary presentation; real shell
 integration; performance budgets; physical second-device HTTPS proof.
+
+## Tasks part 32 checkpoint (JS-192, Card 526)
+
+The task editor in the installed package now has the legacy "Assigned to" field, and the
+"N tasks it created for you" footer uses the saved assistant name. The package host passes
+the signed-in name and the assistant's name along with the theme (read from the shell's
+own data endpoint); the screen shows "<name> · you" and falls back to "You" and "Moss"
+when the host gives nothing. No route, tool, job, migration or host contract changed.
+
+Checked: all 42 screen tests pass against the real compiled screen, including a new test
+that feeds a name and an assistant name and checks both strings. On the real HTTPS server
+(signed in as a freshly created owner, real browser) the editor shows the Assigned to
+field with the fallback "You", because the package-check frame has no shell data endpoint.
+
+Not proven: the name path against the real shell (needs the application shell to host
+module screens), a second physical device, a task made by a chat tool showing its source
+mark. The scripted live gate (`test:rust-tasks-ui`) was driven by hand this time and its
+own scripted-task assertion failed because no scripted browser run created that task; this
+is a gate-driver gap, not a product failure. Workshop and Food remain excluded. Part of
+#4027; release note Category N/A.
+
+Remaining: per-queue retry/retention in the host; email triage feedback; Today/chat focus
+links; installed chat and summary presentation; real shell integration (also needed for
+the account name); performance budgets; physical second-device HTTPS proof.

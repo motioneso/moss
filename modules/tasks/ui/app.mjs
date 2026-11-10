@@ -7,7 +7,8 @@ import {
   driftMark,
   effortLabel,
   isAssistantSource,
-  trackingNote
+  trackingNote,
+  assigneeLabel
 } from "./row-marks.mjs";
 import { taskFilters } from "./filters.mjs";
 import { tagManager } from "./tags.mjs";
@@ -23,6 +24,7 @@ import { taskDetails } from "./details.mjs";
 const client = moduleClient();
 const $ = (id) => document.getElementById(id);
 const state = {
+  assistantName: "",
   tasks: [],
   timeZone: null,
   editorTimeZone: null,
@@ -285,7 +287,7 @@ function render() {
   result.replaceChildren();
   result.className = $("view").value === "matrix" ? "tasks-matrix" : "";
   show("empty", tasks.length === 0);
-  const tracked = trackingNote(assistantTrackedCount(tasks));
+  const tracked = trackingNote(assistantTrackedCount(tasks), state.assistantName);
   $("tracking-note").textContent = tracked;
   show("tracking-note", tracked !== "");
   for (const { title, subtitle, tasks: grouped } of taskGroups(tasks, $("view").value)) {
@@ -588,6 +590,12 @@ void client
     if (typeof theme?.theme === "string") document.documentElement.dataset.theme = theme.theme;
     if (typeof theme?.colorMode === "string")
       document.documentElement.dataset.colorMode = theme.colorMode;
+    // The host passes the signed-in name and the assistant's name along with the theme.
+    $("task-assignee").textContent = assigneeLabel(theme?.displayName);
+    if (typeof theme?.assistantName === "string") {
+      state.assistantName = theme.assistantName;
+      if (state.tasks) render();
+    }
   })
   .catch(() => {});
 window.addEventListener("beforeunload", (event) => {

@@ -114,6 +114,9 @@ pub fn render() -> String {
                     <Field><FormLabel control_id="description">"Description"</FormLabel>
                         <textarea id="description" name="description" class="jds-input" rows="4"></textarea>
                     </Field>
+                    <Field><FormLabel control_id="task-assignee">"Assigned to"</FormLabel>
+                        <output id="task-assignee" class="jds-caption">"You"</output>
+                    </Field>
                     <div class="tasks-columns">
                         <Field><FormLabel control_id="task-list">"List"</FormLabel><select id="task-list" name="listId" class="jds-input" required></select></Field>
                         <Field><FormLabel control_id="task-status">"Status"</FormLabel>

@@ -25,7 +25,16 @@ export function assistantTrackedCount(tasks) {
   return tasks.filter((task) => task.status !== "done" && isAssistantSource(task.source)).length;
 }
 
-export function trackingNote(count, assistantName = "Moss") {
+// The assistant's saved name comes from the host; a blank or missing one falls back to Moss.
+export function trackingNote(count, assistantName) {
   if (!count) return "";
-  return `${assistantName} is tracking ${count} ${count === 1 ? "task" : "tasks"} it created for you. Each is marked by source.`;
+  const name =
+    typeof assistantName === "string" && assistantName.trim() ? assistantName.trim() : "Moss";
+  return `${name} is tracking ${count} ${count === 1 ? "task" : "tasks"} it created for you. Each is marked by source.`;
+}
+
+// "<name> · you" when the host supplies the account name, plain "You" otherwise.
+export function assigneeLabel(displayName) {
+  const name = typeof displayName === "string" ? displayName.trim() : "";
+  return name ? `${name} · you` : "You";
 }

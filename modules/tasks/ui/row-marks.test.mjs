@@ -5,7 +5,8 @@ import {
   driftMark,
   effortLabel,
   isAssistantSource,
-  trackingNote
+  trackingNote,
+  assigneeLabel
 } from "./row-marks.mjs";
 
 const now = new Date("2026-11-10T20:00:00Z");
@@ -49,4 +50,17 @@ test("tracking note counts open assistant tasks", () => {
   assert.match(trackingNote(2), /tracking 2 tasks/);
   assert.match(trackingNote(1), /tracking 1 task /);
   assert.equal(trackingNote(0), "");
+});
+
+test("tracking note uses the saved assistant name", () => {
+  assert.match(trackingNote(2, "Jarvis"), /^Jarvis is tracking 2 tasks/);
+  assert.match(trackingNote(2, "  "), /^Moss is tracking/);
+  assert.match(trackingNote(2, undefined), /^Moss is tracking/);
+});
+
+test("assignee shows the account name or plain You", () => {
+  assert.equal(assigneeLabel("Ben"), "Ben · you");
+  assert.equal(assigneeLabel(" Ben "), "Ben · you");
+  assert.equal(assigneeLabel(""), "You");
+  assert.equal(assigneeLabel(undefined), "You");
 });
