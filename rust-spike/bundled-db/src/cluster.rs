@@ -196,7 +196,12 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// `initdb` writes into a side folder that is renamed into place only once it is complete,
 /// so a crash or power cut during the first run leaves nothing half made.
 pub fn initialize(layout: &Layout, bundle: &Bundle) -> Result<bool, String> {
-    if layout.data.join("PG_VERSION").is_file() {
+    // An unfinished first run can leave PG_VERSION behind, so the marker is checked first.
+    #[cfg(windows)]
+    let interrupted = layout.root.join("initdb-unfinished").exists();
+    #[cfg(not(windows))]
+    let interrupted = false;
+    if !interrupted && layout.data.join("PG_VERSION").is_file() {
         return Ok(false);
     }
     // Windows keeps the data folder open as a pinned handle, so it cannot be replaced by a

@@ -296,7 +296,10 @@ fn stop(options: &Options) -> Result<ExitCode, String> {
     #[cfg(windows)]
     {
         layout.check_run().map_err(|e| e.to_string())?;
-        std::fs::write(layout.run.join(STOP_REQUEST), pid.to_string())
+        // Written whole, then renamed into place, so the supervisor never reads it half made.
+        let pending = layout.run.join(format!("{STOP_REQUEST}.tmp"));
+        std::fs::write(&pending, pid.to_string())
+            .and_then(|_| std::fs::rename(&pending, layout.run.join(STOP_REQUEST)))
             .map_err(|e| format!("stop request: {e}"))?;
     }
     while cluster::holder(&layout)?.is_some() {
