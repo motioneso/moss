@@ -747,6 +747,7 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
                 .unwrap()
         });
         let folder_database = app.clone();
+        let archive_database = app.clone();
         let cipher = safety_core::secret::SecretCipher::connectors(
             &std::collections::HashMap::from([(
                 "JARVIS_CONNECTOR_SECRET_KEY".into(),
@@ -781,20 +782,28 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
                     std::collections::BTreeMap::new(),
                 )
                 .unwrap()
-                .with_account_base(notes_base);
-                Ok(Arc::new(LinkedNotesPorts::new(Arc::new(folders), services)))
+                .with_account_base(notes_base.clone());
+                let linked: Arc<dyn moss_module_host::runtime::Ports> =
+                    Arc::new(LinkedNotesPorts::new(Arc::new(folders), services));
+                Ok(Arc::new(
+                    moss_module_host::folder_settings::FolderSettingsPorts::new(
+                        archive_database,
+                        std::collections::BTreeMap::from([(
+                            ("notes".to_string(), "source".to_string()),
+                            moss_module_host::folder_settings::FolderSetting {
+                                path_key: "notes-source-path".into(),
+                                status_key: "notes-last-sync".into(),
+                                roots: std::collections::BTreeMap::new(),
+                            },
+                        )]),
+                        linked,
+                    )
+                    .unwrap()
+                    .with_account_base(notes_base),
+                ))
             },
         )
         .unwrap();
-        for name in ["requestNotesSync"] {
-            let r = application.installer.call(
-                "notes",
-                AccessContext::new(owner, "notes-diag"),
-                "api",
-                &json!({"name":name,"parameters":{}}).to_string(),
-            );
-            println!("DIAG {name} -> {:?}", r.map_err(|e| format!("{e:#}")));
-        }
         let archive = |sessions: Value| -> Value {
             serde_json::from_str(
                 &application
