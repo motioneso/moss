@@ -1334,8 +1334,7 @@ no effect on another account or an administrator, and the three error cases. The
 gate turns the switch off through the real control in a real browser, reads it back from the server
 (briefings off, planning still on) and sees it stay off after a reload. Nothing rewritten.
 
-One unexplained blip: the first server-gate run failed at account sign-up with 422 before reaching
-Calendar; an identical rerun passed. The test now prints the sign-up body if it recurs.
+One unexplained blip: the server test fails at account sign-up (422 "Failed to create user") when it runs in the same database right after the other Calendar tests, and passes when run alone (as in earlier parts). The test now prints the sign-up body.
 
 Not proven: provider execution, the four provider tools end to end, retry/recover/confirm running a
 change, a second account in a browser, a second physical device. The write-back and planning
