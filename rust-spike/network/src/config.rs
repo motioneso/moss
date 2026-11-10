@@ -162,6 +162,8 @@ pub fn private_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
         file.write_all(bytes)
             .and_then(|_| file.sync_all())
             .map_err(|_| "Cannot save private configuration")?;
+        // Windows refuses to rename a file that is still open.
+        drop(file);
         fs::rename(&tmp, path).map_err(|_| "Cannot replace private configuration")
     })();
     if result.is_err() {
