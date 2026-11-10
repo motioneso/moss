@@ -7,8 +7,8 @@ APIs through an installed consumer fixture; the report records the current resul
 application still needs to compose that package into its real Settings and chat flows.
 The normal People gate compares complete 100-person and 100-link lists from a
 1,005-person account against the real legacy handlers, under the unchanged default host budgets.
-The optional 21-case large-account diagnostic also covers links and larger limits.
-It is **currently red**: both 100-row responses pass, then the 250-person response
+The optional 23-case large-account diagnostic also covers links and larger limits.
+It is **currently red**: both 100-row responses pass, then the 200-person response
 exhausts Wasm fuel during response formatting. Later cases are not reached;
 large-account parity remains unproved.
 With the task-owned build environment and generated component prepared as below, reproduce

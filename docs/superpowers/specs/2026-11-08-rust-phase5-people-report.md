@@ -2609,3 +2609,79 @@ The final receipt commit changes only this report; the runtime, manifest and
 gate inputs remain those tested at `bb8e8e168`. The checkpoint PR and recipe
 proof retain the evidence after task scratch is removed. See the Herdr review record and checkpoint PR for the final review verdict.
 The remaining acceptance list above is still open.
+
+## Part 23 — qualify the large-read failure boundary (checkpoint)
+
+Before editing, the task branch was fast-forwarded to `4c66ea048`, including
+merged People part 22 (PR 4149). No runtime optimization survived this checkpoint.
+Public interfaces, tables, privacy rules and host budgets are unchanged.
+
+The diagnostic now includes 200-person and 200-link requests between the existing
+100 and 250 boundaries, for 23 legacy cases. The ordinary gate still qualifies
+only complete 100-person and 100-link responses; it does not claim the larger
+cases pass. The module app map records the observed 200-contact fuel failure.
+
+The unchanged core Wasm was frozen before editing: SHA-256
+`abb4cddc6ecdfcfb24abe34d42605ad9cc2fafccb4dcd3640ced4f2f814cae9b`.
+Its explicitly wrapped component has SHA-256
+`7a57d5dcfabe9e231f5a36a3ef9cd842b61098cdb4490fdfd79a432834b0ffbe`.
+Baseline probe `20261109-180655-x91hdq` passes both complete 100-row responses,
+then exhausts fuel constructing the 200-person response (exit 101).
+
+Separate canonical timestamp, single-pass row conversion and confidence formatting
+experiments still failed at 250 contacts. Their combination also failed at 200
+contacts in probe `20261109-180853-VJjz0n` (exit 101). Those experiments were removed:
+no improved boundary was demonstrated. The final runtime source matches part 22.
+The diagnostic remains deliberately red until the resource gap is fixed; raising
+budgets, truncating results or changing the public interface was not used to hide it.
+
+Builds use task-owned Cargo, rustup and targets in scratch. Existing pinned
+toolchains and declared dependency caches were copied there; missing locked
+dependencies and both declared Wasm targets were fetched there. The already
+approved `wit-bindgen =0.57.1` remains a local project dependency. No global
+tool or new third-party dependency was installed. Limited disk space required
+moving this task's scratch onto available memory-backed storage.
+
+The shipping server router in `rust-spike/shell/app/src/main.rs` still lacks
+the installed People route/frame and chat-tool composition. Real UI acceptance,
+sign-in/origin/privacy acceptance and a second physical device over HTTPS remain
+unproved. Full large-account reads, complete locale ordering, listener parser
+qualification, ingest nudges, real providers, installed scheduling, command
+retention/quotas and broader backend failures also remain open. This is a
+partial diagnostic checkpoint, not completed Phase 5 acceptance.
+
+### Part 23 final receipts
+
+All database checks used `scripts/run-gate.sh` with task-owned Cargo/rustup/target
+directories and isolated throwaway PostgreSQL servers. The final component is the
+frozen part 22 component above; `git diff 4c66ea048 -- modules/people/src` is empty.
+The package rebuilt with the updated manifest has SHA-256
+`7dbf0e4c5316adc2eba6b5feb82a22763bbf47eb5a1c52742ba87f6e4fe08777`.
+
+- Ordinary gate `20261109-181128-cidIV2`: **exit 0**, 11 tests across 10 suites.
+  Exact legacy API, tool, job, notes, persistence and settings comparisons pass.
+  Privacy controls fail with protections removed and pass when restored for all
+  seven tables under app/worker roles, including other-user/admin attempts;
+  owner-only folder preferences are separately qualified the same way.
+  Complete 100-person and 100-link reads pass; larger lists are not claimed.
+- Installed-package gate `20261109-181842-sMYeOj`: **exit 0**. Signed package
+  download/install/reload, all four public APIs through an installed consumer,
+  219 legacy route responses and all seven table snapshots match. The standalone
+  downstream JSON parser and browser-bridge tests also pass. These are fixture
+  checks, not a live shipping application or browser/device check.
+- Final explicit diagnostic `20261109-182201-b0MXma`: **exit 101** (wait exits 1).
+  The two 100-row responses pass, then the 200-contact request exhausts fuel in
+  `repository::response` / JSON indexing. The 200-link and later cases are not
+  reached. This reproduces the failure using the final diagnostic and unchanged
+  component; it is not a passing full parity run.
+- Native People tests: **34 passed**. Rust formatting, scoped TypeScript lint,
+  scoped Prettier and app-map generation pass. The proof retains final static
+  check output and the independent review record.
+
+Gate receipts identify the intermediate commit `edcff21ef` plus dirty input
+fingerprints (`ff0c9c48fbbe` ordinary; `5d328d6f7e6f` installed/diagnostic), rather
+than a clean final commit. Final report/README receipts and removal of the
+intermediate experiment are recorded by the checkpoint commit; no tested runtime
+implementation changed afterward. Full command output is preserved in the task
+proof before scratch cleanup. The earlier privacy proofs are supplemented by
+this fresh ordinary run; none of the open application/device work is waived.
