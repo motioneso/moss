@@ -2067,6 +2067,6 @@ unported connectors module. Today/chat focus links need the application shell to
 `?focus=` into module screens. Workshop and Food remain excluded. Part of #4027;
 release note Category N/A.
 
-Remaining: per-queue retry/retention in the host; public People linkage; email triage
+Remaining: footer uses the name "Moss" instead of the user's saved assistant name (review round 2; the package screen has no assistant-name source yet); per-queue retry/retention in the host; public People linkage; email triage
 feedback; Today/chat focus links; installed chat and summary presentation; real shell
 integration; performance budgets; physical second-device HTTPS proof.
