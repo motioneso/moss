@@ -196,11 +196,10 @@ mod linux {
             return notify(title, body);
         }
         listen_for_clicks(data);
+        // The lock is held across the send so a fast click waits for the entry to exist.
+        let mut held = links().lock().unwrap_or_else(|e| e.into_inner());
         let id = send(title, body, true)?;
-        links()
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(id, (server.to_owned(), path.to_owned()));
+        held.insert(id, (server.to_owned(), path.to_owned()));
         Ok(())
     }
 

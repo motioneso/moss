@@ -97,6 +97,10 @@ pub async fn serve_in(
     app: Router,
     folder: Option<&Path>,
 ) -> Result<(), String> {
+    // A request left by an earlier run could name a reused process number.
+    if let Some(folder) = folder {
+        let _ = std::fs::remove_file(folder.join(STOP_FILE));
+    }
     // Remote connections cannot consume the owner's loopback reserve.
     let local_slots = Arc::new(Semaphore::new(32));
     let remote_slots = Arc::new(Semaphore::new(224));

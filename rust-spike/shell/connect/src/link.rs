@@ -63,13 +63,16 @@ pub fn write_request(data: &Path, request: &Request) -> Result<(), String> {
 
 /// Reads and removes the waiting request, if any. A damaged or unsafe one is dropped.
 pub fn take_request(data: &Path) -> Option<Request> {
-    let path = data.join(REQUEST);
-    let bytes = private_read(&path).ok()?;
+    // Moving the file aside first means a newer request written meanwhile is never removed.
+    let path = data.join("open-request.taking");
+    std::fs::rename(data.join(REQUEST), &path).ok()?;
+    let bytes = private_read(&path);
     let age = std::fs::metadata(&path)
         .and_then(|m| m.modified())
         .ok()
         .and_then(|t| std::time::SystemTime::now().duration_since(t).ok());
     let _ = std::fs::remove_file(&path);
+    let bytes = bytes.ok()?;
     // A request nobody picked up for a minute is stale; opening it later would surprise.
     if age.is_none_or(|a| a > STALE) {
         return None;

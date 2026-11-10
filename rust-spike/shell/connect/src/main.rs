@@ -158,7 +158,10 @@ fn main() {
     // One window per data folder. A second launch asks the first to come forward and leaves.
     let _ = store::private_dir(&args.data);
     let Some(_window_lock) = link::window_lock(&args.data) else {
-        let _ = link::write_request(&args.data, &link::Request { server: None, path: None });
+        // A destination already waiting for the first window must not be overwritten.
+        if !args.data.join("open-request.json").exists() {
+            let _ = link::write_request(&args.data, &link::Request { server: None, path: None });
+        }
         std::process::exit(0);
     };
     let store = Store::new(args.data);
@@ -376,6 +379,8 @@ impl App {
                 {
                     if view.id == id {
                         let _ = view.view.load_url(&format!("{}{path}", view.origin));
+                        self.screen.clear();
+                        self.restore_views();
                         return;
                     }
                 }
