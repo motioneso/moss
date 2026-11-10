@@ -165,3 +165,48 @@ scratch directory and `MOSS_PROOF_PORT` to that port, then run
 imports a scratch Docker root with the stage and an explicit shell/interpreter baseline, with
 no host mounts or external network; it exercises real PostgreSQL, migrations, pgvector,
 certificate generation, HTTPS hello, Stop and data-preserving uninstall. It does not load the UI.
+
+### Explicit module-host assembly checkpoint (slice 18)
+
+`moss-shell --modules <private-modules.json>` opts into the existing extended module
+application and its server-owned worker. Normal launches without this argument keep the
+previous behavior. The file must pass the same private-file checks as network credentials:
+
+```json
+{
+  "data": "<absolute module data folder>",
+  "admin_user_id": "<existing instance administrator UUID>",
+  "migrations_url": "<existing host migration-service database URL>",
+  "producer_url": "<jarvis_app_runtime database URL>",
+  "worker_url": "<jarvis_worker_runtime database URL>",
+  "connector_key": "<existing connector encryption key>"
+}
+```
+
+This is an explicit assembly for an **existing approved catalog** and module data, not an
+installer. The database must already have the module host catalog, lifecycle and queue
+schemas; this server does not run bootstrap SQL or duplicate the Phase 1 installer. The
+app does not generate or pass this configuration yet. Module AI and embeddings fail closed
+until their configured services are assembled. Never place the private file in source control.
+
+Authenticated `/api/m/<module>/<route>` calls use the existing network guard and extended
+module dispatcher, on at most four blocking calls at once. The single owned worker repeatedly
+uses `Installer::run_job`, including due schedule advancement and the existing queue leases;
+idle or failed passes wait one second. Worker errors log a fixed event, not their diagnostic
+contents. Its owner requests shutdown and joins the current pass when the server returns.
+
+Extended-host `notify.post` commits recipient-owned `app.notifications` rows in the guest
+invocation transaction, using the authenticated actor and installed module ID. A failed
+invocation rolls them back; desktop acceptance remains independent of bell reads. The older
+non-extended service assembly retains its module-local notification files.
+
+The bridge respects the actor's `notifications:<module ID>` disabled preference. It currently
+accepts only a text title: body, urgency, event identity, links and deduplication are not
+ported. Quiet-hours authority and deferred delivery are also unimplemented. Do not enable
+real reminder producers through this opt-in assembly until those policies are ported and
+qualified. This checkpoint only qualifies a synthetic assembly fixture.
+
+`test:rust-module-assembly`, through verify-gate with task-owned Rust directories, exercises
+the actual HTTPS executable with a synthetic signed Wasm module and an overdue schedule.
+It is not proof of real reminder producers, native banners, background notifications after
+app quit, or a second device. Those remain the next qualification work.

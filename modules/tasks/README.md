@@ -75,7 +75,10 @@ requires one-use approval. The summary's timezone and local date now reflect the
 account locale. Missing or invalid zones retain the legacy fallback. Consecutive
 midnights follow DST rather than assuming every day lasts twenty-four hours.
 
-Current remaining work: lazy recurrence advancement, recurrence jobs, full
+Part 29 adds lazy recurrence advancement: the list and focus, at-risk and overdue
+reads (routes and tools) first move each stale owned series to its next occurrence
+on the account's local day, as the legacy server does. Current remaining work:
+recurrence jobs, full
 deferred-queue policy and installed worker dispatch, public People linkage,
 policy/feedback orchestration, remaining screen/settings parity, installed chat and summary presentation,
 real application shell integration, performance budgets and physical second-device
