@@ -150,11 +150,17 @@ pub fn find_unfinished(host: &impl Host, plan_id: &str, key: &str) -> Result<Opt
         return Ok(None);
     };
     let id = header["id"].as_str().ok_or_else(unreadable)?;
-    let items = query(host, ITEMS, &Query::select(Filter::eq("operation_id", id)))?;
-    let open = items
-        .iter()
-        .any(|row| matches!(row["outcome"].as_str(), Some("pending" | "unknown")));
-    Ok(open.then(|| id.to_owned()))
+    let mut open = Query::select(Filter::And {
+        filters: vec![
+            Filter::eq("operation_id", id),
+            Filter::In {
+                column: "outcome".into(),
+                values: vec![json!("pending"), json!("unknown")],
+            },
+        ],
+    });
+    open.limit = Some(1);
+    Ok((!query(host, ITEMS, &open)?.is_empty()).then(|| id.to_owned()))
 }
 
 /// Writes any missing item rows (unique per batch and block) and returns the batch.

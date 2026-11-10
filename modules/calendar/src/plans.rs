@@ -374,6 +374,21 @@ pub fn append_blocks(
         return Err(Error::new(409, "day plan changed since it was read"));
     }
     require_tasks(host, &json!({}), &rows)?;
+    // The revision is claimed before any block is written, so a conflicting save
+    // leaves nothing behind.
+    let now = context(host, "read", "call")?["now"].clone();
+    let updated = query(
+        host,
+        PLANS,
+        &Query::update(
+            both(vec![Filter::eq("id", plan_id), Filter::eq("revision", expected_revision)]),
+            values(json!({"revision":expected_revision+1,"updated_at":now})),
+        ),
+    )?;
+    let row = updated
+        .first()
+        .ok_or_else(|| Error::new(409, "day plan changed since it was read"))?
+        .clone();
     let stored = blocks(host, plan_id)?;
     let mut position = stored.iter().filter_map(|b| b["position"].as_i64()).max().map_or(0, |p| p + 1);
     for mut row in rows {
@@ -390,17 +405,5 @@ pub fn append_blocks(
         position += 1;
         query(host, BLOCKS, &Query::insert(values(row)))?;
     }
-    let now = context(host, "read", "call")?["now"].clone();
-    let updated = query(
-        host,
-        PLANS,
-        &Query::update(
-            both(vec![Filter::eq("id", plan_id), Filter::eq("revision", expected_revision)]),
-            values(json!({"revision":expected_revision+1,"updated_at":now})),
-        ),
-    )?;
-    let row = updated
-        .first()
-        .ok_or_else(|| Error::new(409, "day plan changed since it was read"))?;
-    Ok(json!({"plan":dto(host, row)?}))
+    Ok(json!({"plan":dto(host, &row)?}))
 }

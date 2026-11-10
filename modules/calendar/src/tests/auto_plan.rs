@@ -19,6 +19,7 @@ fn matches(row: &Value, filter: &Value) -> bool {
     match filter["type"].as_str() {
         Some("and") => filter["filters"].as_array().unwrap().iter().all(|f| matches(row, f)),
         Some("compare") => row[filter["column"].as_str().unwrap()] == filter["value"],
+        Some("in") => filter["values"].as_array().unwrap().contains(&row[filter["column"].as_str().unwrap()]),
         _ => true,
     }
 }

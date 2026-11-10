@@ -1309,7 +1309,12 @@ with Rust 1.95.0; the Wasm build passes. The signed-package database gate now al
 second linked from a real cached event, a duplicate fire converged to one batch, another account sees
 nothing.
 
-Not proven: any caller (no Briefings package), the apply job that would settle the batch, a second
-account over HTTP, a second physical device. Still required: Connectors, Tasks and Briefings
+Review round 1 (codex) found two majors, both fixed. Appending blocks now claims the plan revision
+before writing any block, so a conflicting save leaves nothing behind. The unfinished-batch lookup
+now asks the database for one pending or unknown item instead of reading the first 1000 items.
+
+Not proven: a save landing between the revision claim and the block writes (the order is the
+protection, there is no concurrent test), a batch over 1000 items, any caller (no Briefings package),
+the apply job that would settle the batch, a second account over HTTP, a second physical device. Still required: Connectors, Tasks and Briefings
 adapters, apply execution, retry/recover/confirm running a change, source behavior and
 external-calendar status controls, full shell and chat, old-screen replacement, complete parity.
