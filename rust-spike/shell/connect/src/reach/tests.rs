@@ -323,3 +323,30 @@ async fn stop_refuses_to_stop_the_database_without_a_reachable_server() {
         .exists());
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+/// The Windows stop route: a request file naming the server's process id ends the server, and
+/// a request naming another process (a leftover from an earlier run) does not.
+#[tokio::test]
+async fn stop_request_file_ends_only_the_server_it_names() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let origin = format!("https://127.0.0.1:{}", listener.local_addr().unwrap().port());
+    let dir = scratch("stop-file");
+    let certs = dir.join("certs");
+    moss_network::tls::local_certificate(&certs, std::slice::from_ref(&origin)).unwrap();
+    let acceptor =
+        moss_network::tls::acceptor(&certs.join("certificate.pem"), &certs.join("key.pem")).unwrap();
+    let folder = dir.clone();
+    let mut served = tokio::spawn(async move {
+        moss_network::tls::serve_in(listener, acceptor, moss(), Some(&folder)).await
+    });
+    super::request_stop_by_file(&dir, std::process::id() + 1).unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_millis(900), &mut served).await.is_err(),
+        "a request for another process must not stop this server"
+    );
+    assert!(!dir.join(moss_network::tls::STOP_FILE).exists(), "the request is consumed");
+    super::request_stop_by_file(&dir, std::process::id()).unwrap();
+    let ended = tokio::time::timeout(Duration::from_secs(5), served).await;
+    assert!(matches!(ended, Ok(Ok(Ok(())))), "the named server stops");
+    std::fs::remove_dir_all(dir).unwrap();
+}

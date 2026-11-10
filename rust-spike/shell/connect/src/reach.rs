@@ -521,38 +521,50 @@ pub async fn stop_local(install: &Path, folder: &Path) -> Result<(), Problem> {
     .map_err(|_| Problem::Unreachable)??;
     // Unreachable is not proof of death: leave the database alone if hello cannot answer.
     let (running, _) = local(folder).await?;
-    #[cfg(unix)]
-    {
-        if running.pid == 0 || running.pid > i32::MAX as u32 {
-            return Err(Problem::Unreachable);
-        }
-        // SAFETY: plain signal to a process whose certificate answered for this folder just now.
-        if unsafe { libc::kill(running.pid as i32, libc::SIGTERM) } != 0 {
-            return Err(Problem::Unreachable);
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = running;
+    if running.pid == 0 || running.pid > i32::MAX as u32 {
         return Err(Problem::Unreachable);
     }
-    #[cfg(unix)]
-    {
-        for _ in 0..120 {
-            still_running(folder);
-            if !folder.join(RUNNING_FILE).exists() {
-                let (i, f) = (install.to_owned(), folder.to_owned());
-                return tokio::task::spawn_blocking(move || {
-                    crate::provision::stop_database(&i, &f)
-                })
+    request_stop(folder, running.pid)?;
+    for _ in 0..120 {
+        still_running(folder);
+        if !folder.join(RUNNING_FILE).exists() {
+            let (i, f) = (install.to_owned(), folder.to_owned());
+            // Where there is no database program yet (Windows) this finds nothing to stop.
+            return tokio::task::spawn_blocking(move || crate::provision::stop_database(&i, &f))
                 .await
                 .map_err(|_| Problem::Unreachable)?
                 .map_err(|_| Problem::Unreachable);
-            }
-            tokio::time::sleep(Duration::from_millis(250)).await;
         }
-        Err(Problem::Unreachable)
+        tokio::time::sleep(Duration::from_millis(250)).await;
     }
+    Err(Problem::Unreachable)
+}
+
+/// Asks the server whose certificate just answered for this folder to shut down.
+#[cfg(unix)]
+fn request_stop(_folder: &Path, pid: u32) -> Result<(), Problem> {
+    // SAFETY: plain signal to a process whose certificate answered for this folder just now.
+    if unsafe { libc::kill(pid as i32, libc::SIGTERM) } != 0 {
+        return Err(Problem::Unreachable);
+    }
+    Ok(())
+}
+
+/// Windows has no termination signal for a background program, so the request is a file in the
+/// server's private folder that names the server's process id.
+#[cfg(not(unix))]
+fn request_stop(folder: &Path, pid: u32) -> Result<(), Problem> {
+    request_stop_by_file(folder, pid)
+}
+
+/// The file route. Kept compiled on every platform so Linux tests exercise what Windows runs.
+#[cfg_attr(unix, allow(dead_code))]
+pub(crate) fn request_stop_by_file(folder: &Path, pid: u32) -> Result<(), Problem> {
+    moss_network::config::private_write(
+        &folder.join(moss_network::tls::STOP_FILE),
+        pid.to_string().as_bytes(),
+    )
+    .map_err(|_| Problem::Unreachable)
 }
 
 #[cfg(test)]
