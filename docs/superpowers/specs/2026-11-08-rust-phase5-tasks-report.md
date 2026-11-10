@@ -2176,3 +2176,25 @@ during a session shows after a reload.
 
 Remaining: per-queue retention in the host; email triage feedback; Today/chat focus links;
 installed chat and summary presentation; performance budgets; physical second-device HTTPS proof.
+
+## Tasks part 36 checkpoint (JS-212, Card 526)
+
+The Tasks package has a second public call, `prepareTaskRoute`, that builds the approval card
+for the routes the legacy module presents (add activity, assign and remove tag, break down,
+create, rename and delete list, create, rename and delete tag) and for the task-view preference
+change. It follows the legacy rules: path values are shown after the body values, a query
+string, an extra or missing path value, a body key that repeats a path value, or a non-object
+body gives no card, and the preference card shows "List" or "Grid" and refuses anything else.
+Another account, including an admin, gets no card for rows it cannot see.
+
+Checked: three native tests (nine in the file) pass; the full Tasks gate (`test:rust-tasks`)
+passed, including a new compiled-component test on a real database for route cards and for
+other accounts being refused; the live HTTPS gate (`test:rust-tasks-server`) passed with the
+manifest change loaded by the real server.
+
+Not proven or not built: no HTTP route exposes either call and the Rust chat drawer has no
+approval card, so no browser proof exists for this slice (the card has no screen yet); the
+card was proven against the compiled component and a real database only. Still open:
+per-queue retention in the host; email triage feedback; Today/chat focus links; installed chat
+and summary presentation; performance budgets; physical second-device HTTPS proof. Workshop
+and Food remain excluded. Part of #4027; release note Category N/A.

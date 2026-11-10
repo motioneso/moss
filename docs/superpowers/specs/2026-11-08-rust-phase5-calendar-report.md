@@ -1318,3 +1318,34 @@ protection, there is no concurrent test), a batch over 1000 items, any caller (n
 the apply job that would settle the batch, a second account over HTTP, a second physical device. Still required: Connectors, Tasks and Briefings
 adapters, apply execution, retry/recover/confirm running a change, source behavior and
 external-calendar status controls, full shell and chat, old-screen replacement, complete parity.
+
+## JS-209 / part 28: briefing and planning source switches
+
+Package 0.25.0 adds two Calendar switches, "Include in briefings" and "Use for planning", to the
+Calendar settings screen. They read and write the account's existing source-behavior preference
+(entries `calendar.briefings` and `calendar.planning`, both on by default) through a Calendar-only
+host binding. Only those two entries change; other modules' entries in the same preference are kept.
+New routes `GET` and `PATCH /source-behaviors` (signed-in; the guest accepts only the two boolean
+fields and answers 400 otherwise; the host checks again). The "Write events back" behavior is not
+a switch here: it is already controlled by the Time blocks mode, which sets the writeback tier.
+
+Live (`pnpm test:rust-calendar-server` through `scripts/run-gate.sh`, real HTTPS server, real Chrome,
+nothing rewritten): no sign-in gives 401; defaults read as both on; an unknown field gives 400; the
+browser turns "Use for planning" off through the real control, sees "Settings saved.", reads back
+planning off and briefings on, and the choice survives a reload. Review found that saving another setting reset the on-screen switches to On; fixed, and the gate now changes Look ahead after flipping a switch and checks the switch still reads Off. A failed switch read now shows both as On instead of failing the screen. Guest test
+`source_switch_patch_reaches_the_host_and_bad_bodies_do_not` and the package tests pass.
+
+Not proven: the Briefings module honoring the switches (the Rust Briefings package does not exist),
+provider execution, the four provider tools end to end, retry/recover/confirm running a change,
+external-calendar (Outlook) status controls (they belong to the Connectors package, not built), a
+second account, a second physical device over LAN or tailnet. Still required: Connectors, Tasks and
+Briefings adapters, the apply job and execution, full shell and chat, old-screen replacement,
+complete parity.
+
+## JS-211 / part 29: overlap with part 28, and a test diagnostic
+
+Part 29 first built the briefing switch independently; part 28 (#4211) merged the same feature
+first, so that work was dropped in favor of part 28's version. Part 29's only contribution is that the
+server test now prints the sign-up response body on failure. Observed before the merge: the server
+test failed at sign-up (422 "Failed to create user") when run in the same database right after the
+other Calendar tests, and passed when run alone. Cause not found.
