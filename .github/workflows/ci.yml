@@ -175,7 +175,8 @@ jobs:
 
   unit:
     name: Verify unit tests (${{ matrix.shard }}/2)
-    runs-on: ubuntu-latest
+    # Pinned: Playwright does not support Chromium on the Ubuntu 26.04 that ubuntu-latest now is.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     needs: changes
     if: needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.rust_only != 'true'
@@ -305,7 +306,8 @@ jobs:
 
   browser:
     name: Verify web and browser tests (${{ matrix.shard }}/2)
-    runs-on: ubuntu-latest
+    # Pinned: Playwright does not support Chromium on the Ubuntu 26.04 that ubuntu-latest now is.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     needs: changes
     if: needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.rust_only != 'true'
