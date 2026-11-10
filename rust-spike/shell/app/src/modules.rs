@@ -35,18 +35,20 @@ const DEFAULT_FUEL_CEILING: u64 = 250_000_000;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Settings {
-    data: PathBuf,
-    admin_user_id: uuid::Uuid,
-    migrations_url: String,
-    producer_url: String,
-    worker_url: String,
-    connector_key: String,
+pub struct Settings {
+    pub(crate) data: PathBuf,
+    /// Absent until the module installer records the instance owner.
     #[serde(default)]
-    fuel_ceiling: Option<u64>,
+    pub(crate) admin_user_id: Option<uuid::Uuid>,
+    pub(crate) migrations_url: String,
+    pub(crate) producer_url: String,
+    pub(crate) worker_url: String,
+    pub(crate) connector_key: String,
+    #[serde(default)]
+    pub(crate) fuel_ceiling: Option<u64>,
     /// Base folder for per-account notes roots (`<base>/<account id>`). Needed by People.
     #[serde(default)]
-    notes_base: Option<PathBuf>,
+    pub(crate) notes_base: Option<PathBuf>,
 }
 
 // AI configuration is not assembled by this checkpoint. Calls fail closed.
@@ -113,7 +115,7 @@ pub struct ServerModules {
     pub application: Arc<Application>,
 }
 
-pub fn open(path: &Path, database: Database) -> Result<ServerModules> {
+pub fn read_settings(path: &Path) -> Result<Settings> {
     let settings: Settings = serde_json::from_slice(
         &moss_network::config::private_read(path).map_err(anyhow::Error::msg)?,
     )?;
@@ -125,6 +127,26 @@ pub fn open(path: &Path, database: Database) -> Result<ServerModules> {
         !settings.connector_key.is_empty(),
         "Module connector key is required"
     );
+    Ok(settings)
+}
+
+/// Opens the serving host and its worker. Fails until the installer has recorded an owner.
+pub fn open(path: &Path, database: Database) -> Result<ServerModules> {
+    let settings = read_settings(path)?;
+    let worker_url = settings.worker_url.clone();
+    let application = Arc::new(application(settings, database)?);
+    let worker = Worker::start(application.installer.clone(), Secret::new(worker_url))?;
+    Ok(ServerModules {
+        _worker: worker,
+        application,
+    })
+}
+
+/// The module application without a worker, for the installer.
+pub fn application(settings: Settings, database: Database) -> Result<Application> {
+    let admin_user_id = settings
+        .admin_user_id
+        .ok_or_else(|| anyhow::anyhow!("No module has been installed yet"))?;
     let cipher = SecretCipher::connectors(
         &[("JARVIS_CONNECTOR_SECRET_KEY".into(), settings.connector_key)].into(),
     )
@@ -134,10 +156,10 @@ pub fn open(path: &Path, database: Database) -> Result<ServerModules> {
         anyhow::ensure!(base.is_absolute(), "Notes base needs an absolute path");
     }
     let preferences_database = database.clone();
-    let application = Arc::new(Application::open_extended_with(
+    let application = Application::open_extended_with(
         &settings.data,
         database,
-        AccessContext::new(settings.admin_user_id, "server-module-catalog"),
+        AccessContext::new(admin_user_id, "server-module-catalog"),
         Configuration {
             migrations: Secret::new(settings.migrations_url),
             producer: Secret::new(settings.producer_url),
@@ -151,28 +173,57 @@ pub fn open(path: &Path, database: Database) -> Result<ServerModules> {
             Some(base) => linked_notes(preferences_database, base, services),
             None => Ok(services),
         },
-    )?);
-    let worker = Worker::start(
-        application.installer.clone(),
-        Secret::new(settings.worker_url),
     )?;
-    Ok(ServerModules {
-        _worker: worker,
-        application,
-    })
+    Ok(application)
 }
 
-pub fn routes(application: Arc<Application>) -> Router {
+/// The host once it is running. Empty until the installer has put a module in.
+pub type Slot = Arc<std::sync::Mutex<Option<ServerModules>>>;
+
+pub fn routes(slot: Slot) -> Router {
     Router::new()
         .route("/api/m/{module}/{*path}", any(dispatch))
         .with_state(Arc::new(Api {
-            application,
+            slot,
             slots: Arc::new(tokio::sync::Semaphore::new(4)),
         }))
 }
 
+/// Tries to open the host every couple of seconds until it works or `stop` is set, so a module
+/// installed while the server runs is served without a restart. Blocking; run it off the
+/// async executor. Logs one fixed line, never the reason.
+pub fn load_when_ready(
+    slot: Slot,
+    path: PathBuf,
+    database: Database,
+    stop: Arc<std::sync::atomic::AtomicBool>,
+) {
+    use std::sync::atomic::Ordering;
+    let mut said = false;
+    while !stop.load(Ordering::Relaxed) {
+        match open(&path, database.clone()) {
+            Ok(host) => {
+                *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some(host);
+                eprintln!("moss-shell: module host is running");
+                return;
+            }
+            Err(_) if !said => {
+                said = true;
+                eprintln!("moss-shell: waiting for the first module to be installed");
+            }
+            Err(_) => {}
+        }
+        for _ in 0..10 {
+            if stop.load(Ordering::Relaxed) {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+    }
+}
+
 struct Api {
-    application: Arc<Application>,
+    slot: Slot,
     slots: Arc<tokio::sync::Semaphore>,
 }
 
@@ -183,6 +234,15 @@ async fn dispatch(
     uri: Uri,
     body: Bytes,
 ) -> Response {
+    let Some(application) = api
+        .slot
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .map(|host| host.application.clone())
+    else {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    };
     let Ok(slot) = api.slots.clone().try_acquire_owned() else {
         return StatusCode::TOO_MANY_REQUESTS.into_response();
     };
@@ -197,7 +257,7 @@ async fn dispatch(
         .to_owned();
     match tokio::task::spawn_blocking(move || {
         let _slot = slot;
-        api.application
+        application
             .dispatch_extended(access, method.as_str(), &target, &body)
     })
     .await

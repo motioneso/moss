@@ -20,6 +20,11 @@ use std::{
     sync::Arc,
 };
 
+/// The public keys a registry's clients trust.
+pub struct Published {
+    pub root: String,
+    pub publisher: String,
+}
 pub fn install(
     data: &Path,
     registry: &Path,
@@ -27,6 +32,33 @@ pub fn install(
     admin: &AccessContext,
     ports: Arc<dyn Ports>,
 ) -> Installer {
+    let (keys, artifacts) = publish_with_keys(registry);
+    let installer = reopen(data, database, admin, ports);
+    let source = installer
+        .refresh(
+            admin,
+            Source::Folder(registry.into()),
+            &Keys::public(&keys.root),
+            &Keys::public(&keys.publisher),
+            "people-test-registry",
+        )
+        .unwrap();
+    for artifact in &artifacts {
+        installer
+            .install(admin, &source, artifact, true)
+            .unwrap_or_else(|error| panic!("Installing {}: {error:#}", artifact.id));
+    }
+    installer
+}
+/// Writes the signed registry folder and returns the keys a client must trust.
+pub fn publish(registry: &Path) -> Published {
+    let (keys, _) = publish_with_keys(registry);
+    Published {
+        root: Keys::public(&keys.root),
+        publisher: Keys::public(&keys.publisher),
+    }
+}
+fn publish_with_keys(registry: &Path) -> (Keys, Vec<Artifact>) {
     let keys = Keys::new();
     std::fs::create_dir_all(registry.join("packages")).unwrap();
     let people =
@@ -144,22 +176,7 @@ pub fn install(
         )
         .unwrap();
     }
-    let installer = reopen(data, database, admin, ports);
-    let source = installer
-        .refresh(
-            admin,
-            Source::Folder(registry.into()),
-            &Keys::public(&keys.root),
-            &Keys::public(&keys.publisher),
-            "people-test-registry",
-        )
-        .unwrap();
-    for artifact in &artifacts {
-        installer
-            .install(admin, &source, artifact, true)
-            .unwrap_or_else(|error| panic!("Installing {}: {error:#}", artifact.id));
-    }
-    installer
+    (keys, artifacts)
 }
 fn base64_public(key: &ring::signature::Ed25519KeyPair) -> Vec<u8> {
     use ring::signature::KeyPair;

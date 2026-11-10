@@ -25,6 +25,8 @@ use std::process::{Child, Stdio};
 use std::time::{Duration, Instant};
 
 pub const DATABASE_FOLDER: &str = "database";
+/// The server's module settings, written at setup. The module installer completes it.
+pub const MODULES_FILE: &str = "modules.json";
 const FIRST_PORT: u16 = 7420;
 const READY_TIMEOUT: Duration = Duration::from_secs(180);
 
@@ -152,9 +154,10 @@ fn prepare(store: &Store, install: &Path, folder: &Path) -> Result<(), Failure> 
             }
         })?;
     ensure_database(install, folder, true)?;
-    let credentials = run_credentials(install, folder)?;
+    let (credentials, modules) = run_credentials(install, folder)?;
     let credentials_path = folder.join("credentials.json");
     private_write(&credentials_path, credentials.as_bytes()).map_err(|_| Failure::Other)?;
+    private_write(&folder.join(MODULES_FILE), modules.as_bytes()).map_err(|_| Failure::Other)?;
     Config {
         listen: std::net::SocketAddr::from(([0, 0, 0, 0], port)),
         origins,
@@ -278,24 +281,50 @@ fn read_event(log: &Path) -> Option<String> {
     last
 }
 
-fn run_credentials(install: &Path, folder: &Path) -> Result<String, Failure> {
+/// The server's credentials file text and the module settings text, both from one call.
+fn run_credentials(install: &Path, folder: &Path) -> Result<(String, String), Failure> {
     let output = crate::launch::command(install, "moss-db")
-        .args(["credentials", "--root"])
+        .args(["credentials", "--module-host", "--root"])
         .arg(folder.join(DATABASE_FOLDER))
         .stdin(Stdio::null())
         .stderr(Stdio::null())
         .output()
         .map_err(|_| Failure::DatabaseFailed)?;
     let text = String::from_utf8(output.stdout).map_err(|_| Failure::DatabaseFailed)?;
-    // Four fields or nothing; the text is written to an owner-only file and never logged.
     let value: Value = serde_json::from_str(&text).map_err(|_| Failure::DatabaseFailed)?;
-    let complete = ["app_url", "auth_url", "auth_secret", "connector_key"]
-        .iter()
-        .all(|key| value[key].as_str().is_some_and(|v| !v.is_empty()));
-    if !output.status.success() || !complete {
+    let field = |key: &str| value[key].as_str().filter(|v| !v.is_empty()).map(str::to_owned);
+    // Every field or nothing; the texts go to owner-only files and are never logged.
+    let (Some(app_url), Some(auth_url), Some(auth_secret), Some(connector_key)) = (
+        field("app_url"),
+        field("auth_url"),
+        field("auth_secret"),
+        field("connector_key"),
+    ) else {
+        return Err(Failure::DatabaseFailed);
+    };
+    let (Some(migrations_url), Some(worker_url)) = (field("migrations_url"), field("worker_url"))
+    else {
+        return Err(Failure::DatabaseFailed);
+    };
+    if !output.status.success() {
         return Err(Failure::DatabaseFailed);
     }
-    Ok(text)
+    let credentials = serde_json::json!({
+        "app_url": app_url,
+        "auth_url": auth_url,
+        "auth_secret": auth_secret,
+        "connector_key": connector_key,
+    });
+    // No admin account exists yet. The installer records it when the first module goes in.
+    let modules = serde_json::json!({
+        "data": folder.join("modules"),
+        "migrations_url": migrations_url,
+        "producer_url": app_url,
+        "worker_url": worker_url,
+        "connector_key": connector_key,
+        "notes_base": folder.join("notes"),
+    });
+    Ok((credentials.to_string(), modules.to_string()))
 }
 
 /// Asks the instance's database supervisor to stop and waits for it. Quietly does nothing when

@@ -24,6 +24,7 @@ use safety_core::access::AccessContext;
 use tower_http::services::ServeDir;
 
 mod desktop_notices;
+mod module_install;
 mod modules;
 mod runner_data;
 
@@ -183,6 +184,14 @@ fn running_record(folder: &Path, config: &Config, port: u16) -> Result<instance:
 }
 
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("install-module") {
+        let runtime_free = module_install::run(std::env::args().skip(2).collect());
+        if let Err(error) = runtime_free {
+            eprintln!("moss-shell: {error:#}");
+            std::process::exit(1);
+        }
+        return;
+    }
     let args = match parse_args() {
         Ok(a) => a,
         Err(e) => {
@@ -191,6 +200,14 @@ fn main() {
         }
     };
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    // An instance made by the app carries its module settings, so no flag is needed.
+    let modules_path = args.modules.clone().or_else(|| {
+        args.instance
+            .as_ref()
+            .map(|folder| folder.join("modules.json"))
+            .filter(|path| path.is_file())
+    });
     let prepared = runtime.block_on(async {
         let config = Config::read(&args.network)?;
         let platform = config.platform().await?;
@@ -207,33 +224,29 @@ fn main() {
             None => None,
         };
         let network = Network::new(platform.clone(), config, args.network)?;
-        // Open last: errors above must not drop the host's runtimes on this executor.
-        let modules = match args.modules {
-            Some(path) => {
-                let database = platform.app.clone();
-                Some(
-                    tokio::task::spawn_blocking(move || modules::open(&path, database))
-                        .await
-                        .map_err(|_| "Cannot start module host")?
-                        .map_err(|_| "Cannot start module host")?,
-                )
-            }
-            None => None,
-        };
+        // The host opens in the background, last: errors above must not drop its runtimes on
+        // this executor, and a module installed later is picked up without a restart.
+        let modules: modules::Slot = Arc::new(Mutex::new(None));
+        let loader = modules_path.map(|path| {
+            let (slot, database, stop) = (modules.clone(), platform.app.clone(), stop.clone());
+            tokio::task::spawn_blocking(move || {
+                modules::load_when_ready(slot, path, database, stop)
+            })
+        });
         let data = Arc::new(Accounts {
             platform,
             runner: args.runner,
             data: Mutex::new(HashMap::new()),
         });
         let private = router(data, args.web.clone());
-        let private = match &modules {
-            Some(host) => private.merge(modules::routes(host.application.clone())),
+        let private = match &loader {
+            Some(_) => private.merge(modules::routes(modules.clone())),
             None => private,
         };
         let app = web::router(network, private, args.web);
-        Ok::<_, String>((listener, acceptor, app, running, modules))
+        Ok::<_, String>((listener, acceptor, app, running, modules, loader))
     });
-    let (listener, acceptor, app, running, modules) = match prepared {
+    let (listener, acceptor, app, running, modules, loader) = match prepared {
         Ok(parts) => parts,
         Err(_) => {
             eprintln!("moss-shell: could not start secure HTTPS; check private configuration, certificates and runtime database roles");
@@ -248,7 +261,11 @@ fn main() {
     }
     let served = runtime.block_on(tls::serve(listener, acceptor, app));
     // The host owns blocking runtimes. Drop it outside the asynchronous executor.
-    drop(modules);
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    if let Some(loader) = loader {
+        let _ = runtime.block_on(loader);
+    }
+    drop(modules.lock().unwrap_or_else(|e| e.into_inner()).take());
     if let Some(folder) = &args.instance {
         instance::Running::remove_if_ours(folder);
     }
