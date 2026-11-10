@@ -82,14 +82,15 @@ jobs:
             exit 0
           fi
           # rust_only == every changed path is docs or Rust. Rust means everything under
-          # rust-spike/, Rust sources and Cargo files under modules/, and the rust-*.yml
-          # workflows. Anything unsure (TypeScript, sql, css, package.json, other
+          # rust-spike/, every path inside a module package under modules/ (each one there is
+          # a Rust package with a Cargo.toml: moss.module.json, ui/, tools/, tests and so on), and
+          # the rust-*.yml workflows. Anything unsure (TypeScript, sql, css, package.json, other
           # .github/**) counts as not Rust. Counted rather than exit-code-tested: the safe
           # direction of a mistake here is "run the full gate".
-          non_rust=$(grep -vcE '(^docs/|\.md$|^rust-spike/|^modules/.*(\.rs|/Cargo\.toml|/Cargo\.lock)$|^\.github/workflows/rust-[^/]*\.yml$)' files.txt || true)
+          non_rust=$(grep -vcE '(^docs/|\.md$|^rust-spike/|^modules/[^/]+/|^\.github/workflows/rust-[^/]*\.yml$)' files.txt || true)
           if [ "${non_rust:-1}" -eq 0 ]; then
             echo "rust_only=true" >> "$GITHUB_OUTPUT"
-            echo "Rust-only change — the old browser tests are skipped."
+            echo "Rust-only change — the old browser and unit tests are skipped."
           fi
           # Pushes never skip the other jobs, so docs_only stays false for them.
           if [ "$EVENT_NAME" = "push" ]; then exit 0; fi
@@ -177,7 +178,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.rust_only != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -486,7 +487,7 @@ jobs:
         run: JARVIS_IMAGE_TAG=ci-${{ github.run_id }} JARVIS_ENV_FILE=./env.production.local POSTGRES_PASSWORD=postgres JARVIS_CLI_RUNNER_RPC_SECRET=ci-smoke-only-not-real docker compose -p jarv1s-prod-smoke -f infra/docker-compose.prod.yml down -v
 
   # #895: the single required status check. Every heavy job is conditional on
-  # `docs_only` (and browser on `rust_only`), so naming an
+  # `docs_only` (and unit and browser on `rust_only`), so naming an
   # individual job as required would deadlock whichever path skips it. This job
   # aggregates all of them under one name that is correct on both paths and fails
   # closed on `cancelled` (a 35-minute job timeout in this repo, not a benign skip).
