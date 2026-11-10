@@ -130,6 +130,9 @@ const behaviors = await context.request.get(`${origin}/api/m/calendar/source-beh
 const rows = (await behaviors.json()).sources[0].behaviors;
 assert.equal(rows.find((b: { id: string }) => b.id === "calendar.briefings").enabled, false);
 assert.equal(rows.find((b: { id: string }) => b.id === "calendar.planning").enabled, true);
+// Changing another setting must not flip the switch back on screen.
+await saveSetting("Look ahead", "1");
+assert.equal(await signal.isChecked(), false, "switch stays off after another save");
 await page.screenshot({ path: join(OUT!, "calendar-briefing-switch.png") });
 await page.reload();
 await signal.waitFor({ timeout: 60_000 });

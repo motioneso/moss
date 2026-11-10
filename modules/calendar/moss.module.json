@@ -364,7 +364,7 @@
       "id": "calendar.automation",
       "label": "Calendar",
       "path": "/settings/calendar",
-      "description": "Saved account lookahead, prep-task and time-block choices. Time-block mode also saves the matching writeback permission. Auto grants standing permission also honored by the existing app; Rust action execution and source-behavior controls remain open.",
+      "description": "Saved account lookahead, prep-task and time-block choices, plus the \"Include calendar signal in briefings\" switch (on by default; if saving fails the screen says so and keeps the last saved value). Time-block mode also saves the matching writeback permission. Auto grants standing permission also honored by the existing app; Rust action execution and the planning and write-back switches remain open.",
       "scope": "user"
     }
   ]

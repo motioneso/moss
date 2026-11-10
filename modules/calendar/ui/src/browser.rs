@@ -72,7 +72,9 @@ impl State {
         self.briefing_saved.set(false);
         spawn_local(async move {
             match request("PATCH", "/briefing-settings", body).await {
-                Ok(saved) => {
+                Ok(mut saved) => {
+                    // The settings answer omits the switch; keep the last confirmed one.
+                    saved["sources"] = self.briefing.get_untracked()["sources"].clone();
                     self.briefing.set(saved);
                     self.briefing_saved.set(true);
                 }
