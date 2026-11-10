@@ -255,6 +255,13 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
         private_base.is_absolute(),
         "Private notes base needs an absolute path"
     );
+    // Private copies must never sit inside, or contain, any linked notes folder.
+    if let Some(base) = &notes_base {
+        anyhow::ensure!(
+            !private_base.starts_with(base) && !base.starts_with(&private_base),
+            "Private notes base must be separate from the notes base"
+        );
+    }
     if let Some(base) = &notes_base {
         anyhow::ensure!(base.is_absolute(), "Notes base needs an absolute path");
     }
@@ -300,7 +307,16 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
                 };
                 linked_notes(preferences_database, base, private_base, services)
             }
-            None => Ok(services),
+            None => {
+                // Private export needs no linked notes folder.
+                let folders = PreferenceFolders::new(
+                    preferences_database,
+                    BTreeMap::new(),
+                    BTreeMap::new(),
+                )?
+                .with_private_export("notes", "private-export", private_base);
+                Ok(Arc::new(LinkedNotesPorts::new(Arc::new(folders), services)))
+            }
         },
     )?;
     Ok(application)

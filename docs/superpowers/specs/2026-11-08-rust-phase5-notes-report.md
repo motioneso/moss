@@ -1924,6 +1924,13 @@ rebuilt components. Live (`pnpm test:rust-notes-server`, through the gate, passe
 Postgres and real files, a copy was written once, a retry was unchanged, a different retry was a
 kept conflict, and a second actor's copy landed in its own folder.
 
+Review round 1 (Codex): the server now refuses a `private_base` that sits inside or contains the
+notes base, and private export is registered even when no notes base is configured (compile
+checked only; the live gate was not rerun after this change). One finding is declined: creation
+uses the existing compare-and-write, which checks then renames, so an outside program writing the
+exact same private file in that instant could be replaced. The area is owner-only and Moss is its
+only writer; the same documented limit applies to every linked-folder write.
+
 Not proven: the API over HTTP (it has no route; it ran in this process), indexing of private
 copies (the legacy queue-index step is not ported), a second signed-in account, native UI and a
 second physical device.
