@@ -44,14 +44,22 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
           set -euo pipefail
           # Both outputs default to the full gate; any early exit below keeps them false.
           echo "docs_only=false" >> "$GITHUB_OUTPUT"
           echo "rust_only=false" >> "$GITHUB_OUTPUT"
           # Push events have no pull request file list, so look up the PR that produced the
-          # commit. A failed or empty lookup runs the full gate.
+          # commit. That PR only covers the whole push when the push is exactly one commit
+          # (squash merges), so a longer range, a failed compare or an empty lookup runs the
+          # full gate.
           if [ "$EVENT_NAME" = "push" ]; then
+            count=$(gh api "repos/$REPO/compare/$BEFORE_SHA...$SHA" --jq '.total_commits' || true)
+            if [ "${count:-0}" != "1" ]; then
+              echo "Push is not exactly one commit (${count:-unknown}) — running the full gate."
+              exit 0
+            fi
             PR_NUMBER=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[0].number // empty' || true)
             if [ -z "${PR_NUMBER:-}" ]; then
               echo "No merged PR found for $SHA — running the full gate."
@@ -61,8 +69,10 @@ jobs:
             echo "Not a pull request and no PR number provided — running the full gate."
             exit 0
           fi
+          # Renames list both the new and the old path, so moving a file into a Rust tree
+          # still counts the path it left.
           # The API file list avoids fetch-depth games and merge-base guesswork.
-          if ! gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename' > files.txt; then
+          if ! gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate --jq '.[] | .filename, (.previous_filename // empty)' > files.txt; then
             echo "File list lookup failed — running the full gate."
             exit 0
           fi
