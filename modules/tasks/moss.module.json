@@ -92,6 +92,9 @@
     ],
     "ledger": "core-legacy"
   },
+  "provides": {
+    "prepareTaskAction": "1.0.0"
+  },
   "navigation": [
     {
       "id": "tasks",

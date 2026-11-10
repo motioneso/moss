@@ -32,3 +32,7 @@ path = "../tests/rows.rs"
 [[test]]
 name = "contracts"
 path = "../tests/contracts.rs"
+
+[[test]]
+name = "approval"
+path = "../tests/approval.rs"
