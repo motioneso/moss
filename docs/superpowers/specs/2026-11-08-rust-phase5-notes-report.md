@@ -1652,7 +1652,9 @@ and proof artifact; no full acceptance claim follows from partial gate results.
 Experimental installed write tools can now require approval for the note version
 shown to the account, in addition to the existing account, tool and exact-input
 binding. The additive host tool flag `approvalVersion` defaults off for existing
-packages. The trusted server saves the displayed version using
+packages. Permission summaries include the target requirement, so adding or
+removing it during an update requests install approval. The trusted server saves
+the displayed version using
 `approve_tool_at_version`; plain grants cannot run tools with this flag. The
 dispatcher ignores caller envelope versions and forwards only the saved grant's
 version. It consumes that grant before calling the installed tool, including when
@@ -1660,10 +1662,12 @@ Notes subsequently refuses a stale target. Existing expiry and replay rules rema
 
 The Notes guest reuses the preparation hash over resolved source, relative path
 and exact saved text. It compares the approved version before create, edit or
-delete, while the existing linked-folder call lock is held, and still uses the
-existing expected-text/destination guard for the actual mutation. An intervening
-content change or source relink refuses the action before writing or saving a
-sync checkpoint. The account must prepare and approve again. This compares state,
+delete after notes.read acquires its linked-folder call lock, and still uses
+the existing expected-text/destination guard for the actual mutation. Folder
+resolution itself is not locked. The returned file destination must also match that resolved source, closing a
+folder-selection race between resolving and reading. An intervening content
+change or source relink refuses the action before writing or saving a sync
+checkpoint. The account must prepare and approve again. This compares state,
 not inode identity: replacing a folder/file at the same path with identical text
 is not detected. The outer host still redacts guest failures; assembled chat
 retry guidance is not implemented here.
@@ -1681,7 +1685,12 @@ test covers stale content and relinked sources for all three tools, plain grants
 forged caller versions, account/input/tool refusal, replay and subsequent fresh
 writes, sync and search. It retains the checkpoint privacy RLS-removal controls
 for both runtime roles. Queue delivery and embeddings remain named stand-ins.
-Final execution receipts and independent review are recorded in the task proof.
+A separate native host stand-in regression reproduced an accepted delete with
+the check removed when the source
+changed between folder resolution and file read; the destination identity check
+now refuses it. This mid-call switch is native stand-in proof, not a live
+installed-path race test. Final execution receipts and independent review are recorded in
+the task proof.
 
 Builds use task-owned scratch Cargo/Rust homes and separate ordinary/write-tools
 guest targets, with the already-declared Wasm target and approved pinned

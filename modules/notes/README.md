@@ -149,8 +149,9 @@ downstream port calls. They exercise wrong accounts (including an unrelated
 admin), changed parameters, a different tool and grant replay before file or
 database access, then the original approved write. They also remove checkpoint
 RLS to observe cross-account read/update/delete denial assertions fail, restore
-it and repeat. This is installed service integration, not approval-card freshness,
-an active queue, configured models, assembled chat or second-device proof.
+it and repeat. These checks remain installed service integration; part twenty-two adds target
+freshness. An active queue, configured models, assembled chat and second-device
+proof remain unfinished.
 
 ## Export limits
 
@@ -697,8 +698,11 @@ caller-supplied envelope versions are ignored. It consumes the grant before
 calling Notes, retaining the existing account/tool/input binding and expiry.
 
 Notes compares that version to its current resolved source, relative path and
-exact file content before create/edit/delete. The linked-folder adapter retains
-its existing call lock through comparison and guarded mutation; external writers
+exact file content before create/edit/delete. It also checks that the returned destination matches
+the resolved source, refusing a folder switch between resolving and reading.
+The linked-folder adapter retains
+its existing call lock from notes.read through comparison and guarded mutation;
+the earlier folder resolution itself is not locked. external writers
 are still fenced by the adapter's exact expected-text comparison. Changed content
 or a different source refuses the action without saving a sync checkpoint. A
 fresh preparation and approval are required after refusal. This detects state

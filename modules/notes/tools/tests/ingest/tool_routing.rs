@@ -243,7 +243,7 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
         for (name, parameters, text) in [
             (
                 "notes.create",
-                json!({"path":"note.md","content":"Before edit."}),
+                json!({"path":"note.md","content":"Before edit.","overwrite":true}),
                 Some("Before edit."),
             ),
             (
@@ -326,8 +326,13 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
                 )
                 .unwrap();
             f.source(owner, json!(alternate));
+            let before_relink = backend_calls.load(Ordering::SeqCst);
             assert!(call(owner, name, parameters.clone()).is_err());
             service_errors.lock().unwrap().clear();
+            assert!(
+                backend_calls.load(Ordering::SeqCst) > before_relink,
+                "Relink refusal must reach Notes, not fail at approval"
+            );
             assert_eq!(std::fs::read(alternate.join("note.md")).ok(), before);
             assert_eq!(jobs.lock().unwrap().len(), count);
             f.source(owner, json!(root));

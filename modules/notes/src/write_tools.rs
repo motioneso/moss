@@ -14,6 +14,7 @@ struct Request {
     tool: String,
     parameters: Parameters,
     #[serde(default, rename = "approvalVersion")]
+    #[cfg_attr(not(feature = "write-tools"), allow(dead_code))]
     approval_version: Option<String>,
 }
 // Retain submitted field order without randomized maps, which need WASI entropy.
@@ -187,11 +188,14 @@ pub fn handle(host: &impl Host, payload: &str) -> Result<String> {
     let root = source(host)?;
     let path = relative(&input.raw["path"], &root)?;
     let note = read(host, &path)?;
-    if request
-        .approval_version
-        .as_ref()
-        .is_some_and(|version| version != &target_version(&root, &path, &note))
-    {
+    if request.approval_version.as_ref().is_some_and(|version| {
+        version != &target_version(&root, &path, &note)
+            || note["destinationId"]
+                != crate::identity::destination_id(&format!(
+                    "{}/{path}",
+                    root.trim_end_matches('/')
+                ))
+    }) {
         return Err(failure(
             409,
             "Note changed since approval. Prepare the action again.",

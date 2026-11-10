@@ -260,6 +260,42 @@ fn approval_describes_changed_credential_tool_and_install_scope() {
 }
 
 #[test]
+fn target_approval_requirement_changes_are_visible_to_install_approval() {
+    let mut old = common::manifest("1.0.0");
+    old.capabilities
+        .push(moss_module_host::manifest::Capability {
+            port: "tools".into(),
+            operations: ["run".into()].into(),
+            resources: ["save".into()].into(),
+            allow_private: false,
+        });
+    old.tools.insert(
+        "save".into(),
+        moss_module_host::manifest::Tool {
+            description: "Save".into(),
+            risk: "write".into(),
+            approval_version: false,
+        },
+    );
+    let mut versioned = old.clone();
+    versioned.tools.get_mut("save").unwrap().approval_version = true;
+    for (next, previous) in [(&versioned, &old), (&old, &versioned)] {
+        assert!(next
+            .newly_requested(previous)
+            .iter()
+            .any(|p| p.port == "tools"));
+    }
+    assert!(serde_json::to_string(&versioned.permissions())
+        .unwrap()
+        .contains("displayed target approval required"));
+    // Preserve serialization of existing signed package manifests.
+    assert!(serde_json::to_value(&old.tools["save"])
+        .unwrap()
+        .get("approvalVersion")
+        .is_none());
+}
+
+#[test]
 fn migrations_are_numbered_forward_and_table_prefixes_do_not_alias() {
     let mut m = common::manifest("1.0.0");
     m.database.migrations = vec!["sql/0002_next.sql".into(), "sql/0001_first.sql".into()];
