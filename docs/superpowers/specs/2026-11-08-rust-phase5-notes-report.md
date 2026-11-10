@@ -1938,3 +1938,15 @@ second physical device.
 Still open: automatic recovery timer, retention, managed publication and reconciliation, daily
 archives, singleton coalescing and recall warmup, the assembled Settings and chat join, and
 second-device HTTPS proof.
+
+## Part thirty checkpoint — daily chat archive
+
+Package 0.1.19 provides `writeDailyChatArchive` (module-to-module API). Input is `{localDate, folder, sessions}`; each session has `threadId`, `title`, an optional `timeLabel` and messages with `role` and `body`. The guest writes one Markdown file per day inside the linked notes folder, starting with the legacy `<!-- moss-chat-archive:v1 -->` marker, one `## <time> — <title>` heading per session and `**role:** body` lines. A later run replaces only a marked file. A person's own file with the day's name is kept and the archive goes to `<date> (moss).md`. Both names taken by foreign files is an error and nothing changes. No linked folder, no sessions, or an unusable folder or date returns the legacy refusal reasons (`no-notes-source`, `no-sessions`, `bad-folder`) without writing. A successful write requests a sync bound to the folder that was written.
+
+One deliberate difference from legacy: the caller supplies the heading time already formatted (`timeLabel`), because the guest has no timezone database. Without a label the heading falls back to the thread id, like legacy does for a session with no messages. Replacement uses compare-and-write against the text just read, so a concurrent edit is refused rather than overwritten.
+
+Checks: six guest tests (layout, blank title and fallback heading, replace own file, keep foreign file, both names taken, refusals write nothing and request no sync, unknown fields refused); the rest of the Notes suites still pass. Live (`pnpm test:rust-notes-server`, through the gate, passed): on the real server stack with real Postgres and real files, a day's archive was written into the folder the HTTPS steps linked, refreshed on a second run, and a person's own file of the same name was left untouched with the archive saved beside it. The first live attempt failed because the check had not joined the layer that resolves the linked folder; that was a gap in the check, not in the module.
+
+Not proven: the API over HTTP or from chat (no route; the chat settings screen and the daily trigger are not joined), the time label produced by the real chat side, a second signed-in account, native UI, second physical device.
+
+Still open: automatic recovery timer, retention, managed publication and reconciliation, singleton coalescing and recall warmup, the assembled Settings and chat join, second-device HTTPS proof.
