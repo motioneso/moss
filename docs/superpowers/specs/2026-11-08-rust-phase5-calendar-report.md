@@ -989,59 +989,41 @@ comparison still checks other Month structure and labels against production.
 The live runner checks the entire overflow button fits its event list before clicking.
 Part 18 covered initial positioning; the part 19 checkpoint below adds timezone changes.
 
-## JS-142 / part 19: saved timezone positioning checkpoint
+## JS-142 / part 19: saved timezone positioning
 
 Card 525, package 0.19.0, PR #4141. Day and Week reset their remembered scroll only
 when the effective saved timezone changes; ordinary refreshes retain user scroll.
-The real installed-screen regression changes saved locale and cache rows in the
+The installed-screen regression changes saved locale and cache rows in the
 throwaway server at desktop and phone widths. Baseline failed by 474.033 pixels.
-Ben paused verification for CPU load, then resumed it on 2026-11-09. Before that
-pause, UI/data, installed reads/settings/drafts, 210 operation cases and all-five-
-table failing-first privacy passed; tools/jobs and root types were interrupted.
-Final acceptance requires a complete gate, after-fix live check, root types,
-review and task Proof artifact; use the artifact for the resumed run's verdicts.
-The first Claude review found no blocker/major. No new tools were installed.
-The live runner pins a late-day event and follows Month overflow to Day; the prior
-direct-chip lookup timed out when the current-time fixture sorted past three chips.
-It waits for the view save before following overflow, as the Month checks do.
-See README for commands and remaining full-port and physical-device HTTPS work.
+The app map describes the new positioning. Calendar remains a pure server API client.
 
-### Part 19 resume checkpoint (2026-11-09, not ready)
+The live runner pins a late-day primary event and follows Month overflow to Day,
+waiting for the view save before that click. The prior direct-chip lookup depended
+on the current hour and could select an event behind the three visible chips.
 
-Product code is unchanged since c4a20ef90. Final runner commit 03b777eca adds a
-fixed late-day primary event, reaches it through Month overflow and waits for the
-view save before that click. Scoped strict TypeScript, ESLint and formatting pass.
-The full Calendar gate passed on clean 03b777eca, fingerprint f426edd7f7b4,
-log `task_142_rust_port_phase_5_calendar_modu-20261109-161435-KjYTQ5.log`.
-It includes operation comparisons, all-five-table failing-first privacy and tools/jobs.
-Root type checking passed on 4740e9ec3; GitHub static/unit/browser/deployment checks
-were green when checked, with integration jobs still running.
+An earlier full live run passed the timezone cases but failed Month pointer clicks.
+A focused installed-screen reproduction captured the actual pointer: the button
+center was at local y=379.390625, but the delivered pointer was at y=518.390015,
+on the following week's cell. The 139-pixel difference exactly matched the
+screenshot clip's vertical origin. All clipping ancestors contained the button,
+and DOM hit testing at its center returned the button. Increasing row height
+would not address this input offset. Reloading between device cases did not fix it.
+The Month, initial-scroll and timezone helpers now capture the full viewport;
+proof images are cropped afterward, outside the browser. Normal pointer checks,
+geometry assertions and all overflow/date/detail navigation checks remain.
+Diagnostic reproduction log: `task_142_rust_port_phase_5_calendar_modu-20261109-174601-PYYt2j.log`.
 
-The latest installed HTTPS run is **red**, despite all four saved-timezone and
-all four initial-position cases passing. Its log is
-`task_142_rust_port_phase_5_calendar_modu-20261109-163018-AGoCmz.log`.
-`month-live.ts:68` cannot click today's overflow button at desktop width:
-a neighboring `.cal-mcell` intercepts pointer events. Its geometry assertion
-(the button fits its immediate parent) passed, so it does not prove hit testing.
-`Month` already reserves 144 pixels per row; no layout fix has been made here.
-Do not force the click or drop the check. Inspect actual cell/list/button bounds
-and the hit target on a running instance, then reproduce and fix the real layout.
+Ben paused verification for CPU load, then resumed it on 2026-11-09. Final full-gate,
+normal-refresh HTTPS live, focused Month repetition, scoped checks and independent
+review receipts are published in the task Proof artifact; use its recorded commit
+and fingerprints for the final verdicts. Root type checking also passed on 4740e9ec3.
+An earlier run crossed UTC midnight and failed the startup-selected timezone shift;
+that harness boundary remains unproven. Strict CSR Clippy still reports the existing
+work-week toggle formatting lint; allowing only that lint passes. No dependencies,
+global tools or wit-bindgen were installed for this part.
 
-An earlier run crossed UTC midnight and failed the startup-selected timezone
-shift after both desktop cases passed. Another passed all four timezone cases
-and Month checks, then timed out the newly added overflow-to-Day step before its
-readiness wait existed. These are not complete green live results.
-
-Local scratch state remains in `/tmp/js142-calendar`: `run` provides the task-local
-Rust home, both shared bundles and two-worker-compatible caches; final receipts,
-logs, cropped timezone screenshots, the last Month screenshot, strict TS config,
-and an unpublished Proof draft are there. `build-proof.py` intentionally refuses
-a red live run. Its final review and live-log references must be refreshed before use.
-No new dependency, global tool or wit-bindgen installation occurred.
-
-Resume with the Month hit-target reproduction, then run the full gate and complete
-signed-in live check sequentially on the final commit. Fresh Claude review round
-two remains unused; record it on the final commit. Publish the real Proof, update
-the draft PR and card, and only then run ready. PR #4141 remains a draft; there is
-no final Proof or ready claim. Full-port and physical second-device work above
-remain open. This checkpoint stops at the brief's continuation limit.
+Full-port work above remains open: provider tools/jobs and execution, concrete public
+adapters and provenance, complete validation/error parity, full shell/Today/chat,
+old-screen replacement and physical second-device trusted HTTPS. Same-computer LAN
+requests and phone-width rendering do not prove another physical device or production
+certificate trust. This PR is the bounded saved-timezone screen checkpoint.

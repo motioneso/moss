@@ -62,12 +62,8 @@ export async function checkTimezoneScroll(
           )
           .toBeLessThanOrEqual(1);
         assert((await scroll.evaluate((el) => el.clientHeight)) > 0);
-        const bounds = await scroll.boundingBox();
-        assert(bounds);
-        await tab.screenshot({
-          path: join(out, `timezone-${view.toLowerCase()}-${width}.png`),
-          clip: bounds
-        });
+        // Keep screenshot clipping outside the browser so later pointer input stays aligned.
+        await tab.screenshot({ path: join(out, `timezone-${view.toLowerCase()}-${width}.png`) });
         // A later refresh in that same timezone must preserve deliberate scrolling.
         await scroll.evaluate((el, value) => {
           el.scrollTop = value;

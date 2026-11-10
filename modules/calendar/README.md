@@ -442,7 +442,9 @@ No provider, table, privacy policy, shared host or cross-module adapter changes.
 The complete port and physical second-device trusted HTTPS remain open as listed
 in the main Calendar report.
 
-Current part 19 checkpoint is not ready: the full Calendar gate passes and all
-four saved-timezone browser cases pass, but the complete installed UI run fails
-when a neighboring Month cell intercepts the overflow button. See the report's
-resume checkpoint for exact logs, scratch state and remaining review/proof steps.
+The Month click investigation captured a browser input offset equal to the clipped
+screenshot's origin, despite correct button geometry and DOM hit testing. Month,
+initial-scroll and timezone checks now capture the full viewport and crop evidence
+off-browser afterward. The checks retain normal pointer clicks and all navigation
+assertions. See the phase report and task Proof for the reproduction and final
+full-gate, installed HTTPS UI and independent-review receipts.
