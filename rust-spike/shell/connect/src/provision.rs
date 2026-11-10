@@ -86,8 +86,14 @@ pub fn create_instance(store: &Store, install: &Path, name: &str) -> Result<(), 
         return Err(Failure::NoDatabaseProgram);
     }
     let folder = store.instance_folder(name);
-    private_dir(&store.data).map_err(|_| Failure::Other)?;
-    private_dir(&store.servers_dir()).map_err(|_| Failure::Other)?;
+    private_dir(&store.data).map_err(|e| {
+        eprintln!("moss-app setup: data folder: {e}");
+        Failure::Other
+    })?;
+    private_dir(&store.servers_dir()).map_err(|e| {
+        eprintln!("moss-app setup: servers folder: {e}");
+        Failure::Other
+    })?;
     // Keep cleanup and setup exclusive across app processes, including different names.
     // Otherwise one setup can delete another's unfinished folder.
     let _setup = setup_lock(&store.servers_dir())?;
@@ -147,6 +153,7 @@ fn prepare(store: &Store, install: &Path, folder: &Path) -> Result<(), Failure> 
     let tls = folder.join("tls");
     local_certificate_with_command(&tls, &origins, crate::launch::command(install, "openssl"))
         .map_err(|e| {
+            eprintln!("moss-app setup: certificate: {e}");
             if e.contains("OpenSSL") {
                 Failure::NeedsOpenssl
             } else {

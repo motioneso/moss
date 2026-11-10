@@ -29,6 +29,8 @@ async fn windows_app_provisions_starts_stops_and_restarts_the_whole_server() {
         }
     }
     let _cleanup = Cleanup(&install, &store);
+    let probe = std::process::Command::new("openssl").arg("version").output();
+    println!("openssl probe: {:?}", probe.map(|o| String::from_utf8_lossy(&o.stdout).into_owned()));
     provision::create_instance(&store, &install, "default").expect("app sets up a server");
     let folder = store.instance_folder("default");
     let config_path = folder.join("network.json");
