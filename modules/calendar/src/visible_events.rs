@@ -1,7 +1,12 @@
 //! `calendar.listVisibleEvents`. Reads through the public Connectors interface only, so the
 //! module never touches provider accounts or their cache directly. A missing Connectors package
 //! fails the call closed.
-use crate::{context, draft_tool::actor_zone, Error, Result};
+use crate::{
+    context,
+    draft_tool::{actor_zone, trim},
+    Error, Result,
+};
+
 use chrono::{DateTime, Duration, NaiveDate, SecondsFormat, TimeZone, Utc};
 use moss_module_sdk::{Client, Host};
 use serde_json::{json, Map, Value};
@@ -14,7 +19,7 @@ fn iso(value: DateTime<Utc>) -> String {
 }
 
 /// Start of the local civil day, skipping a midnight that a clock change removed.
-fn local_midnight(date: NaiveDate, zone: chrono_tz::Tz) -> DateTime<Utc> {
+fn local_midnight<Z: TimeZone>(date: NaiveDate, zone: &Z) -> DateTime<Utc> {
     let mut at = date.and_hms_opt(0, 0, 0).expect("midnight exists");
     loop {
         if let Some(local) = zone.from_local_datetime(&at).earliest() {
@@ -24,14 +29,12 @@ fn local_midnight(date: NaiveDate, zone: chrono_tz::Tz) -> DateTime<Utc> {
     }
 }
 
-/// The `[start, end)` instants of a named local day plus its label.
-pub fn window_range(
-    name: &str,
+fn day_bounds<Z: TimeZone>(
+    zone: &Z,
     now: DateTime<Utc>,
-    saved_zone: &str,
+    name: &str,
 ) -> Option<(DateTime<Utc>, DateTime<Utc>, &'static str)> {
-    let zone = actor_zone(saved_zone);
-    let today = now.with_timezone(&zone).date_naive();
+    let today = now.with_timezone(zone).date_naive();
     let (day, label) = match name {
         "today" => (today, "today"),
         "tomorrow" => (today.succ_opt()?, "tomorrow"),
@@ -44,13 +47,51 @@ pub fn window_range(
     ))
 }
 
+/// A saved zone may be an IANA name or a fixed offset such as `+05:30`. An empty value uses the
+/// product default; any other value this build cannot read yields `None` rather than a wrong day.
+fn fixed_offset(text: &str) -> Option<chrono::FixedOffset> {
+    let sign = match text.as_bytes().first()? {
+        b'+' => 1,
+        b'-' => -1,
+        _ => return None,
+    };
+    let (h, m) = text[1..].split_once(':').unwrap_or((&text[1..], "0"));
+    let (h, m): (i32, i32) = (h.parse().ok()?, m.parse().ok()?);
+    if h > 23 || m > 59 {
+        return None;
+    }
+    chrono::FixedOffset::east_opt(sign * (h * 3600 + m * 60))
+}
+
+/// The `[start, end)` instants of a named local day plus its label.
+pub fn window_range(
+    name: &str,
+    now: DateTime<Utc>,
+    saved_zone: &str,
+) -> Option<(DateTime<Utc>, DateTime<Utc>, &'static str)> {
+    if saved_zone.is_empty() || saved_zone.len() > 100 {
+        return day_bounds(&actor_zone(""), now, name);
+    }
+    if let Ok(zone) = saved_zone.parse::<chrono_tz::Tz>() {
+        return day_bounds(&zone, now, name);
+    }
+    if let Some(zone) = chrono_tz::TZ_VARIANTS
+        .iter()
+        .copied()
+        .find(|zone| zone.name().eq_ignore_ascii_case(saved_zone))
+    {
+        return day_bounds(&zone, now, name);
+    }
+    day_bounds(&fixed_offset(saved_zone)?, now, name)
+}
+
 fn bounded_titles(events: &[Value]) -> Vec<String> {
     let mut titles = vec![];
     for event in events {
         if titles.len() == MAX_PREVIEW_TITLES {
             break;
         }
-        let title = event["title"].as_str().unwrap_or("").trim();
+        let title = trim(event["title"].as_str().unwrap_or(""));
         if title.is_empty() {
             continue;
         }
@@ -143,7 +184,7 @@ pub fn read(host: &impl Host, input: &Value) -> Result<Value> {
         .with_timezone(&Utc);
         let locale = host.call("kv", "get", "calendar.chat-context", json!({}))?;
         let (start, end, day) = window_range(name, now, locale["timezone"].as_str().unwrap_or(""))
-            .ok_or_else(invalid)?;
+            .ok_or_else(|| Error::new(503, "Calendar timezone is unavailable"))?;
         request.insert("windowStart".into(), json!(iso(start)));
         request.insert("windowEnd".into(), json!(iso(end)));
         label = Some(day);

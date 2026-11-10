@@ -394,6 +394,17 @@ fn visible_events_resolve_named_days_in_the_saved_zone_and_summarize_only_live_a
     assert_eq!(start, end);
     assert_eq!(end2.to_rfc3339(), "2026-11-09T05:00:00+00:00");
     assert!(window_range("someday", now, "").is_none());
+    let now = chrono::DateTime::parse_from_rfc3339("2026-11-09T12:00:00Z")
+        .unwrap()
+        .to_utc();
+    let offset = window_range("today", now, "+05:30").unwrap();
+    assert_eq!(offset.0.to_rfc3339(), "2026-11-08T18:30:00+00:00");
+    assert!(window_range("today", now, "Not/AZone").is_none());
+    let blank = vec![json!({"title":"\u{feff}"}), json!({"title":"B"})];
+    assert_eq!(
+        summarize(&blank, "today", false, false).unwrap(),
+        "2 events today. Next: B."
+    );
 
     let item = |title: &str, source: &str| {
         json!({"eventKey":"k","account":{"connectorAccountId":"a","providerLabel":"G"},

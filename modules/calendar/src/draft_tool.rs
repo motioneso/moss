@@ -4,7 +4,8 @@ use chrono::DateTime;
 use moss_module_sdk::Host;
 use serde_json::{json, Value};
 
-fn trim(value: &str) -> &str {
+/// JavaScript `String.prototype.trim`.
+pub(crate) fn trim(value: &str) -> &str {
     value.trim_matches(|c: char| c == '\u{feff}' || (c != '\u{85}' && c.is_whitespace()))
 }
 fn invalid(message: impl Into<String>) -> Error {

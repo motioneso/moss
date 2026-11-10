@@ -996,7 +996,8 @@ package handler. It reads only through a public Connectors call (`listCalendarCo
 resolves the named windows today and tomorrow in the saved account timezone (default
 unchanged), projects events, accounts and gaps with the original field names and writes the
 one-sentence summary only when the answer is complete and live (no cache, gap or truncation).
-A missing Connectors package makes the call fail closed with the standard unavailable error.
+Saved zones may be IANA names or fixed offsets such as +05:30; a zone this build cannot read
+fails closed instead of guessing a day. A missing Connectors package makes the call fail closed with the standard unavailable error.
 
 The manifest does not advertise the tool or declare the Connectors requirement yet. A hard
 requirement would stop Calendar installing until a Rust Connectors package exists, and the
