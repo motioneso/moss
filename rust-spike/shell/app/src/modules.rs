@@ -362,6 +362,7 @@ pub type Slot = Arc<std::sync::Mutex<Option<ServerModules>>>;
 pub fn routes(slot: Slot, web: PathBuf) -> Router {
     Router::new()
         .route("/api/m/{module}/{*path}", any(dispatch))
+        .route("/api/modules/navigation", get(navigation))
         .route("/api/modules/{module}/screen", get(screen))
         .route("/module-ui/{module}/{digest}/{*path}", get(ui_asset))
         .route(
@@ -429,6 +430,20 @@ fn host(slot: &Slot) -> Option<Arc<Application>> {
 #[derive(Deserialize)]
 struct ScreenQuery {
     path: String,
+}
+
+/// Navigation entries from installed modules for the signed-in account.
+async fn navigation(
+    State(api): State<Arc<Api>>,
+    Extension(access): Extension<AccessContext>,
+) -> Response {
+    let Some(application) = host(&api.slot) else {
+        return Json(serde_json::json!({ "links": [] })).into_response();
+    };
+    match tokio::task::spawn_blocking(move || application.installer.navigation(&access)).await {
+        Ok(Ok(links)) => Json(serde_json::json!({ "links": links })).into_response(),
+        _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
 }
 
 /// The verified screen address for a signed-in account. Refused if the module is off for it.
