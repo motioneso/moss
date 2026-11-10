@@ -85,6 +85,7 @@ fn render(sessions: &[Session]) -> String {
     lines.join("\n")
 }
 
+/// A message carries only `role` and `body`; the caller removes `createdAt`.
 /// Writes (or refreshes) the day's archive, then requests a sync of the same folder.
 pub fn write(host: &impl Host, request: &Request) -> Result<Value> {
     if request.sessions.is_empty() {
@@ -108,9 +109,15 @@ pub fn write(host: &impl Host, request: &Request) -> Result<Value> {
         .collect::<Vec<_>>()
         .join("/");
     let content = render(&request.sessions);
+    // A folder of "." names the notes root, so no directory prefix is added.
+    let prefix = if folder.is_empty() {
+        String::new()
+    } else {
+        format!("{folder}/")
+    };
     let candidates = [
-        format!("{folder}/{}.md", request.local_date),
-        format!("{folder}/{} (moss).md", request.local_date),
+        format!("{prefix}{}.md", request.local_date),
+        format!("{prefix}{} (moss).md", request.local_date),
     ];
     for path in &candidates {
         let note = host

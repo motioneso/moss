@@ -139,3 +139,13 @@ fn unknown_fields_are_refused() {
         "localDate":"2026-08-25","folder":"A","sessions":[],"path":"../x"}});
     assert!(handle(&host, "api", &payload.to_string()).is_err());
 }
+
+#[test]
+fn dot_folder_writes_at_the_notes_root() {
+    let host = vault();
+    for folder in [".", "./", "./."] {
+        let out = run(&host, folder, vec![session("T", Some("1"), "x")]).unwrap();
+        assert_eq!(out["path"], "2026-08-25.md", "{folder:?}");
+    }
+    assert!(host.files.borrow().keys().all(|path| !path.starts_with('/')));
+}
