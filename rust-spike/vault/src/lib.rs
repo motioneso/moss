@@ -216,12 +216,6 @@ impl Root {
         Ok(fs::remove_file(path)?)
     }
 
-    /// Last-modified time of an existing file, without following links.
-    pub fn modified(&self, relative: &str) -> Result<std::time::SystemTime, VaultError> {
-        let path = self.resolve(relative, true)?;
-        Ok(fs::symlink_metadata(path)?.modified()?)
-    }
-
     /// Checks `relative` and walks it name by name, refusing links. The last name may be
     /// missing unless `must_exist`.
     fn resolve(&self, relative: &str, must_exist: bool) -> Result<PathBuf, VaultError> {
@@ -345,10 +339,6 @@ impl VaultContext {
 
     pub fn remove(&self, relative: &str) -> Result<(), VaultError> {
         self.root.remove(relative)
-    }
-
-    pub fn modified(&self, relative: &str) -> Result<std::time::SystemTime, VaultError> {
-        self.root.modified(relative)
     }
 }
 
