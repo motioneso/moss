@@ -1003,4 +1003,5 @@ review and task Proof artifact; use the artifact for the resumed run's verdicts.
 The first Claude review found no blocker/major. No new tools were installed.
 The live runner pins a late-day event and follows Month overflow to Day; the prior
 direct-chip lookup timed out when the current-time fixture sorted past three chips.
+It waits for the view save before following overflow, as the Month checks do.
 See README for commands and remaining full-port and physical-device HTTPS work.

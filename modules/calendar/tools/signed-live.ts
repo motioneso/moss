@@ -18,7 +18,7 @@ import { networkInterfaces } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import pg from "pg";
-import { chromium } from "@playwright/test";
+import { chromium, expect } from "@playwright/test";
 import { getMossDatabaseUrls } from "@moss/db";
 import { readHttpOracle } from "./http-oracle.js";
 import { checkStartup } from "./startup-check.js";
@@ -558,6 +558,7 @@ try {
     0,
     "The pinned late event must be behind Month's three visible chips"
   );
+  await expect(frame.getByRole("button", { name: "Today", exact: true })).toBeEnabled();
   await monthToday.locator(".cal-mmore").click();
   await frame.locator(".cal-tg__col").waitFor();
   await frame
