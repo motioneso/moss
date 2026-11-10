@@ -157,7 +157,7 @@ pub fn render() -> String {
                     <section aria-labelledby="subtasks-heading"><h3 id="subtasks-heading">"Subtasks"</h3>
                         <p id="subtasks-loading" hidden role="status">"Loading subtasks…"</p>
                         <div id="subtasks-error" hidden role="alert">
-                            <p>"Could not load subtasks. Any previously loaded subtasks are still shown."</p>
+                            <p>"Could not load subtasks. Previously loaded subtasks may be out of date. Retry before changing them."</p>
                             {action("retry-subtasks", "Retry subtasks")}
                         </div>
                         <p id="subtasks-empty" hidden role="status">"No subtasks yet."</p>

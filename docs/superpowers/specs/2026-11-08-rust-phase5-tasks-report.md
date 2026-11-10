@@ -1826,7 +1826,10 @@ refreshes keep loaded children and tags; assigned tags remain available even
 when list suggestions cannot load. Each panel distinguishes a successful empty
 read from a failure. Opening another task clears the prior task's detail rows.
 Retries keep unsaved fields and perform reads only, without repeating an
-acknowledged completion. The module's app map describes this recovery.
+acknowledged completion. Stale subtask controls stay unavailable until a successful read, and a successful
+retry returns focus to the panel input. Detail refresh still runs if the page-wide
+task reload fails; both finish before the write guard is released. The module's
+app map describes this recovery.
 
 Two real-markup controller regressions were observed failing on the original
 screen: either a rejected subtask read or a rejected tag read hid every detail

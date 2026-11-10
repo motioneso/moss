@@ -1,4 +1,4 @@
-/* global document, window */
+/* global document */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -33,6 +33,7 @@ for (const failed of ["subtasks", "tags"]) {
       };
       let child = { ...task, id: "child", title: "Saved child", parentTaskId: "one", tags: [] };
       let failReads = true;
+      let failOverview = false;
       const calls = [];
       globalThis.__tasksDetails = {
         theme: async () => ({}),
@@ -40,7 +41,10 @@ for (const failed of ["subtasks", "tags"]) {
         dispose() {},
         async request(method, path, body) {
           calls.push({ method, path, body });
-          if (path === "/tasks") return { tasks: [task] };
+          if (path === "/tasks") {
+            if (failOverview) throw new Error("offline overview");
+            return { tasks: [task] };
+          }
           if (path === "/tasks/lists") return { lists: [{ id: "inbox", name: "Inbox" }] };
           if (path === "/tasks/local-day") return { timezone: "UTC", date: "2026-11-09" };
           if (path === "/tasks/preferences") return { preferences: { defaultView: "priority" } };
@@ -122,17 +126,25 @@ for (const failed of ["subtasks", "tags"]) {
         $("comment").value = "Unsaved comment";
         const writes = () => calls.filter((call) => call.method !== "GET").length;
         const before = writes();
+        await click(`[data-action="retry-${panel}"] button`);
+        assert.equal($(`${panel}-error`).hidden, false, "a failed retry stays recoverable");
+        assert.equal(writes(), before);
         failReads = false;
         await click(`[data-action="retry-${panel}"] button`);
         assert.equal($(`${panel}-error`).hidden, true);
         assert.match($("subtasks").textContent, /Saved child/);
         assert.match($("task-tags").textContent, /available/);
         assert.equal(writes(), before, "retry is a read only");
+        assert.equal(
+          document.activeElement,
+          $(failed === "subtasks" ? "subtask-title" : "tag-name")
+        );
         assert.equal($("title").value, "Unsaved title");
         assert.equal($("subtask-title").value, "Unsaved child");
         assert.equal($("tag-name").value, "Unsaved tag");
         assert.equal($("comment").value, "Unsaved comment");
         failReads = true;
+        failOverview = true;
         await click('#subtasks input[type="checkbox"]');
         assert.equal(writes(), before + 1);
         assert.equal($(`${panel}-error`).hidden, false);
@@ -142,7 +154,13 @@ for (const failed of ["subtasks", "tags"]) {
           "failed refresh keeps loaded children"
         );
         assert.match($("task-tags").textContent, /available/, "failed refresh keeps loaded tags");
+        assert.equal(
+          document.querySelector('#subtasks input[type="checkbox"]').disabled,
+          failed === "subtasks",
+          "stale child controls cannot replay an acknowledged write"
+        );
         failReads = false;
+        failOverview = false;
         await click(`[data-action="retry-${panel}"] button`);
         assert.equal(writes(), before + 1, "retry must not repeat a completion");
         assert.equal(document.querySelector('#subtasks input[type="checkbox"]').checked, true);
@@ -154,12 +172,13 @@ for (const failed of ["subtasks", "tags"]) {
         );
         await click('[data-action="discard-changes"] button');
         task = { ...task, id: "two", title: "Other task", tags: [] };
+        failReads = true;
         await click('[data-action="reload"] button');
         await click("#task-results .jds-btn");
         assert.equal($("subtasks").textContent, "", "switching tasks clears prior children");
         assert.equal($("task-tags").textContent, "", "switching tasks clears prior tags");
-        assert.equal($("subtasks-empty").hidden, false);
-        assert.equal($("task-tags-empty").hidden, false);
+        assert.equal($(`${panel}-error`).hidden, false);
+        assert.equal($(`${panel}-empty`).hidden, true);
       } finally {
         dom.window.close();
         for (const key of keys) {

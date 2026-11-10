@@ -59,6 +59,10 @@ const details = taskDetails({
   api,
   run,
   taskRow,
+  isBusy: () => state.busy,
+  focus: (node) => {
+    state.focusAfter = node;
+  },
   tagButton: (tag, assigned) =>
     button(
       `#${tag.name}`,
@@ -176,6 +180,7 @@ async function run(action) {
     search.sync();
     activity.sync();
     settings.sync();
+    details.sync();
     $("tasks-app").removeAttribute("aria-busy");
     state.focusAfter?.focus();
     state.focusAfter = null;
@@ -218,8 +223,8 @@ function taskRow(task) {
     done.checked = task.status === "done";
     void run(async () => {
       await api("PATCH", `/tasks/${task.id}`, { status: task.status === "done" ? "todo" : "done" });
-      await load();
-      if (state.editing) await extras();
+      if (state.editing) await refreshDetails();
+      else await load();
     });
   });
   const content = text("div", "", "tasks-row-title");
@@ -352,8 +357,13 @@ async function extras() {
 }
 async function refreshEditor() {
   state.editing = (await api("GET", `/tasks/${state.editing.id}`)).task;
-  await load();
-  await extras();
+  await refreshDetails();
+}
+async function refreshDetails() {
+  // Wait for both before releasing the page's write guard, even if one rejects.
+  const results = await Promise.allSettled([load(), extras()]);
+  const failed = results.find((result) => result.status === "rejected");
+  if (failed) throw failed.reason;
 }
 function manageLists() {
   deleting.close();
