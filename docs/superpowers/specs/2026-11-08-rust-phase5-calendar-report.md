@@ -1070,3 +1070,38 @@ behavior and external-calendar status controls; full shell/Today/chat;
 old-screen replacement; complete assembled parity; physical second-device
 trusted HTTPS. Phone-width rendering, disposable TLS and a same-computer LAN
 request do not establish another physical device or production certificate trust.
+
+## JS-166 / part 21: settings request validation parity
+
+Card 525, package 0.21.0. The briefing-settings PATCH route now retains the
+original Fastify normalization: allowed scalar and singleton-array coercion,
+removal of additional fields, and the original `FST_ERR_VALIDATION` response for
+invalid requests. For example, `lookaheadDays: "1"` saves one day; an unknown
+`ownerUserId` is discarded. Normalization happens at the HTTP guest boundary;
+the trusted preference writer retains its typed field allowlist and authenticated
+actor. Calendar remains a pure client of the server API.
+
+The baseline differential failed on an extra owner field: Rust returned 400 where
+the original removes the field and returns 200. All 242 schema comparisons pass
+after the correction, including booleans, nulls, singleton arrays, body shapes,
+radix/exponent/whitespace numeric strings and mixed invalid fields. The installed
+matrix compares these requests plus the eleven existing valid write sequences
+for owner, another user and administrator (759 comparisons), final stored values,
+revisions and writeback policy. Each rejected installed request also checks that
+storage is unchanged. Original privacy fault witnesses remain in the full gate.
+The signed-in browser runner sends accepted and rejected requests through both
+URL prefixes and reloads the real settings controls to verify confirmed values.
+Fresh full-gate, root-check, browser and independent review verdicts belong in
+this task's Proof artifact; this report does not substitute for those receipts.
+
+Builds use task-local copies of existing Rust 1.95.0/Wasm and build caches.
+Project dependencies are restored offline from the declared lockfile; both
+shared asset builders write into one scratch directory. No new dependency,
+global tool or wit-bindgen is installed.
+
+This is a bounded parity checkpoint. Still required: provider tools and jobs,
+execution flows, concrete public adapters and provenance, the other unverified
+validation/error contracts, full shell/Today/chat, old-screen replacement,
+complete assembled parity and physical second-device trusted HTTPS. Disposable
+TLS, a phone-width browser and same-computer LAN requests do not prove another
+physical device or production certificate trust.

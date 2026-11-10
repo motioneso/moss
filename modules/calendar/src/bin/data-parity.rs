@@ -4,6 +4,14 @@ use serde_json::{json, Value};
 use std::io::{self, Read};
 fn run(v: &Value) -> moss_calendar::Result<Value> {
     match v["op"].as_str().unwrap_or("") {
+        "settings-http" => Ok(
+            match moss_calendar::settings_http::normalize(v["value"].clone()) {
+                Ok(body) => json!({"status":200,"body":body}),
+                Err(error) => {
+                    json!({"status":error.status,"body":{"error":error.message,"code":error.code}})
+                }
+            },
+        ),
         "assistant-name" => Ok(json!(model::assistant_name(&v["value"]["assistantName"]))),
         "event" => Ok(events::serialize(&v["value"])),
         "heartbeat-input" => {

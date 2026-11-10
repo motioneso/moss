@@ -41,7 +41,7 @@ export async function httpOracle(
   requests: readonly {
     method: "GET" | "PATCH" | "POST";
     url: string;
-    body?: Record<string, unknown>;
+    body?: unknown;
   }[],
   tasks?: Readonly<Record<string, ReferenceTask>>,
   runs?: Readonly<Record<string, ReferenceRun>>
@@ -122,7 +122,13 @@ export async function httpOracle(
   try {
     const responses = [];
     for (const { method, url, body } of requests) {
-      const result = await server.inject({ method, url, payload: body });
+      const result = await server.inject({
+        method,
+        url,
+        ...(body === undefined
+          ? {}
+          : { payload: JSON.stringify(body), headers: { "content-type": "application/json" } })
+      });
       responses.push({ status: result.statusCode, body: result.json() as unknown });
     }
     return responses;

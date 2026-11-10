@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -273,8 +273,13 @@
     },
     {
       "id": "calendar.briefing-settings",
-      "description": "Edit and reload account lookahead, prep-task and time-block choices. Settings and the time-block writeback policy save together; failed saves retain confirmed values. Auto grants standing permission also honored by the existing app. This Rust screen does not execute provider actions. A visible startup message remains until the screen mounts. Reload page in the parent retries the current screen and preserves an event link when one is present.",
+      "description": "Edit and reload account lookahead, prep-task and time-block choices. Both original and installed settings URLs retain legacy scalar and singleton-array coercion, discard unknown fields, and return the original validation error for invalid requests. Only normalized declared fields reach the strict account-scoped preference writer. Settings and the time-block writeback policy save together; failed saves retain confirmed values. Auto grants standing permission also honored by the existing app. This Rust screen does not execute provider actions. A visible startup message remains until the screen mounts. Reload page in the parent retries the current screen and preserves an event link when one is present.",
       "errors": [
+        {
+          "code": "FST_ERR_VALIDATION",
+          "class": "validation",
+          "description": "The settings request is invalid. Use lookahead days zero, one or two, supported automation modes, and boolean legacy flags. Your saved settings are unchanged."
+        },
         {
           "code": "calendar-settings-save-failed",
           "class": "transient",

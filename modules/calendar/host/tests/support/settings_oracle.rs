@@ -42,11 +42,14 @@ fn call(app: &Application, f: &Fixture, actor: Uuid, method: &str, body: Value) 
 }
 
 pub fn verify(app: &Application, f: &Fixture, captured: &Captured) {
-    let patches = json!([{}, {"lookaheadDays":0}, {"lookaheadDays":1}, {"lookaheadDays":2.0},
+    let mut patches = json!([{}, {"lookaheadDays":0}, {"lookaheadDays":1}, {"lookaheadDays":2.0},
         {"suggestTasks":false,"suggestTimeBlocks":false}, {"createTasks":true,"blockTime":true},
         {"prepTaskMode":"off","timeBlockMode":"off"}, {"prepTaskMode":"suggest","timeBlockMode":"suggest"},
         {"prepTaskMode":"auto","timeBlockMode":"auto"}, {"createTasks":false,"blockTime":false},
         {"lookaheadDays":2.0,"prepTaskMode":"off","timeBlockMode":"suggest"}]);
+    let validation: Vec<Value> =
+        serde_json::from_str(include_str!("../../../tools/settings-patch-cases.json")).unwrap();
+    patches.as_array_mut().unwrap().extend(validation);
     for actor in [f.a, f.b, f.admin] {
         reset(f, actor);
         let mut child = Command::new("pnpm")
@@ -77,10 +80,19 @@ pub fn verify(app: &Application, f: &Fixture, captured: &Captured) {
         reset(f, actor);
         assert_eq!(expected.len(), patches.as_array().unwrap().len());
         for (patch, expected) in patches.as_array().unwrap().iter().zip(expected) {
+            let before = snapshot(f, actor);
             let actual = call(app, f, actor, "PATCH", patch.clone());
+            if actual["status"] != 200 {
+                assert_eq!(
+                    snapshot(f, actor),
+                    before,
+                    "Rejected settings patch mutated stored data: {patch}"
+                );
+            }
             assert_eq!(
                 json!({"status":actual["status"],"body":actual["body"]}),
-                expected
+                expected,
+                "Settings request differs for {patch}"
             );
         }
         assert_eq!(
@@ -89,7 +101,7 @@ pub fn verify(app: &Application, f: &Fixture, captured: &Captured) {
             "Preference, revision or writeback-policy mismatch"
         );
     }
-    println!("PASS 33 installed-Wasm / production settings PATCH comparisons plus stored values, revisions and policy");
+    println!("PASS {} installed-Wasm / production settings PATCH comparisons plus stored values, revisions, policy and rejection rollback", patches.as_array().unwrap().len() * 3);
 
     let owner = snapshot(f, f.a);
     for actor in [f.b, f.admin] {
