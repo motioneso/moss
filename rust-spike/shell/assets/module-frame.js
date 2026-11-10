@@ -24,7 +24,7 @@ async function request(method, path, body) {
   const text = await response.text();
   if (!response.ok) {
     // The bridge passes the status and a small JSON body on so a screen can show guidance.
-    let parsed = null;
+    let parsed;
     try {
       parsed = text ? JSON.parse(text) : null;
     } catch {
