@@ -1577,7 +1577,7 @@ general guidance for in-root vault policy refusals. The installed Settings test
 also checks real symlink-descendant refusals through both save and browse routes;
 this is a deliberate vault restriction, not legacy symlink parity.
 
-## Part twenty-one checkpoint — installed tool dispatcher integration
+## Part twenty-one checkpoint — installed tool dispatcher and call finalization
 
 The disposable Notes gate now exercises the existing generic tool dispatcher
 with an installed, signed experimental package, rather than calling only the
@@ -1606,10 +1606,14 @@ updates and deletes are denied; removing RLS must make those assertions fail,
 then restoration must restore the denial. The aggregate gate retains the
 earlier legacy differential and privacy-removal controls as well.
 
-This slice adds test coverage and documentation only. No shipped manifest,
-runtime permission, dependency, SQL, host service or screen changes. The app map
-already describes writes and sync as experimental and remains accurate. The
-probe is a synthetic caller of the real service, not chat or an approval UI.
+The installed-path regression exposed a host lifecycle bug: account services did
+not forward call finalization, so approval preparation held its folder lock and
+the following approved create failed as busy. `ServicePorts` now forwards
+finalization to its existing downstream adapters. This lets folder cleanup,
+transaction completion, compensation and deferred publication run on their
+existing success/failure paths. The Notes app-map metadata records that preparing
+an action leaves its folder available. No runtime permission, dependency, SQL or
+screen changes; writes and sync remain experimental. The probe is a synthetic caller of the real service, not chat or an approval UI.
 It does not establish approval-version rechecking or permit ordinary-package
 write activation. Cross-account search negatives here supplement the existing
 search gate privacy-removal controls; these actors have no source or index.
@@ -1630,3 +1634,15 @@ managed publication/fencing and reconciliation, private exports/daily archives,
 full path/HTTP parity, assembled Settings/chat and physical second-device HTTPS
 proof. This is a bounded integration checkpoint, not a replacement for working
 legacy Notes. Completing that list exceeds this continuation's context scope.
+
+Validation status for this checkpoint: the initial aggregate gate passed its
+earlier suites and six ingest tests, then failed the new dispatcher test because
+the outer host error is deliberately redacted. A test-only observer now checks
+the trusted approval refusal before redaction. The next focused run exposed the
+retained folder lock on approved create, prompting the host finalization fix.
+The focused disposable run then passed the installed export/setup check and
+new dispatcher regression, including both roles and privacy-removal controls.
+Both permitted review rounds were used before these execution findings; the
+corrected commit still requires a fresh review and final aggregate gate before
+Ready. Current passing and failing receipts are attached to the checkpoint PR
+and proof artifact; no full acceptance claim follows from partial gate results.

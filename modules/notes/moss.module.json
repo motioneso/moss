@@ -131,7 +131,7 @@
     },
     {
       "id": "notes.action-details",
-      "description": "The prepareNoteAction public API prepares legacy create, edit and delete approval details from the calling account's linked folder. It returns the target, ordered fields and current version, including the permanent-delete warning. Preparing details does not grant approval, change files or request sync. Installed chat execution and approval consumption remain unfinished. Canonical source identity is used for versions; symlink descendant selections remain refused.",
+      "description": "The prepareNoteAction public API prepares legacy create, edit and delete approval details from the calling account's linked folder. It returns the target, ordered fields and current version, including the permanent-delete warning. Preparing details does not grant approval, change files or request sync. Preparing details leaves the folder available for the next approved action. Installed chat execution and approval consumption remain unfinished. Canonical source identity is used for versions; symlink descendant selections remain refused.",
       "errors": [
         {
           "code": "notes-action-source-unavailable",

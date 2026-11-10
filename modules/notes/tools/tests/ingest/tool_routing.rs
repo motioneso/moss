@@ -17,12 +17,38 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 struct CountCalls {
     count: Arc<AtomicUsize>,
+    errors: Arc<Mutex<Vec<String>>>,
     next: Arc<dyn Ports>,
 }
 impl Ports for CountCalls {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
         self.count.fetch_add(1, Ordering::SeqCst);
-        self.next.invoke(scope, port, request)
+        let result = self.next.invoke(scope, port, request);
+        if let Err(error) = &result {
+            self.errors
+                .lock()
+                .unwrap()
+                .push(format!("{port}.{}: {error:#}", request.operation));
+        }
+        result
+    }
+    fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
+        self.next.finish_call(scope, success)
+    }
+}
+
+// Observe the trusted service result before Host::call redacts guest errors.
+struct RecordServiceErrors {
+    errors: Arc<Mutex<Vec<String>>>,
+    next: Arc<dyn Ports>,
+}
+impl Ports for RecordServiceErrors {
+    fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
+        let result = self.next.invoke(scope, port, request);
+        if let Err(error) = &result {
+            self.errors.lock().unwrap().push(format!("{error:#}"));
+        }
+        result
     }
     fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
         self.next.finish_call(scope, success)
@@ -85,6 +111,7 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
         );
         let data = tempfile::tempdir().unwrap();
         let backend_calls = Arc::new(AtomicUsize::new(0));
+        let backend_errors = Arc::new(Mutex::new(Vec::new()));
         let services = Arc::new(
             ServicePorts::new(
                 data.path(),
@@ -92,6 +119,7 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
                 Arc::new(NoAi),
                 Arc::new(CountCalls {
                     count: backend_calls.clone(),
+                    errors: backend_errors.clone(),
                     next: ports,
                 }),
             )
@@ -195,12 +223,17 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
         let mut undeclared = caller.clone();
         undeclared.requires.clear();
         assert!(prepare(owner, &undeclared).is_err());
+        let service_errors = Arc::new(Mutex::new(Vec::new()));
+        let observed_services = Arc::new(RecordServiceErrors {
+            errors: service_errors.clone(),
+            next: services.clone(),
+        });
         let call = |actor, name: &str, parameters: Value| {
             f.host.call(
                 probe.as_bytes(),
                 manifest.clone(),
                 AccessContext::new(actor, "notes-tool-dispatch"),
-                services.clone(),
+                observed_services.clone(),
                 "route",
                 &json!({"operation":"run","resource":name,"parameters":{"parameters":parameters}})
                     .to_string(),
@@ -222,7 +255,7 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
             let before = std::fs::read(root.join("note.md")).ok();
             let count = jobs.lock().unwrap().len();
             let untouched = backend_calls.load(Ordering::SeqCst);
-            assert_approval_denied(call(owner, name, parameters.clone()));
+            assert_approval_denied(call(owner, name, parameters.clone()), &service_errors);
             services
                 .approve_tool(
                     &AccessContext::new(owner, "notes-tool-approval"),
@@ -233,17 +266,20 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
                 .unwrap();
             // Neither another account nor changed parameters may spend this grant.
             for actor in [other, f.actors[2]] {
-                assert_approval_denied(call(actor, name, parameters.clone()));
+                assert_approval_denied(call(actor, name, parameters.clone()), &service_errors);
             }
             let mut changed = parameters.clone();
             changed["path"] = json!("different.md");
-            assert_approval_denied(call(owner, name, changed));
+            assert_approval_denied(call(owner, name, changed), &service_errors);
             let different_tool = if name == "notes.delete" {
                 "notes.edit"
             } else {
                 "notes.delete"
             };
-            assert_approval_denied(call(owner, different_tool, parameters.clone()));
+            assert_approval_denied(
+                call(owner, different_tool, parameters.clone()),
+                &service_errors,
+            );
             assert_eq!(
                 backend_calls.load(Ordering::SeqCst),
                 untouched,
@@ -252,8 +288,15 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
             assert_eq!(std::fs::read(root.join("note.md")).ok(), before);
             assert!(!root.join("different.md").exists());
             assert_eq!(jobs.lock().unwrap().len(), count);
-            let out: Value =
-                serde_json::from_str(&call(owner, name, parameters.clone()).unwrap()).unwrap();
+            let out: Value = serde_json::from_str(
+                &call(owner, name, parameters.clone()).unwrap_or_else(|error| {
+                    panic!(
+                        "Approved {name}: {error:#}; backend errors: {:?}",
+                        backend_errors.lock().unwrap()
+                    );
+                }),
+            )
+            .unwrap();
             assert_eq!(out, json!({"data":{"path":"note.md","synced":true}}));
             assert!(backend_calls.load(Ordering::SeqCst) > untouched);
             assert_eq!(
@@ -264,7 +307,7 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
             );
             assert_eq!(jobs.lock().unwrap().len(), count + 1);
             let untouched = backend_calls.load(Ordering::SeqCst);
-            assert_approval_denied(call(owner, name, parameters));
+            assert_approval_denied(call(owner, name, parameters), &service_errors);
             assert_eq!(
                 backend_calls.load(Ordering::SeqCst),
                 untouched,
@@ -348,7 +391,19 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
     }
 }
 
-fn assert_approval_denied(result: anyhow::Result<String>) {
-    let error = format!("{:#}", result.unwrap_err());
-    assert!(error.contains("needs the account's approval"), "{error}");
+fn assert_approval_denied(result: anyhow::Result<String>, errors: &Mutex<Vec<String>>) {
+    assert_eq!(
+        result.unwrap_err().to_string(),
+        "The module could not finish this request"
+    );
+    let errors = std::mem::take(&mut *errors.lock().unwrap());
+    assert_eq!(
+        errors.len(),
+        1,
+        "Expected one trusted service refusal: {errors:?}"
+    );
+    assert!(
+        errors[0].contains("needs the account's approval"),
+        "{errors:?}"
+    );
 }

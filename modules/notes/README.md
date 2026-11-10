@@ -126,6 +126,13 @@ The second gate remains the two-server SQL-only comparison; it is not Notes HTTP
 
 ## Installed tool-dispatch checks (part twenty-one)
 
+The host's account-services adapter now forwards end-of-call finalization. Without
+this, installed approval preparation retained a folder lock and the next approved
+write failed as busy. The integration test reproduced that failure. Finalization
+also reaches the existing transaction, compensation and deferred-job adapters.
+Guest errors remain redacted; the test observes trusted service failures before
+that boundary to distinguish approval refusals from unrelated errors.
+
 The disposable aggregate gate now joins the existing generic `tools.run` service
 to an installed, signed experimental Notes guest for create, edit, delete and
 indexed search. A WAT probe only forwards the outer service request; the Notes
