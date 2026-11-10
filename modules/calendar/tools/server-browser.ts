@@ -104,10 +104,23 @@ const confirmed = await context.request.get(`${origin}/api/m/calendar/briefing-s
 const settings = (await confirmed.json()).settings;
 assert.equal(settings.lookaheadDays, 0);
 assert.equal(settings.prepTaskMode, "off");
+// Source switch: "Use for planning" goes off through the real control; briefings stays on.
+const switchSaved = page.waitForResponse(
+  (r) => r.url().endsWith("/api/m/calendar/source-behaviors") && r.request().method() === "PATCH"
+);
+await frame.getByLabel("Use for planning", { exact: true }).selectOption("off");
+assert.equal((await switchSaved).status(), 200, "planning switch save");
+await saved.waitFor();
+const sources = await context.request.get(`${origin}/api/m/calendar/source-behaviors`, {
+  headers: { origin }
+});
+assert.deepEqual(await sources.json(), { briefings: true, planning: false });
 await page.screenshot({ path: join(OUT!, "calendar-settings.png") });
 await page.reload();
 await lookAhead.waitFor({ timeout: 60_000 });
 assert.equal(await lookAhead.inputValue(), "0");
+assert.equal(await frame.getByLabel("Use for planning", { exact: true }).inputValue(), "off");
+assert.equal(await frame.getByLabel("Include in briefings", { exact: true }).inputValue(), "on");
 console.log(
   "PASS settings changed in the real control are saved by the server and survive a reload"
 );

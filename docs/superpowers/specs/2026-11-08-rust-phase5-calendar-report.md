@@ -1277,3 +1277,26 @@ a change, a second account, a second physical device. Still required: Connectors
 Briefings adapters, the apply job and execution, source behavior and external-calendar status
 controls, full shell and chat, old-screen replacement, complete parity. These need a Rust
 Connectors package first, which does not exist yet.
+
+## JS-209 / part 28: briefing and planning source switches
+
+Package 0.24.0 adds two Calendar switches, "Include in briefings" and "Use for planning", to the
+Calendar settings screen. They read and write the account's existing source-behavior preference
+(entries `calendar.briefings` and `calendar.planning`, both on by default) through a Calendar-only
+host binding. Only those two entries change; other modules' entries in the same preference are kept.
+New routes `GET` and `PATCH /source-behaviors` (signed-in; the guest accepts only the two boolean
+fields and answers 400 otherwise; the host checks again). The "Write events back" behavior is not
+a switch here: it is already controlled by the Time blocks mode, which sets the writeback tier.
+
+Live (`pnpm test:rust-calendar-server` through `scripts/run-gate.sh`, real HTTPS server, real Chrome,
+nothing rewritten): no sign-in gives 401; defaults read as both on; an unknown field gives 400; the
+browser turns "Use for planning" off through the real control, sees "Settings saved.", reads back
+planning off and briefings on, and the choice survives a reload. Guest test
+`source_switch_patch_reaches_the_host_and_bad_bodies_do_not` and the package tests pass.
+
+Not proven: the Briefings module honoring the switches (the Rust Briefings package does not exist),
+provider execution, the four provider tools end to end, retry/recover/confirm running a change,
+external-calendar (Outlook) status controls (they belong to the Connectors package, not built), a
+second account, a second physical device over LAN or tailnet. Still required: Connectors, Tasks and
+Briefings adapters, the apply job and execution, full shell and chat, old-screen replacement,
+complete parity.
