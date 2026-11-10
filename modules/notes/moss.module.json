@@ -4,7 +4,7 @@
   "name": "Notes",
   "description": "Choose your notes folder, search your indexed notes, and create, edit or delete notes with your approval.",
   "publisher": "Moss",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -41,8 +41,8 @@
     },
     {
       "port": "jobs",
-      "operations": ["enqueue-after-commit", "enqueue-options"],
-      "resources": ["notes.sync"]
+      "operations": ["enqueue-after-commit", "enqueue-options", "schedule"],
+      "resources": ["notes.sync", "notes.sync-tick"]
     },
     {
       "port": "context",
@@ -77,7 +77,7 @@
     {
       "id": "notes.source",
       "label": "Notes folder",
-      "description": "Browse, link, change or unlink your allowed notes folder, view saved sync status and sync now. Scheduled sync is not available yet.",
+      "description": "Browse, link, change or unlink your allowed notes folder, view saved sync status and sync now. A linked folder also syncs on its own every fifteen minutes.",
       "path": "/settings/connections",
       "scope": "user",
       "entry": "ui/index.html"
@@ -105,7 +105,7 @@
     },
     {
       "id": "notes.folder-settings",
-      "description": "Settings → Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. Folder requests preserve legacy schema validation and coercion; extra fields are ignored and cannot choose another account. Invalid bodies or repeated directory paths receive the legacy validation response. Relative and symlink path behavior still differs. Sync now requests an indexing run on the server and the line shows the saved last-sync status. Scheduled sync is not available yet. This package is not yet a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
+      "description": "Settings → Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. Folder requests preserve legacy schema validation and coercion; extra fields are ignored and cannot choose another account. Invalid bodies or repeated directory paths receive the legacy validation response. Relative and symlink path behavior still differs. Sync now requests an indexing run on the server and the line shows the saved last-sync status. Linking a folder also creates one fifteen-minute sync schedule for the account; each tick requests a fresh sync and does nothing while no folder is linked. This package is not yet a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
       "errors": [
         {
           "code": "notes-folder-invalid-input",
@@ -188,7 +188,7 @@
     },
     {
       "id": "notes.sync-ingest",
-      "description": "The host provides core-owned Notes file ingestion (folder walk, legacy document chunking, configured document embeddings, unchanged-file skipping and per-page atomic indexing) behind the sync coordinator's vault ports, plus atomic deleted-note cleanup. Assembly must connect MemoryIngestPorts and MemoryCleanupPorts with the same account-specific roots and notes-source-path preference as folder settings, and supply the account's configured document embedding model. Managed publication snapshots are refused until that join exists. The package declares the notes.sync job and the manual sync route. It declares no schedule yet, so scheduled sync is not available.",
+      "description": "The host provides core-owned Notes file ingestion (folder walk, legacy document chunking, configured document embeddings, unchanged-file skipping and per-page atomic indexing) behind the sync coordinator's vault ports, plus atomic deleted-note cleanup. Assembly must connect MemoryIngestPorts and MemoryCleanupPorts with the same account-specific roots and notes-source-path preference as folder settings, and supply the account's configured document embedding model. Managed publication snapshots are refused until that join exists. The package declares the notes.sync job and the manual sync route. It also declares the notes.sync-tick job, which a per-account fifteen-minute schedule runs; the schedule is created when a folder is linked or a manual sync is requested.",
       "remediations": [
         {
           "id": "notes.configure-ingest",
@@ -222,7 +222,7 @@
     },
     {
       "id": "notes.sync-outcomes",
-      "description": "The durable sync worker records final counts or a safe failure in the calling account's saved last-sync status after database finalization. Deferred pages and ticks after unlinking preserve prior results. Status writes are best effort and never change the sync result. Assembly must wrap the transaction and queue adapters with FolderSyncStatusPorts, bound to notes-last-sync. Scheduled sync is not available yet."
+      "description": "The durable sync worker records final counts or a safe failure in the calling account's saved last-sync status after database finalization. Deferred pages and ticks after unlinking preserve prior results. Status writes are best effort and never change the sync result. Assembly must wrap the transaction and queue adapters with FolderSyncStatusPorts, bound to notes-last-sync. Scheduled ticks write the same status."
     },
     {
       "id": "notes.sync-checkpoints",
@@ -286,6 +286,7 @@
     }
   },
   "jobs": {
+    "notes.sync-tick": {},
     "notes.sync": {
       "checkpoint-id": {
         "kind": "id"

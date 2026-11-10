@@ -45,8 +45,33 @@ struct Job {
     parameters: Resume,
 }
 
+pub const TICK: &str = "notes.sync-tick";
+
+/// Keeps one fifteen-minute sync schedule per account. The stable key makes
+/// repeat calls replace the row. A scheduling failure never fails the caller.
+pub(crate) fn reconcile_schedule(host: &impl Host) {
+    let _ = host.call(
+        "jobs",
+        "schedule",
+        TICK,
+        json!({"cron":"*/15 * * * *","timezone":"UTC","key":"notes-sync","params":{}}),
+    );
+}
+
+/// A scheduled tick requests a fresh checkpoint for the linked folder. With no
+/// folder linked it does nothing, so unlinking needs no schedule cancellation.
+fn tick(host: &impl Host) -> Result<String> {
+    let Some(source) = selected_source(host)? else {
+        return Ok(json!({"noOp":true}).to_string());
+    };
+    Ok(request_source(host, &source)?.to_string())
+}
+
 pub fn handle(host: &impl Host, payload: &str) -> Result<String> {
     let value: Value = serde_json::from_str(payload)?;
+    if value["queue"] == TICK {
+        return tick(host);
+    }
     if value["parameters"].get("checkpoint-id").is_none()
         && value["parameters"].get("checkpointId").is_none()
     {

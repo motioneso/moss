@@ -93,6 +93,13 @@ impl Host for Services {
                 assert_eq!(self.writes.borrow().len(), 1);
                 json!({"deferred":true})
             }
+            ("jobs", "schedule", "notes.sync-tick") => {
+                assert_eq!(
+                    params,
+                    json!({"cron":"*/15 * * * *","timezone":"UTC","key":"notes-sync","params":{}})
+                );
+                json!({"id":ID})
+            }
             _ => panic!("Unexpected manual-sync access: {port}/{op}/{resource}"),
         })
     }
@@ -145,4 +152,25 @@ fn manual_sync_failures_return_safe_legacy_error() {
             json!({"status":500,"body":{"error":"Internal server error"}})
         );
     }
+}
+
+#[test]
+fn scheduled_tick_requests_a_checkpoint_only_when_a_folder_is_linked() {
+    let linked = Services {
+        source: json!("/notes"),
+        fail: None,
+        writes: RefCell::new(vec![]),
+    };
+    let out = handle(&linked, "job", r#"{"queue":"notes.sync-tick","parameters":{}}"#).unwrap();
+    assert_eq!(serde_json::from_str::<Value>(&out).unwrap(), json!({"checkpointId":ID}));
+    assert_eq!(linked.writes.borrow().len(), 1);
+
+    let unlinked = Services {
+        source: json!(""),
+        fail: None,
+        writes: RefCell::new(vec![]),
+    };
+    let out = handle(&unlinked, "job", r#"{"queue":"notes.sync-tick","parameters":{}}"#).unwrap();
+    assert_eq!(serde_json::from_str::<Value>(&out).unwrap(), json!({"noOp":true}));
+    assert!(unlinked.writes.borrow().is_empty());
 }

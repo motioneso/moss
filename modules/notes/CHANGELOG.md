@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.17
+
+- A linked notes folder now syncs on its own every fifteen minutes. Linking a folder or pressing Sync now sets up the schedule; the scheduled run does nothing while no folder is linked. Automatic indexing recovery is not available yet.
+
 ## 0.1.16
 
 - Ship the create, edit and delete chat tools, the manual sync request and the sync job in the package itself. Each write waits for your approval of the note as shown, and refuses a changed note or relinked folder. Settings, Connections gains a Sync now button. Scheduled sync and automatic indexing recovery are not available yet.

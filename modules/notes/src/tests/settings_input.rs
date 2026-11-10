@@ -8,6 +8,9 @@ use std::cell::RefCell;
 struct Folder(RefCell<Vec<Value>>);
 impl Host for Folder {
     fn call(&self, port: &str, op: &str, resource: &str, params: Value) -> Result<Value> {
+        if (port, op) == ("jobs", "schedule") {
+            return Ok(json!({}));
+        }
         assert_eq!((port, resource), ("vault", "source"));
         assert!(matches!(op, "folder.set" | "folder.list"));
         self.0.borrow_mut().push(params.clone());
