@@ -351,6 +351,9 @@ fn deliver(title: &str, body: &str, link: Option<(&str, &str)>) -> Result<(), St
 mod tests {
     use super::*;
 
+    /// The tests share the process-wide click folder, so they run one at a time.
+    static SERIAL: Mutex<()> = Mutex::new(());
+
     fn folder() -> PathBuf {
         let dir = std::env::temp_dir().join(format!("moss click {}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -361,6 +364,7 @@ mod tests {
     /// notification center calls on a click. A real click needs a person at the screen.
     #[test]
     fn click_on_an_alert_asks_the_window_app_for_its_page() {
+        let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let dir = folder();
         let _window = crate::link::window_lock(&dir).expect("window lock");
         *CLICK_DATA.lock().unwrap() = Some(dir.clone());
@@ -395,6 +399,7 @@ mod tests {
     /// notification the way the system does and calls the method the system calls.
     #[test]
     fn click_that_launches_the_notifier_opens_its_page() {
+        let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let dir = folder();
         let _window = crate::link::window_lock(&dir).expect("window lock");
         *CLICK_DATA.lock().unwrap() = Some(dir.clone());
