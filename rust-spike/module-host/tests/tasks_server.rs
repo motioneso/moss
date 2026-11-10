@@ -223,11 +223,11 @@ fn installed_tasks_package_serves_routes_and_nightly_job_from_the_real_server() 
     let (db, occurrence) = runtime.block_on(async {
         let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
         tokio::spawn(async move { let _ = connection.await; });
-        let occurrence = |db: &tokio_postgres::Client| {
-            let q = db.query_one("SELECT recurrence->>'occurrence_date' FROM app.tasks WHERE id=$1", &[&id]);
-            async move { q.await.unwrap().get::<_, String>(0) }
-        };
-        let first = occurrence(&db).await;
+        let first: String = db
+            .query_one("SELECT recurrence->>'occurrence_date' FROM app.tasks WHERE id=$1", &[&id])
+            .await
+            .unwrap()
+            .get(0);
         (db, first)
     });
     assert_eq!(occurrence, "2020-01-01");
