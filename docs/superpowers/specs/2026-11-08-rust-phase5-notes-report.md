@@ -1834,3 +1834,30 @@ publication and reconciliation, private exports and daily archives, configured
 embeddings in production, singleton coalescing and recall warmup, remaining
 path/HTTP parity, the assembled Settings and chat join, and use from a second
 physical device over HTTPS (the available second device was unreachable).
+
+## Part twenty-six checkpoint — Notes folder settings live on the real server
+
+The real Rust server now connects the Notes folder. With `notes_base` in the modules
+file, each account gets an owner-only `<base>/<account id>` root. The server binds the
+`source` resource to the `notes-source-path` and `notes-last-sync` settings, so browse,
+link, status and unlink work without a test stand-in. `FolderSettingsPorts` gained
+`with_account_base` (explicit roots still win). People's note folder wiring is unchanged
+and shares the same base.
+
+Live proof (`pnpm test:rust-notes-server`, through the gate): the signed Notes package is
+installed through the registry installer, then the real HTTPS server (`moss-shell --modules`)
+is driven with a real sign-up and cookie and real Postgres. Observed: 401 without sign-in;
+no folder saved at first; the offered root is the account folder; browsing lists its
+subfolder; linking `/etc` is refused (400); linking the subfolder saves and reads back;
+last-sync status readable; Sync now returns 202 with a queued job id; unlinking keeps the
+files. This is an HTTP check on this machine. It is not a native screen or second-device
+proof.
+
+Still open: indexing and search on the real server (no embeddings configured there, so
+`notes.search` and the sync job cannot complete), scheduled sync and recovery timer,
+retention, managed publication and reconciliation, private exports and daily archives,
+singleton coalescing and recall warmup, remaining path/HTTP parity, the assembled
+Settings and chat join, and use from a second physical device over HTTPS.
+
+Scratch Cargo/Rust homes and targets lived on the Downloads SSD scratch (hard-linked from
+the previous part, since /tmp is on a different disk and the NVMe is full).
