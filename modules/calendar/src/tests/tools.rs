@@ -41,6 +41,50 @@ fn settings_patch_reaches_the_scoped_host_once() {
 }
 
 #[test]
+fn source_switch_patch_reaches_the_host_and_bad_bodies_do_not() {
+    struct Sources;
+    impl Host for Sources {
+        fn call(&self, port: &str, operation: &str, resource: &str, body: Value) -> Result<Value> {
+            assert_eq!(
+                (port, operation, resource),
+                ("kv", "set", "calendar.source-behaviors")
+            );
+            assert_eq!(body, json!({"planning":false}));
+            Ok(json!({"briefings":true,"planning":false}))
+        }
+    }
+    let route = |host: &dyn Host, body: Value| -> Value {
+        struct Dyn<'a>(&'a dyn Host);
+        impl Host for Dyn<'_> {
+            fn call(&self, a: &str, b: &str, c: &str, d: Value) -> Result<Value> {
+                self.0.call(a, b, c, d)
+            }
+        }
+        serde_json::from_str(
+            &handle(
+                &Dyn(host),
+                "route",
+                &json!({"method":"PATCH","path":"/source-behaviors","params":{},"query":{},"body":body})
+                    .to_string(),
+            )
+            .unwrap(),
+        )
+        .unwrap()
+    };
+    let saved = route(&Sources, json!({"planning":false}));
+    assert_eq!(saved["status"], 200);
+    assert_eq!(saved["body"], json!({"briefings":true,"planning":false}));
+    for bad in [
+        json!({}),
+        json!({"planning":"off"}),
+        json!({"writeback":true}),
+        json!([true]),
+    ] {
+        assert_eq!(route(&NoCalls, bad)["status"], 400);
+    }
+}
+
+#[test]
 fn chat_rejects_provider_effects_and_extra_authority_before_host_access() {
     for key in [
         "startsAt",

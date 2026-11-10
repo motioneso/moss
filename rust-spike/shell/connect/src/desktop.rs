@@ -184,6 +184,14 @@ mod linux {
         send(title, body, false).map(|_| ())
     }
 
+    /// What the notifier keeps for as long as it shows alerts. Linux needs nothing.
+    pub fn notifier_session(_data: &Path) {}
+
+    /// Waits between notifier rounds.
+    pub fn pause(duration: std::time::Duration) {
+        std::thread::sleep(duration);
+    }
+
     /// Sends an alert that opens `path` on the saved server when clicked.
     pub fn notify_link(
         data: &Path,
@@ -243,7 +251,10 @@ mod linux {
                             let Some((id, key)) = params.get::<(u32, String)>() else {
                                 return;
                             };
-                            let link = links().lock().unwrap_or_else(|e| e.into_inner()).remove(&id);
+                            let link = links()
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .remove(&id);
                             if let (Some((server, path)), "default") = (link, key.as_str()) {
                                 let request = crate::link::Request {
                                     server: Some(server),
@@ -260,7 +271,10 @@ mod linux {
                         Box::new(|params| {
                             if let Some((id, _)) = params.get::<(u32, u32)>() {
                                 // A click also closes the alert; ActionInvoked arrives first.
-                                links().lock().unwrap_or_else(|e| e.into_inner()).remove(&id);
+                                links()
+                                    .lock()
+                                    .unwrap_or_else(|e| e.into_inner())
+                                    .remove(&id);
                             }
                         }),
                     );
@@ -277,7 +291,11 @@ mod linux {
             .map_err(|_| "Desktop notifications are unavailable")?;
         let hints: HashMap<String, Variant> = HashMap::new();
         let body = gio::glib::markup_escape_text(body);
-        let actions: Vec<&str> = if clickable { vec!["default", "Open"] } else { Vec::new() };
+        let actions: Vec<&str> = if clickable {
+            vec!["default", "Open"]
+        } else {
+            Vec::new()
+        };
         let reply = bus
             .call_sync(
                 Some("org.freedesktop.Notifications"),
@@ -398,16 +416,28 @@ mod native {
     #[cfg(windows)]
     use super::windows as os;
     use super::*;
-    pub use os::{notify, Tray};
-    /// Click-to-open is built for Linux; elsewhere the alert shows without a link.
-    pub fn notify_link(
-        _data: &std::path::Path,
-        _server: &str,
-        _path: &str,
-        title: &str,
-        body: &str,
-    ) -> Result<(), String> {
-        notify(title, body)
+    pub use os::{notify, notify_link, pause, Tray};
+
+    /// Keeps what the notifier needs so a click on its alert reaches it. On Windows that is a
+    /// hidden notification icon with a message loop; on macOS it is the notification delegate.
+    pub struct NotifierSession {
+        #[cfg(windows)]
+        _icon: Option<Tray>,
+    }
+
+    pub fn notifier_session(data: &Path) -> NotifierSession {
+        #[cfg(target_os = "macos")]
+        {
+            os::listen_for_clicks(data);
+            NotifierSession {}
+        }
+        #[cfg(windows)]
+        {
+            let _ = data;
+            NotifierSession {
+                _icon: os::hidden_tray(),
+            }
+        }
     }
     use std::path::Path;
     pub fn tray(proxy: tao::event_loop::EventLoopProxy<crate::UserEvent>) -> Option<Tray> {

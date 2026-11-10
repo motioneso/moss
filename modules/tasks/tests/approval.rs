@@ -225,3 +225,84 @@ fn read_tools_and_unknown_requests_are_refused() {
     let other = json!({"name":"prepareTaskAction","parameters":{"tool":"tasks.createList","inputJson":"{}"},"actorUserId":"x"});
     assert!(moss_tasks_module::handle(&Rows, "api", &other.to_string()).is_err());
 }
+
+fn route(name: &str, params: &str, query: Option<&str>, body: Option<&str>) -> Value {
+    let request = json!({"name":"prepareTaskRoute","parameters":{
+        "route":name,"paramsJson":params,"queryJson":query,"bodyJson":body}});
+    let out = moss_tasks_module::handle(&Rows, "api", &request.to_string()).unwrap();
+    serde_json::from_str(&out).unwrap()
+}
+
+#[test]
+fn route_cards_match_the_tool_cards_with_path_values_after_body_values() {
+    let c = route(
+        "addActivity",
+        &format!(r#"{{"id":"{TASK}"}}"#),
+        None,
+        Some(r#"{"activityType":"note","body":"Called"}"#),
+    );
+    assert_eq!(c["ok"]["title"], "Add task activity");
+    assert_eq!(c["ok"]["target"], "Write report");
+    assert_eq!(
+        rows(&c),
+        vec![
+            pair("Activity type", "note"),
+            pair("Text", "Called"),
+            pair("Task", "Write report")
+        ]
+    );
+    let c = route(
+        "renameTag",
+        &format!(r#"{{"listId":"{LIST}","tagId":"{TAG}"}}"#),
+        Some("{}"),
+        Some(r#"{"name":"Chores"}"#),
+    );
+    assert_eq!(c["ok"]["target"], "Errands");
+    assert_eq!(
+        rows(&c),
+        vec![
+            pair("Name", "Chores"),
+            pair("List", "Home"),
+            pair("Tag", "Errands")
+        ]
+    );
+}
+
+#[test]
+fn route_cards_refuse_odd_requests() {
+    let id = format!(r#"{{"id":"{TASK}"}}"#);
+    let body = Some(r#"{"activityType":"note"}"#);
+    // A query string, an extra parameter, a repeated key and a non-object body.
+    assert_eq!(route("addActivity", &id, Some(r#"{"x":"1"}"#), body)["ok"], Value::Null);
+    assert_eq!(
+        route("addActivity", &format!(r#"{{"id":"{TASK}","x":"1"}}"#), None, body)["ok"],
+        Value::Null
+    );
+    assert_eq!(
+        route("addActivity", &id, None, Some(&format!(r#"{{"activityType":"note","taskId":"{TASK}"}}"#)))["ok"],
+        Value::Null
+    );
+    assert_eq!(route("addActivity", &id, None, Some("[]"))["ok"], Value::Null);
+    assert_eq!(route("addActivity", "{}", None, body)["ok"], Value::Null);
+    assert_eq!(
+        route("nope", "{}", None, None),
+        json!({"error":{"statusCode":400,"error":"Unknown Tasks route"}})
+    );
+}
+
+#[test]
+fn preferences_card_shows_the_view_in_words() {
+    let c = route("setPreferences", "{}", None, Some(r#"{"defaultView":"matrix"}"#));
+    assert_eq!(c["ok"]["title"], "Set task view preference");
+    assert_eq!(c["ok"]["target"], "Your task preferences");
+    assert_eq!(c["ok"]["content"], "user_authored");
+    assert_eq!(rows(&c), vec![pair("Default task view", "Grid")]);
+    assert_eq!(
+        rows(&route("setPreferences", "{}", None, Some(r#"{"defaultView":"priority"}"#))),
+        vec![pair("Default task view", "List")]
+    );
+    for bad in [r#"{}"#, r#"{"defaultView":"x"}"#, r#"{"defaultView":"matrix","a":1}"#] {
+        assert_eq!(route("setPreferences", "{}", None, Some(bad))["ok"], Value::Null);
+    }
+    assert_eq!(route("setPreferences", "{}", None, None)["ok"], Value::Null);
+}
