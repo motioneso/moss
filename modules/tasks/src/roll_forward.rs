@@ -118,6 +118,13 @@ fn roll_series<H: Host + ?Sized>(
                 Filter::Owned,
                 Filter::eq("id", task.id.as_str()),
                 Filter::eq("status", "todo"),
+                // Skip the move when a concurrent edit changed or cleared the series.
+                Filter::eq("recurrence_series_id", series_id),
+                Filter::eq(
+                    "updated_at",
+                    task.updated_at
+                        .to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+                ),
             ]),
             crate::repository::values(json!({
                 "recurrence":next.dto(),
