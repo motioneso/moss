@@ -61,8 +61,8 @@
     },
     {
       "port": "jobs",
-      "operations": ["enqueue"],
-      "resources": ["tasks-deferred-status"]
+      "operations": ["enqueue", "schedule"],
+      "resources": ["tasks-deferred-status", "tasks-recurrence"]
     },
     {
       "port": "action-policy",
@@ -470,6 +470,7 @@
     }
   },
   "jobs": {
+    "tasks-recurrence": {},
     "tasks-deferred-status": {
       "task-id": {
         "kind": "id"

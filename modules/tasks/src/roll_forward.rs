@@ -50,6 +50,9 @@ pub fn roll_forward_owned<H: Host + ?Sized>(repo: &Repository<'_, H>) -> Result<
             series.entry(id).or_default().push(task);
         }
     }
+    if !series.is_empty() {
+        crate::jobs::reconcile_recurrence_schedule(repo);
+    }
     let mut rolled = 0;
     for (series_id, mut rows) in series {
         // A stale scan only looks at parseable dates; no stale row, no work.

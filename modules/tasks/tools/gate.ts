@@ -16,7 +16,8 @@ const run = spawnSync(
     "--",
     "--ignored",
     "--nocapture",
-    "--test-threads=1"
+    "--test-threads=1",
+    ...(process.env["TASKS_PRIVACY_FILTER"]?.split(",") ?? [])
   ],
   {
     stdio: "inherit",
@@ -29,6 +30,8 @@ const run = spawnSync(
   }
 );
 if (run.status !== 0) process.exit(run.status ?? 1);
+// A focused run (comma-separated test-name filters) stops after the privacy suite.
+if (process.env["TASKS_PRIVACY_FILTER"]) process.exit(0);
 const tools = spawnSync("pnpm", ["exec", "tsx", "modules/tasks/tools/tool-parity.ts"], {
   stdio: "inherit",
   env: process.env

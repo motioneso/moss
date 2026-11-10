@@ -57,7 +57,11 @@ impl<H: Host + ?Sized> Repository<'_, H> {
         if let Patch::Set(_) = &input.recurrence {
             data.insert("recurrence_series_id".into(), json!(self.uuid()?));
         }
-        self.one(TASKS, Query::insert(data))
+        let created = self.one(TASKS, Query::insert(data))?;
+        if matches!(&input.recurrence, Patch::Set(_)) {
+            crate::jobs::reconcile_recurrence_schedule(self);
+        }
+        Ok(created)
     }
     pub fn update_task(&self, id: &str, input: &TaskFields) -> Result<Option<Task>> {
         // Keep the route's pre-read: do not resolve new relationships for a hidden task.

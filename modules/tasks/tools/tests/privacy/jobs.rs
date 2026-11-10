@@ -216,3 +216,113 @@ fn compiled_deferred_status_uses_real_queue_and_captured_actor() {
         println!("PASS deferred-worker privacy assertion: RLS removed={removed}");
     }
 }
+
+#[test]
+#[ignore = "Database work only through the Tasks verify-gate"]
+fn compiled_recurrence_schedule_is_one_per_account_and_job_rolls_only_that_account() {
+    let mut f = Fixture::open_with(true);
+    // Another test in the same run may have installed the queue schema already.
+    let queue_installed: bool = f
+        .rt
+        .block_on(f.db.query_one(
+            "SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname='moss_queue')",
+            &[],
+        ))
+        .unwrap()
+        .get(0);
+    if !queue_installed {
+        f.sql(moss_platform_jobs::MIGRATION);
+    }
+    let app_url = std::env::var("JS51_APP_URL").unwrap();
+    let app =
+        f.rt.block_on(Database::connect(&app_url, 4, RuntimeRole::App))
+            .unwrap();
+    f.ports = Arc::new(ContextPorts::new(Arc::new(
+        TransactionalDatabasePorts::new(
+            app.clone(),
+            Arc::new(JobPorts::new(Secret::new(app_url), app, Arc::new(DenyPorts)).unwrap()),
+        )
+        .unwrap(),
+    )));
+    let make = |actor, title: &str| {
+        let created = f.route(
+            actor,
+            "POST",
+            "/tasks",
+            json!({"title":title,"recurrence":{"freq":"daily","interval":1,"occurrence_date":"2020-01-01"}}),
+        );
+        assert_eq!(created["status"], 201);
+        created["body"]["task"]["id"].as_str().unwrap().to_string()
+    };
+    let owner_task = make(f.owner, "Owner series");
+    let other_task = make(f.other, "Other series");
+    // A second recurring create must replace, not add to, the account's schedule.
+    make(f.owner, "Owner second series");
+    let schedules = |actor: Uuid| -> i64 {
+        f.rt.block_on(f.db.query_one(
+            "SELECT count(*) FROM moss_queue.schedules WHERE actor_user_id=$1 AND queue LIKE '%.tasks-recurrence'",
+            &[&actor],
+        ))
+        .unwrap()
+        .get(0)
+    };
+    assert_eq!(schedules(f.owner), 1);
+    assert_eq!(schedules(f.other), 1);
+    let occurrence = |id: &str| -> String {
+        f.rt.block_on(f.db.query_one(
+            "SELECT recurrence->>'occurrence_date' FROM app.tasks WHERE id=$1",
+            &[&id.parse::<Uuid>().unwrap()],
+        ))
+        .unwrap()
+        .get(0)
+    };
+    assert_eq!(occurrence(&owner_task), "2020-01-01");
+    // Fire the owner's schedule through the real scheduler and worker queue.
+    f.rt.block_on(f.db.execute(
+        "UPDATE moss_queue.schedules SET next_at=clock_timestamp()-interval '1 minute' WHERE actor_user_id=$1",
+        &[&f.owner],
+    ))
+    .unwrap();
+    let job = f.rt.block_on(async {
+        let queue = moss_platform_jobs::Queue::connect(
+            &std::env::var("JS51_WORKER_URL").unwrap(),
+            moss_platform_jobs::Role::Worker,
+            specs(&f.manifest),
+        )
+        .await
+        .unwrap();
+        assert_eq!(queue.tick().await.unwrap(), 1);
+        let job = queue.claim().await.unwrap().expect("recurrence job available");
+        (queue, job)
+    });
+    assert_eq!(job.1.actor.user_id(), f.owner);
+    let worker =
+        f.rt.block_on(Database::connect(
+            &std::env::var("JS51_WORKER_URL").unwrap(),
+            4,
+            RuntimeRole::Worker,
+        ))
+        .unwrap();
+    let job_ports = Arc::new(ContextPorts::new(Arc::new(
+        TransactionalDatabasePorts::new(worker, Arc::new(DenyPorts)).unwrap(),
+    )));
+    let request = json!({"queue":"tasks-recurrence","parameters":job.1.metadata.params().cloned().unwrap_or_else(|| json!({}))});
+    let output: Value = serde_json::from_str(
+        &f.host
+            .call(
+                &f.wasm,
+                f.manifest.clone(),
+                AccessContext::new(job.1.actor.user_id(), "recurrence-worker"),
+                job_ports,
+                "job",
+                &request.to_string(),
+            )
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(output, json!({"rolledForward":2}));
+    f.rt.block_on(job.0.finish(&job.1, true)).unwrap();
+    assert!(occurrence(&owner_task).as_str() > "2026-01-01");
+    assert_eq!(occurrence(&other_task), "2020-01-01", "another account's series stays put");
+    println!("PASS recurrence job: one schedule per account, owner series rolled, other untouched");
+}
