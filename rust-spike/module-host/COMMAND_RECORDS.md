@@ -22,9 +22,11 @@ Records use the account/module scope by default. Never declare a private command
 in `installWideKv`: that is an explicit, separate grant for install-wide data. The authenticated
 scope supplies the account; no request may select one. Records are module-private work data,
 not a substitute for canonical notes or shared account preferences. They are retained until
-module data is purged; queue completion does not currently garbage-collect them. This storage
-has no aggregate quota or automatic retention policy, so package qualification must account
-for long-running accumulation. Individual record size is bounded.
+module data is purged; queue completion does not currently garbage-collect them. Each
+account/module/resource holds at most 10,000 records; a new id beyond that is refused while
+replays of existing ids still succeed. There is no automatic retention or pruning, so
+package qualification must account for long-running accumulation. Individual record size is
+bounded.
 
 ## Deferred queue publication
 
