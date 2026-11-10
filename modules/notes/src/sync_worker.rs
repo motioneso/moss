@@ -79,6 +79,9 @@ fn tick(host: &impl Host) -> Result<String> {
     };
     // Re-register in case the first registration failed; the keyed row is replaced.
     reconcile_schedule(host);
+    // Maintenance first, so a stuck earlier request is republished and old
+    // finished checkpoints are dropped. It never fails the tick.
+    crate::sync_recovery::sweep(host);
     Ok(request_source(host, &source)?.to_string())
 }
 

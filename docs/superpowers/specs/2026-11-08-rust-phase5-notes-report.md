@@ -1950,3 +1950,32 @@ Checks: six guest tests (layout, blank title and fallback heading, replace own f
 Not proven: the API over HTTP or from chat (no route; the chat settings screen and the daily trigger are not joined), the time label produced by the real chat side, a second signed-in account, native UI, second physical device.
 
 Still open: automatic recovery timer, retention, managed publication and reconciliation, singleton coalescing and recall warmup, the assembled Settings and chat join, second-device HTTPS proof.
+
+## Part thirty-one checkpoint — automatic recovery and retention
+
+Package 0.1.20. Each fifteen-minute tick (only while a folder is linked) now first runs a
+maintenance sweep, then requests its normal sync.
+
+- Recovery: the sweep scans the account's saved sync requests in id order, at most 25 per page
+  and 8 pages per tick, and republishes any request that has no saved result. Queue idempotency
+  keeps a repeat harmless. A page that fails stops the scan and is retried on the next tick.
+- Retention: finished requests (those with a saved result) older than seven days are deleted,
+  at most 25 per tick. Unfinished requests are never deleted, whatever their age.
+- Maintenance errors are ignored, so they never fail or delay the sync itself.
+
+Checks: a unit test for the seven-day date arithmetic (month, leap year, year boundary) and a
+tick test showing the unfinished row is republished and only the old finished row is deleted;
+all other Notes suites pass.
+
+Live (`pnpm test:rust-notes-server`, through the gate, passed): on the real HTTPS server with
+real Postgres, a finished checkpoint dated ten days ago and a saved request that had never been
+published were inserted for the signed-up account. When the schedule came due, the server's own
+scheduler ran the tick; the old finished row was deleted and the never-published request was
+republished and finished by the worker, with no manual action. The gate ran on 0.1.19 metadata;
+only the version number and app-map text changed afterwards.
+
+Not proven: more than 8 pages of backlog in one tick (the rest waits for the next tick), crash
+recovery of a request saved by a process that died mid-write, native UI, a second device.
+
+Still open: managed publication and reconciliation, singleton coalescing and recall warmup, the
+assembled Settings and chat join, second-device HTTPS proof.

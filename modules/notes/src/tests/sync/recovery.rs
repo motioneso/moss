@@ -131,3 +131,62 @@ fn publication_refusal_returns_no_cursor_and_retry_reuses_ids() {
         host.rows[0]["id"]
     );
 }
+
+#[test]
+fn tick_republishes_unfinished_and_deletes_only_old_finished_checkpoints() {
+    const NEW: &str = "00000000-0000-4000-8000-0000000000ff";
+    struct Tick {
+        old: Vec<Value>,
+        jobs: RefCell<Vec<Value>>,
+        deleted: RefCell<Vec<Value>>,
+    }
+    impl Host for Tick {
+        fn call(&self, port: &str, op: &str, _: &str, p: Value) -> Result<Value> {
+            Ok(match (port, op) {
+                ("context", "read") => json!({"now":"2026-11-10T08:00:00Z"}),
+                ("context", "uuid") => json!({"id":NEW}),
+                ("vault", "folder.get") => json!({"status":200,"body":"/notes"}),
+                ("jobs", "schedule") => json!({"id":NEW}),
+                ("jobs", "enqueue-after-commit") => {
+                    self.jobs.borrow_mut().push(p);
+                    json!({"deferred":true})
+                }
+                ("db", "query") => match p["kind"].as_str().unwrap() {
+                    "delete" => {
+                        self.deleted.borrow_mut().push(p["filter"]["value"].clone());
+                        json!([])
+                    }
+                    "insert" => json!([p["values"]]),
+                    _ if p["filter"]["column"] == "created_at" => {
+                        assert_eq!(p["filter"]["value"], "2026-11-03T00:00:00Z");
+                        json!(self.old)
+                    }
+                    _ => json!(self.old),
+                },
+                _ => panic!("unexpected {port}/{op}"),
+            })
+        }
+    }
+    let host = Tick {
+        old: vec![
+            json!({"id":"00000000-0000-4000-8000-000000000001","checkpoint":{"workerResult":{"ingested":1,"skipped":0,"errors":0}}}),
+            json!({"id":"00000000-0000-4000-8000-000000000002","checkpoint":{"sourcePath":"/n"}}),
+        ],
+        jobs: RefCell::new(vec![]),
+        deleted: RefCell::new(vec![]),
+    };
+    moss_notes::guest::handle(&host, "job", r#"{"queue":"notes.sync-tick","parameters":{}}"#)
+        .unwrap();
+    let ids: Vec<_> = host
+        .jobs
+        .borrow()
+        .iter()
+        .map(|j| j["params"]["checkpoint-id"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(ids, vec!["00000000-0000-4000-8000-000000000002", NEW]);
+    assert_eq!(
+        *host.deleted.borrow(),
+        vec![json!("00000000-0000-4000-8000-000000000001")],
+        "only the finished old row is deleted"
+    );
+}

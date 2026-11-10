@@ -78,6 +78,9 @@ impl Host for Services {
             }
             ("context", "read", "call") => json!({"now":"2026-11-09T12:00:00Z"}),
             ("context", "uuid", "new") => json!({"id":ID}),
+            ("db", "query", "app.notes_sync_checkpoints") if params["kind"] == "select" => {
+                json!([])
+            }
             ("db", "query", "app.notes_sync_checkpoints") => {
                 assert_eq!(params["kind"], "insert");
                 assert_eq!(
