@@ -1877,6 +1877,25 @@ installed-screen proof is separate. The optional signed UI gate receipt
 parent/child states after the real screen flow. Final gate and review receipts
 are attached to this task's proof artifact.
 
+The full unchanged endpoint comparison passes **96 of 96 cases**, with no
+case exclusions or relaxed assertions. The signed HTTPS fixture installed the
+package from its disposable registry. Through its real screen, owner setup was
+followed by Manage lists, task creation with one subtask, opening the editor,
+typing description and comment drafts, and completing the final subtask. The
+parent status changed to Done while both drafts stayed. Saving and reopening
+retained the description and both completed states. Leaving the clean editor
+showed the task list without a discard prompt. The gate checked the exact saved
+description, one completed child and one completed parent in the real tables,
+and exactly one proof task. Desktop and narrow viewport screenshots accompany
+the task proof. The narrow viewport is not another device.
+
+Certificate verification, sign-in redirect, unknown-host refusal and
+unknown-origin refusal passed independently. Browser automation ignored the
+fixture certificate warning as instructed. A slow first package load required
+a page reload; only the hydrated, exercised screen is counted as live proof.
+The fixture does not connect real AI or chat. Full shell and physical device
+access remain unproven.
+
 The branch was fast-forwarded to main including part 26. Declared JavaScript
 dependencies were restored offline and the tools lockfile was refreshed offline
 without a byte change. The previous scratch toolchain path no longer contained
