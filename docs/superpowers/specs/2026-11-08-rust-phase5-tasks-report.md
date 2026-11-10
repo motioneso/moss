@@ -1831,8 +1831,17 @@ acknowledged completion. The module's app map describes this recovery.
 Two real-markup controller regressions were observed failing on the original
 screen: either a rejected subtask read or a rejected tag read hid every detail
 panel. These checks use the actual Rust-rendered markup and controller with a
-labeled bridge stand-in; they are not live browser evidence. Final verification
-and live evidence are recorded below before this checkpoint is handed over.
+labeled bridge stand-in; they are not live browser evidence. Current controller,
+endpoint, privacy and signed-screen run receipts accompany this checkpoint in
+its task proof artifact. Passing the existing endpoint cases does not establish
+full feature parity.
+
+The existing scratch Rust toolchain, Wasm target, approved generator graph and
+Cargo dependencies were reused offline. The tools lockfile was refreshed offline
+without a byte change. Declared JavaScript dependencies were restored offline.
+No global tool or new dependency was installed. The signed HTTPS fixture is
+separate from the real application shell. The existing device bridge reported
+no attached physical device; local browser checks do not prove another device.
 
 This checkpoint adds no HTTP route, tool, job kind, migration or host contract.
 Remaining Phase 5 work: lazy recurrence advancement; recurrence jobs;
