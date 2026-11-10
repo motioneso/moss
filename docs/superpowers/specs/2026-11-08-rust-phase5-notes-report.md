@@ -1964,3 +1964,15 @@ Not proven: a real 24-hour wait (an old row was inserted with a past timestamp),
 Still open: managed publication and reconciliation (needs the Meetings module), singleton coalescing and recall warmup, the assembled Settings and chat join, second-device HTTPS proof.
 
 Review round 1 (Codex): two majors fixed. Recovery covered only 250 rows per tick (now 1000, restarting from the start each tick; a day beyond 1000 rows needs a very large folder and would leave later rows unrecovered, which is a documented limit, not a persisted cursor). Unlinking cancelled the only maintenance entry point, so it now runs maintenance first.
+
+## Part thirty-four checkpoint — one waiting sync per folder, live over the LAN address
+
+Package 0.1.21. Sync now and the fifteen-minute tick no longer stack requests. Before saving a new request they look at the account's saved requests from the last ten minutes; one with no result and the same folder is reused (its id is returned and publication is repeated, which the queue deduplicates by id). This is the legacy one-queued-sync-per-account rule without a queue change, because the job reads the folder when it runs. Saving, editing or deleting a note and the daily archive still request their own sync. A request older than ten minutes no longer absorbs anything, so a lost one cannot block syncing.
+
+Recall warmup (legacy loaded a local model before the first search) does not apply: the Rust server embeds through a configured endpoint and loads no model.
+
+Checks: two new guest tests (reuse a waiting request; make a new one when nothing matches, the match is finished, or it is another folder); existing sync and component suites pass. Live (`pnpm test:rust-notes-server`, through the gate, passed): the real HTTPS server was started listening on all interfaces with the sharing switch on and trusted origins for both loopback and this machine's LAN address, with a certificate covering both. Sign-up used loopback; every Notes call (folder browse, link, sync, status, unlink) went through the LAN address with a real cookie. With a waiting request saved for the linked folder, Sync now returned that request's id instead of a new one. The earlier scheduler and retention checks still pass.
+
+Not proven: a second physical device (the LAN address is this machine's own, so the traffic loops back in the kernel), the tailnet address, a phone browser, Notes screens in a browser (the web app does not yet mount module screens), search from chat (the server has no tool-call route), a second account, hosted embeddings.
+
+Still open: managed publication and reconciliation (needs Meetings), the assembled Settings and chat join, second-device proof.
