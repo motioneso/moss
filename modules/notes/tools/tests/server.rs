@@ -571,16 +571,14 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         let garden = search("tomato compost soil");
         println!("search coffee -> {coffee}");
         println!("search garden -> {garden}");
-        let first = |v: &Value| v.to_string();
         let top = |v: &Value| {
-            v["data"]["results"][0]["path"]
+            v["data"]["chunks"][0]["sourcePath"]
                 .as_str()
-                .or_else(|| v["results"][0]["path"].as_str())
-                .map(str::to_owned)
-                .unwrap_or_else(|| first(v))
+                .unwrap_or_else(|| panic!("no first chunk: {v}"))
+                .to_owned()
         };
-        assert!(top(&coffee).contains("coffee.md"), "{coffee}");
-        assert!(top(&garden).contains("garden.md"), "{garden}");
+        assert!(top(&coffee).ends_with("/Journal/coffee.md"), "{coffee}");
+        assert!(top(&garden).ends_with("/Journal/garden.md"), "{garden}");
         drop(application);
         drop(runtime);
     }
