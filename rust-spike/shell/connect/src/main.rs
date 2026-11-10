@@ -7,6 +7,7 @@
 
 mod desktop;
 mod launch;
+mod link;
 mod notifier;
 mod pin;
 mod provision;
@@ -48,6 +49,11 @@ enum UserEvent {
     Show(Value),
     Open(Opened),
     ShowServers,
+    /// Another program asked this window to show a saved server, and maybe one of its pages.
+    OpenLink {
+        server: Option<String>,
+        path: Option<String>,
+    },
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     Reveal,
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -94,6 +100,8 @@ struct App {
     window: Window,
     connect: WebView,
     server: Option<ServerView>,
+    /// A page to land on once the named server opens.
+    pending_link: Option<(String, String)>,
     current: Option<String>,
     /// The address and code on the certificate screen, the only pin the user can confirm.
     shown_pin: Option<(String, String)>,
@@ -147,6 +155,12 @@ fn main() {
             std::process::exit(2);
         }
     };
+    // One window per data folder. A second launch asks the first to come forward and leaves.
+    let _ = store::private_dir(&args.data);
+    let Some(_window_lock) = link::window_lock(&args.data) else {
+        let _ = link::write_request(&args.data, &link::Request { server: None, path: None });
+        std::process::exit(0);
+    };
     let store = Store::new(args.data);
     let servers = store.load().unwrap_or_else(|_| {
         eprintln!("moss-app: the server list is unreadable; starting with an empty list");
@@ -160,6 +174,18 @@ fn main() {
         .with_min_inner_size(LogicalSize::new(360.0, 560.0))
         .build(&event_loop)
         .expect("window");
+
+    let hand_off = proxy.clone();
+    let hand_off_data = store.data.clone();
+    std::thread::spawn(move || loop {
+        if let Some(request) = link::take_request(&hand_off_data) {
+            let event = UserEvent::OpenLink { server: request.server, path: request.path };
+            if hand_off.send_event(event).is_err() {
+                return;
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(400));
+    });
 
     let web = args.install.join("web");
     let ipc = proxy.clone();
@@ -187,6 +213,7 @@ fn main() {
         window,
         connect,
         server: None,
+        pending_link: None,
         current: None,
         shown_pin: None,
         turn: 0,
@@ -336,6 +363,25 @@ impl App {
             UserEvent::ShowServers => {
                 self.turn += 1;
                 self.list_servers();
+            }
+            UserEvent::OpenLink { server, path } => {
+                self.window.set_visible(true);
+                self.window.set_focus();
+                let Some(id) = server else { return };
+                self.turn += 1;
+                if self.store.find(&self.servers, &id).is_none() {
+                    return self.list_servers();
+                }
+                let shown = self.current.as_deref() == Some(id.as_str());
+                if let (true, Some(view), Some(path)) = (shown, self.server.as_ref(), path.as_ref())
+                {
+                    if view.id == id {
+                        let _ = view.view.load_url(&format!("{}{path}", view.origin));
+                        return;
+                    }
+                }
+                self.pending_link = path.map(|p| (id.clone(), p));
+                self.choose(id);
             }
             UserEvent::TrayUnavailable => {
                 self.tray = None;
@@ -769,9 +815,19 @@ impl App {
             .server
             .as_ref()
             .is_some_and(|s| s.id == opened.id && s.origin == opened.origin);
-        if !reuse {
+        let landing = match self.pending_link.take() {
+            Some((id, path)) if id == opened.id => path,
+            _ => String::from("/today"),
+        };
+        if reuse {
+            if landing != "/today" {
+                if let Some(server) = &self.server {
+                    let _ = server.view.load_url(&format!("{}{landing}", opened.origin));
+                }
+            }
+        } else {
             self.server = None;
-            match self.server_view(&opened) {
+            match self.server_view(&opened, &landing) {
                 Ok(view) => self.server = Some(view),
                 Err(_) => {
                     return self.show(json!({"screen":"problem", "name": opened.name, "reason": "This app could not open the server's pages.", "retry": false}))
@@ -788,7 +844,7 @@ impl App {
         }
     }
 
-    fn server_view(&self, opened: &Opened) -> Result<ServerView, String> {
+    fn server_view(&self, opened: &Opened, landing: &str) -> Result<ServerView, String> {
         let dir = self.store.profile(&opened.id)?;
         let mut profile = Box::new(WebContext::new(Some(dir)));
         let origin = opened.origin.clone();
@@ -862,7 +918,7 @@ impl App {
         trust_macos::install(&view, opened, self.proxy.clone())?;
         #[cfg(windows)]
         trust_windows::install(&view, opened, self.proxy.clone())?;
-        view.load_url(&format!("{}/today", opened.origin))
+        view.load_url(&format!("{}{landing}", opened.origin))
             .map_err(|_| "Cannot load the server")?;
         Ok(ServerView {
             id: opened.id.clone(),
