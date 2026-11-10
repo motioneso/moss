@@ -76,6 +76,7 @@ fn dispatch<H: Host + ?Sized>(
                 .now()?
                 .parse()
                 .map_err(|_| Error::Http(500, "Internal server error"))?;
+            crate::roll_forward::roll_forward_owned(repo)?;
             let mut rows = vec![];
             for task in repo.persisted_tasks()? {
                 if let Some(q) = &quadrant {
@@ -105,6 +106,7 @@ fn dispatch<H: Host + ?Sized>(
                 .now()?
                 .parse::<chrono::DateTime<chrono::Utc>>()
                 .map_err(|_| Error::Http(500, "Internal server error"))?;
+            crate::roll_forward::roll_forward_owned(repo)?;
             json!({"tasks":drift_json(repo,&crate::drift::focus(repo,now)?)?,"signals":[]})
         }
         ("GET", "/tasks/at-risk") => {
@@ -112,6 +114,7 @@ fn dispatch<H: Host + ?Sized>(
                 .now()?
                 .parse::<chrono::DateTime<chrono::Utc>>()
                 .map_err(|_| Error::Http(500, "Internal server error"))?;
+            crate::roll_forward::roll_forward_owned(repo)?;
             json!({"tasks":drift_json(repo,&crate::drift::at_risk(repo,now)?)?})
         }
         ("GET", "/tasks/overdue") => {
@@ -119,6 +122,7 @@ fn dispatch<H: Host + ?Sized>(
                 .now()?
                 .parse::<chrono::DateTime<chrono::Utc>>()
                 .map_err(|_| Error::Http(500, "Internal server error"))?;
+            crate::roll_forward::roll_forward_owned(repo)?;
             json!({"tasks":drift_json(repo,&crate::drift::overdue(repo,now)?)?})
         }
         ("POST", "/tasks/search/interpret") => {
