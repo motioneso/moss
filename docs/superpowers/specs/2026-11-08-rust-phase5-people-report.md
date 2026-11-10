@@ -2873,3 +2873,32 @@ safety-budget decision that belongs with the host owner, not a People-only chang
    quotas, full locale ordering, shipping listener parser qualification.
 
 Not proven: everything in step 3 and the large-account list limit.
+
+## Part 27 — second-account privacy on the real server (checkpoint)
+
+Branch fast-forwarded to `dd0e06964` (slice 19, PR 4175) before editing. No People source,
+package, SQL or host budget changed. The live server gate (`pnpm test:rust-people-server`)
+gained a second signed-in account.
+
+### What the gate now proves, over HTTPS on the real server
+
+- Setup allows one owner over HTTP, so the second account is created in the database with the
+  owner's password hash and then signs in through the real sign-in route.
+- The second account's list contains none of the owner's people.
+- Reading the owner's person by id is refused (500, the same safe body the legacy server
+  returns for a missing person) and the response carries no name.
+- Editing the owner's person by id is refused and the owner's data is unchanged.
+- After saving its own notes folder, the second account can create its own person, and the
+  owner's list does not show it.
+
+Green run: gate rc=0 against a fresh throwaway database; component and package built from
+this tree with a task-owned toolchain.
+
+### Not proven
+
+- Native UI and a second physical device over HTTPS.
+- Chat flows, note-folder indexing, ingest nudges, real source providers.
+- The refusal is a 500 rather than a 404, matching legacy parity; a friendlier not-found
+  status would be a deliberate difference from the legacy contract.
+
+Remaining work is unchanged from part 26 steps 3 and 4.

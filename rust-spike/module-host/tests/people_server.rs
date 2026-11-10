@@ -253,5 +253,107 @@ fn installed_people_package_serves_routes_from_the_real_server() {
     let (status, settings) = call(Method::GET, "/people/notes-settings", Some(&cookie), None);
     assert_eq!(status, 200, "{settings}");
     println!("PASS installed People package served over HTTPS: sign-in required, create writes a note in the account folder, list, notes settings reachable");
-    println!("NOT PROVEN: second account over HTTP (setup allows one owner), native UI, second physical device, note-folder indexing");
+
+    // Second account. Setup allows one owner over HTTP, so the account is made in the
+    // database with the owner's password hash and then signs in through the real route.
+    let second: uuid::Uuid = runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let id = uuid::Uuid::new_v4();
+        db.execute(
+            "INSERT INTO app.users (id, name, email, email_verified, created_at, updated_at, is_instance_admin, status) \
+             VALUES ($1, 'People second', 'people-second@example.test', false, now(), now(), false, 'active')",
+            &[&id],
+        )
+        .await
+        .unwrap();
+        db.execute(
+            "INSERT INTO app.auth_accounts (id, account_id, provider_id, user_id, password, created_at, updated_at) \
+             SELECT gen_random_uuid(), $1::uuid::text, 'credential', $1::uuid, password, now(), now() \
+             FROM app.auth_accounts WHERE user_id = $2::uuid AND provider_id = 'credential'",
+            &[&id, &owner],
+        )
+        .await
+        .unwrap();
+        id
+    });
+    let signed = client
+        .post(format!("{origin}/api/auth/sign-in/email"))
+        .header("origin", &origin)
+        .json(&json!({"email":"people-second@example.test","password":"temporary-people-password-177-not-a-real-secret"}))
+        .send()
+        .unwrap();
+    assert_eq!(signed.status(), 200, "second account sign-in");
+    let cookie2 = signed.headers()["set-cookie"]
+        .to_str()
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap()
+        .to_owned();
+    let person_id = created.1["person"]["id"].as_str().unwrap().to_owned();
+    let safe = json!({"error":"Internal Server Error"});
+    let (status, theirs) = call(Method::GET, "/people", Some(&cookie2), None);
+    assert_eq!(status, 200, "{theirs}");
+    assert!(
+        theirs["people"].as_array().is_some_and(|p| p.is_empty()),
+        "second account must see none of the owner's people: {theirs}"
+    );
+    // The second account has its own notes folder before it tries the owner's person,
+    // so the edit reaches the canonical-note path and not the projection-only fallback.
+    let saved2 = call(
+        Method::PUT,
+        "/people/notes-settings",
+        Some(&cookie2),
+        Some(json!({"folder": root.join("notes").join(second.to_string())})),
+    );
+    assert_eq!(saved2.0, 200, "second account folder: {}", saved2.1);
+    let note_path = folder.join(created.1["notePath"].as_str().unwrap());
+    let note_before = fs::read(&note_path).unwrap();
+    let (status, direct) = call(
+        Method::GET,
+        &format!("/people/{person_id}"),
+        Some(&cookie2),
+        None,
+    );
+    assert_eq!((status, &direct), (500, &safe), "direct read refused");
+    let (status, patched) = call(
+        Method::PATCH,
+        &format!("/people/{person_id}"),
+        Some(&cookie2),
+        Some(json!({"displayName":"Hijacked"})),
+    );
+    assert_eq!((status, &patched), (500, &safe), "edit refused");
+    assert_eq!(
+        fs::read(&note_path).unwrap(),
+        note_before,
+        "the owner's note file must be unchanged"
+    );
+    let (status, after) = call(Method::GET, "/people", Some(&cookie), None);
+    assert_eq!(status, 200, "{after}");
+    assert!(
+        after.to_string().contains("Ada Lovelace") && !after.to_string().contains("Hijacked"),
+        "{after}"
+    );
+    let mine2 = call(
+        Method::POST,
+        "/people",
+        Some(&cookie2),
+        Some(json!({"displayName":"Grace Hopper"})),
+    );
+    assert_eq!(mine2.0, 200, "second account create: {}", mine2.1);
+    let second_person = mine2.1["person"]["id"].as_str().unwrap().to_owned();
+    let (status, owner_list) = call(Method::GET, "/people", Some(&cookie), None);
+    assert_eq!(status, 200, "{owner_list}");
+    assert!(
+        owner_list["people"].as_array().is_some_and(|p| !p.is_empty())
+            && !owner_list.to_string().contains(&second_person),
+        "owner must not see the second account's person: {owner_list}"
+    );
+    println!("PASS privacy: second signed-in account sees none of the owner's people, cannot read or edit one by id, and its own person stays hidden from the owner");
+    println!("NOT PROVEN: native UI, second physical device, note-folder indexing");
 }

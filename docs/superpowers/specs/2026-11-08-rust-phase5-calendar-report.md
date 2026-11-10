@@ -1154,3 +1154,40 @@ apply job; concrete public Tasks, Briefings and Connectors adapters; apply/retry
 confirm execution; source behavior and external-calendar status controls; full shell and chat;
 old-screen replacement; complete assembled parity; physical second-device trusted HTTPS.
 Nothing in this slice was exercised through a live UI or second device.
+
+## JS-181 / part 23: provider tool logic and live server run
+
+Adds the guest logic for `calendar.createEvent`, `calendar.deleteEvent` and
+`calendar.rescheduleEvent` in `modules/calendar/src/provider_tools.rs`, routed from the package
+handler. The guest validates input, resolves the create window (morning 9-12, afternoon 12-17,
+evening 17-21, default tomorrow morning, duration clamped to 15..480, default title "Focus time")
+in the saved account timezone, and sends every provider effect through public Connectors calls
+(`createCalendarEvent`, `deleteCalendarEvent`, `rescheduleCalendarEvent`). A missing Connectors
+package fails closed with the standard unavailable error and writes nothing. Delete and
+reschedule return the original "required" result shapes for missing or unreadable input before
+any provider call. The timezone resolver is now shared with the upcoming-events tool.
+
+Differences from the original: a `start` or `newStart` is read as RFC 3339, a date, or a
+zoneless date-time taken as UTC; an unknown `partOfDay` is refused. The approval-card text, the
+freeze of a relative day across the approval gap, and the confirmation policy are host work and
+are not part of this slice. The three tools are not advertised in the manifest yet, for the same
+reason as part 22 (no Rust Connectors package).
+
+Checks: five new guest tests in `tools.rs` (window bands, fixed offsets, bad input, the exact
+Connectors requests, fail-closed) pass with Rust 1.95.0.
+
+### Live run on the real server
+
+New gate `pnpm test:rust-calendar-server` (through `scripts/run-gate.sh`): builds the real
+`moss-shell` and the network helper, publishes the packed Calendar package through a signed
+folder registry, installs it with the canonical installer, starts the server over HTTPS with a
+modules file, signs up an owner through the real sign-up route, and calls the routes. Result:
+no sign-in gives 401; the owner's cached event is listed and readable by id; an unknown id
+gives 404; a day plan is created and read back; briefing settings read with defaults. The
+cached event row is inserted by the test the way a sync would leave it; no response is rewritten.
+
+Not proven: Calendar screens on the real server (it serves module routes only, no frames), the
+provider tools end to end (no Connectors package), a second account over HTTP, a second physical
+device. Still required: the day-plan apply job, concrete Tasks/Briefings/Connectors adapters,
+apply/retry/recovery/confirm execution, source behavior and external-calendar status controls,
+full shell and chat, old-screen replacement, complete parity.
