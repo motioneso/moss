@@ -786,6 +786,15 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
             },
         )
         .unwrap();
+        for name in ["requestNotesSync"] {
+            let r = application.installer.call(
+                "notes",
+                AccessContext::new(owner, "notes-diag"),
+                "api",
+                &json!({"name":name,"parameters":{}}).to_string(),
+            );
+            println!("DIAG {name} -> {:?}", r.map_err(|e| format!("{e:#}")));
+        }
         let archive = |sessions: Value| -> Value {
             serde_json::from_str(
                 &application
