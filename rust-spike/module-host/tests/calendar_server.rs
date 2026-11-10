@@ -73,6 +73,15 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         .unwrap()
         .success());
     fs::create_dir(root.join("web")).unwrap();
+    if let Ok(shared) = std::env::var("MOSS_MODULE_SHARED_DIR") {
+        // Generated shared styles and fonts, which the sandboxed screens load.
+        let status = Command::new("cp")
+            .args(["-r", &shared])
+            .arg(root.join("web/module-shared"))
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
     fs::write(
         root.join("web/index.html"),
         "<!doctype html><title>Calendar HTTP fixture</title>",
@@ -267,7 +276,11 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         });
         let account = uuid::Uuid::new_v4();
         db.execute("INSERT INTO app.connector_accounts(id,provider_id,owner_user_id,encrypted_secret,scopes) VALUES($1,'google',$2,'{}',ARRAY['https://www.googleapis.com/auth/calendar'])", &[&account, &owner]).await.unwrap();
-        db.execute("INSERT INTO app.calendar_events(id,connector_account_id,owner_user_id,title,starts_at,ends_at,external_id) VALUES($1,$2,$3,$4,'2026-11-12T15:00:00Z','2026-11-12T16:00:00Z','server-gate')", &[&uuid::Uuid::new_v4(), &account, &owner, &event_title]).await.unwrap();
+        // Today at 15:00 UTC, so the Month view of a later run still shows it.
+        let day = chrono::Utc::now().date_naive();
+        let starts = day.and_hms_opt(15, 0, 0).unwrap().and_utc();
+        let ends = day.and_hms_opt(16, 0, 0).unwrap().and_utc();
+        db.execute("INSERT INTO app.calendar_events(id,connector_account_id,owner_user_id,title,starts_at,ends_at,external_id) VALUES($1,$2,$3,$4,$5,$6,'server-gate')", &[&uuid::Uuid::new_v4(), &account, &owner, &event_title, &starts, &ends]).await.unwrap();
     });
     private(
         &root.join("modules.json"),
@@ -364,8 +377,52 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         Some(json!({"expectedRevision":1,"idempotencyKey":"k","surprise":true})),
     );
     assert_eq!((status, bad["code"].as_str()), (400, Some("day_plan_invalid")), "{bad}");
+    // Retry, recover and confirm validate the request and then fail closed, like apply.
+    let plan_id = created["plan"]["id"].as_str().unwrap();
+    let operation = uuid::Uuid::new_v4();
+    let item = uuid::Uuid::new_v4();
+    let operation_path = |action: &str| format!("/day-plans/{plan_id}/operations/{operation}/{action}");
+    for (action, body) in [
+        ("retry", json!({"itemIds":[item]})),
+        ("recover", json!({})),
+        ("confirm", json!({"approvalId":"approval-1"})),
+    ] {
+        let path = operation_path(action);
+        assert_eq!(call(Method::POST, &path, None, Some(body.clone())).0, 401, "{action}");
+        let (status, refused) = call(Method::POST, &path, Some(&cookie), Some(body));
+        assert_eq!((status, refused["error"].as_str()), (503, Some("day plan apply is unavailable")), "{action}: {refused}");
+    }
+    let (status, bad) = call(Method::POST, &operation_path("retry"), Some(&cookie), Some(json!({"itemIds":[]})));
+    assert_eq!((status, bad["code"].as_str()), (400, Some("day_plan_invalid")), "{bad}");
     let (status, settings) = call(Method::GET, "/briefing-settings", Some(&cookie), None);
     println!("briefing settings read -> {status}: {settings}");
     println!("PASS installed Calendar package served over HTTPS by the real server: sign-in required, owner event list and detail, unknown event 404, day plan create and read, apply route validates and fails closed");
+    // The signed-in owner gets the verified screen address; the files need no session.
+    let screen_url = format!("{origin}/api/modules/calendar/screen?path=/calendar");
+    assert_eq!(client.get(&screen_url).send().unwrap().status(), 401);
+    let screen: Value = client.get(&screen_url).header("cookie", &cookie).send().unwrap().json().unwrap();
+    let src = screen["src"].as_str().expect("screen address");
+    assert!(src.starts_with("/module-ui/calendar/"), "{screen}");
+    assert_eq!(client.get(format!("{origin}{src}")).header("origin", "null").header("sec-fetch-site", "cross-site").send().unwrap().status(), 200);
+    println!("PASS Calendar screen address and files served over HTTPS");
+    // Real-browser check of the Calendar screens against this server.
+    if let Ok(script) = std::env::var("MOSS_CALENDAR_BROWSER_SCRIPT") {
+        let out = std::env::var("MOSS_CALENDAR_BROWSER_OUT").unwrap_or_else(|_| root.display().to_string());
+        let status = Command::new("pnpm")
+            .args(["exec", "tsx", &script])
+            .env("ORIGIN", &origin)
+            .env("EMAIL", "calendar-owner@example.test")
+            .env("PASSWORD", "temporary-calendar-password-181-not-a-real-secret")
+            .env("EVENT_TITLE", event_title)
+            .env("OUT", out)
+            .status()
+            .unwrap();
+        assert!(status.success(), "browser check failed\n{}", fs::read_to_string(root.join("server.log")).unwrap_or_default());
+    }
+    // Optional manual browser check: keep the server up and print where it is.
+    if let Ok(seconds) = std::env::var("MOSS_CALENDAR_HOLD_SECONDS") {
+        println!("HOLD {origin} for {seconds}s");
+        std::thread::sleep(std::time::Duration::from_secs(seconds.parse().unwrap_or(0)));
+    }
     println!("NOT PROVEN: Calendar screens on the real server (it serves module routes only), provider tools, second account over HTTP, second physical device");
 }
