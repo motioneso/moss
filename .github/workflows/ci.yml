@@ -525,10 +525,11 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     needs: [verify, unit, integration, browser, compose-smoke, prod-compose-smoke]
-    # always() so a skipped browser job (Rust-only push) still builds the image.
+    # always() so a skipped unit or browser job (Rust-only push) still builds the image.
     if: >-
       always() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
-      needs.verify.result == 'success' && needs.unit.result == 'success' &&
+      needs.verify.result == 'success' &&
+      (needs.unit.result == 'success' || needs.unit.result == 'skipped') &&
       needs.integration.result == 'success' && needs.compose-smoke.result == 'success' &&
       needs.prod-compose-smoke.result == 'success' &&
       (needs.browser.result == 'success' || needs.browser.result == 'skipped')
