@@ -83,8 +83,34 @@ const display = await context.request.get(`${origin}/api/m/calendar/display-sett
 });
 assert.equal(display.status(), 200);
 
-// Open: changing the look-ahead through the control did not reach the server within 30s
-// on the real server (see the Calendar report, part 25). Not asserted until diagnosed.
+// Settings screen: change the controls and confirm the server kept the values.
+await page.goto(screen("/settings/calendar"));
+const lookAhead = frame.getByLabel("Look ahead", { exact: true });
+await lookAhead.waitFor({ timeout: 60_000 });
+const saved = frame.getByRole("status").filter({ hasText: "Settings saved." });
+const saveSetting = async (label: string, value: string) => {
+  const response = page.waitForResponse(
+    (r) => r.url().endsWith("/api/m/calendar/briefing-settings") && r.request().method() === "PATCH"
+  );
+  await frame.getByLabel(label, { exact: true }).selectOption(value);
+  assert.equal((await response).status(), 200, `${label} save`);
+  await saved.waitFor();
+};
+await saveSetting("Look ahead", "0");
+await saveSetting("Prep tasks", "off");
+const confirmed = await context.request.get(`${origin}/api/m/calendar/briefing-settings`, {
+  headers: { origin }
+});
+const settings = (await confirmed.json()).settings;
+assert.equal(settings.lookaheadDays, 0);
+assert.equal(settings.prepTaskMode, "off");
+await page.screenshot({ path: join(OUT!, "calendar-settings.png") });
+await page.reload();
+await lookAhead.waitFor({ timeout: 60_000 });
+assert.equal(await lookAhead.inputValue(), "0");
+console.log(
+  "PASS settings changed in the real control are saved by the server and survive a reload"
+);
 
 assert.deepEqual(failed, [], "server errors during the run");
 await browser.close();

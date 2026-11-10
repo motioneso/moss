@@ -1255,3 +1255,25 @@ until it is diagnosed. The last gate run with the frame fix passed everything be
 
 Provider execution, retry/recover/confirm running a change, second account, second physical device
 (phone or laptop over LAN/tailnet), settings save through the UI on the real server.
+
+## JS-200 / part 26: settings save was a false success on the real server (fixed)
+
+Cause of the open finding in part 25: the server composition did not include the Calendar
+preference wrapper, so the briefing-settings PATCH wrote to a module-private store and answered
+200 "saved" while the account's real preferences never changed (a later read still gave the
+default of 2). The server now wraps its ports with `CalendarPorts` (Calendar-only; it answers
+calls from the Calendar module and passes everything else on), so settings and the account
+timezone come from the real account preferences. `moss-shell` depends on the Calendar host crate
+for this; a module-neutral preference binding would remove that coupling later.
+
+Live (real HTTPS server, real Chrome, nothing rewritten): the gate opens the settings screen,
+changes Look ahead to Today only and Prep tasks to Off through the real controls, sees the
+"Settings saved." status, reads the values back from the server (0 and off), and reloads to see
+Look ahead still 0. Before the fix the same step failed with 2 instead of 0. Run through
+`pnpm test:rust-calendar-server` via `scripts/run-gate.sh`; the browser step is back in the gate.
+
+Not proven: provider execution, the four provider tools end to end, retry/recover/confirm running
+a change, a second account, a second physical device. Still required: Connectors, Tasks and
+Briefings adapters, the apply job and execution, source behavior and external-calendar status
+controls, full shell and chat, old-screen replacement, complete parity. These need a Rust
+Connectors package first, which does not exist yet.
