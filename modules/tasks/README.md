@@ -455,3 +455,9 @@ browser-created proof task's due date to `2026-03-08` and do date to `2026-11-01
 The gate additionally requires their persisted timestamps to be Pacific local
 noon across the spring and fall clock changes. This seeds account preferences
 in the disposable fixture; it does not prove Profile's timezone-setting UI.
+
+## Part 38: focus presets from the address
+
+The Rust shell passes `?focus=priorities|atrisk|donetoday` to the Tasks screen, which opens
+with that preset (status filter cleared). Unknown values are ignored. Nothing in Today or chat
+links to these addresses yet. No route, tool, job kind, SQL or host interface changes.

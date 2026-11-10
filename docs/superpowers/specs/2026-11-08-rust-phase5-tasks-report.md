@@ -2198,3 +2198,27 @@ card was proven against the compiled component and a real database only. Still o
 per-queue retention in the host; email triage feedback; Today/chat focus links; installed chat
 and summary presentation; performance budgets; physical second-device HTTPS proof. Workshop
 and Food remain excluded. Part of #4027; release note Category N/A.
+
+## Tasks part 38 checkpoint (JS-216, Card 526)
+
+The Rust shell now opens the Tasks screen with a focus preset when the address carries
+`?focus=` (Do First `priorities`, `atrisk`, `donetoday`). The shell keeps the value when it
+navigates inside the app or on back/forward, passes it to the module page, and the page hands
+it to the screen, which selects the preset and drops the status filter, as the legacy page
+did. Any other value is ignored and the screen opens as usual. Only a short lowercase word is
+passed on, and the screen accepts only the three presets.
+
+Checked: new unit tests (shell address parsing, screen preset parsing); the full Tasks gate
+(`test:rust-tasks`) and the live HTTPS gate (`test:rust-tasks-server`). Live, in a real
+browser on the real HTTPS server, signed in, with two tasks created through the server (one
+due tomorrow, one with no date): `/tasks` shows both; `/tasks?focus=atrisk` shows only the due
+one with the "At risk" chip and the Focus box set to At risk; `/tasks?focus=bogus` shows both;
+moving to the address inside the open app (back/forward style) applies the preset without a
+reload.
+
+Not proven or not built: the Rust Today page has no task numbers yet and the Rust chat drawer
+renders no links, so nothing in the app points at these addresses yet; only the address
+works. A second physical device was not used. Still open: per-queue retention in the host;
+email triage feedback; installed chat and summary presentation; approval cards in the chat
+drawer; performance budgets; physical second-device HTTPS proof. Workshop and Food remain
+excluded. Part of #4027; release note Category N/A.
