@@ -124,7 +124,28 @@ signed package from a temporary folder registry with the real PostgreSQL lifecyc
 and checks dispatch, required-module disable refusal, saved rows and ledger identity.
 The second gate remains the two-server SQL-only comparison; it is not Notes HTTP parity.
 
-## Limits
+## Installed tool-dispatch checks (part twenty-one)
+
+The disposable aggregate gate now joins the existing generic `tools.run` service
+to an installed, signed experimental Notes guest for create, edit, delete and
+indexed search. A WAT probe only forwards the outer service request; the Notes
+handler, linked files, private sync checkpoints, indexing and retrieval use the
+real Rust implementations. Queue delivery is manual and both embedding adapters
+use the named deterministic test provider. The fixture declares write tools only
+in its experimental manifest; the ordinary package remains read-only.
+The same service probe calls the installed read-only approval-preparation API;
+callers without the declared Notes dependency are refused. Preparation supplies
+an action version but grants no approval and makes no file or sync change.
+
+The checks distinguish approval refusal from a later Notes conflict by counting
+downstream port calls. They exercise wrong accounts (including an unrelated
+admin), changed parameters, a different tool and grant replay before file or
+database access, then the original approved write. They also remove checkpoint
+RLS to observe cross-account read/update/delete denial assertions fail, restore
+it and repeat. This is installed service integration, not approval-card freshness,
+an active queue, configured models, assembled chat or second-device proof.
+
+## Export limits
 
 The host uses its ordinary transaction isolation. This is not a point-in-time
 snapshot across all pages/tables while another process changes data. Paging,

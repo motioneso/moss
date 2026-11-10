@@ -1576,3 +1576,54 @@ Independent review prompted narrower claims for missing paths outside roots and
 general guidance for in-root vault policy refusals. The installed Settings test
 also checks real symlink-descendant refusals through both save and browse routes;
 this is a deliberate vault restriction, not legacy symlink parity.
+
+## Part twenty-one checkpoint — installed tool dispatcher integration
+
+The disposable Notes gate now exercises the existing generic tool dispatcher
+with an installed, signed experimental package, rather than calling only the
+guest's write handlers. Its path is `tools.run`, the real Notes Wasm guest,
+guarded file mutation, a private durable sync request, manual delivery to the
+installed worker, real indexing and indexed search. The test performs create,
+edit and delete and checks their resulting file and search contents. Both app
+and worker database roles use the same path; installer catalog setup still
+uses app credentials. Queue publication is captured and delivery is manual.
+Query and document embeddings use the same named deterministic stand-in.
+
+A synthetic dependent caller also reaches the installed public approval API
+through the actual `api.call` service. Read-only preparation returns an action
+version without changing files or requesting sync; it does not approve the
+subsequent write. Another account and an unrelated admin cannot prepare the
+owner's source, and a caller without the Notes dependency is refused.
+
+The dispatcher checks cover absent approvals, another account and an unrelated
+admin, changed inputs, another tool, and replay of a consumed approval. A port
+counter requires these refusals before Notes file/database work, so a later
+file conflict cannot falsely count as approval enforcement. The original grant
+must still permit the intended write after rejected attempts. The new write's
+checkpoint has UUID-only queued parameters. Cross-account checkpoint reads,
+updates and deletes are denied; removing RLS must make those assertions fail,
+then restoration must restore the denial. The aggregate gate retains the
+earlier legacy differential and privacy-removal controls as well.
+
+This slice adds test coverage and documentation only. No shipped manifest,
+runtime permission, dependency, SQL, host service or screen changes. The app map
+already describes writes and sync as experimental and remains accurate. The
+probe is a synthetic caller of the real service, not chat or an approval UI.
+It does not establish approval-version rechecking or permit ordinary-package
+write activation. Current command receipts and independent review are in the
+task proof artifact.
+
+Builds use task-owned scratch Cargo and Rust homes and separate ordinary and
+write-tools guest targets. The declared Wasm target and approved pinned
+`wit-bindgen` dependency are unchanged; nothing is installed globally. A shared
+host target cache may be reused, but the toolchain homes are task-owned and
+survive removal of another task's original folder. Database checks run only
+through `scripts/run-gate.sh`.
+
+Full Notes acceptance remains unfinished: configured embeddings, live installed
+chat and approval freshness/consumption orchestration, production sync and queue
+delivery, singleton coalescing, recall warmup, automatic recovery and retention,
+managed publication/fencing and reconciliation, private exports/daily archives,
+full path/HTTP parity, assembled Settings/chat and physical second-device HTTPS
+proof. This is a bounded integration checkpoint, not a replacement for working
+legacy Notes. Completing that list exceeds this continuation's context scope.
