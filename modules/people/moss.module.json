@@ -6,6 +6,7 @@
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
   "abi": "moss:module@1",
   "capabilities": [
     {

@@ -27,6 +27,9 @@ use std::{
     sync::Arc,
 };
 
+/// Largest per-invocation fuel a module manifest may request on this server.
+const DEFAULT_FUEL_CEILING: u64 = 250_000_000;
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Settings {
@@ -84,7 +87,7 @@ pub fn open(path: &Path, database: Database) -> Result<ServerModules> {
             intelligence: Arc::new(UnconfiguredIntelligence),
             version: "0.1.0".parse()?,
             compiled_cache: None,
-            fuel_ceiling: settings.fuel_ceiling,
+            fuel_ceiling: Some(settings.fuel_ceiling.unwrap_or(DEFAULT_FUEL_CEILING)),
         },
     )?);
     let worker = Worker::start(
