@@ -21,6 +21,9 @@ enum ApiRequest {
     #[serde(rename = "exportPrivateNote")]
     ExportPrivate(crate::private_export::Request),
     #[cfg(feature = "write-tools")]
+    #[serde(rename = "writeDailyChatArchive")]
+    DailyArchive(crate::daily_archive::Request),
+    #[cfg(feature = "write-tools")]
     #[serde(rename = "recoverNotesSync")]
     RecoverSync(crate::sync_recovery::Recovery),
 }
@@ -63,6 +66,8 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> Result<String> {
                 ApiRequest::ExportPrivate(input) => {
                     crate::private_export::create_or_inspect(host, &input)?
                 }
+                #[cfg(feature = "write-tools")]
+                ApiRequest::DailyArchive(input) => crate::daily_archive::write(host, &input)?,
                 #[cfg(feature = "write-tools")]
                 ApiRequest::RecoverSync(input) => crate::sync_recovery::recover(host, input)?,
                 ApiRequest::Prepare(request) => {

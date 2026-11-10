@@ -4,7 +4,7 @@
   "name": "Notes",
   "description": "Choose your notes folder, search your indexed notes, and create, edit or delete notes with your approval.",
   "publisher": "Moss",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -72,7 +72,8 @@
     "collectManagedNotesExportSection": "1.0.0",
     "prepareNoteAction": "1.0.0",
     "exportPrivateNote": "1.0.0",
-    "inspectPrivateNote": "1.0.0"
+    "inspectPrivateNote": "1.0.0",
+    "writeDailyChatArchive": "1.0.0"
   },
   "navigation": [],
   "settings": [
@@ -108,6 +109,10 @@
     {
       "id": "notes.private-export",
       "description": "Other modules can save a versioned private copy of a note through the exportPrivateNote API and check one with inspectPrivateNote. Each copy is created once, never overwritten, and kept in the calling account's private notes area, separate from the linked notes folder. The server must be configured with a private notes location. These copies are not indexed or searchable yet."
+    },
+    {
+      "id": "notes.daily-chat-archive",
+      "description": "The chat module can save a day's conversations as one Markdown file in a folder inside the linked notes folder, through the writeDailyChatArchive API. Each file starts with a Moss marker, so a later run replaces only its own file. A file of your own with the same name is never touched; the archive goes beside it as a file ending in (moss). With no linked folder, no conversations or an unusable folder name, nothing is written. A write requests a sync. The caller supplies each conversation's time label already formatted for the person. The chat settings screen and the daily trigger are not joined yet."
     },
     {
       "id": "notes.folder-settings",

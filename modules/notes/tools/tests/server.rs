@@ -728,6 +728,131 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         drop(application);
         drop(runtime);
     }
+    // The daily chat archive is a module-to-module API with no HTTP route. It runs in this
+    // process against the real database, the folder the HTTPS steps linked, and real files.
+    {
+        use moss_module_host::linked_notes::{LinkedNotesPorts, PreferenceFolder, PreferenceFolders};
+        let ai: Arc<dyn moss_module_host::ai::Intelligence> = Arc::new(
+            moss_module_host::ai::EmbeddingsOnly::new(moss_module_host::ai::FixedEmbeddings::new(
+                embedding_url.parse().unwrap(),
+                "bag-of-words-768".into(),
+                "local-stub".into(),
+            ))
+            .unwrap(),
+        );
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let app = runtime.block_on(async {
+            safety_core::db::Database::connect(&app_url, 4, safety_core::db::RuntimeRole::App)
+                .await
+                .unwrap()
+        });
+        let folder_database = app.clone();
+        let archive_database = app.clone();
+        let cipher = safety_core::secret::SecretCipher::connectors(
+            &std::collections::HashMap::from([(
+                "JARVIS_CONNECTOR_SECRET_KEY".into(),
+                connector_key.clone(),
+            )]),
+        )
+        .unwrap();
+        let notes_base = root.join("notes");
+        let application = Application::open_extended_with(
+            &root.join("data"),
+            app,
+            access.clone(),
+            Configuration {
+                migrations: Secret::new(bootstrap_url.clone()),
+                producer: Secret::new(app_url.clone()),
+                cipher: Arc::new(cipher),
+                intelligence: ai,
+                version: "0.1.0".parse().unwrap(),
+                compiled_cache: None,
+                fuel_ceiling: None,
+            },
+            |services| {
+                let folders = PreferenceFolders::new(
+                    folder_database,
+                    std::collections::BTreeMap::from([(
+                        ("notes".to_string(), "source".to_string()),
+                        PreferenceFolder {
+                            preference: "notes-source-path".into(),
+                            relative_to: None,
+                        },
+                    )]),
+                    std::collections::BTreeMap::new(),
+                )
+                .unwrap()
+                .with_account_base(notes_base.clone());
+                let linked: Arc<dyn moss_module_host::runtime::Ports> =
+                    Arc::new(LinkedNotesPorts::new(Arc::new(folders), services));
+                Ok(Arc::new(
+                    moss_module_host::folder_settings::FolderSettingsPorts::new(
+                        archive_database,
+                        std::collections::BTreeMap::from([(
+                            ("notes".to_string(), "source".to_string()),
+                            moss_module_host::folder_settings::FolderSetting {
+                                path_key: "notes-source-path".into(),
+                                status_key: "notes-last-sync".into(),
+                                roots: std::collections::BTreeMap::new(),
+                            },
+                        )]),
+                        linked,
+                    )
+                    .unwrap()
+                    .with_account_base(notes_base),
+                ))
+            },
+        )
+        .unwrap();
+        let archive = |sessions: Value| -> Value {
+            serde_json::from_str(
+                &application
+                    .installer
+                    .call(
+                        "notes",
+                        AccessContext::new(owner, "notes-daily-archive-live"),
+                        "api",
+                        &json!({"name":"writeDailyChatArchive","parameters":{
+                            "localDate":"2026-11-10","folder":"Moss/Chats","sessions":sessions}})
+                            .to_string(),
+                    )
+                    .unwrap_or_else(|e| {
+                        panic!(
+                            "archive call failed: {e:#}; file written: {}",
+                            journal.join("Moss/Chats/2026-11-10.md").is_file()
+                        )
+                    }),
+            )
+            .unwrap()
+        };
+        let sessions = json!([{"threadId":"t1","title":"Trip plan","timeLabel":"9:00 AM",
+            "messages":[{"role":"user","body":"Where should we stay?"},
+                        {"role":"assistant","body":"Near the station."}]}]);
+        let first = archive(sessions.clone());
+        assert_eq!(first, json!({"written":true,"path":"Moss/Chats/2026-11-10.md"}), "{first}");
+        let file = journal.join("Moss/Chats/2026-11-10.md");
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert!(text.starts_with("<!-- moss-chat-archive:v1 -->\n"), "{text}");
+        assert!(text.contains("## 9:00 AM \u{2014} Trip plan"), "{text}");
+        assert!(text.contains("**assistant:** Near the station."), "{text}");
+        // A later run replaces only Moss's own file.
+        let again = archive(json!([{"threadId":"t1","title":"Trip plan","timeLabel":"9:00 AM",
+            "messages":[{"role":"user","body":"Updated question"}]}]));
+        assert_eq!(again["path"], "Moss/Chats/2026-11-10.md");
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert!(text.contains("Updated question") && !text.contains("Near the station"));
+        // A person's own file with the day's name is never touched.
+        std::fs::write(&file, "# my own journal").unwrap();
+        let beside = archive(sessions);
+        assert_eq!(beside["path"], "Moss/Chats/2026-11-10 (moss).md", "{beside}");
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "# my own journal");
+        assert!(journal.join("Moss/Chats/2026-11-10 (moss).md").is_file());
+        let refused = archive(json!([]));
+        assert_eq!(refused["reason"], "no-sessions");
+        println!("daily archive -> written, replaced own file, kept the person's file and saved beside it, empty refused");
+        drop(application);
+        drop(runtime);
+    }
     let unlinked = call(
         Method::PUT,
         "/notes-source",
@@ -747,5 +872,6 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     println!("PASS schedule: linking created one fifteen-minute sync schedule per account; when due, the server's scheduler and worker indexed a note added later, with no manual request");
     println!("PASS indexing: the server's own worker embedded three real notes through a local HTTP embeddings endpoint, and search returned the matching note first for two queries");
     println!("PASS private export: a versioned note copy was written once into the account's private area (outside the linked folder), a retry was unchanged, a different retry was a kept conflict, and another actor's copy stayed separate");
-    println!("NOT PROVEN: private export over HTTP (it is a module-to-module API run in-process) and indexing of private copies, a hosted embeddings provider (a local stand-in endpoint was used), search from the chat or any server endpoint, second signed-in account (setup allows one owner), native UI, second physical device");
+    println!("PASS daily chat archive: in the linked folder, a day's conversations were written with the Moss marker, refreshed on a second run, and a person's own file of the same name was kept with the archive saved beside it");
+    println!("NOT PROVEN: daily archive over HTTP or from chat (it is a module-to-module API run in-process; the chat settings and daily trigger are not joined), private export over HTTP (it is a module-to-module API run in-process) and indexing of private copies, a hosted embeddings provider (a local stand-in endpoint was used), search from the chat or any server endpoint, second signed-in account (setup allows one owner), native UI, second physical device");
 }

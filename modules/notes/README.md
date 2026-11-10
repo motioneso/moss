@@ -9,8 +9,8 @@ The guest uses only `moss-module-sdk` database queries on Notes-owned tables.
 Notes remains required and has no standalone screen. This package is a continuation
 checkpoint: Connections folder selection, saved sync status and Sync now have a package screen and
 installed routes. Search, create, edit and delete are package tools, and the package declares the
-`notes.sync` job and the manual sync route. Private note export (versioned copies) is provided; managed publication,
-daily archives and the account export screen join are unfinished. The Connections
+`notes.sync` job and the manual sync route. Private note export (versioned copies) and the daily chat archive API are provided; managed publication
+and the account export screen join are unfinished. The Connections
 screen still needs joining into the assembled Phase 4 settings shell. Do not replace a
 working legacy Notes installation with this checkpoint.
 
