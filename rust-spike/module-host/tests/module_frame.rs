@@ -71,7 +71,7 @@ fn installed_screens_use_verified_versioned_opaque_assets() {
     )
     .unwrap();
     let screen = i.screen(&access, "sample.counter", "/counter").unwrap();
-    assert_eq!(screen.sandbox, "allow-scripts");
+    assert_eq!(screen.sandbox, "allow-scripts allow-forms");
     assert!(screen.src.contains(&digest));
     assert!(screen.src.ends_with("/ui/index.html"));
     let policy = AssetPolicy::new("https://moss.example.test").unwrap();
@@ -81,7 +81,7 @@ fn installed_screens_use_verified_versioned_opaque_assets() {
     assert_eq!(asset.body, files["ui/index.html"]);
     assert_eq!(asset.content_type, "text/html; charset=utf-8");
     let csp = &asset.headers["Content-Security-Policy"];
-    assert!(csp.contains("sandbox allow-scripts"));
+    assert!(csp.contains("sandbox allow-scripts allow-forms"));
     assert!(!csp.contains("allow-same-origin"));
     assert!(csp.contains("'wasm-unsafe-eval'"));
     assert!(csp.contains("style-src-attr 'unsafe-inline'"));

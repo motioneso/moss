@@ -374,7 +374,7 @@ fn compiled_people_routes_match_legacy_http_handlers_and_rows() {
                 "/settings/memory/people",
             )
             .unwrap();
-        assert_eq!(screen.sandbox, "allow-scripts");
+        assert_eq!(screen.sandbox, "allow-scripts allow-forms");
         let parts: Vec<_> = screen.src.splitn(5, '/').collect();
         let asset = installer
             .ui_asset(

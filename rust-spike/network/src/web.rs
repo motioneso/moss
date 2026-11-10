@@ -105,20 +105,27 @@ fn theme_asset(path: &str) -> bool {
     matches!(path, "/app.css" | "/boot-theme.js" | "/icon.svg") || path.starts_with("/fonts/")
 }
 
+/// Static files for sandboxed module screens. They hold no account data.
+fn module_asset(path: &str) -> bool {
+    path.starts_with("/module-ui/") || path.starts_with("/module-shared/")
+}
+
 fn public(path: &str) -> bool {
-    matches!(
-        path,
-        "/sign-in"
-            | "/setup"
-            | "/api/setup/status"
-            | "/api/hello"
-            | "/api/auth/sign-in/email"
-            | "/api/auth/sign-up/email"
-            | "/access.js"
-            | "/app.css"
-            | "/boot-theme.js"
-            | "/icon.svg"
-    ) || path.starts_with("/fonts/")
+    module_asset(path)
+        || matches!(
+            path,
+            "/sign-in"
+                | "/setup"
+                | "/api/setup/status"
+                | "/api/hello"
+                | "/api/auth/sign-in/email"
+                | "/api/auth/sign-up/email"
+                | "/access.js"
+                | "/app.css"
+                | "/boot-theme.js"
+                | "/icon.svg"
+        )
+        || path.starts_with("/fonts/")
 }
 
 fn denied(status: u16, code: &'static str) -> Response {
@@ -153,7 +160,10 @@ async fn boundary(State(n): State<Arc<Network>>, mut request: Request, next: Nex
         "x-content-type-options",
         HeaderValue::from_static("nosniff"),
     );
-    response.headers_mut().insert("content-security-policy", HeaderValue::from_static("default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; connect-src 'self'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"));
+    // Module screens carry their own stricter policy from the module host.
+    if !response.headers().contains_key("content-security-policy") {
+        response.headers_mut().insert("content-security-policy", HeaderValue::from_static("default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; connect-src 'self'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"));
+    }
     log(audit_line(response.status().as_u16()));
     response
 }
@@ -173,10 +183,15 @@ async fn guarded(n: &Arc<Network>, request: &mut Request, next: Next) -> Respons
     if request.uri().authority().is_some() || request.uri().scheme().is_some() {
         return denied(421, "host_refused");
     }
-    if let Err(status) = n
-        .policy
-        .check(request.headers(), request.method(), peer.ip())
-    {
+    // Opaque module frames load their own public static files without credentials. Their
+    // requests carry `Origin: null` and a cross-site fetch label, so only the host and
+    // sharing checks apply to those read-only paths.
+    let mut checked = request.headers().clone();
+    if module_asset(request.uri().path()) && request.method() == Method::GET {
+        checked.remove("origin");
+        checked.remove("sec-fetch-site");
+    }
+    if let Err(status) = n.policy.check(&checked, request.method(), peer.ip()) {
         return denied(
             status,
             if status == 421 {

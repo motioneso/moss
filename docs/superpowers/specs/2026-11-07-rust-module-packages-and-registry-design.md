@@ -157,7 +157,7 @@ releases rather than through the registry.
 
 Module screens open in a sandboxed frame inside the Moss app frame.
 
-- The frame has `sandbox="allow-scripts"` and no same-origin permission, so its origin is opaque.
+- The frame has `sandbox="allow-scripts allow-forms"` and no same-origin permission (forms are allowed so a native submit event reaches the module, while the policy keeps `form-action 'none'` so nothing navigates), so its origin is opaque.
   It cannot read Moss cookies, local storage or the host page.
 - Moss serves `ui/` files from a versioned path with a strict content-security policy. The policy
   allows scripts and styles only from that path and the shared Park Press stylesheet, allows
@@ -165,7 +165,7 @@ Module screens open in a sandboxed frame inside the Moss app frame.
   file), and adds `'wasm-unsafe-eval'` so the bundle can start. Because the frame's origin is
   opaque, these files are served with cross-origin headers that accept the `null` origin. No
   other route accepts it.
-- Every `ui/` response also carries `sandbox allow-scripts` in that policy header. A person who
+- Every `ui/` response also carries `sandbox allow-scripts allow-forms` in that policy header. A person who
   opens the path straight in a tab still gets an opaque origin, so the module's script never runs
   with Moss's own origin, storage or script-readable cookies. The Rust host's session cookie
   must be `HttpOnly`.

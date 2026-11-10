@@ -259,7 +259,7 @@ fn main() {
         });
         let private = router(data, args.web.clone());
         let private = match &loader {
-            Some(_) => private.merge(modules::routes(modules.clone())),
+            Some(_) => private.merge(modules::routes(modules.clone(), args.web.clone())),
             None => private,
         };
         let private = match admin {

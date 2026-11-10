@@ -18,6 +18,7 @@ cargo build --release --quiet -p moss-shell-ui --target wasm32-unknown-unknown
 "$CARGO_TARGET_DIR/release/ui-bindgen" \
   "$CARGO_TARGET_DIR/wasm32-unknown-unknown/release/moss-shell-ui.wasm" "$web" app
 python3 assets/build-assets.py "$web"
+python3 ../module-ui/build-assets.py "$web/module-shared"
 cp assets/index.html "$web/index.html"
 cargo build --release --quiet -p moss-shell -p moss-app
 cp "$CARGO_TARGET_DIR/release/moss-shell" "$CARGO_TARGET_DIR/release/moss-app" "$out/"

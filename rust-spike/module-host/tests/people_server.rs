@@ -67,6 +67,15 @@ fn installed_people_package_serves_routes_from_the_real_server() {
         .unwrap()
         .success());
     fs::create_dir(root.join("web")).unwrap();
+    if let Ok(shared) = std::env::var("MOSS_MODULE_SHARED_DIR") {
+        // Generated shared styles and fonts for a manual browser check.
+        let status = Command::new("cp")
+            .args(["-r", &shared])
+            .arg(root.join("web/module-shared"))
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
     fs::write(
         root.join("web/index.html"),
         "<!doctype html><title>People HTTP fixture</title>",
@@ -212,6 +221,12 @@ fn installed_people_package_serves_routes_from_the_real_server() {
         (status, response.json::<Value>().unwrap_or(Value::Null))
     };
     use reqwest::Method;
+    // The module host opens in the background; wait until it answers.
+    let ready = Instant::now() + Duration::from_secs(90);
+    while call(Method::GET, "/people", Some(&cookie), None).0 == 503 {
+        assert!(Instant::now() < ready, "module host never became ready");
+        std::thread::sleep(Duration::from_millis(500));
+    }
     assert_eq!(call(Method::GET, "/people", None, None).0, 401);
     let (status, list) = call(Method::GET, "/people", Some(&cookie), None);
     assert_eq!(status, 200, "{list}");
@@ -253,6 +268,74 @@ fn installed_people_package_serves_routes_from_the_real_server() {
     let (status, settings) = call(Method::GET, "/people/notes-settings", Some(&cookie), None);
     assert_eq!(status, 200, "{settings}");
     println!("PASS installed People package served over HTTPS: sign-in required, create writes a note in the account folder, list, notes settings reachable");
+
+    // The signed-in account gets the verified screen address. The screen's own files are
+    // public, carry the module policy and never need the session cookie.
+    let screen_url = format!("{origin}/api/modules/people/screen?path=/settings/memory/people");
+    assert_eq!(client.get(&screen_url).send().unwrap().status(), 401);
+    let screen: Value = client
+        .get(&screen_url)
+        .header("cookie", &cookie)
+        .send()
+        .unwrap()
+        .json()
+        .unwrap();
+    let src = screen["src"].as_str().expect("screen address");
+    assert!(src.starts_with("/module-ui/people/"), "{screen}");
+    let asset = client
+        .get(format!("{origin}{src}"))
+        .header("origin", "null")
+        .header("sec-fetch-site", "cross-site")
+        .send()
+        .unwrap();
+    assert_eq!(asset.status(), 200, "screen file without a session");
+    // The opaque-origin exemption covers module files only. Account routes still refuse it,
+    // and a foreign Host never reaches the asset handler.
+    let cross_site_api = client
+        .get(format!("{origin}/api/m/people/people?limit=1"))
+        .header("cookie", &cookie)
+        .header("origin", "null")
+        .header("sec-fetch-site", "cross-site")
+        .send()
+        .unwrap();
+    assert!(
+        cross_site_api.status() == 403 || cross_site_api.status() == 401,
+        "cross-site account route: {}",
+        cross_site_api.status()
+    );
+    let foreign_host = client
+        .get(format!("{origin}{src}"))
+        .header("host", "evil.example")
+        .send()
+        .unwrap();
+    assert!(
+        foreign_host.status().is_client_error(),
+        "foreign host: {}",
+        foreign_host.status()
+    );
+    let csp = asset.headers()["content-security-policy"]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    assert!(
+        csp.contains("sandbox allow-scripts allow-forms") && csp.contains(&origin),
+        "{csp}"
+    );
+    assert_eq!(
+        client
+            .get(format!("{origin}/api/modules/people/screen?path=/nope"))
+            .header("cookie", &cookie)
+            .send()
+            .unwrap()
+            .status(),
+        404
+    );
+    println!("PASS People screen address and files served over HTTPS");
+    // Optional manual browser check: keep the server up and print where it is.
+    if let Ok(seconds) = std::env::var("MOSS_PEOPLE_HOLD_SECONDS") {
+        println!("HOLD {origin} for {seconds}s");
+        std::thread::sleep(Duration::from_secs(seconds.parse().unwrap_or(0)));
+    }
 
     // Second account. Setup allows one owner over HTTP, so the account is made in the
     // database with the owner's password hash and then signs in through the real route.
@@ -350,7 +433,9 @@ fn installed_people_package_serves_routes_from_the_real_server() {
     let (status, owner_list) = call(Method::GET, "/people", Some(&cookie), None);
     assert_eq!(status, 200, "{owner_list}");
     assert!(
-        owner_list["people"].as_array().is_some_and(|p| !p.is_empty())
+        owner_list["people"]
+            .as_array()
+            .is_some_and(|p| !p.is_empty())
             && !owner_list.to_string().contains(&second_person),
         "owner must not see the second account's person: {owner_list}"
     );
