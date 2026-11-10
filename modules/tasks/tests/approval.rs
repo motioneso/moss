@@ -225,3 +225,91 @@ fn read_tools_and_unknown_requests_are_refused() {
     let other = json!({"name":"prepareTaskAction","parameters":{"tool":"tasks.createList","inputJson":"{}"},"actorUserId":"x"});
     assert!(moss_tasks_module::handle(&Rows, "api", &other.to_string()).is_err());
 }
+
+fn api(name: &str, parameters: Value) -> Value {
+    let request = json!({"name":name,"parameters":parameters});
+    let out = moss_tasks_module::handle(&Rows, "api", &request.to_string()).unwrap();
+    serde_json::from_str(&out).unwrap()
+}
+fn route(name: &str, params: Value, query: Value, body: Option<&str>) -> Value {
+    api(
+        "prepareTaskRoute",
+        json!({"route":name,"params":params,"query":query,"bodyJson":body}),
+    )
+}
+
+#[test]
+fn route_cards_join_path_parameters_to_the_body() {
+    let renamed = route(
+        "renameTag",
+        json!({"listId":LIST,"tagId":TAG}),
+        json!({}),
+        Some(r#"{"name":"Chores"}"#),
+    );
+    assert_eq!(renamed["ok"]["title"], "Rename task tag");
+    assert_eq!(renamed["ok"]["target"], "Errands");
+    assert_eq!(
+        rows(&renamed),
+        vec![pair("Name", "Chores"), pair("List", "Home"), pair("Tag", "Errands")]
+    );
+    let removed = route("deleteList", json!({"listId":LIST}), json!({}), None);
+    assert_eq!(removed["ok"]["target"], "Home");
+    let broken = route(
+        "breakDown",
+        json!({"id":TASK}),
+        json!({}),
+        Some(r#"{"steps":["One","Two"]}"#),
+    );
+    assert_eq!(
+        rows(&broken)[..2],
+        [pair("Subtask 1", "One"), pair("Subtask 2", "Two")]
+    );
+    let created = route("createList", json!({}), json!({}), Some(r#"{"name":"Errands"}"#));
+    assert_eq!(created["ok"]["target"], "Your task lists");
+}
+
+#[test]
+fn route_cards_refuse_extra_missing_or_colliding_inputs() {
+    let none = json!({"ok":null});
+    let body = Some(r#"{"name":"X"}"#);
+    // query string, unknown parameter, missing parameter, body collision, bad body shapes
+    assert_eq!(route("renameList", json!({"listId":LIST}), json!({"a":"1"}), body), none);
+    assert_eq!(route("renameList", json!({"listId":LIST,"x":LIST}), json!({}), body), none);
+    assert_eq!(route("renameList", json!({}), json!({}), body), none);
+    assert_eq!(
+        route("renameList", json!({"listId":LIST}), json!({}), Some(r#"{"name":"X","listId":"y"}"#)),
+        none
+    );
+    assert_eq!(route("renameList", json!({"listId":LIST}), json!({}), Some("null")), none);
+    assert_eq!(route("renameList", json!({"listId":LIST}), json!({}), Some("[1]")), none);
+    // a task id the account cannot see gives no card
+    assert_eq!(
+        route("breakDown", json!({"id":OTHER_LIST}), json!({}), Some(r#"{"steps":["a"]}"#)),
+        none
+    );
+    let unknown = route("nope", json!({}), json!({}), None);
+    assert_eq!(unknown["error"]["statusCode"], 400);
+}
+
+fn prefs(body: &str, params: Value, query: Value) -> Value {
+    api(
+        "prepareTaskPreferences",
+        json!({"params":params,"query":query,"bodyJson":body}),
+    )
+}
+
+#[test]
+fn preferences_card_shows_the_view_in_words_and_refuses_the_rest() {
+    let list = prefs(r#"{"defaultView":"priority"}"#, json!({}), json!({}));
+    assert_eq!(list["ok"]["title"], "Set task view preference");
+    assert_eq!(list["ok"]["target"], "Your task preferences");
+    assert_eq!(rows(&list), vec![pair("Default task view", "List")]);
+    let grid = prefs(r#"{"defaultView":"matrix"}"#, json!({}), json!({}));
+    assert_eq!(rows(&grid), vec![pair("Default task view", "Grid")]);
+    let none = json!({"ok":null});
+    assert_eq!(prefs(r#"{"defaultView":"table"}"#, json!({}), json!({})), none);
+    assert_eq!(prefs(r#"{"defaultView":"matrix","x":1}"#, json!({}), json!({})), none);
+    assert_eq!(prefs("{}", json!({}), json!({})), none);
+    assert_eq!(prefs(r#"{"defaultView":"matrix"}"#, json!({"a":"b"}), json!({})), none);
+    assert_eq!(prefs(r#"{"defaultView":"matrix"}"#, json!({}), json!({"q":"1"})), none);
+}

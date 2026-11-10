@@ -539,3 +539,105 @@ pub(crate) fn prepare<H: Host + ?Sized>(host: &H, tool: &str, input_json: &str) 
         Err(_) => json!({"error":{"statusCode":503,"error":"Tasks service is unavailable"}}),
     }
 }
+
+// Route name, tool it maps to, and the path parameters with the input key each fills.
+const ROUTES: &[(&str, &str, &[(&str, &str)])] = &[
+    ("addActivity", "tasks.addActivity", &[("id", "taskId")]),
+    ("assignTag", "tasks.assignTag", &[("id", "taskId")]),
+    (
+        "unassignTag",
+        "tasks.unassignTag",
+        &[("id", "taskId"), ("tagId", "tagId")],
+    ),
+    ("createList", "tasks.createList", &[]),
+    ("renameList", "tasks.renameList", &[("listId", "listId")]),
+    ("deleteList", "tasks.deleteList", &[("listId", "listId")]),
+    ("createTag", "tasks.createTag", &[("listId", "listId")]),
+    (
+        "renameTag",
+        "tasks.renameTag",
+        &[("listId", "listId"), ("tagId", "tagId")],
+    ),
+    (
+        "deleteTag",
+        "tasks.deleteTag",
+        &[("listId", "listId"), ("tagId", "tagId")],
+    ),
+    ("breakDown", "tasks.breakDown", &[("id", "taskId")]),
+];
+
+/// Handles `prepareTaskRoute`. Path parameters join the body as explicit inputs, so a
+/// query string, an unknown or missing parameter, or a body key that collides gives no card.
+pub(crate) fn prepare_route<H: Host + ?Sized>(
+    host: &H,
+    route: &str,
+    params: &serde_json::Map<String, Value>,
+    query: &serde_json::Map<String, Value>,
+    body_json: Option<&str>,
+) -> Value {
+    let Some((_, tool, mapping)) = ROUTES.iter().find(|(name, _, _)| *name == route) else {
+        return json!({"error":{"statusCode":400,"error":"Unknown Tasks route"}});
+    };
+    let none = json!({"ok":null});
+    if !query.is_empty() {
+        return none;
+    }
+    let mut input: Vec<(String, Ordered)> = match body_json {
+        None => Vec::new(),
+        Some(text) => match serde_json::from_str::<Ordered>(text) {
+            Ok(Ordered::Object(entries)) => entries,
+            _ => return none,
+        },
+    };
+    if params.keys().any(|k| !mapping.iter().any(|(p, _)| p == k)) {
+        return none;
+    }
+    for (param, key) in *mapping {
+        let Some(value) = params.get(*param) else {
+            return none;
+        };
+        if input.iter().any(|(k, _)| k == key) {
+            return none;
+        }
+        let Ok(value) = serde_json::from_value::<Ordered>(value.clone()) else {
+            return none;
+        };
+        input.push(((*key).to_owned(), value));
+    }
+    match prepare_card(host, tool, &input) {
+        Ok(Ok(card)) => json!({"ok":card}),
+        Ok(Err(message)) => json!({"error":{"statusCode":400,"error":message}}),
+        Err(_) => json!({"error":{"statusCode":503,"error":"Tasks service is unavailable"}}),
+    }
+}
+
+/// Handles `prepareTaskPreferences`: only the default view, shown in words.
+pub(crate) fn prepare_preferences(
+    params: &serde_json::Map<String, Value>,
+    query: &serde_json::Map<String, Value>,
+    body_json: &str,
+) -> Value {
+    let none = json!({"ok":null});
+    if !params.is_empty() || !query.is_empty() {
+        return none;
+    }
+    let Ok(Ordered::Object(body)) = serde_json::from_str::<Ordered>(body_json) else {
+        return none;
+    };
+    let [(key, value)] = body.as_slice() else {
+        return none;
+    };
+    if key != "defaultView" {
+        return none;
+    }
+    let Some(shown) = choice(value, &[("priority", "List"), ("matrix", "Grid")]) else {
+        return none;
+    };
+    json!({"ok":{
+        "title": "Set task view preference",
+        "content": "user_authored",
+        "target": "Your task preferences",
+        "fields": [{"label":"Default task view","value":shown}],
+        "version": "[]"
+    }})
+}

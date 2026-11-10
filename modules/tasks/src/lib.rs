@@ -56,6 +56,27 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
             enum Api {
                 #[serde(rename = "prepareTaskAction")]
                 Prepare(Prepare),
+                #[serde(rename = "prepareTaskRoute")]
+                Route(Route),
+                #[serde(rename = "prepareTaskPreferences")]
+                Preferences(Preferences),
+            }
+            type Map = serde_json::Map<String, serde_json::Value>;
+            #[derive(serde::Deserialize)]
+            #[serde(rename_all = "camelCase", deny_unknown_fields)]
+            struct Route {
+                route: String,
+                params: Map,
+                query: Map,
+                // Absent when the request has no body.
+                body_json: Option<String>,
+            }
+            #[derive(serde::Deserialize)]
+            #[serde(rename_all = "camelCase", deny_unknown_fields)]
+            struct Preferences {
+                params: Map,
+                query: Map,
+                body_json: String,
             }
             #[derive(serde::Deserialize)]
             #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -64,8 +85,20 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
                 // A JSON string keeps field order, which sets the card's row order.
                 input_json: String,
             }
-            let Api::Prepare(request) = serde_json::from_str(payload)?;
-            Ok(approval::prepare(host, &request.tool, &request.input_json).to_string())
+            Ok(match serde_json::from_str(payload)? {
+                Api::Prepare(r) => approval::prepare(host, &r.tool, &r.input_json),
+                Api::Route(r) => approval::prepare_route(
+                    host,
+                    &r.route,
+                    &r.params,
+                    &r.query,
+                    r.body_json.as_deref(),
+                ),
+                Api::Preferences(r) => {
+                    approval::prepare_preferences(&r.params, &r.query, &r.body_json)
+                }
+            }
+            .to_string())
         }
         _ => Err(moss_module_sdk::Error::new("Unsupported Tasks invocation")),
     }
