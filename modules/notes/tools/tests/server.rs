@@ -137,14 +137,17 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     assert!(!port.0.is_empty());
     // Set NOTES_LIVE_HOST to this machine's LAN or tailnet address to reach the server
     // through that address (listening on all interfaces) instead of loopback.
-    let host = std::env::var("NOTES_LIVE_HOST").unwrap_or_else(|_| "localhost".into());
-    let listen = if host == "localhost" { "127.0.0.1" } else { "0.0.0.0" };
-    let origin = format!("https://{host}:{}", port.0);
+    let lan_host = std::env::var("NOTES_LIVE_HOST").ok();
+    let listen = if lan_host.is_some() { "0.0.0.0" } else { "127.0.0.1" };
+    let origin = format!("https://localhost:{}", port.0);
+    let lan_origin = lan_host.map(|h| format!("https://{h}:{}", port.0));
+    let mut all_origins = vec![origin.clone()];
+    all_origins.extend(lan_origin.clone());
     let cert = root.join("tls/certificate.pem");
     assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
         .args(["local-certificate"])
         .arg(root.join("tls"))
-        .arg(&origin)
+        .args(&all_origins)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -167,7 +170,7 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     );
     private(
         &root.join("network.json"),
-        &json!({"listen":format!("{listen}:{}",port.0),"origins":[origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
+        &json!({"listen":format!("{listen}:{}",port.0),"origins":all_origins,"sharing":lan_origin.is_some(),"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
     );
     let client = reqwest::blocking::Client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
@@ -339,10 +342,13 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"notes_base":root.join("notes"),"embeddings":{"url":embedding_url,"model":"bag-of-words-768","api_key":"local-stub"}}),
     );
     let _server = start(true);
+    // Notes calls go through the LAN address when one is set, so they cross the real
+    // non-loopback path (sharing switch, trusted origin, certificate for that address).
+    let notes_origin = lan_origin.clone().unwrap_or_else(|| origin.clone());
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
         let mut request = client
-            .request(method, format!("{origin}/api/m/notes{path}"))
-            .header("origin", &origin);
+            .request(method, format!("{notes_origin}/api/m/notes{path}"))
+            .header("origin", &notes_origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
