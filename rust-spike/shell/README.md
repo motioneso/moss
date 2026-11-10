@@ -134,6 +134,23 @@ screen. The root, container and image are removed even on failure. Docker, Xvfb,
 `xkbcomp`, D-Bus and ffmpeg must already be available; the script installs nothing.
 This proves neither a real desktop login nor This computer creation or second-device HTTPS.
 
+For local creation through the real native UI, use the same desktop stage and a new
+`MOSS_DESKTOP_PROOF` directory, then run
+`scripts/run-gate.sh start --gate test:rust-linux-creation` with the verify-gate skill.
+This reuses that root, starts with no instance folder, chooses This computer, creates an owner,
+signs out and signs back in. Keyboard and pointer actions use a fixed 1100×780 test window;
+the test explicitly focuses it because this minimal desktop has no window manager. Form links
+use keyboard activation; pointer link activation in this fixture is unreliable and unqualified.
+The app's normal listening port stays inside the isolated network namespace; no host port is
+published. The proof checks fresh database creation, migrations, HTTPS hello with certificate
+verification, setup changing from incomplete to complete, and pgvector. It captures the real
+sign-in, owner, Sharing, sign-out, Today and account screens. **Inspect these PNGs:** this fixture
+does not make semantic DOM assertions about the final sign-in or Today screen. Today still uses
+the shell's labelled sample data. The temporary password is generated in memory and typed via
+stdin. The fixture removes its database with the entire test root when it finishes.
+This remains a software-rendered build-ABI checkpoint, not a general Linux installer or a
+second-device connection qualification.
+
 To remove a stage, disable Start Moss at login, quit the app and stop its servers. As the
 ordinary install owner, run `python3 /path/to/install/uninstall.py`. Python 3 and Linux `/proc`
 are required for this maintenance command. It removes only unchanged inventory files, refuses

@@ -17,7 +17,9 @@ import uuid
 from proof_linux_runtime import copy_baseline, run
 
 
-def prove():
+def prove(exercise=None):
+    if exercise is not None and os.environ.get("JARVIS_GATE_RUN") != "1":
+        raise RuntimeError("Run database desktop proofs through scripts/run-gate.sh")
     install = Path(os.environ["MOSS_CLEAN_INSTALL"]).resolve()
     proof = Path(os.environ["MOSS_DESKTOP_PROOF"]).resolve()
     closure = json.loads((install / "runtime/closure.json").read_text())
@@ -34,7 +36,8 @@ def prove():
         shutil.copytree(install / "runtime/rootfs", root, dirs_exist_ok=True)
         for source, target in (
             ("/bin/dash", "/bin/sh"), ("/bin/cat", "/bin/cat"),
-            ("/bin/mv", "/bin/mv"), ("/usr/bin/Xvfb", "/usr/bin/Xvfb"),
+            ("/bin/mv", "/bin/mv"), ("/bin/chmod", "/bin/chmod"),
+            ("/usr/bin/Xvfb", "/usr/bin/Xvfb"),
             ("/usr/bin/xdotool", "/usr/bin/xdotool"), ("/usr/bin/xwd", "/usr/bin/xwd"),
             ("/usr/bin/xkbcomp", "/usr/bin/xkbcomp"),
             ("/usr/bin/dbus-daemon", "/usr/bin/dbus-daemon"),
@@ -66,8 +69,8 @@ def prove():
              "--env", "WEBKIT_DISABLE_COMPOSITING_MODE=1",
              "--entrypoint", "/bin/sh", image, "-c", "while read line; do :; done"])
 
-        def execute(*args):
-            return run(["docker", "exec", image, *args])
+        def execute(*args, **kwargs):
+            return run(["docker", "exec", "-i", image, *args], **kwargs)
 
         def shell(command):
             return execute("/bin/sh", "-c", command)
@@ -124,7 +127,10 @@ def prove():
              "-frames:v", "1", str(proof / "native.png")])
         (proof / "after.log").write_text(shell("cat /data/app.log"))
         print("PASS: native window and real WebKit web process; inspect native.png for first-run UI", flush=True)
-        print("NOT PROVEN: desktop login manager, This computer creation, hardware rendering, media, second device, installers, signing", flush=True)
+        if exercise is not None:
+            exercise(execute, shell, image, window, proof)
+        else:
+            print("NOT PROVEN: desktop login manager, This computer creation, hardware rendering, media, second device, installers, signing", flush=True)
     finally:
         if created:
             for name in ("dbus", "xvfb", "app"):
