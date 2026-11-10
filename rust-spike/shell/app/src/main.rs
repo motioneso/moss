@@ -289,7 +289,7 @@ fn main() {
             std::process::exit(1);
         }
     }
-    let served = runtime.block_on(tls::serve(listener, acceptor, app));
+    let served = runtime.block_on(tls::serve_in(listener, acceptor, app, args.instance.as_deref()));
     // The host owns blocking runtimes. Drop it outside the asynchronous executor.
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
     // The loader can sit in a database wait or a lock held by another installer. Give it a few
