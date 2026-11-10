@@ -23,6 +23,8 @@ use uuid::Uuid;
 mod account;
 #[path = "privacy/actions.rs"]
 mod actions;
+#[path = "privacy/approval.rs"]
+mod approval;
 #[path = "privacy/heartbeat.rs"]
 mod heartbeat;
 #[path = "privacy/jobs.rs"]
