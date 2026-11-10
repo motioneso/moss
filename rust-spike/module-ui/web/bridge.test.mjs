@@ -136,6 +136,31 @@ test("resize is bounded and errors do not forward host diagnostics", async () =>
   await s.send({ type: "unknown" });
   assert.equal(s.replies.at(-1).error, "Moss could not finish this request");
 });
+test("a failed route passes its status and small body, and nothing else, to the screen", async () => {
+  const fail = (status, body) =>
+    setup({
+      request: () => {
+        throw Object.assign(new Error("secret host detail"), { status, body });
+      }
+    });
+  const s = fail(400, { error: "Path is not within an allowed notes root" });
+  await s.send({ type: "request", method: "GET", path: "/x" });
+  assert.deepEqual(s.replies.at(-1), {
+    channel: "moss.module.v1",
+    id: "one",
+    ok: false,
+    error: "Moss could not finish this request",
+    status: 400,
+    body: { error: "Path is not within an allowed notes root" }
+  });
+  const big = fail(500, { text: "x".repeat(5000) });
+  await big.send({ type: "request", method: "GET", path: "/x" });
+  assert.equal(big.replies.at(-1).status, 500);
+  assert.equal("body" in big.replies.at(-1), false);
+  const odd = fail(200, { a: 1 });
+  await odd.send({ type: "request", method: "GET", path: "/x" });
+  assert.equal("status" in odd.replies.at(-1), false);
+});
 test("guest receives replies only on its document-bound port and disposes pending work", async () => {
   let receive;
   let transport;

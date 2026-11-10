@@ -6,6 +6,8 @@ import { openModuleFrame } from "/module-shared/host-bridge.mjs";
 const params = new URLSearchParams(location.search);
 const moduleId = params.get("module") ?? "";
 const screenPath = params.get("path") ?? "";
+// A Today or chat link may carry a short lowercase preset for the screen to open with.
+const focusParam = params.get("focus") ?? "";
 const frame = document.getElementById("frame");
 const failure = document.getElementById("failure");
 
@@ -21,8 +23,17 @@ async function request(method, path, body) {
     headers: body === null ? {} : { "content-type": "application/json" },
     body: body === null ? undefined : JSON.stringify(body)
   });
-  if (!response.ok) throw new Error();
   const text = await response.text();
+  if (!response.ok) {
+    // The bridge passes the status and a small JSON body on so a screen can show guidance.
+    let parsed;
+    try {
+      parsed = text ? JSON.parse(text) : null;
+    } catch {
+      parsed = null;
+    }
+    throw Object.assign(new Error(), { status: response.status, body: parsed });
+  }
   if (!text) return null;
   return JSON.parse(text);
 }
@@ -36,7 +47,9 @@ try {
   const screen = await reply.json();
   const dark = matchMedia("(prefers-color-scheme: dark)").matches;
   document.title = screen.title;
-  openModuleFrame(frame, moduleId, screen.src, {
+  const screenUrl = new URL(screen.src, location.href);
+  if (/^[a-z]{1,20}$/.test(focusParam)) screenUrl.searchParams.set("focus", focusParam);
+  openModuleFrame(frame, moduleId, screenUrl.href, {
     request,
     theme: () => ({ theme: "park-press", colorMode: dark ? "dark" : "light" }),
     navigate: async (path) => {
