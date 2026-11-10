@@ -1761,3 +1761,48 @@ recovery/retention, managed publication/fencing/reconciliation, private exports
 and daily archives, complete HTTP/path parity, assembled Settings/chat and real
 use from another physical device over HTTPS. Completing that list exceeds this
 continuation's context scope. Do not replace working legacy Notes with this package.
+
+## Part twenty-four checkpoint — real queued delivery after approved tool writes
+
+The installed four-tool check now joins approved create, edit and delete to the
+real durable queue and installed job dispatcher before checking indexed search.
+Earlier checks captured publication and manually supplied worker parameters.
+The new check reads the saved queue row and verifies its calling account, module,
+manifest identity, checkpoint UUID, completion and attempt count. It compares the
+entire saved queue envelope against fixed metadata and the checkpoint UUID. Both runtime data roles are exercised; the queue producer
+always uses app credentials and the dispatcher claims with worker credentials.
+
+For each role, unlinking the source before the first delivery refuses the job and
+leaves indexed data unchanged. The newly saved Notes failure status confirms the guest ran. The queue saves a
+pending retry with a future due time. Successful deliveries must save zero file
+errors and no last-error message. After
+the original source is restored, the test advances only that disposable job's due
+time and the dispatcher completes it on its second attempt. The next claim finds
+no remaining work. Existing other-owner/admin read, update and delete checks on
+the routed-write checkpoint retain the RLS-removal exposure and restored denials.
+No queue delivery stand-in is used in this installed-tool check; document and
+query embeddings still use the named deterministic test provider. Other test
+fixtures retain their explicitly named queue stand-ins.
+
+This checkpoint changes verification and its documentation. It adds no product
+behavior, permissions, dependencies, SQL or shared-host changes. The shipping
+manifest and app map continue to describe read-only search and folder controls,
+with write tools and sync unavailable in the ordinary package. No new UI proof is
+claimed. Notes remains a pure client of the server SDK.
+
+Builds use task-owned scratch Cargo/Rust homes and separate ordinary/write-tools
+guest targets. The declared Rust 1.95.0 toolchain, Wasm target and approved pinned
+wit-bindgen 0.57.1 are prepared only in scratch storage; nothing is installed
+globally. An initial copied toolchain listed the Wasm target in its metadata but
+lacked its files. A fresh task-owned toolchain replaces that inconsistent copy.
+Database checks run only through `scripts/run-gate.sh`. Final command receipts
+and the independent review verdict are recorded in the task proof.
+
+Full Notes acceptance remains open: assembled chat approval presentation and
+writes, configured embeddings, production worker and schedule assembly, singleton
+coalescing and recall warmup, automatic recovery and retention, managed
+publication/fencing/reconciliation, private exports and daily archives, remaining
+HTTP/path parity, assembled Settings/chat, and use from another physical device
+over HTTPS. This is a bounded parity checkpoint; it must not replace working
+legacy Notes. Completing the remaining list exceeds this continuation's context
+scope.

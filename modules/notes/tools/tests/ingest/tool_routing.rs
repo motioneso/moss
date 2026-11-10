@@ -1,9 +1,11 @@
 //! Installed generic tool dispatch into the real Notes guest. The outer WAT
 //! probe forwards a tools.run request; it is not chat or an approval screen.
-//! Queue delivery is manual and embeddings use the parent fixture's named stub.
+//! Publication, claiming and installed job dispatch use the real durable queue.
+//! Embeddings use the parent fixture's named deterministic stub.
 use super::*;
 use moss_module_host::{
     ai::Intelligence,
+    jobs::JobPorts,
     memory_search::{MemorySearchPorts, QueryEmbeddings},
     migrations::PostgresLifecycle,
     postgres::PostgresCatalog,
@@ -14,6 +16,26 @@ use moss_module_host::{
 };
 use safety_core::secret::{Secret, SecretCipher};
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+// Observe successful publication without replacing queue admission or storage.
+struct ObserveQueue {
+    jobs: Arc<Mutex<Vec<Value>>>,
+    next: Arc<dyn Ports>,
+}
+impl Ports for ObserveQueue {
+    fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
+        let result = self.next.invoke(scope, port, request)?;
+        if port == "jobs" {
+            assert_eq!(request.operation, "enqueue-options");
+            assert!(result["id"].is_string(), "Publication must save a real job");
+            self.jobs.lock().unwrap().push(request.parameters.clone());
+        }
+        Ok(result)
+    }
+    fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
+        self.next.finish_call(scope, success)
+    }
+}
 
 struct CountCalls {
     count: Arc<AtomicUsize>,
@@ -99,7 +121,21 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
             ))
             .unwrap();
         }
-        let (ports, jobs) = f.durable_ports(db.clone(), false);
+        let jobs = Arc::new(Mutex::new(Vec::new()));
+        // Publication always uses the app producer role, even when Notes data
+        // execution uses the worker role. Claiming uses worker credentials below.
+        let queue = Arc::new(ObserveQueue {
+            jobs: jobs.clone(),
+            next: Arc::new(
+                JobPorts::new(
+                    Secret::new(std::env::var("JS55_APP_URL").unwrap()),
+                    f.database("app"),
+                    f.ingest_ports(db.clone(), Arc::new(Stub)),
+                )
+                .unwrap(),
+            ),
+        });
+        let ports = f.durable_ports_with_queue(db.clone(), queue);
         let ports = Arc::new(
             MemorySearchPorts::new(
                 db.clone(),
@@ -426,19 +462,84 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
                 }
                 println!("PASS {role}: new routed-write checkpoint read/update/delete denial fails with RLS removed and passes restored");
             }
-            // Manual delivery: this is real installed worker execution, not an active queue.
-            let out: Value = serde_json::from_str(
-                &installer
-                    .call(
-                        "notes",
-                        AccessContext::new(owner, "notes-tool-worker"),
-                        "job",
-                        &json!({"queue":"notes.sync","parameters":params}).to_string(),
-                    )
-                    .unwrap(),
-            )
-            .unwrap();
-            assert_eq!(out["errors"], 0);
+            let worker = Secret::new(std::env::var("JS55_WORKER_URL").unwrap());
+            let expected_attempts = if name == "notes.create" {
+                let indexed = f.snapshot();
+                f.rt.block_on(f.bootstrap.execute(
+                    "DELETE FROM app.preferences WHERE owner_user_id=$1 AND key='notes-last-sync'",
+                    &[&owner],
+                ))
+                .unwrap();
+                assert!(f.status(db.clone(), owner).is_null());
+                f.source(owner, Value::Null);
+                let failure_started: std::time::SystemTime =
+                    f.rt.block_on(f.bootstrap.query_one("SELECT clock_timestamp()", &[]))
+                        .unwrap()
+                        .get(0);
+                assert!(
+                    installer.run_job(&worker).is_err(),
+                    "Unlinking must refuse saved work rather than retarget it"
+                );
+                assert_eq!(
+                    f.snapshot(),
+                    indexed,
+                    "Refused delivery must leave the index unchanged"
+                );
+                assert_eq!(f.status(db.clone(), owner)["lastError"], "path is not within the linked notes source",
+                    "The Notes worker must record the source refusal, not fail before guest execution");
+                let retry = f.rt.block_on(f.bootstrap.query_one(
+                    "SELECT state, attempts, failure_code, run_at >= $3::timestamptz + interval '10 seconds' FROM moss_queue.jobs WHERE actor_user_id=$1 AND idempotency_key=$2",
+                    &[&owner, &id, &failure_started],
+                )).unwrap();
+                assert_eq!(retry.get::<_, String>(0), "pending");
+                assert_eq!(retry.get::<_, i32>(1), 1);
+                assert_eq!(retry.get::<_, String>(2), "handler");
+                assert!(
+                    retry.get::<_, bool>(3),
+                    "Failure must retain the declared minimum retry delay"
+                );
+                f.source(owner, json!(root));
+                // Advance only this disposable job's due time; no wall-clock sleep
+                // or retry loop, and no production timer is claimed.
+                f.rt.block_on(f.bootstrap.execute(
+                    "UPDATE moss_queue.jobs SET run_at=now()-interval '1 second' WHERE actor_user_id=$1 AND idempotency_key=$2",
+                    &[&owner, &id],
+                )).unwrap();
+                2
+            } else {
+                1
+            };
+            assert!(
+                installer.run_job(&worker).unwrap(),
+                "The installed dispatcher must claim the saved sync"
+            );
+            assert!(
+                !installer.run_job(&worker).unwrap(),
+                "No duplicate delivery remains"
+            );
+            let row = f.rt.block_on(f.bootstrap.query_one(
+                "SELECT state, attempts, payload FROM moss_queue.jobs WHERE actor_user_id=$1 AND idempotency_key=$2",
+                &[&owner, &id],
+            )).unwrap();
+            assert_eq!(row.get::<_, String>(0), "completed");
+            assert_eq!(row.get::<_, i32>(1), expected_attempts);
+            let status = f.status(db.clone(), owner);
+            assert_eq!(
+                status["errors"], 0,
+                "Successful queued sync must report no file errors"
+            );
+            assert!(status.get("lastError").is_none());
+            let payload: Value = row.get(2);
+            let module = moss_module_host::jobs::module_key("notes");
+            assert_eq!(
+                payload,
+                json!({
+                    "actorUserId":owner, "moduleId":module,
+                    "manifestHash":moss_module_host::jobs::manifest_hash(&manifest),
+                    "jobKind":format!("{module}.notes.sync"), "params":params
+                }),
+                "The persisted envelope must contain only trusted metadata and the checkpoint UUID"
+            );
             for actor in [owner, other, f.actors[2]] {
                 services
                     .set_action_policy(
@@ -470,7 +571,7 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
                 }
             }
         }
-        println!("PASS {role}: installed tools.run → Notes create/edit/delete → private sync request → manually delivered installed worker → indexed search; account/parameter-bound one-use approvals");
+        println!("PASS {role}: installed tools.run → Notes create/edit/delete → private sync request → durable queue and installed dispatcher → indexed search; account/parameter-bound one-use approvals");
     }
 }
 

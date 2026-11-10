@@ -137,7 +137,8 @@ The disposable aggregate gate now joins the existing generic `tools.run` service
 to an installed, signed experimental Notes guest for create, edit, delete and
 indexed search. A WAT probe only forwards the outer service request; the Notes
 handler, linked files, private sync checkpoints, indexing and retrieval use the
-real Rust implementations. Queue delivery is manual and both embedding adapters
+real Rust implementations. Part twenty-four replaces manual queue delivery with
+the real durable queue and installed dispatcher. Both embedding adapters still
 use the named deterministic test provider. The fixture declares write tools only
 in its experimental manifest; the ordinary package remains read-only.
 The same service probe calls the installed read-only approval-preparation API;
@@ -746,3 +747,30 @@ singleton coalescing and recall warmup, automatic recovery/retention,
 managed publication/fencing/reconciliation, private exports/daily archives,
 complete path/HTTP parity, assembled Settings/chat and a physical second-device
 HTTPS check. This remains a checkpoint, not a replacement for working legacy Notes.
+
+## Real queued tool sync checks (part twenty-four)
+
+The installed tool-dispatch check now uses the real durable PostgreSQL queue in
+place of captured publication and manual worker calls. Approved create, edit and
+delete calls save private sync checkpoints, publish through `JobPorts`, and run
+through the installed host's `run_job` dispatcher before indexed search checks
+the resulting content. The test verifies the stored job's account, module,
+manifest identity, UUID-only parameters, completion and attempt count. Both app
+and worker data execution roles are covered; publication always uses the app
+producer credentials and claiming uses the worker credentials.
+
+For each role, unlinking the source before the create-triggered job runs refuses
+delivery without changing the index. The real queue records a pending retry with
+its handler failure code and a future retry time. The newly saved failure status
+confirms the Notes worker ran, and each successful delivery must save zero file
+errors without a last-error message. Restoring the source and advancing only the
+disposable job's due time lets the installed dispatcher complete that same job.
+The existing other-owner/admin checkpoint controls still remove RLS, observe
+otherwise denied read/update/delete access, restore it and repeat the denials.
+
+Run the aggregate Notes gate through `scripts/run-gate.sh` with both built guests,
+as described above. Document and query embeddings remain the named deterministic
+test provider. This is installed service/queue integration, not assembled chat,
+a production worker loop, scheduled sync, a real configured model or second-device
+HTTPS proof. No shipping manifest grants, UI, SQL, dependencies or app-map behavior
+change in this test checkpoint. The ordinary package remains read-only.
