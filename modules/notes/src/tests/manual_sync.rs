@@ -267,3 +267,70 @@ fn tick_deletes_old_checkpoints_and_republishes_unfinished_ones() {
     assert_eq!(publishes.len(), 1);
     assert_eq!(publishes[0]["idempotencyKey"], ID);
 }
+
+/// Rows the recent-request lookup returns, and a record of inserts and publishes.
+struct Pending {
+    rows: Value,
+    inserts: RefCell<u32>,
+    published: RefCell<Vec<String>>,
+}
+impl Host for Pending {
+    fn call(&self, port: &str, op: &str, resource: &str, params: Value) -> Result<Value> {
+        Ok(match (port, op, resource) {
+            ("vault", "folder.get", "source") => json!({"status":200,"body":"/notes"}),
+            ("context", "read", "call") => json!({"now":"2026-11-09T12:00:00Z"}),
+            ("context", "uuid", "new") => json!({"id":ID}),
+            ("db", "query", "app.notes_sync_checkpoints") if params["kind"] == "select" => {
+                assert_eq!(params["filter"]["value"], "2026-11-09T11:50:00Z");
+                self.rows.clone()
+            }
+            ("db", "query", "app.notes_sync_checkpoints") => {
+                *self.inserts.borrow_mut() += 1;
+                json!([params["values"]])
+            }
+            ("jobs", "enqueue-after-commit", "notes.sync") => {
+                self.published
+                    .borrow_mut()
+                    .push(params["idempotencyKey"].as_str().unwrap().to_owned());
+                json!({"deferred":true})
+            }
+            ("jobs", "schedule", "notes.sync-tick") => json!({"id":ID}),
+            _ => panic!("Unexpected access: {port}/{op}/{resource}"),
+        })
+    }
+}
+
+fn manual(rows: Value) -> (Value, Pending) {
+    let host = Pending {
+        rows,
+        inserts: RefCell::new(0),
+        published: RefCell::new(vec![]),
+    };
+    let out = handle(&host, "route", r#"{"method":"POST","path":"/notes/sync"}"#).unwrap();
+    (serde_json::from_str(&out).unwrap(), host)
+}
+
+#[test]
+fn manual_sync_reuses_a_recent_unfinished_request_for_the_same_folder() {
+    let other = "11111111-1111-4111-8111-111111111111";
+    let (out, host) = manual(json!([
+        {"id":other,"checkpoint":{"sourcePath":"/notes"}},
+    ]));
+    assert_eq!(out, json!({"status":202,"body":{"jobId":other}}));
+    assert_eq!(*host.inserts.borrow(), 0);
+    assert_eq!(*host.published.borrow(), vec![other.to_owned()]);
+}
+
+#[test]
+fn manual_sync_makes_a_new_request_when_nothing_matching_is_waiting() {
+    let finished = json!({"id":"22222222-2222-4222-8222-222222222222",
+        "checkpoint":{"workerResult":{"ingested":1,"skipped":0,"errors":0}}});
+    let elsewhere = json!({"id":"33333333-3333-4333-8333-333333333333",
+        "checkpoint":{"sourcePath":"/elsewhere"}});
+    for rows in [json!([]), json!([finished, elsewhere])] {
+        let (out, host) = manual(rows);
+        assert_eq!(out, json!({"status":202,"body":{"jobId":ID}}));
+        assert_eq!(*host.inserts.borrow(), 1);
+        assert_eq!(*host.published.borrow(), vec![ID.to_owned()]);
+    }
+}

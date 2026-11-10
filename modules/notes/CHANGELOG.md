@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.21
+
+- Pressing Sync now while a sync for the same folder is still waiting no longer stacks another one. The waiting request is reused and still reads the folder when it runs. The fifteen-minute schedule does the same. Saving, editing or deleting a note still asks for its own sync.
+
 ## 0.1.20
 
 - Notes now cleans up after itself. Every fifteen minutes it retries any sync request that did not finish starting, and it removes saved sync requests older than a day, so a crash or a brief outage no longer leaves a sync stuck forever.

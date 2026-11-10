@@ -135,7 +135,11 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         .into(),
     );
     assert!(!port.0.is_empty());
-    let origin = format!("https://localhost:{}", port.0);
+    // Set NOTES_LIVE_HOST to this machine's LAN or tailnet address to reach the server
+    // through that address (listening on all interfaces) instead of loopback.
+    let host = std::env::var("NOTES_LIVE_HOST").unwrap_or_else(|_| "localhost".into());
+    let listen = if host == "localhost" { "127.0.0.1" } else { "0.0.0.0" };
+    let origin = format!("https://{host}:{}", port.0);
     let cert = root.join("tls/certificate.pem");
     assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
         .args(["local-certificate"])
@@ -163,7 +167,7 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     );
     private(
         &root.join("network.json"),
-        &json!({"listen":format!("127.0.0.1:{}",port.0),"origins":[origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
+        &json!({"listen":format!("{listen}:{}",port.0),"origins":[origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
     );
     let client = reqwest::blocking::Client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
@@ -554,6 +558,30 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     let kept = rows("SELECT id::text FROM app.notes_sync_checkpoints WHERE owner_user_id=$1 AND id::text LIKE '0a000000-%' ORDER BY id");
     assert_eq!(kept, vec!["0a000000-0000-4000-8000-0000000000a2".to_string()]);
     println!("tick retention removed the old checkpoint and kept the recent one: {kept:?}");
+    // Sync now while a recent request for the same folder is still waiting reuses it
+    // instead of stacking a second one.
+    let waiting = "0b000000-0000-4000-8000-0000000000b1";
+    {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+                .await
+                .unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            db.execute(
+                "INSERT INTO app.notes_sync_checkpoints (id, owner_user_id, checkpoint) VALUES ($1::text::uuid, $2, jsonb_build_object('sourcePath', $3::text))",
+                &[&waiting, &owner, &journal.to_str().unwrap()],
+            )
+            .await
+            .unwrap();
+        });
+    }
+    let again = call(Method::POST, "/notes/sync", Some(&cookie), Some(json!({})));
+    assert_eq!(again.0, 202, "{}", again.1);
+    assert_eq!(again.1["jobId"], json!(waiting), "{}", again.1);
+    println!("Sync now reused the waiting request: {}", again.1);
     // Search runs through the same host ports in this process (the server has no tool
     // endpoint yet), against the real index and the same embeddings endpoint.
     {

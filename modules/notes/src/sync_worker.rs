@@ -2,7 +2,7 @@
 //! Private paths/hashes live in an owner-scoped table; jobs carry only its UUID.
 //! Checkpoints are retained for retry after post-commit queue publication failure.
 use moss_module_sdk::{
-    query::{Filter, Query},
+    query::{Compare, Filter, Order, Query},
     Client, Error, Host, Result,
 };
 use serde::{Deserialize, Serialize};
@@ -82,7 +82,7 @@ fn tick(host: &impl Host) -> Result<String> {
     };
     // Re-register in case the first registration failed; the keyed row is replaced.
     reconcile_schedule(host);
-    Ok(request_source(host, &source)?.to_string())
+    Ok(request_coalesced(host, &source)?.to_string())
 }
 
 pub fn handle(host: &impl Host, payload: &str) -> Result<String> {
@@ -160,7 +160,49 @@ pub(crate) fn selected_source(host: &impl Host) -> Result<Option<String>> {
 pub fn request(host: &impl Host) -> Result<Value> {
     let source =
         selected_source(host)?.ok_or_else(|| Error::new("Notes source is not configured"))?;
-    request_source(host, &source)
+    request_coalesced(host, &source)
+}
+
+/// How long an unfinished request for the same folder absorbs new manual or
+/// scheduled requests, matching the legacy one-queued-sync-per-account rule.
+const COALESCE_SECONDS: i64 = 10 * 60;
+
+/// Manual and scheduled syncs reuse a recent unfinished request for the same
+/// folder instead of stacking another. The job reads the folder when it runs, so
+/// the waiting request covers files changed since it was saved. Writes and the
+/// daily archive always request their own sync.
+pub(crate) fn request_coalesced(host: &impl Host, source: &str) -> Result<Value> {
+    if let Some(id) = pending_request(host, source)? {
+        let context = host.call("context", "read", "call", json!({}))?;
+        publish(host, &id, context["now"].as_str().ok_or_else(unavailable)?)?;
+        return Ok(json!({"checkpointId":id}));
+    }
+    request_source(host, source)
+}
+
+fn pending_request(host: &impl Host, source: &str) -> Result<Option<String>> {
+    let context = host.call("context", "read", "call", json!({}))?;
+    let now = context["now"].as_str().ok_or_else(unavailable)?;
+    let cutoff =
+        crate::sync_recovery::shift_seconds(now, -COALESCE_SECONDS).ok_or_else(unavailable)?;
+    let mut query = Query::select(Filter::Compare {
+        column: "created_at".into(),
+        op: Compare::Ge,
+        value: json!(cutoff),
+    });
+    query.limit = Some(25);
+    query.order = vec![Order {
+        column: "created_at".into(),
+        descending: true,
+    }];
+    let rows = Client(host).query(TABLE, &query)?;
+    Ok(rows.iter().find_map(|row| {
+        let checkpoint = row.get("checkpoint")?;
+        let open = checkpoint.get("workerResult").is_none();
+        (open && checkpoint.get("sourcePath").and_then(Value::as_str) == Some(source))
+            .then(|| row.get("id")?.as_str().map(str::to_owned))
+            .flatten()
+    }))
 }
 
 /// Preserve the HTTP handler's server-read source in private durable state,

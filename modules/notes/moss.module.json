@@ -4,7 +4,7 @@
   "name": "Notes",
   "description": "Choose your notes folder, search your indexed notes, and create, edit or delete notes with your approval.",
   "publisher": "Moss",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -116,7 +116,7 @@
     },
     {
       "id": "notes.folder-settings",
-      "description": "Settings → Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. Folder requests preserve legacy schema validation and coercion; extra fields are ignored and cannot choose another account. Invalid bodies or repeated directory paths receive the legacy validation response. Relative and symlink path behavior still differs. Sync now requests an indexing run on the server and the line shows the saved last-sync status. Linking a folder also creates one fifteen-minute sync schedule for the account; each tick requests a fresh sync and does nothing while no folder is linked. Each tick also removes saved sync requests older than a day and asks the server to retry any unfinished request. This package is not yet a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
+      "description": "Settings → Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. Folder requests preserve legacy schema validation and coercion; extra fields are ignored and cannot choose another account. Invalid bodies or repeated directory paths receive the legacy validation response. Relative and symlink path behavior still differs. Sync now requests an indexing run on the server and the line shows the saved last-sync status. Linking a folder also creates one fifteen-minute sync schedule for the account; each tick requests a fresh sync and does nothing while no folder is linked. Sync now and each tick reuse a recent unfinished request for the same folder instead of stacking another. Each tick also removes saved sync requests older than a day and asks the server to retry any unfinished request. This package is not yet a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
       "errors": [
         {
           "code": "notes-folder-invalid-input",
