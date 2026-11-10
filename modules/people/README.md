@@ -11,6 +11,8 @@ The optional 29-case large-account diagnostic also covers links and larger limit
 It is **currently red**: both 100-row responses pass, then the 150-person response
 exhausts Wasm fuel while dropping response values. Later cases are not reached;
 large-account parity remains unproved.
+Response conversion reuses database field-name buffers and moves formatted confidence
+and timestamp strings into JSON values; this does not establish a larger supported limit.
 With the task-owned build environment and generated component prepared as below, reproduce
 through verify-gate:
 

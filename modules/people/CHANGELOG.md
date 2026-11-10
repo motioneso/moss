@@ -12,6 +12,11 @@ regressions. The expanded diagnostic now exhausts fuel at 150 people during resp
 larger reads remain unqualified. Intermediate probes narrow the known failure
 boundary without changing runtime code or host budgets.
 
+Reuse response field-name buffers and move normalized confidence/timestamp strings
+into JSON values. This removes redundant response allocations without changing wire
+values or host budgets. The large-account acceptance boundary is still recorded
+in the README; these allocation changes alone do not establish large-account parity.
+
 Preserve every canonical accent when sorting People folders, including multiple accents
 on one letter, before comparing case. Comparisons for selected letter families and the installed
 folder replay cover this correction; complete locale collation remains unqualified.
