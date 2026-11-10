@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import { chromium } from "@playwright/test";
+import { chromium, expect } from "@playwright/test";
 
 const { ORIGIN, EMAIL, PASSWORD, EVENT_TITLE, OUT } = process.env;
 for (const [name, value] of Object.entries({ ORIGIN, EMAIL, PASSWORD, EVENT_TITLE, OUT })) {
@@ -50,6 +50,7 @@ await frame.getByRole("button", { name: "Month", exact: true }).waitFor({ timeou
 await frame.getByRole("button", { name: "Month", exact: true }).click();
 const chip = frame.getByRole("button", { name: new RegExp(EVENT_TITLE!) }).first();
 await chip.waitFor({ timeout: 30_000 });
+await expect(chip).toBeInViewport();
 await page.screenshot({ path: join(OUT!, "calendar-month.png") });
 console.log("PASS Month screen on the real server shows the signed-in owner's cached event");
 
@@ -88,11 +89,17 @@ const lookahead = frame.getByLabel("Look ahead", { exact: true });
 await lookahead.waitFor({ timeout: 60_000 });
 // The server default is two days; the control saves as soon as it changes.
 await lookahead.selectOption("0");
-await page.waitForTimeout(1500);
-const saved = await context.request.get(`${origin}/api/m/calendar/briefing-settings`, {
-  headers: { origin }
-});
-assert.equal((await saved.json()).settings.lookaheadDays, 0, "look-ahead saved by the server");
+await expect
+  .poll(
+    async () => {
+      const saved = await context.request.get(`${origin}/api/m/calendar/briefing-settings`, {
+        headers: { origin }
+      });
+      return (await saved.json()).settings.lookaheadDays;
+    },
+    { timeout: 30_000, message: "look-ahead saved by the server" }
+  )
+  .toBe(0);
 await page.screenshot({ path: join(OUT!, "calendar-settings.png") });
 console.log("PASS settings change through the real control is stored by the server");
 
