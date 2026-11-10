@@ -1338,6 +1338,8 @@ reaches the server (PUT 200, read back off), and it stays off after a reload whi
 and Prep tasks keep their earlier saved values. The control's input is hidden by the design
 system, so the check clicks the visible track.
 
+Review round 1 (codex) found the switch showed On after saving another setting; fixed and now asserted live. Its other finding (Tasks reverted) came from diffing against a newer main and does not appear in the merge-base diff.
+
 Not proven: People after the shared wrapper change (its server gate was not rerun; its database
 tests are unchanged), a second account, a second physical device, the other three source
 behaviors, the platform-wide source-behavior list, external-calendar status, provider execution,

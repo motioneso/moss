@@ -134,8 +134,11 @@ await page.screenshot({ path: join(OUT!, "calendar-settings-switch-off.png") });
 await page.reload();
 await included.waitFor({ state: "attached", timeout: 60_000 });
 assert.equal(await included.isChecked(), false, "briefing switch stays off after reload");
-// Other settings are untouched by the switch.
+// Other settings are untouched by the switch, and saving one keeps the switch showing off.
 assert.equal(await lookAhead.inputValue(), "0");
+await saveSetting("Look ahead", "1");
+assert.equal(await included.isChecked(), false, "saving another setting keeps the switch off");
+await saveSetting("Look ahead", "0");
 console.log(
   "PASS the briefing switch saves through the real control, reaches the server and survives a reload"
 );
