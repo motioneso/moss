@@ -496,3 +496,18 @@ rows are repaired on replay. `POST /day-plans/:id/apply` validates the body and 
 because execution needs a Connectors package; it writes nothing. The original takes a row lock
 on the plan during reservation; the host runs each database call in its own transaction, so the
 unique idempotency key and the revision check carry that protection instead.
+
+## Briefing switch (part 30)
+
+Version 0.25.0 adds the "Include calendar signal in briefings" switch to the Calendar
+settings screen. It reads and writes the same per-account stored value the existing app
+uses (`calendar.briefings` inside the account's source-behavior preferences, on by default)
+through two new routes, `GET` and `PUT` `/briefing-source`, with body `{ "enabled": boolean }`.
+The server binds the key; the package cannot name another preference. The shared preference
+wrapper now passes calls it has no binding for to the next wrapper instead of failing them.
+
+Live check on the real HTTPS server (`pnpm test:rust-calendar-server`): the switch starts on,
+clicking it in the real browser sends the save, the server reports off, and the switch stays off
+after a reload with the other settings untouched. Not covered: "Use for planning" and
+"Write events back" (no consumer exists in Rust yet), the platform-wide source-behavior list,
+and external-calendar status controls (need a Connectors package).

@@ -288,6 +288,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
     }
     let preferences_database = database.clone();
     let calendar_database = database.clone();
+    let calendar_behavior_database = database.clone();
     let mut embedding_model = None;
     let generator: Arc<dyn Intelligence> = match &settings.ai_key {
         Some(key) => crate::module_ai::intelligence(
@@ -355,7 +356,19 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             }?;
             // Calendar keeps its settings in the account's real preferences and reads the
             // account timezone. The wrapper only answers calls made by the Calendar module.
-            Ok(Arc::new(CalendarPorts::new(calendar_database, services)?) as Arc<dyn Ports>)
+            let behaviors = AccountPreferencesPorts::new(
+                calendar_behavior_database,
+                BTreeMap::from([(
+                    ("calendar".into(), "calendar-briefing-behavior".into()),
+                    Binding::BooleanOverride {
+                        key: "sourceBehaviors".into(),
+                        entry: "calendar.briefings".into(),
+                        default: true,
+                    },
+                )]),
+                services,
+            )?;
+            Ok(Arc::new(CalendarPorts::new(calendar_database, Arc::new(behaviors))?) as Arc<dyn Ports>)
         },
     )?;
     Ok(application)

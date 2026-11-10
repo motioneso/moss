@@ -108,6 +108,37 @@ await page.screenshot({ path: join(OUT!, "calendar-settings.png") });
 await page.reload();
 await lookAhead.waitFor({ timeout: 60_000 });
 assert.equal(await lookAhead.inputValue(), "0");
+
+// The briefing switch is on by default; turning it off must reach the server and survive a reload.
+const included = frame.getByLabel("Include calendar signal in briefings", { exact: true });
+// The native input is visually hidden by the design system; people click the track.
+const track = frame.locator("label.jds-switch").filter({ hasText: "Include calendar signal" });
+await included.waitFor({ state: "attached" });
+await track.waitFor();
+assert.equal(await included.isChecked(), true, "briefing switch starts on");
+const source = await context.request.get(`${origin}/api/m/calendar/briefing-source`, {
+  headers: { origin }
+});
+assert.deepEqual(await source.json(), { enabled: true });
+const sourceSaved = page.waitForResponse(
+  (r) => r.url().endsWith("/api/m/calendar/briefing-source") && r.request().method() === "PUT"
+);
+await track.click();
+assert.equal((await sourceSaved).status(), 200, "briefing switch save");
+await saved.waitFor();
+const afterSave = await context.request.get(`${origin}/api/m/calendar/briefing-source`, {
+  headers: { origin }
+});
+assert.deepEqual(await afterSave.json(), { enabled: false });
+await page.screenshot({ path: join(OUT!, "calendar-settings-switch-off.png") });
+await page.reload();
+await included.waitFor({ state: "attached", timeout: 60_000 });
+assert.equal(await included.isChecked(), false, "briefing switch stays off after reload");
+// Other settings are untouched by the switch.
+assert.equal(await lookAhead.inputValue(), "0");
+console.log(
+  "PASS the briefing switch saves through the real control, reaches the server and survives a reload"
+);
 console.log(
   "PASS settings changed in the real control are saved by the server and survive a reload"
 );

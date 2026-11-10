@@ -67,3 +67,21 @@ pub fn derive(p: &Value) -> Value {
         .unwrap_or(2.0) as i64;
     json!({"lookaheadDays":days,"prepTaskMode":prep,"timeBlockMode":block,"suggestTasks":prep!="off","createTasks":prep=="auto","suggestTimeBlocks":block!="off","blockTime":block=="auto"})
 }
+
+/// The per-account "include calendar signal in briefings" switch. The host owns the key.
+pub fn source_read(host: &impl Host) -> Result<Value> {
+    Ok(host.call("kv", "preference.read", "calendar-briefing-behavior", json!({}))?)
+}
+pub fn source_save(host: &impl Host, body: &Value) -> Result<Value> {
+    let enabled = body
+        .get("enabled")
+        .and_then(Value::as_bool)
+        .filter(|_| body.as_object().is_some_and(|o| o.len() == 1))
+        .ok_or_else(|| Error::new(400, "body/enabled must be boolean"))?;
+    Ok(host.call(
+        "kv",
+        "preference.write",
+        "calendar-briefing-behavior",
+        json!({"enabled":enabled}),
+    )?)
+}

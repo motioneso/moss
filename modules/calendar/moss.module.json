@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.24.0",
+  "version": "0.25.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -31,13 +31,14 @@
     },
     {
       "port": "kv",
-      "operations": ["get", "set"],
+      "operations": ["get", "set", "preference.read", "preference.write"],
       "resources": [
         "calendar.briefing-settings",
         "calendar.chat-context",
         "calendar.task-reference",
         "calendar.briefing-reference",
-        "calendar.ui-view"
+        "calendar.ui-view",
+        "calendar-briefing-behavior"
       ]
     }
   ],
@@ -136,6 +137,16 @@
     {
       "method": "PATCH",
       "path": "/briefing-settings",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/briefing-source",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/briefing-source",
       "signIn": true
     },
     {
@@ -353,7 +364,7 @@
       "id": "calendar.automation",
       "label": "Calendar",
       "path": "/settings/calendar",
-      "description": "Saved account lookahead, prep-task and time-block choices. Time-block mode also saves the matching writeback permission. Auto grants standing permission also honored by the existing app; Rust action execution and source-behavior controls remain open.",
+      "description": "Saved account lookahead, prep-task and time-block choices. Time-block mode also saves the matching writeback permission. Auto grants standing permission also honored by the existing app; Rust action execution remains open; the briefing switch is on the Calendar settings screen.",
       "scope": "user"
     }
   ]

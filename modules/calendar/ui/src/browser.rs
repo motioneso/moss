@@ -86,6 +86,32 @@ impl State {
             restore(&focused);
         });
     }
+    fn save_source(self, enabled: bool) {
+        if self.briefing_saving.get_untracked() || self.loading.get_untracked() != Refresh::Idle {
+            return;
+        }
+        let focused = preserve();
+        self.briefing_saving.set(true);
+        self.briefing_failed.set(false);
+        self.briefing_saved.set(false);
+        spawn_local(async move {
+            match request("PUT", "/briefing-source", json!({"enabled":enabled})).await {
+                Ok(saved) => {
+                    let mut briefing = self.briefing.get_untracked();
+                    briefing["included"] = saved["enabled"].clone();
+                    self.briefing.set(briefing);
+                    self.briefing_saved.set(true);
+                }
+                Err(_) => {
+                    self.briefing_failed.set(true);
+                    // Reapply the confirmed value to the control the browser just flipped.
+                    self.briefing.set(self.briefing.get_untracked());
+                }
+            }
+            self.briefing_saving.set(false);
+            restore(&focused);
+        });
+    }
     fn zone(self) -> chrono_tz::Tz {
         self.display.get()["timezone"]
             .as_str()
@@ -135,7 +161,10 @@ impl State {
                     Some(serde_json::from_value(result["events"].clone()).map_err(|_| ())?)
                 };
                 let briefing = if settings() {
-                    Some(request("GET", "/briefing-settings", Value::Null).await?)
+                    let mut briefing = request("GET", "/briefing-settings", Value::Null).await?;
+                    let source = request("GET", "/briefing-source", Value::Null).await?;
+                    briefing["included"] = source["enabled"].clone();
+                    Some(briefing)
                 } else {
                     None
                 };
@@ -331,6 +360,17 @@ fn Settings(state: State) -> impl IntoView {
         {move||(state.briefing.get()!=Value::Null).then(||view!{
             <section class="calendar-settings-section" aria-label="Briefings">
                 <h2>"Briefings"</h2>
+                <Field>
+                    <label class="jds-switch" for="calendar-included">
+                        <input id="calendar-included" data-cal-focus="calendar-included" type="checkbox" aria-describedby="included-help"
+                            disabled=move||disabled.get()
+                            prop:checked=move||state.briefing.get()["included"]!=false
+                            on:change=move|event|state.save_source(event_target_checked(&event))/>
+                        <span class="jds-switch__track"><span class="jds-switch__thumb"></span></span>
+                        <span class="jds-switch__label">"Include calendar signal in briefings"</span>
+                    </label>
+                    <p class="jds-hint" id="included-help">"Use calendar-derived readiness signals instead of replaying the whole agenda."</p>
+                </Field>
                 <Field><FormLabel control_id="calendar-lookahead">"Look ahead"</FormLabel>
                     <p class="jds-hint" id="lookahead-help">"Let the briefing flag prep-needed meetings coming up soon."</p>
                     <span class="jds-selectwrap"><select id="calendar-lookahead" data-cal-focus="calendar-lookahead" class="jds-select" aria-describedby="lookahead-help"

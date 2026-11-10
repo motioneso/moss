@@ -693,3 +693,43 @@ mod provider {
         }
     }
 }
+
+#[test]
+fn briefing_source_switch_reads_and_writes_only_the_declared_value() {
+    use std::sync::Mutex;
+    struct Source(Mutex<bool>);
+    impl Host for Source {
+        fn call(&self, port: &str, operation: &str, resource: &str, body: Value) -> Result<Value> {
+            assert_eq!((port, resource), ("kv", "calendar-briefing-behavior"));
+            let mut enabled = self.0.lock().unwrap();
+            if operation == "preference.write" {
+                assert_eq!(body.as_object().unwrap().len(), 1);
+                *enabled = body["enabled"].as_bool().unwrap();
+            } else {
+                assert_eq!(operation, "preference.read");
+                assert_eq!(body, json!({}));
+            }
+            Ok(json!({"enabled":*enabled}))
+        }
+    }
+    let host = Source(Mutex::new(true));
+    let call = |method: &str, body: Value| -> Value {
+        serde_json::from_str(
+            &handle(
+                &host,
+                "route",
+                &json!({"method":method,"path":"/briefing-source","params":{},"query":{},"body":body})
+                    .to_string(),
+            )
+            .unwrap(),
+        )
+        .unwrap()
+    };
+    assert_eq!(call("GET", json!(null))["body"], json!({"enabled":true}));
+    assert_eq!(call("PUT", json!({"enabled":false}))["body"], json!({"enabled":false}));
+    assert_eq!(call("GET", json!(null))["body"], json!({"enabled":false}));
+    for bad in [json!({}), json!({"enabled":"no"}), json!({"enabled":true,"x":1}), json!(null)] {
+        assert_eq!(call("PUT", bad)["status"], 400);
+    }
+    assert_eq!(call("GET", json!(null))["body"], json!({"enabled":false}));
+}

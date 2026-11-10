@@ -1318,3 +1318,27 @@ protection, there is no concurrent test), a batch over 1000 items, any caller (n
 the apply job that would settle the batch, a second account over HTTP, a second physical device. Still required: Connectors, Tasks and Briefings
 adapters, apply execution, retry/recover/confirm running a change, source behavior and
 external-calendar status controls, full shell and chat, old-screen replacement, complete parity.
+
+## JS-214 / part 30: briefing switch on the real server (package 0.25.0)
+
+Adds the one source-behavior control the original Calendar settings screen carries, "Include
+calendar signal in briefings". The Rust server had no source-behavior storage at all, so the
+Calendar package gets two routes (`GET`/`PUT /briefing-source`) backed by a host binding of the
+same account preference the existing app writes (`sourceBehaviors` entry `calendar.briefings`,
+default on). The key is fixed in the server composition, the guest sends only `{enabled}` and the
+route rejects any other body with 400. The Calendar manifest gains `preference.read` and
+`preference.write` on its key-value permission for one new resource. The shared preference
+wrapper previously claimed every `preference.*` call; it now handles only calls with a binding
+and passes the rest on, so Calendar's wrapper can sit beside People's.
+
+Checks: guest test `briefing_source_switch_reads_and_writes_only_the_declared_value`; calendar
+package tests (4), UI tests, host boundaries (17) pass with Rust 1.95.0. Live, through
+`scripts/run-gate.sh` and `pnpm test:rust-calendar-server`: the switch starts on, the real click
+reaches the server (PUT 200, read back off), and it stays off after a reload while Look ahead
+and Prep tasks keep their earlier saved values. The control's input is hidden by the design
+system, so the check clicks the visible track.
+
+Not proven: People after the shared wrapper change (its server gate was not rerun; its database
+tests are unchanged), a second account, a second physical device, the other three source
+behaviors, the platform-wide source-behavior list, external-calendar status, provider execution,
+Connectors/Tasks/Briefings adapters, full shell and chat, old-screen replacement.
