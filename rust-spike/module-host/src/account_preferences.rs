@@ -25,8 +25,27 @@ pub struct AccountPreferencesPorts {
     runtime: tokio::runtime::Runtime,
     bindings: BTreeMap<(String, String), Binding>,
     next: Arc<dyn Ports>,
+    account_base: Option<PathBuf>,
+}
+/// Per-account notes root under a host-owned base: `<base>/<account id>`, created on demand.
+pub fn account_base_root(base: &std::path::Path, actor: Uuid) -> Result<Vec<PathBuf>> {
+    let root = base.join(actor.to_string());
+    std::fs::create_dir_all(&root).context("The notes root could not be prepared")?;
+    Ok(vec![root])
 }
 impl AccountPreferencesPorts {
+    /// Accounts without an explicit root get `<base>/<account id>`.
+    pub fn with_account_base(mut self, base: PathBuf) -> Self {
+        self.account_base = Some(base);
+        self
+    }
+    fn roots_for(&self, roots: &BTreeMap<Uuid, Vec<PathBuf>>, actor: Uuid) -> Result<Vec<PathBuf>> {
+        match (roots.get(&actor), &self.account_base) {
+            (Some(roots), _) => Ok(roots.clone()),
+            (None, Some(base)) => account_base_root(base, actor),
+            _ => anyhow::bail!("No allowed notes roots"),
+        }
+    }
     pub fn new(
         database: Database,
         bindings: BTreeMap<(String, String), Binding>,
@@ -37,6 +56,7 @@ impl AccountPreferencesPorts {
             runtime: tokio::runtime::Runtime::new()?,
             bindings,
             next,
+            account_base: None,
         })
     }
     fn preference(&self, scope: &CallScope, request: &Request) -> Result<Value> {
@@ -51,9 +71,7 @@ impl AccountPreferencesPorts {
             let Binding::Folder { roots, .. } = binding else {
                 anyhow::bail!("Not a folder preference")
             };
-            let roots = roots
-                .get(&access.actor_user_id())
-                .context("No allowed notes roots")?;
+            let roots = self.roots_for(roots, access.actor_user_id())?;
             let path = request
                 .parameters
                 .get("path")
@@ -93,13 +111,11 @@ impl AccountPreferencesPorts {
                     let value = request.parameters.get("folder").context("Missing folder")?;
                     ensure!(value.is_null() || value.is_string(), "Invalid folder");
                     if let Some(path) = value.as_str() {
-                        let roots = roots
-                            .get(&access.actor_user_id())
-                            .context("No allowed notes roots")?;
+                        let roots = self.roots_for(roots, access.actor_user_id())?;
                         VaultContext::at_allowed_root(
                             access,
                             &PathBuf::from(path),
-                            &AllowedRoots::for_account(access, roots.clone()),
+                            &AllowedRoots::for_account(access, roots),
                         )?;
                     }
                     Some(value.clone())
