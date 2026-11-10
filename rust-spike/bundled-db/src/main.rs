@@ -21,7 +21,7 @@ usage:
   moss-db up      --root DIR --pg DIR --repo DIR [--tcp] [--port-range FIRST-LAST]
   moss-db stop    --root DIR
   moss-db status  --root DIR
-  moss-db credentials --root DIR
+  moss-db credentials --root DIR [--module-host]
   moss-db check   --root DIR [--write NOTE]
   moss-db hold    --root DIR --seconds N
   moss-db at-rest [--root DIR] [--path LABEL=DIR]...
@@ -80,6 +80,8 @@ struct Options {
     pg: Option<PathBuf>,
     repo: Option<PathBuf>,
     tcp: bool,
+    module_host: bool,
+    module_install: bool,
     port_range: Option<(u16, u16)>,
     write: Option<String>,
     seconds: Option<u32>,
@@ -101,6 +103,8 @@ impl Options {
                 "--pg" => options.pg = Some(value()?.into()),
                 "--repo" => options.repo = Some(value()?.into()),
                 "--tcp" => options.tcp = true,
+                "--module-host" => options.module_host = true,
+                "--module-install" => options.module_install = true,
                 "--port-range" => {
                     let text = value()?;
                     let range = text
@@ -303,12 +307,24 @@ fn credentials(options: &Options) -> Result<ExitCode, String> {
             .map(|s| s.expose().to_owned())
             .map_err(|e| e.to_string())
     };
-    emit(&json!({
+    let mut out = json!({
         "app_url": url("jarvis_app_runtime")?,
         "auth_url": url("jarvis_auth_runtime")?,
         "auth_secret": generated("session-signing-secret")?,
         "connector_key": generated("connector-key")?,
-    }));
+    });
+    // Only the module installer asks for these: the migration owner builds module tables,
+    // the worker role runs queued jobs. The server's own credential file never holds them.
+    if options.module_host {
+        out["migrations_url"] = json!(url("jarvis_migration_owner")?);
+        out["worker_url"] = json!(url("jarvis_worker_runtime")?);
+    }
+    // Creating a module's database roles needs more than the migration owner may do, so the
+    // one-shot installer asks for the superuser URL. It keeps it in memory and never files it.
+    if options.module_install {
+        out["install_url"] = json!(url(SUPERUSER)?);
+    }
+    emit(&out);
     Ok(ExitCode::SUCCESS)
 }
 

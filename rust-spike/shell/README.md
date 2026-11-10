@@ -166,6 +166,29 @@ imports a scratch Docker root with the stage and an explicit shell/interpreter b
 no host mounts or external network; it exercises real PostgreSQL, migrations, pgvector,
 certificate generation, HTTPS hello, Stop and data-preserving uninstall. It does not load the UI.
 
+### Automatic module bootstrap (slice 20)
+
+An instance the app creates now carries a private `modules.json` (database addresses, connector
+key, module data and notes folders; no owner yet). `moss-shell serve --instance <folder>` uses it
+without a flag and keeps retrying in the background until a module is installed, answering 503
+on module routes meanwhile. The installer is
+
+```bash
+moss-shell install-module --instance <folder> --registry-id ID \
+  (--registry-folder DIR | --registry-url URL) --root-key KEY --first-party-key KEY [--approve] MODULE...
+```
+
+It creates any missing module tables (idempotent), records the instance owner in `modules.json`
+and installs each module. Without `--approve` a module that asks for new permissions fails. A
+running server serves the module within seconds, with no restart. `moss-db credentials
+--module-host` supplies the migration owner and worker logins for `modules.json`; the server's
+own credentials file is unchanged. Creating a module's database roles needs more than the
+migration owner may do, so the caller runs the installer with `MOSS_INSTALL_DATABASE_URL` set
+from `moss-db credentials --module-install` (`install_url`, the superuser login). It is read
+from the environment for that one run and never written. After preparing tables the installer
+hands the module schemas to the migration owner, which is the login the server keeps. The
+server's shutdown waits at most five seconds for the background loader. Gate: `pnpm test:rust-module-bootstrap` (needs the People component and package).
+
 ### Explicit module-host assembly checkpoint (slice 18)
 
 `moss-shell --modules <private-modules.json>` opts into the existing extended module

@@ -15,6 +15,8 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 pub const MIGRATION: &str = include_str!("../sql/0003_queue_join.sql");
+/// The queue tables the module host needs, for installers that prepare a database.
+pub const QUEUE_MIGRATION: &str = moss_platform_jobs::MIGRATION;
 pub fn module_key(id: &str) -> String {
     format!("m-{}", &crate::trust::digest(id.as_bytes())[..32])
 }
