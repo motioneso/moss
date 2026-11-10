@@ -2457,3 +2457,48 @@ complete locale ordering, listener parser qualification, ingest nudges, provider
 installed scheduling, retention/quotas and broader backend failure handling.
 This is a partial checkpoint, not completed Phase 5 acceptance. Final ordinary,
 privacy and installed replay results are recorded below and in the checkpoint PR.
+
+### Part 21 verification receipts
+
+Ordinary gate `20261109-154839-PbuEtl` passed (exit 0) on clean
+`e6a1d0e7c57716ef40932a37fb9a2edfc5e7b340`, input fingerprint
+`sha256:884e040713866c735b9cb32f2d4cc2d4aa9fc54c508d2a499dd1bdbd74bf580d`.
+It includes the complete 100-person legacy response, all seven tool handlers,
+both job kinds, notes, persistence, Settings and seven-table privacy controls.
+The privacy assertions deliberately fail with RLS removed, then pass with it
+restored for app and worker roles, including other-user and admin actors. This
+is database/component evidence, not real installed UI or sign-in proof.
+
+All 34 native People tests, strict Clippy and Rustfmt passed. Four legacy vector
+sets matched. Repository lint, formatting, file-size and type checks passed;
+app-map generation and final scoped lint/formatting passed. The component hash is
+`6774885a0bee3851c3a37ec72490f5911550a87e17a7f1ca34b1a439d8a36c6a`;
+the package hash is
+`23b4ad5cd45fcbbbf4a464ec8ae2095053099449b640b305716a8638be8535b9`.
+
+Independent review round one found no blocker or major issue. Its pending ordinary
+receipt concern is resolved by the run above. Fixture setup now builds the full
+large-account oracle for one ordinary assertion; the whole gate took 6m04s,
+including database creation/migrations and all tests (setup time is not isolated).
+Avoiding unused oracle cases remains a possible optimization. Local duplication
+of the SDK query-parameter assembly is deliberate to avoid re-decoding owned JSON
+without changing the shared SDK in this slice; drift is a maintenance risk.
+The reviewer flagged a different error string, but the SDK's serde error
+conversion already uses `Invalid host response`, as this change does. Rustfmt
+churn is accepted. Large-read failures are acknowledged limits, not new parity
+claims; the app-map advice stays conditional because callers may lack a limit UI.
+
+Installed gate `20261109-155540-EDzvFC` passed (exit 0), also recorded on clean
+`e6a1d0e7c` with the same input fingerprint. It downloaded, installed and reloaded
+the signed package; all 219 legacy route responses and all seven table snapshots
+matched. All four public APIs passed through an installed consumer. The maximum
+fifty-reference refresh returned 202 in 1,325 ms against the unchanged 5,000 ms
+deadline. Folder save/refusal/browse cases and other-user/admin refusals passed.
+The standalone downstream JSON check and UI bridge tests passed too. Both gate
+containers were removed by the runner. These are installed host-dispatch receipts,
+not a browser session, live UI acceptance or a second-device HTTPS check.
+
+The final receipt commit changes this report only; the runtime and gate inputs
+are those tested at `e6a1d0e7c`. The checkpoint PR and recipe proof preserve the
+outputs before task scratch is removed. The remaining acceptance list above is
+still open.
