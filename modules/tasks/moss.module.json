@@ -93,7 +93,8 @@
     "ledger": "core-legacy"
   },
   "provides": {
-    "prepareTaskAction": "1.0.0"
+    "prepareTaskAction": "1.0.0",
+    "prepareTaskRoute": "1.0.0"
   },
   "navigation": [
     {
