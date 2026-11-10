@@ -310,6 +310,31 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     );
     assert_eq!(status, 200, "{children}");
     assert!(children.to_string().contains("Journal"), "{children}");
+    // Exactly one root is offered, and a neighbouring account's folder is out of reach
+    // for browsing and linking, with the saved setting left unchanged.
+    assert_eq!(
+        roots["directories"].as_array().map(Vec::len),
+        Some(1),
+        "{roots}"
+    );
+    let neighbour = root.join("notes").join(uuid::Uuid::new_v4().to_string());
+    fs::create_dir_all(neighbour.join("Private")).unwrap();
+    let (status, browse) = call(
+        Method::GET,
+        &format!("/notes-source/directories?path={}", neighbour.display()),
+        Some(&cookie),
+        None,
+    );
+    assert_eq!(status, 400, "{browse}");
+    let (status, link) = call(
+        Method::PUT,
+        "/notes-source",
+        Some(&cookie),
+        Some(json!({"path":neighbour})),
+    );
+    assert_eq!(status, 400, "{link}");
+    let (_, still) = call(Method::GET, "/notes-source", Some(&cookie), None);
+    assert_eq!(still["path"], Value::Null, "{still}");
     let outside = call(
         Method::PUT,
         "/notes-source",
@@ -351,5 +376,5 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         "unlinking must keep the files"
     );
     println!("PASS installed Notes package served over HTTPS: sign-in required, folder offered and browsed inside the account root, outside path refused, link saved, status readable, sync requested, unlink keeps files");
-    println!("NOT PROVEN: indexing and search (no embeddings configured), second account, native UI, second physical device");
+    println!("NOT PROVEN: indexing and search (no embeddings configured), second signed-in account (setup allows one owner), native UI, second physical device");
 }
