@@ -13,8 +13,12 @@ import re
 import shutil
 import tempfile
 
+from linux_runtime import stage_runtime
 
-def stage(dist: Path, postgres: Path, out: Path) -> None:
+
+def stage(dist: Path, postgres: Path, out: Path, server_runtime: bool = False,
+          openssl: Path = Path("/usr/bin/openssl"),
+          ca_bundle: Path = Path("/etc/ssl/certs/ca-certificates.crt")) -> None:
     repo = Path(__file__).resolve().parents[3]
     if out.exists():
         raise ValueError("Output already exists; choose a new folder")
@@ -43,12 +47,18 @@ def stage(dist: Path, postgres: Path, out: Path) -> None:
             shutil.copy2(dist / name, temporary / name)
         shutil.copytree(dist / "web", temporary / "web")
         shutil.copytree(postgres, temporary / "postgres", symlinks=True)
+        for file in (temporary / "postgres").rglob("*"):
+            if file.is_symlink() and not file.resolve().is_relative_to(temporary.resolve()):
+                raise ValueError("PostgreSQL bundle has a link outside its install folder")
         for folder in schema:
             target = temporary / "schema" / folder
             target.mkdir(parents=True)
             for file in sorted((repo / folder).iterdir()):
                 if file.is_file() and file.name.endswith((".sql", ".mjs")):
                     shutil.copy2(file, target / file.name)
+        shutil.copy2(Path(__file__).with_name("uninstall.py"), temporary / "uninstall.py")
+        if server_runtime:
+            stage_runtime(temporary, openssl, ca_bundle)
         # No source folders, instance data, credentials or toolchain caches are copied.
         entries = {}
         for file in sorted(temporary.rglob("*")):
@@ -69,8 +79,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("dist", "postgres", "out"):
         parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument("--linux-server-runtime", action="store_true",
+                        help="Include the build platform's headless ELF/OpenSSL/CA closure (not WebKit)")
+    parser.add_argument("--openssl", type=Path, default=Path("/usr/bin/openssl"))
+    parser.add_argument("--ca-bundle", type=Path, default=Path("/etc/ssl/certs/ca-certificates.crt"))
     args = parser.parse_args()
-    stage(args.dist.resolve(), args.postgres.resolve(), args.out.resolve())
+    stage(args.dist.resolve(), args.postgres.resolve(), args.out.resolve(),
+          args.linux_server_runtime, args.openssl.resolve(), args.ca_bundle.resolve())
     print("Staged unsigned Moss app, server, database supervisor, PostgreSQL and schema")
 
 

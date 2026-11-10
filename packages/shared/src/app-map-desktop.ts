@@ -129,7 +129,7 @@ export const DESKTOP_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] 
     id: "rust-app-local-setup",
     runtime: "rust",
     description:
-      "The desktop app could not set up a server on this computer, and the screen says why: the copy of Moss came without its database, the OpenSSL program is missing, the database did not start (its log is in the server's folder), or this system is not supported yet. Fix what it names and try again, or press Switch server and add another computer that runs Moss.",
+      "The desktop app could not set up a server on this computer, and the screen says why: the copy of Moss came without its database, the OpenSSL program is missing, the database did not start (its log is in the server's folder), or this system is not supported yet. Fix what it names and try again, or press Switch server and add another computer that runs Moss. Unsigned Linux staging can include the headless server's libraries, OpenSSL and public CA files; its moss-run launcher starts the server or database supervisor with that runtime. It requires the build platform's ELF interpreter ABI and a POSIX shell, and does not package the native WebKit app runtime. To remove a staged install, first turn off Start Moss at login, quit the app and stop its servers, then run python3 uninstall.py from the install folder. Uninstall requires Python and the ordinary install owner, refuses changed files or live install executables, and keeps instance data and other unlisted files.",
     path: "moss-app://servers",
     scope: "system"
   }
