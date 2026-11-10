@@ -1123,3 +1123,9 @@ It now expects success while retaining the unchanged-owner-storage assertion; th
 strict host-interface forged-owner rejection remains separate. The app-map wording
 now limits its validation claim to well-formed JSON bodies. These final corrections
 need a further review round; the task's two allowed rounds were already used.
+
+The first live run reached the settings contract helper and exposed TSX's generated
+`__name` reference inside the serialized browser callback. The helper now uses a
+direct request loop without a nested function; the API assertions are unchanged.
+The failed live receipt is retained as failing-first evidence, and a fresh live
+run and final review are required for this browser-only test correction.

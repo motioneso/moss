@@ -6,26 +6,31 @@ export async function checkSettingsContract(tab: Page) {
   for (const prefix of ["/api/calendar", "/api/m/calendar"]) {
     const results = await tab.evaluate(async (prefix) => {
       const path = `${prefix}/briefing-settings`;
-      const patch = async (body: unknown) => {
+      const responses = [];
+      for (const body of [
+        {
+          lookaheadDays: "1",
+          prepTaskMode: ["suggest"],
+          timeBlockMode: ["off"],
+          blockTime: null,
+          ownerUserId: "foreign",
+          extra: { timeBlockMode: "auto" }
+        },
+        { lookaheadDays: 3, timeBlockMode: "auto" }
+      ]) {
         const response = await fetch(path, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(body)
         });
-        return { status: response.status, body: await response.json() };
-      };
-      const accepted = await patch({
-        lookaheadDays: "1",
-        prepTaskMode: ["suggest"],
-        timeBlockMode: ["off"],
-        blockTime: null,
-        ownerUserId: "foreign",
-        extra: { timeBlockMode: "auto" }
-      });
-      const rejected = await patch({ lookaheadDays: 3, timeBlockMode: "auto" });
+        responses.push({ status: response.status, body: await response.json() });
+      }
+      const [accepted, rejected] = responses;
       const persisted = await (await fetch(path)).json();
       return { accepted, rejected, persisted };
     }, prefix);
+    assert.ok(results.accepted, "Missing accepted-request response");
+    assert.ok(results.rejected, "Missing rejected-request response");
     assert.equal(results.accepted.status, 200);
     assert.deepEqual(results.accepted.body, {
       settings: {
