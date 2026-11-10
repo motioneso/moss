@@ -2988,32 +2988,29 @@ Remaining work is unchanged from part 26 steps 3 and 4.
 - The pre-existing clippy complaint in `folder_sync_status.rs` and rustfmt drift in `linked_notes.rs`
   are outside this change and untouched.
 
-## Part 31: old command records are pruned
+## Part 31: age-based pruning of command records rejected, live gate re-run
 
-### Built
+### Decision
 
-- When an account's stored command records reach the 10,000 limit, the host first deletes records
-  older than 30 days, then stores the new one. If nothing has expired it still refuses with
-  "Too many stored commands for this account". Records are removed only at the limit, so normal
-  traffic pays nothing. A queued command reads its record within minutes, so a month-old record
-  has no live reader; a retry of a pruned request stores as new work, as it would after any
-  other record loss.
-- The file layer gained a last-modified lookup (`modified`) that refuses links like its other calls.
-- Two unit tests: the limit and replay test, and a new one where an aged-out record is dropped,
-  the new one fits, and the dropped id stores as new again (retention is injected; real age is 30 days).
+- Age-based pruning of stored command records (delete records older than 30 days once an account
+  holds 10,000) was built, then dropped after review. A record's age says nothing about whether a
+  queued job still needs it: a job left pending or delayed past 30 days would lose its command, and
+  the host cannot see queue state from the file layer. The change was reverted; nothing ships.
+- Safe pruning needs the record to be tied to the job that reads it (delete on job completion, or
+  check the job table before deleting). That crosses the file layer and the queue and is the next
+  step for this item. Until then the 10,000-record refusal from part 30 stands.
 
 ### Checked
 
-- `cargo test --lib command_records` passes (2 tests); rustfmt clean on both changed files.
-- `pnpm test:rust-people-server` through the gate with a freshly built component, screen and package:
-  rc=0 (HTTPS sign-in, second-account privacy, create/list/settings). The pruning path is not reached
-  there, since it needs 10,000 records.
-- Setup note: the scratch Rust copy again needed its stale `wasm32-wasip2` entry removed from
-  `lib/rustlib/multirust-config.toml` (not only `components`) before the target would install.
-  The gate takes the script name (`--gate test:rust-people-server`), not the full pnpm command.
+- `pnpm test:rust-people-server` through the gate with a freshly built component, screen and package
+  on the rebased tree: rc=0 (HTTPS sign-in, second-account privacy, create/list/settings).
+- README no longer says the large-account diagnostic is red; People requests 200M fuel and passes all 29.
+- Setup notes: the scratch Rust copy needed its stale `wasm32-wasip2` entry removed from
+  `lib/rustlib/multirust-config.toml` (not only `components`) before the target would install. The
+  gate takes the script name (`--gate test:rust-people-server`), not the full pnpm command.
 
 ### Not proven
 
-- Pruning at the real 10,000 count, or on a real 30-day-old file (age is injected in the test).
-- A second physical device; ingest nudges, real source providers, full locale ordering, chat flows.
+- A second physical device; ingest nudges, real source providers, record pruning, full locale
+  ordering, chat flows.
 - Part 29's browser run was not repeated; no screen code changed.
