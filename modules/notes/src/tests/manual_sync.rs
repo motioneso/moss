@@ -267,3 +267,57 @@ fn tick_deletes_old_checkpoints_and_republishes_unfinished_ones() {
     assert_eq!(publishes.len(), 1);
     assert_eq!(publishes[0]["idempotencyKey"], ID);
 }
+
+#[test]
+fn repeat_manual_sync_joins_the_unfinished_request_for_the_same_folder() {
+    struct Busy {
+        rows: Value,
+        inserts: RefCell<usize>,
+        publishes: RefCell<Vec<Value>>,
+    }
+    impl Host for Busy {
+        fn call(&self, port: &str, op: &str, resource: &str, params: Value) -> Result<Value> {
+            Ok(match (port, op, resource) {
+                ("vault", "folder.get", "source") => json!({"status":200,"body":"/notes"}),
+                ("context", "read", "call") => json!({"now":"2026-11-09T12:00:00Z"}),
+                ("context", "uuid", "new") => json!({"id":ID}),
+                ("jobs", "schedule", "notes.sync-tick") => json!({"id":ID}),
+                ("db", "query", "app.notes_sync_checkpoints") if params["kind"] == "select" => {
+                    // Only requests from the last five minutes are looked at.
+                    assert_eq!(params["filter"]["column"], "created_at");
+                    assert_eq!(params["filter"]["value"], "2026-11-09T11:55:00Z");
+                    self.rows.clone()
+                }
+                ("db", "query", "app.notes_sync_checkpoints") => {
+                    *self.inserts.borrow_mut() += 1;
+                    json!([params["values"]])
+                }
+                ("jobs", "enqueue-after-commit", "notes.sync") => {
+                    self.publishes.borrow_mut().push(params);
+                    json!({"deferred":true})
+                }
+                _ => panic!("Unexpected access: {port}/{op}/{resource}"),
+            })
+        }
+    }
+    let other = "00000000-0000-4000-8000-000000000009";
+    let cases = [
+        // Unfinished request for the same folder: joined, no new row.
+        (json!([{"id":other,"checkpoint":{"sourcePath":"/notes"}}]), other, 0),
+        // Finished, other folder, or a continuation page: a new request.
+        (json!([{"id":other,"checkpoint":{"sourcePath":"/notes","workerResult":{"ingested":1,"skipped":0,"errors":0}}}]), ID, 1),
+        (json!([{"id":other,"checkpoint":{"sourcePath":"/elsewhere"}}]), ID, 1),
+        (json!([{"id":other,"checkpoint":{"sourcePath":"/notes","filePath":"a.md","chunkOffset":3}}]), ID, 1),
+        (json!([]), ID, 1),
+    ];
+    for (rows, expected, inserts) in cases {
+        let host = Busy { rows, inserts: RefCell::new(0), publishes: RefCell::new(vec![]) };
+        let out = handle(&host, "api", r#"{"name":"requestNotesSync","parameters":{}}"#).unwrap();
+        assert_eq!(serde_json::from_str::<Value>(&out).unwrap(), json!({"checkpointId":expected}));
+        assert_eq!(*host.inserts.borrow(), inserts);
+        // The joined request is published again under its own id.
+        let publishes = host.publishes.borrow();
+        assert_eq!(publishes.len(), 1);
+        assert_eq!(publishes[0]["idempotencyKey"], expected);
+    }
+}

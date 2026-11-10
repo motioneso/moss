@@ -82,7 +82,7 @@ fn tick(host: &impl Host) -> Result<String> {
     };
     // Re-register in case the first registration failed; the keyed row is replaced.
     reconcile_schedule(host);
-    Ok(request_source(host, &source)?.to_string())
+    Ok(request_source_coalesced(host, &source)?.to_string())
 }
 
 pub fn handle(host: &impl Host, payload: &str) -> Result<String> {
@@ -160,13 +160,58 @@ pub(crate) fn selected_source(host: &impl Host) -> Result<Option<String>> {
 pub fn request(host: &impl Host) -> Result<Value> {
     let source =
         selected_source(host)?.ok_or_else(|| Error::new("Notes source is not configured"))?;
-    request_source(host, &source)
+    request_source_coalesced(host, &source)
 }
 
 /// Preserve the HTTP handler's server-read source in private durable state,
 /// never in the queue envelope. A later folder change cannot retarget this job.
 pub(crate) fn request_source(host: &impl Host, source: &str) -> Result<Value> {
     enqueue(host, json!({"sourcePath":source}))
+}
+
+/// Requests younger than this and still unfinished absorb a repeat request.
+const COALESCE_SECONDS: i64 = 5 * 60;
+
+/// Manual and scheduled requests join an unfinished one for the same folder, so
+/// repeated clicks queue one pass. The joined request is published again (the
+/// queue deduplicates by id), which also repairs a lost first publication. Writes
+/// and archives always queue their own pass, because a running pass may have
+/// already scanned past their file.
+pub(crate) fn request_source_coalesced(host: &impl Host, source: &str) -> Result<Value> {
+    if let Some(id) = unfinished_request(host, source)? {
+        let context = host.call("context", "read", "call", json!({}))?;
+        let now = context["now"].as_str().ok_or_else(unavailable)?;
+        publish(host, &id, now)?;
+        return Ok(json!({"checkpointId":id}));
+    }
+    request_source(host, source)
+}
+
+fn unfinished_request(host: &impl Host, source: &str) -> Result<Option<String>> {
+    let context = host.call("context", "read", "call", json!({}))?;
+    let now = context["now"].as_str().ok_or_else(unavailable)?;
+    let cutoff = crate::sync_recovery::shift_seconds(now, -COALESCE_SECONDS)
+        .ok_or_else(unavailable)?;
+    let mut query = Query::select(Filter::Compare {
+        column: "created_at".into(),
+        op: moss_module_sdk::query::Compare::Gt,
+        value: json!(cutoff),
+    });
+    query.limit = Some(100);
+    let rows = Client(host).query(TABLE, &query)?;
+    for row in rows {
+        let Some(checkpoint) = row["checkpoint"].as_object() else {
+            continue;
+        };
+        // A plain request holds only its source. Continuation pages hold more.
+        if checkpoint.len() == 1 && checkpoint.get("sourcePath").and_then(Value::as_str) == Some(source) {
+            if let Some(id) = row["id"].as_str() {
+                uuid::Uuid::parse_str(id).map_err(|_| unavailable())?;
+                return Ok(Some(id.to_owned()));
+            }
+        }
+    }
+    Ok(None)
 }
 
 fn resume(host: &impl Host, input: Resume) -> Result<String> {
