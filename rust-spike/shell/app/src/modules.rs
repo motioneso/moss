@@ -54,6 +54,10 @@ pub struct Settings {
     /// Base folder for per-account notes roots (`<base>/<account id>`). Needed by People.
     #[serde(default)]
     pub(crate) notes_base: Option<PathBuf>,
+    /// Base folder for per-account private areas (`<base>/<account id>`). Defaults to
+    /// `<data>/private-notes`; it must stay outside every linked notes folder.
+    #[serde(default)]
+    pub(crate) private_base: Option<PathBuf>,
     /// One OpenAI-style embeddings endpoint for every account. Absent means embeddings fail closed.
     #[serde(default)]
     pub(crate) embeddings: Option<EmbeddingSettings>,
@@ -128,7 +132,12 @@ fn memory(
 
 /// Account preference and linked-notes ports for People. Keys, resources and roots are
 /// fixed here, never chosen by the guest.
-fn linked_notes(database: Database, base: PathBuf, next: Arc<dyn Ports>) -> Result<Arc<dyn Ports>> {
+fn linked_notes(
+    database: Database,
+    base: PathBuf,
+    private_base: PathBuf,
+    next: Arc<dyn Ports>,
+) -> Result<Arc<dyn Ports>> {
     let preferences = AccountPreferencesPorts::new(
         database.clone(),
         BTreeMap::from([
@@ -171,7 +180,8 @@ fn linked_notes(database: Database, base: PathBuf, next: Arc<dyn Ports>) -> Resu
         ]),
         BTreeMap::new(),
     )?
-    .with_account_base(base.clone());
+    .with_account_base(base.clone())
+    .with_private_export("notes", "private-export", private_base);
     let linked: Arc<dyn Ports> = Arc::new(LinkedNotesPorts::new(
         Arc::new(folders),
         Arc::new(preferences),
@@ -237,6 +247,14 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
     )
     .map_err(|_| anyhow::anyhow!("Invalid module connector key"))?;
     let notes_base = settings.notes_base.clone();
+    let private_base = settings
+        .private_base
+        .clone()
+        .unwrap_or_else(|| settings.data.join("private-notes"));
+    anyhow::ensure!(
+        private_base.is_absolute(),
+        "Private notes base needs an absolute path"
+    );
     if let Some(base) = &notes_base {
         anyhow::ensure!(base.is_absolute(), "Notes base needs an absolute path");
     }
@@ -280,7 +298,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
                     )?,
                     None => services,
                 };
-                linked_notes(preferences_database, base, services)
+                linked_notes(preferences_database, base, private_base, services)
             }
             None => Ok(services),
         },

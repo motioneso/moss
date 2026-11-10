@@ -9,7 +9,7 @@ The guest uses only `moss-module-sdk` database queries on Notes-owned tables.
 Notes remains required and has no standalone screen. This package is a continuation
 checkpoint: Connections folder selection, saved sync status and Sync now have a package screen and
 installed routes. Search, create, edit and delete are package tools, and the package declares the
-`notes.sync` job and the manual sync route. Scheduled sync, managed publication, private note export,
+`notes.sync` job and the manual sync route. Private note export (versioned copies) is provided; managed publication,
 daily archives and the account export screen join are unfinished. The Connections
 screen still needs joining into the assembled Phase 4 settings shell. Do not replace a
 working legacy Notes installation with this checkpoint.
@@ -171,8 +171,8 @@ The host uses its ordinary transaction isolation. This is not a point-in-time
 snapshot across all pages/tables while another process changes data. Paging,
 fuel, deadline and message limits can refuse a large export; no partial section
 is returned as success. Streaming and the account export UI join remain work.
-Private note export and daily archive file behavior are separate from this managed
-source export. Existing linked-folder compensation, crash and platform limits in
+Private note export (`exportPrivateNote`, `inspectPrivateNote`, resource `private-export`) and daily
+archive file behavior are separate from this managed source export. Existing linked-folder compensation, crash and platform limits in
 `HOST_ADAPTER.md` and the phase report still apply.
 
 ## Connections checkpoint
