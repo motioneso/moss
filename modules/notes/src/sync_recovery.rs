@@ -141,22 +141,34 @@ fn page(
             continue;
         }
         // Age counts from completion, so a late-finishing request is kept long
-        // enough for a queue retry to replay its saved result.
-        let finished = checkpoint
-            .get("completedAt")
-            .or_else(|| row.get("created_at"))
-            .and_then(Value::as_str);
-        if finished.is_some_and(|at| at < cutoff) {
-            Client(host).query(
-                crate::sync_worker::TABLE,
-                &Query::delete(Filter::eq("id", json!(id))),
-            )?;
+        // enough for a queue retry to replay its saved result. A result saved
+        // before completion times existed is stamped now and kept for the window.
+        match checkpoint.get("completedAt").and_then(Value::as_str) {
+            Some(at) if at < cutoff => {
+                Client(host).query(
+                    crate::sync_worker::TABLE,
+                    &Query::delete(Filter::eq("id", json!(id))),
+                )?;
+            }
+            Some(_) => {}
+            None => {
+                let mut stamped = checkpoint.clone();
+                stamped.insert("completedAt".into(), json!(now));
+                Client(host).query(
+                    crate::sync_worker::TABLE,
+                    &Query::update(
+                        Filter::eq("id", json!(id)),
+                        [("checkpoint".into(), Value::Object(stamped))].into(),
+                    ),
+                )?;
+            }
         }
     }
     Ok((rows.len(), rows.last().and_then(|r| r["id"].as_str().map(str::to_owned))))
 }
 
-/// The UTC midnight `RETENTION_DAYS` before the given RFC 3339 timestamp.
+/// The UTC midnight `RETENTION_DAYS` before the given RFC 3339 timestamp, so a
+/// finished request is kept between two and three days.
 fn cutoff(now: &str) -> Result<String> {
     let date = now.get(..10).ok_or_else(unavailable)?;
     let mut parts = date.split('-').map(|p| p.parse::<i64>());

@@ -1961,11 +1961,16 @@ maintenance sweep, then requests its normal sync.
   budget is still reached across ticks.
 - Recovery: a request with no saved result is republished. Queue idempotency keeps a repeat
   harmless. A failing page stops the scan until the next tick.
-- Retention: a finished request is deleted two days after it completed. The worker now saves a
-  completion time with each result; older rows without one fall back to their creation time.
+- Retention: a finished request is deleted between two and three days after it completed (the
+  cutoff is UTC midnight). The worker now saves a completion time with each result; an older row
+  without one is stamped with the current time on its first sweep and kept for the window.
   A queue retry waits at most one day, so a retry can always replay its saved result. Unfinished
   requests are never deleted, whatever their age.
 - Maintenance errors are ignored, so they never fail or delay the sync itself.
+
+Review round 2 (Codex) found that rows saved before completion times existed would fall back to
+creation age and could be deleted at once; they are now stamped and kept. It also noted the
+window is two to three days because the cutoff is midnight; that is accepted and documented.
 
 Review round 1 (Codex) found three major problems in the first version (a fixed seven days from
 creation could delete a request that finished late and was about to be retried; a scan that always

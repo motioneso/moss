@@ -521,7 +521,7 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
             });
             db.execute(
                 "INSERT INTO app.notes_sync_checkpoints(id, owner_user_id, checkpoint, created_at) VALUES ($1::text::uuid, $2, $3::text::jsonb, now()-interval '10 days')",
-                &[&OLD_FINISHED, &owner, &json!({"workerResult":{"ingested":1,"skipped":0,"errors":0}}).to_string()],
+                &[&OLD_FINISHED, &owner, &json!({"workerResult":{"ingested":1,"skipped":0,"errors":0},"completedAt":"2020-01-01T00:00:00Z"}).to_string()],
             )
             .await
             .unwrap();

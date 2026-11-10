@@ -139,6 +139,7 @@ fn tick_republishes_unfinished_and_deletes_only_old_finished_checkpoints() {
         old: Vec<Value>,
         jobs: RefCell<Vec<Value>>,
         deleted: RefCell<Vec<Value>>,
+        stamped: RefCell<Vec<Value>>,
     }
     impl Host for Tick {
         fn call(&self, port: &str, op: &str, _: &str, p: Value) -> Result<Value> {
@@ -157,6 +158,10 @@ fn tick_republishes_unfinished_and_deletes_only_old_finished_checkpoints() {
                         json!([])
                     }
                     "insert" => json!([p["values"]]),
+                    "update" => {
+                        self.stamped.borrow_mut().push(p["filter"]["value"].clone());
+                        json!([p["values"]])
+                    }
                     _ => {
                         // Honour the id bounds the scan sends (greater-than and at-most).
                         let mut lo = String::new();
@@ -197,6 +202,7 @@ fn tick_republishes_unfinished_and_deletes_only_old_finished_checkpoints() {
         ],
         jobs: RefCell::new(vec![]),
         deleted: RefCell::new(vec![]),
+        stamped: RefCell::new(vec![]),
     };
     moss_notes::guest::handle(&host, "job", r#"{"queue":"notes.sync-tick","parameters":{}}"#)
         .unwrap();
@@ -209,7 +215,12 @@ fn tick_republishes_unfinished_and_deletes_only_old_finished_checkpoints() {
     assert_eq!(ids, vec!["00000000-0000-4000-8000-000000000002", NEW]);
     assert_eq!(
         *host.deleted.borrow(),
-        vec![json!("00000000-0000-4000-8000-000000000001"), json!("00000000-0000-4000-8000-000000000004")],
-        "rows finished over two days ago are deleted (older created_at only when no completion time); a row completed yesterday is kept even though it was created long ago"
+        vec![json!("00000000-0000-4000-8000-000000000001")],
+        "only a row completed over two days ago is deleted; one completed yesterday is kept even though it was created long ago"
+    );
+    assert_eq!(
+        *host.stamped.borrow(),
+        vec![json!("00000000-0000-4000-8000-000000000004")],
+        "a result saved before completion times existed is stamped, not deleted"
     );
 }
