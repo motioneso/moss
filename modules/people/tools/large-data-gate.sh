@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Full large-account diagnostic under the unchanged default host budgets.
+# Probe large-account legacy parity; check its exit status and the delivery report.
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 if [[ "${JARVIS_GATE_RUN:-}" != 1 ]]; then
