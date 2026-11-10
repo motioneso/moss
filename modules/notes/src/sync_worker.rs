@@ -29,9 +29,6 @@ struct PageResult {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct SavedPage {
     worker_result: PageResult,
-    /// When the result was saved; retention counts from here.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    completed_at: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -68,6 +65,8 @@ fn schedule(host: &impl Host) -> Result<Value> {
 /// Cancels the account's schedule when the folder is unlinked. The keyed
 /// schedule call is idempotent and returns the stable row id to cancel.
 pub(crate) fn cancel_schedule(host: &impl Host) {
+    // No tick will run for this account again until it relinks, so clean up now.
+    crate::sync_recovery::maintain(host);
     let Ok(saved) = schedule(host) else { return };
     if let Some(id) = saved["id"].as_str() {
         let _ = host.call("jobs", "unschedule", TICK, json!({"id":id}));
@@ -77,14 +76,12 @@ pub(crate) fn cancel_schedule(host: &impl Host) {
 /// A scheduled tick requests a fresh checkpoint for the linked folder. With no
 /// folder linked it does nothing, so unlinking needs no schedule cancellation.
 fn tick(host: &impl Host) -> Result<String> {
+    crate::sync_recovery::maintain(host);
     let Some(source) = selected_source(host)? else {
         return Ok(json!({"noOp":true}).to_string());
     };
     // Re-register in case the first registration failed; the keyed row is replaced.
     reconcile_schedule(host);
-    // Maintenance first, so a stuck earlier request is republished and old
-    // finished checkpoints are dropped. It never fails the tick.
-    crate::sync_recovery::sweep(host);
     Ok(request_source(host, &source)?.to_string())
 }
 
@@ -226,10 +223,6 @@ fn resume(host: &impl Host, input: Resume) -> Result<String> {
     }
     let saved = SavedPage {
         worker_result: serde_json::from_value(result.clone()).map_err(|_| unavailable())?,
-        completed_at: host
-            .call("context", "read", "call", json!({}))
-            .ok()
-            .and_then(|c| c["now"].as_str().map(str::to_owned)),
     };
     let updated = Client(host).query(
         TABLE,

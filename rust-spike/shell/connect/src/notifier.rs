@@ -137,7 +137,7 @@ pub fn run(data: PathBuf, once: bool) -> i32 {
             if app_active_for(&data, &entry.server) {
                 continue;
             }
-            runtime.block_on(poll(&entry, &mut seen));
+            runtime.block_on(poll(&data, &entry, &mut seen));
         }
         if once {
             return 0;
@@ -146,7 +146,7 @@ pub fn run(data: PathBuf, once: bool) -> i32 {
     }
 }
 
-async fn poll(entry: &Entry, seen: &mut HashSet<(String, String)>) {
+async fn poll(data: &Path, entry: &Entry, seen: &mut HashSet<(String, String)>) {
     let path = format!("/api/notifier/notices?client={}", entry.client);
     let Ok((200, body)) =
         reach::request(&entry.origin, &entry.pin, "GET", &path, &entry.token, None).await
@@ -164,11 +164,18 @@ async fn poll(entry: &Entry, seen: &mut HashSet<(String, String)>) {
         let text = notice.body.clone().unwrap_or_default();
         let key = (entry.server.clone(), format!("{}@{}", notice.id, notice.version));
         // A failed acceptance last round must not show the same alert twice.
-        if seen.contains(&key) || crate::desktop::notify(&notice.title, &text).is_ok() {
+        let delivered = seen.contains(&key)
+            || match notice.href.as_deref().filter(|h| crate::link::valid_path(h)) {
+                Some(path) => {
+                    crate::desktop::notify_link(data, &entry.server, path, &notice.title, &text)
+                }
+                None => crate::desktop::notify(&notice.title, &text),
+            }
+            .is_ok();
+        if delivered {
             seen.insert(key);
             shown.push((notice.id, notice.version));
         }
-        let _ = notice.href;
     }
     if shown.is_empty() {
         return;

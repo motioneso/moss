@@ -1951,47 +1951,16 @@ Not proven: the API over HTTP or from chat (no route; the chat settings screen a
 
 Still open: automatic recovery timer, retention, managed publication and reconciliation, singleton coalescing and recall warmup, the assembled Settings and chat join, second-device HTTPS proof.
 
-## Part thirty-one checkpoint — automatic recovery and retention
+## Part thirty-one checkpoint — sync recovery and retention on the tick
 
-Package 0.1.20. Each fifteen-minute tick (only while a folder is linked) first runs a
-maintenance sweep, then requests its normal sync.
+Package 0.1.20. The fifteen-minute sync tick now also runs maintenance for its account, before the linked-folder check, and never fails the tick. First it deletes saved sync checkpoints older than 24 hours, finished or not. Then it scans up to forty pages (1000 rows) in stable id order and asks the queue again for every checkpoint that has no saved result. Queue identity is the checkpoint id, so a repeat request is safe. The experimental `recoverNotesSync` API stays for explicit retries. The 24-hour cutoff is computed in the guest from the host's `now` (no timezone or date library is added).
 
-- Scan: one pass over the account's saved sync requests in id order, 25 per page, at most 8
-  pages per tick. It starts at a random id and wraps to the start, so a backlog larger than the
-  budget is still reached across ticks.
-- Recovery: a request with no saved result is republished. Queue idempotency keeps a repeat
-  harmless. A failing page stops the scan until the next tick.
-- Retention: a finished request is deleted between two and three days after it completed (the
-  cutoff is UTC midnight). The worker now saves a completion time with each result; an older row
-  without one is stamped with the current time on its first sweep and kept for the window.
-  A queue retry waits at most one day, so a retry can always replay its saved result. Unfinished
-  requests are never deleted, whatever their age.
-- Maintenance errors are ignored, so they never fail or delay the sync itself.
+Decisions: retention is time-only, not result-based, because the database filter cannot see inside the saved result. An unfinished checkpoint that survived roughly ninety retries in a day is dropped. Unlinking runs the same maintenance once before cancelling the schedule, so old checkpoints are cleared; rows from the last day stay until the folder is linked again. Recovery also re-requests rows that are still in flight; the queue deduplicates by checkpoint id.
 
-Review round 2 (Codex) found that rows saved before completion times existed would fall back to
-creation age and could be deleted at once; they are now stamped and kept. It also noted the
-window is two to three days because the cutoff is midnight; that is accepted and documented.
+Checks: unit tests for date shifting (day, month, year and leap-day boundaries), and a tick test that the delete carries the right cutoff and only the unfinished checkpoint is requested again. Live (`pnpm test:rust-notes-server`, through the gate, passed): on the real HTTPS server with real Postgres, a finished checkpoint backdated three days and a recent one were inserted, then the account's schedule was made due. The server's own scheduler ran the tick, which indexed the new note as before, deleted the old checkpoint and kept the recent one.
 
-Review round 1 (Codex) found three major problems in the first version (a fixed seven days from
-creation could delete a request that finished late and was about to be retried; a scan that always
-started at the same id never reached rows past the first 200; the delete query stopped at the first
-25 old rows even when they were unfinished). All three are fixed as described above.
+Not proven: a real 24-hour wait (an old row was inserted with a past timestamp), a crash between saving a checkpoint and queueing it, a second account, native UI, second physical device.
 
-Checks: a unit test for the date arithmetic (month, leap year, year boundary) and a tick test
-with four rows showing the wrap-around scan, the unfinished row republished, an old finished row
-and a legacy row without a completion time deleted, and a row created long ago but completed
-yesterday kept; all other Notes suites pass.
+Still open: managed publication and reconciliation (needs the Meetings module), singleton coalescing and recall warmup, the assembled Settings and chat join, second-device HTTPS proof.
 
-Live (`pnpm test:rust-notes-server`, through the gate): on the real HTTPS server with real
-Postgres, three rows were inserted for the signed-up account (finished ten days ago, never
-published, and created ten days ago but finished recently). When the schedule came due, the
-server's own scheduler ran the tick; the old finished row was deleted, the recently finished row
-was kept, and the never-published request was republished and finished by the worker, with no
-manual action.
-
-Not proven: a backlog larger than the per-tick budget (covered only by the wrap-around unit
-test), crash recovery of a request saved by a process that died mid-write, native UI, a second
-device.
-
-Still open: managed publication and reconciliation, singleton coalescing and recall warmup, the
-assembled Settings and chat join, second-device HTTPS proof.
+Review round 1 (Codex): two majors fixed. Recovery covered only 250 rows per tick (now 1000, restarting from the start each tick; a day beyond 1000 rows needs a very large folder and would leave later rows unrecovered, which is a documented limit, not a persisted cursor). Unlinking cancelled the only maintenance entry point, so it now runs maintenance first.
