@@ -9,6 +9,11 @@ use std::sync::{Mutex, Once};
 
 static EVENTS: Mutex<Option<Box<dyn Fn(Action) + Send>>> = Mutex::new(None);
 static REGISTER: Once = Once::new();
+static DELEGATE: Once = Once::new();
+/// The data folder that clicked alerts hand their page request to.
+static CLICK_DATA: Mutex<Option<PathBuf>> = Mutex::new(None);
+const SERVER_KEY: &str = "moss-server";
+const PATH_KEY: &str = "moss-path";
 
 unsafe extern "C-unwind" fn activate(_: *mut AnyObject, _: Sel, _: *mut AnyObject) {
     if let Ok(events) = EVENTS.lock() {
@@ -103,6 +108,159 @@ pub fn tray(action: impl Fn(Action) + Send + 'static) -> Option<Tray> {
 }
 
 pub fn notify(title: &str, body: &str) -> Result<(), String> {
+    deliver(title, body, None)
+}
+
+/// Shows an alert that opens `path` on the saved server when the user clicks it. The click
+/// arrives in this process, so the notifier must be the process that showed the alert.
+pub fn notify_link(
+    data: &Path,
+    server: &str,
+    path: &str,
+    title: &str,
+    body: &str,
+) -> Result<(), String> {
+    if !crate::link::valid_path(path) {
+        return notify(title, body);
+    }
+    *CLICK_DATA.lock().unwrap_or_else(|e| e.into_inner()) = Some(data.to_owned());
+    deliver(title, body, Some((server, path)))
+}
+
+/// Turns a clicked alert's stored server and page into the request the window app reads.
+fn route_click(data: &Path, server: Option<String>, path: Option<String>) {
+    let (Some(server), Some(path)) = (server, path) else {
+        return;
+    };
+    let request = crate::link::Request {
+        server: Some(server),
+        path: Some(path),
+    };
+    if let Err(e) = crate::link::open(data, &request) {
+        eprintln!("moss-app notifier: {e}");
+    }
+}
+
+unsafe fn string_value(dictionary: *mut AnyObject, key: &str) -> Option<String> {
+    let value: *mut AnyObject = msg_send![dictionary, objectForKey: &*NSString::from_str(key)];
+    if value.is_null() {
+        return None;
+    }
+    let bytes: *const std::ffi::c_char = msg_send![value, UTF8String];
+    if bytes.is_null() {
+        return None;
+    }
+    Some(
+        std::ffi::CStr::from_ptr(bytes)
+            .to_string_lossy()
+            .into_owned(),
+    )
+}
+
+unsafe extern "C-unwind" fn did_activate(
+    _: *mut AnyObject,
+    _: Sel,
+    _center: *mut AnyObject,
+    notification: *mut AnyObject,
+) {
+    let info: *mut AnyObject = msg_send![notification, userInfo];
+    if info.is_null() {
+        return;
+    }
+    let data = CLICK_DATA.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    if let Some(data) = data {
+        route_click(
+            &data,
+            string_value(info, SERVER_KEY),
+            string_value(info, PATH_KEY),
+        );
+    }
+}
+
+/// Alerts show even while the app is frontmost.
+unsafe extern "C-unwind" fn should_present(
+    _: *mut AnyObject,
+    _: Sel,
+    _center: *mut AnyObject,
+    _notification: *mut AnyObject,
+) -> i8 {
+    1
+}
+
+/// Registers the delegate class once and returns a new instance that is never released: the
+/// notification center keeps only a weak reference to its delegate.
+unsafe fn delegate() -> Option<*mut AnyObject> {
+    DELEGATE.call_once(|| {
+        let base = AnyClass::get(c"NSObject").unwrap();
+        let class = ffi::objc_allocateClassPair(
+            base as *const AnyClass,
+            c"MossNotificationDelegate".as_ptr(),
+            0,
+        );
+        if class.is_null() {
+            return;
+        }
+        let activate = std::mem::transmute::<
+            unsafe extern "C-unwind" fn(*mut AnyObject, Sel, *mut AnyObject, *mut AnyObject),
+            unsafe extern "C-unwind" fn(),
+        >(did_activate);
+        let present = std::mem::transmute::<
+            unsafe extern "C-unwind" fn(*mut AnyObject, Sel, *mut AnyObject, *mut AnyObject) -> i8,
+            unsafe extern "C-unwind" fn(),
+        >(should_present);
+        ffi::class_addMethod(
+            class,
+            sel!(userNotificationCenter:didActivateNotification:),
+            activate,
+            c"v@:@@".as_ptr(),
+        );
+        ffi::class_addMethod(
+            class,
+            sel!(userNotificationCenter:shouldPresentNotification:),
+            present,
+            c"c@:@@".as_ptr(),
+        );
+        ffi::objc_registerClassPair(class);
+    });
+    let class = AnyClass::get(c"MossNotificationDelegate")?;
+    let instance: *mut AnyObject = msg_send![class, new];
+    (!instance.is_null()).then_some(instance)
+}
+
+/// Makes this process the notification center's delegate, so clicks on its alerts reach it.
+pub fn listen_for_clicks(data: &Path) {
+    *CLICK_DATA.lock().unwrap_or_else(|e| e.into_inner()) = Some(data.to_owned());
+    // SAFETY: the center and delegate are Objective-C objects used on the calling thread.
+    unsafe {
+        let Some(class) = AnyClass::get(c"NSUserNotificationCenter") else {
+            return;
+        };
+        let center: *mut AnyObject = msg_send![class, defaultUserNotificationCenter];
+        if center.is_null() {
+            return;
+        }
+        if let Some(delegate) = delegate() {
+            let _: () = msg_send![center, setDelegate: delegate];
+        }
+    }
+}
+
+/// Lets the main run loop deliver clicks while the notifier waits for its next round.
+pub fn pause(duration: std::time::Duration) {
+    // SAFETY: Foundation classes, called on the thread that owns this run loop.
+    unsafe {
+        let (Some(date), Some(run_loop)) = (AnyClass::get(c"NSDate"), AnyClass::get(c"NSRunLoop"))
+        else {
+            return std::thread::sleep(duration);
+        };
+        let until: *mut AnyObject =
+            msg_send![date, dateWithTimeIntervalSinceNow: duration.as_secs_f64()];
+        let current: *mut AnyObject = msg_send![run_loop, currentRunLoop];
+        let _: () = msg_send![current, runUntilDate: until];
+    }
+}
+
+fn deliver(title: &str, body: &str, link: Option<(&str, &str)>) -> Result<(), String> {
     // This legacy native API is guarded by class availability. Delivery on supported macOS
     // releases, bundle identity and OS permission still need Phase 7 runtime qualification.
     unsafe {
@@ -118,10 +276,76 @@ pub fn notify(title: &str, body: &str) -> Result<(), String> {
         ];
         let _: () = msg_send![notification, setTitle: &*NSString::from_str(title)];
         let _: () = msg_send![notification, setInformativeText: &*NSString::from_str(body)];
+        if let Some((server, path)) = link {
+            let info: *mut AnyObject = msg_send![
+                AnyClass::get(c"NSMutableDictionary")
+                    .ok_or("macOS notifications are unavailable")?,
+                new
+            ];
+            for (key, value) in [(SERVER_KEY, server), (PATH_KEY, path)] {
+                let _: () = msg_send![info, setObject: &*NSString::from_str(value), forKey: &*NSString::from_str(key)];
+            }
+            let _: () = msg_send![notification, setUserInfo: info];
+            let _: () = msg_send![info, release];
+        }
         let _: () = msg_send![center, deliverNotification: notification];
         let _: () = msg_send![notification, release];
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn folder() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("moss click {}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Builds a notification the way `deliver` does, then calls the delegate method the
+    /// notification center calls on a click. A real click needs a person at the screen.
+    #[test]
+    fn click_on_an_alert_asks_the_window_app_for_its_page() {
+        let dir = folder();
+        let _window = crate::link::window_lock(&dir).expect("window lock");
+        *CLICK_DATA.lock().unwrap() = Some(dir.clone());
+        unsafe {
+            let delegate = delegate().expect("delegate class");
+            let notification: *mut AnyObject =
+                msg_send![AnyClass::get(c"NSUserNotification").unwrap(), new];
+            let info: *mut AnyObject =
+                msg_send![AnyClass::get(c"NSMutableDictionary").unwrap(), new];
+            for (key, value) in [(SERVER_KEY, "s1"), (PATH_KEY, "/tasks")] {
+                let _: () = msg_send![info, setObject: &*NSString::from_str(value), forKey: &*NSString::from_str(key)];
+            }
+            let _: () = msg_send![notification, setUserInfo: info];
+            let center: *mut AnyObject = std::ptr::null_mut();
+            let _: () = msg_send![delegate, userNotificationCenter: center, didActivateNotification: notification];
+            // An alert with no link stores no page, so its click opens nothing.
+            let plain: *mut AnyObject =
+                msg_send![AnyClass::get(c"NSUserNotification").unwrap(), new];
+            let _: () =
+                msg_send![delegate, userNotificationCenter: center, didActivateNotification: plain];
+        }
+        let want = crate::link::Request {
+            server: Some("s1".into()),
+            path: Some("/tasks".into()),
+        };
+        assert_eq!(crate::link::take_request(&dir), Some(want));
+        assert_eq!(crate::link::take_request(&dir), None);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_click_without_a_server_or_page_is_ignored() {
+        let dir = folder();
+        route_click(&dir, None, Some("/tasks".into()));
+        route_click(&dir, Some("s1".into()), None);
+        assert_eq!(crate::link::take_request(&dir), None);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 }
 
 fn login_file(data: &Path) -> Result<PathBuf, String> {
