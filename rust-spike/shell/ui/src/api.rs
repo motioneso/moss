@@ -74,6 +74,8 @@ pub struct ModulePlan {
 struct Pick<'a> {
     module: &'a str,
     approve: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    version: Option<&'a str>,
 }
 
 /// The server's own sentence when it refuses, else a plain fallback.
@@ -92,9 +94,9 @@ async fn failure(response: gloo_net::http::Response) -> String {
     }
 }
 
-async fn post_pick<T: DeserializeOwned>(path: &str, module: &str, approve: bool) -> Result<T, String> {
+async fn post_pick<T: DeserializeOwned>(path: &str, module: &str, approve: bool, version: Option<&str>) -> Result<T, String> {
     let response = Request::post(path)
-        .json(&Pick { module, approve })
+        .json(&Pick { module, approve, version })
         .map_err(|e| e.to_string())?
         .send()
         .await
@@ -117,11 +119,11 @@ pub async fn available_modules() -> Result<ModuleList, String> {
 }
 
 pub async fn module_plan(module: &str) -> Result<ModulePlan, String> {
-    post_pick("/api/modules/plan", module, false).await
+    post_pick("/api/modules/plan", module, false, None).await
 }
 
-pub async fn install_module(module: &str, approve: bool) -> Result<(), String> {
-    post_pick::<serde_json::Value>("/api/modules/install", module, approve)
+pub async fn install_module(module: &str, version: &str) -> Result<(), String> {
+    post_pick::<serde_json::Value>("/api/modules/install", module, true, Some(version))
         .await
         .map(|_| ())
 }

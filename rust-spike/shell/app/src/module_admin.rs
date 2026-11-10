@@ -61,6 +61,9 @@ struct Pick {
     module: String,
     #[serde(default)]
     approve: bool,
+    /// The version the owner reviewed. An approved install must name it.
+    #[serde(default)]
+    version: Option<String>,
 }
 
 fn say(status: StatusCode, message: &str) -> Response {
@@ -130,7 +133,7 @@ fn registry(instance: &Path) -> Result<Registry, &'static str> {
 }
 
 /// Runs the installer child and returns its output. Messages are short and never carry an address.
-fn run(instance: &Path, extra: &[&str], modules: &[String]) -> Result<String, String> {
+fn run(instance: &Path, extra: &[String], modules: &[String]) -> Result<String, String> {
     let registry = registry(instance).map_err(str::to_owned)?;
     let url = elevated_url(instance).map_err(str::to_owned)?;
     let exe = std::env::current_exe().map_err(|_| "Cannot find the installer".to_owned())?;
@@ -171,7 +174,7 @@ fn run(instance: &Path, extra: &[&str], modules: &[String]) -> Result<String, St
         .collect())
 }
 
-async fn call(admin: Arc<Admin>, extra: Vec<&'static str>, modules: Vec<String>) -> Response {
+async fn call(admin: Arc<Admin>, extra: Vec<String>, modules: Vec<String>) -> Response {
     let _one_at_a_time = admin.gate.lock().await;
     let instance = admin.instance.clone();
     match tokio::task::spawn_blocking(move || run(&instance, &extra, &modules)).await {
@@ -191,7 +194,7 @@ async fn list(
     if let Err(refused) = require_admin(&admin, &access).await {
         return refused;
     }
-    call(admin, vec!["--list"], vec![]).await
+    call(admin, vec!["--list".into()], vec![]).await
 }
 
 fn valid_name(name: &str) -> bool {
@@ -213,7 +216,7 @@ async fn plan(
     if !valid_name(&pick.module) {
         return say(StatusCode::BAD_REQUEST, "Invalid module name");
     }
-    call(admin, vec!["--plan"], vec![pick.module]).await
+    call(admin, vec!["--plan".into()], vec![pick.module]).await
 }
 
 /// Without `approve` the installer refuses a module that asks for permissions, so the owner
@@ -229,7 +232,14 @@ async fn install(
     if !valid_name(&pick.module) {
         return say(StatusCode::BAD_REQUEST, "Invalid module name");
     }
-    let extra = if pick.approve { vec!["--approve"] } else { vec![] };
+    let mut extra: Vec<String> = vec![];
+    if pick.approve {
+        // Approval covers only the version that was previewed.
+        let Some(version) = pick.version.as_deref().filter(|v| valid_name(v)) else {
+            return say(StatusCode::BAD_REQUEST, "Name the version you reviewed");
+        };
+        extra.extend(["--approve".to_owned(), "--version".to_owned(), version.to_owned()]);
+    }
     call(admin, extra, vec![pick.module]).await
 }
 

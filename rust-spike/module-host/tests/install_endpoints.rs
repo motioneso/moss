@@ -194,17 +194,32 @@ fn owner_installs_a_module_from_the_app_endpoints() {
     let (status, plan) = api(Method::POST, "/api/modules/plan", Some(json!({"module":"people"})), Some(&cookie));
     assert_eq!(status, 200, "{plan}\n{}", log("server.log"));
     println!("PLAN {plan}");
-    assert!(plan["permissions"].as_array().is_some_and(|p| !p.is_empty()), "the prompt shows what people asks for");
+    assert!(
+        plan["permissions"].as_array().is_some_and(|p| {
+            !p.is_empty()
+                && p.iter().all(|x| {
+                    ["group", "headline"].iter().all(|k| x[*k].as_str().is_some_and(|t| !t.is_empty()))
+                })
+        }),
+        "the prompt shows what people asks for: {plan}"
+    );
+    let people_version = plan["version"].as_str().expect("plan names a version").to_owned();
     // Providers first: People depends on them.
     for module in ["person-providers"] {
-        let (status, body) = api(Method::POST, "/api/modules/install", Some(json!({"module":module,"approve":true})), Some(&cookie));
+        let (status, reviewed) = api(Method::POST, "/api/modules/plan", Some(json!({"module":module})), Some(&cookie));
+        assert_eq!(status, 200, "{reviewed}");
+        let (status, body) = api(Method::POST, "/api/modules/install", Some(json!({"module":module,"approve":true,"version":reviewed["version"]})), Some(&cookie));
         assert_eq!(status, 200, "{body}\n{}", log("server.log"));
     }
     let (status, refused) = api(Method::POST, "/api/modules/install", Some(json!({"module":"people"})), Some(&cookie));
     assert_eq!(status, 422, "without approval the installer refuses: {refused}");
-    let (status, body) = api(Method::POST, "/api/modules/install", Some(json!({"module":"people","approve":true})), Some(&cookie));
+    let (status, no_version) = api(Method::POST, "/api/modules/install", Some(json!({"module":"people","approve":true})), Some(&cookie));
+    assert_eq!(status, 400, "approval must name the reviewed version: {no_version}");
+    let (status, stale) = api(Method::POST, "/api/modules/install", Some(json!({"module":"people","approve":true,"version":"0.0.1-stale"})), Some(&cookie));
+    assert_eq!(status, 422, "approval of a different version is refused: {stale}");
+    let (status, body) = api(Method::POST, "/api/modules/install", Some(json!({"module":"people","approve":true,"version":people_version})), Some(&cookie));
     assert_eq!(status, 200, "{body}\n{}", log("server.log"));
-    let (status, bad) = api(Method::POST, "/api/modules/install", Some(json!({"module":"--approve","approve":true})), Some(&cookie));
+    let (status, bad) = api(Method::POST, "/api/modules/install", Some(json!({"module":"--approve","approve":true,"version":"1.0.0"})), Some(&cookie));
     assert_eq!(status, 400, "{bad}");
     let (_, after) = api(Method::GET, "/api/modules", None, Some(&cookie));
     assert!(after["modules"].as_array().unwrap().iter().any(|m| m["id"] == "people" && m["installed"] == true), "{after}");

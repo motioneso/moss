@@ -38,7 +38,7 @@ pub fn ModulesPage() -> impl IntoView {
     let approve = move |plan: ModulePlan| {
         step.set(Step::Installing(plan.name.clone()));
         spawn_local(async move {
-            match api::install_module(&plan.id, true).await {
+            match api::install_module(&plan.id, &plan.version).await {
                 Ok(()) => {
                     step.set(Step::Done(plan.name));
                     reload();

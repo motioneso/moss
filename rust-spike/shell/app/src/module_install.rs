@@ -16,7 +16,7 @@ pub const INSTALL_URL_VARIABLE: &str = "MOSS_INSTALL_DATABASE_URL";
 
 const USAGE: &str = "usage: moss-shell install-module --instance DIR --registry-id ID \
 (--registry-folder DIR | --registry-url URL) --root-key KEY --first-party-key KEY \
-[--approve | --list | --plan] [MODULE...]
+[--approve [--version V]| --list | --plan] [MODULE...]
   --list   prints the registry's modules as JSON and installs nothing
   --plan   prints what each MODULE would ask permission for as JSON and installs nothing";
 
@@ -27,6 +27,7 @@ struct Args {
     root_key: String,
     first_party_key: String,
     approve: bool,
+    version: Option<String>,
     mode: Mode,
     modules: Vec<String>,
 }
@@ -41,6 +42,7 @@ enum Mode {
 fn parse(raw: Vec<String>) -> Result<Args> {
     let (mut instance, mut id, mut source, mut root, mut first) = (None, None, None, None, None);
     let (mut approve, mut modules, mut mode) = (false, vec![], Mode::Install);
+    let mut version = None;
     let mut raw = raw.into_iter();
     while let Some(flag) = raw.next() {
         if flag == "--approve" {
@@ -66,6 +68,7 @@ fn parse(raw: Vec<String>) -> Result<Args> {
                 }
                 "root-key" => root = Some(value),
                 "first-party-key" => first = Some(value),
+                "version" => version = Some(value),
                 _ => bail!("unknown option {flag}\n{USAGE}"),
             }
         } else {
@@ -83,6 +86,7 @@ fn parse(raw: Vec<String>) -> Result<Args> {
         root_key: root.ok_or_else(|| need("--root-key"))?,
         first_party_key: first.ok_or_else(|| need("--first-party-key"))?,
         approve,
+        version,
         mode,
         modules,
     })
@@ -238,6 +242,11 @@ pub fn run(raw: Vec<String>) -> Result<()> {
                 })
             );
             continue;
+        }
+        if let Some(reviewed) = &args.version {
+            if artifact.version.to_string() != *reviewed {
+                bail!("{name} changed in the registry since it was reviewed; review it again");
+            }
         }
         application
             .installer
