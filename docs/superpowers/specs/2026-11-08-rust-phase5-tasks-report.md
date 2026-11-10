@@ -1674,3 +1674,84 @@ HTTPS proof. The signed fixture exercises installation, TLS and sign-in but
 remains separate from the application shell. No physical device was attached to
 the existing device bridge during this work; a narrow viewport is not evidence
 of second-device access.
+
+## Tasks part 24 checkpoint (JS-151, Card 526)
+
+Date editing, due-day labels and interpreted-search day filters now use the
+saved account timezone. The authenticated package-only `GET /tasks/local-day`
+route uses the existing public host calendar service; it accepts no account or
+timezone selector. Search uses that same service for the date in the AI prompt.
+Tasks product code does not query core preferences or People internals.
+
+The screen waits for a valid saved timezone before opening an editor. An initial
+read failure shows the existing page recovery; Retry reloads the account calendar.
+Due and do inputs show local days. Changed days save at local noon using the
+unchanged application's wall-time algorithm; untouched fields omit the timestamp
+from updates. An open editor retains its timezone for partial-save retries, and
+new recurring drafts retain their first-save local day. The module's app-map
+metadata now describes these behaviors and recovery.
+
+Two regressions were observed failing before the fix. The date-model check
+failed when a timestamp near UTC midnight was treated as a changed local day.
+The compiled guest check failed because an AI prompt used November 9 for a
+Pacific account whose day was still November 8. The fixed check freezes only
+the invocation clock; saved preferences and account-local conversion still use
+the real host and disposable database. It also checks UTC+14, the existing invalid-zone Pacific
+fallback and an independent account.
+
+Repository lint, type checks, changed-file formatting, file-size, UI-class and
+static guard checks pass. The first full package run passed 19 of 20 database
+checks; the new check assumed UTC fallback where the existing app uses Pacific.
+That fixture expectation was corrected and the independent account was given
+an explicit UTC preference. A focused verify-gate rerun passed the corrected test; the 19 successful
+checks were retained. Remaining package tool and integration receipts are
+recorded in the task proof artifact. Differential checks compare the unchanged app
+with the package over 200 saved-zone date conversions, including spring/fall DST,
+fractional offsets, UTC+14 and leap/year boundaries; 5,520 interpreted-filter
+combinations over four zones; 91 search helpers; 800 list/tag/filter combinations;
+20 capture drafts; 24 tag suggestions; and ten views. All 29 real-markup
+controller tests and 19 native guest tests pass. The controller tests mock the
+bridge and are not live failure proof.
+
+The full endpoint comparison ran every unchanged historical and package case:
+**95 of 96 match**. The sole failure remains `component deferred status: recurring
+completion is idempotent and rejects children`, step 7's final task-list response.
+TypeScript lists the next occurrence before the completed original; Rust reverses
+that order. This checkpoint does not change completion, queue or recurrence code,
+exclude cases, sort away differences or relax assertions. Normal harness startup
+succeeded this time; no scratch startup extension was needed.
+
+Live proof used a fresh signed package installed from the disposable registry on
+the Rust HTTPS fixture. Owner setup, list creation through Manage lists, task
+creation, date entry, save, reload and reopen used the real package screen. Due
+March 8 and do November 1 remained those days in Pacific time after an unrelated
+description edit and another reload. The fixture verified exact stored instants
+`2026-03-08T19:00:00.000Z` and `2026-11-01T20:00:00.000Z`, and one proof task.
+Its synthetic owner's timezone is seeded only in the gate fixture; this does not
+prove Profile's setting screen. TLS certificate verification, sign-in redirect,
+unknown-host refusal and unknown-origin refusal passed independently. Browser
+automation ignored the fixture certificate warning. Screenshots and command
+receipts are in the task proof artifact, outside Git.
+
+The branch was fast-forwarded to main including part 23 after explicit approval.
+Existing scratch Rust 1.95, Wasm target and Cargo registry caches were reused
+offline, including the pinned wit-bindgen graph approved on 2026-11-08. The tools
+lockfile was refreshed offline without a byte change. Declared JavaScript
+dependencies were restored offline. A native-only test run sharing the tools target cache caused mismatched crate
+artifacts between the two lockfiles; clearing only this task's module artifacts
+restored the tools build. Keep native module tests in a separate target directory.
+No global tool, target, generator or new dependency was installed. Workshop and Food remain excluded. Part of #4027;
+release note Category N/A.
+
+This remains a bounded checkpoint, not full Phase 5 acceptance. Remaining:
+lazy recurrence advancement; recurrence jobs; deferred-queue retry/retention
+policy, optional request-key retention and installed worker dispatch; public
+People linkage; policy enforcement and feedback orchestration; remaining screen
+and settings parity; installed chat and summary presentation; real application
+shell integration; performance budgets; the endpoint ordering mismatch; and
+physical second-device HTTPS proof. Lazy advancement needs guarded occurrence
+updates and conflict recovery beyond the current guest query interface; a
+read-then-write race is not an acceptable substitute. The signed fixture remains
+separate from the application shell. No physical device was attached to the
+existing device bridge during this work; local HTTPS and viewport checks do not
+prove access from another device.

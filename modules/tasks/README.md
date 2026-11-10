@@ -42,7 +42,9 @@ Current remaining work: lazy recurrence advancement, recurrence jobs, full
 deferred-queue policy and installed worker dispatch, public People linkage,
 policy/feedback orchestration, remaining screen/settings parity, installed chat and summary presentation,
 real application shell integration, performance budgets and physical second-device
-HTTPS proof. Historical checkpoint notes below describe the earlier state.
+HTTPS proof. The full endpoint run still matches 95 of 96 cases; repeated
+recurring completion differs at the final task-list ordering. Historical
+checkpoint notes below describe the earlier state.
 
 Part 15 adds list inclusion, show-only and exclusion under **Choose lists**,
 alongside the compact list picker. Tags can be combined (any selected tag

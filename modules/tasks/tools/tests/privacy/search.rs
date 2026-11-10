@@ -151,10 +151,17 @@ fn compiled_search_uses_saved_account_day_in_prompt() {
         prompt: Mutex::new(String::new()),
     });
     f.ports = provider.clone();
+    // Give the independent account an explicit zone, distinct from the legacy
+    // Pacific fallback, so this assertion actually tests account isolation.
+    f.rt.block_on(f.db.execute(
+        "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'locale',$2)",
+        &[&f.other, &json!({"timezone":"UTC"})],
+    ))
+    .unwrap();
     for (zone, day) in [
         ("America/Los_Angeles", "2026-11-08"),
         ("Pacific/Kiritimati", "2026-11-09"),
-        ("Invalid/Zone", "2026-11-09"),
+        ("Invalid/Zone", "2026-11-08"),
     ] {
         f.rt.block_on(f.db.execute(
             "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'locale',$2) ON CONFLICT(owner_user_id,key) DO UPDATE SET value_json=EXCLUDED.value_json",
@@ -180,9 +187,13 @@ fn compiled_search_uses_saved_account_day_in_prompt() {
         assert_eq!(calendar["body"]["date"], day);
         assert_eq!(
             calendar["body"]["timezone"],
-            if zone == "Invalid/Zone" { "UTC" } else { zone }
+            if zone == "Invalid/Zone" {
+                "America/Los_Angeles"
+            } else {
+                zone
+            }
         );
-        // Another account has no saved zone and sees its own UTC fallback.
+        // Another account sees its own saved UTC zone.
         let other = f.route(f.other, "GET", "/tasks/local-day", Value::Null);
         assert_eq!(other["body"], json!({"timezone":"UTC","date":"2026-11-09"}));
     }
